@@ -301,6 +301,50 @@ async function sessionTarget(db, req, t) {
           prompt: built.prompt || '', draft: dNext
         };
       }
+      // v3.0.700 -- TD-500. STASH IS ITS OWN INSTRUCTION ON A CHAPTER, AND IT HAD TO BE.
+      //
+      // The book Stash means "take the lettering off the cover and give the five canned title
+      // styles back", and it says that by writing url:''. A chapter has no canned styles: the
+      // panel either shows lettering or shows a picture, so the same patch was read here as
+      // EMPTY THE PANEL, and it did exactly that.
+      //
+      // AND IT COULD NOT BE FIXED BY PASSING THE PICTURE AS patch.url. The ordinary write below
+      // sets nextMeta.built_title from whatever it is given, so handing it the photograph would
+      // MARK THAT PHOTOGRAPH AS A DRAWN TITLE -- which is precisely what layout_meta.built_title
+      // exists to prevent, and would send the pill row's Retouch down the lettering path.
+      //
+      // WHAT IT DOES, IN ONE UPDATE: the live title is demoted to the draft (so the builder still
+      // has it and releaseImage still sees a reference to its bytes), the last real picture goes
+      // back on the panel, and the undo slot is armed with the lettering that just came off --
+      // paired with prev_built_title so Revert restores the MARKER as well as the pixels. Stash
+      // and Revert are a toggle: off, on, off.
+      if (patch.stash) {
+        // IDEMPOTENT. Nothing live means nothing to take off, and restoring the old picture over
+        // whatever is there now would be a change nobody asked for. Same rule the book Stash
+        // learned in v3.0.696, for the same reason: pressing it twice must be safe.
+        if (!built || !built.url) {
+          return { url: '', src: '', text: '', sub: null, prompt: '', stashed: true,
+                   image: row.image || '', revertImage: row.revert_image || '',
+                   draft: (meta && meta.built_title_draft) || null };
+        }
+        const sMeta = Object.assign({}, meta);
+        const liveBT = built;
+        demoteBuiltTitle(sMeta);
+        const scene = (sMeta.last_scene && sMeta.last_scene.url) ? sMeta.last_scene : null;
+        sMeta.prev_built_title = liveBT;
+        await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, layout_meta = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?')
+          .run(scene ? scene.url : null, scene ? (scene.w || null) : null, scene ? (scene.h || null) : null,
+               JSON.stringify(sMeta), row.image || null, row.img_w || null, row.img_h || null, row.id);
+        return {
+          url: '', src: '', text: '', sub: null, prompt: '', stashed: true,
+          // image is the PANEL, which is no longer the same thing as the title. Every other
+          // return from this writer has them equal, which is why the client could read one and
+          // mean the other; this is the first that separates them, so it says so explicitly.
+          image: scene ? scene.url : '',
+          revertImage: row.image || '',
+          draft: sMeta.built_title_draft || null
+        };
+      }
       // PROMOTE reuses the ordinary write below rather than repeating it. The draft becomes the
       // patch, so the marker, the image, the displaced-picture undo slot and the returned shape
       // are all produced by one path -- the path that is already tested.
@@ -386,6 +430,25 @@ async function sessionTarget(db, req, t) {
       // reverting from one title to another restores the right one. Written together, read together.
       var _displaced = (patch.url !== undefined && row.image) ? row.image : null;
       var _displacedBT = (built && built.url) ? built : null;
+      // v3.0.700 -- TD-500. THE LAST REAL PICTURE, KEPT SEPARATELY FROM THE ONE-DEEP UNDO.
+      //
+      // Ian, 2026-08-18: "Done and Stash should pull in the normal image on the panel if there is
+      // or was one there... Done and Stash should not clear the panel if there was an image there
+      // before."
+      //
+      // revert_image CANNOT ANSWER THIS. It is one deep and most recent by design (v3.0.659), so
+      // a title drawn over a title leaves the EARLIER TITLE in it -- and a Stash reading that slot
+      // would hand back lettering when the reader asked for their photograph. Ian chose the third
+      // option offered: remember the last real picture separately, so Stash goes back to it however
+      // many titles have passed over the top.
+      //
+      // WRITTEN AT THE ONE MOMENT IT CAN BE KNOWN. _displacedBT is set when the thing being pushed
+      // off is itself a drawn title; absent, what is being pushed off is a scene, and that is the
+      // only reliable point at which this row can be told apart from lettering. Recording it later
+      // would mean guessing.
+      if (_displaced && !_displacedBT) {
+        nextMeta.last_scene = { url: _displaced, w: row.img_w || null, h: row.img_h || null };
+      }
       if (patch.url !== undefined) {
         if (_displaced) {
           if (_displacedBT) nextMeta.prev_built_title = _displacedBT; else delete nextMeta.prev_built_title;

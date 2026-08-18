@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId, coverFromPrefs } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
@@ -275,7 +275,10 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const _dateRange = require('./pdf').formatDateRange(_sdTimes);
   res.json({
     campaign_id: Number(req.params.campaignId),
-    cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
+    // v3.0.698 -- TD-497. WAS `cur.cover_image_url || camp.campaign_image_url`, which is why a
+    // cleared cover came straight back. coverFromPrefs reads key PRESENCE, so a deliberate
+    // clear survives the round trip and an untouched book still gets the campaign picture.
+    cover_image_url: coverFromPrefs(cur, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
     built_title_url: cur.built_title_url || '',
@@ -471,7 +474,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     campaign_id: Number(cid),
-    cover_image_url: merged.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
+    // v3.0.698 -- TD-497. The PUT answers in the same shape as the GET, so it reads the same way.
+    cover_image_url: coverFromPrefs(merged, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
     built_title_url: merged.built_title_url || '',
@@ -609,7 +613,11 @@ router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async
     // which is the same fault as v3.0.645: a check that exercises the function and not the wire.
     const body = (req.body && req.body.patch) || {};
     const patch = {};
-    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote'].forEach(function (k) {
+    // v3.0.700 -- 'stash' ADDED. This allowlist silently ate 'draft' and 'promote' in v3.0.657 and
+    // the failure was invisible: a stripped verb leaves a patch that still looks valid, so the
+    // write went through meaning something else entirely. A new verb in titleTarget is not a
+    // feature until it is also a word this line knows.
+    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote', 'stash'].forEach(function (k) {
       if (body[k] !== undefined) patch[k] = body[k];
     });
     // A promote names no fields on purpose -- it uses the draft already on the row -- so it is a

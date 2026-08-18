@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -2499,7 +2499,12 @@ function coverSubtitle(pageOpts) {
 // preview of an edit that has not been saved yet. The pageOpts builders below resolve that order.
 function applyForkBookMeta(campaign, fbm) {
   var _f = fbm || {};
-  campaign.cover_image_url = _f.cover_image_url || campaign.campaign_image_url || '';
+  // v3.0.698 -- TD-497. PRESENCE, NOT TRUTHINESS. The six `if (!campaign.cover_image_url &&
+  // campaign.campaign_image_url)` lines that run BEFORE this one are left exactly as they are:
+  // they seed the campaign row for a book with no fork prefs at all, which is still the right
+  // default. This line is the one that decides for a book that HAS prefs, and it is the only one
+  // that ever saw the reader's choice.
+  campaign.cover_image_url = coverFromPrefs(_f, campaign.cover_image_url || campaign.campaign_image_url || '');
   campaign.back_cover_image_url = _f.back_cover_image_url || '';
   campaign.title_image_url = _f.title_image_url || '';
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
@@ -5037,6 +5042,22 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
+  /* v3.0.699 -- TD-497 stage two. THE COVER WITH NO PICTURE IS THE SAME COVER.
+     Ian, 2026-08-18, on the text-only fallback: "Get rid of The Saga of and the campaign
+     description. Just leave title and sub title... I cant seem to get the title to move or size
+     based on the title settings. And I cant get the Title builder image on it."
+     ALL THREE WERE THE SAME CAUSE. The no-picture cover was a SECOND LAYOUT -- .cover-content with
+     .cover-eyebrow / .cover-title / .cover-divider / .cover-subtitle -- and every control that
+     matters is written against the FIRST one. coverPlaceCss targets .cover-art-caption and
+     .cover-art-img and nothing else, so placement could not reach it. builtTitleHtml was emitted
+     only inside the has-a-picture branch, so drawn lettering could not reach it either. Tuning the
+     second layout would have meant maintaining two covers forever; there is now ONE, and the
+     picture is the only optional part of it.
+     no-art drops the inner panel so the page ground shows through, which is what leaves ONE set of
+     gold lines rather than two. The fade and the haze are omitted at the markup level rather than
+     hidden here: both exist to keep type readable over artwork, and over a flat ground they would
+     only darken it. */
+  .cover-art-frame.no-art { border:none; background:transparent; box-shadow:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in; }
   ${COVER_HAZE_CSS}
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
@@ -5080,24 +5101,18 @@ ${fCover ? `<!-- COVER PAGE -->
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
-  ${campaign.cover_image_url ? `<div class="cover-content cover-image-layout">
-    <div class="cover-art-frame">
-      <img class="cover-art-img" src="${campaign.cover_image_url}" alt="" />
-      <div class="cover-art-fade"></div>
+  <div class="cover-content cover-image-layout">
+    <div class="cover-art-frame${campaign.cover_image_url ? '' : ' no-art'}">
+      ${campaign.cover_image_url ? `<img class="cover-art-img" src="${campaign.cover_image_url}" alt="" />
+      <div class="cover-art-fade"></div>` : ''}
       <div class="cover-art-caption">
-        <div class="cover-title-haze"><span class="cover-title-haze-fx"></span>
+        <div class="cover-title-haze">${campaign.cover_image_url ? '<span class="cover-title-haze-fx"></span>' : ''}
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
         </div>
       </div>
     </div>
-  </div>` : `<div class="cover-content">
-    <div class="cover-eyebrow">A Saga of</div>
-    <div class="cover-campaign">${campaign.name}</div>
-    <div class="cover-divider"></div>
-    <div class="cover-session">${session.name}</div>
-    <div class="cover-date">${formatDate(session.session_date)}</div>
-  </div>`}
+  </div>
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
 
@@ -5117,8 +5132,8 @@ ${fCover ? `<!-- COVER PAGE -->
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
-${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /><img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+${fCover ? `<!-- BACK COVER PAGE -->
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -5654,6 +5669,22 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
+  /* v3.0.699 -- TD-497 stage two. THE COVER WITH NO PICTURE IS THE SAME COVER.
+     Ian, 2026-08-18, on the text-only fallback: "Get rid of The Saga of and the campaign
+     description. Just leave title and sub title... I cant seem to get the title to move or size
+     based on the title settings. And I cant get the Title builder image on it."
+     ALL THREE WERE THE SAME CAUSE. The no-picture cover was a SECOND LAYOUT -- .cover-content with
+     .cover-eyebrow / .cover-title / .cover-divider / .cover-subtitle -- and every control that
+     matters is written against the FIRST one. coverPlaceCss targets .cover-art-caption and
+     .cover-art-img and nothing else, so placement could not reach it. builtTitleHtml was emitted
+     only inside the has-a-picture branch, so drawn lettering could not reach it either. Tuning the
+     second layout would have meant maintaining two covers forever; there is now ONE, and the
+     picture is the only optional part of it.
+     no-art drops the inner panel so the page ground shows through, which is what leaves ONE set of
+     gold lines rather than two. The fade and the haze are omitted at the markup level rather than
+     hidden here: both exist to keep type readable over artwork, and over a flat ground they would
+     only darken it. */
+  .cover-art-frame.no-art { border:none; background:transparent; box-shadow:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in; }
   ${COVER_HAZE_CSS}
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
@@ -5881,24 +5912,18 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
-  ${coverImg ? `<div class="cover-content cover-image-layout">
-    <div class="cover-art-frame">
-      <img class="cover-art-img" src="${coverImg}" alt="" />
-      <div class="cover-art-fade"></div>
+  <div class="cover-content cover-image-layout">
+    <div class="cover-art-frame${coverImg ? '' : ' no-art'}">
+      ${coverImg ? `<img class="cover-art-img" src="${coverImg}" alt="" />
+      <div class="cover-art-fade"></div>` : ''}
       <div class="cover-art-caption">
-        <div class="cover-title-haze"><span class="cover-title-haze-fx"></span>
+        <div class="cover-title-haze">${coverImg ? '<span class="cover-title-haze-fx"></span>' : ''}
         ${_builtTitle ? builtTitleHtml(_builtTitle) : `<div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>`}
         </div>
       </div>
     </div>
-  </div>` : `<div class="cover-content">
-    <div class="cover-eyebrow">The Saga of</div>
-    <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-    <div class="cover-divider"></div>
-    <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
-    <div class="cover-dates"${_coverSubStylePlain}>${_fmEsc(coverSubtitle(pageOpts))}</div>
-  </div>`}
+  </div>
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
 ${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
@@ -5916,8 +5941,8 @@ ${allSessionsHTML}
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
-${(fCover && (!paginated || pageOpts.page === totalSessions) && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /><img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+${(fCover && (!paginated || pageOpts.page === totalSessions)) ? `<!-- BACK COVER PAGE -->
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -6809,11 +6834,19 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
                   : ('<div class="wc-title cover-art-title">' + bookTitle + '</div>' +
                      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : ''))) +
       '</div></div></div>' + mark
+    // v3.0.699 -- THE SAME PANEL, MINUS THE PICTURE. This branch used to be its own layout
+    // (.wc-textfront, an eyebrow, no caption box), so placement, size and a drawn title all
+    // missed it exactly as they missed the interior one. .wc-front-cap already carries the
+    // cover-art-caption class the placement rules are written against, which is why reusing it
+    // is what makes the controls work rather than a separate fix for each.
     : framing +
-      '<div class="wc-frame"><div class="wc-textfront">' +
-      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
-      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
-      '</div></div>' + mark;
+      '<div class="wc-frame no-art">' +
+      '<div class="wc-front-cap cover-art-caption">' +
+      '<div class="cover-title-haze">' +
+      (builtTitle ? builtTitleHtml(builtTitle)
+                  : ('<div class="wc-title cover-art-title">' + bookTitle + '</div>' +
+                     (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : ''))) +
+      '</div></div></div>' + mark;
   var backInner = framing +
     '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') +
     '<div class="wc-back-cap">' + logo + '</div></div>' + mark;
@@ -6867,6 +6900,10 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
     '.wc-frame { position:absolute; inset:0.8in; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
     '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
+    // v3.0.699 -- the same rule for the POD wrap, so the printed cover and the preview agree
+    // about what a cover with no picture looks like. Two answers to that question is how the
+    // proof and the book end up different objects.
+    '.wc-frame.no-art { border:none; background:transparent; box-shadow:none; }' +
     '.wc-mark { position:absolute; left:50%; bottom:0.5in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
