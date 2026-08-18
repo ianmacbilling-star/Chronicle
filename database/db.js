@@ -2325,6 +2325,40 @@ async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch, versio
   return merged;
 }
 
+// =====================================================================================================
+// v3.0.698 -- TD-497. AN EMPTY COVER HAD TWO MEANINGS, AND ONE BUTTON NEEDED THEM SEPARATED.
+// =====================================================================================================
+//
+// Ian, 2026-08-18: "We need a way to clear all three cover images and just let the front and back
+// covers be the dark brown that is there now."
+//
+// Nine places said the same thing: no cover chosen means use the campaign tile picture. That is
+// right for a book nobody has set up, and it makes Remove impossible -- the write lands, the next
+// read puts the picture straight back, and the button looks broken while the server is the one
+// doing it. Empty meant BOTH "never chosen" and "deliberately none", which is the TD-443 fault in
+// a different field.
+//
+// THE THIRD STATE WAS ALREADY IN THE STORAGE AND NOBODY WAS READING IT. fork_book_prefs is a JSON
+// blob, so a key can be ABSENT as well as empty, and the two are already written apart:
+//
+//   key absent                  -- nothing has ever been chosen        -> the campaign picture
+//   key present, falsy          -- chosen, then deliberately cleared   -> no cover
+//   key present, truthy         -- that picture
+//
+// NO BACKFILL IS NEEDED, and that was measured rather than hoped for. prepMaterializeBookMeta
+// writes cover_image_url ONLY when own_cover is truthy (`if (_bm.own_cover) _body.cover_image_url
+// = _bm.own_cover;`), so a book that has never had a cover picked has never had the key written.
+// Every existing row therefore already means what this function reads it as.
+//
+// ONE FUNCTION, because the alternative is the same three-line rule in three files -- and a rule
+// spelled out per call site is a rule that will disagree with itself the first time one of them is
+// edited. That is the derives-do-not-pair rule, and this is the shape it takes here.
+function coverFromPrefs(prefs, campaignImageUrl) {
+  var p = prefs || {};
+  if (Object.prototype.hasOwnProperty.call(p, 'cover_image_url')) return p.cover_image_url || '';
+  return campaignImageUrl || '';
+}
+
 // Read an integer app_settings value by key, falling back to `def` on miss/error.
 async function getAppSettingInt(key, def) {
   try {
@@ -2335,4 +2369,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };
+module.exports = { coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };

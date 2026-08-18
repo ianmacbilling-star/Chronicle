@@ -2396,6 +2396,27 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-img-thumb:hover { border-color:var(--gold); }
 .prep-img-thumb.has-img { border-style:solid; border-color:rgba(201,168,76,0.5); }
 .prep-thumb-plus { color:rgba(201,168,76,0.5); font-size:22px; line-height:1; }
+/* v3.0.698 -- TD-497. THE COVER AND BACK TILES SHOW THE CROP.
+   Ian, 2026-08-18: "the cover tiles don't show what they are going to look like. When you select
+   them you can see how it's going to crop them to fit in the Archive picker... but they don't show
+   that way here."
+   The rule above letterboxes EVERY thumbnail, which is right for the campaign-settings thumb and
+   for the title-page tile (that one prints whole), and wrong for the two that print cropped. The
+   anchor classes mirror pdf.js COVER_PLACE exactly and are chosen in app.js from the SAME helper
+   the picker outline uses, so tile, picker and print cannot drift. Note the inversion is real:
+   a title at the BOTTOM anchors the picture to the TOP. */
+.prep-img-slots .prep-img-thumb.pt-crop { background-size:cover!important; background-repeat:no-repeat!important; }
+.prep-img-slots .prep-img-thumb.pt-crop.pt-pos-top { background-position:center top!important; }
+.prep-img-slots .prep-img-thumb.pt-crop.pt-pos-center { background-position:center center!important; }
+.prep-img-slots .prep-img-thumb.pt-crop.pt-pos-bottom { background-position:center bottom!important; }
+/* The Remove pill. Same family as the regen / retouch / archive pills on other images, smaller,
+   and only ever rendered when the tile actually has a picture. */
+.prep-thumb-x { position:absolute; top:3px; right:3px; z-index:2; width:18px; height:18px; padding:0;
+  line-height:16px; text-align:center; font-size:12px; font-family:inherit; border-radius:50%;
+  border:1px solid rgba(201,168,76,0.55); background:rgba(12,7,3,0.82); color:rgba(240,217,138,0.9);
+  cursor:pointer; opacity:0.75; transition:opacity 0.15s, background 0.15s; }
+.prep-thumb-x:hover { opacity:1; background:rgba(120,30,20,0.9); border-color:var(--gold); }
+.prep-img-slots .prep-img-thumb { position:relative; }
 .prep-img-cap { font-size:11px; color:rgba(201,168,76,0.8); margin-top:4px; }
 .prep-img-modal { position:fixed; inset:0; z-index:100001; background:rgba(8,5,2,0.72); display:flex; align-items:center; justify-content:center; padding:20px; }
 .prep-img-modal-box { background:#16100a; border:1px solid rgba(201,168,76,0.35); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,0.5); width:100%; max-width:680px; max-height:85vh; display:flex; flex-direction:column; padding:18px; }

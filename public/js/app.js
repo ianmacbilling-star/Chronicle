@@ -7875,9 +7875,6 @@ function platinumGate(what, why) {
 
 // openTitleBuilder(target) -- target defaults to the book, so the Prep panel button is unchanged.
 function openTitleBuilder(target) {
-  // v3.0.697 -- belt to closeTitleBuilder's braces. A modal reopened after the watchdog fired
-  // must not inherit two disabled buttons.
-  _tbDoneIdle();
   state._tbTarget = (target && target.kind) ? target : { kind: 'book' };
   state._tbSessionCur = null;
   // v3.0.652 -- TD-443. A MODAL THAT HAS WRITTEN NOTHING MUST CHANGE NOTHING.
@@ -8041,83 +8038,6 @@ function _tbSyncSessionMoment() {
   } catch (e) {}
 }
 
-// =====================================================================================================
-// v3.0.697 -- TD-499. THE BOOK WAS REDRAWN BEFORE THE WRITE LANDED.
-// =====================================================================================================
-//
-// Ian, 2026-08-18: "It doesn't reload the book right... if I do Done and Use the book reloads and
-// keeps the normal text title. Then when I go to another tab and come back it's got the picture.
-// So it's in the loading of the book, not the title urls."
-//
-// EXACTLY RIGHT, AND A TIGHTER STATEMENT OF IT THAN THE ONE I OPENED WITH. Nothing was ever lost.
-// The book path of _tbSave called _prepMetaWrite(book) and then `then()` ON THE SAME TICK.
-// _prepMetaWrite queues its PUT on state._prepMetaChain and returns immediately, so `then` --
-// which is closeTitleBuilder -- ran while the PUT was still in flight. closeTitleBuilder ends by
-// setting the preview iframe's src to /api/pdf/novel/..., A FRESH SERVER RENDER THAT READS
-// fork_book_prefs. Two requests, one race, and the render usually won: the server drew the book as
-// it stood BEFORE the button was pressed. The next tab switch called loadNovelPreview again, by
-// which time the PUT had long since committed, and the picture appeared.
-//
-// THE SESSION PATH WAS NEVER BROKEN -- it awaits its fetch before calling `then`. Only the book
-// path raced, which is why every report of this was about the cover.
-//
-// _prepMetaWrite HAS TAKEN A `cb` SINCE v3.0.578 for precisely this. _tbSave never passed one.
-// This is the whole fix: one function, three call sites, and the callback is the only way out.
-//
-// THE WATCHDOG IS NOT DECORATION. Waiting on the server means a request that never settles would
-// leave a modal open with two dead buttons in it -- the same class of fault as the six silent
-// refusals (TD-493) and the silent close (TD-496), manufactured by the fix for a third one. If the
-// confirmation has not come back in 20 seconds the buttons come back to life and SAY SO, and the
-// modal stays open so nothing has been thrown away.
-function _tbBookWrite(book, then) {
-  var settled = false;
-  var timer = null;
-  var fire = function () {
-    if (settled) return;
-    settled = true;
-    if (timer) { clearTimeout(timer); timer = null; }
-    if (then) then();
-  };
-  if (typeof _prepMetaWrite !== 'function') { fire(); return; }
-  timer = setTimeout(function () {
-    if (settled) return;
-    settled = true;
-    timer = null;
-    _tbDoneIdle();
-    if (typeof appNotice === 'function') {
-      appNotice('That save has not come back yet.',
-        'The change was sent, but the server has not confirmed it, so the book has not been redrawn.',
-        'Nothing has been lost. Wait a moment and press it again, or close this and switch tabs to see whether it landed.');
-    }
-  }, 20000);
-  // _prepMetaWrite calls cb on EVERY outcome -- success, a refusal it has already announced, a
-  // failed fetch, and the no-campaign guard on its first line -- so this cannot be a one-way door.
-  _prepMetaWrite(book, fire);
-}
-
-// _tbDoneBusy / _tbDoneIdle: the two Done buttons wait for the server now, so they must LOOK like
-// it. Both are disabled for the round trip -- pressing the other one mid-flight would queue a
-// second write behind the first on a FIFO chain -- and only the pressed one changes its words.
-// The original label is parked on the element rather than in a variable, so a reopened modal
-// cannot inherit a stale one.
-var _TB_DONE_IDS = ['title-build-use', 'title-build-stash'];
-function _tbDoneBusy(pressedId) {
-  _TB_DONE_IDS.forEach(function (id) {
-    var b = _tbEl(id); if (!b) return;
-    if (b.getAttribute('data-tb-label') == null) b.setAttribute('data-tb-label', b.innerHTML);
-    b.disabled = true;
-    if (id === pressedId) b.innerHTML = 'Saving\u2026';
-  });
-}
-function _tbDoneIdle() {
-  _TB_DONE_IDS.forEach(function (id) {
-    var b = _tbEl(id); if (!b) return;
-    var was = b.getAttribute('data-tb-label');
-    if (was != null) { b.innerHTML = was; b.removeAttribute('data-tb-label'); }
-    b.disabled = false;
-  });
-}
-
 // _tbSave: ONE call site for every write the modal makes.
 //
 // v3.0.641 -- the two targets take different paths ON PURPOSE, and it is not the drift this module
@@ -8150,7 +8070,8 @@ function _tbSave(patch, then) {
       if (patch.text !== undefined) book.built_title_draft_text = patch.text;
       if (patch.sub !== undefined) book.built_title_draft_sub = patch.sub;
       if (patch.prompt !== undefined) book.built_title_draft_prompt = patch.prompt;
-      _tbBookWrite(book, then);
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
       return;
     }
     // PROMOTE: the draft becomes the title, and is spent. Written in ONE call so a cover cannot
@@ -8187,10 +8108,6 @@ function _tbSave(patch, then) {
           if (then) then();
           return;
         }
-        // v3.0.697 -- THE ONE PATH LEFT THAT RETURNS WITHOUT CALLING `then`, so it is the one
-        // path that has to hand the buttons back itself. Everything else reaches _tbDoneIdle
-        // through closeTitleBuilder.
-        _tbDoneIdle();
         if (typeof appNotice === 'function') {
           appNotice('There is nothing drawn yet.',
             'Nothing has been drawn for this title, so there is nothing to put on the cover.',
@@ -8212,7 +8129,8 @@ function _tbSave(patch, then) {
       //
       // It is also what makes Done & Stash reversible: Use then Stash then Use has to be able to
       // go round more than once, and it could not while the first Use emptied the drawer.
-      _tbBookWrite(book, then);
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
       return;
     }
     // v3.0.687 -- the stash keys ride the SAME patch as the clear, so the cover and the held copy
@@ -8229,7 +8147,8 @@ function _tbSave(patch, then) {
     if (patch.prompt !== undefined) book.built_title_prompt = patch.prompt;
     if (patch.prevUrl !== undefined) book.built_title_prev = patch.prevUrl;
     if (patch.prevSrc !== undefined) book.built_title_prev_src = patch.prevSrc;
-    _tbBookWrite(book, then);
+    if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+    if (then) then();
     return;
   }
   var cid = state.currentCampaign && state.currentCampaign.id;
@@ -8325,15 +8244,11 @@ function titleBuilderUse() {
   // PREVIEW is not state.bookMeta, so a book promote landed on the server and left the picture on
   // screen unchanged. Same report v3.0.642 fixed for chapters: "when I hit done it didn't put the
   // image in the panel."
-  // v3.0.697 -- THE SECOND REPAINT IS GONE, AND ITS REASON WAS NEVER TRUE.
-  // v3.0.693 added it on the reading that "closeTitleBuilder repaints only the chapter path".
-  // It does not: its last statement is an UNCONDITIONAL loadNovelPreview(novelLayoutStyle) for
-  // both targets. So every Use was firing TWO server-side PDF renders, both of them racing the
-  // same PUT. A second render cannot win a race the first one lost -- they are the same request.
-  // The repaint is correct; it was only ever in the wrong place in TIME, not in the wrong count.
-  _tbDoneBusy('title-build-use');
   _tbSave({ promote: 1 }, function () {
     closeTitleBuilder();
+    if (!_tbIsSession() && typeof loadNovelPreview === 'function') {
+      try { loadNovelPreview(novelLayoutStyle); } catch (e) {}
+    }
   });
 }
 function closeTitleBuilder() {
@@ -8347,9 +8262,6 @@ function closeTitleBuilder() {
   // that draw it are repainted, exactly as the generation path does.
   // v3.0.652 -- TD-443. Only a modal that wrote something may repaint the moment. A close with no
   // write leaves whatever was on the row exactly where it was -- scene, title or nothing.
-  // v3.0.697 -- EVERY EXIT RE-ARMS THE BUTTONS. Cancel, the X, a promote, a stash and a refusal
-  // that closes all land here, so this is the one place that has to say it.
-  _tbDoneIdle();
   if (_tbIsSession() && state._tbDirty) _tbSyncSessionMoment();
   state._tbDirty = false;
   // v3.0.641 -- clear the target, or a chapter builder closed and the Prep panel one reopened would
@@ -8650,7 +8562,6 @@ function titleBuildStash() {
     return;
   }
   _tbErr('');
-  _tbDoneBusy('title-build-stash');
   _tbSave({
     url: '', src: '', prevUrl: '', prevSrc: '',
     stashUrl: cur.url, stashSrc: cur.src || '', stashText: cur.text || '',
@@ -9128,18 +9039,78 @@ function _prepMemberSetImage(kind, url) {
   var body = {}; body[field] = url; if (state.novelAsUser) body.fork_user = state.novelAsUser;
   fetch('/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
-    .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Reverted to the campaign image.'); })
+    // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
+    // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
+    .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })
     .catch(function(){ showAlert('Could not update your book image.'); });
 }
+// v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
+//
+// pdf.js COVER_PLACE moves the picture, not just the caption: a title at the BOTTOM anchors the
+// artwork to the TOP, a title at the TOP anchors it to the bottom, and MIDDLE centres it. The
+// inversion is easy to write backwards, so it is written once here and read by the tiles, rather
+// than restated beside each of them. coverCropAnchor is the picker's own helper and returns the
+// title PLACE; this returns the CSS position, which is the other thing.
+function prepCropPosClass() {
+  var place = (typeof coverCropAnchor === 'function') ? coverCropAnchor() : 'bottom';
+  if (place === 'top') return 'pt-pos-bottom';
+  if (place === 'middle') return 'pt-pos-center';
+  return 'pt-pos-top';
+}
+// PREP_CROP_KINDS: the tiles whose picture is CROPPED on the printed page. The title-page artwork
+// is not -- it prints whole -- so it keeps the letterboxed thumbnail and is deliberately absent.
+var PREP_CROP_KINDS = { cover: 1, back: 1 };
 function renderPrepThumbs() {
   var c = state.currentCampaign; if (!c) return;
+  var _pos = prepCropPosClass();
   ['cover','back','title'].forEach(function(kind){
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
     var _f = PREP_IMG_KINDS[kind].field;
     var url = ((state.bookMeta || {})[_f]) || '';
-    if (url) { el.style.backgroundImage = 'url("' + encodeURI(url) + '")'; el.classList.add('has-img'); el.innerHTML = ''; }
-    else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.innerHTML = '<span class="prep-thumb-plus">+</span>'; }
+    el.classList.remove('pt-crop', 'pt-pos-top', 'pt-pos-center', 'pt-pos-bottom');
+    if (url && PREP_CROP_KINDS[kind]) el.classList.add('pt-crop', _pos);
+    if (url) {
+      el.style.backgroundImage = 'url("' + encodeURI(url) + '")';
+      el.classList.add('has-img');
+      // The pill is drawn ONLY when there is something to remove, so an empty slot cannot offer to
+      // clear itself. Ian: no confirmation -- this clears a CHOICE, not a picture; the artwork is
+      // still in the Archive and one click puts it back.
+      el.innerHTML = '<button type="button" class="prep-thumb-x" title="Remove this picture" '
+        + 'onclick="prepRemoveImage(\'' + kind + '\', event)">&times;</button>';
+    } else {
+      el.style.backgroundImage = '';
+      el.classList.remove('has-img');
+      el.innerHTML = '<span class="prep-thumb-plus">+</span>';
+    }
   });
+}
+// prepRemoveImage: clear one of the three book pictures.
+//
+// The pill sits INSIDE the tile, and the tile's own onclick opens the Archive picker -- so without
+// stopPropagation every Remove would clear the picture and then immediately open the picker over
+// the result, which reads as the button having done the wrong thing.
+//
+// TWO OWNERS, ONE BUTTON. prepUseMember decides which record this book's pictures live on, exactly
+// as selectPrepImage does for setting them. Writing only the member path would leave the pill dead
+// on a canonical book with no message -- the silent-control fault again.
+function prepRemoveImage(kind, ev) {
+  try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch (e) {}
+  if (!PREP_IMG_KINDS[kind]) return;
+  var c = state.currentCampaign; if (!c) return;
+  if (typeof prepUseMember === 'function' && prepUseMember()) { _prepMemberSetImage(kind, ''); return; }
+  var body = {}; body[PREP_IMG_KINDS[kind].field] = '';
+  fetch('/api/campaigns/' + c.id, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || !d.id) { showAlert('That picture could not be removed. Switch to your own version and try again.'); return; }
+    c[PREP_IMG_KINDS[kind].field] = '';
+    var i = (state.campaigns || []).findIndex(function (x) { return x.id === c.id; });
+    if (i >= 0) state.campaigns[i][PREP_IMG_KINDS[kind].field] = '';
+    state.bookMeta = state.bookMeta || {};
+    state.bookMeta[PREP_IMG_KINDS[kind].field] = '';
+    renderPrepThumbs();
+    showAlert('Image removed.');
+  }).catch(function () { showAlert('That picture could not be removed.'); });
 }
 function _prepEnsureArchives(cb) {
   var _cid = state.currentCampaign && state.currentCampaign.id;
@@ -16157,6 +16128,10 @@ function prepApplyOwnershipLock() {
       if (!t) return;
       t.style.opacity = own ? '' : '0.55';
       t.style.cursor = own ? '' : 'not-allowed';
+      // v3.0.698 -- and the Remove pill with them. A live-looking control on a read-only tile is
+      // the same fault this block already exists to prevent.
+      var _x = t.querySelector ? t.querySelector('.prep-thumb-x') : null;
+      if (_x) _x.style.display = own ? '' : 'none';
       t.title = own ? '' : 'This is someone else s version. Switch to your own version to change the images.';
     });
     var note = document.getElementById('prep-readonly-note');
