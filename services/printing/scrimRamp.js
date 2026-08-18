@@ -178,7 +178,12 @@ const HAZE_RY = 2.30;      // semi-axis / title-box half-height
 // 0.94 was never a plateau value: it was the PEAK of a gradient that touched full strength at a
 // single edge and averaged far lighter across the type. Carrying it onto a flat core is what
 // made the fade a slab you can see the outline of.
-const HAZE_PEAK = 0.47;    // alpha at the centre
+// v3.0.692 -- Ian: "needs to be about 35% darker at the center." 0.47 * 1.35 = 0.635.
+// THE EXPONENT MOVES WITH IT, AND THAT IS THE POINT. Peak scales the WHOLE field, so raising it
+// alone would drag the outer reaches back up by 35% as well -- and the outer field is the one
+// thing that is now right. Solving for the exponent that holds the 25%-out point at ~50 while the
+// centre rises gives 6.0. Two numbers moved so that only ONE thing changes on the page.
+const HAZE_PEAK = 0.635;   // alpha at the centre
 // v3.0.691 -- STEEPER AGAIN. Ian: "And then cut the outer edges by another 50%."
 // SOLVED, NOT GUESSED, AND NOT STACKED. Halving the peak, steepening the exponent and shrinking
 // the core all cut the same numbers, so applying all three at their face value took the text
@@ -188,7 +193,7 @@ const HAZE_PEAK = 0.47;    // alpha at the centre
 //     690        centre 240  box 240  25% 174  50% 55  75% 5
 //     asked for  centre 120  box ~110  25% ~43  50% ~14  75% ~1
 //     691        centre 120  box  97  25%  52  50% 15  75% 1
-const HAZE_POWER = 4.5;    // falloff shape; higher = the rim dies off much faster
+const HAZE_POWER = 6.0;    // falloff shape; raised to hold the outer field while the centre darkens
 // Where the title box sits inside the image, derived from the semi-axes rather than named twice.
 // v3.0.691 -- THE FLAT CORE SHRINKS, BECAUSE THE SHAPE WAS THE COMPLAINT.
 // Ian, looking at a rendered plain-text title: "it looks like a rectangle around the letters...
