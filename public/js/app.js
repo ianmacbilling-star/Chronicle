@@ -222,11 +222,40 @@ function appConfirm(opts) {
   // Found by id now rather than by a :not() chain on the footer. That selector picked the button by
   // what it was NOT, so giving the cancel a danger class or adding a third button would have
   // silently matched something else.
+  // v3.0.687 -- ONE-BUTTON NOTICE MODE IS BACK, AND THIS TIME IT HAS A USER.
+  // v3.0.634 added it, v3.0.635 removed it, and the note above says why: THAT refusal offered a
+  // way forward (Upgrade My Plan) so it needed both buttons. A refusal with nowhere to go is a
+  // different thing -- 'you cannot do this right now, here is why' has nothing to cancel, and a
+  // Cancel beside an OK on such a box invites the reader to look for the difference.
   var cancelBtn = document.getElementById('app-confirm-cancel');
-  if (cancelBtn) cancelBtn.textContent = o.cancelLabel || 'Cancel';
+  if (cancelBtn) {
+    cancelBtn.textContent = o.cancelLabel || 'Cancel';
+    cancelBtn.classList.toggle('hidden', !!o.okOnly);
+  }
   var ok = document.getElementById("app-confirm-ok");
   if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
   var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
+}
+// v3.0.687 -- A REFUSAL MUST LAND IN FRONT OF THE READER.
+//
+// Ian, 2026-08-17, after half an hour lost to a control that appeared to do nothing: "Put them in
+// the MIDDLE OF THE SCREEN... Most of the time you never see them... If they have scrolled down at
+// all you never see them."
+//
+// showAlert slides in at the top right for a couple of seconds. That is fine for 'that worked' --
+// missing a Saved toast costs nothing. It is the wrong device entirely for 'that did NOT happen',
+// because the reader is looking at the control they just clicked, which is often nowhere near the
+// top of the page, and the only evidence of the refusal expires before they look up.
+//
+// THE LINE, so this does not turn into 133 modals: a toast confirms, a modal refuses. Six call
+// sites in this file tell the reader an action was declined; all six come through here.
+//
+// THE COST OF GETTING THIS WRONG IS MEASURED, NOT IMAGINED: a print order in review freezes every
+// layout control through blockLayoutChangeIfOrdering, which is called from FOUR places and
+// silently returned after a toast. Title placement and title size 'stopped working' and were
+// diagnosed as a rendering regression before anybody found the refusal.
+function appNotice(title, body, note) {
+  appConfirm({ title: title, body: body, note: note || '', okOnly: true, okLabel: 'OK' });
 }
 function closeAppConfirm() {
   state._appConfirmFn = null;
@@ -8049,7 +8078,43 @@ function _tbSave(patch, then) {
     // end up carrying artwork whose recorded words belong to a different drawing.
     if (patch.promote) {
       var _bm = state.bookMeta || {};
-      if (!_bm.built_title_draft_url) { _tbErr('There is nothing drawn to use yet.'); return; }
+      // v3.0.689 -- TD-495. THE ONLY PATH IN THIS FUNCTION THAT RETURNED WITHOUT CALLING `then`,
+      // AND `then` IS closeTitleBuilder. So Done & Use did nothing AND left the modal open.
+      //
+      // Ian, 2026-08-17: "Sometimes the Done and Use button doesn't work... You have to do it a
+      // couple times... then it works... Sometimes it just doesn't close the form."
+      //
+      // WHY IT WAS INTERMITTENT: the promote below used to clear built_title_draft_* locally, so
+      // the instant a title was used the client believed there was no draft left and the NEXT
+      // press hit this line. Reopening the modal re-read the server -- which had kept the draft
+      // all along -- and the button worked again. Hence 'do it a couple of times'.
+      //
+      // TWO FIXES, and the second is the real one:
+      //   1. nothing to promote is no longer a dead button. If a drawn title is ALREADY in charge
+      //      there is genuinely nothing to do, so Done & Use closes, which is what the reader
+      //      asked for. Only a truly empty builder refuses, and it now does so in a MODAL.
+      //   2. the local draft clear is gone -- see below.
+      if (!_bm.built_title_draft_url) {
+        if (_bm.built_title_url) {
+          // v3.0.693 -- WAS A SILENT CLOSE, AND SILENT IS THE FAULT. v3.0.689 turned "the button
+          // does nothing and the form stays open" into "the form closes and nothing happens" --
+          // worse, because the reader loses even the evidence that they pressed it. Ian: "it
+          // closes... does nothing... then when i open and hit it again it works."
+          if (typeof appNotice === 'function') {
+            appNotice('That title is already on your cover.',
+              'There is no newer drawing waiting, so Done & Use had nothing to apply.',
+              'Press Generate to draw a new one, or Done & Stash to take this one off the cover.');
+          }
+          if (then) then();
+          return;
+        }
+        if (typeof appNotice === 'function') {
+          appNotice('There is nothing drawn yet.',
+            'Nothing has been drawn for this title, so there is nothing to put on the cover.',
+            'Press Generate, or use Replace to take one from your Archive.');
+        } else { _tbErr('There is nothing drawn to use yet.'); }
+        return;
+      }
       book.built_title_url = _bm.built_title_draft_url;
       book.built_title_src = _bm.built_title_draft_src || '';
       book.built_title_text = _bm.built_title_draft_text || '';
@@ -8057,14 +8122,24 @@ function _tbSave(patch, then) {
       book.built_title_prompt = _bm.built_title_draft_prompt || '';
       book.built_title_prev = _bm.built_title_url || '';
       book.built_title_prev_src = _bm.built_title_src || '';
-      book.built_title_draft_url = '';
-      book.built_title_draft_src = '';
-      book.built_title_draft_text = '';
-      book.built_title_draft_prompt = '';
+      // v3.0.689 -- TD-495. THE DRAFT IS NO LONGER SPENT BY USING IT, and that closes a real
+      // split: services/titleTarget.js has kept the draft through a promote since v3.0.661, and
+      // this branch -- the one that actually runs for a book -- threw it away. One feature, two
+      // behaviours, decided by which target you were on. The client now agrees with the server.
+      //
+      // It is also what makes Done & Stash reversible: Use then Stash then Use has to be able to
+      // go round more than once, and it could not while the first Use emptied the drawer.
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
       if (then) then();
       return;
     }
+    // v3.0.687 -- the stash keys ride the SAME patch as the clear, so the cover and the held copy
+    // can never disagree about which drawing this is.
+    if (patch.stashUrl !== undefined) book.built_title_draft_url = patch.stashUrl;
+    if (patch.stashSrc !== undefined) book.built_title_draft_src = patch.stashSrc;
+    if (patch.stashText !== undefined) book.built_title_draft_text = patch.stashText;
+    if (patch.stashSub !== undefined) book.built_title_draft_sub = patch.stashSub;
+    if (patch.stashPrompt !== undefined) book.built_title_draft_prompt = patch.stashPrompt;
     if (patch.url !== undefined) book.built_title_url = patch.url;
     if (patch.src !== undefined) book.built_title_src = patch.src;
     if (patch.text !== undefined) book.built_title_text = patch.text;
@@ -8164,7 +8239,17 @@ function titleBuilderUse() {
   // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
   // straight through it: deleting one left the other satisfying the check. _tbSave already routes
   // book and chapter; there was never a second thing to say here.
-  _tbSave({ promote: 1 }, function () { closeTitleBuilder(); });
+  // v3.0.693 -- REPAINT THE COVER. closeTitleBuilder repaints only the chapter path, reasoning that
+  // _prepMetaWrite owns state.bookMeta and the Prep panel reads it. True -- but the rendered cover
+  // PREVIEW is not state.bookMeta, so a book promote landed on the server and left the picture on
+  // screen unchanged. Same report v3.0.642 fixed for chapters: "when I hit done it didn't put the
+  // image in the panel."
+  _tbSave({ promote: 1 }, function () {
+    closeTitleBuilder();
+    if (!_tbIsSession() && typeof loadNovelPreview === 'function') {
+      try { loadNovelPreview(novelLayoutStyle); } catch (e) {}
+    }
+  });
 }
 function closeTitleBuilder() {
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
@@ -8436,6 +8521,66 @@ function titleBuildRevert() {
 
 // TD-401. Take the drawn title off the book. The five presets come back to life the moment it is gone
 // -- that is the whole point, and it is what prepApplyTitleModeLock decides from.
+// v3.0.687 -- DONE & STASH. TD-494.
+//
+// Ian, 2026-08-17: "I have no way to Not use what's in the title builder and get back to the
+// Regular title styles... It should leave the draft image in there but not use it on the cover."
+// Remove did get there, and it is worded and shaped as a deletion -- Archive first or lose the
+// token -- so the only exit from a drawn title was a door marked permanent. Remove is hidden now.
+//
+// IT COPIES THE LIVE ARTWORK INTO THE DRAFT ON THE WAY OUT, rather than trusting a draft to be
+// sitting there. It cannot: the client's promote branch clears built_title_draft_* while the
+// SERVER's promote deliberately keeps it (v3.0.661), and the client branch is the one that runs
+// for a book. So after Done & Use there is no draft left to hold, and a Stash that assumed one
+// would quietly throw the picture away -- which is the exact failure this button exists to end.
+// The divergence itself is TD-495; this does not depend on which way it is settled.
+//
+// ONE WRITE, not two. Live and draft move in a single patch so there is no instant where the
+// artwork is off the cover and not yet held anywhere.
+function titleBuildStash() {
+  if (!state.currentCampaign) return;
+  var cur = _tbCur();
+  if (!cur.url) {
+    // v3.0.696 -- THIS EARLY RETURN WAS THE WHOLE OF THE 'IT TAKES TWO TRIES' BUG.
+    //
+    // Measured, not guessed. Ian read the state straight out of the console on a book where the
+    // buttons were failing:
+    //     [ built_title_url, built_title_draft_url ]  ->  [ "", "https://.../rest-...png" ]
+    // Live empty, draft holding the artwork -- which is EXACTLY the state a successful Stash
+    // leaves behind. Handed that back, this line read cur.url as falsy, called it 'nothing to do'
+    // and returned BEFORE the lock release below, so the modal shut and the five title styles
+    // stayed disabled. The v3.0.693 fix to prepApplyTitleModeLock was correct and unreachable.
+    //
+    // TWO FAULTS IN ONE LINE. It confused 'nothing in charge' with 'nothing to do' -- an already
+    // stashed title still needs the styles released -- and it did it SILENTLY, so the button
+    // looked broken rather than idle. Stash is now IDEMPOTENT: pressing it on an already stashed
+    // title releases the locks, says so, and closes.
+    if (typeof prepApplyOwnershipLock === 'function') prepApplyOwnershipLock();
+    if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    if (typeof showAlert === 'function') showAlert('Already stashed. The title styles are yours again; press Done & Use to put the drawing back.');
+    closeTitleBuilder();
+    return;
+  }
+  _tbErr('');
+  _tbSave({
+    url: '', src: '', prevUrl: '', prevSrc: '',
+    stashUrl: cur.url, stashSrc: cur.src || '', stashText: cur.text || '',
+    stashSub: (cur.sub == null ? null : cur.sub), stashPrompt: cur.prompt || ''
+  }, function () {
+    // The five canned styles are decided by prepApplyTitleModeLock from whether a drawn title is
+    // in charge. Nothing is in charge now, so they must come back -- Ian: "when hit it should free
+    // up lock so you can use the canned title styles."
+    // v3.0.693 -- BOTH LOCKS, IN THIS ORDER. The ownership lock owns PREP_LOCK_PLAIN (where
+    // pcl-titleStyle gets its `!own`); the mode lock runs after it and owns the two title controls.
+    // Calling only the second was the bug; calling only the first would leave print-title-color
+    // untouched, because it is in neither list.
+    if (typeof prepApplyOwnershipLock === 'function') prepApplyOwnershipLock();
+    if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    if (typeof showAlert === 'function') showAlert('Stashed. The title styles are back in charge; press Done & Use to put the drawing back.');
+    closeTitleBuilder();
+  });
+}
+// TD-401. Kept and reachable, but no longer on the toolbar -- see titleBuildStash above.
 function titleBuildRemove() {
   if (!state.currentCampaign) return;
   var archived = !!_tbArchiveRow();
@@ -10623,7 +10768,9 @@ function applyArchiveToTarget(archiveId) {
   // checked by their own handler. Everything else still needs a campaign on screen, because /apply
   // is scoped to it -- and now says so rather than shrugging.
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid && !ctx.prepKind) { showAlert('No campaign is open, so that image cannot be applied. Open the campaign and try again.'); return; }
+  if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
+    'That image cannot be applied because no campaign is on screen.',
+    'Open the campaign and try again.'); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -15106,7 +15253,9 @@ async function deleteMyVersion() {
   }
   if (!forkOwnNonCanonical()) {
     if (forkOnScreenIsCanonical()) {
-      showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
+      appNotice('That version cannot be deleted.',
+        'This is the original version of the session, so it cannot be deleted -- everything else is built from it.',
+        'You can rename it, or delete one of your other versions.');
     } else {
       showAlert('You can only remove a session from your own versions.');
     }
@@ -15664,7 +15813,9 @@ function saveCampaignLayoutOpts(ctx){
     // gets the same rule the cover already had -- prepUseMember gates the images, this gates the
     // layout, and they now agree.
     if (ctx !== 'session' && typeof novelOwnView === 'function' && !novelOwnView()) {
-      if (typeof showAlert === 'function') showAlert('You are looking at someone else\u2019s version. Switch to your own version to change the layout.');
+      if (typeof appNotice === 'function') appNotice('That is not your version.',
+        'You are looking at someone else\u2019s version, so the layout cannot be changed here.',
+        'Switch to your own version and the layout controls come back.');
       return;
     }
     var fork = null;
@@ -15945,11 +16096,24 @@ function prepApplyTitleModeLock() {
   try {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
-    // Only ever tightens: a control already disabled because this is not your version stays disabled.
+    // Computes the answer for these two controls from BOTH of their gates -- see below.
     ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      if (built || !own) el.disabled = true;
+      // v3.0.693 -- THIS NOW RELEASES AS WELL AS TIGHTENS, and that is the Done & Stash bug.
+      // Ian: "Done and Stash doesn't allow me to change the Title Styles now... If we aren't using
+      // the title builder i should be able to change the title styles."
+      //
+      // The old line had NO ELSE, so this function could only ever switch a control OFF. Stash
+      // clears built_title_url and then called it, which cleared the dimming and the tooltip -- so
+      // it LOOKED like it had worked -- while the control stayed disabled. The re-enable lived
+      // only in prepApplyOwnershipLock.
+      //
+      // Safe to compute outright BECAUSE THESE TWO IDS HAVE EXACTLY THESE TWO GATES: is a drawn
+      // title in charge, and is this your version. pcl-titleStyle is also in PREP_LOCK_PLAIN, which
+      // sets the same `!own`; print-title-color is in NEITHER list, which is why nothing else could
+      // ever bring it back.
+      el.disabled = !!(built || !own);
       el.style.opacity = (built || !own) ? '0.55' : '';
       // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
       // would 'restore' the explanation this function itself put there.
@@ -16757,13 +16921,69 @@ function updatePrintPageDisplay(n, exact) {
 
 // Resolve the interior PDF, reusing a cached render when params are unchanged.
 // Resolves to { url, pages }.
+// v3.0.681 -- TD-390. TAKE A NUMBER. One helper for both render calls.
+//
+// A print URL used to be fetched and waited on. Rendering, flattening and uploading a book runs past
+// the ~100-second proxy ceiling on a large one, and the reader saw a failure for work that had
+// usually finished. This posts the same URL to the job wrapper, gets a ticket back, and polls --
+// returning THE SAME {ok, j} shape the direct fetch returned, so both call sites are unchanged in
+// what they receive.
+//
+// IT FALLS BACK TO THE OLD BEHAVIOUR ON ANYTHING UNEXPECTED. If the server answers 200 instead of
+// 202 -- an older build, a route not converted, a proxy that swallowed the wrapper -- the answer is
+// passed straight through. During a deploy the two halves are briefly mismatched, and this is the
+// half that has to tolerate it.
+//
+// UNKNOWN RESTARTS RATHER THAN FAILS. The job store is in memory (TD-435), so a redeploy mid-render
+// loses the ticket. That is not "your book failed"; it is "ask again", and the reader is told it is
+// still working rather than shown an error for something that may well have succeeded.
+function runRenderJob(url, kind, onTick) {
+  var jobUrl = url.replace(/^\/api\/pdf\/(print-interior|print-cover)\//, '/api/pdf/render-job/$1/');
+  if (jobUrl === url) {
+    // Not a URL this wrapper knows -- fetch it the old way rather than guessing.
+    return fetch(url).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+  }
+  var started = Date.now();
+  var restarts = 0;
+  function poll(jobId) {
+    return new Promise(function (resolve) { setTimeout(resolve, 1500); })
+      .then(function () { return fetch('/api/pdf/render-status/' + encodeURIComponent(jobId)); })
+      .then(function (r) { return r.json(); })
+      .then(function (st) {
+        if (!st) throw new Error('Lost contact with the print builder.');
+        if (st.state === 'done') return { ok: true, j: st.body };
+        if (st.state === 'error') return { ok: false, j: st.body || { error: 'render_failed' } };
+        if (st.state === 'unknown') {
+          // The process that held the ticket is gone. Start over ONCE; twice means something is
+          // wrong that retrying will not fix, and a silent retry loop is worse than an error.
+          if (restarts >= 1) return { ok: false, j: { error: 'render_lost', message: 'The print builder restarted while your book was being made. Please try again.' } };
+          restarts++;
+          return start();
+        }
+        if (typeof onTick === 'function') { try { onTick(Math.round((Date.now() - started) / 1000)); } catch (e) {} }
+        return poll(jobId);
+      });
+  }
+  function start() {
+    return fetch(jobUrl, { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.status !== 202 || !res.j || !res.j.jobId) return { ok: res.ok, j: res.j };
+        return poll(res.j.jobId);
+      });
+  }
+  return start();
+}
+
 function ensureInterior() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.url) {
     return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages });
   }
-  return fetch(key)
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+  return runRenderJob(key, 'print-interior', function (secs) {
+    // The reader is told it is still working, which is the whole point of a ticket.
+    try { showPrintBtnMsg('Building your interior file\u2026 ' + secs + 's', null); } catch (e) {}
+  })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
@@ -16921,11 +17141,14 @@ function reorderFromOrder(id) {
   var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
   if (!o) return;
   if (!o.campaign_id) {
-    showAlert('The campaign this book belonged to has been deleted, so it cannot be reordered.');
+    appNotice('This book cannot be reordered.',
+      'The campaign this book belonged to has been deleted, so there is nothing left to reorder from.');
     return;
   }
   if (!o.interior_pdf_url || !o.cover_pdf_url) {
-    showAlert('This order did not keep both print files, so it cannot be reordered directly. You can build a fresh order from the Publish page.');
+    appNotice('This order cannot be reordered directly.',
+      'This order did not keep both print files, so there is nothing to send to the printer a second time.',
+      'You can build a fresh order from the Publish page.');
     return;
   }
   // v3.0.667 -- TD-465. SAY WHY IT FAILED BEFORE THEY SEND THE SAME FILES AGAIN.
@@ -17434,8 +17657,10 @@ function orderInProgress() {
 // blocked the change (caller should return without applying it).
 function blockLayoutChangeIfOrdering() {
   if (!orderInProgress()) return false;
-  if (typeof showAlert === 'function') {
-    showAlert('You have a print order in review. Open the Order tab and click Back to cancel it before changing the layout, or the book you order will not match what you see here.');
+  if (typeof appNotice === 'function') {
+    appNotice('Your layout is locked while an order is in review.',
+      'You have a print order in review, so the layout cannot be changed -- otherwise the book you receive would not match the one you are looking at.',
+      'Open the Order tab and click Back to cancel the order, then change the layout.');
   }
   return true;
 }
@@ -17494,8 +17719,12 @@ function reviewPrintOrder() {
         body.pageCount = intr.pages;
         updatePrintPageDisplay(intr.pages, true);
       }
-      return fetch(printCoverUrl())
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
+      // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
+      // with most of the ceiling already spent.
+      return runRenderJob(printCoverUrl(), 'print-cover', function (secs) {
+        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', null); } catch (e) {}
+      });
     })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {

@@ -12,6 +12,13 @@ const path = require('path');
 const { uploadFile, deleteFile, fetchFile, copyObject } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { flattenPdf } = require('../services/printing/flattenPdf');
+// v3.0.686 -- TD-406. The cover scrim is a PNG alpha ramp, not a CSS gradient: Ghostscript
+// cannot reproduce the construct Chromium emits for a gradient, and the flatten erased it from
+// every print-bound cover. See services/printing/scrimRamp.js for the measurements.
+// v3.0.688 -- TD-490. The four directional band ramps are RETIRED: a haze around the lettering
+// needs no direction, so top / middle / bottom now share one image instead of three that could
+// drift. scrimCss stays exported for reference; nothing here reads it any more.
+const { coverHazeCss: COVER_HAZE_CSS } = require('../services/printing/scrimRamp');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
 const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
@@ -2350,7 +2357,12 @@ function builtTitleCss(size) {
     ? COVER_SIZE_RATIO[String(size || 'medium')] : 1;
   // Capped at 96 so Large cannot push the artwork past the caption and into the frame.
   var pct = Math.min(96, Math.round(BUILT_TITLE_BASE_PCT * r));
-  return '.cover-built-title { display:block; margin:0 auto; width:' + pct + '%; height:auto;' +
+  // v3.0.688 -- THE WIDTH MOVES TO THE HAZE BOX. It cannot stay on the image: the haze box wraps
+  // the title and is shrink-to-fit, so a percentage width on a child would resolve against a box
+  // whose width that child defines -- circular, and the browser falls back to the PNG's intrinsic
+  // size. Sizing the BOX and filling it keeps one number and makes the haze track the drawing.
+  return '.cover-title-haze { width:' + pct + '%; }' +
+         ' .cover-built-title { display:block; margin:0 auto; width:100%; height:auto;' +
          ' object-fit:contain; }';
 }
 function builtTitleHtml(url) {
@@ -2410,11 +2422,11 @@ function coverSizeCss(size) {
 var COVER_PLACE = {
   bottom: '',
   top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
-    ' background:linear-gradient(to bottom, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }' +
+    ' }' +
     ' .cover-art-img { object-position:center bottom; }',
   middle: '.cover-art-caption { top:50%; bottom:auto; height:46%; transform:translateY(-50%);' +
     ' justify-content:center; padding:0 0.4in;' +
-    ' background:linear-gradient(to bottom, rgba(10,6,4,0) 0%, rgba(10,6,4,0.6) 18%, rgba(10,6,4,0.95) 50%, rgba(10,6,4,0.6) 82%, rgba(10,6,4,0) 100%); }' +
+    ' }' +
     ' .cover-art-img { object-position:center center; }'
 };
 function coverPlaceCss(place) {
@@ -5025,7 +5037,8 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
-  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
+  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in; }
+  ${COVER_HAZE_CSS}
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
@@ -5072,8 +5085,10 @@ ${fCover ? `<!-- COVER PAGE -->
       <img class="cover-art-img" src="${campaign.cover_image_url}" alt="" />
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
+        <div class="cover-title-haze"><span class="cover-title-haze-fx"></span>
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
+        </div>
       </div>
     </div>
   </div>` : `<div class="cover-content">
@@ -5639,7 +5654,8 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
-  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
+  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in; }
+  ${COVER_HAZE_CSS}
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
@@ -5870,8 +5886,10 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <img class="cover-art-img" src="${coverImg}" alt="" />
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
+        <div class="cover-title-haze"><span class="cover-title-haze-fx"></span>
         ${_builtTitle ? builtTitleHtml(_builtTitle) : `<div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>`}
+        </div>
       </div>
     </div>
   </div>` : `<div class="cover-content">
@@ -6231,7 +6249,130 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
 // Phase 1 renders at the document's native 8.5x11 trim; Lulu pads bleed. True
 // full-bleed 8.75x11.25 geometry + high-res panel regen come in Phase 2.
 // ============================================================
-router.get('/print-interior/:campaignId', requireAuth, async function(req, res) {
+// =================================================================================================
+// v3.0.681 -- TD-390. TAKE A NUMBER INSTEAD OF STANDING AT THE COUNTER.
+//
+// print-interior and print-cover rendered, flattened and uploaded WHILE THE BROWSER WAITED. There is
+// roughly a 100-second ceiling between the customer and this server that belongs to the proxy, not
+// to us: past it the connection is cut and the reader sees a failure -- for work that usually
+// FINISHED. Ghostscript alone measured 42 seconds on a 49-page book, and the flatten runs on every
+// path, including the fast subtraction path that skips rendering entirely. The page cap is 400.
+//
+// Same shape as the save-optimized job (v3.0.605) on purpose, because a second pattern for the same
+// problem is how two things that must agree start to drift. One store, one status route, one client
+// helper -- and this store is shared by both routes rather than each growing its own.
+//
+// ALWAYS ASYNC, EVEN FOR A TEN-PAGE BOOK. Making it conditional on size would mean the slow path
+// only ever runs for the rare large book -- which is to say it would be the path nobody tests and
+// everybody depends on. Ian's largest book today is 90 pages, so a size-gated version would never
+// have run at all before a customer found it.
+//
+// IN MEMORY, WITH EYES OPEN, exactly as the save job is: the failure mode is what matters. An
+// unknown job id answers state=unknown rather than an error, and the client re-issues the request.
+// It is the same TD-435 constraint as everything else in this file and does not make it worse.
+var _renderJobs = new Map();
+var RENDER_JOB_TTL_MS = 30 * 60 * 1000;
+var RENDER_JOB_MAX = 60;
+function renderJobPrune() {
+  try {
+    var now = Date.now();
+    _renderJobs.forEach(function (j, id) {
+      if (now - (j.finishedAt || j.startedAt || now) > RENDER_JOB_TTL_MS) _renderJobs.delete(id);
+    });
+    while (_renderJobs.size > RENDER_JOB_MAX) {
+      var oldest = _renderJobs.keys().next();
+      if (oldest.done) break;
+      _renderJobs.delete(oldest.value);
+    }
+  } catch (e) {}
+}
+// Hand the ticket over and get out of the way. Everything before this call is cheap -- a database
+// read and some string work -- so validation failures still come back immediately and unchanged.
+function renderJobStart(req, res, kind) {
+  var id = PROC_ID + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  var job = { id: id, kind: kind, userId: req.session.userId, state: 'running',
+              startedAt: Date.now(), finishedAt: 0, result: null, status: 0, body: null };
+  renderJobPrune();
+  _renderJobs.set(id, job);
+  res.status(202).json({ ok: true, async: true, jobId: id, kind: kind, startedAt: job.startedAt });
+  return job;
+}
+// The work reports through the job because the response has already gone. Both routes answered with
+// res.json(payload) or res.status(n).json(err); these two record exactly that, so the client sees
+// the same payloads it always did.
+function renderJobDone(job, body) {
+  if (!job) return;
+  job.state = 'done'; job.status = 200; job.body = body; job.finishedAt = Date.now();
+}
+function renderJobFail(job, status, body) {
+  if (!job) return;
+  job.state = 'error'; job.status = status || 500; job.body = body; job.finishedAt = Date.now();
+}
+// The wrapper. It drives the SAME handler through a captured response, so every status code, every
+// error body and the ordering of the checks are whatever the synchronous route does -- there is no
+// second implementation to keep in step, which is the whole reason it is built this way.
+//
+// ?download= is deliberately NOT routed through here: that path streams raw PDF bytes to a browser
+// that navigated to the URL, and a navigating browser cannot poll. It stays synchronous and keeps
+// its exposure to the ceiling; it is a preview, not the money path. Recorded rather than hidden.
+function renderJobCaptureRes(job) {
+  var _status = 200;
+  return {
+    status: function (n) { _status = n; return this; },
+    set: function () { return this; },
+    type: function () { return this; },
+    json: function (body) {
+      if (_status >= 400) renderJobFail(job, _status, body); else renderJobDone(job, body);
+      return this;
+    },
+    // A handler that reaches res.send here asked for ?download=, which the wrapper refuses above.
+    // Recorded as an error rather than silently dropped, so it cannot become a job that never ends.
+    send: function () {
+      renderJobFail(job, 500, { error: 'render_job_stream', message: 'That request streams a file and cannot be run as a job.' });
+      return this;
+    },
+    get headersSent() { return job.state !== 'running'; }
+  };
+}
+var RENDER_JOB_KINDS = { 'print-interior': true, 'print-cover': true };
+router.post('/render-job/:kind/:campaignId', requireAuth, async function (req, res) {
+  var kind = String(req.params.kind || '');
+  if (!RENDER_JOB_KINDS[kind]) return res.status(400).json({ error: 'unknown_render_kind' });
+  if (req.query.download) return res.status(400).json({ error: 'download_is_synchronous' });
+  var job = renderJobStart(req, res, kind);
+  try {
+    var sink = renderJobCaptureRes(job);
+    if (kind === 'print-interior') await printInteriorHandler(req, sink);
+    else await printCoverHandler(req, sink);
+    // A handler that returned without answering would leave the job running forever. It cannot
+    // happen today -- every path ends in a res call -- so this is the belt, and it is loud.
+    if (job.state === 'running') {
+      renderJobFail(job, 500, { error: 'render_job_no_answer', message: 'The render finished without producing a result.' });
+    }
+  } catch (e) {
+    console.error('[render-job] ' + kind + ' failed:', e && e.message ? e.message : e);
+    renderJobFail(job, 500, { error: 'render_failed', message: (e && e.message) || 'render failed' });
+  }
+});
+router.get('/render-status/:jobId', requireAuth, function (req, res) {
+  try {
+    var job = _renderJobs.get(String(req.params.jobId || ''));
+    // UNKNOWN IS NOT AN ERROR -- a restart, a redeploy or an aged-out job all land here, and none of
+    // them means the render failed. The client starts again rather than being told a lie.
+    if (!job) return res.json({ state: 'unknown', proc: PROC_ID, up: Math.round(process.uptime()) });
+    if (job.userId !== req.session.userId) return res.status(403).json({ state: 'error', error: 'not_yours' });
+    if (job.state === 'done') return res.json({ state: 'done', status: 200, body: job.body });
+    if (job.state === 'error') return res.json({ state: 'error', status: job.status, body: job.body });
+    return res.json({ state: 'running', elapsedMs: Date.now() - job.startedAt, kind: job.kind });
+  } catch (e) {
+    return res.status(500).json({ state: 'error', status: 500, body: { error: 'status_failed' } });
+  }
+});
+
+router.get('/print-interior/:campaignId', requireAuth, printInteriorHandler);
+// v3.0.681 -- TD-390. Named, so the async wrapper can drive THE SAME function. The body below is
+// untouched: one code path, two entry points, rather than a second copy that has to be kept in step.
+async function printInteriorHandler(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
@@ -6503,7 +6644,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
   }
-});
+}
 
 // ============================================================
 // PRINT COVER (Phase 3) -- one-piece wrap PDF: back | spine | front.
@@ -6663,10 +6804,11 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
       '<div class="wc-frame"><img class="wc-img cover-art-img" src="' + frontImg + '" alt="" />' +
       '<div class="wc-fade"></div>' +
       '<div class="wc-front-cap cover-art-caption">' +
+      '<div class="cover-title-haze"><span class="cover-title-haze-fx"></span>' +
       (builtTitle ? builtTitleHtml(builtTitle)
                   : ('<div class="wc-title cover-art-title">' + bookTitle + '</div>' +
                      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : ''))) +
-      '</div></div>' + mark
+      '</div></div></div>' + mark
     : framing +
       '<div class="wc-frame"><div class="wc-textfront">' +
       '<div class="wc-eyebrow">The Saga of</div><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
@@ -6685,6 +6827,35 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // the two-day stuck-pack hang. So the printed cover was rendering in Georgia.
     baseFontCss() + titleFaceCss +
     "body { font-family: 'Cinzel','Georgia',serif; background:#0a0604; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }" +
+    // v3.0.684 -- TD-406. THE SCRIM IS A BACKGROUND, AND ONLY THIS BUILDER NEVER SAID IT MAY PRINT.
+    //
+    // THREE BUILDERS DRAW A COVER. buildSessionHTML and buildNovelHTML each emit
+    //     @media print { * { print-color-adjust:exact; } }
+    // and their caption gradient prints. This one set the property on BODY ALONE and never opened
+    // an @media print block at all, and its caption gradient did not print. That is the whole of
+    // TD-406: not the Puppeteer path, not Ghostscript, ONE BUILDER OUT OF THREE.
+    //
+    // THE CONTROL IS ON THE SAME PAGE. wc-fade -- the soft darkening around the artwork edge -- is
+    // an inset box-shadow, and it prints on every cover including the broken one. A shadow is not a
+    // background, so print-color-adjust does not govern it. Backgrounds vanished and shadows
+    // survived, which is exactly what TD-406 measured and then attributed to the wrong cause.
+    //
+    // MEASURED, NOT REASONED: Ghostscript was ruled out by running the exact flatten command from
+    // flattenPdf.js over gradients built four different ways -- axial shading through a luminosity
+    // soft mask, constant alpha, stepped solid bands, and an image alpha ramp, plain and nested
+    // inside a clipped transparency group. All eight survived unchanged. -dCompatibilityLevel=1.3
+    // composites transparency; it does not discard it. And printBackground is true in renderPdf.js,
+    // the one renderer every PDF in this product goes through.
+    //
+    // WHY BODY WAS NOT ENOUGH is not established. The property is specified as inherited and it
+    // should have been. What IS established is that the two builders carrying the * rule print the
+    // gradient and the one carrying only the body rule does not. This copies the declaration that
+    // demonstrably works rather than inventing a second way to say it.
+    //
+    // v3.0.682 IS WHY THIS IS ADDITIVE. That build replaced the gradient with an inset box-shadow on
+    // the caption box -- a 52 percent tall element -- so the shadow was clipped to its own edge and
+    // drew a hard line across the artwork. Nothing here touches a declaration that already works.
+    '@media print { * { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }' +
     '.wrap { position:relative; width:' + W + 'in; height:' + H + 'in; background:#0a0604; overflow:hidden; }' +
     '.wc-panel { position:absolute; top:0; height:' + H + 'in; overflow:hidden; }' +
     '.wc-back  { left:0; width:' + sideW + 'in; }' +
@@ -6700,7 +6871,8 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
     '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
-    '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
+    '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; }' +
+    COVER_HAZE_CSS +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
     '.wc-title { font-size:' + COVER_PT.artTitle + 'pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
@@ -6779,7 +6951,9 @@ router.get('/cover-dims-probe/:campaignId', requireAuth, async function (req, re
     return res.status(500).json({ error: (e && e.message) || 'cover-dims-probe failed' });
   }
 });
-router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
+router.get('/print-cover/:campaignId', requireAuth, printCoverHandler);
+// v3.0.681 -- TD-390. Named for the same reason as printInteriorHandler above.
+async function printCoverHandler(req, res) {
   try {
     const db = await getDb();
     const campaign = await db.prepare(
@@ -6883,7 +7057,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     console.error('[print-cover] error:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
-});
+}
 
 // ============================================================
 // PUBLISH TO PUBLIC LIBRARY (Stories tab)
