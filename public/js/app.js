@@ -16349,12 +16349,69 @@ function prepLayoutLoad(){
   // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
   prepApplyOwnershipLock();
 }
+// =====================================================================================================
+// v3.0.702 -- TD-498. A MISSING CONTROL MEANT RESET TO DEFAULT, AND IT WAS WRITTEN TO THE DATABASE.
+// =====================================================================================================
+//
+// CL_SELECTS is ONE registry read by TWO layout UIs, and they do not carry the same controls.
+// Measured against app.html rather than assumed:
+//
+//   arrange, border, caption, font   -- in BOTH  (cl-* and pcl-*)
+//   titlePlace, titleSize, titleStyle -- pcl-* ONLY
+//   paper, narr                       -- in NEITHER
+//
+// Both collectors did `o[k] = el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]`, so a control that is not
+// on screen was read as A DELIBERATE CHOICE OF THE DEFAULT. Pressing Apply in the Layout modal
+// therefore wrote titlePlace:'bottom', titleSize:'medium', titleStyle:'chronicle' over whatever the
+// reader had picked -- and saveCustomLayoutPrefs writes through to saveCampaignLayoutOpts, so it is
+// PERSISTED to fork_book_prefs, not merely local.
+//
+// IT CROSSES FROM A SESSION TO THE BOOK, WHICH IS WHY IT IS WORSE THAN IT LOOKS. The only button
+// that opens that modal is the session Preview tab's Layout button, openCustomLayout('session') --
+// but customOpts is ONE unified object shared by the session and the book. So a session-scoped
+// Apply wiped the BOOK COVER's title settings, _syncLayoutPanels repainted the three Prep dropdowns
+// from the wiped object, the book preview re-rendered without the placement, and the next touch of
+// anything on the Prep panel committed the loss to the novel fork as well.
+//
+// THE COMMENT ABOVE CL_SELECTS PREDICTED THIS EXACTLY -- "a control added outside it would work in
+// whichever half somebody remembered" -- and adding titleSize to the registry in v3.0.554 wired it
+// into a form with no such control. Instead of half-working it half-DESTROYED.
+//
+// THE FIX IS THE FALLBACK, NOT THE REGISTRY. An absent control means NO OPINION, so the value in
+// force is carried through untouched. CUSTOM_LAYOUT_DEFAULTS is still the last resort, for a key
+// that has genuinely never been set.
+//
+// THE SHAPE OF THE RESULT IS DELIBERATELY UNCHANGED: the same seventeen keys in the same order, so
+// the co string this serialises into is byte-identical for every book that has not lost anything.
+// Six keys in CUSTOM_LAYOUT_DEFAULTS are in NEITHER registry -- pano, aside, companion, emphasis,
+// watermark, hidelogo -- and are therefore dropped from customOpts on every commit today. None has
+// a control anywhere in app.html, so none is reachable, and the server carries its own defaults for
+// them. Preserving them here would start putting new keys on the wire to fix nothing; that is
+// TD-504, filed rather than smuggled into this build.
+//
+// paper AND narr STAY AS THEY ARE, AND THAT IS NOT THE SAME BUG. _normalizeLayoutBlob FORCES
+// paper:'white' and narr:'plain' on every load on purpose (TD-168, TD-134): both pickers were
+// removed and the server forces white regardless. Under the new fallback they simply carry the
+// forced value through, which is the same answer by a better route.
+function clCollect(prefix) {
+  var cur = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
+  var o = {};
+  CL_SELECTS.forEach(function (k) {
+    var el = document.getElementById(prefix + k);
+    if (el) { o[k] = el.value; return; }
+    o[k] = (cur[k] !== undefined) ? cur[k] : CUSTOM_LAYOUT_DEFAULTS[k];
+  });
+  CL_TOGGLES.forEach(function (k) {
+    var el = document.getElementById(prefix + k);
+    if (el) { o[k] = el.checked ? 1 : 0; return; }
+    o[k] = ((cur[k] !== undefined) ? cur[k] : CUSTOM_LAYOUT_DEFAULTS[k]) ? 1 : 0;
+  });
+  return o;
+}
 // Read the layout panel (pcl-*) into the unified customOpts + mark it active, WITHOUT rendering.
 function prepLayoutCommit(){
   if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return false;
-  var o={};
-  CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
-  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  var o=clCollect('pcl-');
   customOpts=o;
   customActive=true;
   saveCustomLayoutPrefs('novel');
@@ -16388,9 +16445,7 @@ function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal
 function resetCustomLayout(){ customOpts=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(_clCtx); openCustomLayout(_clCtx); }
 function applyCustomLayout(){
   if(_clCtx==='novel' && blockLayoutChangeIfOrdering()) return;
-  var o={};
-  CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
-  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  var o=clCollect('cl-');
   customOpts=o;
   customActive=true;
   saveCustomLayoutPrefs(_clCtx);
