@@ -532,6 +532,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .progress-wrap{margin-top:14px;display:none;}
 .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:8px;}
 .progress-fill{height:100%;background:var(--crimson);border-radius:2px;width:0%;transition:width 0.3s;}
+/* v3.0.701 -- TD-489. THE SHEEN, AND WHY IT IS PART OF THE FIX RATHER THAN A FLOURISH.
+   creepBar can never arrive, but past ~99% each step moves the bar less than a pixel -- so a reader
+   watching the last stretch of a long render would see a bar that has, as far as they can tell,
+   stopped. The maths and the screen have to agree. This runs on every .progress-fill including the
+   Before/After bar, which Ian deliberately left parked at 45% because the real page counter takes
+   over there: a parked bar that still looks alive is exactly right for that one too.
+   SCREEN ONLY. Nothing here goes near the print path -- these are app chrome, never rendered into
+   a PDF -- so the standing rule about gradients through the flatten does not apply. */
+.progress-fill{position:relative;overflow:hidden;}
+.progress-fill::after{content:"";position:absolute;top:0;bottom:0;width:40%;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.30) 50%,rgba(255,255,255,0) 100%);
+  animation:pf-sheen 2.2s linear infinite;}
+@keyframes pf-sheen{0%{left:-40%;}100%{left:100%;}}
+@media (prefers-reduced-motion: reduce){.progress-fill::after{animation:none;display:none;}}
 .progress-msg{font-size:12px;color:var(--text-muted);text-align:center;}
 
 /* MODAL */

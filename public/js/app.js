@@ -4412,11 +4412,7 @@ function generateNarrativeAndImages() {
   // whole way rather than sprinting then parking. Ease 0.04 keeps it slow from the beginning;
   // tiny 0.10 floor keeps every 750ms tick perceptible but small; crawls slowly toward 98 (never
   // parks at 90) and _narrEnd snaps to 100 on finish.
-  var _nticker = setInterval(function() {
-    _npct += Math.max(0.10, (98 - _npct) * 0.015);
-    if (_npct > 98) _npct = 98;
-    if (_nfill) _nfill.style.width = _npct.toFixed(1) + '%';
-  }, 750);
+  var _nticker = creepBar(_nfill, _npct, 0.012, 750);
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -4510,11 +4506,7 @@ function generateNarrativeOnly() {
   // small but always moving; crawls slowly toward 98 (never parks at 90), snaps 100 on done.
   // (The old curve eased 12%/tick of the gap at 400ms -- it sprinted to ~85 then parked, which
   // read as stalled.)
-  var ticker = setInterval(function () {
-    pct += Math.max(0.10, (98 - pct) * 0.015);
-    if (pct > 98) pct = 98;
-    if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 750);
+  var ticker = creepBar(fill, pct, 0.012, 750);
   function endBar(done) {
     clearInterval(ticker);
     clearGenLock();
@@ -6057,6 +6049,45 @@ function selLayout(el, layout) {
   loadPreview(layout);
 }
 
+// =====================================================================================================
+// v3.0.701 -- TD-489. NO PROGRESS BAR MAY EVER PARK.
+// =====================================================================================================
+//
+// Ian, 2026-08-17: "ALL PROGRESS BARS in the system should never stop. They need to creep always
+// until done."
+//
+// FIVE FAKE BARS, ALL PARKED, FOR ONE STRUCTURAL REASON. Every one was
+//     pct += Math.max(FLOOR, (CEIL - pct) * ease);  if (pct > CEIL) pct = CEIL;
+// and A FLOOR PLUS A CEILING IS A PROMISE TO STOP. The floor guarantees the ceiling is reached in
+// finite time and the clamp holds it there. Four of the five were WRITTEN TO FIX THIS COMPLAINT --
+// the comments still say "never parks at 90" -- and all they did was move the parking spot from 88
+// to 98. Tuning constants cannot fix this; the shape is the fault.
+//
+// A PURE ASYMPTOTE HAS NEITHER. The step is always a fraction of the remaining gap, so it is always
+// positive and the value can never arrive. No floor, no Math.min, no clamp -- and the absence of
+// those three is the whole guarantee, which is why the guards count them at zero rather than
+// checking that the numbers look right.
+//
+// ONE HELPER, SO THE FEEL IS ONE NUMBER. Each caller keeps its own ease and tick, because a fast
+// render should still feel faster than a slow one -- but the SHAPE lives here, and there is no
+// second place for it to drift to. The callers all keep using clearInterval on what this returns,
+// so no stopping path had to be touched.
+//
+// THE SHEEN IS NOT DECORATION AND IT IS DELIBERATELY CSS-ONLY. Past about 99 percent the movement
+// is sub-pixel, so "never stops" has to be true on the SCREEN and not only in the arithmetic. It is
+// a rule on .progress-fill rather than a class this function adds and removes, because a class
+// added here would have to be removed on every one of the stopping paths -- and a bar left sheening
+// after it finished would be a new way to look stuck.
+var CREEP_ASYMPTOTE = 99.6;
+function creepBar(fill, from, ease, ms) {
+  var pct = (typeof from === 'number') ? from : 0;
+  if (fill) fill.style.width = pct.toFixed(2) + '%';
+  return setInterval(function () {
+    pct += (CREEP_ASYMPTOTE - pct) * ease;
+    if (fill) fill.style.width = pct.toFixed(2) + '%';
+  }, ms);
+}
+
 // --- Preview render progress bar (shared by the session + novel preview iframes).
 // The real server render percentage is unknowable, so the bar creeps toward ~90%
 // while Chromium renders the PDF, then snaps to 100% when the iframe finishes.
@@ -6073,12 +6104,12 @@ function startPreviewProgress(prefix, mode) {
   if (msg) msg.textContent = (mode === 'wysiwyg')
     ? 'Rendering the paged PDF (this can take several seconds)...'
     : 'Loading preview...';
-  var ease = (mode === 'wysiwyg') ? 0.04 : 0.18;
-  _previewProgress[prefix] = setInterval(function() {
-    pct += Math.max(0.4, (90 - pct) * ease);
-    if (pct > 90) pct = 90;
-    fill.style.width = pct.toFixed(1) + '%';
-  }, 300);
+  // v3.0.701 -- RETUNED, AND THE NUMBERS WERE MEASURED RATHER THAN CHOSEN. An asymptote always
+  // flattens; the only question is whether it flattens before or after the job it is describing
+  // finishes. The old eases were picked against a ceiling of 90 and go sub-pixel in about half a
+  // minute against this curve, which is inside the length of a slow WYSIWYG render.
+  var ease = (mode === 'wysiwyg') ? 0.025 : 0.08;
+  _previewProgress[prefix] = creepBar(fill, pct, ease, 300);
 }
 function stopPreviewProgress(prefix) {
   var wrap = document.getElementById(prefix + '-progress-wrap');
@@ -6246,10 +6277,10 @@ async function extractMoments() {
   msg.textContent = 'Reading your session transcript...';
 
   var pct = 5;
-  var ticker = setInterval(function() {
-    pct = Math.min(pct + Math.random() * 6, 88);
-    fill.style.width = pct + '%';
-  }, 400);
+  // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
+  // that never arrives does not need disguising, and randomness in a bar that cannot finish only
+  // makes two runs of the same length look different.
+  var ticker = creepBar(fill, pct, 0.008, 400);
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
@@ -10117,11 +10148,7 @@ function generateNarrative() {
   // Gentle creep: slow ease from a low start, tiny 0.10 floor, 750ms tick; small nudges that keep
   // crawling slowly toward 98 (never parks at 90). Replaces a random-jump-to-88 that sprinted then
   // parked. (Duplicated function -- both copies patched identically.)
-  var ticker = setInterval(function() {
-    pct += Math.max(0.10, (98 - pct) * 0.015);
-    if (pct > 98) pct = 98;
-    if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 750);
+  var ticker = creepBar(fill, pct, 0.012, 750);
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
@@ -12698,10 +12725,10 @@ async function extractMoments() {
   msg.textContent = 'Reading your session transcript...';
 
   var pct = 5;
-  var ticker = setInterval(function() {
-    pct = Math.min(pct + Math.random() * 6, 88);
-    fill.style.width = pct + '%';
-  }, 400);
+  // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
+  // that never arrives does not need disguising, and randomness in a bar that cannot finish only
+  // makes two runs of the same length look different.
+  var ticker = creepBar(fill, pct, 0.008, 400);
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
@@ -13870,11 +13897,7 @@ function generateNarrative() {
   // Gentle creep: slow ease from a low start, tiny 0.10 floor, 750ms tick; small nudges that keep
   // crawling slowly toward 98 (never parks at 90). Replaces a random-jump-to-88 that sprinted then
   // parked. (Duplicated function -- both copies patched identically.)
-  var ticker = setInterval(function() {
-    pct += Math.max(0.10, (98 - pct) * 0.015);
-    if (pct > 98) pct = 98;
-    if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 750);
+  var ticker = creepBar(fill, pct, 0.012, 750);
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
