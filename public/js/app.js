@@ -8540,7 +8540,27 @@ function titleBuildRevert() {
 function titleBuildStash() {
   if (!state.currentCampaign) return;
   var cur = _tbCur();
-  if (!cur.url) { closeTitleBuilder(); return; }   // nothing in charge; Stash has nothing to do
+  if (!cur.url) {
+    // v3.0.696 -- THIS EARLY RETURN WAS THE WHOLE OF THE 'IT TAKES TWO TRIES' BUG.
+    //
+    // Measured, not guessed. Ian read the state straight out of the console on a book where the
+    // buttons were failing:
+    //     [ built_title_url, built_title_draft_url ]  ->  [ "", "https://.../rest-...png" ]
+    // Live empty, draft holding the artwork -- which is EXACTLY the state a successful Stash
+    // leaves behind. Handed that back, this line read cur.url as falsy, called it 'nothing to do'
+    // and returned BEFORE the lock release below, so the modal shut and the five title styles
+    // stayed disabled. The v3.0.693 fix to prepApplyTitleModeLock was correct and unreachable.
+    //
+    // TWO FAULTS IN ONE LINE. It confused 'nothing in charge' with 'nothing to do' -- an already
+    // stashed title still needs the styles released -- and it did it SILENTLY, so the button
+    // looked broken rather than idle. Stash is now IDEMPOTENT: pressing it on an already stashed
+    // title releases the locks, says so, and closes.
+    if (typeof prepApplyOwnershipLock === 'function') prepApplyOwnershipLock();
+    if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    if (typeof showAlert === 'function') showAlert('Already stashed. The title styles are yours again; press Done & Use to put the drawing back.');
+    closeTitleBuilder();
+    return;
+  }
   _tbErr('');
   _tbSave({
     url: '', src: '', prevUrl: '', prevSrc: '',
