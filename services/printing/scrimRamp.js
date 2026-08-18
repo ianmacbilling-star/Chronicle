@@ -193,7 +193,7 @@ const HAZE_PEAK = 0.635;   // alpha at the centre
 //     690        centre 240  box 240  25% 174  50% 55  75% 5
 //     asked for  centre 120  box ~110  25% ~43  50% ~14  75% ~1
 //     691        centre 120  box  97  25%  52  50% 15  75% 1
-const HAZE_POWER = 6.0;    // falloff shape; raised to hold the outer field while the centre darkens
+const HAZE_POWER = 18.0;   // steep, because the flat core now reaches the box edge
 // Where the title box sits inside the image, derived from the semi-axes rather than named twice.
 // v3.0.691 -- THE FLAT CORE SHRINKS, BECAUSE THE SHAPE WAS THE COMPLAINT.
 // Ian, looking at a rendered plain-text title: "it looks like a rectangle around the letters...
@@ -205,7 +205,22 @@ const HAZE_POWER = 6.0;    // falloff shape; raised to hold the outer field whil
 // reach v3.0.688 lacked. The core is still centred on the type, so the words keep the densest
 // part; the ends now sit a little below peak instead of on a flat top, which at HALF strength
 // is a shading rather than a plate.
-const PLATEAU = 0.85;      // flat core as a fraction of the title box
+// v3.0.694 -- BACK TO THE FULL BOX. Ian: "I don't think the shape before was the problem... it was
+// just way to strong." He is right, and v3.0.691 shrank the wrong thing.
+//
+// The two reports that had to be satisfied together were "I don't want to realize there is a fade
+// there" and "the s in Ages is hard to see". With a 0.85 core the outer glyphs sat on the falloff
+// -- 122 against 162 at the centre -- which is exactly why the END of a line went thin while the
+// middle looked fine. Coverage of the type is not the thing to trade away; STRENGTH and REACH are.
+//
+// So the flat core covers the whole title box again (every letter gets the same alpha, wherever it
+// sits in the line) and the price is paid by the exponent instead: 6 -> 18, which collapses the
+// field almost immediately outside the box. Same centre density Ian approved in v3.0.692, and LESS
+// spill than v3.0.692 had.
+//     690   centre 240  box 240  25% 179  50% 66  <- covered the type, but far too strong
+//     692   centre 162  box 122  25%  53  50% 10  <- right strength, starved the outer letters
+//     694   centre 162  box 162  25%  51  50%  1
+const PLATEAU = 1.0;       // flat core as a fraction of the title box
 const INNER_X = PLATEAU / HAZE_RX;
 const INNER_Y = PLATEAU / HAZE_RY;
 const HAZE_W = 192;
