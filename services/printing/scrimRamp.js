@@ -183,7 +183,20 @@ const HAZE_RY = 2.30;      // semi-axis / title-box half-height
 // alone would drag the outer reaches back up by 35% as well -- and the outer field is the one
 // thing that is now right. Solving for the exponent that holds the 25%-out point at ~50 while the
 // centre rises gives 6.0. Two numbers moved so that only ONE thing changes on the page.
-const HAZE_PEAK = 0.635;   // alpha at the centre
+// v3.0.695 -- THE WASH STEPS BACK AND THE LETTERS CARRY THEIR OWN DARKNESS.
+// Ian: "Most covers look fine but others you can see the Rectangle." Six rounds of tuning moved
+// between two failure states -- reach far enough to cover the outermost glyph and the region is
+// visible; hug the type and the ends of a line go thin. A single blob cannot do both, because a
+// blob has an extent and letters do not.
+//
+// v3.0.694 IS THE PROVEN FALLBACK AND ITS NUMBERS ARE KEPT HERE ON PURPOSE:
+//     PLATEAU 1.0   HAZE_PEAK 0.635   HAZE_POWER 18   RX 1.55   RY 2.30
+//     centre 162  box 162  25% 45  50% 0
+// Ian on that build: "this is genuinely not bad... hold onto it and remember what it is." To go
+// back, restore HAZE_PEAK to 0.635 and drop the halo block from hazeCss().
+//
+// The wash now only lifts very bright artwork; the legibility comes from the halo below.
+const HAZE_PEAK = 0.22;    // alpha at the centre
 // v3.0.691 -- STEEPER AGAIN. Ian: "And then cut the outer edges by another 50%."
 // SOLVED, NOT GUESSED, AND NOT STACKED. Halving the peak, steepening the exponent and shrinking
 // the core all cut the same numbers, so applying all three at their face value took the text
@@ -287,7 +300,44 @@ function hazeCss() {
     ' top:-' + py + '%; bottom:-' + py + '%; pointer-events:none;' +
     ' background-image:url(' + uri + '); background-size:100% 100%; background-repeat:no-repeat; }' +
     ' .cover-title-haze .cover-art-title, .cover-title-haze .cover-art-dates,' +
-    ' .cover-title-haze .cover-built-title { position:relative; }';
+    ' .cover-title-haze .cover-built-title { position:relative; }' +
+    haloCss();
+}
+
+// THE HALO. v3.0.695 -- TD-490.
+//
+// A shadow on the GLYPHS has no extent of its own: there is no region to notice, and the last
+// letter of a long line gets exactly what the first one gets, because each carries its own. That
+// is the pair of complaints that a single blob could never satisfy at the same time.
+//
+// TWO MECHANISMS, because there are two kinds of title and they are different objects:
+//   - PLAIN LETTERING is text, so text-shadow. Sized in `em` so it rides the font-size that
+//     coverSizeCss already sets -- Small draws a small halo and Large a large one with no second
+//     number to keep in step. `.cover-art-title` already carried `0 2px 16px`; it was never doing
+//     the work because the scrim was.
+//   - A BUILT TITLE is an IMAGE, and text-shadow does nothing to an image. filter:drop-shadow
+//     operates on the PNG's ALPHA CHANNEL, so the halo follows the drawn ink rather than the
+//     picture's bounding box. THAT ALSO RETIRES TD-491: nothing measures a box any more, so a
+//     drawing with wide transparent margins stops being a problem before it is one.
+//
+// THREE STACKED PASSES, tight to wide. One wide soft shadow reads as a smudge; a tight dense pass
+// under a wide faint one reads as depth. Same colour as the wash, so they compound rather than
+// arguing.
+//
+// PRINT RISK, STATED NOT ASSUMED: Chromium rasterises filters, which SHOULD put drop-shadow in the
+// image-plus-soft-mask family that v3.0.686 proved survives Ghostscript -- the built title and the
+// cover vignette both already come through the flatten intact. "Should" is the word that cost four
+// hours on TD-406. CHECK A PUBLISHED COVER WITH POPPLER AND GHOSTSCRIPT BEFORE TRUSTING IT.
+function haloCss() {
+  var c = 'rgba(' + SCRIM_RGB[0] + ',' + SCRIM_RGB[1] + ',' + SCRIM_RGB[2] + ',';
+  var textHalo = c + '0.95) 0 0 0.06em, ' + c + '0.85) 0 0 0.16em, ' + c + '0.55) 0 0 0.42em';
+  // Absolute units for the image: an <img> inherits a font-size that nothing scales, so `em` here
+  // would be a constant pretending to be responsive.
+  var imgHalo = 'drop-shadow(0 0 0.035in ' + c + '0.95)) drop-shadow(0 0 0.09in ' + c + '0.8))'
+    + ' drop-shadow(0 0 0.22in ' + c + '0.5))';
+  return ' .cover-title-haze .cover-art-title, .cover-title-haze .cover-art-dates,' +
+    ' .cover-title-haze .wc-title, .cover-title-haze .wc-sub { text-shadow:' + textHalo + '; }' +
+    ' .cover-title-haze .cover-built-title { filter:' + imgHalo + '; }';
 }
 
 // The full CSS declaration, so every call site emits the same three properties. background-size
