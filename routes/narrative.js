@@ -22,6 +22,73 @@ const { TEXT_MODEL } = require('../config/models');
 // IMPORTANT: the ids here are the source of truth for what is VALID. The
 // frontend keeps a parallel display list (name/description/example) keyed by
 // these same ids — keep the ids in sync.
+// =====================================================================================================
+// v3.0.704 -- TD-507. THE SYSTEM PROMPT SAID "FANTASY" AND OUTRANKED EVERYTHING THAT SAID OTHERWISE.
+// =====================================================================================================
+//
+// TWO FAULTS, ONE CAUSE, AND v3.0.703 FIXED NEITHER BECAUSE IT EDITED THE WRONG MESSAGE.
+//
+// (1) LANGUAGE. Ian, 2026-08-18, after v3.0.703 shipped and was tested: "703 was applied when i did
+//     it... The captions were Spanish but the Narratives themselves were not." v3.0.703 put the
+//     director's instructions in the USER message under a mandatory heading. That was the right
+//     content in the weaker of the two places. The SYSTEM message said "You are a skilled fantasy
+//     author writing graphic novel narrative prose" and every style carries an ENGLISH example
+//     sentence beside it, so the whole persona pulled toward English and won. extract.js has no
+//     comparable system prompt, which is exactly why the captions obeyed and the prose did not.
+//
+// (2) GENRE. Ian, same day: "'You are a skilled fantasy author' should be based on whatever genre
+//     they select on the campaign Details modal. We default to fantasy but if they pick something
+//     different that prompt should change." Genre steering already reached the USER prompt
+//     (_genreProse, v3.0.486) -- but the model was simultaneously being TOLD IT WAS A FANTASY
+//     AUTHOR, so a Horror or Nonfiction campaign had its own steering argued with from above.
+//
+// THE LESSON WORTH KEEPING: a system prompt is not a stronger user prompt, it is a different
+// instrument. Anything that must hold against the model's own inclination -- what language this is
+// in, what kind of author is writing -- belongs there. v3.0.703's block stays where it is and is
+// still doing useful work; this adds the half that can actually win.
+//
+// 'other' RESOLVES TO NO PERSONA WORD, deliberately: genres.js makes it EXCLUSIVE and emits no
+// steering because it defers to the campaign prompt. Naming it in the persona would reintroduce
+// exactly the override this build is removing.
+// THE PRIMARY GENRE ONLY, because genres.js states the rule: order is meaningful and the FIRST is
+// primary. Chaining two into the persona produced "skilled horror and mystery / crime author" --
+// found by running this rather than by reading it. The secondary genres still steer through
+// _genreProse in the user prompt, which is where nuance belongs; the persona is one clean noun.
+//
+// FILTERED BY SLUG, NOT LABEL. The first cut tested the LABEL against 'other' and let
+// "skilled other (use prompt) author" through, which is the failure this whole build is about --
+// a persona asserting something the campaign never asked for.
+function narrativePersona(campaignRow) {
+  var slugs = [];
+  try { slugs = genresvc.campaignGenres(campaignRow) || []; } catch (e) { slugs = []; }
+  var primary = slugs[0];
+  if (!primary || primary === genresvc.EXCLUSIVE) return 'skilled author';
+  var label = '';
+  try { label = (genresvc.genreLabels([primary]) || [])[0] || ''; } catch (e) { label = ''; }
+  // Labels are display strings and a few carry a slash or a parenthetical; take the head of the
+  // slash pair so the sentence reads as a kind of author rather than as a menu entry.
+  label = String(label).split('/')[0].split('(')[0].trim().toLowerCase();
+  if (!label) return 'skilled author';
+  return 'skilled ' + label + ' author';
+}
+// buildNarrativeSystem: the ONE place the system message is assembled.
+//
+// split/join rather than replace so the persona swap covers every occurrence and is a harmless
+// no-op if the phrase is ever reworded -- a silent no-op being far better here than a half-swapped
+// prompt. A guard asserts the phrase count, so a reword shows up as a failed build rather than as
+// prose that quietly goes back to sounding like fantasy.
+function buildNarrativeSystem(styleSystem, campaignRow, notes) {
+  var base = String(styleSystem || '').split('a skilled fantasy author').join('a ' + narrativePersona(campaignRow));
+  if (!notes) return base;
+  return 'DIRECTOR INSTRUCTIONS -- THESE OVERRIDE EVERYTHING BELOW, INCLUDING THE PERSONA AND THE ' +
+    'NARRATIVE STYLE:\n' + notes + '\n' +
+    'These are the reader\'s own instructions and they outrank your own judgment. If they name a ' +
+    'LANGUAGE, write EVERY string you return -- intro, moment, bridge and outro -- entirely in that ' +
+    'language, including any text that the examples below happen to show in English. If they name a ' +
+    'tone, tense, formality, or a way of naming or addressing a character, apply it throughout. Do ' +
+    'NOT reorder events to satisfy them; the panel order is already settled.\n\n' + base;
+}
+
 // ============================================================
 const NARRATIVE_STYLES = (function () {
   const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
@@ -239,7 +306,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const _genreProse = genresvc.genreSteering(campaign && campaign.genres, 'prose');
   const _campPrompt = genresvc.campaignPrompt(campaign && campaign.campaign_prompt);
   const prompt =
-    'You are a skilled fantasy author writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
+    // v3.0.704 -- TD-507. Was hardcoded 'fantasy', two lines above the _genreProse steering it
+    // argued with. Same persona helper as the system message, so the two cannot disagree.
+    'You are a ' + narrativePersona(campaign) + ' writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
     'Campaign: ' + campaign.name + '\n' +
     (campaign.lore && campaign.lore.trim() ? ('World / Lore (background for consistency and continuity across sessions \u2014 NOT events of this session; the transcript is the sole source of what actually happened):\n' + campaign.lore.trim() + '\n\n') : '') +
     'Session: ' + session.name + '\n' +
@@ -385,7 +454,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       body: JSON.stringify({
         model: TEXT_MODEL,
         max_tokens: 8000,
-        system: styleBundle.system,
+        // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
+        // both the genre steering and the director's instructions in the user message.
+        system: buildNarrativeSystem(styleBundle.system, campaign, directorNotes),
         messages: [{ role: 'user', content: prompt }]
       })
     });
