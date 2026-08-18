@@ -613,7 +613,11 @@ router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async
     // which is the same fault as v3.0.645: a check that exercises the function and not the wire.
     const body = (req.body && req.body.patch) || {};
     const patch = {};
-    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote'].forEach(function (k) {
+    // v3.0.700 -- 'stash' ADDED. This allowlist silently ate 'draft' and 'promote' in v3.0.657 and
+    // the failure was invisible: a stripped verb leaves a patch that still looks valid, so the
+    // write went through meaning something else entirely. A new verb in titleTarget is not a
+    // feature until it is also a word this line knows.
+    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote', 'stash'].forEach(function (k) {
       if (body[k] !== undefined) patch[k] = body[k];
     });
     // A promote names no fields on purpose -- it uses the draft already on the row -- so it is a

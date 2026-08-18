@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -2499,7 +2499,12 @@ function coverSubtitle(pageOpts) {
 // preview of an edit that has not been saved yet. The pageOpts builders below resolve that order.
 function applyForkBookMeta(campaign, fbm) {
   var _f = fbm || {};
-  campaign.cover_image_url = _f.cover_image_url || campaign.campaign_image_url || '';
+  // v3.0.698 -- TD-497. PRESENCE, NOT TRUTHINESS. The six `if (!campaign.cover_image_url &&
+  // campaign.campaign_image_url)` lines that run BEFORE this one are left exactly as they are:
+  // they seed the campaign row for a book with no fork prefs at all, which is still the right
+  // default. This line is the one that decides for a book that HAS prefs, and it is the only one
+  // that ever saw the reader's choice.
+  campaign.cover_image_url = coverFromPrefs(_f, campaign.cover_image_url || campaign.campaign_image_url || '');
   campaign.back_cover_image_url = _f.back_cover_image_url || '';
   campaign.title_image_url = _f.title_image_url || '';
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times

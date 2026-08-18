@@ -1353,12 +1353,32 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
       var _prevBT = _rMeta.prev_built_title || null;
       // v3.0.660 -- reverting TO a picture demotes the title that was live rather than dropping
       // it, so it stays in the builder and its bytes stay referenced.
+      // v3.0.700 -- TD-501. REVERT IS A TOGGLE NOW, NOT A ONE-WAY DOOR.
+      //
+      // Ian, 2026-08-18: the Revert pill "should pretty much always show if anything has ever
+      // been there and been changed."
+      //
+      // IT WORKED ONCE AND THEN VANISHED. The undo slot was armed on the way IN and cleared on the
+      // way BACK -- revert_image = NULL -- so one press restored the picture and left nothing to
+      // return to. The pill is drawn from that column, so it disappeared with it. Worse, the image
+      // being reverted AWAY from was handed to releaseImage, so its bytes could be collected and
+      // the choice was not merely hidden, it was gone.
+      //
+      // THE SLOTS SWAP. What was on the panel becomes what Revert restores next, which makes the
+      // control mean the same thing every time it is pressed and keeps BOTH pictures referenced.
+      // That is also why releaseImage is no longer called here: nothing has stopped being used.
+      //
+      // THE MARKER SWAPS WITH IT (the v3.0.655 pair rule). revert_image and prev_built_title
+      // describe ONE previous state and are written together; putting the pixels back without the
+      // marker would return lettering to the panel dressed as a scene.
+      var _liveBT = (_rMeta.built_title && _rMeta.built_title.url) ? _rMeta.built_title : null;
       if (_prevBT) _rMeta.built_title = _prevBT; else demoteBuiltTitle(_rMeta);
-      delete _rMeta.prev_built_title;
+      if (_liveBT) _rMeta.prev_built_title = _liveBT; else delete _rMeta.prev_built_title;
     } catch (e) { _rMeta = null; }
-    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
-    if (current && current !== moment.revert_image) await releaseImage(db, current);
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ?, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null,
+           current || null, moment.img_w || null, moment.img_h || null,
+           _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
     res.json({ success: true, image: moment.revert_image });
   } catch (e) {
     console.error('revert-moment error:', e.message);
