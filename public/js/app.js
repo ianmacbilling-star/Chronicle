@@ -8095,7 +8095,19 @@ function _tbSave(patch, then) {
       //      asked for. Only a truly empty builder refuses, and it now does so in a MODAL.
       //   2. the local draft clear is gone -- see below.
       if (!_bm.built_title_draft_url) {
-        if (_bm.built_title_url) { if (then) then(); return; }   // already in charge; nothing to promote
+        if (_bm.built_title_url) {
+          // v3.0.693 -- WAS A SILENT CLOSE, AND SILENT IS THE FAULT. v3.0.689 turned "the button
+          // does nothing and the form stays open" into "the form closes and nothing happens" --
+          // worse, because the reader loses even the evidence that they pressed it. Ian: "it
+          // closes... does nothing... then when i open and hit it again it works."
+          if (typeof appNotice === 'function') {
+            appNotice('That title is already on your cover.',
+              'There is no newer drawing waiting, so Done & Use had nothing to apply.',
+              'Press Generate to draw a new one, or Done & Stash to take this one off the cover.');
+          }
+          if (then) then();
+          return;
+        }
         if (typeof appNotice === 'function') {
           appNotice('There is nothing drawn yet.',
             'Nothing has been drawn for this title, so there is nothing to put on the cover.',
@@ -8227,7 +8239,17 @@ function titleBuilderUse() {
   // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
   // straight through it: deleting one left the other satisfying the check. _tbSave already routes
   // book and chapter; there was never a second thing to say here.
-  _tbSave({ promote: 1 }, function () { closeTitleBuilder(); });
+  // v3.0.693 -- REPAINT THE COVER. closeTitleBuilder repaints only the chapter path, reasoning that
+  // _prepMetaWrite owns state.bookMeta and the Prep panel reads it. True -- but the rendered cover
+  // PREVIEW is not state.bookMeta, so a book promote landed on the server and left the picture on
+  // screen unchanged. Same report v3.0.642 fixed for chapters: "when I hit done it didn't put the
+  // image in the panel."
+  _tbSave({ promote: 1 }, function () {
+    closeTitleBuilder();
+    if (!_tbIsSession() && typeof loadNovelPreview === 'function') {
+      try { loadNovelPreview(novelLayoutStyle); } catch (e) {}
+    }
+  });
 }
 function closeTitleBuilder() {
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
@@ -8528,6 +8550,11 @@ function titleBuildStash() {
     // The five canned styles are decided by prepApplyTitleModeLock from whether a drawn title is
     // in charge. Nothing is in charge now, so they must come back -- Ian: "when hit it should free
     // up lock so you can use the canned title styles."
+    // v3.0.693 -- BOTH LOCKS, IN THIS ORDER. The ownership lock owns PREP_LOCK_PLAIN (where
+    // pcl-titleStyle gets its `!own`); the mode lock runs after it and owns the two title controls.
+    // Calling only the second was the bug; calling only the first would leave print-title-color
+    // untouched, because it is in neither list.
+    if (typeof prepApplyOwnershipLock === 'function') prepApplyOwnershipLock();
     if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
     if (typeof showAlert === 'function') showAlert('Stashed. The title styles are back in charge; press Done & Use to put the drawing back.');
     closeTitleBuilder();
@@ -16049,11 +16076,24 @@ function prepApplyTitleModeLock() {
   try {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
-    // Only ever tightens: a control already disabled because this is not your version stays disabled.
+    // Computes the answer for these two controls from BOTH of their gates -- see below.
     ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      if (built || !own) el.disabled = true;
+      // v3.0.693 -- THIS NOW RELEASES AS WELL AS TIGHTENS, and that is the Done & Stash bug.
+      // Ian: "Done and Stash doesn't allow me to change the Title Styles now... If we aren't using
+      // the title builder i should be able to change the title styles."
+      //
+      // The old line had NO ELSE, so this function could only ever switch a control OFF. Stash
+      // clears built_title_url and then called it, which cleared the dimming and the tooltip -- so
+      // it LOOKED like it had worked -- while the control stayed disabled. The re-enable lived
+      // only in prepApplyOwnershipLock.
+      //
+      // Safe to compute outright BECAUSE THESE TWO IDS HAVE EXACTLY THESE TWO GATES: is a drawn
+      // title in charge, and is this your version. pcl-titleStyle is also in PREP_LOCK_PLAIN, which
+      // sets the same `!own`; print-title-color is in NEITHER list, which is why nothing else could
+      // ever bring it back.
+      el.disabled = !!(built || !own);
       el.style.opacity = (built || !own) ? '0.55' : '';
       // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
       // would 'restore' the explanation this function itself put there.
