@@ -238,7 +238,7 @@
         {
           "selector": "#ntab-preview",
           "click": "#ntab-preview",
-          "title": "Preview & Export",
+          "title": "Prep & Preview",
           "text": "Here is where you set up your book and preview it before you publish.",
           "placement": "auto"
         },
@@ -250,15 +250,15 @@
           "open": "#prep-acc-cover .prep-acc-head"
         },
         {
-          "selector": "#prep-thumb-cover",
-          "title": "Cover, back and title images",
-          "text": "Set these from your Archive. The × on a tile removes that picture, and the tiles show you the crop the printed page will use. Clear the cover and you get a plain framed cover instead.",
-          "placement": "auto"
-        },
-        {
           "selector": "#title-build-open",
           "title": "Draw your title",
           "text": "Have your title drawn as artwork instead of set in type. It costs a token, and it can be saved to your Archive so you can put it back later.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#prep-thumb-cover",
+          "title": "Cover, back and title images",
+          "text": "Set these from your Archive. The × on a tile removes that picture, and the tiles show you the crop the printed page will use. Clear the cover and you get a plain framed cover instead.",
           "placement": "auto"
         },
         {
