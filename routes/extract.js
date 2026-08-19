@@ -163,19 +163,19 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       '\n\nLANGUAGE -- AND THIS IS NOT AN EXCEPTION TO THE ABOVE, IT IS WHAT THESE FIELDS ARE FOR. ' +
       'Two of the fields you return are never shown to a reader: "description" is an internal ' +
       'outline, and "prompt" is fed directly to an image model that reads ENGLISH ONLY and uses ' +
-      'the exact character names to attach the right reference pictures. WRITE "description" AND ' +
-      '"prompt" IN ENGLISH ALWAYS, whatever language the transcript or the instructions above are ' +
-      'in, and keep every character, place and item name spelled EXACTLY as it appears in the ' +
-      'transcript -- never translated, never inflected. Everything a reader sees -- the session ' +
-      '"title", each panel "title", "emphasis", "establishing_scene" and the narrative outline -- ' +
-      'follows the director\'s instructions and the language of the transcript as normal.'
+      'the exact character names to attach the right reference pictures. WRITE "description", ' +
+      '"prompt" AND "establishing_scene" IN ENGLISH ALWAYS, whatever language the transcript or ' +
+      'the instructions above are in, and keep every character, place and item name spelled ' +
+      'EXACTLY as it appears in the transcript -- never translated, never inflected. Everything a ' +
+      'reader sees -- the session "title", each panel "title", "emphasis" and the narrative ' +
+      'outline -- follows the director\'s instructions and the language of the transcript as normal.'
     : '';
 
   // v3.0.708 -- TD-511. IN THE SYSTEM PROMPT AS WELL, and that placement is the v3.0.704 lesson
   // applied rather than rediscovered: a rule that has to hold against an instruction the model has
   // been told is MANDATORY cannot live only in the same message as that instruction.
   const systemPrompt = 'You are a graphic novel director and storyboard artist analyzing a TTRPG session transcript. ' +
-    'The "description" and "prompt" fields you return are internal machine input, never shown to a reader: ' +
+    'The "description", "prompt" and "establishing_scene" fields you return are internal machine input, never shown to a reader: ' +
     'you write them in ENGLISH ALWAYS, whatever language the transcript or the director instructions use, ' +
     'with every character, place and item name spelled exactly as the transcript spells it. ' +
     'Reader-facing text -- titles, emphasis, the establishing scene and the narrative outline -- follows ' +
@@ -218,7 +218,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
     '{\n' +
     '  "title": "Session title (4-6 dramatic words)",\n' +
-    '  "establishing_scene": "A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD: keep it a wide, scene-setting view, not a close-up portrait. If characters are genuinely present in this opening view you MAY include them, but refer to each KNOWN character BY THEIR EXACT NAME (e.g. \\"Ruk\\", \\"Zara\\") and NEVER by a group term (\\"the party\\") or an anonymous label (\\"a warrior\\") - the exact name lets the system attach the matching reference image so they look like themselves. Name only the characters actually in this opening frame, and show them within the wider scene rather than as a posed portrait. If the opening is an empty landscape or location with no one present, describe it with no people. Style-neutral (do NOT name an art style or medium).",\n' +
+    '  "establishing_scene": "IN ENGLISH ALWAYS, whatever language the transcript is in -- this string is glued to English scaffolding and sent straight to an image model as the session title picture prompt; it is never shown to a reader. A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD: keep it a wide, scene-setting view, not a close-up portrait. If characters are genuinely present in this opening view you MAY include them, but refer to each KNOWN character BY THEIR EXACT NAME (e.g. \\"Ruk\\", \\"Zara\\") and NEVER by a group term (\\"the party\\") or an anonymous label (\\"a warrior\\") - the exact name lets the system attach the matching reference image so they look like themselves. Name only the characters actually in this opening frame, and show them within the wider scene rather than as a posed portrait. If the opening is an empty landscape or location with no one present, describe it with no people. Style-neutral (do NOT name an art style or medium).",\n' +
     '  "moments": [\n' +
     '    {\n' +
     '      "title": "Short evocative panel title. HARD LIMITS, and they depend on the shape you chose for this panel: a TOWER or TALL panel is narrow, so its title must be at most 4 words and 30 characters; every other shape may use up to 7 words and 60 characters. The title is printed as a caption the width of the picture, so a long title on a narrow panel wraps or is cut. Shorter is always safer.",\n' +
@@ -329,6 +329,26 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       const insert = await db.prepare(
         'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
+      // v3.0.709 -- TD-511(2). establishing_scene IS AN IMAGE PROMPT, AND ITS NAME SAYS OTHERWISE.
+      //
+      // Ian, 2026-08-19, quoting a prompt back after v3.0.708 shipped: the panel prompts came
+      // back English and THIS one was still German, with the English scaffolding below bolted to
+      // the front of it -- "Starts in english????"
+      //
+      // v3.0.708 PUT establishing_scene ON THE READER-FACING LIST. That was wrong, and it was
+      // wrong for the reason this project keeps paying for: it was classified by its NAME and by
+      // a schema description that reads like prose ("A vivid 2-3 sentence WIDE ESTABLISHING
+      // SHOT"), rather than by tracing where the value lands. It lands HERE -- concatenated onto
+      // fixed English scaffolding and written into moments.prompt as the session title picture.
+      // A reader never sees it.
+      //
+      // THE GUARD THAT NOW EXISTS keys off the INSERT below rather than off any wording: every
+      // model-authored field written into moments.prompt must be named in the English-always
+      // rule. v3.0.708's guards all passed while this was broken because every one of them
+      // checked what the rule SAID and none checked which fields feed a prompt.
+      //
+      // estScene is written to moments.description as well; both columns are internal, so English
+      // is right for both.
       // Approach B: the title image is the FIRST moment (kind='establishing'),
       // wide + high-prominence with wide-shot scaffolding so it renders as the
       // session/chapter title image; editable like any panel.
