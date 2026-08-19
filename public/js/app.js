@@ -15320,14 +15320,42 @@ function reloadSessionForFork() {
       // Refresh the session-character list so amendment controls reflect
       // the newly-selected version (editable on your own, read-only else).
       if (typeof loadSessionCharacters === 'function') loadSessionCharacters();
-      // If the Publish/Preview tab is open, re-render the preview for the
-      // newly-selected version (it reads fork_id from state.currentForkId).
-      var _exp = document.getElementById('session-tab-export');
-      if (_exp && _exp.style.display !== 'none' && typeof loadPreview === 'function') {
-        loadPreview(state.layoutStyle || 'Classic');
-      }
-      // Other tabs lazy-reload on click via forkQ(); storyboard is the
-      // live view, so refresh it immediately.
+      // =====================================================================================================
+      // v3.0.707 -- TD-510. THE TAB YOU ARE STANDING ON RELOADS TOO.
+      // =====================================================================================================
+      //
+      // Ian, 2026-08-19: "When I switch versions, when I'm on the review tab... it doesn't change.
+      // The other tabs change just not the review tab."
+      //
+      // THE ASSUMPTION THAT FAILED WAS WRITTEN DOWN RIGHT HERE: "Other tabs lazy-reload on click via
+      // forkQ()". They do -- ON CLICK. loadReview() is called from switchSessionTab, which fires when
+      // you ARRIVE at a tab. Switching versions while already standing on Review never calls it, so
+      // the panel keeps showing the previous version's outline, directions and prose.
+      //
+      // AND THE PATTERN OF THE BUG IS THE PATTERN OF THE FIX. Notes, storyboard and characters are
+      // each refreshed above by their own hand-written line, added one at a time as somebody hit
+      // this for that tab. Review is simply the one nobody had hit yet. A fourth special case would
+      // leave the fifth tab waiting for the same report, so this asks WHICH TAB IS OPEN and reloads
+      // that one -- generalising the export branch, which has been doing exactly this correctly all
+      // along and was the only tab that could not go stale.
+      //
+      // VISIBILITY, NOT _activeSessionTab(). The panel's own display is the thing that decides what
+      // the reader can see; _activeSessionTab reads the tab BUTTON's class, which is a second
+      // description of the same fact and can disagree with it. One source of truth.
+      var SESSION_TAB_RELOADERS = {
+        'session-tab-export': function () { if (typeof loadPreview === 'function') loadPreview(state.layoutStyle || 'Classic'); },
+        'session-tab-review': function () { if (typeof loadReview === 'function') loadReview(); }
+      };
+      // NOTES, STORYBOARD AND CHARACTERS ARE ABSENT DELIBERATELY, and characters is the one worth
+      // naming: updateNotesBox, renderStoryboard and loadSessionCharacters are ALL already called
+      // unconditionally above, because each must be correct whether or not its tab is on screen.
+      // Adding characters here as well fired a second identical fetch whenever that tab happened to
+      // be open -- caught by counting the call sites after the edit rather than by reading it back.
+      // So Review really was the ONLY tab that could go stale, and this is the whole of the fix.
+      Object.keys(SESSION_TAB_RELOADERS).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.style.display !== 'none') { try { SESSION_TAB_RELOADERS[id](); } catch (e) {} }
+      });
     });
 }
 
