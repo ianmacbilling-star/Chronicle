@@ -445,6 +445,28 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Keep events in chronological order; never place a later event before the panel that depicts it\n' +
     '- A BRIDGE block covers ONLY what happens between its panel\'s moment and the next panel\'s moment (travel, deliberation, side events the panels skip)\n' +
     '- If the transcript covers events the panels skip, those belong in the BRIDGE blocks\n\n' +
+    // v3.0.711 -- TD-513. THE QUOTE CONTRACT, AND IT IS NOT A GERMAN PROBLEM.
+    //
+    // Ian's failed generation, 2026-08-19, at line 14 column 219 of the response:
+    //     ELIAS: \u201eHaette absagen sollen. Haette krank spielen sollen."
+    // The OPENING quote is \u201e, the German low quote, which is correct German. The CLOSING one
+    // is a plain ASCII quote -- and inside a JSON string an unescaped quote ENDS THE STRING. The
+    // parser closed `before` there, then met the rest of the sentence where it wanted a comma.
+    //
+    // SO THE CAUSE IS DIALOGUE, NOT GERMAN. Any language can put a straight quote inside quoted
+    // speech; German merely makes it likely, because the asymmetric \u201e...\u201c pair invites
+    // getting one half wrong. English narratives have been lucky rather than safe, and the
+    // first diagnosis here -- truncation, because German runs long -- was wrong for that reason.
+    //
+    // TYPOGRAPHIC QUOTES ARE THE FIX AT SOURCE, and they are better prose anyway. The parser
+    // salvage below is the second half, because a model WILL still slip occasionally and losing a
+    // whole generation -- and the tokens spent on it -- to one character is not acceptable.
+    'QUOTATION MARKS -- CRITICAL FOR VALID JSON. Inside any string value you return, never use the ' +
+    'straight ASCII double quote character. For quoted speech use typographic quotes appropriate to ' +
+    'the language you are writing in -- \u201c \u201d in English, \u201e \u201c in German, ' +
+    '\u00ab \u00bb in French and Spanish -- and use them as a MATCHED PAIR, never one typographic ' +
+    'and one straight. A raw double quote inside a value ends the string and makes the whole ' +
+    'response unparseable.\n' +
     'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length +
     ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
     'IMPORTANT: panel_index is ZERO-BASED \u2014 PANEL 1 above is panel_index 0, PANEL 2 is panel_index 1, and so on. List the sections in panel order, PANEL 1 first.\n' +
@@ -515,14 +537,77 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
           if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
         }
       } catch (e2) { recovered = null; }
+      // v3.0.711 -- TD-513. SECOND SALVAGE: TRIM BACK TO THE LAST COMPLETE SECTION.
+      //
+      // The recovery above only rescues a response whose damage falls AFTER a closing brace that
+      // still leaves valid JSON. Ian's failure broke mid-string inside sections[1], so every later
+      // brace was inside a value the parser had already lost its place in, and the whole thing was
+      // thrown away -- INCLUDING a complete intro, a complete intro_summary and a complete panel 0.
+      // A generation the reader paid for was discarded because of one character in a later panel.
+      //
+      // WHAT THIS DOES: walk the sections array from the front, keeping every element that parses
+      // whole, and stop at the first that does not. The result is short -- the caller pads missing
+      // sections and the reader can regenerate the tail -- but the prose that survived is kept.
+      //
+      // NOTHING IS INVENTED. Every kept element is a complete object that JSON.parse accepted; the
+      // partial one is dropped rather than repaired. Guessing at a half-written sentence would put
+      // words in the author's mouth, which is worse than a short narrative.
+      if (!recovered) {
+        try {
+          const BSLASH = String.fromCharCode(92);
+          const SECT_KEY = String.fromCharCode(34) + 'sections' + String.fromCharCode(34);
+          const sIdx = clean.indexOf(SECT_KEY);
+          const aIdx = sIdx >= 0 ? clean.indexOf('[', sIdx) : -1;
+          if (aIdx > 0) {
+            const head = clean.slice(0, aIdx + 1);
+            const kept = [];
+            let depth = 0, start = -1, inStr = false, esc = false;
+            for (let p = aIdx + 1; p < clean.length; p++) {
+              const ch = clean[p];
+              if (esc) { esc = false; continue; }
+              if (ch === BSLASH) { esc = true; continue; }
+              if (ch === '"') { inStr = !inStr; continue; }
+              if (inStr) continue;
+              if (ch === '{') { if (depth === 0) start = p; depth++; }
+              else if (ch === '}') {
+                depth--;
+                if (depth === 0 && start >= 0) {
+                  try { kept.push(JSON.parse(clean.slice(start, p + 1))); } catch (e3) { break; }
+                  start = -1;
+                }
+              } else if (ch === ']' && depth === 0) break;
+            }
+            if (kept.length) {
+              const shell = JSON.parse(head.slice(0, head.lastIndexOf(SECT_KEY)).replace(/,\s*$/, '') + '}');
+              shell.sections = kept;
+              recovered = shell;
+              try { console.error('[narrative] salvaged ' + kept.length + ' of ' + moments.length + ' sections after a parse failure'); } catch (_cs) {}
+            }
+          }
+        } catch (e4) { recovered = null; }
+      }
       if (recovered) {
         parsed = recovered;
       } else {
         // Give up, but CAPTURE the raw so the exact malformation is visible in the
         // job error (queryable) and in the server logs.
+        // v3.0.711 -- TD-513. TWO AUDIENCES, TWO STRINGS.
+        //
+        // This wrote 1500 characters of RAW MODEL OUTPUT into the job error, and the job error is
+        // what the READER is shown. The intent was diagnostic -- the comment says the raw should be
+        // 'visible in the job error (queryable) and in the server logs' -- but the same string was
+        // doing both jobs, so Ian got a wall of German JSON in a 2.5-second toast.
+        //
+        // The diagnosis belongs in debug_logs, which the admin pack dump already reads and which
+        // is genuinely queryable. The reader gets a sentence and an action.
         try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
+        try {
+          await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
+            message: 'The model returned unparseable JSON and no part of it could be salvaged.',
+            detail: { parse_error: perr.message, job_id: jobId, session_id: session.id, raw_head: clean.slice(0, 4000) } });
+        } catch (_le) {}
         await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
-          ('The narrative came back in an unexpected format (' + perr.message + '). RAW: ' + clean.slice(0, 1500)),
+          'The narrative came back in a format we could not read. Nothing was saved and no tokens were spent on the failed part. Please try generating it again.',
           new Date().toISOString(), jobId
         );
         return;
