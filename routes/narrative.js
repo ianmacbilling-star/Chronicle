@@ -201,9 +201,40 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   let directorNotes = session.session_notes || '';
   let gapDirections = {};
   let gapOutlines = {};
-  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity FROM session_forks WHERE id = ?').get(targetForkId);
+  // v3.0.705 -- TD-508. `role` ADDED to this SELECT. Without it the line below had nothing to ask
+  // but the CALLER's campaign role, which is a different question with a different answer.
+  const fkSteer = await db.prepare('SELECT role, fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity FROM session_forks WHERE id = ?').get(targetForkId);
   if (fkSteer) {
-    if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
+    // =====================================================================================================
+    // v3.0.705 -- TD-508. THE SESSION INSTRUCTIONS ON A NON-CANONICAL VERSION NEVER REACHED THE PROSE.
+    // =====================================================================================================
+    //
+    // Ian, 2026-08-19, on a Spanish instruction saved ONLY to a new version: the captions came back
+    // Spanish and the narrative did not.
+    //
+    // WAS `callerRole !== 'dm'`. callerRole is the reader's CAMPAIGN role, and a Story Master's is
+    // always 'dm' -- on every version they own, canonical or not. So this branch never fired for
+    // the one person who writes most of these notes, and directorNotes stayed on the CANONICAL
+    // session_notes no matter which version was on screen.
+    //
+    // TWO CONSEQUENCES, AND THE SECOND IS THE WORSE ONE. The instruction on the version being
+    // generated was ignored -- and the canonical's notes were silently used in its place, which
+    // may be stale, may belong to a different line of thinking, or may be empty. Nothing said so.
+    //
+    // role IS THE CANONICAL MARKER, and it is an enforced invariant rather than a convention:
+    // db.js keeps `CREATE UNIQUE INDEX idx_forks_one_dm ON session_forks(session_id) WHERE
+    // role = 'dm'`, so exactly one fork per session carries it. THE ACTING FORK's role is the
+    // question -- extract.js:73 has asked it correctly since v3.0.445, which is precisely why the
+    // captions obeyed and the prose did not. One word apart, three files, months of divergence.
+    //
+    // NO FALLBACK, DELIBERATELY. Ian: "When a version is created the notes from the version you
+    // started on are copied into your new version... if they clear out those notes it still should
+    // use what is there or nothing if they were removed. So do NOT go back to the canonical notes.
+    // It should never look to a different version's notes." Inheritance happens ONCE, at
+    // copy-on-create; at read time a version owns its own instructions absolutely. `|| ''` is
+    // therefore the whole rule -- cleared means cleared, and empty is a real answer here rather
+    // than a missing one.
+    if (fkSteer.role !== 'dm') directorNotes = fkSteer.fork_notes || '';
     if (fkSteer.narrative_directions) {
       try { gapDirections = JSON.parse(fkSteer.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
     }
