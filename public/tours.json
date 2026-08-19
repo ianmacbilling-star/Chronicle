@@ -6,7 +6,7 @@
       "steps": [
         {
           "selector": "#campaigns-grid",
-          "title": "Welcome \u2014 and thank you!",
+          "title": "Welcome — and thank you!",
           "text": "Thanks for signing up for Campaignia. This is your home base; here is a quick tour of the essentials.",
           "placement": "auto"
         },
@@ -19,7 +19,7 @@
         {
           "selector": ".add-campaign-card",
           "title": "Start a {campaign}",
-          "text": "Click here to create your first {campaign} \u2014 the world your {sessions} and graphic novel live inside. Once you have one, its tile gets a Details button \u2014 that is where its image, Lore / Background, and member settings live.",
+          "text": "Click here to create your first {campaign} — the world your {sessions} and graphic novel live inside. Once you have one, its tile gets a Details button — that is where its image, Lore / Background, and member settings live.",
           "placement": "auto"
         },
         {
@@ -37,7 +37,7 @@
         {
           "selector": "#user-avatar",
           "title": "Your profile",
-          "text": "Open this for your account details, plan and tokens \u2014 and to sign out.",
+          "text": "Open this for your account details, plan and tokens — and to sign out.",
           "placement": "bottom"
         },
         {
@@ -54,14 +54,14 @@
         {
           "selector": "#camp-edit-btn",
           "title": "Edit your {campaign}",
-          "text": "Click the pencil to rename your {campaign} or update its description anytime \u2014 and to write your {campaign}'s Lore / Background: the backstory and world it all takes place in.",
+          "text": "Click the pencil to rename your {campaign} or update its description anytime — and to write your {campaign}'s Lore / Background: the backstory and world it all takes place in.",
           "placement": "auto"
         },
         {
           "selector": "#camp-nav-members",
           "dmOnly": true,
           "title": "Invite members",
-          "text": "Invite others to join your {campaign} \u2014 give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
+          "text": "Invite others to join your {campaign} — give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
           "placement": "bottom"
         },
         {
@@ -73,25 +73,25 @@
         {
           "selector": "#btn-new-session",
           "title": "Add a {session}",
-          "text": "Start a new {session} and paste your story, transcript, notes, whatever you have \u2014 Campaignia turns it into an illustrated storyboard, ready to publish.",
+          "text": "Start a new {session} and paste your story, transcript, notes, whatever you have — Campaignia turns it into an illustrated storyboard, ready to publish.",
           "placement": "auto"
         },
         {
           "selector": "#camp-nav-assets",
           "title": "Asset Library",
-          "text": "Upload maps, locations, items, or artwork for Campaignia to use as references across your {sessions} \u2014 it helps lock in the look you want and keep your images consistent.",
+          "text": "Upload maps, locations, items, or artwork for Campaignia to use as references across your {sessions} — it helps lock in the look you want and keep your images consistent.",
           "placement": "bottom"
         },
         {
           "selector": "#camp-nav-archives",
           "title": "Archives",
-          "text": "Images you save are kept here to reuse later \u2014 swap them into any panel, or publish one to the public Library to show off a little.",
+          "text": "Images you save are kept here to reuse later — swap them into any panel, or publish one to the public Library to show off a little.",
           "placement": "bottom"
         },
         {
           "selector": "#camp-nav-publish",
           "title": "Publish your story",
-          "text": "When your {sessions} are ready, turn your work into a shareable graphic novel \u2014 or order a printed book.",
+          "text": "When your {sessions} are ready, turn your work into a shareable graphic novel — or order a printed book.",
           "placement": "bottom"
         }
       ]
@@ -102,7 +102,7 @@
         {
           "selector": "#char-name",
           "title": "Name your character",
-          "text": "Give your character a name \u2014 add a nickname after a slash (like 'Theron / Ash') and Campaignia will recognize both.",
+          "text": "Give your character a name — add a nickname after a slash (like 'Theron / Ash') and Campaignia will recognize both.",
           "placement": "auto"
         },
         {
@@ -114,13 +114,13 @@
         {
           "selector": "#char-desc",
           "title": "Visual & personality traits",
-          "text": "Describe how they look and act \u2014 appearance, clothing, temperament, mannerisms. The more you give here, the better Campaignia captures them.",
+          "text": "Describe how they look and act — appearance, clothing, temperament, mannerisms. The more you give here, the better Campaignia captures them.",
           "placement": "auto"
         },
         {
           "selector": "#char-ref-images",
           "title": "Reference images",
-          "text": "Have pictures, drawings, or renderings of your character? Add them here. No images? No problem \u2014 Campaignia will create one for you.",
+          "text": "Have pictures, drawings, or renderings of your character? Add them here. No images? No problem — Campaignia will create one for you.",
           "placement": "auto"
         },
         {
@@ -137,13 +137,13 @@
         {
           "selector": "#char-grid",
           "title": "Your characters",
-          "text": "These are your {campaign} characters \u2014 the canonical version of each one. Their reference image and prompt are reused across every {session}, so they stay consistent.",
+          "text": "These are your {campaign} characters — the canonical version of each one. Their reference image and prompt are reused across every {session}, so they stay consistent.",
           "placement": "auto"
         },
         {
           "selector": ".add-char-card",
           "title": "Add a character",
-          "text": "Add a new character here \u2014 give them a name, a description, and any reference pictures you have.",
+          "text": "Add a new character here — give them a name, a description, and any reference pictures you have.",
           "placement": "auto"
         },
         {
@@ -160,7 +160,7 @@
         {
           "selector": "#asset-grid",
           "title": "Your asset library",
-          "text": "Just like characters, assets give Campaignia visual references \u2014 locations, NPCs (people), and items it can pull into your panels to keep your world consistent.",
+          "text": "Just like characters, assets give Campaignia visual references — locations, NPCs (people), and items it can pull into your panels to keep your world consistent.",
           "placement": "auto"
         },
         {
@@ -177,7 +177,7 @@
         {
           "selector": "#asset-name",
           "title": "Name & keywords",
-          "text": "Name your asset \u2014 it can have several. Separate them with a slash and Campaignia will match any of them when they come up in your story.",
+          "text": "Name your asset — it can have several. Separate them with a slash and Campaignia will match any of them when they come up in your story.",
           "placement": "auto"
         },
         {
@@ -189,7 +189,7 @@
         {
           "selector": "#asset-description",
           "title": "Describe it",
-          "text": "Write what this asset looks like and Campaignia can generate a reference image from it \u2014 or leave it blank and upload your own. You can edit this description anytime.",
+          "text": "Write what this asset looks like and Campaignia can generate a reference image from it — or leave it blank and upload your own. You can edit this description anytime.",
           "placement": "auto"
         },
         {
@@ -206,7 +206,7 @@
         {
           "selector": "#archives-grid",
           "title": "Your archive",
-          "text": "Any image you generate in Campaignia can be archived. This is where you find them all \u2014 reuse them in your story, or publish one to the public Library to share with the world.",
+          "text": "Any image you generate in Campaignia can be archived. This is where you find them all — reuse them in your story, or publish one to the public Library to share with the world.",
           "placement": "auto"
         }
       ],
@@ -214,7 +214,7 @@
     },
     "novel": {
       "title": "Publish",
-      "requires": "#novel-summary-list .novel-session-block",
+      "requires": "#novel-summary-list .session-card-grid",
       "steps": [
         {
           "selector": "#ntab-sessions",
@@ -226,13 +226,13 @@
         {
           "selector": "#novel-version-select",
           "title": "Whose version?",
-          "text": "Choose whose version you want to publish \u2014 your version, or one of your members' versions.",
+          "text": "Choose whose version you want to publish — your version, or one of your members' versions.",
           "placement": "auto"
         },
         {
-          "selector": "#novel-summary-list input[type=\"checkbox\"]",
+          "selector": "#novel-summary-list",
           "title": "Include in print",
-          "text": "Check which {sessions} to include in this book \u2014 tick the box for each one you want in print.",
+          "text": "Tick the box for each {session} you want in the book.",
           "placement": "auto"
         },
         {
@@ -245,38 +245,63 @@
         {
           "selector": "#prep-title",
           "title": "Title",
-          "text": "Give your book a title.",
+          "text": "Give your book a title. Each version keeps its own.",
           "placement": "auto"
         },
         {
           "selector": "#prep-thumb-cover",
-          "title": "Cover",
-          "text": "Set your cover, back, and title images from your Archive.",
+          "title": "Cover, back and title images",
+          "text": "Set these from your Archive. The × on a tile removes that picture, and the tiles show you the crop the printed page will use. Clear the cover and you get a plain framed cover instead.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#title-build-open",
+          "title": "Draw your title",
+          "text": "Have your title drawn as artwork instead of set in type. It costs a token, and it goes to your Archive so you can put it back later.",
           "placement": "auto"
         },
         {
           "selector": "#novel-custom-btn",
           "title": "Layout",
-          "text": "Choose how your story is laid out \u2014 comic, picture book, or magazine.",
+          "text": "Comic, picture book, or magazine.",
           "placement": "auto"
         },
         {
-          "selector": "#novel-preview-mode-btn",
-          "title": "Quick View vs True View",
-          "text": "Use Quick View to test and tweak quickly; switch to True View for an exact final look before publishing.",
+          "selector": "#prep-optimize-btn",
+          "title": "Optimize",
+          "text": "When the look is right, this takes you to Optimize — the last step before you publish or order.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ntab-finalize",
+          "click": "#ntab-finalize",
+          "title": "Optimize",
+          "text": "Here your book is prepared for printing: page breaks, decorations, and how each page is laid out.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#layoutai-run-btn",
+          "title": "The AI layout review",
+          "text": "Our AI engine reads your book the way an editor would — looking for errors, flow and density — and fixes what it finds to make the best book it can. It costs tokens, and it tells you how many before it starts.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ntab-order",
+          "click": "#ntab-order",
+          "title": "Order & Publish",
+          "text": "The last stop.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-tab-order",
+          "title": "Order a printed copy",
+          "text": "Make your selections here, then prepare and approve your book for printing. The options vary with your page count.",
           "placement": "auto"
         },
         {
           "selector": "#novel-publish-btn",
           "title": "Publish to the Library",
-          "text": "When it looks right, publish your story to the public Library as a shareable web page.",
-          "placement": "auto"
-        },
-        {
-          "selector": "#novel-tab-order",
-          "click": "#ntab-order",
-          "title": "Order a printed copy",
-          "text": "Or order a printed copy of your book here. Options can vary with your page count.",
+          "text": "Publish your book as a shareable web page.",
           "placement": "auto"
         }
       ]
@@ -287,19 +312,19 @@
         {
           "selector": "#stab-notes",
           "title": "Where your story lives",
-          "text": "This is where your story lives \u2014 the heart of a session.",
+          "text": "This is where your story lives — the heart of a session.",
           "placement": "auto"
         },
         {
           "selector": "#transcript-input",
           "title": "Your story",
-          "text": "This is your story. Whatever you have \u2014 an actual story, a transcript, journal entries, session notes \u2014 we'll take it and use it. This is also the one field owned by the Story Master \u2014 if you've joined a campaign as a member, you'll be able to read it but not edit it.",
+          "text": "This is your story. Whatever you have — an actual story, a transcript, journal entries, session notes — we'll take it and use it. This is also the one field owned by the Story Master — if you've joined a campaign as a member, you'll be able to read it but not edit it.",
           "placement": "auto"
         },
         {
           "selector": "#session-notes-input",
           "title": "Notes & instructions",
-          "text": "This is where you tell Campaignia how to create your story \u2014 anything it should know or do.",
+          "text": "This is where you tell Campaignia how to create your story — anything it should know or do.",
           "placement": "auto"
         },
         {
@@ -348,13 +373,13 @@
         {
           "selector": "#review-list",
           "title": "Review before you generate",
-          "text": "See Campaignia's plan before it generates anything. Every image panel and every bridge between them shows an outline \u2014 the facts the narration will cover \u2014 so you can fix anything missing or out of order before spending tokens.",
+          "text": "See Campaignia's plan before it generates anything. Every image panel and every bridge between them shows an outline — the facts the narration will cover — so you can fix anything missing or out of order before spending tokens.",
           "placement": "auto"
         },
         {
           "selector": ".review-panel",
           "title": "Edit the plan",
-          "text": "On each panel, edit the Narrative Outline (the facts to cover), the Narrative Direction (how it's written \u2014 tone and pacing), or the Image Prompt (the picture), and add or remove characters and assets. On a phone these collapse into a menu.",
+          "text": "On each panel, edit the Narrative Outline (the facts to cover), the Narrative Direction (how it's written — tone and pacing), or the Image Prompt (the picture), and add or remove characters and assets. On a phone these collapse into a menu.",
           "placement": "auto"
         },
         {
@@ -378,7 +403,7 @@
         {
           "selector": ".storyboard-panel.is-opening",
           "title": "Title image",
-          "text": "The opening image for your story \u2014 usually a wide, distant shot that sets the scene.",
+          "text": "The opening image for your story — usually a wide, distant shot that sets the scene.",
           "placement": "auto"
         },
         {
@@ -426,7 +451,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .moment-opts-btn",
           "title": "Cast for this Moment",
-          "text": "Open these options to add or remove characters and assets for this Moment \u2014 just like the Review tab. Make your changes, then Regenerate.",
+          "text": "Open these options to add or remove characters and assets for this Moment — just like the Review tab. Make your changes, then Regenerate.",
           "placement": "auto",
           "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
         },
@@ -450,7 +475,7 @@
         {
           "selector": "#session-custom-btn",
           "title": "Layout",
-          "text": "Choose how your story is laid out \u2014 comic, picture book, or magazine. (Same as the Publish page.)",
+          "text": "Choose how your story is laid out — comic, picture book, or magazine. (Same as the Publish page.)",
           "placement": "auto"
         },
         {
