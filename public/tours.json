@@ -239,7 +239,7 @@
           "selector": "#ntab-preview",
           "click": "#ntab-preview",
           "title": "Preview & Export",
-          "text": "Switch here to set up and preview your book before you publish.",
+          "text": "Here is where you set up your book and preview it before you publish.",
           "placement": "auto"
         },
         {
@@ -264,7 +264,7 @@
           "selector": "#prep-acc-layout",
           "click": "#prep-acc-layout .prep-acc-head",
           "title": "Layout",
-          "text": "Open this to choose how your book looks — comic, picture book or magazine — along with the borders, captions, fonts and decorations that go with it.",
+          "text": "Open this to choose how your book looks — the layout, borders, captions, fonts and decorations.",
           "placement": "auto"
         },
         {
@@ -470,7 +470,7 @@
         {
           "selector": "#session-custom-btn",
           "title": "Layout",
-          "text": "Choose how your story is laid out — comic, picture book, or magazine. (Same as the Publish page.)",
+          "text": "Choose how your story is laid out — the layout, borders, captions, fonts and decorations. (Same as the Publish page.)",
           "placement": "auto"
         },
         {
