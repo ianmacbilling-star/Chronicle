@@ -89,6 +89,62 @@ function buildNarrativeSystem(styleSystem, campaignRow, notes) {
     'NOT reorder events to satisfy them; the panel order is already settled.\n\n' + base;
 }
 
+// =====================================================================================================
+// v3.0.713 -- TD-515. REPAIR THE QUOTES INSTEAD OF ASKING FOR THEM.
+// =====================================================================================================
+//
+// v3.0.711 added a QUOTATION MARKS contract to the prompt: use typographic quotes, never a straight
+// ASCII one, matched pairs only. Ian's log shows the model ignored it and failed in exactly the same
+// place twice --
+//     position 1422 (line 14 column 219)   -- before the contract
+//     position 1446 (line 14 column 269)   -- after it
+// Same error class, same line, 24 characters apart. ASKING DOES NOT WORK for a habit this ingrained,
+// and continuing to reword the instruction would be tuning a constant against a structural problem.
+//
+// WHAT THIS DOES: a straight quote inside a JSON string ends that string. A CLOSING quote is always
+// followed by one of , } ] : or whitespace-then-one-of-those. A quote followed by anything else --
+// a letter, a space then a letter -- cannot be structural, so it must be punctuation the model failed
+// to escape. Escaping it makes the document parse and preserves the character the reader should see.
+//
+// THREE THINGS THIS DELIBERATELY DOES NOT DO:
+//   1. It never runs on the happy path. Called only after JSON.parse has already thrown, so a healthy
+//      response is never touched by a heuristic.
+//   2. It escapes ONLY quotes it can prove are mid-value. Anything ambiguous is left alone and the
+//      generation fails as before -- a wrong repair is worse than an honest failure.
+//   3. It is NOT a way round the all-or-nothing rule. A repaired document still faces the section
+//      count check below; repair fixes syntax, never completeness.
+//
+// LANGUAGE-AGNOSTIC BY CONSTRUCTION. It reasons about JSON structure, not about German, so it covers
+// the whole class rather than the one model habit that exposed it.
+function repairUnescapedQuotes(src) {
+  const DQ = String.fromCharCode(34);
+  const BS = String.fromCharCode(92);
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  let fixes = 0;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === BS) { out += ch; esc = true; continue; }
+    if (ch !== DQ) { out += ch; continue; }
+    if (!inStr) { inStr = true; out += ch; continue; }
+    // Inside a string and looking at a quote: structural only if what FOLLOWS it could follow a
+    // closing quote. Anything else and the model meant a literal quotation mark.
+    let j = i + 1;
+    while (j < src.length && (src[j] === ' ' || src[j] === '\t' || src[j] === '\r' || src[j] === '\n')) j++;
+    const nxt = j < src.length ? src[j] : '';
+    if (nxt === ',' || nxt === '}' || nxt === ']' || nxt === ':' || nxt === '') {
+      inStr = false; out += ch; continue;
+    }
+    out += BS + DQ;
+    fixes++;
+  }
+  // An odd number of structural quotes means the walk lost its place; returning the original lets
+  // the caller fail honestly rather than parse something reshaped by a guess.
+  if (inStr || !fixes) return { text: src, fixes: 0 };
+  return { text: out, fixes: fixes };
+}
 // ============================================================
 const NARRATIVE_STYLES = (function () {
   const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
@@ -489,6 +545,19 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Async: create a pending job, respond immediately, then run the (slow)
   // generation in the background. Express does not await this handler, so the
   // Claude call finishes after the response is sent \u2014 no gateway timeout.
+  // v3.0.713 -- TD-516. ONE NARRATIVE JOB PER VERSION AT A TIME.
+  //
+  // Ian's Railway log came back interleaved: 2-space keys and 6-space keys alternating in an
+  // order no single document could have, with a fragment of an EARLIER generation cut off
+  // mid-word above the failure. Two jobs were running on the same fork and both were writing.
+  // The log was only the visible symptom -- both would also have written to the same
+  // narrative_* columns, and the loser of that race silently overwrites the winner.
+  const _running = await db.prepare(
+    "SELECT id FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') ORDER BY id DESC"
+  ).get(targetForkId);
+  if (_running) {
+    return res.status(409).json({ error: 'A narrative is already being written for this version. Wait for it to finish, or reload the page if you think it has stalled.' });
+  }
   const _jobNow = new Date().toISOString();
   const _jobIns = await db.prepare(
     "INSERT INTO narrative_jobs (user_id, campaign_id, session_id, fork_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
@@ -557,6 +626,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       // narrative that saves is a truncated book somebody can publish by accident, and no warning is
       // worth that. A failed generation costs a retry; a silently short one costs trust in every
       // narrative that looked fine.
+      // v3.0.713 -- TD-515. ONE REPAIR ATTEMPT, THEN FAIL HONESTLY.
+      let _rep = null;
+      try {
+        const _fixed = repairUnescapedQuotes(clean);
+        if (_fixed.fixes > 0) {
+          _rep = JSON.parse(_fixed.text);
+          console.error('[narrative] repaired ' + _fixed.fixes + ' unescaped quote(s) and parsed cleanly');
+        }
+      } catch (_re) { _rep = null; }
+      if (_rep) { parsed = _rep; }
+      else {
       try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
       try {
         await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
@@ -565,10 +645,14 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
             panels: moments.length, raw_len: clean.length, raw_head: clean.slice(0, 4000) } });
       } catch (_le) {}
       await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
-        'The narrative came back in a format we could not read, so none of it was saved. Please try generating it again.',
+        // v3.0.713 -- the technical reason is IN the message now. It reads as noise to most
+        // people, but Ian had to dig through Railway logs to learn what 'a format we could not
+        // read' actually meant, twice. One line of jargon is cheaper than that round trip.
+        ('The narrative came back in a format we could not read, so none of it was saved. Please try generating it again. (Technical detail: ' + perr.message + ')'),
         new Date().toISOString(), jobId
       );
       return;
+      }
     }
     // v3.0.712 -- TD-514. A VALID RESPONSE CAN STILL BE A SHORT ONE.
     //
