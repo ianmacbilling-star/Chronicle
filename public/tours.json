@@ -245,8 +245,9 @@
         {
           "selector": "#prep-title",
           "title": "Title",
-          "text": "Give your book a title. Each version keeps its own.",
-          "placement": "auto"
+          "text": "Give your book a title. Each version keeps its own, along with its subtitle and colour.",
+          "placement": "auto",
+          "open": "#prep-acc-cover .prep-acc-head"
         },
         {
           "selector": "#prep-thumb-cover",
@@ -261,11 +262,11 @@
           "placement": "auto"
         },
         {
-          "selector": "#prep-acc-layout",
-          "click": "#prep-acc-layout .prep-acc-head",
+          "selector": "#prep-acc-layout .prep-acc-body",
           "title": "Layout",
           "text": "Open this to choose how your book looks — the layout, borders, captions, fonts and decorations.",
-          "placement": "auto"
+          "placement": "auto",
+          "open": "#prep-acc-layout .prep-acc-head"
         },
         {
           "selector": "#ntab-finalize",

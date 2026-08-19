@@ -19215,7 +19215,26 @@ function _tourRenderStep() {
       _tourScheduleSettle();
     });
   };
-  if (step.click) {
+  // v3.0.721 -- TD-521(4). A TOUR NEEDS "MAKE SURE THIS IS OPEN", NOT "CLICK THIS".
+  //
+  // step.click fires blind. That is right for a TAB, which is idempotent -- clicking the tab you
+  // are already on changes nothing. It is wrong for the Prep accordions, because togglePrepAcc
+  // TOGGLES: pointing a click at an already-open panel SHUTS it, and the tour engine then skips
+  // every step inside it silently (see _tourVisible below and the skip at the top of _find).
+  //
+  // So a click could not fix what Ian reported. Whichever accordion he had used last was open,
+  // the other shut; a blind click would have rescued one and broken the other, and WHICH ONE
+  // would depend on a localStorage value from a previous session. `open` is idempotent by
+  // construction: it clicks only when the target is not already showing.
+  if (step.open) {
+    try {
+      var _oe = document.querySelector(step.open);
+      var _ob = _oe && _oe.parentNode ? _oe.parentNode.querySelector('.prep-acc-body') : null;
+      var _shut = !_ob || _ob.style.display === 'none' || !_tourVisible(_ob);
+      if (_oe && _shut) _oe.click();
+    } catch (e) {}
+    setTimeout(_find, 200);
+  } else if (step.click) {
     try { var _ce = document.querySelector(step.click); if (_ce) _ce.click(); } catch (e) {}
     setTimeout(_find, 160);
   } else {
