@@ -506,7 +506,16 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       },
       body: JSON.stringify({
         model: TEXT_MODEL,
-        max_tokens: 8000,
+        // v3.0.712 -- TD-514. THE BUDGET SCALES WITH THE BOOK.
+        // Ian: "Can you make it so it can handle longer prose?"
+        // 8000 WAS FLAT AND THE WORK IS NOT: every panel needs a moment block and a bridge block,
+        // each with a summary, so the response grows linearly with panel count while the ceiling
+        // stayed put. A long session ran out of room mid-sections -- a truncation, which is exactly
+        // what the broken acceptance test below used to wave through as a success.
+        // NON-ENGLISH PROSE MAKES IT WORSE: German and Spanish tokenize longer than English for the
+        // same content, so the sessions most likely to overflow are the ones the language work just
+        // made possible. 1500 floor + 1100 per panel, capped well inside the model's output limit.
+        max_tokens: Math.min(32000, 1500 + (moments.length * 1100)),
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
         system: buildNarrativeSystem(styleBundle.system, campaign, directorNotes),
@@ -526,92 +535,59 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     try {
       parsed = JSON.parse(clean);
     } catch (perr) {
-      // The model occasionally returns JSON that is truncated (hit max_tokens) or
-      // carries a stray character. Conservative recovery: parse up to the last
-      // closing brace, and accept it ONLY if it has the expected shape.
-      let recovered = null;
+      // =====================================================================================================
+      // v3.0.712 -- TD-514. THE NARRATIVE IS ALL OR NOTHING.
+      // =====================================================================================================
+      //
+      // Ian, 2026-08-19: "Fail cleanly. The narrative is an all or nothing."
+      //
+      // WHAT WAS HERE, AND WHY IT SHIPPED A ONE-PARAGRAPH BOOK WITH NO ERROR AT ALL:
+      //     if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
+      // That OR is the entire fault. A response truncated anywhere after the intro still parses back
+      // to a candidate carrying a complete intro and NO SECTIONS, which satisfies the right-hand side,
+      // so it was accepted, the job was marked complete, and the reader got an opening scene and
+      // silence. The comment above it read "accept it ONLY if it has the expected shape" -- an intro
+      // with zero sections is not the expected shape, and the test never checked.
+      //
+      // v3.0.711 MADE IT WORSE BY BUILDING ON TOP OF IT. A second salvage pass was added behind
+      // `if (!recovered)` without reading what made recovered truthy, so the new code was UNREACHABLE
+      // in precisely the case it was written for. Extending a path instead of reading it.
+      //
+      // BOTH SALVAGE PASSES ARE GONE, and that is Ian's call rather than a simplification: a partial
+      // narrative that saves is a truncated book somebody can publish by accident, and no warning is
+      // worth that. A failed generation costs a retry; a silently short one costs trust in every
+      // narrative that looked fine.
+      try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
       try {
-        const lb = clean.lastIndexOf('}');
-        if (lb > 0) {
-          const cand = JSON.parse(clean.slice(0, lb + 1));
-          if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
-        }
-      } catch (e2) { recovered = null; }
-      // v3.0.711 -- TD-513. SECOND SALVAGE: TRIM BACK TO THE LAST COMPLETE SECTION.
-      //
-      // The recovery above only rescues a response whose damage falls AFTER a closing brace that
-      // still leaves valid JSON. Ian's failure broke mid-string inside sections[1], so every later
-      // brace was inside a value the parser had already lost its place in, and the whole thing was
-      // thrown away -- INCLUDING a complete intro, a complete intro_summary and a complete panel 0.
-      // A generation the reader paid for was discarded because of one character in a later panel.
-      //
-      // WHAT THIS DOES: walk the sections array from the front, keeping every element that parses
-      // whole, and stop at the first that does not. The result is short -- the caller pads missing
-      // sections and the reader can regenerate the tail -- but the prose that survived is kept.
-      //
-      // NOTHING IS INVENTED. Every kept element is a complete object that JSON.parse accepted; the
-      // partial one is dropped rather than repaired. Guessing at a half-written sentence would put
-      // words in the author's mouth, which is worse than a short narrative.
-      if (!recovered) {
-        try {
-          const BSLASH = String.fromCharCode(92);
-          const SECT_KEY = String.fromCharCode(34) + 'sections' + String.fromCharCode(34);
-          const sIdx = clean.indexOf(SECT_KEY);
-          const aIdx = sIdx >= 0 ? clean.indexOf('[', sIdx) : -1;
-          if (aIdx > 0) {
-            const head = clean.slice(0, aIdx + 1);
-            const kept = [];
-            let depth = 0, start = -1, inStr = false, esc = false;
-            for (let p = aIdx + 1; p < clean.length; p++) {
-              const ch = clean[p];
-              if (esc) { esc = false; continue; }
-              if (ch === BSLASH) { esc = true; continue; }
-              if (ch === '"') { inStr = !inStr; continue; }
-              if (inStr) continue;
-              if (ch === '{') { if (depth === 0) start = p; depth++; }
-              else if (ch === '}') {
-                depth--;
-                if (depth === 0 && start >= 0) {
-                  try { kept.push(JSON.parse(clean.slice(start, p + 1))); } catch (e3) { break; }
-                  start = -1;
-                }
-              } else if (ch === ']' && depth === 0) break;
-            }
-            if (kept.length) {
-              const shell = JSON.parse(head.slice(0, head.lastIndexOf(SECT_KEY)).replace(/,\s*$/, '') + '}');
-              shell.sections = kept;
-              recovered = shell;
-              try { console.error('[narrative] salvaged ' + kept.length + ' of ' + moments.length + ' sections after a parse failure'); } catch (_cs) {}
-            }
-          }
-        } catch (e4) { recovered = null; }
-      }
-      if (recovered) {
-        parsed = recovered;
-      } else {
-        // Give up, but CAPTURE the raw so the exact malformation is visible in the
-        // job error (queryable) and in the server logs.
-        // v3.0.711 -- TD-513. TWO AUDIENCES, TWO STRINGS.
-        //
-        // This wrote 1500 characters of RAW MODEL OUTPUT into the job error, and the job error is
-        // what the READER is shown. The intent was diagnostic -- the comment says the raw should be
-        // 'visible in the job error (queryable) and in the server logs' -- but the same string was
-        // doing both jobs, so Ian got a wall of German JSON in a 2.5-second toast.
-        //
-        // The diagnosis belongs in debug_logs, which the admin pack dump already reads and which
-        // is genuinely queryable. The reader gets a sentence and an action.
-        try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
-        try {
-          await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
-            message: 'The model returned unparseable JSON and no part of it could be salvaged.',
-            detail: { parse_error: perr.message, job_id: jobId, session_id: session.id, raw_head: clean.slice(0, 4000) } });
-        } catch (_le) {}
-        await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
-          'The narrative came back in a format we could not read. Nothing was saved and no tokens were spent on the failed part. Please try generating it again.',
-          new Date().toISOString(), jobId
-        );
-        return;
-      }
+        await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
+          message: 'The model returned unparseable JSON. Nothing was saved (all-or-nothing, TD-514).',
+          detail: { parse_error: perr.message, job_id: jobId, session_id: session.id,
+            panels: moments.length, raw_len: clean.length, raw_head: clean.slice(0, 4000) } });
+      } catch (_le) {}
+      await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
+        'The narrative came back in a format we could not read, so none of it was saved. Please try generating it again.',
+        new Date().toISOString(), jobId
+      );
+      return;
+    }
+    // v3.0.712 -- TD-514. A VALID RESPONSE CAN STILL BE A SHORT ONE.
+    //
+    // A truncation landing on a brace boundary parses perfectly and arrives here with fewer sections
+    // than there are panels. JSON validity says nothing about COMPLETENESS, so the count is checked
+    // separately -- and it is this check, not the parse, that catches what Ian actually hit.
+    if (!parsed || !Array.isArray(parsed.sections) || parsed.sections.length < moments.length) {
+      const _got = (parsed && Array.isArray(parsed.sections)) ? parsed.sections.length : 0;
+      try { console.error('[narrative] short response: ' + _got + ' of ' + moments.length + ' sections'); } catch (_cs) {}
+      try {
+        await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
+          message: 'The model returned fewer sections than there are panels. Nothing was saved (all-or-nothing, TD-514).',
+          detail: { got: _got, expected: moments.length, job_id: jobId, session_id: session.id, raw_len: clean.length } });
+      } catch (_le2) {}
+      await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
+        ('The narrative came back short -- ' + _got + ' of ' + moments.length + ' panels were written, so none of it was saved. Please try generating it again.'),
+        new Date().toISOString(), jobId
+      );
+      return;
     }
 
     // Defensive alignment: the prompt labels panels 1-based but asks for a
