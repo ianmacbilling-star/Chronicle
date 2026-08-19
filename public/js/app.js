@@ -4586,8 +4586,40 @@ function generateNarrativeOnly() {
   });
 }
 
-// v3.0.715 -- TD-517. ONE PLACE THAT TELLS THE SERVER, called by both cancel buttons.
+// =====================================================================================================
+// v3.0.715 / v3.0.717 -- TD-517, TD-520. THE WHOLE CANCEL TEARDOWN, IN ONE PLACE.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "it stopped the narrative... good. but it should then hide it. we don't need to
+// see it if it isn't running."
+//
+// THIS IS THE THIRD TIME THE SAME DIVERGENCE HAS BITTEN, AND THAT IS THE ACTUAL BUG. There have
+// always been TWO teardowns for one operation -- the completion path (_narrEnd / endBar) and the
+// cancel path -- and the cancel one has been missing a different piece each time:
+//     v3.0.715  it did not tell the server, so generation carried on
+//     v3.0.716  it did not clear the ticker, so the bar kept creeping
+//     v3.0.717  it did not hide narr-bar-cell, so the stopped bar stayed on screen
+// Each fix addressed the piece that had been noticed. THE WHOLE TEARDOWN NOW LIVES HERE and both
+// buttons call it, so there is no second place for the next piece to go missing from.
+//
+// The completion paths keep their own teardown deliberately: they animate to 100% and fade after
+// a delay, which a cancel must NOT do -- a cancelled run showing a full bar would read as done.
 function _narrTellServerCancelled() {
+  // Hide everything the completion path hides, immediately and with no success animation.
+  ['review-progress-wrap', 'narr-bar-cell', 'generate-progress'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  ['narr-cancel-btn', 'sb-narr-cancel-btn'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  // Reset the fills to zero. Left at their cancelled width they would flash the old percentage
+  // for a frame the next time a run starts.
+  // ONE fill, not two: both narrative paths share narr-bar-cell and narr-progress-fill. The first
+  // draft of this list invented an sb- prefixed twin by symmetry with the BUTTON ids, which do
+  // differ -- checked against app.html rather than assumed.
+  ['narr-progress-fill'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.width = '0%';
+  });
   // v3.0.716 -- TD-518. STOP THE BAR FIRST, and unconditionally: this runs before the job-id
   // check because a cancel with no job id still has a ticker running behind it.
   if (state.narrTicker) { try { clearInterval(state.narrTicker); } catch (e) {} state.narrTicker = null; }
