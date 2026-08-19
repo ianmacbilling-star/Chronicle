@@ -552,12 +552,36 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // mid-word above the failure. Two jobs were running on the same fork and both were writing.
   // The log was only the visible symptom -- both would also have written to the same
   // narrative_* columns, and the loser of that race silently overwrites the winner.
+  // v3.0.714 -- TD-516(2). THE GUARD HAD NO WAY OUT, AND IT LOCKED IAN OUT COMPLETELY.
+  //
+  // v3.0.713 added a one-job-per-version check and nothing that ever releases it. A job only
+  // leaves 'pending'/'running' by finishing or erroring -- so a run the reader CANCELS, or one
+  // killed by a deploy or a container restart, sits in the table forever and every later attempt
+  // on that version is refused. Ian hit it within minutes: cancel, then Generate, then blocked.
+  //
+  // THE ANSWER WAS ALREADY WRITTEN ONE SCREEN AWAY, in ensureGenFree (app.js, v3.0.476): the
+  // client-side lock 'auto-expires in 15 min. If a run got stuck (a hung or aborted request that
+  // skipped its clear), offer a manual override so the user is never blocked waiting it out.'
+  // That comment is the specification for this guard and I did not copy it -- a lock with no
+  // expiry and no override is a lock that will eventually strand somebody.
+  //
+  // TWENTY MINUTES, not fifteen: the client lock covers a browser request, this covers a Claude
+  // call that now has a token budget scaling to 32000 (v3.0.712) and can legitimately run long.
+  // The window is deliberately generous, because refusing a real concurrent run is a small harm
+  // and stranding a reader is a large one.
+  const _staleCut = new Date(Date.now() - (20 * 60 * 1000)).toISOString();
   const _running = await db.prepare(
-    "SELECT id FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') ORDER BY id DESC"
-  ).get(targetForkId);
+    "SELECT id, updated_at FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ? ORDER BY id DESC"
+  ).get(targetForkId, _staleCut);
   if (_running) {
-    return res.status(409).json({ error: 'A narrative is already being written for this version. Wait for it to finish, or reload the page if you think it has stalled.' });
+    return res.status(409).json({ error: 'A narrative is already being written for this version. Wait for it to finish -- it will time out on its own within 20 minutes if it has stalled.' });
   }
+  // Anything already past the window is retired here rather than left to accumulate, so the table
+  // does not fill with rows that are permanently neither running nor finished.
+  try {
+    await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE fork_id = ? AND status IN ('pending','running') AND updated_at <= ?")
+      .run('This run was abandoned -- it was cancelled, or the server restarted before it finished.', new Date().toISOString(), targetForkId, _staleCut);
+  } catch (_se) {}
   const _jobNow = new Date().toISOString();
   const _jobIns = await db.prepare(
     "INSERT INTO narrative_jobs (user_id, campaign_id, session_id, fork_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
