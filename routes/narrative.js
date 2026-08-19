@@ -571,6 +571,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // and stranding a reader is a large one.
   const _staleCut = new Date(Date.now() - (20 * 60 * 1000)).toISOString();
   const _running = await db.prepare(
+    // 'cancelled' is absent from this list on purpose: a cancelled run must never block the next
+    // attempt, which is the whole point of cancelling it.
     "SELECT id, updated_at FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ? ORDER BY id DESC"
   ).get(targetForkId, _staleCut);
   if (_running) {
@@ -716,6 +718,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     // Save to database — sections JSON already carries each panel's
     // after_summary; intro/outro summaries get their own columns.
+    // v3.0.715 -- TD-517. THE LAST CHECK BEFORE ANYTHING IS WRITTEN.
+    //
+    // Read here rather than held in memory: the cancel arrives on a DIFFERENT request while this
+    // one is inside a long await, so the only place the two can meet is the row itself.
+    // Deliberately the last thing before the write -- checking earlier would leave a window in
+    // which a cancel is accepted and the narrative still lands.
+    const _cx = await db.prepare('SELECT status FROM narrative_jobs WHERE id = ?').get(jobId);
+    if (_cx && _cx.status === 'cancelled') {
+      try { console.error('[narrative] job ' + jobId + ' was cancelled; discarding the result'); } catch (_cc) {}
+      return;
+    }
     const now = new Date().toISOString();
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
@@ -752,6 +765,40 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 // POLL a narrative job (async submit -> poll). Owner-scoped. Returns the
 // narrative payload when done, a friendly error when failed, else pending.
 // ============================================================
+// =====================================================================================================
+// v3.0.715 -- TD-517. CANCEL NOW MEANS CANCEL.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "I started a narrative ... then hit cancel... and it kept going."
+//
+// IT DID, AND THE BUTTON WAS NEVER LYING SO MUCH AS TALKING TO THE WRONG MACHINE. Cancel called
+// state.abortNarr.abort(), an AbortController on the BROWSER's fetch. But generation is a
+// background job: the server inserts a narrative_jobs row, RESPONDS IMMEDIATELY with a job id,
+// and runs the slow Claude call after the response is sent. So the fetch being aborted had
+// already completed, and the word 'cancel' appeared nowhere in this file at all.
+//
+// WHAT CANCEL CAN AND CANNOT DO. It cannot stop a Claude call already in flight -- that request
+// is made and will be billed by the API whatever happens here. What it CAN do is guarantee the
+// result is never written, so an existing narrative is not overwritten by a run the reader
+// changed their mind about. That is the honest promise and it is the one the button now makes.
+//
+// THE READER'S TOKENS ARE SAFE, AND THAT IS LUCK OF ORDERING RATHER THAN DESIGN: spendTokens is
+// called AFTER the narrative is saved, so a job that stops before the write never reaches the
+// charge. Ian: "Say the tokens have been spent... if they have been spent." They have not been,
+// so the message says so -- and a guard below pins the ordering, because moving the spend above
+// the save would quietly turn that sentence into a lie.
+router.post('/cancel/:jobId', requireAuth, async function (req, res) {
+  const db = await getDb();
+  const job = await db.prepare('SELECT * FROM narrative_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);
+  if (!job) return res.status(404).json({ error: 'That run could not be found.' });
+  if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+    return res.json({ ok: true, status: job.status, already: true });
+  }
+  await db.prepare("UPDATE narrative_jobs SET status='cancelled', error=?, updated_at=? WHERE id=?")
+    .run('Cancelled before the narrative was saved. Nothing was written and no tokens were spent.', new Date().toISOString(), req.params.jobId);
+  res.json({ ok: true, status: 'cancelled' });
+});
+
 router.get('/job/:jobId', requireAuth, async function(req, res) {
   const db = await getDb();
   const job = await db.prepare('SELECT * FROM narrative_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);

@@ -4435,6 +4435,9 @@ function generateNarrativeAndImages() {
   .then(function(data){
     if (!data || !data.job_id) { _narrEnd(false); showError('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       if (!state.narrJobActive) return;
@@ -4477,6 +4480,15 @@ function cancelNarr() {
   state.narrJobActive = false;
   clearGenLock();
   if (state.abortNarr) { try { state.abortNarr.abort(); } catch (e) {} }
+  // v3.0.715 -- TD-517. TELL THE SERVER, NOT JUST THE BROWSER.
+  //
+  // Aborting the fetch above stops the POLLING. It has never stopped the GENERATION, because the
+  // request being aborted returned a job id seconds ago and the Claude call runs on after it.
+  // Without this, cancel hid the progress bar and the narrative landed anyway a minute later,
+  // overwriting whatever was there.
+  // The wording is exact BECAUSE the ordering makes it true: spendTokens runs AFTER the narrative
+  // is saved, so a run stopped before the write never reaches the charge.
+  _narrTellServerCancelled();
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
@@ -4529,6 +4541,9 @@ function generateNarrativeOnly() {
     if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not generate narrative: ' + data.error); return; }
     if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function () {
       if (tries++ > 100) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
@@ -4556,9 +4571,24 @@ function generateNarrativeOnly() {
   });
 }
 
+// v3.0.715 -- TD-517. ONE PLACE THAT TELLS THE SERVER, called by both cancel buttons.
+function _narrTellServerCancelled() {
+  if (!state.narrJobId) return;
+  var _jid = state.narrJobId;
+  state.narrJobId = null;
+  fetch('/api/narrative/cancel/' + _jid, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.already) return;
+      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
+    })
+    .catch(function () {});
+}
 function cancelNarrOnly() {
   clearGenLock();
   if (state.abortNarrOnly) { try { state.abortNarrOnly.abort(); } catch (e) {} }
+  // v3.0.715 -- TD-517. The narrative-only button shares the fault and the fix; see cancelNarr.
+  if (typeof _narrTellServerCancelled === 'function') _narrTellServerCancelled();
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
@@ -6514,6 +6544,9 @@ function regenNarrativeSection(type, panelIndex) {
     if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
     if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
@@ -12999,6 +13032,9 @@ function regenNarrativeSection(type, panelIndex) {
     if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
     if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
