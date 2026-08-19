@@ -257,26 +257,21 @@
         {
           "selector": "#title-build-open",
           "title": "Draw your title",
-          "text": "Have your title drawn as artwork instead of set in type. It costs a token, and it goes to your Archive so you can put it back later.",
+          "text": "Have your title drawn as artwork instead of set in type. It costs a token, and it can be saved to your Archive so you can put it back later.",
           "placement": "auto"
         },
         {
-          "selector": "#novel-custom-btn",
+          "selector": "#prep-acc-layout",
+          "click": "#prep-acc-layout .prep-acc-head",
           "title": "Layout",
-          "text": "Comic, picture book, or magazine.",
-          "placement": "auto"
-        },
-        {
-          "selector": "#prep-optimize-btn",
-          "title": "Optimize",
-          "text": "When the look is right, this takes you to Optimize — the last step before you publish or order.",
+          "text": "Open this to choose how your book looks — comic, picture book or magazine — along with the borders, captions, fonts and decorations that go with it.",
           "placement": "auto"
         },
         {
           "selector": "#ntab-finalize",
           "click": "#ntab-finalize",
           "title": "Optimize",
-          "text": "Here your book is prepared for printing: page breaks, decorations, and how each page is laid out.",
+          "text": "This is where we put the whole book together and let you preview it and make changes before you publish.",
           "placement": "auto"
         },
         {
@@ -293,13 +288,13 @@
           "placement": "auto"
         },
         {
-          "selector": "#novel-tab-order",
+          "selector": "#ord-card-print",
           "title": "Order a printed copy",
           "text": "Make your selections here, then prepare and approve your book for printing. The options vary with your page count.",
           "placement": "auto"
         },
         {
-          "selector": "#novel-publish-btn",
+          "selector": "#ord-card-publish",
           "title": "Publish to the Library",
           "text": "Publish your book as a shareable web page.",
           "placement": "auto"
