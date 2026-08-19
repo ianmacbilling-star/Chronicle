@@ -7561,19 +7561,52 @@ function prepSyncTitle() {
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
   var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+  // =====================================================================================================
+  // v3.0.706 -- TD-509. THE TITLE DID NOT FOLLOW THE VERSION.
+  // =====================================================================================================
+  //
+  // Ian, 2026-08-19: "The Title on the Prep and Preview pane on the Publish page isn't changing when
+  // I change version. That title should be stored with the version."
+  //
+  // IT WAS STORED WITH THE VERSION ALL ALONG. book_title lives in fork_book_prefs keyed by
+  // version_id, onNovelVersionChange reloads it, and state.bookMeta held the right value. The box
+  // simply refused it: the assignment below was gated on `!tEl.value`, and after a switch the box
+  // still holds the PREVIOUS version's title, so it is not empty, so nothing is written. The new
+  // title was fetched, arrived, and was discarded.
+  //
+  // THE GATE IS NOT JUNK AND MUST NOT SIMPLY BE DELETED. It protects an unsaved edit -- the v3.0.578
+  // fault, where a repaint from a server answer wiped a subtitle mid-typing. So the question is not
+  // "repaint or not", it is "WHOSE title is in this box". Version identity answers it honestly:
+  // while the version has not changed, the reader may be mid-edit and the box is left alone; the
+  // moment it changes, the box belongs to a different book and is repainted unconditionally.
+  //
+  // THE STASH WAS THE SECOND HALF, and on its own it made the bug look intermittent rather than
+  // stuck. _prepOwnTitle exists to carry your own unsaved title across a look at SOMEONE ELSE'S
+  // version and back. Nothing cleared it when moving between two versions you own, so a title from
+  // an earlier version could be restored over a later one -- the box showing neither version's
+  // stored value. It is now dropped whenever the version identity moves, because a stash is only
+  // valid for the version it was taken from.
+  //
+  // Ian's rule, same day, and this is the client half of it: "Values are COPIED. Once a version
+  // exists it should never go back and look at the Canonical for values. It's now independent."
+  var _vNow = (typeof state.novelVersionId !== 'undefined' && state.novelVersionId !== null)
+    ? String(state.novelVersionId) : '';
+  var _vChanged = (state._prepTitleVersion !== _vNow);
+  if (_vChanged) state._prepOwnTitle = null;
+  state._prepTitleVersion = _vNow;
+  var _fallbackTitle = (state.bookMeta && state.bookMeta.book_title)
+    ? state.bookMeta.book_title
+    : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
   if (own) {
     tEl.readOnly = false;
     if (state._prepOwnTitle != null) { tEl.value = state._prepOwnTitle; state._prepOwnTitle = null; }
-    if (!tEl.value) {
-      tEl.value = (state.bookMeta && state.bookMeta.book_title)
-        ? state.bookMeta.book_title
-        : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
-    }
+    if (_vChanged || !tEl.value) tEl.value = _fallbackTitle;
   } else {
-    if (state._prepOwnTitle == null) state._prepOwnTitle = tEl.value || '';
-    tEl.value = (state.bookMeta && state.bookMeta.book_title)
-      ? state.bookMeta.book_title
-      : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
+    // v3.0.706 -- the stash is only taken on the way OUT of a version you own, and only when the
+    // version has not just changed underneath it. Taking it after a switch would capture the
+    // wrong book's title.
+    if (state._prepOwnTitle == null && !_vChanged) state._prepOwnTitle = tEl.value || '';
+    tEl.value = _fallbackTitle;
     tEl.readOnly = true;
   }
   prepApplyOwnershipLock();   // v3.0.580 -- the layout half, re-applied on every version switch
