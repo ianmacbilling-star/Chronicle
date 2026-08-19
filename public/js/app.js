@@ -4412,11 +4412,24 @@ function generateNarrativeAndImages() {
   // whole way rather than sprinting then parking. Ease 0.04 keeps it slow from the beginning;
   // tiny 0.10 floor keeps every 750ms tick perceptible but small; crawls slowly toward 98 (never
   // parks at 90) and _narrEnd snaps to 100 on finish.
+  // v3.0.716 -- TD-518. THE TICKER HAS TO BE REACHABLE FROM OUTSIDE THIS FUNCTION.
+  //
+  // Ian, 2026-08-19: "it says it cancelled but the progress bar continues..."
+  //
+  // _nticker was a local var and clearInterval ran ONLY inside _narrEnd. cancelNarr never calls
+  // _narrEnd -- it does its own teardown -- so the interval was never cleared. It kept firing
+  // against a hidden element forever, one tick every 750ms for the life of the page.
+  //
+  // v3.0.701 IS WHY IT IS VISIBLE NOW RATHER THAN MERELY WASTEFUL. Before that build the bar
+  // parked at 98 and a leaked ticker sat there silently; the asymptote means a leaked ticker
+  // creeps on for ever, so a fault that had always existed finally showed itself.
   var _nticker = creepBar(_nfill, _npct, 0.012, 750);
+  state.narrTicker = _nticker;
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
     clearInterval(_nticker);
+    state.narrTicker = null;   // v3.0.716 -- one handle, cleared on every exit path
     state.narrJobActive = false;
     clearGenLock();
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
@@ -4519,8 +4532,10 @@ function generateNarrativeOnly() {
   // (The old curve eased 12%/tick of the gap at 400ms -- it sprinted to ~85 then parked, which
   // read as stalled.)
   var ticker = creepBar(fill, pct, 0.012, 750);
+  state.narrTicker = ticker;   // v3.0.716 -- TD-518, same fault on the narrative-only path
   function endBar(done) {
     clearInterval(ticker);
+    state.narrTicker = null;
     clearGenLock();
     var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'none';
     if (done && fill) fill.style.width = '100%';
@@ -4573,6 +4588,9 @@ function generateNarrativeOnly() {
 
 // v3.0.715 -- TD-517. ONE PLACE THAT TELLS THE SERVER, called by both cancel buttons.
 function _narrTellServerCancelled() {
+  // v3.0.716 -- TD-518. STOP THE BAR FIRST, and unconditionally: this runs before the job-id
+  // check because a cancel with no job id still has a ticker running behind it.
+  if (state.narrTicker) { try { clearInterval(state.narrTicker); } catch (e) {} state.narrTicker = null; }
   if (!state.narrJobId) return;
   var _jid = state.narrJobId;
   state.narrJobId = null;
