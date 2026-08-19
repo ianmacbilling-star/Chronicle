@@ -669,7 +669,7 @@ if (typeof window !== "undefined" && !window.__alertPatched) {
   window.__alertPatched = true;
   window.alert = function (m) {
     var msg = String(m == null ? "" : m);
-    try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showAlert(msg); } catch (e) {}
+    try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showError(msg); } catch (e) {}
   };
 }
 
@@ -2336,13 +2336,13 @@ async function deleteSession(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadSessions();
     })
     .catch(function(e) {
-      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+      if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
     });
 }
 
@@ -3342,11 +3342,11 @@ function _saveCast(p) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not save casting: ' + data.error); loadReview(); return; }
+    if (data.error) { showError('Could not save casting: ' + data.error); loadReview(); return; }
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
   })
-  .catch(function(e){ showAlert('Could not save casting: ' + e.message); loadReview(); });
+  .catch(function(e){ showError('Could not save casting: ' + e.message); loadReview(); });
 }
 function castAddCharacter(momentId, sel) {
   var id = parseInt(sel.value, 10); if (!id) return;
@@ -3386,14 +3386,14 @@ function castReset(momentId) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not reset casting: ' + data.error); return; }
+    if (data.error) { showError('Could not reset casting: ' + data.error); return; }
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
       _refreshOpenMomentOptions(momentId);
     });
   })
-  .catch(function(e){ showAlert('Could not reset casting: ' + e.message); });
+  .catch(function(e){ showError('Could not reset casting: ' + e.message); });
 }
 
 
@@ -3539,12 +3539,12 @@ function saveNarrDirection() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not save direction: ' + data.error); return; }
+    if (data.error) { showError('Could not save direction: ' + data.error); return; }
     state.narrativeDirections = data.directions || {};
     closeNarrDirection();
     refreshNarrativeDirectionUI(gapKey);
   })
-  .catch(function(e){ showAlert('Could not save direction: ' + e.message); });
+  .catch(function(e){ showError('Could not save direction: ' + e.message); });
 }
 
 // Refresh the surfaces that show a gap's Direction after it's saved, WITHOUT
@@ -3628,11 +3628,11 @@ function saveOutline() {
   fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if (data && data.error) { showAlert('Could not save outline: ' + (data.message || data.error)); return; }
+      if (data && data.error) { showError('Could not save outline: ' + (data.message || data.error)); return; }
       closeOutlineModal();
       if (typeof loadReview === 'function') loadReview();
     })
-    .catch(function(e){ showAlert('Could not save outline: ' + e.message); });
+    .catch(function(e){ showError('Could not save outline: ' + e.message); });
 }
 
 // ============================================================
@@ -4164,11 +4164,11 @@ function setVerbosity(v) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Could not set narrative length: ' + data.error); highlightVerbosity(_prev); return; }
+    if (data.error) { showError('Could not set narrative length: ' + data.error); highlightVerbosity(_prev); return; }
     state.narrativeVerbosity = data.verbosity || v;
     mpSave('session', { narrative_verbosity: state.narrativeVerbosity });
   })
-  .catch(function(e) { showAlert('Could not set narrative length: ' + e.message); highlightVerbosity(_prev); });
+  .catch(function(e) { showError('Could not set narrative length: ' + e.message); highlightVerbosity(_prev); });
 }
 
 function closeStylePicker() {
@@ -4186,13 +4186,13 @@ function selectStyleCard(kind, id) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { showAlert('Could not set narrative style: ' + data.error); return; }
+      if (data.error) { showError('Could not set narrative style: ' + data.error); return; }
       state.narrativeStyle = data.style || id;
       mpSave('session', { narrative_style: state.narrativeStyle });
       refreshNarrStyleButtons();
       closeStylePicker();
     })
-    .catch(function(e) { showAlert('Could not set narrative style: ' + e.message); });
+    .catch(function(e) { showError('Could not set narrative style: ' + e.message); });
   } else if (kind === 'art') {
     state.artStyle = id;
     mpSave('session', { art_style: id });
@@ -4433,7 +4433,7 @@ function generateNarrativeAndImages() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (!data || !data.job_id) { _narrEnd(false); showAlert('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
+    if (!data || !data.job_id) { _narrEnd(false); showError('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
     var tries = 0;
     var poll = function() {
@@ -4444,7 +4444,7 @@ function generateNarrativeAndImages() {
         .then(function(j){
           if (!state.narrJobActive) return;
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (j.status === 'error') { _narrEnd(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          if (j.status === 'error') { _narrEnd(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
           if (typeof fillStoryboardProse === 'function') fillStoryboardProse(state.narrativeData);
           _narrEnd(true);
@@ -4453,7 +4453,7 @@ function generateNarrativeAndImages() {
     };
     poll();
   })
-  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showAlert('Could not start narrative: ' + e.message); });
+  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -4526,8 +4526,8 @@ function generateNarrativeOnly() {
     // job until it is done, THEN render -- previously this read data.intro/
     // sections/outro straight off the job_id response (all undefined), rendering
     // an empty narrative while the background job quietly saved the real one.
-    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
-    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not start narrative: no job id returned'); return; }
+    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not generate narrative: ' + data.error); return; }
+    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
     var tries = 0;
     var poll = function () {
@@ -4537,7 +4537,7 @@ function generateNarrativeOnly() {
         .then(function (j) {
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
           if (btn) { btn.disabled = false; btn.textContent = origLabel; }
-          if (j.status === 'error') { endBar(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          if (j.status === 'error') { endBar(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           endBar(true);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
           state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
@@ -4552,7 +4552,7 @@ function generateNarrativeOnly() {
     if (btn) { btn.disabled = false; btn.textContent = origLabel; }
     endBar(false);
     if (e && e.name === 'AbortError') return;
-    showAlert('Could not generate narrative: ' + e.message);
+    showError('Could not generate narrative: ' + e.message);
   });
 }
 
@@ -4691,10 +4691,10 @@ function setCampaignCover(archiveId, cb) {
       showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the cover.');
+      showError((data && data.error) || 'Could not update the cover.');
     }
   })
-  .catch(function(){ showAlert('Could not update the campaign cover.'); });
+  .catch(function(){ showError('Could not update the campaign cover.'); });
 }
 
 function setCampaignBackCover(archiveId, cb) {
@@ -4718,10 +4718,10 @@ function setCampaignBackCover(archiveId, cb) {
       showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the back cover.');
+      showError((data && data.error) || 'Could not update the back cover.');
     }
   })
-  .catch(function(){ showAlert('Could not update the back cover.'); });
+  .catch(function(){ showError('Could not update the back cover.'); });
 }
 
 // Set/clear the interior TITLE-PAGE image from an archived image. DM-only.
@@ -4746,10 +4746,10 @@ function setCampaignTitleImage(archiveId, cb) {
       showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the title image.');
+      showError((data && data.error) || 'Could not update the title image.');
     }
   })
-  .catch(function(){ showAlert('Could not update the title-page image.'); });
+  .catch(function(){ showError('Could not update the title-page image.'); });
 }
 
 function showErrorDialog(msg, title) {
@@ -4932,7 +4932,7 @@ var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
 // than a corner toast. Reused by character portraits AND custom art-style slots.
 function showSlotError(slot, msg) {
   var zone = document.getElementById('drop-' + slot);
-  if (!zone || !zone.parentNode) { showAlert(msg); return; }
+  if (!zone || !zone.parentNode) { showError(msg); return; }
   var el = document.getElementById('slot-err-' + slot);
   if (!el) {
     el = document.createElement('div');
@@ -6003,14 +6003,14 @@ async function deleteChar(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadCharacters();
     })
     .catch(function(e) {
       var m = 'Delete failed: ' + (e && e.message ? e.message : 'network error');
-      if (typeof showAlert === 'function') { showAlert(m); } else { alert(m); }
+      if (typeof showAlert === 'function') { showError(m); } else { alert(m); }
     });
 }
 
@@ -6430,7 +6430,7 @@ function saveNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error: ' + result.error); return; }
+    if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
@@ -6458,7 +6458,7 @@ function saveInlineNarrative(silent) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { if (!silent) showAlert('Error: ' + result.error); return; }
+    if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     if (!silent) showAlert('Narrative saved!');
   });
@@ -6501,7 +6501,7 @@ function regenNarrativeSection(type, panelIndex) {
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
     if (box) box.disabled = false;
-    if (!ok && msg) showAlert(msg);
+    if (!ok && msg) showError(msg);
   };
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -6995,7 +6995,7 @@ async function onNovelVersionChange(val) {
   if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
-    showAlert(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    showError(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   // v3.0.471 -- AN ORDER IN PROGRESS BLOCKS THE SWITCH UNTIL IT IS ANSWERED FOR (TD-276).
@@ -7671,7 +7671,7 @@ function _prepMetaWrite(patch, cb) {
         return r.json().catch(function () { return null; }).then(function (e) {
           var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
           try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
-          if (typeof showAlert === 'function') showAlert(msg);
+          if (typeof showAlert === 'function') showError(msg);
           return null;
         });
       })
@@ -7692,7 +7692,7 @@ function _prepMetaWrite(patch, cb) {
         if (!m) {
           // Put the stored truth back on screen rather than leaving a value nothing accepted.
           if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
-          if (typeof showAlert === 'function') showAlert('That change could not be saved. Switch to your own version to change the cover or the title.');
+          if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
         }
         if (cb) cb(m);
         return m;
@@ -8797,7 +8797,7 @@ function titleBuildArchiveToggle() {
         if (d && d.error) { _tbErr(d.message || d.error); return; }
         state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
         _tbSyncArchivePill();
-        if (typeof showAlert === 'function') showAlert('Removed from your Archive.');
+        if (typeof showAlert === 'function') showError('Removed from your Archive.');
       })
       .catch(function () { _tbErr('Could not update the Archive.'); });
     return;
@@ -9219,7 +9219,7 @@ function _prepMemberSetImage(kind, url) {
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
     .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })
-    .catch(function(){ showAlert('Could not update your book image.'); });
+    .catch(function(){ showError('Could not update your book image.'); });
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
 //
@@ -9279,7 +9279,7 @@ function prepRemoveImage(kind, ev) {
   fetch('/api/campaigns/' + c.id, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   }).then(function (r) { return r.json(); }).then(function (d) {
-    if (!d || !d.id) { showAlert('That picture could not be removed. Switch to your own version and try again.'); return; }
+    if (!d || !d.id) { showError('That picture could not be removed. Switch to your own version and try again.'); return; }
     c[PREP_IMG_KINDS[kind].field] = '';
     var i = (state.campaigns || []).findIndex(function (x) { return x.id === c.id; });
     if (i >= 0) state.campaigns[i][PREP_IMG_KINDS[kind].field] = '';
@@ -9287,7 +9287,7 @@ function prepRemoveImage(kind, ev) {
     state.bookMeta[PREP_IMG_KINDS[kind].field] = '';
     renderPrepThumbs();
     showAlert('Image removed.');
-  }).catch(function () { showAlert('That picture could not be removed.'); });
+  }).catch(function () { showError('That picture could not be removed.'); });
 }
 function _prepEnsureArchives(cb) {
   var _cid = state.currentCampaign && state.currentCampaign.id;
@@ -9332,9 +9332,9 @@ function openPrepImagePicker(kind, campaignId) {
   // would refuse a Story Master looking at somebody else's version of their own campaign.
   if (PREP_IMG_KINDS[kind].campaignField) {
     // The role of the campaign being EDITED, which is not necessarily the one on screen.
-    if (!_camp || _camp.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
+    if (!_camp || _camp.my_role !== 'dm') { showError('Only the Story Master can change the campaign image.'); return; }
   } else if (!(typeof prepUseMember === 'function' && prepUseMember())) {
-    showAlert('Switch to your own version to change the cover, back, or title image.');
+    showError('Switch to your own version to change the cover, back, or title image.');
     return;
   }
   state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
@@ -9452,10 +9452,10 @@ function selectPrepImage(kind, archiveId) {
     // The causes are fixed above -- the campaign is carried through and the archives belong to it --
     // so these should not fire. If they ever do, they say so instead of shrugging.
     var _cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
-    if (!_cid) { showAlert('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
+    if (!_cid) { showError('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
     var _cc = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_cid); })[0];
     var _a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
-    if (!_a) { showAlert('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
+    if (!_a) { showError('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
     // Clicking the picture already on the tile REMOVES it, exactly as the retired picker did.
     var _cur = (_cc && _cc.campaign_image_url) || '';
     setCampaignImage(_cid, (_cur === _a.image_url) ? '' : _a.image_url, function () {
@@ -10094,7 +10094,7 @@ function setupCardDragDrop() {
 
     var file = files[0];
     if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+      showError(UPLOAD_TYPE_MSG);
       return;
     }
 
@@ -10131,11 +10131,11 @@ function uploadPortraitToChar(charId, file) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error uploading portrait: ' + data.error); return; }
+    if (data.error) { showError('Error uploading portrait: ' + data.error); return; }
     showAlert('Portrait updated for ' + char.name + '!');
     loadCharacters();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); });
+  .catch(function(e) { showError('Error: ' + e.message); });
 }
 
 // ============================================================
@@ -10283,7 +10283,7 @@ function saveNarrative() {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error saving: ' + result.error); return; }
+    if (result.error) { showError('Error saving: ' + result.error); return; }
     narrativeData = data;
     showAlert('Narrative saved!');
   });
@@ -10304,7 +10304,7 @@ function toggleSessionPreview() { previewSessionInline(); }
 // Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
   if (state.tierInfo && state.tierInfo.can_export === false) {
-    showAlert('Export is not available on your current plan. Upgrade to Silver or higher to export PDFs.');
+    showError('Export is not available on your current plan. Upgrade to Silver or higher to export PDFs.');
     return;
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
@@ -10387,6 +10387,49 @@ function showModalError(id, msg) {
   el.classList.remove('hidden');
 }
 
+// =====================================================================================================
+// v3.0.710 -- TD-512. AN ERROR LOOKED EXACTLY LIKE A SUCCESS AND VANISHED IN 2.5 SECONDS.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "It did give me an error at the top of the screen generating the narratives.
+// I couldn't see it and read it in time before it went away... We need to make all the Toast
+// Errors and messages have an OK button on them and appear as a Modal."
+//
+// HE ALSO SAID "I thought we fixed this already", AND HE WAS HALF RIGHT. TD-493 / v3.0.687 fixed
+// the Title Builder REFUSALS -- ten appNotice call sites. This is a different and far larger set:
+// showAlert had 133 call sites and NO ERROR VARIANT AT ALL. Every one rendered .alert-success --
+// green, top right, gone in 2500ms. A failure was literally styled as a success and given the same
+// lifespan as "Transcript saved!".
+//
+// WHY NOT SNIFF THE TEXT AT RUNTIME. That was the obvious design and it is wrong here: Ian's error
+// arrived IN GERMAN. Any keyword classifier keys on English words and would misfile every message
+// in every language the app now supports -- rebuilding, in the presentation layer, the exact bug
+// v3.0.703 through v3.0.709 were spent removing. THE CALL SITE KNOWS: a .catch(), a non-OK status,
+// an `if (!ok)` branch is an error whatever language its message is written in. So the routing is
+// decided in the source, once, and never re-derived from the string.
+//
+// AND THE CLASSIFICATION DEFAULTS TO THE MODAL. The conversion kept an explicit list of
+// confirmations and converted everything else, rather than listing the errors and converting those.
+// Inverting it that way means a message nobody classified becomes a VISIBLE modal instead of an
+// invisible error -- the failure mode of the miss is loud rather than silent.
+function showError(msg) {
+  var text = String(msg == null ? '' : msg);
+  if (!text) return;
+  // uiConfirm already owns the modal furniture and the focus trap. Reusing it with a single button
+  // keeps ONE modal in the product; a second implementation would drift in styling and in the
+  // Escape/backdrop behaviour, which is the paired-derive fault this file keeps recording.
+  if (typeof appNotice === 'function') { try { appNotice('Something went wrong.', text, ''); return; } catch (e) {} }
+  if (typeof uiConfirm === 'function') { try { uiConfirm({ title: 'Something went wrong.', body: text, okLabel: 'OK', hideCancel: true }); return; } catch (e) {} }
+  // Last resort only. If neither modal helper is present the message must still be readable, so it
+  // falls back to a toast that does NOT time out rather than to one that does.
+  var el = document.createElement('div');
+  el.className = 'alert alert-error';
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;max-width:520px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.25);';
+  el.title = 'Click to dismiss';
+  el.onclick = function () { el.remove(); };
+  document.body.appendChild(el);
+}
 function showAlert(msg) {
   var el = document.createElement('div');
   el.className = 'alert alert-success';
@@ -10790,7 +10833,7 @@ function submitRetouch() {
     var charId = state.retouchCharId;
     var ch = (state.characters || []).find(function(c){ return c.id === charId; });
     if (!ch) return;
-    if (isCharGenBusy(charId)) { showAlert('This character\u2019s reference image is still generating. Please wait, then try again.'); return; }
+    if (isCharGenBusy(charId)) { showError('This character\u2019s reference image is still generating. Please wait, then try again.'); return; }
     setCharGenBusy(charId);   // TF-09
     closeRetouch();
     var refTargetId = 'char-ref-image-' + charId;
@@ -11179,10 +11222,10 @@ function setArchivePublic(id, makePublic) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ public: !!makePublic })
   }).then(function (r) { return r.json(); }).then(function (d) {
-    if (d && d.error) { showAlert(d.error); renderArchives(); return; }
+    if (d && d.error) { showError(d.error); renderArchives(); return; }
     var a = (state.archives || []).find(function (x) { return x.id === id; });
     if (a) a.public = !!makePublic;
-  }).catch(function () { showAlert('Could not update the Public setting.'); renderArchives(); });
+  }).catch(function () { showError('Could not update the Public setting.'); renderArchives(); });
 }
 
 // ---- Admin: Public Library moderation modal ----
@@ -11256,8 +11299,8 @@ function adminUnpublish(id, card, btn) {
   fetch('/api/admin/library/' + id + '/unpublish', { method: 'POST' })
     .then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
-      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
-    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError('Could not remove.'); });
 }
 
 function openAdminStories() {
@@ -11330,8 +11373,8 @@ function adminUnpublishStory(id, card, btn) {
   fetch('/api/admin/stories/' + id + '/unpublish', { method: 'POST' })
     .then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
-      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
-    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError('Could not remove.'); });
 }
 // --- Copy an archived image into the campaign's Assets (DM-only). ------------
 // Opens a small modal for Name + Type, then posts to the from-archive route
@@ -11397,7 +11440,7 @@ async function deleteArchive(id) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.success) {
-        showAlert('Removed from the Archive.');
+        showError('Removed from the Archive.');
         state.archives = (state.archives || []).filter(function(a){ return a.id !== id; });
         renderArchives();
       } else {
@@ -11602,12 +11645,12 @@ function saveImagePrompt() {
         var _rvp = document.getElementById('session-tab-review');
         if (_rvp && _rvp.style.display !== 'none' && typeof loadReview === 'function') loadReview();
       } else {
-        showAlert((data && data.error) || 'Could not save the prompt.');
+        showError((data && data.error) || 'Could not save the prompt.');
       }
     })
     .catch(function() {
       ta.disabled = false;
-      showAlert('Could not save the prompt.');
+      showError('Could not save the prompt.');
     });
 }
 
@@ -12356,13 +12399,13 @@ async function deleteSession(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadSessions();
     })
     .catch(function(e) {
-      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+      if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
     });
 }
 
@@ -12872,7 +12915,7 @@ function saveNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error: ' + result.error); return; }
+    if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
@@ -12900,7 +12943,7 @@ function saveInlineNarrative(silent) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { if (!silent) showAlert('Error: ' + result.error); return; }
+    if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     if (!silent) showAlert('Narrative saved!');
   });
@@ -12943,7 +12986,7 @@ function regenNarrativeSection(type, panelIndex) {
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
     if (box) box.disabled = false;
-    if (!ok && msg) showAlert(msg);
+    if (!ok && msg) showError(msg);
   };
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -13843,7 +13886,7 @@ function setupCardDragDrop() {
 
     var file = files[0];
     if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+      showError(UPLOAD_TYPE_MSG);
       return;
     }
 
@@ -13880,11 +13923,11 @@ function uploadPortraitToChar(charId, file) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error uploading portrait: ' + data.error); return; }
+    if (data.error) { showError('Error uploading portrait: ' + data.error); return; }
     showAlert('Portrait updated for ' + char.name + '!');
     loadCharacters();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); });
+  .catch(function(e) { showError('Error: ' + e.message); });
 }
 
 // ============================================================
@@ -14032,7 +14075,7 @@ function saveNarrative() {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error saving: ' + result.error); return; }
+    if (result.error) { showError('Error saving: ' + result.error); return; }
     narrativeData = data;
     showAlert('Narrative saved!');
   });
@@ -14179,13 +14222,13 @@ function refreshInviteButtonVisibility() { applyRoleVisibility(); }
 function openInviteModal() {
   var cur = state.currentCampaign;
   if (!cur) {
-    showAlert('No campaign selected');
+    showError('No campaign selected');
     return;
   }
   // The invite button stays visible on the Free Trial (it shows what's
   // possible), but inviting is a paid feature -- stop them on click.
   if (state.user && state.user.tier === 'trial') {
-    showAlert('Inviting players is a paid feature. Free Trial campaigns are single-player. Upgrade to a paid plan to invite your table.');
+    showError('Inviting players is a paid feature. Free Trial campaigns are single-player. Upgrade to a paid plan to invite your table.');
     return;
   }
   // Reset modal state.
@@ -14550,13 +14593,13 @@ function confirmRemoveMember() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
-        showAlert(data.error);
+        showError(data.error);
       }
       closeConfirmRemoveMember();
       loadMembersTab();
     })
     .catch(function(e) {
-      showAlert('Could not remove member: ' + e.message);
+      showError('Could not remove member: ' + e.message);
       closeConfirmRemoveMember();
     })
     .finally(function() {
@@ -14595,7 +14638,7 @@ function confirmMakeDm() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        showAlert(data.error);
+        showError(data.error);
         if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
         return;
       }
@@ -14604,7 +14647,7 @@ function confirmMakeDm() {
       window.location.reload();
     })
     .catch(function(e) {
-      showAlert('Could not transfer the Story Master role: ' + e.message);
+      showError('Could not transfer the Story Master role: ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
     });
 }
@@ -14637,12 +14680,12 @@ function confirmRevokeInvite() {
   fetch('/api/campaigns/' + cur.id + '/invites/' + iid, { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) showAlert(data.error);
+      if (data.error) showError(data.error);
       closeConfirmRevokeInvite();
       loadPendingInvites();
     })
     .catch(function(e) {
-      showAlert('Could not revoke: ' + e.message);
+      showError('Could not revoke: ' + e.message);
       closeConfirmRevokeInvite();
     })
     .finally(function() {
@@ -14662,12 +14705,12 @@ function copyExistingInviteLink(inviteId, expired) {
     fetch('/api/campaigns/' + cur.id + '/invites/' + inviteId + '/reactivate', { method: 'POST' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.error) { showAlert(data.error); return; }
+        if (data.error) { showError(data.error); return; }
         writeToClipboard(inv.url, 'Reactivated & copied');
         // Refresh so the row no longer shows "expired"
         loadPendingInvites();
       })
-      .catch(function(e) { showAlert('Could not reactivate: ' + e.message); });
+      .catch(function(e) { showError('Could not reactivate: ' + e.message); });
   } else {
     writeToClipboard(inv.url, 'Copied');
   }
@@ -14839,7 +14882,7 @@ function saveAccessStatus(status) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      showAlert(data.error);
+      showError(data.error);
       // Revert dropdown
       var sel = document.getElementById('session-access-status-select');
       if (sel) sel.value = state._currentAccessStatus || 'draft';
@@ -14873,7 +14916,7 @@ function saveAccessStatus(status) {
       .catch(function() { /* non-fatal */ });
   })
   .catch(function(e) {
-    showAlert('Could not update status: ' + e.message);
+    showError('Could not update status: ' + e.message);
     var sel = document.getElementById('session-access-status-select');
     if (sel) sel.value = state._currentAccessStatus || 'draft';
   })
@@ -15191,7 +15234,7 @@ function onForkChange(forkId) {
       var _dm = (state.sessionForks || []).filter(function (f) { return f.role === 'dm'; })[0];
       _fs.value = String(state.currentForkId || (_dm ? _dm.fork_id : ''));
     }
-    showAlert(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    showError(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
@@ -15367,7 +15410,7 @@ function reloadSessionForFork() {
 function newSessionVersion() {
   if (!state.currentCampaign || !state.currentSession) return;
   var src = state.currentForkId || (state.sessionForks && state.sessionForks[0] && state.sessionForks[0].fork_id);
-  if (!src) { showAlert('There is no version here to copy yet.'); return; }
+  if (!src) { showError('There is no version here to copy yet.'); return; }
   var srcFork = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(src); })[0];
   var srcLabel = srcFork ? srcFork.label : 'this version';
   // v3.0.459 -- ASK THE SERVER WHICH VERSIONS THIS SESSION IS MISSING FROM (TD-242 stage 3c).
@@ -15397,7 +15440,7 @@ function newSessionVersion() {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
-        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not create that version.'); return; }
+        if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not create that version.'); return; }
         state.currentForkId = res.j.fork_id;
         loadSessionForks(state.currentSession.id);
         reloadSessionForFork();
@@ -15407,7 +15450,7 @@ function newSessionVersion() {
       })
       .catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
-        showAlert('Could not create that version. Please try again.');
+        showError('Could not create that version. Please try again.');
       });
     });
   });
@@ -15417,8 +15460,8 @@ function newSessionVersion() {
 function renameSessionVersion() {
   if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
   var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
-  if (!f || !f.is_mine) { showAlert('You can only rename your own versions.'); return; }
-  if (!f.version_id) { showAlert('This version is still being set up. Please reload the page and try again.'); return; }
+  if (!f || !f.is_mine) { showError('You can only rename your own versions.'); return; }
+  if (!f.version_id) { showError('This version is still being set up. Please reload the page and try again.'); return; }
   uiPrompt('Rename version', 'What should this version be called?', f.name || '').then(function (name) {
     if (name === null) return;
     name = (name || '').trim();
@@ -15433,12 +15476,12 @@ function renameSessionVersion() {
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not rename that version.'); return; }
+        if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not rename that version.'); return; }
         loadSessionForks(state.currentSession.id);
         // The name is campaign-level now, so every session and the Publish picker change at once.
         if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
       })
-      .catch(function () { showAlert('Could not rename that version. Please try again.'); });
+      .catch(function () { showError('Could not rename that version. Please try again.'); });
   });
 }
 // v3.0.474 -- ASKS, AND CAN ALSO JOIN AN EXISTING VERSION (TD-277).
@@ -15478,7 +15521,7 @@ async function makeMyVersion() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
-      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
@@ -15486,7 +15529,7 @@ async function makeMyVersion() {
     })
     .catch(function(e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
-      if (typeof showAlert === 'function') { showAlert('Could not create your version: ' + e.message); } else { alert(e.message); }
+      if (typeof showAlert === 'function') { showError('Could not create your version: ' + e.message); } else { alert(e.message); }
     });
 }
 
@@ -15505,7 +15548,7 @@ async function deleteMyVersion() {
   var _fid = state.currentForkId;
   var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(_fid); })[0];
   if (!_fid || !_dv) {
-    showAlert('Pick the version you want to remove from the dropdown first.');
+    showError('Pick the version you want to remove from the dropdown first.');
     return;
   }
   if (!forkOwnNonCanonical()) {
@@ -15514,7 +15557,7 @@ async function deleteMyVersion() {
         'This is the original version of the session, so it cannot be deleted -- everything else is built from it.',
         'You can rename it, or delete one of your other versions.');
     } else {
-      showAlert('You can only remove a session from your own versions.');
+      showError('You can only remove a session from your own versions.');
     }
     return;
   }
@@ -15553,7 +15596,7 @@ async function deleteMyVersion() {
         (_choice === 'deleteVersion' ? '?delete_version=1' : ''), { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       // Ian, 2026-08-06: drop to the CANONICAL. Nulling both is exactly that -- loadSessionForks
       // selects the canonical when nothing is named -- and it is the safe landing either way,
       // because the fork that WAS on screen no longer exists.
@@ -15564,7 +15607,7 @@ async function deleteMyVersion() {
       // The version's session count changed, or the version itself is gone.
       if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
     })
-    .catch(function(e) { if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert(e.message); } });
+    .catch(function(e) { if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert(e.message); } });
 }
 
 // Render a lock banner on the Characters tab for players when the
@@ -16619,10 +16662,10 @@ function setCampaignImage(campaignId, newUrl, cb) {
       showAlert(newUrl ? 'Campaign image set.' : 'Campaign image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the campaign image.');
+      showError((data && data.error) || 'Could not update the campaign image.');
     }
   })
-  .catch(function(){ showAlert('Could not update the campaign image.'); });
+  .catch(function(){ showError('Could not update the campaign image.'); });
 }
 
 // Archive picker for the campaign image. Same look as the Pre-Publish Prep
@@ -16685,7 +16728,7 @@ function _openCampaignImagePickerLegacy(campaignId) {
       }
       overlay.appendChild(box); document.body.appendChild(overlay);
     })
-    .catch(function(){ showAlert('Could not load archived images.'); });
+    .catch(function(){ showError('Could not load archived images.'); });
 }
 function closeCampaignImagePicker() {
   var m = document.getElementById('cs-img-modal');
@@ -17538,7 +17581,7 @@ function reorderGoToOrderTab(campaignId) {
   }
   function go() {
     var c = have();
-    if (!c) { reorderClear(); showAlert('Could not open that campaign.'); return; }
+    if (!c) { reorderClear(); showError('Could not open that campaign.'); return; }
     // v3.0.678 -- TD-464 / TD-479. THROUGH THE CHOKE POINT, NOT AROUND IT.
     //
     // v3.0.665 navigated with selectCampaignNovel, and ESLint no-undef found out why that was a bad
@@ -17563,7 +17606,7 @@ function reorderGoToOrderTab(campaignId) {
   fetch('/api/campaigns')
     .then(function (r) { return r.json(); })
     .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
-    .catch(function () { reorderClear(); showAlert('Could not open that campaign.'); });
+    .catch(function () { reorderClear(); showError('Could not open that campaign.'); });
 }
 
 // Called at the END of refreshPrintOptions, once the binding/colour/finish lists exist and the
@@ -18366,14 +18409,14 @@ function deleteOrder(id) {
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) {
-            showAlert((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
+            showError((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
             return;
           }
           // Re-read rather than splice the card out: the list is the server's answer, and a local
           // edit that disagrees with it is how a deleted row reappears on the next load.
           if (typeof loadOrders === 'function') loadOrders();
         })
-        .catch(function () { showAlert('Could not reach the server. Please try again.'); });
+        .catch(function () { showError('Could not reach the server. Please try again.'); });
     }
   });
 }
@@ -21681,7 +21724,7 @@ function optimizeShowBusy(j) {
           })
           .catch(function () {
             _kb.disabled = false; _kb.textContent = 'Stop that run and start over';
-            if (typeof showAlert === 'function') showAlert('Could not stop that run. Try again in a moment.');
+            if (typeof showAlert === 'function') showError('Could not stop that run. Try again in a moment.');
           });
       };
       host.appendChild(_kb);
