@@ -231,8 +231,9 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 You spend tokens to generate images; once generated, they're yours. These four are
 distinct:
 
-- **Export** — save your book as a PDF via the PDF control (from **True View** /
-  **Open in New Tab**).
+- **Export** — save your book as a PDF. **Run Optimize first**: the finished PDF comes from
+  the Optimize tab, and you open it with **Review in a New Tab** and save or print from the
+  browser's own PDF viewer.
 - **Print** — print that PDF on your own printer, from the same control. No extra
   requirement beyond being able to Export.
 - **Publish** — publish your finished story to the public **Library** as a shareable
@@ -240,8 +241,9 @@ distinct:
   entry, managed on your Account page.
 - **Order** — order a physical print-on-demand (POD) book through our print partner.
 
-**True View** (the exact on-screen look of the finished book) is available to everyone
-— including a lone Copper member — for a session or the whole novel. **Export and home
+**Seeing the finished book** is open to everyone — including a lone Copper member — for a
+session or the whole novel: the preview panel shows it as you work, and the Optimize tab shows
+it as it will print. **Export and home
 Print** are open to anyone who can view the story (the browser's PDF viewer does the
 save/print). The two things that require an **effective paid tier** (your own
 subscription, or a Copper seat under a paid Story Master) are **Publishing to the
@@ -423,8 +425,8 @@ Where the story comes together as alternating image panels and narrative.
 ### 10.5 Preview tab
 See how it looks on the printed page.
 - **Layout** — Comic, Picture Book, Magazine, or Gazette (the button shows the pick).
-- **Quick View / True View** — Quick View is a fast on-screen look; **True View** is
-  exactly how it'll print, with page breaks, gutters, and margins.
+- **The preview panel** — a fast on-screen look at the {session} as you work. For exactly how
+  it will print, with page breaks, gutters and margins, run **Optimize** on the Publish page.
 - **Open in New Tab** — full-size PDF in the browser (save/print via the browser).
 - **All publishing options →** — (with access) jumps to the Publish page.
 
@@ -840,7 +842,8 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   **Generate Story** → review on the **Review** tab → **Generate Narrative & Images** →
   fine-tune the **Storyboard** → check **Preview** → **Publish** or **Order**.
 - **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Comic,
-  Picture Book, Magazine, or Gazette. Use **True View** to see the real printed result.
+  Picture Book, Magazine, or Gazette. Run **Optimize** on the Publish page to see the real
+  printed result.
 - **"How do I hand off running the campaign?"** **Members** → the member's **⋯** →
   **Make Story Master**. The incoming Story Master needs a paid subscription; everyone
   keeps their own versions.
@@ -898,8 +901,8 @@ Friction points and what's actually going on.
   by name**. Fix it via the panel's **⋯** menu (add/remove characters) or **Reset to
   auto**, and check the character's name and slash-separated alternates.
 - **"Why can't I publish or order?"** Those require an **effective paid tier** (your own
-  subscription, or a Copper seat under a paid Story Master). **True View**, **Export**,
-  and home **Print** are open to anyone who can view the story.
+  subscription, or a Copper seat under a paid Story Master). **Previewing**, **Export** and
+  home **Print** are open to anyone who can view the story.
 - **"Why is my book showing the Story Master's version instead of mine?"** For sessions
   you haven't made your **own version** of, Publish falls back to the SM's canonical
   version. Make your own version of those sessions to use yours.
@@ -928,7 +931,8 @@ Friction points and what's actually going on.
 - **What's the difference between an asset and a character?** A **character** is a major
   recurring cast member (Characters tab); an **asset** is a **location** (which becomes
   the background), an **item**, or a **minor NPC** (Asset Library).
-- **How do I see the real printed look?** **Preview** tab → **True View**.
+- **How do I see the real printed look?** Publish page → **Optimize** tab, then **Review in a
+  New Tab**.
 - **Who can make an image public?** The person who archived it, or the campaign's Story
   Master.
 - **Can I build a series?** Yes — publish some sessions now and more later; each Publish
