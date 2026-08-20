@@ -484,9 +484,7 @@ holds the Story Master role, so it follows a handover.
 
 **Making a version**
 
-**Your first version of a campaign is free. Making another one needs Gold or higher on your
-own paid plan** — a Story Master's plan doesn't extend this one, and the Free Trial doesn't
-include it. A trial account gets one version, and keeps every art style.
+A trial account gets one version, and keeps every art style. The full rule is below.
 
 - **You always make a version from a session, never from nothing.** Branch a session and the
   version comes into being around it. The buttons are **Make My Version** (your first one on
@@ -507,11 +505,16 @@ session instructions, all of it. **From that moment it never looks back.** Chang
 afterwards and your version does not move; clear a field in yours and it stays cleared rather
 than reverting to what you copied. That is what makes a version a printing rather than a draft.
 
-**On Platinum you can have as many versions as you want**, and that is the point of them. A
-version holds a whole look — art style, narrative style, layout, cover, title — so having
-several means you can try a different art style, or a different layout, **without throwing away
-the one you already like**. Build one in Ironframe and one in Reverie and keep both. Every
-Platinum member on a campaign can do the same, so a story can have several versions side by side.
+**Your first version is free on every plan. From the second onward you need Gold or higher on
+your own plan** — and then you can have as many as you want. It is an account-level
+allowance, so joining a higher-tier Story Master does not grant it; the tier has to be yours.
+Versions you already made are never taken away, whatever your plan does later.
+
+**That allowance is the point of versions.** A version holds a whole look — art style,
+narrative style, layout, cover, title — so having several means you can try a different art
+style, or a different layout, **without throwing away the one you already like**. Build one in
+Ironframe and one in Reverie and keep both. Every Gold-or-higher member on a campaign can do
+the same, so a story can have several versions side by side.
 
 Branching copies the panels and their pictures, the narrative and its summaries, the
 Direction notes, the outlines, the per-session character looks, the casting, and the art and
