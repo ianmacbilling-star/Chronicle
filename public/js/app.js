@@ -19194,9 +19194,25 @@ function _activeSessionTab() {
   return 'notes';
 }
 
+// v3.0.726 -- TD-525. THE TOP OF THE SESSION SCREEN HAD NO TOUR AT ALL.
+//
+// Checked three ways before writing one: no step in any of the fourteen tours targeted a header
+// element except #session-access-status-select, buried as step 3 of sess-export; every key the
+// engine can derive already had a tour; and no tour sat orphaned in the file. 'session-detail'
+// was a VIEW name that had never been a tour key -- tourKeyForView converted it to sess-<tab>
+// before the lookup, so the header could never be reached.
+//
+// AND THE TAB CHOICE HID IT. switchSessionTab opens a built session on storyboard, so the key was
+// always sess-storyboard; sess-notes is only reachable on a session with no story at all.
+//
+// Runs ONCE, then the key falls back to the tab. _tourProgress is the store the engine already
+// uses for 'has this run', so there is no second notion of seen.
 function tourKeyForView() {
   var v = (window.state && state.currentView) || 'campaigns';
-  if (v === 'session-detail') return 'sess-' + _activeSessionTab();
+  if (v === 'session-detail') {
+    if (_tourProgress && !_tourProgress['session-detail']) return 'session-detail';
+    return 'sess-' + _activeSessionTab();
+  }
   return v;
 }
 
@@ -19350,6 +19366,25 @@ function _tourFinish() {
   var viewId = _tourViewId;
   _tourTeardown();
   _tourMarkComplete(viewId);
+  // v3.0.726 -- TD-525. THE HAND-OFF. Ian: "Session detail should run first, before the tab tour
+  // ... then when the session tour is done start the tab tour for whatever tab they are on."
+  //
+  // Chained HERE rather than at the call site because Next-to-the-end AND Skip both land in this
+  // one function, so skipping the header still gets you the tab tour. _tourMarkComplete has
+  // already recorded the header, so tourKeyForView now returns the tab key and this cannot loop.
+  // A loop would be unrecoverable for the reader: the tour would restart every time they closed it.
+  //
+  // The delay lets the overlay tear down first. startTour MEASURES its target, and measuring while
+  // a full-screen overlay is still on the page is how a first step ends up mispositioned.
+  if (viewId === 'session-detail') {
+    setTimeout(function () {
+      try {
+        if (state.currentView === 'session-detail' && typeof maybeStartTour === 'function') {
+          maybeStartTour('sess-' + _activeSessionTab());
+        }
+      } catch (e) {}
+    }, 260);
+  }
 }
 
 function _tourTeardown() {

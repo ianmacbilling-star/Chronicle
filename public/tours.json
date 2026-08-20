@@ -521,6 +521,58 @@
           "placement": "auto"
         }
       ]
+    },
+    "session-detail": {
+      "steps": [
+        {
+          "selector": "#session-detail-name",
+          "title": "Your {session}",
+          "text": "The name and date of this {session}. Everything below belongs to it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-edit-btn",
+          "title": "Rename it",
+          "text": "Change the name, the date, or the short description that appears underneath.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#new-version-btn",
+          "title": "Make another version",
+          "text": "Start a new version from the one you are looking at. Everything is copied across, and from then on the two are independent.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-fork-select",
+          "title": "Whose version?",
+          "text": "A {session} can have more than one version. Switch between them here — each keeps its own story, pictures and settings.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-access-status-select",
+          "title": "Draft or Ready",
+          "text": "Draft keeps this {session} to yourself. Ready lets your members see it and make their own versions.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-version-menu",
+          "title": "More",
+          "text": "Rename this version, or remove this {session} from it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#sess-nav-assets",
+          "title": "Assets and Archives",
+          "text": "Your recurring people, places and things — and every picture you have generated, kept so you can put one back at any time.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#sess-nav-prev",
+          "title": "Move between {sessions}",
+          "text": "Step to the {session} before or after this one without going back to the list.",
+          "placement": "auto"
+        }
+      ]
     }
   }
 }

@@ -766,6 +766,30 @@
           </div>
         </div>
         <div class="sdh-right">
+          <!-- v3.0.726 -- TD-526. HEADER ORDER, TO IAN'S SPEC: New Version, version dropdown,
+               Draft/Ready, Assets, Archives, ellipsis. The controls that change WHAT YOU ARE
+               LOOKING AT come first, then the one that changes who else can see it, then the
+               two that leave the page. Make My Version rides with New Version because only
+               one of the pair is ever visible -- they are the same slot for different readers.
+               Sliced from the previous markup rather than retyped, so every handler, class
+               and inline style travels with its element. -->
+          <!-- v3.0.441 -- New Version (TD-194). Always shown once the reader already has one, so a
+               member who has not got Gold learns why from the message rather than from a missing
+               button. Copies whichever version is CURRENTLY SELECTED, whoever owns it. -->
+          <button id="new-version-btn"
+                  class="btn btn-secondary"
+                  onclick="newSessionVersion()"
+                  style="display:none;">New Version</button>
+          <!-- Player-only: make your own version of a Ready session. -->
+          <button id="make-my-version-btn"
+                  class="btn btn-primary"
+                  onclick="makeMyVersion()"
+                  style="display:none;">Make My Version</button>
+          <!-- Version selector - DM canonical + any versions the viewer may see. -->
+          <select id="session-fork-select"
+                  class="form-input session-fork-select"
+                  onchange="onForkChange(this.value)"
+                  style="max-width:200px;display:none;"></select>
           <!-- DM sees an editable Draft/Ready dropdown; players see a read-only chip. -->
           <select id="session-access-status-select"
                   class="form-input session-access-status-select"
@@ -777,25 +801,8 @@
           <span id="session-access-status-chip"
                 class="session-access-chip"
                 style="display:none;"></span>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
-          <!-- Version selector - DM canonical + any versions the viewer may see. -->
-          <select id="session-fork-select"
-                  class="form-input session-fork-select"
-                  onchange="onForkChange(this.value)"
-                  style="max-width:200px;display:none;"></select>
-          <!-- Player-only: make your own version of a Ready session. -->
-          <button id="make-my-version-btn"
-                  class="btn btn-primary"
-                  onclick="makeMyVersion()"
-                  style="display:none;">Make My Version</button>
-          <!-- v3.0.441 -- New Version (TD-194). Always shown once the reader already has one, so a
-               member who has not got Gold learns why from the message rather than from a missing
-               button. Copies whichever version is CURRENTLY SELECTED, whoever owns it. -->
-          <button id="new-version-btn"
-                  class="btn btn-secondary"
-                  onclick="newSessionVersion()"
-                  style="display:none;">New Version</button>
+          <button class="btn btn-sm" id="sess-nav-assets" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" id="sess-nav-archives" onclick="showCampaignSection('archives')">Archives</button>
           <!-- Player-only: ellipsis menu holding Delete My Version. Shown only
                when the viewer has their own version (JS toggles this wrapper). -->
           <div class="row-menu" id="session-version-menu" style="display:none;">
