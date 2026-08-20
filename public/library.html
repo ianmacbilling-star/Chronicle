@@ -56,7 +56,11 @@
 
     .gallery { column-width:250px; column-gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
     .card { break-inside:avoid; margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
-    .card img { display:block; width:100%; height:auto; background:#160e06; }
+    /* v3.0.737 -- TD-536. aspect-ratio reserves the space BEFORE the image loads, which is what
+       stops the column reflowing as each one arrives. The per-card ratio is set inline from the
+       real stored dimensions; 4/3 here is only the fallback for legacy rows that have none. */
+    .card img { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; background:#160e06; }
+    .card img[data-exact] { object-fit:fill; }
     .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
     .card .cap-title { font-style:italic; color:rgba(240,232,208,0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
     .card .cap-author { font-style:normal; font-size:12px; color:rgba(201,168,76,0.9); white-space:nowrap; flex:0 0 auto; }
@@ -193,6 +197,15 @@
       var img = document.createElement('img');
       img.setAttribute('loading', 'lazy');
       img.setAttribute('alt', item.caption || 'Campaignia creation');
+      // v3.0.737 -- TD-536. The exact ratio, so the card occupies its final height from the
+      // moment it is created and nothing below it moves when the pixels land. width/height are
+      // set as well: they are what a browser uses before CSS applies, and they cost nothing.
+      if (item.w > 0 && item.h > 0) {
+        img.width = item.w;
+        img.height = item.h;
+        img.style.aspectRatio = item.w + ' / ' + item.h;
+        img.setAttribute('data-exact', '1');   // exact ratio: show the whole image, never crop
+      }
       img.src = item.image_url;
       img.addEventListener('click', function () { openLb(item.image_url, item.caption); });
       fig.appendChild(img);
