@@ -2472,9 +2472,9 @@
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others. Only upload images you own or have the rights to use &mdash; no copyrighted characters or artwork without permission.</div>
+        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
       </div>
-      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style (1 token)</button>
+      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
       <div class="form-group" style="margin-top:14px;">
         <label class="form-label">Style description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; editable; this is what steers every panel</span></label>
         <textarea class="form-textarea" id="cstyle-prompt" style="min-height:120px;" placeholder="Analyze your reference images to generate this, or write your own STYLE: description..."></textarea>

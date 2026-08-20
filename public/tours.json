@@ -398,8 +398,8 @@
         },
         {
           "selector": ".storyboard-panel.is-opening",
-          "title": "Title image",
-          "text": "The opening image for your story — usually a wide, distant shot that sets the scene.",
+          "title": "Open Scene, Chapter Title",
+          "text": "The opening image for your story — usually a wide, distant shot that sets the scene. Or use the Title Builder to create a chapter title image.",
           "placement": "auto"
         },
         {
