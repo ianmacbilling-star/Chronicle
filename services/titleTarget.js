@@ -82,7 +82,16 @@ async function resolveTitleTarget(db, req, target) {
         words: { title: cur.book_title || '', subtitle: cur.subtitle || '' },
         prevUrl: cur.built_title_prev || '',
         prevSrc: cur.built_title_prev_src || '',
-        bookTitle: cur.book_title || ''
+        bookTitle: cur.book_title || '',
+        // v3.0.729 -- TD-527. The book draft, reported at last, and INSIDE current where the
+        // session target has kept its own since v3.0.656 and where app.js already looks.
+        draft: cur.built_title_draft_url ? {
+          url: cur.built_title_draft_url || '',
+          src: cur.built_title_draft_src || '',
+          text: cur.built_title_draft_text || '',
+          sub: (cur.built_title_draft_sub == null ? null : String(cur.built_title_draft_sub)),
+          prompt: cur.built_title_draft_prompt || ''
+        } : null
       },
       // THE ONLY PLACE THAT KNOWS THE STORAGE NAMES. Undefined keys are left alone rather than
       // nulled, so a caller writing only the artwork cannot silently erase the words beside it.

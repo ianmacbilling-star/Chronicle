@@ -101,10 +101,16 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
 - **Silver** — 1 campaign, unlimited sessions, unlimited characters, monthly free
   tokens, a capped number of moments per session, and more art styles than the floor.
 - **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
-  Silver, more moments per session, and more art *and* narrative style options.
+  Silver, more moments per session, more art *and* narrative style options, and
+  **multiple versions of a book**.
 - **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
-  grant, the highest moment caps, all styling options, and the ability to build
-  **custom art styles**.
+  grant, the highest moment caps, all styling options, **multiple versions of a book**,
+  and the ability to build **custom art styles**.
+
+**Versions are the exception to what follows.** Multiple versions is an *account-level*
+allowance, not a creative one, so it is **not** inherited — a Copper member in a Gold Story
+Master's campaign gets Gold-level art styles but still only one version. Silver is one version
+per user as well; the second one needs Gold or higher on your own plan.
 
 **Creative access is inherited within a campaign.** The art/narrative/layout options a
 member can use equal the **higher of their own tier and the Story Master's tier**.
@@ -225,8 +231,9 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 You spend tokens to generate images; once generated, they're yours. These four are
 distinct:
 
-- **Export** — save your book as a PDF via the PDF control (from **True View** /
-  **Open in New Tab**).
+- **Export** — save your book as a PDF. **Run Optimize first**: the finished PDF comes from
+  the Optimize tab, and you open it with **Review in a New Tab** and save or print from the
+  browser's own PDF viewer.
 - **Print** — print that PDF on your own printer, from the same control. No extra
   requirement beyond being able to Export.
 - **Publish** — publish your finished story to the public **Library** as a shareable
@@ -234,8 +241,9 @@ distinct:
   entry, managed on your Account page.
 - **Order** — order a physical print-on-demand (POD) book through our print partner.
 
-**True View** (the exact on-screen look of the finished book) is available to everyone
-— including a lone Copper member — for a session or the whole novel. **Export and home
+**Seeing the finished book** is open to everyone — including a lone Copper member — for a
+session or the whole novel: the preview panel shows it as you work, and the Optimize tab shows
+it as it will print. **Export and home
 Print** are open to anyone who can view the story (the browser's PDF viewer does the
 save/print). The two things that require an **effective paid tier** (your own
 subscription, or a Copper seat under a paid Story Master) are **Publishing to the
@@ -417,8 +425,8 @@ Where the story comes together as alternating image panels and narrative.
 ### 10.5 Preview tab
 See how it looks on the printed page.
 - **Layout** — Comic, Picture Book, Magazine, or Gazette (the button shows the pick).
-- **Quick View / True View** — Quick View is a fast on-screen look; **True View** is
-  exactly how it'll print, with page breaks, gutters, and margins.
+- **The preview panel** — a fast on-screen look at the {session} as you work. For exactly how
+  it will print, with page breaks, gutters and margins, run **Optimize** on the Publish page.
 - **Open in New Tab** — full-size PDF in the browser (save/print via the browser).
 - **All publishing options →** — (with access) jumps to the Publish page.
 
@@ -451,15 +459,17 @@ one.
 
 **What a version holds**
 
-- **The cover and title block** — book title, subtitle, title colour, title style,
-  placement and size, plus the cover, back cover and title-page images.
+- **The cover and title block** — **the book title is the version's own**, not the campaign's;
+  switch versions and the title on screen changes with it. Plus subtitle, title colour, title
+  style, placement and size, and the cover, back cover and title-page images.
 - **The layout** — layout style, picture borders and frames, caption style, body font, drop
   cap, running page header, session dividers and whether each session starts on a fresh
   page, and whether to include the cover page, the character page and the contents.
 - **The styles** — art style, narrative style, narrative verbosity.
 - **The content of every session you've branched** — the panels and their pictures, prompts,
   order and locks; the narrative intro, sections and outro; the Direction notes and
-  outlines; the per-session character looks; and which sessions are in the book at all.
+  outlines; **the session instructions**; the per-session character looks; and which sessions
+  are in the book at all.
 
 **What a version doesn't hold**
 
@@ -482,9 +492,7 @@ holds the Story Master role, so it follows a handover.
 
 **Making a version**
 
-**Your first version of a campaign is free. Making another one needs Gold or higher on your
-own paid plan** — a Story Master's plan doesn't extend this one, and the Free Trial doesn't
-include it. A trial account gets one version, and keeps every art style.
+A trial account gets one version, and keeps every art style. The full rule is below.
 
 - **You always make a version from a session, never from nothing.** Branch a session and the
   version comes into being around it. The buttons are **Make My Version** (your first one on
@@ -499,11 +507,33 @@ include it. A trial account gets one version, and keeps every art style.
 - **Adding a session to a version you already own is always free** — that isn't a new
   version, it's an existing one picking up another session.
 
+**Values are copied, then the version is on its own.** When you make a version it takes a full
+copy of whatever version you branched from — the title, the cover, the layout, the styles, the
+session instructions, all of it. **From that moment it never looks back.** Change the canonical
+afterwards and your version does not move; clear a field in yours and it stays cleared rather
+than reverting to what you copied. That is what makes a version a printing rather than a draft.
+
+**Your first version is free on every plan. From the second onward you need Gold or higher on
+your own plan** — and then you can have as many as you want. It is an account-level
+allowance, so joining a higher-tier Story Master does not grant it; the tier has to be yours.
+Versions you already made are never taken away, whatever your plan does later.
+
+**That allowance is the point of versions.** A version holds a whole look — art style,
+narrative style, layout, cover, title — so having several means you can try a different art
+style, or a different layout, **without throwing away the one you already like**. Build one in
+Ironframe and one in Reverie and keep both. Every Gold-or-higher member on a campaign can do
+the same, so a story can have several versions side by side.
+
 Branching copies the panels and their pictures, the narrative and its summaries, the
 Direction notes, the outlines, the per-session character looks, the casting, and the art and
 narrative styles. One deliberate exception: when you add a *second* session to a version you
-already have, the content comes from the session you branched but the **style comes from
-your version** — otherwise your book would render half in one art style and half in another.
+already have, the **session-level content** comes from the session you branched — panels,
+narrative, instructions, character looks — but the **version-level settings stay yours**: the
+title, the cover, the layout, the art style, the narrative style. Otherwise your book would
+render half in one look and half in another.
+
+As new sessions get created you can add them to your existing versions, then regenerate them
+with that version's art and narrative styles — so a book stays consistent as it grows.
 
 **Who can change what**
 
@@ -516,9 +546,9 @@ the art style and the narrative too.
 
 **What's saved, and when**
 
-**Everything on the Preview & Export tab saves automatically** — there's no Save button for
+**Everything on the Prep & Preview tab saves automatically** — there's no Save button for
 cover and layout settings. Change the title and click away; pick a border; choose a colour;
-each is written to your version as you make it. The first time you open Preview & Export on a
+each is written to your version as you make it. The first time you open Prep & Preview on a
 version, its settings are written in as they stand, so the version genuinely owns them and
 the book you branched from can be restyled later without yours changing underneath you. The
 title and settings then follow the book everywhere — the Optimize tab renders with them, the
@@ -617,49 +647,76 @@ it. Every campaign has exactly one **Story Master**.
 
 ## 15. Publish
 
-Turn finished sessions into a graphic novel — published to the Library and/or ordered as
-a printed book. Three parts:
+Turning finished {sessions} into a graphic novel — published to the Library, ordered as a
+printed book, or both. The Publish page walks left to right through four tabs, and you
+work them **in order**.
 
-**1. Choosing what goes in (Publish/Sessions tab)**
-- **Version dropdown** ("Generating novel for…") — defaults to your own version; switch
-  to publish another member's.
-- **Session cards** — every session in the campaign appears, each with its title image,
-  Ready/Draft status, and an **open** link. A card uses **your own version** if you've
-  made one; for any session you **haven't versioned**, it falls back to the **Story
-  Master's canonical version**. So a card can read Draft, and some may be the SM's version
-  — check both before publishing.
-- **Include in Print checkbox** — tick which sessions go in. Leave all checked to compile
-  the whole story, or pick a subset for episodes/smaller volumes.
+**Tab 1 — {Sessions}: choose what goes in**
 
-**2. Preview & Export — "Prepare to Publish" panel**
-- **Title** — defaults to the campaign name; change it here.
-- **Title color** — color of the title text so it stands out against the cover.
-- **Cover, Back & Title images** — pick each from your Archive.
-- **Refresh preview** — re-render the right-hand preview.
-- **Blurb** (optional) — Library-page teaser; leave blank and it uses your opening
-  narrative.
-- **Rights checkbox** — confirm you own/have rights and the content is general-audience.
-  Required to publish.
-- **Publish to Library** — makes your story a public web page anyone can read.
-- The preview side mirrors the session Preview tab: Layout, Quick/True View, navigation,
-  and Open in New Tab.
+- **Version dropdown** — whose edition you are publishing. It defaults to your own, and
+  you can switch to any member's. **Each version is a separate book**: its own title,
+  cover, layout and prose. Publish yours today and a member's tomorrow, and they are two
+  different books from the same campaign.
+- **{Session} cards** — every {session} in the campaign, each with its title image and
+  Ready/Draft status. A card uses **your own version** where you have made one; where you
+  have not, it falls back to the **Story Master's canonical version**. So a card can read
+  Draft, and some may be the SM's — check both before publishing.
+- **Include in Print** — tick which {sessions} go in. Leave them all for the whole story,
+  or pick a few for an episode or a smaller volume.
 
-**3. Order a printed copy (Order tab)**
-- The book **title** carries from the preview; add an **order name** to label it. Shows
-  which version and who owns it.
-- Print options: **binding** (softcover, hardcover, comic), **color** (premium
-  recommended), **cover finish**, **shipping speed**, plus your shipping address.
-- **Get price** quotes the cost from your options and the page count.
-- **Prepare Your Order** generates the final interior + cover PDFs to review; you must
-  tick **"I have reviewed both the interior and cover PDFs"** before continuing.
-- **Continue to secure payment** → Stripe checkout (add a card if none on file) and
-  places the order. **All print orders are final — no refunds, and an order can't be
-  pulled back once placed.**
-- You get a **tracking number**, and past orders (with tracking + details) live under
-  **My Orders**.
+**Tab 2 — Prep & Preview: make it look like a book**
+
+Everything here belongs to the version you picked on tab 1. **This is the quick place to
+try things out** — stylings, fonts, decorations and layouts — because previewing here is
+**faster and cheaper than running Optimize**. Settle the look here first.
+
+- **Title and subtitle** — default to the campaign name; change them here.
+- **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
+  instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
+  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
+  **Layout** on this same tab. They are on every plan and cost nothing.
+- **Cover, back cover and title-page images** — pick each from your Archive. The **x** on
+  a tile removes that picture, and the tiles show you **the crop the printed page will
+  use**, not the whole image. Clear the cover entirely and you get a **plain framed
+  cover** — dark ground, gold frame, your title on it.
+- **Layout** — the layout itself, borders, captions, fonts and decorations.
+- The right-hand pane previews the book as you change things.
+
+**Tab 3 — Optimize: put the whole book together**
+
+**Optimize layout** hands your book to an AI that reads it the way an editor would —
+looking for errors, flow and density — and fixes what it finds. **We do our best to
+estimate the token cost up front and show it before you start.**
+
+It runs **several passes** to get the density right, and **this is where page breaks are
+added**. As it works it writes what it is doing to the **log on the left**, so you can
+watch the reasoning rather than a spinner. Cancel is there if you change your mind.
+
+When it finishes, each page gains an **Edit** button beside its page number for further
+changes. **An optimized book is saved automatically — but you will need to save again
+after your own individual edits.** **Load Last Optimized File** brings a finished book
+straight back if you have navigated away.
+
+**Tab 4 — Order & Publish**
+
+*Order a printed copy* — binding (softcover, hardcover, comic), colour (premium
+recommended), cover finish, shipping speed and address. **Get price** quotes from your
+options and page count. **Prepare Your Order** generates the final interior and cover
+PDFs, and you must tick **"I have reviewed both the interior and cover PDFs"** before
+continuing. Then **Continue to secure payment** goes to Stripe. **All print orders are
+final — no refunds, and an order cannot be pulled back once placed.** You get a tracking
+number, and past orders live under **My Orders**.
+
+*Publish to the Library* — makes your story a public web page anyone can read. Add a
+**blurb** here if you want a teaser on your Library page; leave it blank and your opening
+narrative is used. You must tick the **rights checkbox** confirming you own the content
+and it is general-audience.
+
+**A page limit applies to both publishing and ordering.** It is an adjustable setting
+rather than a fixed number, so quote the current value from your context rather than a
+remembered one.
 
 ---
-
 ## 16. The public Library
 
 The Library is where you browse everything the Campaignia community has made public. Two
@@ -688,6 +745,33 @@ just can't make new ones.
 
 ---
 
+## 17a. The Title Builder (Platinum)
+
+On the **Platinum** tier you can have your book or chapter title **drawn as artwork**
+instead of set in type. You can access the Title Builder under the title section of the
+**Prep & Preview** tab on the Publish page, or on the **Opening Panel** on the
+**Storyboard** and **Review** tabs on the Session page.
+
+Your title and subtitle come from the book — the drawing uses **those exact words**, so
+change them on the prior screen if they aren't right. Then describe **how the lettering
+should look** — emeralds embedded in decorative iron, gold and black ribbons, carved in
+stone. That description is what decides the style. You can also drop in a **reference
+image** whose writing style or drawing you want the lettering to mimic.
+
+**Generating it** costs a token. Unlike your panel images, a title is drawn with a
+**transparent background**, so it sits on the cover or that chapter heading in your book
+without covering it and without other decorations or borders.
+
+Once it's drawn you can **Retouch** it — describe one change, another token — or
+**Archive** it so you can put it back later with **Replace from Archive**, which costs
+nothing. **Done & Use** puts it on the cover; **Done & Stash** keeps the drawing but takes
+it off, and on a chapter puts the panel's picture back. Nothing reaches your book until
+you press Done & Use.
+
+Notes: the Title Builder needs a **true Platinum subscription**. **The five typed title
+styles are on every plan** — this is the drawn alternative to them.
+
+---
 ## 18. Tokens at the top + buying bundles
 
 - **Token count (top bar):** the gem icon and number in the header is your current total
@@ -758,7 +842,8 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   **Generate Story** → review on the **Review** tab → **Generate Narrative & Images** →
   fine-tune the **Storyboard** → check **Preview** → **Publish** or **Order**.
 - **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Comic,
-  Picture Book, Magazine, or Gazette. Use **True View** to see the real printed result.
+  Picture Book, Magazine, or Gazette. Run **Optimize** on the Publish page to see the real
+  printed result.
 - **"How do I hand off running the campaign?"** **Members** → the member's **⋯** →
   **Make Story Master**. The incoming Story Master needs a paid subscription; everyone
   keeps their own versions.
@@ -816,8 +901,8 @@ Friction points and what's actually going on.
   by name**. Fix it via the panel's **⋯** menu (add/remove characters) or **Reset to
   auto**, and check the character's name and slash-separated alternates.
 - **"Why can't I publish or order?"** Those require an **effective paid tier** (your own
-  subscription, or a Copper seat under a paid Story Master). **True View**, **Export**,
-  and home **Print** are open to anyone who can view the story.
+  subscription, or a Copper seat under a paid Story Master). **Previewing**, **Export** and
+  home **Print** are open to anyone who can view the story.
 - **"Why is my book showing the Story Master's version instead of mine?"** For sessions
   you haven't made your **own version** of, Publish falls back to the SM's canonical
   version. Make your own version of those sessions to use yours.
@@ -846,7 +931,8 @@ Friction points and what's actually going on.
 - **What's the difference between an asset and a character?** A **character** is a major
   recurring cast member (Characters tab); an **asset** is a **location** (which becomes
   the background), an **item**, or a **minor NPC** (Asset Library).
-- **How do I see the real printed look?** **Preview** tab → **True View**.
+- **How do I see the real printed look?** Publish page → **Optimize** tab, then **Review in a
+  New Tab**.
 - **Who can make an image public?** The person who archived it, or the campaign's Story
   Master.
 - **Can I build a series?** Yes — publish some sessions now and more later; each Publish

@@ -5635,7 +5635,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
           // whether they used recordings, played at a table at all, or simply wrote the story. The
           // notice should state what is certainly true and nothing more.
           // No apostrophe in the new text: pdf.js strings are single-quoted (file invariant).
-          'This story was created on Campaignia.com. Narrative text and illustrations were produced in part or entirely with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+          // v3.0.732 -- and note this sits within the standard the block set for itself in v3.0.391:
+          // state what is certainly true and nothing more. Saying the work IS based on the creator's
+          // stories and descriptions is a much smaller assertion than the v3.0.390 sentence that was
+          // reverted for claiming HOW the book was made -- it describes the input, not the process.
+          'This story was created on Campaignia.com. Narrative text and illustrations are based on the creators stories and descriptions and were produced in part or entirely with the assistance of AI tools. All characters and original content remain the property of their respective creators.</div>' +
       '</div>' +
     '</div>';
 

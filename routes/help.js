@@ -200,6 +200,13 @@ router.post('/ask', requireAuth, async function(req, res) {
     G.push(storyDesc ? '- Generate Story currently costs ' + storyDesc + '. (Based on the word count shown under the transcript, notes, and lore fields.)' : '- Generate Story is currently FREE (no token cost).');
     G.push(narrDesc ? '- Generate Narrative currently costs ' + narrDesc + '.' : '- Generate Narrative is currently FREE (no token cost).');
     G.push('- Charged on success only (a failed generation is never charged); the token balance updates right after generating.');
+    // v3.0.731 -- TD-529. THE PAGE CAP IS A SETTING, SO IT IS READ, NOT REMEMBERED.
+    // Read on BOTH paths -- routes/pdf.js [publish-story] and [print-interior] -- so it is stated
+    // as applying to publishing and ordering alike. Traced rather than assumed.
+    try {
+      const _mpp = await getAppSettingInt('max_pages_per_print', 250);
+      if (_mpp > 0) G.push('- The page limit for publishing to the Library AND for ordering a printed book is currently ' + _mpp + ' pages. Use this number, not a remembered one.');
+    } catch (e) {}
     generationCostBlock = G.join('\n');
   } catch (e) {}
 
