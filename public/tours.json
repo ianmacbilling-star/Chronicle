@@ -487,6 +487,40 @@
           "placement": "auto"
         }
       ]
+    },
+    "title-builder": {
+      "steps": [
+        {
+          "selector": "#title-build-title",
+          "title": "Your title",
+          "text": "These are the title and subtitle from your book. The drawing will use these exact words — change them on the prior screen if they aren't right. Unlike your panel images, a title is drawn with a transparent background so it sits on the cover rather than covering it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#title-build-desc",
+          "title": "Describe the lettering",
+          "text": "Say how the words should look, not what they say — emeralds embedded in decorative iron, gold and black ribbons, carved in stone. This is the part that decides the style.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#title-build-drop",
+          "title": "Match a style you already have",
+          "text": "If you have an image of a particular writing style or drawing you would like your lettering to mimic, drop it here.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#title-build-go",
+          "title": "Draw it",
+          "text": "Costs a token. You will see the result here, and you can keep working on it before anything reaches your book.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#title-build-empty-replace",
+          "title": "Already drawn one?",
+          "text": "If you have made a title before, pull it back from your Archive instead of spending a token.",
+          "placement": "auto"
+        }
+      ]
     }
   }
 }

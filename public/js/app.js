@@ -8069,6 +8069,30 @@ function openTitleBuilder(target) {
   var _w0 = _tbWords();
   var t = _w0.title, sub = _w0.subtitle;
   var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || (_tbIsSession() ? 'This chapter has no name yet' : 'This book has no title yet');
+  // =====================================================================================================
+  // v3.0.723 -- TD-522. THE TITLE BUILDER TOUR, AND WHY THE CALL SITS HERE.
+  // =====================================================================================================
+  //
+  // PLACED AFTER THE EARLY RETURNS, NOT AT THE TOP. openTitleBuilder can bail twice before the
+  // modal is ever shown -- someone else's version, and the Platinum gate -- and both of those
+  // render something ELSE. A trigger at the top of the function would run a tour for a modal a
+  // free user never saw, pointed at elements that are not on screen.
+  //
+  // GATED ON THE EMPTY STATE, copying asset-modal's `if (!assetId)`. Roughly half this modal is
+  // hidden until a title exists, and the engine skips an invisible step SILENTLY -- so a tour run
+  // with a drawn title already present would quietly lose steps. Ian ruled the result controls out
+  // of scope anyway: "they should know how to use those".
+  //
+  // requestAnimationFrame COPIES THE characters TOUR, and is not decoration: the modal has only
+  // just been unhidden, and its elements do not measure as visible until the browser has laid
+  // them out. Without the frame the first step can fail _tourVisible and be skipped.
+  try {
+    var _tbHasTitle = !!(_tbCur() && (_tbCur().url || _tbCur().draft));
+    if (!_tbHasTitle && typeof maybeStartTour === 'function') {
+      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour('title-builder'); } catch (e) {} });
+      else maybeStartTour('title-builder');
+    }
+  } catch (e) {}
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
