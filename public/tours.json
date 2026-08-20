@@ -73,7 +73,7 @@
         {
           "selector": "#btn-new-session",
           "title": "Add a {session}",
-          "text": "Start a new {session} and paste your story, transcript, notes, whatever you have — Campaignia turns it into an illustrated storyboard, ready to publish.",
+          "text": "A {session} is like a chapter in your book. Start a new one and paste your story, transcript, notes, whatever you have — Campaignia turns it into an illustrated storyboard, ready to publish.",
           "placement": "auto"
         },
         {
@@ -91,7 +91,7 @@
         {
           "selector": "#camp-nav-publish",
           "title": "Publish your story",
-          "text": "When your {sessions} are ready, turn your work into a shareable graphic novel — or order a printed book.",
+          "text": "When your story is ready, turn your work into a shareable graphic novel — or order a printed book.",
           "placement": "bottom"
         }
       ]
@@ -219,8 +219,8 @@
         {
           "selector": "#ntab-sessions",
           "click": "#ntab-sessions",
-          "title": "Publish your story",
-          "text": "When your story is ready, this is where you publish it.",
+          "title": "Choose your {sessions}",
+          "text": "Is it the whole story, or just a couple of chapters?",
           "placement": "auto"
         },
         {

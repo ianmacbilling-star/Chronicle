@@ -8087,8 +8087,9 @@ function openTitleBuilder(target) {
   // just been unhidden, and its elements do not measure as visible until the browser has laid
   // them out. Without the frame the first step can fail _tourVisible and be skipped.
   try {
-    var _tbHasTitle = !!(_tbCur() && (_tbCur().url || _tbCur().draft));
-    if (!_tbHasTitle && typeof maybeStartTour === 'function') {
+    // v3.0.724 -- TD-522(2). NO EMPTY-STATE GATE. See the note above: four of the five steps are
+    // visible whether or not a title exists, and the fifth is skipped by the engine on its own.
+    if (typeof maybeStartTour === 'function') {
       if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour('title-builder'); } catch (e) {} });
       else maybeStartTour('title-builder');
     }
