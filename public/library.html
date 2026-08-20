@@ -56,11 +56,12 @@
 
     .gallery { column-width:250px; column-gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
     .card { break-inside:avoid; margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
-    /* v3.0.737 -- TD-536. aspect-ratio reserves the space BEFORE the image loads, which is what
-       stops the column reflowing as each one arrives. The per-card ratio is set inline from the
-       real stored dimensions; 4/3 here is only the fallback for legacy rows that have none. */
-    .card img { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; background:#160e06; }
-    .card img[data-exact] { object-fit:fill; }
+    /* v3.0.738 -- TD-536(2). NO aspect-ratio and NO object-fit here on purpose. v3.0.737 put a
+       guessed 4/3 box with object-fit:cover on every card that had no stored pixel size, and
+       cropped most of the gallery -- Ian: "they need to be their actual shape". A card whose
+       ratio cannot be known keeps the original behaviour: whole image, natural height. The
+       ratio is set INLINE, per card, only when it is actually known. */
+    .card img { display:block; width:100%; height:auto; background:#160e06; }
     .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
     .card .cap-title { font-style:italic; color:rgba(240,232,208,0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
     .card .cap-author { font-style:normal; font-size:12px; color:rgba(201,168,76,0.9); white-space:nowrap; flex:0 0 auto; }
@@ -191,21 +192,35 @@
     function setStatus(html) { statusEl.innerHTML = html; }
     function spinner() { setStatus('<span class="spinner"></span>'); }
 
+    // v3.0.738 -- TD-536(2). Mirrors shapeAspectRatio() in routes/images.js. This page is
+    // standalone and cannot import server code, so the seven values are repeated here and a
+    // guard asserts the two lists stay in step.
+    var SHAPE_RATIO = {
+      wide: '16 / 9', tall: '2 / 3', square: '1 / 1', panoramic: '21 / 9',
+      tower: '1 / 4', reference: '3 / 4', fullpage: '3 / 4'
+    };
     function renderCard(item) {
       var fig = document.createElement('figure');
       fig.className = 'card';
       var img = document.createElement('img');
       img.setAttribute('loading', 'lazy');
       img.setAttribute('alt', item.caption || 'Campaignia creation');
-      // v3.0.737 -- TD-536. The exact ratio, so the card occupies its final height from the
-      // moment it is created and nothing below it moves when the pixels land. width/height are
-      // set as well: they are what a browser uses before CSS applies, and they cost nothing.
+      // v3.0.738 -- TD-536(2). RESERVE THE RIGHT SHAPE, OR RESERVE NOTHING.
+      //
+      // Exact pixels first. Failing that the stored shape, which is knowable for nearly every
+      // row -- nano-banana-2 returns null width/height in its webhook, so a great many archives
+      // have no pixel size but do have a shape. Failing both, no ratio at all: the card behaves
+      // as it always did and may shift when the image lands, which is far better than cropping
+      // it into a box we guessed.
+      var _ar = 0;
       if (item.w > 0 && item.h > 0) {
         img.width = item.w;
         img.height = item.h;
-        img.style.aspectRatio = item.w + ' / ' + item.h;
-        img.setAttribute('data-exact', '1');   // exact ratio: show the whole image, never crop
+        _ar = item.w + ' / ' + item.h;
+      } else if (item.shape && SHAPE_RATIO[item.shape]) {
+        _ar = SHAPE_RATIO[item.shape];
       }
+      if (_ar) img.style.aspectRatio = _ar;
       img.src = item.image_url;
       img.addEventListener('click', function () { openLb(item.image_url, item.caption); });
       fig.appendChild(img);
