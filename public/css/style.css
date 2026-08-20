@@ -50,6 +50,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .form-textarea:focus{outline:none;border-color:rgba(201,168,76,0.6);}
 .form-textarea::placeholder{color:rgba(201,168,76,0.55);}
 .form-hint{font-size:11px;color:var(--text-muted);margin-top:4px;}
+/* v3.0.725 -- TD-524. The cost note inside a button. Two steps down from the button label and
+   slightly dimmed, so the price reads as a footnote rather than as part of the action. em
+   rather than px: buttons in this product are not all one size, and a fixed pixel value would
+   look right on the one it was measured against and wrong on the next. */
+.btn-cost{font-size:0.8em;opacity:0.75;font-weight:400;}
 /* Hint/instruction text: readable on light panels by default; .panel-dark for dark. */
 .panel-dark .form-hint{color:rgba(232,213,163,0.72);}
 

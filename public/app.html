@@ -576,7 +576,7 @@
             <!-- LEFT: the print order, its own card. RIGHT: publishing, its own card beside the
                  address rather than nested inside the order border. -->
             <div class="ord-col ord-col-main">
-              <section class="ord-card" style="margin-bottom:0;">
+              <section class="ord-card" id="ord-card-print" style="margin-bottom:0;">
                 <div class="ord-card-title">Order a printed copy</div>
                 <div class="ord-card-sub">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
               <!-- LEFT COLUMN: what to print + format -->
@@ -695,7 +695,7 @@
               </section>
             </div>
             <div class="ord-col ord-col-side">
-              <section class="ord-card" style="margin-bottom:0;">
+              <section class="ord-card" id="ord-card-publish" style="margin-bottom:0;">
             <div class="ord-card-title">Publish to the Library</div>
             <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
             <!-- v3.0.495 -- the hint at the foot of this card is now a real link to the
@@ -766,6 +766,30 @@
           </div>
         </div>
         <div class="sdh-right">
+          <!-- v3.0.726 -- TD-526. HEADER ORDER, TO IAN'S SPEC: New Version, version dropdown,
+               Draft/Ready, Assets, Archives, ellipsis. The controls that change WHAT YOU ARE
+               LOOKING AT come first, then the one that changes who else can see it, then the
+               two that leave the page. Make My Version rides with New Version because only
+               one of the pair is ever visible -- they are the same slot for different readers.
+               Sliced from the previous markup rather than retyped, so every handler, class
+               and inline style travels with its element. -->
+          <!-- v3.0.441 -- New Version (TD-194). Always shown once the reader already has one, so a
+               member who has not got Gold learns why from the message rather than from a missing
+               button. Copies whichever version is CURRENTLY SELECTED, whoever owns it. -->
+          <button id="new-version-btn"
+                  class="btn btn-secondary"
+                  onclick="newSessionVersion()"
+                  style="display:none;">New Version</button>
+          <!-- Player-only: make your own version of a Ready session. -->
+          <button id="make-my-version-btn"
+                  class="btn btn-primary"
+                  onclick="makeMyVersion()"
+                  style="display:none;">Make My Version</button>
+          <!-- Version selector - DM canonical + any versions the viewer may see. -->
+          <select id="session-fork-select"
+                  class="form-input session-fork-select"
+                  onchange="onForkChange(this.value)"
+                  style="max-width:200px;display:none;"></select>
           <!-- DM sees an editable Draft/Ready dropdown; players see a read-only chip. -->
           <select id="session-access-status-select"
                   class="form-input session-access-status-select"
@@ -777,25 +801,8 @@
           <span id="session-access-status-chip"
                 class="session-access-chip"
                 style="display:none;"></span>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
-          <!-- Version selector - DM canonical + any versions the viewer may see. -->
-          <select id="session-fork-select"
-                  class="form-input session-fork-select"
-                  onchange="onForkChange(this.value)"
-                  style="max-width:200px;display:none;"></select>
-          <!-- Player-only: make your own version of a Ready session. -->
-          <button id="make-my-version-btn"
-                  class="btn btn-primary"
-                  onclick="makeMyVersion()"
-                  style="display:none;">Make My Version</button>
-          <!-- v3.0.441 -- New Version (TD-194). Always shown once the reader already has one, so a
-               member who has not got Gold learns why from the message rather than from a missing
-               button. Copies whichever version is CURRENTLY SELECTED, whoever owns it. -->
-          <button id="new-version-btn"
-                  class="btn btn-secondary"
-                  onclick="newSessionVersion()"
-                  style="display:none;">New Version</button>
+          <button class="btn btn-sm" id="sess-nav-assets" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" id="sess-nav-archives" onclick="showCampaignSection('archives')">Archives</button>
           <!-- Player-only: ellipsis menu holding Delete My Version. Shown only
                when the viewer has their own version (JS toggles this wrapper). -->
           <div class="row-menu" id="session-version-menu" style="display:none;">
@@ -2472,9 +2479,9 @@
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others. Only upload images you own or have the rights to use &mdash; no copyrighted characters or artwork without permission.</div>
+        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
       </div>
-      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style (1 token)</button>
+      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
       <div class="form-group" style="margin-top:14px;">
         <label class="form-label">Style description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; editable; this is what steers every panel</span></label>
         <textarea class="form-textarea" id="cstyle-prompt" style="min-height:120px;" placeholder="Analyze your reference images to generate this, or write your own STYLE: description..."></textarea>

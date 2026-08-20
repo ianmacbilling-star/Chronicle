@@ -669,7 +669,7 @@ if (typeof window !== "undefined" && !window.__alertPatched) {
   window.__alertPatched = true;
   window.alert = function (m) {
     var msg = String(m == null ? "" : m);
-    try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showAlert(msg); } catch (e) {}
+    try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showError(msg); } catch (e) {}
   };
 }
 
@@ -2336,13 +2336,13 @@ async function deleteSession(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadSessions();
     })
     .catch(function(e) {
-      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+      if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
     });
 }
 
@@ -3342,11 +3342,11 @@ function _saveCast(p) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not save casting: ' + data.error); loadReview(); return; }
+    if (data.error) { showError('Could not save casting: ' + data.error); loadReview(); return; }
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
   })
-  .catch(function(e){ showAlert('Could not save casting: ' + e.message); loadReview(); });
+  .catch(function(e){ showError('Could not save casting: ' + e.message); loadReview(); });
 }
 function castAddCharacter(momentId, sel) {
   var id = parseInt(sel.value, 10); if (!id) return;
@@ -3386,14 +3386,14 @@ function castReset(momentId) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not reset casting: ' + data.error); return; }
+    if (data.error) { showError('Could not reset casting: ' + data.error); return; }
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
       _refreshOpenMomentOptions(momentId);
     });
   })
-  .catch(function(e){ showAlert('Could not reset casting: ' + e.message); });
+  .catch(function(e){ showError('Could not reset casting: ' + e.message); });
 }
 
 
@@ -3539,12 +3539,12 @@ function saveNarrDirection() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.error) { showAlert('Could not save direction: ' + data.error); return; }
+    if (data.error) { showError('Could not save direction: ' + data.error); return; }
     state.narrativeDirections = data.directions || {};
     closeNarrDirection();
     refreshNarrativeDirectionUI(gapKey);
   })
-  .catch(function(e){ showAlert('Could not save direction: ' + e.message); });
+  .catch(function(e){ showError('Could not save direction: ' + e.message); });
 }
 
 // Refresh the surfaces that show a gap's Direction after it's saved, WITHOUT
@@ -3628,11 +3628,11 @@ function saveOutline() {
   fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if (data && data.error) { showAlert('Could not save outline: ' + (data.message || data.error)); return; }
+      if (data && data.error) { showError('Could not save outline: ' + (data.message || data.error)); return; }
       closeOutlineModal();
       if (typeof loadReview === 'function') loadReview();
     })
-    .catch(function(e){ showAlert('Could not save outline: ' + e.message); });
+    .catch(function(e){ showError('Could not save outline: ' + e.message); });
 }
 
 // ============================================================
@@ -4164,11 +4164,11 @@ function setVerbosity(v) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Could not set narrative length: ' + data.error); highlightVerbosity(_prev); return; }
+    if (data.error) { showError('Could not set narrative length: ' + data.error); highlightVerbosity(_prev); return; }
     state.narrativeVerbosity = data.verbosity || v;
     mpSave('session', { narrative_verbosity: state.narrativeVerbosity });
   })
-  .catch(function(e) { showAlert('Could not set narrative length: ' + e.message); highlightVerbosity(_prev); });
+  .catch(function(e) { showError('Could not set narrative length: ' + e.message); highlightVerbosity(_prev); });
 }
 
 function closeStylePicker() {
@@ -4186,13 +4186,13 @@ function selectStyleCard(kind, id) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { showAlert('Could not set narrative style: ' + data.error); return; }
+      if (data.error) { showError('Could not set narrative style: ' + data.error); return; }
       state.narrativeStyle = data.style || id;
       mpSave('session', { narrative_style: state.narrativeStyle });
       refreshNarrStyleButtons();
       closeStylePicker();
     })
-    .catch(function(e) { showAlert('Could not set narrative style: ' + e.message); });
+    .catch(function(e) { showError('Could not set narrative style: ' + e.message); });
   } else if (kind === 'art') {
     state.artStyle = id;
     mpSave('session', { art_style: id });
@@ -4412,11 +4412,24 @@ function generateNarrativeAndImages() {
   // whole way rather than sprinting then parking. Ease 0.04 keeps it slow from the beginning;
   // tiny 0.10 floor keeps every 750ms tick perceptible but small; crawls slowly toward 98 (never
   // parks at 90) and _narrEnd snaps to 100 on finish.
+  // v3.0.716 -- TD-518. THE TICKER HAS TO BE REACHABLE FROM OUTSIDE THIS FUNCTION.
+  //
+  // Ian, 2026-08-19: "it says it cancelled but the progress bar continues..."
+  //
+  // _nticker was a local var and clearInterval ran ONLY inside _narrEnd. cancelNarr never calls
+  // _narrEnd -- it does its own teardown -- so the interval was never cleared. It kept firing
+  // against a hidden element forever, one tick every 750ms for the life of the page.
+  //
+  // v3.0.701 IS WHY IT IS VISIBLE NOW RATHER THAN MERELY WASTEFUL. Before that build the bar
+  // parked at 98 and a leaked ticker sat there silently; the asymptote means a leaked ticker
+  // creeps on for ever, so a fault that had always existed finally showed itself.
   var _nticker = creepBar(_nfill, _npct, 0.012, 750);
+  state.narrTicker = _nticker;
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
     clearInterval(_nticker);
+    state.narrTicker = null;   // v3.0.716 -- one handle, cleared on every exit path
     state.narrJobActive = false;
     clearGenLock();
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
@@ -4433,8 +4446,11 @@ function generateNarrativeAndImages() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (!data || !data.job_id) { _narrEnd(false); showAlert('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
+    if (!data || !data.job_id) { _narrEnd(false); showError('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       if (!state.narrJobActive) return;
@@ -4444,7 +4460,7 @@ function generateNarrativeAndImages() {
         .then(function(j){
           if (!state.narrJobActive) return;
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (j.status === 'error') { _narrEnd(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          if (j.status === 'error') { _narrEnd(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
           if (typeof fillStoryboardProse === 'function') fillStoryboardProse(state.narrativeData);
           _narrEnd(true);
@@ -4453,7 +4469,7 @@ function generateNarrativeAndImages() {
     };
     poll();
   })
-  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showAlert('Could not start narrative: ' + e.message); });
+  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -4477,6 +4493,15 @@ function cancelNarr() {
   state.narrJobActive = false;
   clearGenLock();
   if (state.abortNarr) { try { state.abortNarr.abort(); } catch (e) {} }
+  // v3.0.715 -- TD-517. TELL THE SERVER, NOT JUST THE BROWSER.
+  //
+  // Aborting the fetch above stops the POLLING. It has never stopped the GENERATION, because the
+  // request being aborted returned a job id seconds ago and the Claude call runs on after it.
+  // Without this, cancel hid the progress bar and the narrative landed anyway a minute later,
+  // overwriting whatever was there.
+  // The wording is exact BECAUSE the ordering makes it true: spendTokens runs AFTER the narrative
+  // is saved, so a run stopped before the write never reaches the charge.
+  _narrTellServerCancelled();
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
@@ -4507,8 +4532,10 @@ function generateNarrativeOnly() {
   // (The old curve eased 12%/tick of the gap at 400ms -- it sprinted to ~85 then parked, which
   // read as stalled.)
   var ticker = creepBar(fill, pct, 0.012, 750);
+  state.narrTicker = ticker;   // v3.0.716 -- TD-518, same fault on the narrative-only path
   function endBar(done) {
     clearInterval(ticker);
+    state.narrTicker = null;
     clearGenLock();
     var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'none';
     if (done && fill) fill.style.width = '100%';
@@ -4526,9 +4553,12 @@ function generateNarrativeOnly() {
     // job until it is done, THEN render -- previously this read data.intro/
     // sections/outro straight off the job_id response (all undefined), rendering
     // an empty narrative while the background job quietly saved the real one.
-    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
-    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not start narrative: no job id returned'); return; }
+    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not generate narrative: ' + data.error); return; }
+    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function () {
       if (tries++ > 100) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
@@ -4537,7 +4567,7 @@ function generateNarrativeOnly() {
         .then(function (j) {
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
           if (btn) { btn.disabled = false; btn.textContent = origLabel; }
-          if (j.status === 'error') { endBar(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          if (j.status === 'error') { endBar(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           endBar(true);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
           state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
@@ -4552,13 +4582,63 @@ function generateNarrativeOnly() {
     if (btn) { btn.disabled = false; btn.textContent = origLabel; }
     endBar(false);
     if (e && e.name === 'AbortError') return;
-    showAlert('Could not generate narrative: ' + e.message);
+    showError('Could not generate narrative: ' + e.message);
   });
 }
 
+// =====================================================================================================
+// v3.0.715 / v3.0.717 -- TD-517, TD-520. THE WHOLE CANCEL TEARDOWN, IN ONE PLACE.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "it stopped the narrative... good. but it should then hide it. we don't need to
+// see it if it isn't running."
+//
+// THIS IS THE THIRD TIME THE SAME DIVERGENCE HAS BITTEN, AND THAT IS THE ACTUAL BUG. There have
+// always been TWO teardowns for one operation -- the completion path (_narrEnd / endBar) and the
+// cancel path -- and the cancel one has been missing a different piece each time:
+//     v3.0.715  it did not tell the server, so generation carried on
+//     v3.0.716  it did not clear the ticker, so the bar kept creeping
+//     v3.0.717  it did not hide narr-bar-cell, so the stopped bar stayed on screen
+// Each fix addressed the piece that had been noticed. THE WHOLE TEARDOWN NOW LIVES HERE and both
+// buttons call it, so there is no second place for the next piece to go missing from.
+//
+// The completion paths keep their own teardown deliberately: they animate to 100% and fade after
+// a delay, which a cancel must NOT do -- a cancelled run showing a full bar would read as done.
+function _narrTellServerCancelled() {
+  // Hide everything the completion path hides, immediately and with no success animation.
+  ['review-progress-wrap', 'narr-bar-cell', 'generate-progress'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  ['narr-cancel-btn', 'sb-narr-cancel-btn'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  // Reset the fills to zero. Left at their cancelled width they would flash the old percentage
+  // for a frame the next time a run starts.
+  // ONE fill, not two: both narrative paths share narr-bar-cell and narr-progress-fill. The first
+  // draft of this list invented an sb- prefixed twin by symmetry with the BUTTON ids, which do
+  // differ -- checked against app.html rather than assumed.
+  ['narr-progress-fill'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.width = '0%';
+  });
+  // v3.0.716 -- TD-518. STOP THE BAR FIRST, and unconditionally: this runs before the job-id
+  // check because a cancel with no job id still has a ticker running behind it.
+  if (state.narrTicker) { try { clearInterval(state.narrTicker); } catch (e) {} state.narrTicker = null; }
+  if (!state.narrJobId) return;
+  var _jid = state.narrJobId;
+  state.narrJobId = null;
+  fetch('/api/narrative/cancel/' + _jid, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.already) return;
+      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
+    })
+    .catch(function () {});
+}
 function cancelNarrOnly() {
   clearGenLock();
   if (state.abortNarrOnly) { try { state.abortNarrOnly.abort(); } catch (e) {} }
+  // v3.0.715 -- TD-517. The narrative-only button shares the fault and the fix; see cancelNarr.
+  if (typeof _narrTellServerCancelled === 'function') _narrTellServerCancelled();
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
@@ -4691,10 +4771,10 @@ function setCampaignCover(archiveId, cb) {
       showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the cover.');
+      showError((data && data.error) || 'Could not update the cover.');
     }
   })
-  .catch(function(){ showAlert('Could not update the campaign cover.'); });
+  .catch(function(){ showError('Could not update the campaign cover.'); });
 }
 
 function setCampaignBackCover(archiveId, cb) {
@@ -4718,10 +4798,10 @@ function setCampaignBackCover(archiveId, cb) {
       showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the back cover.');
+      showError((data && data.error) || 'Could not update the back cover.');
     }
   })
-  .catch(function(){ showAlert('Could not update the back cover.'); });
+  .catch(function(){ showError('Could not update the back cover.'); });
 }
 
 // Set/clear the interior TITLE-PAGE image from an archived image. DM-only.
@@ -4746,10 +4826,10 @@ function setCampaignTitleImage(archiveId, cb) {
       showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the title image.');
+      showError((data && data.error) || 'Could not update the title image.');
     }
   })
-  .catch(function(){ showAlert('Could not update the title-page image.'); });
+  .catch(function(){ showError('Could not update the title-page image.'); });
 }
 
 function showErrorDialog(msg, title) {
@@ -4802,6 +4882,13 @@ function switchSessionTab(tab) {
     loadReview();
   }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
+  // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
+  // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
+  // Not seen yet INCLUDES not loaded yet: _tourProgress starts null and fills asynchronously, and
+  // maybeStartTour re-checks it properly through _tourEnsureProgress before starting anything.
+  try {
+    if (!_tourProgress || !_tourProgress['session-detail']) { maybeStartTour('session-detail'); return; }
+  } catch (e) {}
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -4932,7 +5019,7 @@ var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
 // than a corner toast. Reused by character portraits AND custom art-style slots.
 function showSlotError(slot, msg) {
   var zone = document.getElementById('drop-' + slot);
-  if (!zone || !zone.parentNode) { showAlert(msg); return; }
+  if (!zone || !zone.parentNode) { showError(msg); return; }
   var el = document.getElementById('slot-err-' + slot);
   if (!el) {
     el = document.createElement('div');
@@ -6003,14 +6090,14 @@ async function deleteChar(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadCharacters();
     })
     .catch(function(e) {
       var m = 'Delete failed: ' + (e && e.message ? e.message : 'network error');
-      if (typeof showAlert === 'function') { showAlert(m); } else { alert(m); }
+      if (typeof showAlert === 'function') { showError(m); } else { alert(m); }
     });
 }
 
@@ -6430,7 +6517,7 @@ function saveNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error: ' + result.error); return; }
+    if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
@@ -6458,7 +6545,7 @@ function saveInlineNarrative(silent) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { if (!silent) showAlert('Error: ' + result.error); return; }
+    if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     if (!silent) showAlert('Narrative saved!');
   });
@@ -6501,7 +6588,7 @@ function regenNarrativeSection(type, panelIndex) {
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
     if (box) box.disabled = false;
-    if (!ok && msg) showAlert(msg);
+    if (!ok && msg) showError(msg);
   };
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -6514,6 +6601,9 @@ function regenNarrativeSection(type, panelIndex) {
     if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
     if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
@@ -6995,7 +7085,7 @@ async function onNovelVersionChange(val) {
   if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
-    showAlert(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    showError(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   // v3.0.471 -- AN ORDER IN PROGRESS BLOCKS THE SWITCH UNTIL IT IS ANSWERED FOR (TD-276).
@@ -7561,19 +7651,52 @@ function prepSyncTitle() {
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
   var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+  // =====================================================================================================
+  // v3.0.706 -- TD-509. THE TITLE DID NOT FOLLOW THE VERSION.
+  // =====================================================================================================
+  //
+  // Ian, 2026-08-19: "The Title on the Prep and Preview pane on the Publish page isn't changing when
+  // I change version. That title should be stored with the version."
+  //
+  // IT WAS STORED WITH THE VERSION ALL ALONG. book_title lives in fork_book_prefs keyed by
+  // version_id, onNovelVersionChange reloads it, and state.bookMeta held the right value. The box
+  // simply refused it: the assignment below was gated on `!tEl.value`, and after a switch the box
+  // still holds the PREVIOUS version's title, so it is not empty, so nothing is written. The new
+  // title was fetched, arrived, and was discarded.
+  //
+  // THE GATE IS NOT JUNK AND MUST NOT SIMPLY BE DELETED. It protects an unsaved edit -- the v3.0.578
+  // fault, where a repaint from a server answer wiped a subtitle mid-typing. So the question is not
+  // "repaint or not", it is "WHOSE title is in this box". Version identity answers it honestly:
+  // while the version has not changed, the reader may be mid-edit and the box is left alone; the
+  // moment it changes, the box belongs to a different book and is repainted unconditionally.
+  //
+  // THE STASH WAS THE SECOND HALF, and on its own it made the bug look intermittent rather than
+  // stuck. _prepOwnTitle exists to carry your own unsaved title across a look at SOMEONE ELSE'S
+  // version and back. Nothing cleared it when moving between two versions you own, so a title from
+  // an earlier version could be restored over a later one -- the box showing neither version's
+  // stored value. It is now dropped whenever the version identity moves, because a stash is only
+  // valid for the version it was taken from.
+  //
+  // Ian's rule, same day, and this is the client half of it: "Values are COPIED. Once a version
+  // exists it should never go back and look at the Canonical for values. It's now independent."
+  var _vNow = (typeof state.novelVersionId !== 'undefined' && state.novelVersionId !== null)
+    ? String(state.novelVersionId) : '';
+  var _vChanged = (state._prepTitleVersion !== _vNow);
+  if (_vChanged) state._prepOwnTitle = null;
+  state._prepTitleVersion = _vNow;
+  var _fallbackTitle = (state.bookMeta && state.bookMeta.book_title)
+    ? state.bookMeta.book_title
+    : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
   if (own) {
     tEl.readOnly = false;
     if (state._prepOwnTitle != null) { tEl.value = state._prepOwnTitle; state._prepOwnTitle = null; }
-    if (!tEl.value) {
-      tEl.value = (state.bookMeta && state.bookMeta.book_title)
-        ? state.bookMeta.book_title
-        : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
-    }
+    if (_vChanged || !tEl.value) tEl.value = _fallbackTitle;
   } else {
-    if (state._prepOwnTitle == null) state._prepOwnTitle = tEl.value || '';
-    tEl.value = (state.bookMeta && state.bookMeta.book_title)
-      ? state.bookMeta.book_title
-      : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
+    // v3.0.706 -- the stash is only taken on the way OUT of a version you own, and only when the
+    // version has not just changed underneath it. Taking it after a switch would capture the
+    // wrong book's title.
+    if (state._prepOwnTitle == null && !_vChanged) state._prepOwnTitle = tEl.value || '';
+    tEl.value = _fallbackTitle;
     tEl.readOnly = true;
   }
   prepApplyOwnershipLock();   // v3.0.580 -- the layout half, re-applied on every version switch
@@ -7638,7 +7761,7 @@ function _prepMetaWrite(patch, cb) {
         return r.json().catch(function () { return null; }).then(function (e) {
           var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
           try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
-          if (typeof showAlert === 'function') showAlert(msg);
+          if (typeof showAlert === 'function') showError(msg);
           return null;
         });
       })
@@ -7659,7 +7782,7 @@ function _prepMetaWrite(patch, cb) {
         if (!m) {
           // Put the stored truth back on screen rather than leaving a value nothing accepted.
           if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
-          if (typeof showAlert === 'function') showAlert('That change could not be saved. Switch to your own version to change the cover or the title.');
+          if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
         }
         if (cb) cb(m);
         return m;
@@ -7953,6 +8076,31 @@ function openTitleBuilder(target) {
   var _w0 = _tbWords();
   var t = _w0.title, sub = _w0.subtitle;
   var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || (_tbIsSession() ? 'This chapter has no name yet' : 'This book has no title yet');
+  // =====================================================================================================
+  // v3.0.723 -- TD-522. THE TITLE BUILDER TOUR, AND WHY THE CALL SITS HERE.
+  // =====================================================================================================
+  //
+  // PLACED AFTER THE EARLY RETURNS, NOT AT THE TOP. openTitleBuilder can bail twice before the
+  // modal is ever shown -- someone else's version, and the Platinum gate -- and both of those
+  // render something ELSE. A trigger at the top of the function would run a tour for a modal a
+  // free user never saw, pointed at elements that are not on screen.
+  //
+  // GATED ON THE EMPTY STATE, copying asset-modal's `if (!assetId)`. Roughly half this modal is
+  // hidden until a title exists, and the engine skips an invisible step SILENTLY -- so a tour run
+  // with a drawn title already present would quietly lose steps. Ian ruled the result controls out
+  // of scope anyway: "they should know how to use those".
+  //
+  // requestAnimationFrame COPIES THE characters TOUR, and is not decoration: the modal has only
+  // just been unhidden, and its elements do not measure as visible until the browser has laid
+  // them out. Without the frame the first step can fail _tourVisible and be skipped.
+  try {
+    // v3.0.724 -- TD-522(2). NO EMPTY-STATE GATE. See the note above: four of the five steps are
+    // visible whether or not a title exists, and the fifth is skipped by the engine on its own.
+    if (typeof maybeStartTour === 'function') {
+      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour('title-builder'); } catch (e) {} });
+      else maybeStartTour('title-builder');
+    }
+  } catch (e) {}
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
@@ -8764,7 +8912,7 @@ function titleBuildArchiveToggle() {
         if (d && d.error) { _tbErr(d.message || d.error); return; }
         state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
         _tbSyncArchivePill();
-        if (typeof showAlert === 'function') showAlert('Removed from your Archive.');
+        if (typeof showAlert === 'function') showError('Removed from your Archive.');
       })
       .catch(function () { _tbErr('Could not update the Archive.'); });
     return;
@@ -9186,7 +9334,7 @@ function _prepMemberSetImage(kind, url) {
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
     .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })
-    .catch(function(){ showAlert('Could not update your book image.'); });
+    .catch(function(){ showError('Could not update your book image.'); });
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
 //
@@ -9246,7 +9394,7 @@ function prepRemoveImage(kind, ev) {
   fetch('/api/campaigns/' + c.id, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   }).then(function (r) { return r.json(); }).then(function (d) {
-    if (!d || !d.id) { showAlert('That picture could not be removed. Switch to your own version and try again.'); return; }
+    if (!d || !d.id) { showError('That picture could not be removed. Switch to your own version and try again.'); return; }
     c[PREP_IMG_KINDS[kind].field] = '';
     var i = (state.campaigns || []).findIndex(function (x) { return x.id === c.id; });
     if (i >= 0) state.campaigns[i][PREP_IMG_KINDS[kind].field] = '';
@@ -9254,7 +9402,7 @@ function prepRemoveImage(kind, ev) {
     state.bookMeta[PREP_IMG_KINDS[kind].field] = '';
     renderPrepThumbs();
     showAlert('Image removed.');
-  }).catch(function () { showAlert('That picture could not be removed.'); });
+  }).catch(function () { showError('That picture could not be removed.'); });
 }
 function _prepEnsureArchives(cb) {
   var _cid = state.currentCampaign && state.currentCampaign.id;
@@ -9299,9 +9447,9 @@ function openPrepImagePicker(kind, campaignId) {
   // would refuse a Story Master looking at somebody else's version of their own campaign.
   if (PREP_IMG_KINDS[kind].campaignField) {
     // The role of the campaign being EDITED, which is not necessarily the one on screen.
-    if (!_camp || _camp.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
+    if (!_camp || _camp.my_role !== 'dm') { showError('Only the Story Master can change the campaign image.'); return; }
   } else if (!(typeof prepUseMember === 'function' && prepUseMember())) {
-    showAlert('Switch to your own version to change the cover, back, or title image.');
+    showError('Switch to your own version to change the cover, back, or title image.');
     return;
   }
   state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
@@ -9419,10 +9567,10 @@ function selectPrepImage(kind, archiveId) {
     // The causes are fixed above -- the campaign is carried through and the archives belong to it --
     // so these should not fire. If they ever do, they say so instead of shrugging.
     var _cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
-    if (!_cid) { showAlert('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
+    if (!_cid) { showError('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
     var _cc = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_cid); })[0];
     var _a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
-    if (!_a) { showAlert('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
+    if (!_a) { showError('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
     // Clicking the picture already on the tile REMOVES it, exactly as the retired picker did.
     var _cur = (_cc && _cc.campaign_image_url) || '';
     setCampaignImage(_cid, (_cur === _a.image_url) ? '' : _a.image_url, function () {
@@ -10061,7 +10209,7 @@ function setupCardDragDrop() {
 
     var file = files[0];
     if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+      showError(UPLOAD_TYPE_MSG);
       return;
     }
 
@@ -10098,11 +10246,11 @@ function uploadPortraitToChar(charId, file) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error uploading portrait: ' + data.error); return; }
+    if (data.error) { showError('Error uploading portrait: ' + data.error); return; }
     showAlert('Portrait updated for ' + char.name + '!');
     loadCharacters();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); });
+  .catch(function(e) { showError('Error: ' + e.message); });
 }
 
 // ============================================================
@@ -10250,7 +10398,7 @@ function saveNarrative() {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error saving: ' + result.error); return; }
+    if (result.error) { showError('Error saving: ' + result.error); return; }
     narrativeData = data;
     showAlert('Narrative saved!');
   });
@@ -10271,7 +10419,7 @@ function toggleSessionPreview() { previewSessionInline(); }
 // Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
   if (state.tierInfo && state.tierInfo.can_export === false) {
-    showAlert('Export is not available on your current plan. Upgrade to Silver or higher to export PDFs.');
+    showError('Export is not available on your current plan. Upgrade to Silver or higher to export PDFs.');
     return;
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
@@ -10354,6 +10502,49 @@ function showModalError(id, msg) {
   el.classList.remove('hidden');
 }
 
+// =====================================================================================================
+// v3.0.710 -- TD-512. AN ERROR LOOKED EXACTLY LIKE A SUCCESS AND VANISHED IN 2.5 SECONDS.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "It did give me an error at the top of the screen generating the narratives.
+// I couldn't see it and read it in time before it went away... We need to make all the Toast
+// Errors and messages have an OK button on them and appear as a Modal."
+//
+// HE ALSO SAID "I thought we fixed this already", AND HE WAS HALF RIGHT. TD-493 / v3.0.687 fixed
+// the Title Builder REFUSALS -- ten appNotice call sites. This is a different and far larger set:
+// showAlert had 133 call sites and NO ERROR VARIANT AT ALL. Every one rendered .alert-success --
+// green, top right, gone in 2500ms. A failure was literally styled as a success and given the same
+// lifespan as "Transcript saved!".
+//
+// WHY NOT SNIFF THE TEXT AT RUNTIME. That was the obvious design and it is wrong here: Ian's error
+// arrived IN GERMAN. Any keyword classifier keys on English words and would misfile every message
+// in every language the app now supports -- rebuilding, in the presentation layer, the exact bug
+// v3.0.703 through v3.0.709 were spent removing. THE CALL SITE KNOWS: a .catch(), a non-OK status,
+// an `if (!ok)` branch is an error whatever language its message is written in. So the routing is
+// decided in the source, once, and never re-derived from the string.
+//
+// AND THE CLASSIFICATION DEFAULTS TO THE MODAL. The conversion kept an explicit list of
+// confirmations and converted everything else, rather than listing the errors and converting those.
+// Inverting it that way means a message nobody classified becomes a VISIBLE modal instead of an
+// invisible error -- the failure mode of the miss is loud rather than silent.
+function showError(msg) {
+  var text = String(msg == null ? '' : msg);
+  if (!text) return;
+  // uiConfirm already owns the modal furniture and the focus trap. Reusing it with a single button
+  // keeps ONE modal in the product; a second implementation would drift in styling and in the
+  // Escape/backdrop behaviour, which is the paired-derive fault this file keeps recording.
+  if (typeof appNotice === 'function') { try { appNotice('Something went wrong.', text, ''); return; } catch (e) {} }
+  if (typeof uiConfirm === 'function') { try { uiConfirm({ title: 'Something went wrong.', body: text, okLabel: 'OK', hideCancel: true }); return; } catch (e) {} }
+  // Last resort only. If neither modal helper is present the message must still be readable, so it
+  // falls back to a toast that does NOT time out rather than to one that does.
+  var el = document.createElement('div');
+  el.className = 'alert alert-error';
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;max-width:520px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.25);';
+  el.title = 'Click to dismiss';
+  el.onclick = function () { el.remove(); };
+  document.body.appendChild(el);
+}
 function showAlert(msg) {
   var el = document.createElement('div');
   el.className = 'alert alert-success';
@@ -10757,7 +10948,7 @@ function submitRetouch() {
     var charId = state.retouchCharId;
     var ch = (state.characters || []).find(function(c){ return c.id === charId; });
     if (!ch) return;
-    if (isCharGenBusy(charId)) { showAlert('This character\u2019s reference image is still generating. Please wait, then try again.'); return; }
+    if (isCharGenBusy(charId)) { showError('This character\u2019s reference image is still generating. Please wait, then try again.'); return; }
     setCharGenBusy(charId);   // TF-09
     closeRetouch();
     var refTargetId = 'char-ref-image-' + charId;
@@ -11146,10 +11337,10 @@ function setArchivePublic(id, makePublic) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ public: !!makePublic })
   }).then(function (r) { return r.json(); }).then(function (d) {
-    if (d && d.error) { showAlert(d.error); renderArchives(); return; }
+    if (d && d.error) { showError(d.error); renderArchives(); return; }
     var a = (state.archives || []).find(function (x) { return x.id === id; });
     if (a) a.public = !!makePublic;
-  }).catch(function () { showAlert('Could not update the Public setting.'); renderArchives(); });
+  }).catch(function () { showError('Could not update the Public setting.'); renderArchives(); });
 }
 
 // ---- Admin: Public Library moderation modal ----
@@ -11223,8 +11414,8 @@ function adminUnpublish(id, card, btn) {
   fetch('/api/admin/library/' + id + '/unpublish', { method: 'POST' })
     .then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
-      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
-    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError('Could not remove.'); });
 }
 
 function openAdminStories() {
@@ -11297,8 +11488,8 @@ function adminUnpublishStory(id, card, btn) {
   fetch('/api/admin/stories/' + id + '/unpublish', { method: 'POST' })
     .then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
-      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
-    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showError('Could not remove.'); });
 }
 // --- Copy an archived image into the campaign's Assets (DM-only). ------------
 // Opens a small modal for Name + Type, then posts to the from-archive route
@@ -11364,7 +11555,7 @@ async function deleteArchive(id) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.success) {
-        showAlert('Removed from the Archive.');
+        showError('Removed from the Archive.');
         state.archives = (state.archives || []).filter(function(a){ return a.id !== id; });
         renderArchives();
       } else {
@@ -11569,12 +11760,12 @@ function saveImagePrompt() {
         var _rvp = document.getElementById('session-tab-review');
         if (_rvp && _rvp.style.display !== 'none' && typeof loadReview === 'function') loadReview();
       } else {
-        showAlert((data && data.error) || 'Could not save the prompt.');
+        showError((data && data.error) || 'Could not save the prompt.');
       }
     })
     .catch(function() {
       ta.disabled = false;
-      showAlert('Could not save the prompt.');
+      showError('Could not save the prompt.');
     });
 }
 
@@ -12323,13 +12514,13 @@ async function deleteSession(id) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); }
         return;
       }
       loadSessions();
     })
     .catch(function(e) {
-      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+      if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
     });
 }
 
@@ -12477,6 +12668,13 @@ function switchSessionTab(tab) {
     loadReview();
   }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
+  // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
+  // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
+  // Not seen yet INCLUDES not loaded yet: _tourProgress starts null and fills asynchronously, and
+  // maybeStartTour re-checks it properly through _tourEnsureProgress before starting anything.
+  try {
+    if (!_tourProgress || !_tourProgress['session-detail']) { maybeStartTour('session-detail'); return; }
+  } catch (e) {}
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -12839,7 +13037,7 @@ function saveNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error: ' + result.error); return; }
+    if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
@@ -12867,7 +13065,7 @@ function saveInlineNarrative(silent) {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { if (!silent) showAlert('Error: ' + result.error); return; }
+    if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
     if (!silent) showAlert('Narrative saved!');
   });
@@ -12910,7 +13108,7 @@ function regenNarrativeSection(type, panelIndex) {
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
     if (box) box.disabled = false;
-    if (!ok && msg) showAlert(msg);
+    if (!ok && msg) showError(msg);
   };
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -12923,6 +13121,9 @@ function regenNarrativeSection(type, panelIndex) {
     if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
     if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
+    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
+    // closure, which is part of why cancel could never do anything but abort a finished fetch.
+    state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
       // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
@@ -13810,7 +14011,7 @@ function setupCardDragDrop() {
 
     var file = files[0];
     if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+      showError(UPLOAD_TYPE_MSG);
       return;
     }
 
@@ -13847,11 +14048,11 @@ function uploadPortraitToChar(charId, file) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error uploading portrait: ' + data.error); return; }
+    if (data.error) { showError('Error uploading portrait: ' + data.error); return; }
     showAlert('Portrait updated for ' + char.name + '!');
     loadCharacters();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); });
+  .catch(function(e) { showError('Error: ' + e.message); });
 }
 
 // ============================================================
@@ -13999,7 +14200,7 @@ function saveNarrative() {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error saving: ' + result.error); return; }
+    if (result.error) { showError('Error saving: ' + result.error); return; }
     narrativeData = data;
     showAlert('Narrative saved!');
   });
@@ -14146,13 +14347,13 @@ function refreshInviteButtonVisibility() { applyRoleVisibility(); }
 function openInviteModal() {
   var cur = state.currentCampaign;
   if (!cur) {
-    showAlert('No campaign selected');
+    showError('No campaign selected');
     return;
   }
   // The invite button stays visible on the Free Trial (it shows what's
   // possible), but inviting is a paid feature -- stop them on click.
   if (state.user && state.user.tier === 'trial') {
-    showAlert('Inviting players is a paid feature. Free Trial campaigns are single-player. Upgrade to a paid plan to invite your table.');
+    showError('Inviting players is a paid feature. Free Trial campaigns are single-player. Upgrade to a paid plan to invite your table.');
     return;
   }
   // Reset modal state.
@@ -14517,13 +14718,13 @@ function confirmRemoveMember() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
-        showAlert(data.error);
+        showError(data.error);
       }
       closeConfirmRemoveMember();
       loadMembersTab();
     })
     .catch(function(e) {
-      showAlert('Could not remove member: ' + e.message);
+      showError('Could not remove member: ' + e.message);
       closeConfirmRemoveMember();
     })
     .finally(function() {
@@ -14562,7 +14763,7 @@ function confirmMakeDm() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        showAlert(data.error);
+        showError(data.error);
         if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
         return;
       }
@@ -14571,7 +14772,7 @@ function confirmMakeDm() {
       window.location.reload();
     })
     .catch(function(e) {
-      showAlert('Could not transfer the Story Master role: ' + e.message);
+      showError('Could not transfer the Story Master role: ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
     });
 }
@@ -14604,12 +14805,12 @@ function confirmRevokeInvite() {
   fetch('/api/campaigns/' + cur.id + '/invites/' + iid, { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) showAlert(data.error);
+      if (data.error) showError(data.error);
       closeConfirmRevokeInvite();
       loadPendingInvites();
     })
     .catch(function(e) {
-      showAlert('Could not revoke: ' + e.message);
+      showError('Could not revoke: ' + e.message);
       closeConfirmRevokeInvite();
     })
     .finally(function() {
@@ -14629,12 +14830,12 @@ function copyExistingInviteLink(inviteId, expired) {
     fetch('/api/campaigns/' + cur.id + '/invites/' + inviteId + '/reactivate', { method: 'POST' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.error) { showAlert(data.error); return; }
+        if (data.error) { showError(data.error); return; }
         writeToClipboard(inv.url, 'Reactivated & copied');
         // Refresh so the row no longer shows "expired"
         loadPendingInvites();
       })
-      .catch(function(e) { showAlert('Could not reactivate: ' + e.message); });
+      .catch(function(e) { showError('Could not reactivate: ' + e.message); });
   } else {
     writeToClipboard(inv.url, 'Copied');
   }
@@ -14806,7 +15007,7 @@ function saveAccessStatus(status) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      showAlert(data.error);
+      showError(data.error);
       // Revert dropdown
       var sel = document.getElementById('session-access-status-select');
       if (sel) sel.value = state._currentAccessStatus || 'draft';
@@ -14840,7 +15041,7 @@ function saveAccessStatus(status) {
       .catch(function() { /* non-fatal */ });
   })
   .catch(function(e) {
-    showAlert('Could not update status: ' + e.message);
+    showError('Could not update status: ' + e.message);
     var sel = document.getElementById('session-access-status-select');
     if (sel) sel.value = state._currentAccessStatus || 'draft';
   })
@@ -15158,7 +15359,7 @@ function onForkChange(forkId) {
       var _dm = (state.sessionForks || []).filter(function (f) { return f.role === 'dm'; })[0];
       _fs.value = String(state.currentForkId || (_dm ? _dm.fork_id : ''));
     }
-    showAlert(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    showError(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
@@ -15287,14 +15488,42 @@ function reloadSessionForFork() {
       // Refresh the session-character list so amendment controls reflect
       // the newly-selected version (editable on your own, read-only else).
       if (typeof loadSessionCharacters === 'function') loadSessionCharacters();
-      // If the Publish/Preview tab is open, re-render the preview for the
-      // newly-selected version (it reads fork_id from state.currentForkId).
-      var _exp = document.getElementById('session-tab-export');
-      if (_exp && _exp.style.display !== 'none' && typeof loadPreview === 'function') {
-        loadPreview(state.layoutStyle || 'Classic');
-      }
-      // Other tabs lazy-reload on click via forkQ(); storyboard is the
-      // live view, so refresh it immediately.
+      // =====================================================================================================
+      // v3.0.707 -- TD-510. THE TAB YOU ARE STANDING ON RELOADS TOO.
+      // =====================================================================================================
+      //
+      // Ian, 2026-08-19: "When I switch versions, when I'm on the review tab... it doesn't change.
+      // The other tabs change just not the review tab."
+      //
+      // THE ASSUMPTION THAT FAILED WAS WRITTEN DOWN RIGHT HERE: "Other tabs lazy-reload on click via
+      // forkQ()". They do -- ON CLICK. loadReview() is called from switchSessionTab, which fires when
+      // you ARRIVE at a tab. Switching versions while already standing on Review never calls it, so
+      // the panel keeps showing the previous version's outline, directions and prose.
+      //
+      // AND THE PATTERN OF THE BUG IS THE PATTERN OF THE FIX. Notes, storyboard and characters are
+      // each refreshed above by their own hand-written line, added one at a time as somebody hit
+      // this for that tab. Review is simply the one nobody had hit yet. A fourth special case would
+      // leave the fifth tab waiting for the same report, so this asks WHICH TAB IS OPEN and reloads
+      // that one -- generalising the export branch, which has been doing exactly this correctly all
+      // along and was the only tab that could not go stale.
+      //
+      // VISIBILITY, NOT _activeSessionTab(). The panel's own display is the thing that decides what
+      // the reader can see; _activeSessionTab reads the tab BUTTON's class, which is a second
+      // description of the same fact and can disagree with it. One source of truth.
+      var SESSION_TAB_RELOADERS = {
+        'session-tab-export': function () { if (typeof loadPreview === 'function') loadPreview(state.layoutStyle || 'Classic'); },
+        'session-tab-review': function () { if (typeof loadReview === 'function') loadReview(); }
+      };
+      // NOTES, STORYBOARD AND CHARACTERS ARE ABSENT DELIBERATELY, and characters is the one worth
+      // naming: updateNotesBox, renderStoryboard and loadSessionCharacters are ALL already called
+      // unconditionally above, because each must be correct whether or not its tab is on screen.
+      // Adding characters here as well fired a second identical fetch whenever that tab happened to
+      // be open -- caught by counting the call sites after the edit rather than by reading it back.
+      // So Review really was the ONLY tab that could go stale, and this is the whole of the fix.
+      Object.keys(SESSION_TAB_RELOADERS).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.style.display !== 'none') { try { SESSION_TAB_RELOADERS[id](); } catch (e) {} }
+      });
     });
 }
 
@@ -15306,7 +15535,7 @@ function reloadSessionForFork() {
 function newSessionVersion() {
   if (!state.currentCampaign || !state.currentSession) return;
   var src = state.currentForkId || (state.sessionForks && state.sessionForks[0] && state.sessionForks[0].fork_id);
-  if (!src) { showAlert('There is no version here to copy yet.'); return; }
+  if (!src) { showError('There is no version here to copy yet.'); return; }
   var srcFork = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(src); })[0];
   var srcLabel = srcFork ? srcFork.label : 'this version';
   // v3.0.459 -- ASK THE SERVER WHICH VERSIONS THIS SESSION IS MISSING FROM (TD-242 stage 3c).
@@ -15336,7 +15565,7 @@ function newSessionVersion() {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
-        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not create that version.'); return; }
+        if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not create that version.'); return; }
         state.currentForkId = res.j.fork_id;
         loadSessionForks(state.currentSession.id);
         reloadSessionForFork();
@@ -15346,7 +15575,7 @@ function newSessionVersion() {
       })
       .catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
-        showAlert('Could not create that version. Please try again.');
+        showError('Could not create that version. Please try again.');
       });
     });
   });
@@ -15356,8 +15585,8 @@ function newSessionVersion() {
 function renameSessionVersion() {
   if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
   var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
-  if (!f || !f.is_mine) { showAlert('You can only rename your own versions.'); return; }
-  if (!f.version_id) { showAlert('This version is still being set up. Please reload the page and try again.'); return; }
+  if (!f || !f.is_mine) { showError('You can only rename your own versions.'); return; }
+  if (!f.version_id) { showError('This version is still being set up. Please reload the page and try again.'); return; }
   uiPrompt('Rename version', 'What should this version be called?', f.name || '').then(function (name) {
     if (name === null) return;
     name = (name || '').trim();
@@ -15372,12 +15601,12 @@ function renameSessionVersion() {
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not rename that version.'); return; }
+        if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not rename that version.'); return; }
         loadSessionForks(state.currentSession.id);
         // The name is campaign-level now, so every session and the Publish picker change at once.
         if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
       })
-      .catch(function () { showAlert('Could not rename that version. Please try again.'); });
+      .catch(function () { showError('Could not rename that version. Please try again.'); });
   });
 }
 // v3.0.474 -- ASKS, AND CAN ALSO JOIN AN EXISTING VERSION (TD-277).
@@ -15417,7 +15646,7 @@ async function makeMyVersion() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
-      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
@@ -15425,7 +15654,7 @@ async function makeMyVersion() {
     })
     .catch(function(e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
-      if (typeof showAlert === 'function') { showAlert('Could not create your version: ' + e.message); } else { alert(e.message); }
+      if (typeof showAlert === 'function') { showError('Could not create your version: ' + e.message); } else { alert(e.message); }
     });
 }
 
@@ -15444,7 +15673,7 @@ async function deleteMyVersion() {
   var _fid = state.currentForkId;
   var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(_fid); })[0];
   if (!_fid || !_dv) {
-    showAlert('Pick the version you want to remove from the dropdown first.');
+    showError('Pick the version you want to remove from the dropdown first.');
     return;
   }
   if (!forkOwnNonCanonical()) {
@@ -15453,7 +15682,7 @@ async function deleteMyVersion() {
         'This is the original version of the session, so it cannot be deleted -- everything else is built from it.',
         'You can rename it, or delete one of your other versions.');
     } else {
-      showAlert('You can only remove a session from your own versions.');
+      showError('You can only remove a session from your own versions.');
     }
     return;
   }
@@ -15492,7 +15721,7 @@ async function deleteMyVersion() {
         (_choice === 'deleteVersion' ? '?delete_version=1' : ''), { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       // Ian, 2026-08-06: drop to the CANONICAL. Nulling both is exactly that -- loadSessionForks
       // selects the canonical when nothing is named -- and it is the safe landing either way,
       // because the fork that WAS on screen no longer exists.
@@ -15503,7 +15732,7 @@ async function deleteMyVersion() {
       // The version's session count changed, or the version itself is gone.
       if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
     })
-    .catch(function(e) { if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert(e.message); } });
+    .catch(function(e) { if (typeof showAlert === 'function') { showError('Delete failed: ' + e.message); } else { alert(e.message); } });
 }
 
 // Render a lock banner on the Characters tab for players when the
@@ -16349,12 +16578,69 @@ function prepLayoutLoad(){
   // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
   prepApplyOwnershipLock();
 }
+// =====================================================================================================
+// v3.0.702 -- TD-498. A MISSING CONTROL MEANT RESET TO DEFAULT, AND IT WAS WRITTEN TO THE DATABASE.
+// =====================================================================================================
+//
+// CL_SELECTS is ONE registry read by TWO layout UIs, and they do not carry the same controls.
+// Measured against app.html rather than assumed:
+//
+//   arrange, border, caption, font   -- in BOTH  (cl-* and pcl-*)
+//   titlePlace, titleSize, titleStyle -- pcl-* ONLY
+//   paper, narr                       -- in NEITHER
+//
+// Both collectors did `o[k] = el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]`, so a control that is not
+// on screen was read as A DELIBERATE CHOICE OF THE DEFAULT. Pressing Apply in the Layout modal
+// therefore wrote titlePlace:'bottom', titleSize:'medium', titleStyle:'chronicle' over whatever the
+// reader had picked -- and saveCustomLayoutPrefs writes through to saveCampaignLayoutOpts, so it is
+// PERSISTED to fork_book_prefs, not merely local.
+//
+// IT CROSSES FROM A SESSION TO THE BOOK, WHICH IS WHY IT IS WORSE THAN IT LOOKS. The only button
+// that opens that modal is the session Preview tab's Layout button, openCustomLayout('session') --
+// but customOpts is ONE unified object shared by the session and the book. So a session-scoped
+// Apply wiped the BOOK COVER's title settings, _syncLayoutPanels repainted the three Prep dropdowns
+// from the wiped object, the book preview re-rendered without the placement, and the next touch of
+// anything on the Prep panel committed the loss to the novel fork as well.
+//
+// THE COMMENT ABOVE CL_SELECTS PREDICTED THIS EXACTLY -- "a control added outside it would work in
+// whichever half somebody remembered" -- and adding titleSize to the registry in v3.0.554 wired it
+// into a form with no such control. Instead of half-working it half-DESTROYED.
+//
+// THE FIX IS THE FALLBACK, NOT THE REGISTRY. An absent control means NO OPINION, so the value in
+// force is carried through untouched. CUSTOM_LAYOUT_DEFAULTS is still the last resort, for a key
+// that has genuinely never been set.
+//
+// THE SHAPE OF THE RESULT IS DELIBERATELY UNCHANGED: the same seventeen keys in the same order, so
+// the co string this serialises into is byte-identical for every book that has not lost anything.
+// Six keys in CUSTOM_LAYOUT_DEFAULTS are in NEITHER registry -- pano, aside, companion, emphasis,
+// watermark, hidelogo -- and are therefore dropped from customOpts on every commit today. None has
+// a control anywhere in app.html, so none is reachable, and the server carries its own defaults for
+// them. Preserving them here would start putting new keys on the wire to fix nothing; that is
+// TD-504, filed rather than smuggled into this build.
+//
+// paper AND narr STAY AS THEY ARE, AND THAT IS NOT THE SAME BUG. _normalizeLayoutBlob FORCES
+// paper:'white' and narr:'plain' on every load on purpose (TD-168, TD-134): both pickers were
+// removed and the server forces white regardless. Under the new fallback they simply carry the
+// forced value through, which is the same answer by a better route.
+function clCollect(prefix) {
+  var cur = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
+  var o = {};
+  CL_SELECTS.forEach(function (k) {
+    var el = document.getElementById(prefix + k);
+    if (el) { o[k] = el.value; return; }
+    o[k] = (cur[k] !== undefined) ? cur[k] : CUSTOM_LAYOUT_DEFAULTS[k];
+  });
+  CL_TOGGLES.forEach(function (k) {
+    var el = document.getElementById(prefix + k);
+    if (el) { o[k] = el.checked ? 1 : 0; return; }
+    o[k] = ((cur[k] !== undefined) ? cur[k] : CUSTOM_LAYOUT_DEFAULTS[k]) ? 1 : 0;
+  });
+  return o;
+}
 // Read the layout panel (pcl-*) into the unified customOpts + mark it active, WITHOUT rendering.
 function prepLayoutCommit(){
   if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return false;
-  var o={};
-  CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
-  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  var o=clCollect('pcl-');
   customOpts=o;
   customActive=true;
   saveCustomLayoutPrefs('novel');
@@ -16388,9 +16674,7 @@ function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal
 function resetCustomLayout(){ customOpts=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(_clCtx); openCustomLayout(_clCtx); }
 function applyCustomLayout(){
   if(_clCtx==='novel' && blockLayoutChangeIfOrdering()) return;
-  var o={};
-  CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
-  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  var o=clCollect('cl-');
   customOpts=o;
   customActive=true;
   saveCustomLayoutPrefs(_clCtx);
@@ -16503,10 +16787,10 @@ function setCampaignImage(campaignId, newUrl, cb) {
       showAlert(newUrl ? 'Campaign image set.' : 'Campaign image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showAlert((data && data.error) || 'Could not update the campaign image.');
+      showError((data && data.error) || 'Could not update the campaign image.');
     }
   })
-  .catch(function(){ showAlert('Could not update the campaign image.'); });
+  .catch(function(){ showError('Could not update the campaign image.'); });
 }
 
 // Archive picker for the campaign image. Same look as the Pre-Publish Prep
@@ -16569,7 +16853,7 @@ function _openCampaignImagePickerLegacy(campaignId) {
       }
       overlay.appendChild(box); document.body.appendChild(overlay);
     })
-    .catch(function(){ showAlert('Could not load archived images.'); });
+    .catch(function(){ showError('Could not load archived images.'); });
 }
 function closeCampaignImagePicker() {
   var m = document.getElementById('cs-img-modal');
@@ -17422,7 +17706,7 @@ function reorderGoToOrderTab(campaignId) {
   }
   function go() {
     var c = have();
-    if (!c) { reorderClear(); showAlert('Could not open that campaign.'); return; }
+    if (!c) { reorderClear(); showError('Could not open that campaign.'); return; }
     // v3.0.678 -- TD-464 / TD-479. THROUGH THE CHOKE POINT, NOT AROUND IT.
     //
     // v3.0.665 navigated with selectCampaignNovel, and ESLint no-undef found out why that was a bad
@@ -17447,7 +17731,7 @@ function reorderGoToOrderTab(campaignId) {
   fetch('/api/campaigns')
     .then(function (r) { return r.json(); })
     .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
-    .catch(function () { reorderClear(); showAlert('Could not open that campaign.'); });
+    .catch(function () { reorderClear(); showError('Could not open that campaign.'); });
 }
 
 // Called at the END of refreshPrintOptions, once the binding/colour/finish lists exist and the
@@ -18250,14 +18534,14 @@ function deleteOrder(id) {
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) {
-            showAlert((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
+            showError((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
             return;
           }
           // Re-read rather than splice the card out: the list is the server's answer, and a local
           // edit that disagrees with it is how a deleted row reappears on the next load.
           if (typeof loadOrders === 'function') loadOrders();
         })
-        .catch(function () { showAlert('Could not reach the server. Please try again.'); });
+        .catch(function () { showError('Could not reach the server. Please try again.'); });
     }
   });
 }
@@ -18924,6 +19208,24 @@ function _activeSessionTab() {
   return 'notes';
 }
 
+// v3.0.726 -- TD-525. THE TOP OF THE SESSION SCREEN HAD NO TOUR AT ALL.
+//
+// Checked three ways before writing one: no step in any of the fourteen tours targeted a header
+// element except #session-access-status-select, buried as step 3 of sess-export; every key the
+// engine can derive already had a tour; and no tour sat orphaned in the file. 'session-detail'
+// was a VIEW name that had never been a tour key -- tourKeyForView converted it to sess-<tab>
+// before the lookup, so the header could never be reached.
+//
+// AND THE TAB CHOICE HID IT. switchSessionTab opens a built session on storyboard, so the key was
+// always sess-storyboard; sess-notes is only reachable on a session with no story at all.
+//
+// Runs ONCE, then the key falls back to the tab. _tourProgress is the store the engine already
+// uses for 'has this run', so there is no second notion of seen.
+// v3.0.727 -- DEAD CODE, AND SAYING SO IS THE POINT. Nothing calls this: every tour is started by
+// a direct maybeStartTour(...) at the site that opens the thing. v3.0.726 changed it believing it
+// was the router and shipped a fix that could never run. Left in place rather than deleted
+// because _activeSessionTab is genuinely useful and something may yet want a key function -- but
+// anything that must actually happen belongs at a call site, not here.
 function tourKeyForView() {
   var v = (window.state && state.currentView) || 'campaigns';
   if (v === 'session-detail') return 'sess-' + _activeSessionTab();
@@ -18970,7 +19272,26 @@ function _tourRenderStep() {
       _tourScheduleSettle();
     });
   };
-  if (step.click) {
+  // v3.0.721 -- TD-521(4). A TOUR NEEDS "MAKE SURE THIS IS OPEN", NOT "CLICK THIS".
+  //
+  // step.click fires blind. That is right for a TAB, which is idempotent -- clicking the tab you
+  // are already on changes nothing. It is wrong for the Prep accordions, because togglePrepAcc
+  // TOGGLES: pointing a click at an already-open panel SHUTS it, and the tour engine then skips
+  // every step inside it silently (see _tourVisible below and the skip at the top of _find).
+  //
+  // So a click could not fix what Ian reported. Whichever accordion he had used last was open,
+  // the other shut; a blind click would have rescued one and broken the other, and WHICH ONE
+  // would depend on a localStorage value from a previous session. `open` is idempotent by
+  // construction: it clicks only when the target is not already showing.
+  if (step.open) {
+    try {
+      var _oe = document.querySelector(step.open);
+      var _ob = _oe && _oe.parentNode ? _oe.parentNode.querySelector('.prep-acc-body') : null;
+      var _shut = !_ob || _ob.style.display === 'none' || !_tourVisible(_ob);
+      if (_oe && _shut) _oe.click();
+    } catch (e) {}
+    setTimeout(_find, 200);
+  } else if (step.click) {
     try { var _ce = document.querySelector(step.click); if (_ce) _ce.click(); } catch (e) {}
     setTimeout(_find, 160);
   } else {
@@ -19061,6 +19382,25 @@ function _tourFinish() {
   var viewId = _tourViewId;
   _tourTeardown();
   _tourMarkComplete(viewId);
+  // v3.0.726 -- TD-525. THE HAND-OFF. Ian: "Session detail should run first, before the tab tour
+  // ... then when the session tour is done start the tab tour for whatever tab they are on."
+  //
+  // Chained HERE rather than at the call site because Next-to-the-end AND Skip both land in this
+  // one function, so skipping the header still gets you the tab tour. _tourMarkComplete has
+  // already recorded the header, so tourKeyForView now returns the tab key and this cannot loop.
+  // A loop would be unrecoverable for the reader: the tour would restart every time they closed it.
+  //
+  // The delay lets the overlay tear down first. startTour MEASURES its target, and measuring while
+  // a full-screen overlay is still on the page is how a first step ends up mispositioned.
+  if (viewId === 'session-detail') {
+    setTimeout(function () {
+      try {
+        if (state.currentView === 'session-detail' && typeof maybeStartTour === 'function') {
+          maybeStartTour('sess-' + _activeSessionTab());
+        }
+      } catch (e) {}
+    }, 260);
+  }
 }
 
 function _tourTeardown() {
@@ -21565,7 +21905,7 @@ function optimizeShowBusy(j) {
           })
           .catch(function () {
             _kb.disabled = false; _kb.textContent = 'Stop that run and start over';
-            if (typeof showAlert === 'function') showAlert('Could not stop that run. Try again in a moment.');
+            if (typeof showAlert === 'function') showError('Could not stop that run. Try again in a moment.');
           });
       };
       host.appendChild(_kb);

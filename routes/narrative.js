@@ -22,6 +22,129 @@ const { TEXT_MODEL } = require('../config/models');
 // IMPORTANT: the ids here are the source of truth for what is VALID. The
 // frontend keeps a parallel display list (name/description/example) keyed by
 // these same ids — keep the ids in sync.
+// =====================================================================================================
+// v3.0.704 -- TD-507. THE SYSTEM PROMPT SAID "FANTASY" AND OUTRANKED EVERYTHING THAT SAID OTHERWISE.
+// =====================================================================================================
+//
+// TWO FAULTS, ONE CAUSE, AND v3.0.703 FIXED NEITHER BECAUSE IT EDITED THE WRONG MESSAGE.
+//
+// (1) LANGUAGE. Ian, 2026-08-18, after v3.0.703 shipped and was tested: "703 was applied when i did
+//     it... The captions were Spanish but the Narratives themselves were not." v3.0.703 put the
+//     director's instructions in the USER message under a mandatory heading. That was the right
+//     content in the weaker of the two places. The SYSTEM message said "You are a skilled fantasy
+//     author writing graphic novel narrative prose" and every style carries an ENGLISH example
+//     sentence beside it, so the whole persona pulled toward English and won. extract.js has no
+//     comparable system prompt, which is exactly why the captions obeyed and the prose did not.
+//
+// (2) GENRE. Ian, same day: "'You are a skilled fantasy author' should be based on whatever genre
+//     they select on the campaign Details modal. We default to fantasy but if they pick something
+//     different that prompt should change." Genre steering already reached the USER prompt
+//     (_genreProse, v3.0.486) -- but the model was simultaneously being TOLD IT WAS A FANTASY
+//     AUTHOR, so a Horror or Nonfiction campaign had its own steering argued with from above.
+//
+// THE LESSON WORTH KEEPING: a system prompt is not a stronger user prompt, it is a different
+// instrument. Anything that must hold against the model's own inclination -- what language this is
+// in, what kind of author is writing -- belongs there. v3.0.703's block stays where it is and is
+// still doing useful work; this adds the half that can actually win.
+//
+// 'other' RESOLVES TO NO PERSONA WORD, deliberately: genres.js makes it EXCLUSIVE and emits no
+// steering because it defers to the campaign prompt. Naming it in the persona would reintroduce
+// exactly the override this build is removing.
+// THE PRIMARY GENRE ONLY, because genres.js states the rule: order is meaningful and the FIRST is
+// primary. Chaining two into the persona produced "skilled horror and mystery / crime author" --
+// found by running this rather than by reading it. The secondary genres still steer through
+// _genreProse in the user prompt, which is where nuance belongs; the persona is one clean noun.
+//
+// FILTERED BY SLUG, NOT LABEL. The first cut tested the LABEL against 'other' and let
+// "skilled other (use prompt) author" through, which is the failure this whole build is about --
+// a persona asserting something the campaign never asked for.
+function narrativePersona(campaignRow) {
+  var slugs = [];
+  try { slugs = genresvc.campaignGenres(campaignRow) || []; } catch (e) { slugs = []; }
+  var primary = slugs[0];
+  if (!primary || primary === genresvc.EXCLUSIVE) return 'skilled author';
+  var label = '';
+  try { label = (genresvc.genreLabels([primary]) || [])[0] || ''; } catch (e) { label = ''; }
+  // Labels are display strings and a few carry a slash or a parenthetical; take the head of the
+  // slash pair so the sentence reads as a kind of author rather than as a menu entry.
+  label = String(label).split('/')[0].split('(')[0].trim().toLowerCase();
+  if (!label) return 'skilled author';
+  return 'skilled ' + label + ' author';
+}
+// buildNarrativeSystem: the ONE place the system message is assembled.
+//
+// split/join rather than replace so the persona swap covers every occurrence and is a harmless
+// no-op if the phrase is ever reworded -- a silent no-op being far better here than a half-swapped
+// prompt. A guard asserts the phrase count, so a reword shows up as a failed build rather than as
+// prose that quietly goes back to sounding like fantasy.
+function buildNarrativeSystem(styleSystem, campaignRow, notes) {
+  var base = String(styleSystem || '').split('a skilled fantasy author').join('a ' + narrativePersona(campaignRow));
+  if (!notes) return base;
+  return 'DIRECTOR INSTRUCTIONS -- THESE OVERRIDE EVERYTHING BELOW, INCLUDING THE PERSONA AND THE ' +
+    'NARRATIVE STYLE:\n' + notes + '\n' +
+    'These are the reader\'s own instructions and they outrank your own judgment. If they name a ' +
+    'LANGUAGE, write EVERY string you return -- intro, moment, bridge and outro -- entirely in that ' +
+    'language, including any text that the examples below happen to show in English. If they name a ' +
+    'tone, tense, formality, or a way of naming or addressing a character, apply it throughout. Do ' +
+    'NOT reorder events to satisfy them; the panel order is already settled.\n\n' + base;
+}
+
+// =====================================================================================================
+// v3.0.713 -- TD-515. REPAIR THE QUOTES INSTEAD OF ASKING FOR THEM.
+// =====================================================================================================
+//
+// v3.0.711 added a QUOTATION MARKS contract to the prompt: use typographic quotes, never a straight
+// ASCII one, matched pairs only. Ian's log shows the model ignored it and failed in exactly the same
+// place twice --
+//     position 1422 (line 14 column 219)   -- before the contract
+//     position 1446 (line 14 column 269)   -- after it
+// Same error class, same line, 24 characters apart. ASKING DOES NOT WORK for a habit this ingrained,
+// and continuing to reword the instruction would be tuning a constant against a structural problem.
+//
+// WHAT THIS DOES: a straight quote inside a JSON string ends that string. A CLOSING quote is always
+// followed by one of , } ] : or whitespace-then-one-of-those. A quote followed by anything else --
+// a letter, a space then a letter -- cannot be structural, so it must be punctuation the model failed
+// to escape. Escaping it makes the document parse and preserves the character the reader should see.
+//
+// THREE THINGS THIS DELIBERATELY DOES NOT DO:
+//   1. It never runs on the happy path. Called only after JSON.parse has already thrown, so a healthy
+//      response is never touched by a heuristic.
+//   2. It escapes ONLY quotes it can prove are mid-value. Anything ambiguous is left alone and the
+//      generation fails as before -- a wrong repair is worse than an honest failure.
+//   3. It is NOT a way round the all-or-nothing rule. A repaired document still faces the section
+//      count check below; repair fixes syntax, never completeness.
+//
+// LANGUAGE-AGNOSTIC BY CONSTRUCTION. It reasons about JSON structure, not about German, so it covers
+// the whole class rather than the one model habit that exposed it.
+function repairUnescapedQuotes(src) {
+  const DQ = String.fromCharCode(34);
+  const BS = String.fromCharCode(92);
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  let fixes = 0;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === BS) { out += ch; esc = true; continue; }
+    if (ch !== DQ) { out += ch; continue; }
+    if (!inStr) { inStr = true; out += ch; continue; }
+    // Inside a string and looking at a quote: structural only if what FOLLOWS it could follow a
+    // closing quote. Anything else and the model meant a literal quotation mark.
+    let j = i + 1;
+    while (j < src.length && (src[j] === ' ' || src[j] === '\t' || src[j] === '\r' || src[j] === '\n')) j++;
+    const nxt = j < src.length ? src[j] : '';
+    if (nxt === ',' || nxt === '}' || nxt === ']' || nxt === ':' || nxt === '') {
+      inStr = false; out += ch; continue;
+    }
+    out += BS + DQ;
+    fixes++;
+  }
+  // An odd number of structural quotes means the walk lost its place; returning the original lets
+  // the caller fail honestly rather than parse something reshaped by a guess.
+  if (inStr || !fixes) return { text: src, fixes: 0 };
+  return { text: out, fixes: fixes };
+}
 // ============================================================
 const NARRATIVE_STYLES = (function () {
   const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
@@ -134,9 +257,40 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   let directorNotes = session.session_notes || '';
   let gapDirections = {};
   let gapOutlines = {};
-  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity FROM session_forks WHERE id = ?').get(targetForkId);
+  // v3.0.705 -- TD-508. `role` ADDED to this SELECT. Without it the line below had nothing to ask
+  // but the CALLER's campaign role, which is a different question with a different answer.
+  const fkSteer = await db.prepare('SELECT role, fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity FROM session_forks WHERE id = ?').get(targetForkId);
   if (fkSteer) {
-    if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
+    // =====================================================================================================
+    // v3.0.705 -- TD-508. THE SESSION INSTRUCTIONS ON A NON-CANONICAL VERSION NEVER REACHED THE PROSE.
+    // =====================================================================================================
+    //
+    // Ian, 2026-08-19, on a Spanish instruction saved ONLY to a new version: the captions came back
+    // Spanish and the narrative did not.
+    //
+    // WAS `callerRole !== 'dm'`. callerRole is the reader's CAMPAIGN role, and a Story Master's is
+    // always 'dm' -- on every version they own, canonical or not. So this branch never fired for
+    // the one person who writes most of these notes, and directorNotes stayed on the CANONICAL
+    // session_notes no matter which version was on screen.
+    //
+    // TWO CONSEQUENCES, AND THE SECOND IS THE WORSE ONE. The instruction on the version being
+    // generated was ignored -- and the canonical's notes were silently used in its place, which
+    // may be stale, may belong to a different line of thinking, or may be empty. Nothing said so.
+    //
+    // role IS THE CANONICAL MARKER, and it is an enforced invariant rather than a convention:
+    // db.js keeps `CREATE UNIQUE INDEX idx_forks_one_dm ON session_forks(session_id) WHERE
+    // role = 'dm'`, so exactly one fork per session carries it. THE ACTING FORK's role is the
+    // question -- extract.js:73 has asked it correctly since v3.0.445, which is precisely why the
+    // captions obeyed and the prose did not. One word apart, three files, months of divergence.
+    //
+    // NO FALLBACK, DELIBERATELY. Ian: "When a version is created the notes from the version you
+    // started on are copied into your new version... if they clear out those notes it still should
+    // use what is there or nothing if they were removed. So do NOT go back to the canonical notes.
+    // It should never look to a different version's notes." Inheritance happens ONCE, at
+    // copy-on-create; at read time a version owns its own instructions absolutely. `|| ''` is
+    // therefore the whole rule -- cleared means cleared, and empty is a real answer here rather
+    // than a missing one.
+    if (fkSteer.role !== 'dm') directorNotes = fkSteer.fork_notes || '';
     if (fkSteer.narrative_directions) {
       try { gapDirections = JSON.parse(fkSteer.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
     }
@@ -239,7 +393,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const _genreProse = genresvc.genreSteering(campaign && campaign.genres, 'prose');
   const _campPrompt = genresvc.campaignPrompt(campaign && campaign.campaign_prompt);
   const prompt =
-    'You are a skilled fantasy author writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
+    // v3.0.704 -- TD-507. Was hardcoded 'fantasy', two lines above the _genreProse steering it
+    // argued with. Same persona helper as the system message, so the two cannot disagree.
+    'You are a ' + narrativePersona(campaign) + ' writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
     'Campaign: ' + campaign.name + '\n' +
     (campaign.lore && campaign.lore.trim() ? ('World / Lore (background for consistency and continuity across sessions \u2014 NOT events of this session; the transcript is the sole source of what actually happened):\n' + campaign.lore.trim() + '\n\n') : '') +
     'Session: ' + session.name + '\n' +
@@ -267,7 +423,44 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     (outlineEdited(gapOutlines['closing']) ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['closing']) + '\n' : '') +
     (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
     '\n' +
-    (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
+    // =====================================================================================================
+    // v3.0.703 -- TD-506. THE SESSION INSTRUCTIONS WERE ADVISORY HERE AND MANDATORY EVERYWHERE ELSE.
+    // =====================================================================================================
+    //
+    // Ian, 2026-08-18: "In the session instructions I put write the narrative in spanish... and it
+    // wrote the captions in spanish but not the narratives."
+    //
+    // THE FIELD WAS FINE. THE FRAMING WAS NOT. extract.js hands the SAME text to the model under
+    // "DIRECTOR'S INSTRUCTIONS -- FOLLOW THESE EXACTLY" and tells it the instructions are mandatory
+    // and take priority over its own judgment. This path said the notes "MAY include instructions"
+    // and then gave exactly one actual order, about chronology. So the model read "write it in
+    // Spanish" as background on how the panels came to be chosen, and wrote English.
+    //
+    // AND LANGUAGE WAS NEVER THE ONLY CASUALTY. Tone, tense, formality, how a character is named --
+    // anything written in the session-wide field and expected to shape the PROSE arrived here as
+    // context rather than instruction. It fails silently: the prose comes back good and simply does
+    // not do what was asked, which is why it survived this long unreported.
+    //
+    // WHAT WAS ALREADY WORKING, so this is not overstated: the five per-beat channels -- DIRECTOR
+    // STEERING per moment, per bridge, and for the intro and outro -- have always said "you MUST
+    // follow this". Only the session-wide field was weak.
+    //
+    // THE CHRONOLOGY GUARD IS KEPT, AND IT IS NOT BOILERPLATE. The narrative runs AFTER the
+    // storyboard, so a note like "open with the ambush" has ALREADY moved the panels. Obeyed a
+    // second time here it would reorder the prose against the pictures it is describing. Mandatory
+    // for everything about HOW the story is told; the panel ORDER is settled and stays settled.
+    (directorNotes ?
+      '## DIRECTOR\'S INSTRUCTIONS -- FOLLOW THESE EXACTLY:\n' + directorNotes + '\n\n' +
+      'IMPORTANT: the director\'s instructions above are mandatory and take priority over your own ' +
+      'judgment about how this should read. They apply to the PROSE ITSELF: if they specify a ' +
+      'LANGUAGE, write every block -- intro, moments, bridges and outro -- entirely in that ' +
+      'language. If they specify tone, tense, formality, or how a character is named or addressed, ' +
+      'apply it throughout. Follow them even where they conflict with the style and verbosity ' +
+      'settings below.\n' +
+      'THE ONE EXCEPTION IS ORDER: these instructions have already shaped the panel sequence above, ' +
+      'so honor the chronology of the panels regardless -- do not reorder events to follow them a ' +
+      'second time.\n\n'
+      : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     (isDialogue
@@ -308,6 +501,28 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Keep events in chronological order; never place a later event before the panel that depicts it\n' +
     '- A BRIDGE block covers ONLY what happens between its panel\'s moment and the next panel\'s moment (travel, deliberation, side events the panels skip)\n' +
     '- If the transcript covers events the panels skip, those belong in the BRIDGE blocks\n\n' +
+    // v3.0.711 -- TD-513. THE QUOTE CONTRACT, AND IT IS NOT A GERMAN PROBLEM.
+    //
+    // Ian's failed generation, 2026-08-19, at line 14 column 219 of the response:
+    //     ELIAS: \u201eHaette absagen sollen. Haette krank spielen sollen."
+    // The OPENING quote is \u201e, the German low quote, which is correct German. The CLOSING one
+    // is a plain ASCII quote -- and inside a JSON string an unescaped quote ENDS THE STRING. The
+    // parser closed `before` there, then met the rest of the sentence where it wanted a comma.
+    //
+    // SO THE CAUSE IS DIALOGUE, NOT GERMAN. Any language can put a straight quote inside quoted
+    // speech; German merely makes it likely, because the asymmetric \u201e...\u201c pair invites
+    // getting one half wrong. English narratives have been lucky rather than safe, and the
+    // first diagnosis here -- truncation, because German runs long -- was wrong for that reason.
+    //
+    // TYPOGRAPHIC QUOTES ARE THE FIX AT SOURCE, and they are better prose anyway. The parser
+    // salvage below is the second half, because a model WILL still slip occasionally and losing a
+    // whole generation -- and the tokens spent on it -- to one character is not acceptable.
+    'QUOTATION MARKS -- CRITICAL FOR VALID JSON. Inside any string value you return, never use the ' +
+    'straight ASCII double quote character. For quoted speech use typographic quotes appropriate to ' +
+    'the language you are writing in -- \u201c \u201d in English, \u201e \u201c in German, ' +
+    '\u00ab \u00bb in French and Spanish -- and use them as a MATCHED PAIR, never one typographic ' +
+    'and one straight. A raw double quote inside a value ends the string and makes the whole ' +
+    'response unparseable.\n' +
     'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length +
     ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
     'IMPORTANT: panel_index is ZERO-BASED \u2014 PANEL 1 above is panel_index 0, PANEL 2 is panel_index 1, and so on. List the sections in panel order, PANEL 1 first.\n' +
@@ -330,6 +545,45 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Async: create a pending job, respond immediately, then run the (slow)
   // generation in the background. Express does not await this handler, so the
   // Claude call finishes after the response is sent \u2014 no gateway timeout.
+  // v3.0.713 -- TD-516. ONE NARRATIVE JOB PER VERSION AT A TIME.
+  //
+  // Ian's Railway log came back interleaved: 2-space keys and 6-space keys alternating in an
+  // order no single document could have, with a fragment of an EARLIER generation cut off
+  // mid-word above the failure. Two jobs were running on the same fork and both were writing.
+  // The log was only the visible symptom -- both would also have written to the same
+  // narrative_* columns, and the loser of that race silently overwrites the winner.
+  // v3.0.714 -- TD-516(2). THE GUARD HAD NO WAY OUT, AND IT LOCKED IAN OUT COMPLETELY.
+  //
+  // v3.0.713 added a one-job-per-version check and nothing that ever releases it. A job only
+  // leaves 'pending'/'running' by finishing or erroring -- so a run the reader CANCELS, or one
+  // killed by a deploy or a container restart, sits in the table forever and every later attempt
+  // on that version is refused. Ian hit it within minutes: cancel, then Generate, then blocked.
+  //
+  // THE ANSWER WAS ALREADY WRITTEN ONE SCREEN AWAY, in ensureGenFree (app.js, v3.0.476): the
+  // client-side lock 'auto-expires in 15 min. If a run got stuck (a hung or aborted request that
+  // skipped its clear), offer a manual override so the user is never blocked waiting it out.'
+  // That comment is the specification for this guard and I did not copy it -- a lock with no
+  // expiry and no override is a lock that will eventually strand somebody.
+  //
+  // TWENTY MINUTES, not fifteen: the client lock covers a browser request, this covers a Claude
+  // call that now has a token budget scaling to 32000 (v3.0.712) and can legitimately run long.
+  // The window is deliberately generous, because refusing a real concurrent run is a small harm
+  // and stranding a reader is a large one.
+  const _staleCut = new Date(Date.now() - (20 * 60 * 1000)).toISOString();
+  const _running = await db.prepare(
+    // 'cancelled' is absent from this list on purpose: a cancelled run must never block the next
+    // attempt, which is the whole point of cancelling it.
+    "SELECT id, updated_at FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ? ORDER BY id DESC"
+  ).get(targetForkId, _staleCut);
+  if (_running) {
+    return res.status(409).json({ error: 'A narrative is already being written for this version. Wait for it to finish -- it will time out on its own within 20 minutes if it has stalled.' });
+  }
+  // Anything already past the window is retired here rather than left to accumulate, so the table
+  // does not fill with rows that are permanently neither running nor finished.
+  try {
+    await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE fork_id = ? AND status IN ('pending','running') AND updated_at <= ?")
+      .run('This run was abandoned -- it was cancelled, or the server restarted before it finished.', new Date().toISOString(), targetForkId, _staleCut);
+  } catch (_se) {}
   const _jobNow = new Date().toISOString();
   const _jobIns = await db.prepare(
     "INSERT INTO narrative_jobs (user_id, campaign_id, session_id, fork_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
@@ -347,8 +601,19 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       },
       body: JSON.stringify({
         model: TEXT_MODEL,
-        max_tokens: 8000,
-        system: styleBundle.system,
+        // v3.0.712 -- TD-514. THE BUDGET SCALES WITH THE BOOK.
+        // Ian: "Can you make it so it can handle longer prose?"
+        // 8000 WAS FLAT AND THE WORK IS NOT: every panel needs a moment block and a bridge block,
+        // each with a summary, so the response grows linearly with panel count while the ceiling
+        // stayed put. A long session ran out of room mid-sections -- a truncation, which is exactly
+        // what the broken acceptance test below used to wave through as a success.
+        // NON-ENGLISH PROSE MAKES IT WORSE: German and Spanish tokenize longer than English for the
+        // same content, so the sessions most likely to overflow are the ones the language work just
+        // made possible. 1500 floor + 1100 per panel, capped well inside the model's output limit.
+        max_tokens: Math.min(32000, 1500 + (moments.length * 1100)),
+        // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
+        // both the genre steering and the director's instructions in the user message.
+        system: buildNarrativeSystem(styleBundle.system, campaign, directorNotes),
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -365,29 +630,74 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     try {
       parsed = JSON.parse(clean);
     } catch (perr) {
-      // The model occasionally returns JSON that is truncated (hit max_tokens) or
-      // carries a stray character. Conservative recovery: parse up to the last
-      // closing brace, and accept it ONLY if it has the expected shape.
-      let recovered = null;
+      // =====================================================================================================
+      // v3.0.712 -- TD-514. THE NARRATIVE IS ALL OR NOTHING.
+      // =====================================================================================================
+      //
+      // Ian, 2026-08-19: "Fail cleanly. The narrative is an all or nothing."
+      //
+      // WHAT WAS HERE, AND WHY IT SHIPPED A ONE-PARAGRAPH BOOK WITH NO ERROR AT ALL:
+      //     if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
+      // That OR is the entire fault. A response truncated anywhere after the intro still parses back
+      // to a candidate carrying a complete intro and NO SECTIONS, which satisfies the right-hand side,
+      // so it was accepted, the job was marked complete, and the reader got an opening scene and
+      // silence. The comment above it read "accept it ONLY if it has the expected shape" -- an intro
+      // with zero sections is not the expected shape, and the test never checked.
+      //
+      // v3.0.711 MADE IT WORSE BY BUILDING ON TOP OF IT. A second salvage pass was added behind
+      // `if (!recovered)` without reading what made recovered truthy, so the new code was UNREACHABLE
+      // in precisely the case it was written for. Extending a path instead of reading it.
+      //
+      // BOTH SALVAGE PASSES ARE GONE, and that is Ian's call rather than a simplification: a partial
+      // narrative that saves is a truncated book somebody can publish by accident, and no warning is
+      // worth that. A failed generation costs a retry; a silently short one costs trust in every
+      // narrative that looked fine.
+      // v3.0.713 -- TD-515. ONE REPAIR ATTEMPT, THEN FAIL HONESTLY.
+      let _rep = null;
       try {
-        const lb = clean.lastIndexOf('}');
-        if (lb > 0) {
-          const cand = JSON.parse(clean.slice(0, lb + 1));
-          if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
+        const _fixed = repairUnescapedQuotes(clean);
+        if (_fixed.fixes > 0) {
+          _rep = JSON.parse(_fixed.text);
+          console.error('[narrative] repaired ' + _fixed.fixes + ' unescaped quote(s) and parsed cleanly');
         }
-      } catch (e2) { recovered = null; }
-      if (recovered) {
-        parsed = recovered;
-      } else {
-        // Give up, but CAPTURE the raw so the exact malformation is visible in the
-        // job error (queryable) and in the server logs.
-        try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
-        await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
-          ('The narrative came back in an unexpected format (' + perr.message + '). RAW: ' + clean.slice(0, 1500)),
-          new Date().toISOString(), jobId
-        );
-        return;
+      } catch (_re) { _rep = null; }
+      if (_rep) { parsed = _rep; }
+      else {
+      try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
+      try {
+        await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
+          message: 'The model returned unparseable JSON. Nothing was saved (all-or-nothing, TD-514).',
+          detail: { parse_error: perr.message, job_id: jobId, session_id: session.id,
+            panels: moments.length, raw_len: clean.length, raw_head: clean.slice(0, 4000) } });
+      } catch (_le) {}
+      await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
+        // v3.0.713 -- the technical reason is IN the message now. It reads as noise to most
+        // people, but Ian had to dig through Railway logs to learn what 'a format we could not
+        // read' actually meant, twice. One line of jargon is cheaper than that round trip.
+        ('The narrative came back in a format we could not read, so none of it was saved. Please try generating it again. (Technical detail: ' + perr.message + ')'),
+        new Date().toISOString(), jobId
+      );
+      return;
       }
+    }
+    // v3.0.712 -- TD-514. A VALID RESPONSE CAN STILL BE A SHORT ONE.
+    //
+    // A truncation landing on a brace boundary parses perfectly and arrives here with fewer sections
+    // than there are panels. JSON validity says nothing about COMPLETENESS, so the count is checked
+    // separately -- and it is this check, not the parse, that catches what Ian actually hit.
+    if (!parsed || !Array.isArray(parsed.sections) || parsed.sections.length < moments.length) {
+      const _got = (parsed && Array.isArray(parsed.sections)) ? parsed.sections.length : 0;
+      try { console.error('[narrative] short response: ' + _got + ' of ' + moments.length + ' sections'); } catch (_cs) {}
+      try {
+        await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate Narrative', fn: 'narrativeJob',
+          message: 'The model returned fewer sections than there are panels. Nothing was saved (all-or-nothing, TD-514).',
+          detail: { got: _got, expected: moments.length, job_id: jobId, session_id: session.id, raw_len: clean.length } });
+      } catch (_le2) {}
+      await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
+        ('The narrative came back short -- ' + _got + ' of ' + moments.length + ' panels were written, so none of it was saved. Please try generating it again.'),
+        new Date().toISOString(), jobId
+      );
+      return;
     }
 
     // Defensive alignment: the prompt labels panels 1-based but asks for a
@@ -408,6 +718,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     // Save to database — sections JSON already carries each panel's
     // after_summary; intro/outro summaries get their own columns.
+    // v3.0.715 -- TD-517. THE LAST CHECK BEFORE ANYTHING IS WRITTEN.
+    //
+    // Read here rather than held in memory: the cancel arrives on a DIFFERENT request while this
+    // one is inside a long await, so the only place the two can meet is the row itself.
+    // Deliberately the last thing before the write -- checking earlier would leave a window in
+    // which a cancel is accepted and the narrative still lands.
+    const _cx = await db.prepare('SELECT status FROM narrative_jobs WHERE id = ?').get(jobId);
+    if (_cx && _cx.status === 'cancelled') {
+      try { console.error('[narrative] job ' + jobId + ' was cancelled; discarding the result'); } catch (_cc) {}
+      return;
+    }
     const now = new Date().toISOString();
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
@@ -444,6 +765,40 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 // POLL a narrative job (async submit -> poll). Owner-scoped. Returns the
 // narrative payload when done, a friendly error when failed, else pending.
 // ============================================================
+// =====================================================================================================
+// v3.0.715 -- TD-517. CANCEL NOW MEANS CANCEL.
+// =====================================================================================================
+//
+// Ian, 2026-08-19: "I started a narrative ... then hit cancel... and it kept going."
+//
+// IT DID, AND THE BUTTON WAS NEVER LYING SO MUCH AS TALKING TO THE WRONG MACHINE. Cancel called
+// state.abortNarr.abort(), an AbortController on the BROWSER's fetch. But generation is a
+// background job: the server inserts a narrative_jobs row, RESPONDS IMMEDIATELY with a job id,
+// and runs the slow Claude call after the response is sent. So the fetch being aborted had
+// already completed, and the word 'cancel' appeared nowhere in this file at all.
+//
+// WHAT CANCEL CAN AND CANNOT DO. It cannot stop a Claude call already in flight -- that request
+// is made and will be billed by the API whatever happens here. What it CAN do is guarantee the
+// result is never written, so an existing narrative is not overwritten by a run the reader
+// changed their mind about. That is the honest promise and it is the one the button now makes.
+//
+// THE READER'S TOKENS ARE SAFE, AND THAT IS LUCK OF ORDERING RATHER THAN DESIGN: spendTokens is
+// called AFTER the narrative is saved, so a job that stops before the write never reaches the
+// charge. Ian: "Say the tokens have been spent... if they have been spent." They have not been,
+// so the message says so -- and a guard below pins the ordering, because moving the spend above
+// the save would quietly turn that sentence into a lie.
+router.post('/cancel/:jobId', requireAuth, async function (req, res) {
+  const db = await getDb();
+  const job = await db.prepare('SELECT * FROM narrative_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);
+  if (!job) return res.status(404).json({ error: 'That run could not be found.' });
+  if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+    return res.json({ ok: true, status: job.status, already: true });
+  }
+  await db.prepare("UPDATE narrative_jobs SET status='cancelled', error=?, updated_at=? WHERE id=?")
+    .run('Cancelled before the narrative was saved. Nothing was written and no tokens were spent.', new Date().toISOString(), req.params.jobId);
+  res.json({ ok: true, status: 'cancelled' });
+});
+
 router.get('/job/:jobId', requireAuth, async function(req, res) {
   const db = await getDb();
   const job = await db.prepare('SELECT * FROM narrative_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);
