@@ -617,49 +617,76 @@ it. Every campaign has exactly one **Story Master**.
 
 ## 15. Publish
 
-Turn finished sessions into a graphic novel — published to the Library and/or ordered as
-a printed book. Three parts:
+Turning finished {sessions} into a graphic novel — published to the Library, ordered as a
+printed book, or both. The Publish page walks left to right through four tabs, and you
+work them **in order**.
 
-**1. Choosing what goes in (Publish/Sessions tab)**
-- **Version dropdown** ("Generating novel for…") — defaults to your own version; switch
-  to publish another member's.
-- **Session cards** — every session in the campaign appears, each with its title image,
-  Ready/Draft status, and an **open** link. A card uses **your own version** if you've
-  made one; for any session you **haven't versioned**, it falls back to the **Story
-  Master's canonical version**. So a card can read Draft, and some may be the SM's version
-  — check both before publishing.
-- **Include in Print checkbox** — tick which sessions go in. Leave all checked to compile
-  the whole story, or pick a subset for episodes/smaller volumes.
+**Tab 1 — {Sessions}: choose what goes in**
 
-**2. Preview & Export — "Prepare to Publish" panel**
-- **Title** — defaults to the campaign name; change it here.
-- **Title color** — color of the title text so it stands out against the cover.
-- **Cover, Back & Title images** — pick each from your Archive.
-- **Refresh preview** — re-render the right-hand preview.
-- **Blurb** (optional) — Library-page teaser; leave blank and it uses your opening
-  narrative.
-- **Rights checkbox** — confirm you own/have rights and the content is general-audience.
-  Required to publish.
-- **Publish to Library** — makes your story a public web page anyone can read.
-- The preview side mirrors the session Preview tab: Layout, Quick/True View, navigation,
-  and Open in New Tab.
+- **Version dropdown** — whose edition you are publishing. It defaults to your own, and
+  you can switch to any member's. **Each version is a separate book**: its own title,
+  cover, layout and prose. Publish yours today and a member's tomorrow, and they are two
+  different books from the same campaign.
+- **{Session} cards** — every {session} in the campaign, each with its title image and
+  Ready/Draft status. A card uses **your own version** where you have made one; where you
+  have not, it falls back to the **Story Master's canonical version**. So a card can read
+  Draft, and some may be the SM's — check both before publishing.
+- **Include in Print** — tick which {sessions} go in. Leave them all for the whole story,
+  or pick a few for an episode or a smaller volume.
 
-**3. Order a printed copy (Order tab)**
-- The book **title** carries from the preview; add an **order name** to label it. Shows
-  which version and who owns it.
-- Print options: **binding** (softcover, hardcover, comic), **color** (premium
-  recommended), **cover finish**, **shipping speed**, plus your shipping address.
-- **Get price** quotes the cost from your options and the page count.
-- **Prepare Your Order** generates the final interior + cover PDFs to review; you must
-  tick **"I have reviewed both the interior and cover PDFs"** before continuing.
-- **Continue to secure payment** → Stripe checkout (add a card if none on file) and
-  places the order. **All print orders are final — no refunds, and an order can't be
-  pulled back once placed.**
-- You get a **tracking number**, and past orders (with tracking + details) live under
-  **My Orders**.
+**Tab 2 — Prep & Preview: make it look like a book**
+
+Everything here belongs to the version you picked on tab 1. **This is the quick place to
+try things out** — stylings, fonts, decorations and layouts — because previewing here is
+**faster and cheaper than running Optimize**. Settle the look here first.
+
+- **Title and subtitle** — default to the campaign name; change them here.
+- **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
+  instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
+  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
+  **Layout** on this same tab. They are on every plan and cost nothing.
+- **Cover, back cover and title-page images** — pick each from your Archive. The **x** on
+  a tile removes that picture, and the tiles show you **the crop the printed page will
+  use**, not the whole image. Clear the cover entirely and you get a **plain framed
+  cover** — dark ground, gold frame, your title on it.
+- **Layout** — the layout itself, borders, captions, fonts and decorations.
+- The right-hand pane previews the book as you change things.
+
+**Tab 3 — Optimize: put the whole book together**
+
+**Optimize layout** hands your book to an AI that reads it the way an editor would —
+looking for errors, flow and density — and fixes what it finds. **We do our best to
+estimate the token cost up front and show it before you start.**
+
+It runs **several passes** to get the density right, and **this is where page breaks are
+added**. As it works it writes what it is doing to the **log on the left**, so you can
+watch the reasoning rather than a spinner. Cancel is there if you change your mind.
+
+When it finishes, each page gains an **Edit** button beside its page number for further
+changes. **An optimized book is saved automatically — but you will need to save again
+after your own individual edits.** **Load Last Optimized File** brings a finished book
+straight back if you have navigated away.
+
+**Tab 4 — Order & Publish**
+
+*Order a printed copy* — binding (softcover, hardcover, comic), colour (premium
+recommended), cover finish, shipping speed and address. **Get price** quotes from your
+options and page count. **Prepare Your Order** generates the final interior and cover
+PDFs, and you must tick **"I have reviewed both the interior and cover PDFs"** before
+continuing. Then **Continue to secure payment** goes to Stripe. **All print orders are
+final — no refunds, and an order cannot be pulled back once placed.** You get a tracking
+number, and past orders live under **My Orders**.
+
+*Publish to the Library* — makes your story a public web page anyone can read. Add a
+**blurb** here if you want a teaser on your Library page; leave it blank and your opening
+narrative is used. You must tick the **rights checkbox** confirming you own the content
+and it is general-audience.
+
+**A page limit applies to both publishing and ordering.** It is an adjustable setting
+rather than a fixed number, so quote the current value from your context rather than a
+remembered one.
 
 ---
-
 ## 16. The public Library
 
 The Library is where you browse everything the Campaignia community has made public. Two
