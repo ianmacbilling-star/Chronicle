@@ -688,6 +688,33 @@ just can't make new ones.
 
 ---
 
+## 17a. The Title Builder (Platinum)
+
+On the **Platinum** tier you can have your book or chapter title **drawn as artwork**
+instead of set in type. You can access the Title Builder under the title section of the
+**Prep & Preview** tab on the Publish page, or on the **Opening Panel** on the
+**Storyboard** and **Review** tabs on the Session page.
+
+Your title and subtitle come from the book — the drawing uses **those exact words**, so
+change them on the prior screen if they aren't right. Then describe **how the lettering
+should look** — emeralds embedded in decorative iron, gold and black ribbons, carved in
+stone. That description is what decides the style. You can also drop in a **reference
+image** whose writing style or drawing you want the lettering to mimic.
+
+**Generating it** costs a token. Unlike your panel images, a title is drawn with a
+**transparent background**, so it sits on the cover or that chapter heading in your book
+without covering it and without other decorations or borders.
+
+Once it's drawn you can **Retouch** it — describe one change, another token — or
+**Archive** it so you can put it back later with **Replace from Archive**, which costs
+nothing. **Done & Use** puts it on the cover; **Done & Stash** keeps the drawing but takes
+it off, and on a chapter puts the panel's picture back. Nothing reaches your book until
+you press Done & Use.
+
+Notes: the Title Builder needs a **true Platinum subscription**. **The five typed title
+styles are on every plan** — this is the drawn alternative to them.
+
+---
 ## 18. Tokens at the top + buying bundles
 
 - **Token count (top bar):** the gem icon and number in the header is your current total
