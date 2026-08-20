@@ -37,7 +37,9 @@ router.get('/library', async function (req, res) {
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
     const all = req.query.window === 'all';
-    const SELECT = 'SELECT a.id, a.image_url, a.title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
+    // v3.0.737 -- TD-536. img_w/img_h added so the page can reserve each image's exact space
+    // before the bytes arrive. They are already stored on the row; only the SELECT was short.
+    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
     if (all) {
       // Show-all: newest-first, id-cursor pagination, no shuffle (unchanged).
       const beforeId = parseInt(req.query.beforeId, 10) || 0;
@@ -50,7 +52,7 @@ router.get('/library', async function (req, res) {
       const rows = await stmt.all.apply(stmt, params);
       const hasMore = rows.length > limit;
       const slice = rows.slice(0, limit);
-      const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '' }; });
+      const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0 }; });
       const nextCursor = slice.length ? slice[slice.length - 1].id : null;
       return res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
     }
@@ -68,7 +70,7 @@ router.get('/library', async function (req, res) {
     const rows = await stmt.all.apply(stmt, [limit + 1, offset]);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
-    const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '' }; });
+    const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0 }; });
     const nextOffset = offset + slice.length;
     return res.json({ items: items, hasMore: hasMore, nextOffset: nextOffset });
   } catch (e) {
