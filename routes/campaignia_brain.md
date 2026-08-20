@@ -451,15 +451,17 @@ one.
 
 **What a version holds**
 
-- **The cover and title block** — book title, subtitle, title colour, title style,
-  placement and size, plus the cover, back cover and title-page images.
+- **The cover and title block** — **the book title is the version's own**, not the campaign's;
+  switch versions and the title on screen changes with it. Plus subtitle, title colour, title
+  style, placement and size, and the cover, back cover and title-page images.
 - **The layout** — layout style, picture borders and frames, caption style, body font, drop
   cap, running page header, session dividers and whether each session starts on a fresh
   page, and whether to include the cover page, the character page and the contents.
 - **The styles** — art style, narrative style, narrative verbosity.
 - **The content of every session you've branched** — the panels and their pictures, prompts,
   order and locks; the narrative intro, sections and outro; the Direction notes and
-  outlines; the per-session character looks; and which sessions are in the book at all.
+  outlines; **the session instructions**; the per-session character looks; and which sessions
+  are in the book at all.
 
 **What a version doesn't hold**
 
@@ -499,11 +501,28 @@ include it. A trial account gets one version, and keeps every art style.
 - **Adding a session to a version you already own is always free** — that isn't a new
   version, it's an existing one picking up another session.
 
+**Values are copied, then the version is on its own.** When you make a version it takes a full
+copy of whatever version you branched from — the title, the cover, the layout, the styles, the
+session instructions, all of it. **From that moment it never looks back.** Change the canonical
+afterwards and your version does not move; clear a field in yours and it stays cleared rather
+than reverting to what you copied. That is what makes a version a printing rather than a draft.
+
+**On Platinum you can have as many versions as you want**, and that is the point of them. A
+version holds a whole look — art style, narrative style, layout, cover, title — so having
+several means you can try a different art style, or a different layout, **without throwing away
+the one you already like**. Build one in Ironframe and one in Reverie and keep both. Every
+Platinum member on a campaign can do the same, so a story can have several versions side by side.
+
 Branching copies the panels and their pictures, the narrative and its summaries, the
 Direction notes, the outlines, the per-session character looks, the casting, and the art and
 narrative styles. One deliberate exception: when you add a *second* session to a version you
-already have, the content comes from the session you branched but the **style comes from
-your version** — otherwise your book would render half in one art style and half in another.
+already have, the **session-level content** comes from the session you branched — panels,
+narrative, instructions, character looks — but the **version-level settings stay yours**: the
+title, the cover, the layout, the art style, the narrative style. Otherwise your book would
+render half in one look and half in another.
+
+As new sessions get created you can add them to your existing versions, then regenerate them
+with that version's art and narrative styles — so a book stays consistent as it grows.
 
 **Who can change what**
 
@@ -516,9 +535,9 @@ the art style and the narrative too.
 
 **What's saved, and when**
 
-**Everything on the Preview & Export tab saves automatically** — there's no Save button for
+**Everything on the Prep & Preview tab saves automatically** — there's no Save button for
 cover and layout settings. Change the title and click away; pick a border; choose a colour;
-each is written to your version as you make it. The first time you open Preview & Export on a
+each is written to your version as you make it. The first time you open Prep & Preview on a
 version, its settings are written in as they stand, so the version genuinely owns them and
 the book you branched from can be restyled later without yours changing underneath you. The
 title and settings then follow the book everywhere — the Optimize tab renders with them, the
