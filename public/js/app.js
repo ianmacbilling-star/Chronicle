@@ -4882,6 +4882,13 @@ function switchSessionTab(tab) {
     loadReview();
   }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
+  // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
+  // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
+  // Not seen yet INCLUDES not loaded yet: _tourProgress starts null and fills asynchronously, and
+  // maybeStartTour re-checks it properly through _tourEnsureProgress before starting anything.
+  try {
+    if (!_tourProgress || !_tourProgress['session-detail']) { maybeStartTour('session-detail'); return; }
+  } catch (e) {}
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -12661,6 +12668,13 @@ function switchSessionTab(tab) {
     loadReview();
   }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
+  // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
+  // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
+  // Not seen yet INCLUDES not loaded yet: _tourProgress starts null and fills asynchronously, and
+  // maybeStartTour re-checks it properly through _tourEnsureProgress before starting anything.
+  try {
+    if (!_tourProgress || !_tourProgress['session-detail']) { maybeStartTour('session-detail'); return; }
+  } catch (e) {}
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -19207,12 +19221,14 @@ function _activeSessionTab() {
 //
 // Runs ONCE, then the key falls back to the tab. _tourProgress is the store the engine already
 // uses for 'has this run', so there is no second notion of seen.
+// v3.0.727 -- DEAD CODE, AND SAYING SO IS THE POINT. Nothing calls this: every tour is started by
+// a direct maybeStartTour(...) at the site that opens the thing. v3.0.726 changed it believing it
+// was the router and shipped a fix that could never run. Left in place rather than deleted
+// because _activeSessionTab is genuinely useful and something may yet want a key function -- but
+// anything that must actually happen belongs at a call site, not here.
 function tourKeyForView() {
   var v = (window.state && state.currentView) || 'campaigns';
-  if (v === 'session-detail') {
-    if (_tourProgress && !_tourProgress['session-detail']) return 'session-detail';
-    return 'sess-' + _activeSessionTab();
-  }
+  if (v === 'session-detail') return 'sess-' + _activeSessionTab();
   return v;
 }
 
