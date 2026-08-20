@@ -2181,7 +2181,16 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
 
     const own = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (own.error) return res.status(403).json({ error: own.error });
-    if (!own.current.url && !own.current.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+    // v3.0.729 -- TD-527. THE DRAFT WINS, BECAUSE THE DRAFT IS WHAT THE READER CAN SEE.
+    // It lives INSIDE current rather than beside it -- app.js has read d.current.draft since
+    // v3.0.656, so that is the established shape. A first cut of this fix read own.draft and would
+    // have done nothing at all for a chapter, which is the case Ian was actually testing.
+    // Falling back to the live title keeps Retouch working on a book promoted in an earlier
+    // session with no draft; the result still returns as a draft, because retouching straight
+    // onto the cover would put artwork there that nobody approved.
+    const _rtDraft = (own.current && own.current.draft) || null;
+    const _rtSrc = (_rtDraft && (_rtDraft.url || _rtDraft.src)) ? _rtDraft : own.current;
+    if (!_rtSrc.url && !_rtSrc.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
@@ -2192,7 +2201,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     }
 
     // The uncut original when we have one, else the cut image with its ground painted back on.
-    const input = await titleModelInput(own.current.src, own.current.url);
+    const input = await titleModelInput(_rtSrc.src, _rtSrc.url);
     if (!input.url) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     // IMPERATIVE AND ABSOLUTE, the same register the generate prompt uses. The ground instruction is
