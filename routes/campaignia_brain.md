@@ -101,10 +101,16 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
 - **Silver** — 1 campaign, unlimited sessions, unlimited characters, monthly free
   tokens, a capped number of moments per session, and more art styles than the floor.
 - **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
-  Silver, more moments per session, and more art *and* narrative style options.
+  Silver, more moments per session, more art *and* narrative style options, and
+  **multiple versions of a book**.
 - **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
-  grant, the highest moment caps, all styling options, and the ability to build
-  **custom art styles**.
+  grant, the highest moment caps, all styling options, **multiple versions of a book**,
+  and the ability to build **custom art styles**.
+
+**Versions are the exception to what follows.** Multiple versions is an *account-level*
+allowance, not a creative one, so it is **not** inherited — a Copper member in a Gold Story
+Master's campaign gets Gold-level art styles but still only one version. Silver is one version
+per user as well; the second one needs Gold or higher on your own plan.
 
 **Creative access is inherited within a campaign.** The art/narrative/layout options a
 member can use equal the **higher of their own tier and the Story Master's tier**.
