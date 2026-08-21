@@ -252,6 +252,10 @@
       // ratio already reserved above, so this never measures the DOM and never causes a reflow
       // of its own -- and a card that has no known ratio is counted at a neutral height rather
       // than zero, so one unknown image cannot drag a whole column out of balance.
+      // v3.0.740 -- TD-536(4). Build on demand rather than trusting a caller to have done it.
+      // reset() still calls buildCols() so a tab switch gets a clean grid; this is the safety
+      // net for every other entry point, including the cold open that goes straight to load().
+      if (!cols.length) buildCols();
       var _ci = 0;
       for (var _c = 1; _c < colH.length; _c++) if (colH[_c] < colH[_ci]) _ci = _c;
       var _rh = 1;
