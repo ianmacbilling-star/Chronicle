@@ -250,6 +250,12 @@ app.get('/login', function(req, res) {
 app.get('/library', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'library.html'));
 });
+// v3.0.741 -- TD-537. Extensionless, matching /library and /login. express.static would serve
+// /our-story.html on its own, but the nav links to /our-story and a 404 on the founder letter
+// is not a thing to discover after launch.
+app.get('/our-story', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'our-story.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated
