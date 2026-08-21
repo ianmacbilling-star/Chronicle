@@ -261,6 +261,7 @@ router.get('/sitemap-pages.xml', function (req, res) {
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     '<url><loc>' + xmlEsc(base + '/') + '</loc></url>',
     '<url><loc>' + xmlEsc(base + '/library') + '</loc></url>',
+    '<url><loc>' + xmlEsc(base + '/our-story') + '</loc></url>',
     '</urlset>'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.send(parts.join('\n'));

@@ -54,8 +54,13 @@
     .filter-btn:hover { border-color:var(--gold); color:var(--gold); }
     .filter-btn.active { background:var(--gold); color:var(--ink); border-color:var(--gold); }
 
-    .gallery { column-width:250px; column-gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
-    .card { break-inside:avoid; margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
+    /* v3.0.739 -- TD-536(3). FIXED COLUMNS, not CSS multi-column. column-width made the browser
+       reflow cards BETWEEN columns whenever one changed height, so the same picture visibly
+       moved from column to column and the last column churned worst. Flex columns hold each
+       card where it was put. */
+    .gallery { display:flex; align-items:flex-start; gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
+    .gallery-col { flex:1 1 0; min-width:0; display:flex; flex-direction:column; }
+    .card { margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
     /* v3.0.738 -- TD-536(2). NO aspect-ratio and NO object-fit here on purpose. v3.0.737 put a
        guessed 4/3 box with object-fit:cover on every card that had no stored pixel size, and
        cropped most of the gallery -- Ian: "they need to be their actual shape". A card whose
@@ -85,7 +90,9 @@
 
     @media (max-width:600px) {
       .nav-logo-text { font-size:14px; letter-spacing:2px; }
-      .gallery { column-width:100%; padding:0 14px 30px; }
+      /* v3.0.739 -- column-width is meaningless to a flex row. The JS already picks the column
+         count from the container width, so this just tidies the padding. */
+      .gallery { padding:0 14px 30px; }
     }
     .lib-tabs { display:flex; gap:8px; justify-content:center; margin:0 auto 6px; }
     .tab-btn { background:transparent; border:2px solid var(--ink); color:var(--gold); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
@@ -203,7 +210,12 @@
       var fig = document.createElement('figure');
       fig.className = 'card';
       var img = document.createElement('img');
-      img.setAttribute('loading', 'lazy');
+      // v3.0.739 -- the first screenful loads EAGERLY. Ian: "get them to load their actual size
+      // before the user sees them." loading=lazy on a card already in view means the browser
+      // fetches it only once the scroll handler notices, which is exactly the moment the
+      // placeholders visibly turn into pictures. Below the fold, lazy is still right.
+      img.setAttribute('loading', _eager < 12 ? 'eager' : 'lazy');
+      _eager++;
       img.setAttribute('alt', item.caption || 'Campaignia creation');
       // v3.0.738 -- TD-536(2). RESERVE THE RIGHT SHAPE, OR RESERVE NOTHING.
       //
@@ -236,7 +248,24 @@
         cap.appendChild(capA);
         fig.appendChild(cap);
       }
-      gallery.appendChild(fig);
+      // v3.0.739 -- into the SHORTEST column, and it stays there. Heights are predicted from the
+      // ratio already reserved above, so this never measures the DOM and never causes a reflow
+      // of its own -- and a card that has no known ratio is counted at a neutral height rather
+      // than zero, so one unknown image cannot drag a whole column out of balance.
+      // v3.0.740 -- TD-536(4). Build on demand rather than trusting a caller to have done it.
+      // reset() still calls buildCols() so a tab switch gets a clean grid; this is the safety
+      // net for every other entry point, including the cold open that goes straight to load().
+      if (!cols.length) buildCols();
+      var _ci = 0;
+      for (var _c = 1; _c < colH.length; _c++) if (colH[_c] < colH[_ci]) _ci = _c;
+      var _rh = 1;
+      if (item.w > 0 && item.h > 0) _rh = item.h / item.w;
+      else if (item.shape && SHAPE_RATIO[item.shape]) {
+        var _p = SHAPE_RATIO[item.shape].split(' / ');
+        _rh = Number(_p[1]) / Number(_p[0]);
+      }
+      colH[_ci] += _rh + 0.12;   // +0.12 approximates the caption strip and the 14px gap
+      cols[_ci].appendChild(fig);
     }
 
     function load() {
@@ -267,8 +296,22 @@
       });
     }
 
-    function reset() {
+    // v3.0.739 -- the columns themselves. Rebuilt on reset so a resized window gets the right
+    // count; 250px matches the column-width this replaced, so the gallery looks unchanged.
+    var cols = [], colH = [], _eager = 0;
+    function buildCols() {
       gallery.innerHTML = '';
+      var n = Math.max(1, Math.min(5, Math.floor((gallery.clientWidth || 1000) / 250)));
+      cols = []; colH = [];
+      for (var i = 0; i < n; i++) {
+        var d = document.createElement('div');
+        d.className = 'gallery-col';
+        gallery.appendChild(d);
+        cols.push(d); colH.push(0);
+      }
+    }
+    function reset() {
+      buildCols();
       state.cursor = 0; state.offset = 0; state.done = false; state.loading = false; state.any = false;
       load();
     }

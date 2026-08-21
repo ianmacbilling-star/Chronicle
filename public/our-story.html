@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="/css/fonts.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Our Story | Campaignia</title>
+<meta name="description" content="How Campaignia came to be, from one of its founders." />
+<style>
+  :root { --ink:#0a0806; --panel:#16100a; --gold:#c9a84c; --gold-dim:rgba(201,168,76,0.7); --text:#f0e8d0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ink); color:var(--text); font-family:'Crimson Text',Georgia,serif; line-height:1.7; }
+  .wrap { max-width:820px; margin:0 auto; padding:30px 20px 60px; }
+  header { border-bottom:3px solid var(--gold); padding-bottom:18px; margin-bottom:26px; }
+  header a { color:var(--gold); text-decoration:none; font-size:13px; }
+  h1 { font-family:'Cinzel',serif; color:var(--text); font-size:28px; margin:16px 0 4px; }
+  p { color:var(--text); font-size:17px; margin:0 0 18px; }
+  .greet { font-size:19px; color:var(--gold); margin-bottom:18px; }
+  .sign { margin-top:26px; font-size:17px; }
+  .sign .name { display:block; font-family:'Cinzel',serif; color:var(--gold); font-size:19px; margin-top:2px; }
+  a { color:var(--gold); }
+  footer { border-top:1px solid rgba(201,168,76,0.2); margin-top:44px; padding-top:18px; color:var(--gold-dim); font-size:13px; }
+  @media (max-width:600px) { .wrap { padding:22px 16px 44px; } p { font-size:16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/" onclick="if(history.length>1){history.back();return false;}">&larr; Back to Campaignia</a>
+    <h1>Our Story</h1>
+  </header>
+
+  <p class="greet">Hello,</p>
+  <p>Thanks for taking the time to check out our site. My name is Ian and along with my brother Brian, we are the founders of Campaignia. I&rsquo;d like to give you a little history of how it came to be.</p>
+  <p>First some background&hellip; I made my living programming, line by line. I founded a software company in the healthcare industry, worked my ass off for 18 years then retired. I&rsquo;m married and have 2 sons both in their mid-twenties. I&rsquo;m also a musician and an artist on the side. I write my own songs, play the instruments and paint oil paintings. I&rsquo;ve had a great run. I&rsquo;ve been playing D&amp;D on and off since I was 10. (I&rsquo;m 57 now.) I would ride my bike miles away, be gone until after dark, get in trouble etc. My brother and I always loved the game and along with my son and daughter-in-law we started playing again a few years ago. It&rsquo;s the best.</p>
+  <p>One of my dearest friends who is a top tier master programmer and who worked for me, came to visit and explained how after I left, they brought in AI to do the programming. I wasn&rsquo;t surprised and I was saddened to hear it. The old ways of getting your hands dirty in the code were quickly becoming the &ldquo;old ways&rdquo;. I asked him how it was and what it was like, expecting, &ldquo;It sucks&rdquo;, &ldquo;it&rsquo;s awful&rdquo; etc, etc. But instead, he said he loved it. He said he was meant to do it and that it allowed him to focus on the important and creative parts and not the tedious parts. I was shocked to say the least but now intrigued.</p>
+  <p>A few days later we had a remote D&amp;D session in the nearly 3 year campaign we&rsquo;ve been playing. Afterward, I tried to use AI to make a scene from our game with my character in it. I was able to do it. I thought, if I could make one scene, I could probably make the whole session. Hence Campaignia.</p>
+  <p>It was born to give players the ability to document and remember their games, the moments, the rolls, the story etc. In a 3-year campaign a lot gets forgotten. That&rsquo;s what this is for. Now all of us can have something kind of like what the folks at Critical Role have. Something tangible to remember your campaign by.</p>
+  <p>Yes, it&rsquo;s AI. No hiding that. And as a programmer, artist and musician I understand full well the fear, distrust and disdain that comes with that. To me this is something that nobody was doing before. Much like, there weren&rsquo;t many people hiring sculptors to make their minis before Hero Forge came along. The ability to turn your campaign into your own personal story didn&rsquo;t exist before AI without a lot of time and money. But now it does. Do we use it or not? I don&rsquo;t know. All I know is I had a blast making it, and it still blows me away. You can decide.</p>
+  <p>So here it is. If you want to see what it can do check it out. If not, I completely get it too.</p>
+
+  <p class="sign">Thanks,<span class="name">Ian</span></p>
+
+  <footer>
+    &copy; <span id="yr"></span> So It Begins, LLC. All rights reserved. Campaignia is a service of So It Begins, LLC.
+  </footer>
+</div>
+<script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+</body>
+</html>
