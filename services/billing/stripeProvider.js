@@ -68,6 +68,9 @@ async function createCheckoutSession(opts) {
   const pack = opts.pack;
   const params = {
     mode: 'payment',
+    // v3.0.742 -- TD-539. Without this Stripe creates a GUEST customer (gcus_), the webhook
+    // stores it, and the billing portal rejects it forever after. See the note above.
+    customer_creation: 'always',
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -171,6 +174,9 @@ async function createOneTimeCheckout(opts) {
   if (!stripe) throw unconfigured();
   return await stripe.checkout.sessions.create({
     mode: 'payment',
+    // v3.0.742 -- TD-539, same fault, same fix: a book order is also a one-time payment, so it
+    // too created a guest and broke the buyer's portal.
+    customer_creation: 'always',
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
