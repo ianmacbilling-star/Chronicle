@@ -10,6 +10,10 @@ const HELP_MODEL = process.env.HELP_MODEL || 'claude-haiku-4-5-20251001';
 // AI layout-optimization vision pass ('Optimize Layout'). Overridable in Railway via
 // LAYOUT_MODEL; defaults to the same Sonnet the rest of the stack uses.
 const LAYOUT_MODEL = process.env.LAYOUT_MODEL || 'claude-sonnet-4-6';
+// Retouch prompt rewriting: turns what the reader typed into an instruction the
+// image model can follow. Short, structured, high volume -- Haiku by default.
+// Raise it to Sonnet via RETOUCH_MODEL in Railway if the wording disappoints.
+const RETOUCH_MODEL = process.env.RETOUCH_MODEL || HELP_MODEL;
 
 // fal.ai image models. IMAGE_MODELS = base (text-to-image) endpoint per key;
 // IMAGE_EDIT_MODELS = the /edit (reference-image) endpoint for keys that have one.
@@ -21,4 +25,4 @@ const IMAGE_EDIT_MODELS = {
   nano2: 'fal-ai/nano-banana-2/edit'
 };
 
-module.exports = { TEXT_MODEL, HELP_MODEL, LAYOUT_MODEL, IMAGE_MODELS, IMAGE_EDIT_MODELS };
+module.exports = { TEXT_MODEL, HELP_MODEL, LAYOUT_MODEL, RETOUCH_MODEL, IMAGE_MODELS, IMAGE_EDIT_MODELS };

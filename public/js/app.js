@@ -10870,6 +10870,31 @@ function rgTail() {
   return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged.';
 }
 
+// A slot the reader typed ("right hand") needs its article, or the sentence
+// reads as assembled rather than written. Left alone if they typed one.
+function rgArticle(s) {
+  var v = String(s || '').trim();
+  if (!v) return 'the part';
+  if (/^(the|a|an|his|her|their|its)\s/i.test(v)) return v;
+  return 'the ' + v;
+}
+
+// Only the panel CAST can be replaced from a reference: a typed name that
+// matches no row sends no reference image, and the model then invents a
+// stranger -- which is the very fault this action exists to repair.
+function rgPanelCast() {
+  var out = [];
+  var ms = (typeof state !== 'undefined' && state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) {
+    if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
+      var cs = ms[i].characters || [];
+      for (var j = 0; j < cs.length; j++) if (cs[j] && cs[j].name) out.push(cs[j]);
+      break;
+    }
+  }
+  return out;
+}
+
 function rgCastOptions() {
   var out = '';
   var cs = (typeof state !== 'undefined' && state && state.characters) || [];
@@ -10889,6 +10914,27 @@ function rgPlain(id, label, ph) {
     '<input class="form-input" id="' + id + '" placeholder="' + ph + '" style="margin-top:3px;"></label>';
 }
 
+function rgCastSelect(id, label) {
+  var cs = rgPanelCast();
+  if (!cs.length) {
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">No characters are cast on this panel, so no reference image was sent when it was drawn. Add them to the cast first, then regenerate -- a retouch would send the same empty cast again.' +
+      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div></div>';
+  }
+  var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
+    '<select class="form-input" id="' + id + '" style="margin-top:3px;">';
+  for (var i = 0; i < cs.length; i++) {
+    s += '<option value="' + String(cs[i].name).replace(/"/g, '&quot;') + '">' + String(cs[i].name).replace(/</g, '&lt;') + '</option>';
+  }
+  return s + '</select></label>' +
+    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not the one you want? <button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div>';
+}
+
+function rgOpenCast() {
+  var mid = rgState.momentId;
+  closeRetouch();
+  if (typeof openCastPicker === 'function' && mid) openCastPicker('character', mid);
+}
+
 function rgSelect(id, label, opts) {
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="' + id + '" style="margin-top:3px;">';
@@ -10903,7 +10949,7 @@ function rgCellReadout() {
 function rgActionChange() {
   var sel = document.getElementById('retouch-action');
   var box = document.getElementById('retouch-slots');
-  var row = document.getElementById('retouch-compose-row');
+  var row = document.getElementById('retouch-final-row');
   if (!sel || !box) return;
   var a = sel.value;
   var depth = [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']];
@@ -10916,10 +10962,20 @@ function rgActionChange() {
   else if (a === 'orient') html = rgInput('rg-who', 'Who turns', 'e.g. the orc with the axe') + rgSelect('rg-dir', 'Facing', [['left', 'toward the left of the picture'], ['right', 'toward the right of the picture'], ['viewer', 'toward the viewer'], ['away', 'away from the viewer']]);
   else if (a === 'expression') html = rgInput('rg-who', 'Whose face', 'e.g. the dwarf') + rgPlain('rg-expr', 'Expression', 'e.g. furious, terrified, laughing');
   else if (a === 'bodypart') html = rgInput('rg-who', 'Whose', 'e.g. the orc') + rgPlain('rg-part', 'Which part', 'e.g. the left hand');
+  else if (a === 'reface') html = rgCastSelect('rg-who', 'Who is drawn wrong') + rgCellReadout();
+  else if (a === 'appearance') html = rgInput('rg-who', 'Who changes', 'e.g. Gubuk') + rgPlain('rg-appear', 'What changes about how they look', 'e.g. a fresh scar across the left cheek');
   else if (a === 'scene') html = rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['overcast', 'heavy overcast'], ['rain', 'pouring rain'], ['snow', 'falling snow'], ['fog', 'thick fog']]);
   if (a !== 'free') html += '<datalist id="rg-cast">' + rgCastOptions() + '</datalist>';
   box.innerHTML = html;
-  if (row) { if (a === 'free') row.classList.add('hidden'); else row.classList.remove('hidden'); }
+  // The reveal is available on EVERY action including free text -- the reader
+  // can always see and edit what will be sent.
+  if (row) row.classList.remove('hidden');
+  var fw = document.getElementById('retouch-final-wrap');
+  var fb = document.getElementById('retouch-final-btn');
+  var fo = document.getElementById('retouch-final');
+  if (fw) fw.classList.add('hidden');
+  if (fb) fb.textContent = 'See the final prompt';
+  if (fo) fo.value = '';
   var note = document.getElementById('retouch-compose-note');
   if (note) note.textContent = '';
 }
@@ -10931,18 +10987,17 @@ function rgVal(id) {
 
 function rgCompose() {
   var sel = document.getElementById('retouch-action');
-  var ta = document.getElementById('retouch-instruction');
   var note = document.getElementById('retouch-compose-note');
-  if (!sel || !ta) return;
+  if (!sel) return '';
   var a = sel.value;
-  if (a === 'free') return;
+  if (a === 'free') return '';
   var place = rgPlace(rgState.cell);
   var who = rgVal('rg-who') || 'the figure';
   var what = rgVal('rg-what');
-  var needsCell = (a === 'move' || a === 'add' || a === 'remove' || a === 'effect' || a === 'facing');
+  var needsCell = (a === 'move' || a === 'add' || a === 'remove' || a === 'effect' || a === 'facing' || a === 'reface');
   if (needsCell && !place) {
     if (note) note.textContent = 'Tap a cell on the picture first.';
-    return;
+    return '';
   }
   var out = '';
   if (a === 'move') {
@@ -10976,15 +11031,96 @@ function rgCompose() {
     out = 'In Image 1, change the facial expression of ' + who + ' to ' + (rgVal('rg-expr') || 'a different expression') +
       '. Keep their position, size, distance, pose, clothing and equipment exactly as they are; only the expression on their face changes.' + rgTail();
   } else if (a === 'bodypart') {
-    out = 'In Image 1, redraw ' + (rgVal('rg-part') || 'the malformed part') + ' of ' + who +
+    out = 'In Image 1, redraw ' + rgArticle(rgVal('rg-part') || 'malformed part') + ' of ' + who +
       ', which is currently malformed. Draw it correctly and anatomically naturally, at the same size and in the same position, consistent with their pose and in the same art style. Change nothing else about them: same face, same clothing, same equipment, same position and same size.' + rgTail();
+  } else if (a === 'reface') {
+    out = 'In Image 1, the figure at ' + place + ' is meant to be ' + who + ', but is drawn as the wrong person. ' +
+      'Redraw that same figure as ' + who + ', using the supplied reference image of ' + who + ' for the exact face, hair, build, skin, clothing and equipment. ' +
+      'Keep the figure in exactly the same place, at exactly the same size and the same distance from the viewer, in the same pose and the same lighting as now -- only the identity of the person changes. ' +
+      'Exactly one figure stands there when you are finished.' + rgTail();
+  } else if (a === 'appearance') {
+    out = 'In Image 1, change how ' + who + ' looks: ' + (rgVal('rg-appear') || 'adjust their appearance') + '. ' +
+      'Apply that change to them and nothing else. Keep them in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of their face, build and equipment as it is now.' + rgTail();
   } else if (a === 'scene') {
     var p = rgVal('rg-preset');
     out = 'In Image 1, change the time of day and weather to ' + p +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.';
   }
-  ta.value = out;
-  if (note) note.textContent = 'Written below. Edit it freely before you submit.';
+  return out;
+}
+
+// The reader says what they want in their own words. Everything else -- the
+// action, the cell, the slots, the cast -- is optional structure layered on
+// top. The final prompt is composed from all of it and kept behind a button,
+// because nobody needs to read the machinery to use the feature.
+function rgToggleFinal() {
+  var wrap = document.getElementById('retouch-final-wrap');
+  var btn = document.getElementById('retouch-final-btn');
+  if (!wrap || !btn) return;
+  if (!wrap.classList.contains('hidden')) {
+    wrap.classList.add('hidden');
+    btn.textContent = 'See the final prompt';
+    return;
+  }
+  rgBuildFinal(function () {
+    wrap.classList.remove('hidden');
+    btn.textContent = 'Hide the final prompt';
+  });
+}
+
+// Composition order: the client template is built FIRST and is always a valid
+// answer on its own. The server rewrite is an improvement layered over it, so
+// a failed call degrades to the template rather than to nothing.
+function rgBuildFinal(done) {
+  var out = document.getElementById('retouch-final');
+  var note = document.getElementById('retouch-compose-note');
+  var raw = document.getElementById('retouch-instruction');
+  if (!out) { if (done) done(); return; }
+  var typed = raw ? String(raw.value || '').trim() : '';
+  var sel = document.getElementById('retouch-action');
+  var action = sel ? sel.value : 'free';
+  var tpl = rgCompose() || '';
+  if (!typed && !tpl) { out.value = ''; if (note) note.textContent = 'Say what you want changed, or pick an action.'; if (done) done(); return; }
+  out.value = tpl || typed;
+  if (note) note.textContent = 'Working on the wording...';
+  var body = {
+    moment_id: rgState.momentId,
+    action: action,
+    typed: typed,
+    template: tpl,
+    cell: rgState.cell,
+    place: rgPlace(rgState.cell),
+    cast: rgPanelCast().map(function (c) { return c.name; })
+  };
+  fetch('/api/images/retouch-prompt', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.prompt) {
+        out.value = d.prompt;
+        if (note) note.textContent = '';
+      } else {
+        if (note) note.textContent = tpl ? 'Using the standard wording.' : 'Sending your words as written.';
+      }
+      if (done) done();
+    })
+    .catch(function () {
+      if (note) note.textContent = tpl ? 'Using the standard wording.' : 'Sending your words as written.';
+      if (done) done();
+    });
+}
+
+// What submitRetouch actually sends for a MOMENT. Returns null everywhere
+// else, so the character, asset, session-character and title paths are
+// untouched by any of this.
+function rgFinalInstruction() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var out = document.getElementById('retouch-final');
+  var v = out ? String(out.value || '').trim() : '';
+  if (v) return v;
+  var tpl = rgCompose() || '';
+  return tpl || null;
 }
 
 function rgPickCell(n) {
@@ -11003,6 +11139,14 @@ function rgPickCell(n) {
 function rgTeardown() {
   var wrap = document.getElementById('retouch-grid-wrap');
   if (wrap) wrap.classList.add('hidden');
+  var fw = document.getElementById('retouch-final-wrap');
+  var fr = document.getElementById('retouch-final-row');
+  var fo = document.getElementById('retouch-final');
+  var fb = document.getElementById('retouch-final-btn');
+  if (fw) fw.classList.add('hidden');
+  if (fr) fr.classList.add('hidden');
+  if (fo) fo.value = '';
+  if (fb) fb.textContent = 'See the final prompt';
   rgState.momentId = null;
   rgState.cell = null;
   rgState.cols = 0;
@@ -11129,6 +11273,9 @@ function submitRetouch() {
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
+  // v3.0.751 -- on the MOMENT path the composed prompt is what goes to fal.
+  var _rgFinal = (typeof rgFinalInstruction === 'function') ? rgFinalInstruction() : null;
+  if (_rgFinal) instruction = _rgFinal;
   if (!instruction) { if (ta) ta.focus(); return; }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.

@@ -2536,7 +2536,7 @@
         <img id="retouch-grid-photo" alt="" style="display:block;max-width:100%;max-height:230px;border-radius:6px;">
         <div id="retouch-grid-cells" style="position:absolute;left:0;top:0;right:0;bottom:0;"></div>
       </div>
-      <div style="margin:7px 0 0;font-size:11px;color:var(--gold-dim);line-height:1.4;">Tap a cell to set the place. Cell numbers are never sent to the image model &mdash; they become plain descriptions of the frame.</div>
+      <div style="margin:7px 0 0;font-size:11px;color:var(--gold-dim);line-height:1.4;">Tap a cell to set the place.</div>
       <select class="form-input" id="retouch-action" onchange="rgActionChange()" style="margin:10px 0 0;">
         <option value="free">Describe it myself</option>
         <option value="move">Move a character</option>
@@ -2547,15 +2547,21 @@
         <option value="orient">Change which way someone faces</option>
         <option value="expression">Change an expression</option>
         <option value="bodypart">Fix a body part</option>
+        <option value="reface">Replace someone with their reference</option>
+        <option value="appearance">Change how someone looks</option>
         <option value="scene">Change time of day or weather</option>
       </select>
       <div id="retouch-slots" style="margin:9px 0 0;display:flex;flex-direction:column;gap:7px;"></div>
-      <div id="retouch-compose-row" class="hidden" style="margin:9px 0 0;">
-        <button class="btn btn-sm" onclick="rgCompose()">Write the prompt</button>
-        <span id="retouch-compose-note" style="margin-left:8px;font-size:11px;color:var(--gold-dim);"></span>
-      </div>
     </div>
     <textarea class="form-textarea" id="retouch-instruction" placeholder="e.g. make it nighttime &middot; remove the sword &middot; give him a red cloak" style="min-height:90px;"></textarea>
+    <div id="retouch-final-row" class="hidden" style="margin:9px 0 0;">
+      <button class="btn btn-sm" id="retouch-final-btn" onclick="rgToggleFinal()">See the final prompt</button>
+      <span id="retouch-compose-note" style="margin-left:8px;font-size:11px;color:var(--gold-dim);"></span>
+      <div id="retouch-final-wrap" class="hidden" style="margin:8px 0 0;">
+        <textarea class="form-textarea" id="retouch-final" style="min-height:150px;font-size:12px;"></textarea>
+        <div style="margin:5px 0 0;font-size:11px;color:var(--gold-dim);line-height:1.4;">This is what gets sent. Edit it if you like.</div>
+      </div>
+    </div>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeRetouch()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="submitRetouch()">Retouch image</button>
