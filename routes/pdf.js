@@ -5108,7 +5108,8 @@ ${fCover ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-title-haze">${campaign.cover_image_url ? '<span class="cover-title-haze-fx"></span>' : ''}
         <div class="cover-art-title">${campaign.name}</div>
-        <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
+        <!-- v3.0.748 -- TD-547. Session name only; see the note on sessionMarkerHTML. -->
+        <div class="cover-art-dates">${session.name}</div>
         </div>
       </div>
     </div>
@@ -5149,8 +5150,10 @@ function sessionMarkerHTML(num, name, date) {
   return '<div class="session-marker">' +
     '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
     // v3.0.745 -- TD-544. The name alone; "Session N" only when there is no name to show.
-    '<div class="session-marker-label">' + (name || ('Session ' + num)) +
-      ' &middot; ' + formatDate(date) + '</div>' +
+    // v3.0.748 -- TD-547. The chapter name alone; the date of the sitting is not a fact about
+    // the story. `date` stays in the signature: every caller passes it, and the TOC still wants
+    // dates, so the parameter is a hair's breadth from being needed again.
+    '<div class="session-marker-label">' + (name || ('Session ' + num)) + '</div>' +
   '</div>';
 }
 // Per-page running head for the composed book: campaign name + current session, tucked just
@@ -5584,9 +5587,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .join(', ');
   var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
   var copyHolder = fPublic ? (campaign.owner_pen_name || '') : (campaign.owner_name || campaign.dm_name || dmName);
+  // v3.0.748 -- TD-547. The byline drops the date range. dateRange itself STAYS: formatDateRange
+  // is exported and campaigns.js seeds the book subtitle from it, so removing the variable would
+  // break a field on a different screen. Only this line stops printing it.
   var _castDmLine = fPublic
-    ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder) + (dateRange ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange : '')) : (dateRange || ''))
-    : ('Story Master: ' + dmName + ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange);
+    ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder)) : '')
+    : ('Story Master: ' + dmName);
   var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
     ? String(pageOpts.bookTitle).trim() : (campaign._memberBookTitle || campaign.name);
   // Cover title color picker (Prep to Publish). Applied inline to whichever cover
