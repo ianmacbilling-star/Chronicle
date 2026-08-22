@@ -5420,7 +5420,8 @@ function saveCharFormSilently(charId, cb) {
   var formData = new FormData();
   formData.append('name', name);
   formData.append('player_name', player);
-  formData.append('cls', cls || 'Adventurer');
+  // v3.0.746 -- TD-545. Blank stays blank; nothing is invented for the reader.
+  formData.append('cls', cls || '');
   formData.append('height_ft', charHeightValue());   // v3.0.562 -- TD-345
   formData.append('description', desc);
   var npcEl = document.getElementById('char-is-npc');
@@ -5934,7 +5935,7 @@ function closeCharModal() {
       var fd = new FormData();
       fd.append('name', name);
       fd.append('player_name', document.getElementById('char-player').value.trim());
-      fd.append('cls', document.getElementById('char-cls').value.trim() || 'Adventurer');
+      fd.append('cls', document.getElementById('char-cls').value.trim());   // v3.0.746 -- TD-545
       fd.append('height_ft', charHeightValue());   // v3.0.558 -- empty means unset, and the server stores NULL for it
       fd.append('description', document.getElementById('char-desc').value.trim());
       var npcEl = document.getElementById('char-is-npc');
@@ -6012,7 +6013,8 @@ function saveChar() {
   var formData = new FormData();
   formData.append('name', name);
   formData.append('player_name', player);
-  formData.append('cls', cls || 'Adventurer');
+  // v3.0.746 -- TD-545. Blank stays blank; nothing is invented for the reader.
+  formData.append('cls', cls || '');
   // v3.0.562 -- TD-345. THIS is the path that was missing it. v3.0.558 added the append to the
   // modal-CLOSE autosave and to nothing else, so a height set and then saved with the button was
   // discarded in silence -- the field loaded correctly on reopen from a value that had never been
