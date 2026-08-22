@@ -5628,7 +5628,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     '<div class="detailspage">' +
       '<div class="dp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
       ((_bookTitleFM && _bookTitleFM !== campaign.name) ? '<div class="dp-campaign">' + _fmEsc(campaign.name) + '</div>' : '') +
-      (dateRange ? '<div class="dp-dates">' + dateRange + '</div>' : '') +
+      // v3.0.749 -- TD-547(2). The details page no longer prints the date range. dateRange is
+      // still computed above and still exported through formatDateRange, because campaigns.js
+      // seeds the book subtitle from it -- this stops PRINTING it, nothing more.
       '<div class="dp-divider"></div>' +
       (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
       (fPublic
