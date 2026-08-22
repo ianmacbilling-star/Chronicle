@@ -86,7 +86,7 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload
     const npcFlag = (is_npc === true || is_npc === 'true' || is_npc === 1 || is_npc === '1');
     const result = await db.prepare(
       'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, is_npc, height_ft, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.params.campaignId, name.trim(), player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, parseHeightFt(req.body.height_ft), now, req.session.userId);
+    ).run(req.params.campaignId, name.trim(), player_name || '', cls || '', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, parseHeightFt(req.body.height_ft), now, req.session.userId);
 
     const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
     res.json(character);
@@ -141,7 +141,10 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
     ).run(
       req.body.name ? req.body.name.trim() : char.name,
       req.body.player_name !== undefined ? req.body.player_name.trim() : (char.player_name || ''),
-      req.body.cls ? req.body.cls.trim() : char.cls,
+      // v3.0.747 -- TD-546. `!== undefined`, matching player_name and description directly above
+      // and below. Absent leaves it alone; an empty string clears it, which is what Ian was
+      // trying to do and what the truthiness test made impossible.
+      req.body.cls !== undefined ? String(req.body.cls).trim() : (char.cls || ''),
       req.body.description !== undefined ? req.body.description.trim() : (char.description || ''),
       images.image, images.image_portrait, images.image_fullbody, images.image_action, images.image_other,
       npcVal,
@@ -248,7 +251,10 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
 
     const textInfo =
       'Character name: ' + char.name + '\n' +
-      'Class/role: ' + (char.cls || 'Adventurer') + '\n' +
+      // v3.0.746 -- TD-545. OMITTED when empty, not defaulted. 'Class/role: ' with nothing after
+      // it is worse than no line at all -- it invites the model to fill the blank itself, which is
+      // how a 1932 ballplayer ended up in plate armour (TD-543).
+      (char.cls ? ('Class/role: ' + char.cls + '\n') : '') +
       'Player-written description: ' + (char.description || '(none)') + '\n\n' +
       (imageUrls.length
         ? 'Above are reference image(s) of this character. Study them carefully.'

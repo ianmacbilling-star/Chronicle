@@ -5108,7 +5108,8 @@ ${fCover ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-title-haze">${campaign.cover_image_url ? '<span class="cover-title-haze-fx"></span>' : ''}
         <div class="cover-art-title">${campaign.name}</div>
-        <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
+        <!-- v3.0.748 -- TD-547. Session name only; see the note on sessionMarkerHTML. -->
+        <div class="cover-art-dates">${session.name}</div>
         </div>
       </div>
     </div>
@@ -5148,8 +5149,11 @@ ${fCover ? `<!-- BACK COVER PAGE -->
 function sessionMarkerHTML(num, name, date) {
   return '<div class="session-marker">' +
     '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
-    '<div class="session-marker-label">Session ' + num + ' &mdash; ' + (name || '') +
-      ' &middot; ' + formatDate(date) + '</div>' +
+    // v3.0.745 -- TD-544. The name alone; "Session N" only when there is no name to show.
+    // v3.0.748 -- TD-547. The chapter name alone; the date of the sitting is not a fact about
+    // the story. `date` stays in the signature: every caller passes it, and the TOC still wants
+    // dates, so the parameter is a hair's breadth from being needed again.
+    '<div class="session-marker-label">' + (name || ('Session ' + num)) + '</div>' +
   '</div>';
 }
 // Per-page running head for the composed book: campaign name + current session, tucked just
@@ -5158,7 +5162,8 @@ function sessionMarkerHTML(num, name, date) {
 function runningHeaderHTML(campaignName, num, name) {
   return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;padding-bottom:0.03in;z-index:6;">' +
     '<div class="page-header-campaign">' + (campaignName || '') + '</div>' +
-    '<div class="page-header-session">Session ' + num + ' &mdash; ' + (name || '') + '</div>' +
+    // v3.0.745 -- TD-544. Running head: the chapter name, not our word for it.
+    '<div class="page-header-session">' + (name || ('Session ' + num)) + '</div>' +
   '</div>';
 }
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
@@ -5552,7 +5557,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '<div style="position:relative;z-index:1;">' +
       (fHeader ? ('<div class="page-header">' +
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
-        '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
+        // v3.0.745 -- TD-544. The other renderer, same rule; these two must stay identical or
+        // the same book looks different depending on which path built it.
+        '<div class="page-header-session">' + (s.name || ('Session ' + (si+1))) + '</div>' +
       '</div>') : '') +
       '<div style="break-inside:avoid;">' + chapterHeading + titleImageHTML + '</div>' +   // keep the session marker glued to its establishing image across ALL layouts
       panelsHTML +
@@ -5561,7 +5568,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   }).join('');
 
   var tocRows = sessions.map(function(s, idx){
-    return '<div class="toc-row"><span class="toc-name">Session ' + (idx+1) + ' &mdash; ' + s.name + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
+    // v3.0.745 -- TD-544. Contents lists the chapter, not "Session 7".
+    return '<div class="toc-row"><span class="toc-name">' + (s.name || ('Session ' + (idx+1))) + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
   }).join('');
   var _tocCols = sessions.length <= 30 ? 1 : (sessions.length <= 70 ? 2 : 3);
   var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div><div class="toc-cols" style="column-count:' + _tocCols + ';">' + tocRows + '</div></div>';
@@ -5579,9 +5587,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .join(', ');
   var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
   var copyHolder = fPublic ? (campaign.owner_pen_name || '') : (campaign.owner_name || campaign.dm_name || dmName);
+  // v3.0.748 -- TD-547. The byline drops the date range. dateRange itself STAYS: formatDateRange
+  // is exported and campaigns.js seeds the book subtitle from it, so removing the variable would
+  // break a field on a different screen. Only this line stops printing it.
   var _castDmLine = fPublic
-    ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder) + (dateRange ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange : '')) : (dateRange || ''))
-    : ('Story Master: ' + dmName + ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange);
+    ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder)) : '')
+    : ('Story Master: ' + dmName);
   var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
     ? String(pageOpts.bookTitle).trim() : (campaign._memberBookTitle || campaign.name);
   // Cover title color picker (Prep to Publish). Applied inline to whichever cover
@@ -5617,7 +5628,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     '<div class="detailspage">' +
       '<div class="dp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
       ((_bookTitleFM && _bookTitleFM !== campaign.name) ? '<div class="dp-campaign">' + _fmEsc(campaign.name) + '</div>' : '') +
-      (dateRange ? '<div class="dp-dates">' + dateRange + '</div>' : '') +
+      // v3.0.749 -- TD-547(2). The details page no longer prints the date range. dateRange is
+      // still computed above and still exported through formatDateRange, because campaigns.js
+      // seeds the book subtitle from it -- this stops PRINTING it, nothing more.
       '<div class="dp-divider"></div>' +
       (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
       (fPublic

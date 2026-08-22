@@ -149,7 +149,8 @@ function repairUnescapedQuotes(src) {
 const NARRATIVE_STYLES = (function () {
   const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
   const DIALOGUE_IP_GUARD = ' COPYRIGHT \u2014 You MAY quote or lightly adapt what the players and characters actually say and do in THIS session\'s transcript; that is the user\'s own gameplay and is fair to use. But never reproduce verbatim or near-verbatim passages of PUBLISHED source text (published adventure modules, rulebooks, or novels); if such material is pasted into the transcript, retell it in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise.';
-  const DIALOGUE_SYS = 'You are a comic-book script writer turning a real tabletop RPG session into dialogue-driven graphic-novel script. You always return valid JSON.' + DIALOGUE_IP_GUARD;
+  // v3.0.744 -- TD-543. "a real session": the word real is the load-bearing part, not the genre.
+  const DIALOGUE_SYS = 'You are a comic-book script writer turning a real session into dialogue-driven graphic-novel script. You always return valid JSON.' + DIALOGUE_IP_GUARD;
   return {
     classic: {
       name: 'Classic',
@@ -395,7 +396,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const prompt =
     // v3.0.704 -- TD-507. Was hardcoded 'fantasy', two lines above the _genreProse steering it
     // argued with. Same persona helper as the system message, so the two cannot disagree.
-    'You are a ' + narrativePersona(campaign) + ' writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
+    // v3.0.744 -- TD-543. The persona already carries the genre (v3.0.704); TTRPG here only ever
+    // argued with it, exactly as the hardcoded 'fantasy' it replaced did.
+    'You are a ' + narrativePersona(campaign) + ' writing the narrative for a graphic novel based on a real session.\n\n' +
     'Campaign: ' + campaign.name + '\n' +
     (campaign.lore && campaign.lore.trim() ? ('World / Lore (background for consistency and continuity across sessions \u2014 NOT events of this session; the transcript is the sole source of what actually happened):\n' + campaign.lore.trim() + '\n\n') : '') +
     'Session: ' + session.name + '\n' +

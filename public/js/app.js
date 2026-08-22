@@ -5420,7 +5420,8 @@ function saveCharFormSilently(charId, cb) {
   var formData = new FormData();
   formData.append('name', name);
   formData.append('player_name', player);
-  formData.append('cls', cls || 'Adventurer');
+  // v3.0.746 -- TD-545. Blank stays blank; nothing is invented for the reader.
+  formData.append('cls', cls || '');
   formData.append('height_ft', charHeightValue());   // v3.0.562 -- TD-345
   formData.append('description', desc);
   var npcEl = document.getElementById('char-is-npc');
@@ -5934,7 +5935,7 @@ function closeCharModal() {
       var fd = new FormData();
       fd.append('name', name);
       fd.append('player_name', document.getElementById('char-player').value.trim());
-      fd.append('cls', document.getElementById('char-cls').value.trim() || 'Adventurer');
+      fd.append('cls', document.getElementById('char-cls').value.trim());   // v3.0.746 -- TD-545
       fd.append('height_ft', charHeightValue());   // v3.0.558 -- empty means unset, and the server stores NULL for it
       fd.append('description', document.getElementById('char-desc').value.trim());
       var npcEl = document.getElementById('char-is-npc');
@@ -6012,7 +6013,8 @@ function saveChar() {
   var formData = new FormData();
   formData.append('name', name);
   formData.append('player_name', player);
-  formData.append('cls', cls || 'Adventurer');
+  // v3.0.746 -- TD-545. Blank stays blank; nothing is invented for the reader.
+  formData.append('cls', cls || '');
   // v3.0.562 -- TD-345. THIS is the path that was missing it. v3.0.558 added the append to the
   // modal-CLOSE autosave and to nothing else, so a height set and then saved with the button was
   // discarded in silence -- the field loaded correctly on reopen from a value that had never been
@@ -10792,6 +10794,574 @@ function archiveFilterBarHTML(f, onchange) {
       '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
 }
 
+// ---------------------------------------------------------------------------
+// v3.0.752 -- RETOUCH: ONE PLACE TO TYPE, AND THE SQUARES ANSWER QUESTIONS.
+//
+// The reader always types in the ordinary instruction box. The dropdown and the
+// grid supply only what typing is bad at: which action this is, WHICH figure,
+// and WHERE it goes. Every remaining slot is a PICK -- a tap, a dropdown, a
+// direction. The moment a slot would be a free-text field it belongs in the
+// main box instead, which is what v3.0.751 got wrong: it opened a second place
+// to type while the first sat empty above it.
+//
+// A square answers a QUESTION, and the question changes with the action:
+// "which one?" and "where to?" are different things, and one label called
+// "the place" could not tell them apart.
+//
+// CELL NUMBERS NEVER REACH THE IMAGE MODEL. rgPlace() is the only bridge, and
+// it emits frame-relative English -- the phrasing the model understands, and
+// the phrasing that cannot be resolved against a character's own left hand.
+//
+// RG_ON is the kill switch: false restores the v3.0.749 modal exactly.
+// ---------------------------------------------------------------------------
+var RG_ON = true;
+
+var rgState = { momentId: null, from: null, to: null, active: 'from', cols: 0, rows: 0 };
+
+// Every action declares which squares it needs and what each one asks. Adding
+// an action is a row here plus a template in rgCompose -- nothing else.
+var RG_ACTIONS = {
+  none: { cells: [], ph: 'Say what you want changed, in your own words.' },
+  move: {
+    cells: ['from', 'to'],
+    from: 'Which one? Tap the square it is in now.',
+    to: 'Where to? Tap the square it should end up in.',
+    depth: true,
+    ph: 'Anything else about the move? Optional.'
+  },
+  add: {
+    cells: ['to'], cast: 'Who to add',
+    to: 'Where? Tap the square they should appear in.',
+    depth: true,
+    ph: 'Anything about how they should appear? Optional.'
+  },
+  // Ian, 2026-08-22: adding a CENTERFIELDER offered the cast picker and told him
+  // to regenerate. An extra is not a cast member -- 'Add a character' was doing
+  // two different jobs and giving the wrong advice for one of them.
+  extra: {
+    cells: ['to'],
+    to: 'Where? Tap the square it should appear in.',
+    depth: true,
+    ph: 'Who or what to add? e.g. a centerfielder on the outfield grass, glove up'
+  },
+  background: {
+    cells: [], relight: true,
+    ph: 'What should be behind them? e.g. the view from home plate out to centre field'
+  },
+  remove: {
+    cells: ['from'],
+    from: 'What goes? Tap the square it is in.',
+    ph: 'What is there now? e.g. a small armoured figure'
+  },
+  effect: {
+    cells: ['to'],
+    to: 'Where? Tap the square it should be centred on.',
+    size: true,
+    ph: 'What is the effect? e.g. a burst of crackling white-blue lightning'
+  },
+  facing: {
+    cells: ['from', 'to'],
+    from: 'Who turns? Tap the square they are in.',
+    to: 'Looking at what? Tap that square.',
+    ph: 'Anything else about the look? Optional.'
+  },
+  orient: {
+    cells: ['from'], dir: true,
+    from: 'Who turns? Tap the square they are in.',
+    ph: 'Anything else about the turn? Optional.'
+  },
+  expression: {
+    cells: ['from'],
+    from: 'Whose face? Tap the square they are in.',
+    ph: 'What expression? e.g. furious, terrified, laughing'
+  },
+  bodypart: {
+    cells: ['from'],
+    from: 'Which one? Tap the square they are in.',
+    ph: 'What is wrong? e.g. the right hand has too many fingers'
+  },
+  pose: {
+    cells: ['from', 'to'], optional: ['to'],
+    from: 'Who moves? Tap the square they are in.',
+    to: 'Aimed at what? Tap that square. Skip this if there is no target.',
+    ph: 'What should they be doing? e.g. pointing straight out to the distance'
+  },
+  reface: {
+    cells: ['from'], cast: 'Who it should be',
+    from: 'Which figure is wrong? Tap the square they are in.',
+    ph: 'Anything else? Optional.'
+  },
+  appearance: {
+    cells: ['from'],
+    from: 'Who changes? Tap the square they are in.',
+    ph: 'What changes about how they look? e.g. a fresh scar across the left cheek'
+  },
+  scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
+};
+
+var RG_FROM_TINT = 'rgba(216,184,92,0.34)';
+var RG_TO_TINT = 'rgba(120,196,214,0.34)';
+
+// Grid geometry comes from the panel SHAPE. A fixed 3x3 on a tower panel gives
+// cells taller than the figures standing in them.
+function rgGrid(shape) {
+  if (shape === 'square') return { c: 3, r: 3 };
+  if (shape === 'wide') return { c: 4, r: 2 };
+  if (shape === 'panoramic') return { c: 5, r: 2 };
+  if (shape === 'tower') return { c: 2, r: 8 };
+  if (shape === 'tall' || shape === 'reference' || shape === 'fullpage') return { c: 3, r: 4 };
+  return { c: 4, r: 3 };
+}
+
+// FRAME-RELATIVE ONLY. Never relative to a person or an object: "left of the
+// giant" was resolved as the giant's own left and landed on the wrong side of
+// the picture, and naming a character as a landmark drew a second copy of them.
+function rgPlace(n) {
+  if (!n || !rgState.cols) return '';
+  var col = (n - 1) % rgState.cols;
+  var row = Math.floor((n - 1) / rgState.cols);
+  var fx = (col + 0.5) / rgState.cols;
+  var fy = (row + 0.5) / rgState.rows;
+  var h = (fx < 0.25) ? 'left' : (fx < 0.45) ? 'left-of-centre' : (fx < 0.55) ? 'central' : (fx < 0.75) ? 'right-of-centre' : 'right';
+  var v = (fy < 0.3) ? 'upper' : (fy < 0.7) ? 'middle' : 'lower';
+  var name = (h === 'central' && v === 'middle') ? 'the centre of the picture' : ('the ' + v + ' ' + h + ' area of the picture');
+  return name + ', about ' + Math.round(fx * 100) + ' percent of the way across from the left edge and ' +
+         Math.round(fy * 100) + ' percent of the way down';
+}
+
+// A figure usually straddles two squares, so the SUBJECT is named loosely on
+// purpose. False precision makes the model hunt for a boundary that is not
+// there; "in and around" describes what a person actually pointed at.
+function rgSubject(n) {
+  var p = rgPlace(n);
+  return p ? ('the figure in and around ' + p) : 'the figure';
+}
+
+function rgResolveRefs(s) {
+  var v = String(s || '');
+  if (!rgState.cols) return v;
+  var max = rgState.cols * rgState.rows;
+  return v.replace(/\b(?:cell|panel|square|box|tile)s?\s*#?\s*(\d+)\b/gi, function (m, d) {
+    var n = parseInt(d, 10);
+    if (!n || n > max) return m;
+    return rgPlace(n);
+  });
+}
+
+// Add actions cannot use the standard tail, which forbids adding anyone.
+function rgTailAdd() {
+  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
+}
+
+function rgDepthClause(d, who) {
+  if (d === 'further') {
+    return 'Draw ' + who + ' smaller and further away: reduced in size, soft-edged, low in contrast and veiled by the atmosphere, clearly deep in the scene rather than near the viewer. Something in the foreground crosses in front of ' + who + ' and hides the lower body.';
+  }
+  if (d === 'closer') {
+    return 'Draw ' + who + ' larger and nearer the viewer: bigger in the frame, sharply focused and high in contrast, clearly in the foreground and in front of the scenery behind.';
+  }
+  return 'Draw ' + who + ' at exactly the same size, softness and contrast as now, and at the same distance from the viewer. Do not enlarge, sharpen or bring ' + who + ' nearer the front of the scene.';
+}
+
+// Appended to every template except Add. Mentioning a person is an invitation
+// to draw one -- that cost two duplicated figures before it was written down.
+function rgTail() {
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged.';
+}
+
+function rgArticle(s) {
+  var v = String(s || '').trim();
+  if (!v) return 'the part';
+  if (/^(the|a|an|his|her|their|its)\s/i.test(v)) return v;
+  return 'the ' + v;
+}
+
+// Only the panel CAST can be named: a typed name matching no row sends no
+// reference image, and the model then invents a stranger -- the very fault the
+// reface action exists to repair.
+function rgPanelCast() {
+  var out = [];
+  var ms = (typeof state !== 'undefined' && state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) {
+    if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
+      var cs = ms[i].characters || [];
+      for (var j = 0; j < cs.length; j++) if (cs[j] && cs[j].name) out.push(cs[j]);
+      break;
+    }
+  }
+  return out;
+}
+
+function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+function rgCastSelect(label) {
+  var cs = rgPanelCast();
+  if (!cs.length) {
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nobody is cast on this panel, so no reference picture was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
+      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div></div>';
+  }
+  var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
+    '<select class="form-input" id="rg-who" style="margin-top:3px;">';
+  for (var i = 0; i < cs.length; i++) s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(cs[i].name) + '</option>';
+  return s + '</select></label>' +
+    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div>';
+}
+
+function rgOpenCast() {
+  var mid = rgState.momentId;
+  closeRetouch();
+  if (typeof openCastPicker === 'function' && mid) openCastPicker('character', mid);
+}
+
+function rgSelect(id, label, opts) {
+  var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
+    '<select class="form-input" id="' + id + '" style="margin-top:3px;">';
+  for (var i = 0; i < opts.length; i++) s += '<option value="' + opts[i][0] + '">' + opts[i][1] + '</option>';
+  return s + '</select></label>';
+}
+
+// The question is printed beside the square it belongs to, and the slot the
+// next tap will fill is marked. One generic "tap a cell to set the place"
+// could not say whether it meant the subject or the destination.
+function rgCellRow(slot, question) {
+  var filled = rgState[slot];
+  var isActive = (rgState.active === slot);
+  var tint = (slot === 'from') ? RG_FROM_TINT : RG_TO_TINT;
+  return '<div onclick="rgSetActive(\'' + slot + '\')" style="cursor:pointer;padding:6px 8px;border-radius:6px;' +
+    'border:1px solid ' + (isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)') + ';' +
+    'background:' + (isActive ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
+    '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + tint +
+    ';border:1px solid rgba(255,255,255,0.4);margin-right:6px;vertical-align:middle;"></span>' +
+    '<span style="font-size:11px;color:var(--gold-dim);">' + question + '</span>' +
+    '<span id="rg-readout-' + slot + '" style="font-size:11px;color:var(--gold-light);margin-left:6px;">' +
+    (filled ? ('square ' + filled) : (isActive ? 'waiting for a tap' : '')) + '</span></div>';
+}
+
+function rgActionChange() {
+  var sel = document.getElementById('retouch-action');
+  var box = document.getElementById('retouch-slots');
+  var row = document.getElementById('retouch-final-row');
+  if (!sel || !box) return;
+  var a = sel.value;
+  var def = RG_ACTIONS[a] || RG_ACTIONS.none;   // blank falls back to the no-action shape
+  rgState.from = null;
+  rgState.to = null;
+  rgState.active = def.cells.length ? def.cells[0] : null;
+
+  var html = '';
+  if (def.cast) html += rgCastSelect(def.cast);
+  for (var i = 0; i < def.cells.length; i++) {
+    html += rgCellRow(def.cells[i], def[def.cells[i]]);
+  }
+  if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
+  if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.dir) html += rgSelect('rg-dir', 'Facing', [['left', 'toward the left of the picture'], ['right', 'toward the right of the picture'], ['viewer', 'toward the viewer'], ['away', 'away from the viewer']]);
+  if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
+  if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
+  box.innerHTML = html;
+
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.placeholder = def.ph;
+  if (row) row.classList.remove('hidden');
+  rgPaintCells();
+  rgResetFinal();
+  var note = document.getElementById('retouch-compose-note');
+  if (note) note.textContent = '';
+}
+
+function rgResetFinal() {
+  var fw = document.getElementById('retouch-final-wrap');
+  var fb = document.getElementById('retouch-final-btn');
+  var fo = document.getElementById('retouch-final');
+  if (fw) fw.classList.add('hidden');
+  if (fb) fb.textContent = 'See the final prompt';
+  if (fo) fo.value = '';
+}
+
+function rgSetActive(slot) {
+  rgState.active = slot;
+  rgRedrawRows();
+}
+
+function rgRedrawRows() {
+  var sel = document.getElementById('retouch-action');
+  if (!sel) return;
+  var def = RG_ACTIONS[sel.value] || RG_ACTIONS.none;
+  for (var i = 0; i < def.cells.length; i++) {
+    var slot = def.cells[i];
+    var ro = document.getElementById('rg-readout-' + slot);
+    if (ro) ro.textContent = rgState[slot] ? ('square ' + rgState[slot]) : (rgState.active === slot ? 'waiting for a tap' : '');
+  }
+  var box = document.getElementById('retouch-slots');
+  if (!box) return;
+  var rows = box.children;
+  var ci = 0;
+  for (var k = 0; k < rows.length; k++) {
+    var r = rows[k];
+    if (r.id && r.id.indexOf('rg-readout') === 0) continue;
+    if (r.querySelector && r.querySelector('[id^="rg-readout-"]')) {
+      var isActive = (def.cells[ci] === rgState.active);
+      r.style.borderColor = isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)';
+      r.style.background = isActive ? 'rgba(201,168,76,0.08)' : 'transparent';
+      ci++;
+    }
+  }
+}
+
+function rgPickCell(n) {
+  var sel = document.getElementById('retouch-action');
+  var def = RG_ACTIONS[(sel && sel.value) || 'none'] || RG_ACTIONS.none;
+  if (!def.cells.length) return;
+  var slot = rgState.active || def.cells[0];
+  rgState[slot] = n;
+  // Advance to the next square this action still wants, so two taps fill both
+  // without the reader having to aim at the row in between.
+  var next = null;
+  for (var i = 0; i < def.cells.length; i++) if (!rgState[def.cells[i]]) { next = def.cells[i]; break; }
+  rgState.active = next || slot;
+  rgPaintCells();
+  rgRedrawRows();
+  rgResetFinal();
+}
+
+function rgPaintCells() {
+  var cells = document.getElementById('retouch-grid-cells');
+  if (!cells) return;
+  var kids = cells.children;
+  for (var i = 0; i < kids.length; i++) {
+    var n = i + 1;
+    kids[i].style.background = (rgState.from === n) ? RG_FROM_TINT : (rgState.to === n) ? RG_TO_TINT : 'transparent';
+  }
+}
+
+function rgVal(id) {
+  var el = document.getElementById(id);
+  return el ? String(el.value || '').trim() : '';
+}
+
+// Builds the template answer. Returns '' when the action needs a square that
+// has not been tapped, so the caller can fall back to the reader's own words.
+function rgCompose() {
+  var sel = document.getElementById('retouch-action');
+  var note = document.getElementById('retouch-compose-note');
+  if (!sel) return '';
+  var a = sel.value;
+  var def = RG_ACTIONS[a];
+  if (!def || !a || a === 'none') return '';
+  var optional = def.optional || [];
+  for (var i = 0; i < def.cells.length; i++) {
+    if (optional.indexOf(def.cells[i]) >= 0) continue;
+    if (!rgState[def.cells[i]]) {
+      if (note) note.textContent = 'Tap the square for: ' + def[def.cells[i]].replace(/ Tap the square.*$/, '');
+      return '';
+    }
+  }
+  var fromP = rgPlace(rgState.from);
+  var toP = rgPlace(rgState.to);
+  var subj = rgSubject(rgState.from);
+  var who = rgVal('rg-who');
+  var typed = rgResolveRefs(rgVal('retouch-instruction'));
+  var out = '';
+
+  if (a === 'move') {
+    out = 'This is a repositioning edit. In Image 1, ' + subj + ' is now in a new place: ' + toP + '. ' +
+      rgDepthClause(rgVal('rg-depth'), 'it') +
+      ' Keep its pose, clothing and equipment exactly as they are. The place it came from -- ' + fromP +
+      ' -- is now empty ground: paint it over with the same scenery, ground and atmosphere that surround it, so no figure, weapon, silhouette or shadow remains there.' + rgTail();
+  } else if (a === 'add') {
+    out = 'In Image 1, add ' + (who || typed || 'the character') + ', positioned at ' + toP + '. ' +
+      rgDepthClause(rgVal('rg-depth'), 'them') +
+      (who && typed ? ' ' + typed : '') +
+      ' Draw them in the existing art style of Image 1, matching its medium, lighting and colour. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
+  } else if (a === 'remove') {
+    out = 'In Image 1, one area needs to be painted over with plain background scenery. The area is ' + fromP +
+      (typed ? ', where ' + typed + ' is currently visible' : '') +
+      '. Paint that entire area as continuous background matching the scenery immediately surrounding it: the same ground, atmosphere, colour and lighting. Nothing stands there -- no figure, no object, no weapon, no silhouette and no shadow. It is open, empty ground.' + rgTail();
+  } else if (a === 'effect') {
+    var sz = rgVal('rg-size');
+    var szc = (sz === 'large') ? 'Make it large and dominant in that part of the picture, while still fading at its outer edges.'
+      : (sz === 'medium') ? 'Make it moderate in size, clearly visible but not dominating the picture, fading at its edges.'
+      : 'Keep it small and contained -- no taller than the figure or object it surrounds -- fading out into the surrounding scene rather than filling the area.';
+    out = 'In Image 1, add ' + (typed || 'the effect') + ' at ' + toP + '. ' + szc +
+      ' Match the existing art style, lighting and colour of Image 1 exactly.' + rgTail();
+  } else if (a === 'facing') {
+    out = 'In Image 1, turn ' + subj + ' so that it is looking toward ' + toP +
+      '. Its head and eyes are directed there. Keep its position, size, distance, pose, clothing and equipment exactly as they are; only the direction it faces and looks changes.' +
+      (typed ? ' ' + typed : '') + rgTail();
+  } else if (a === 'orient') {
+    var d = rgVal('rg-dir');
+    var dl = (d === 'left') ? 'toward the left of the picture' : (d === 'right') ? 'toward the right of the picture'
+      : (d === 'viewer') ? 'toward the viewer' : 'away from the viewer';
+    out = 'In Image 1, turn ' + subj + ' so that it is facing ' + dl +
+      '. Keep it in exactly the same place, at the same size and the same distance from the viewer, with the same clothing and equipment; only its body orientation changes.' +
+      (typed ? ' ' + typed : '') + rgTail();
+  } else if (a === 'expression') {
+    out = 'In Image 1, change the facial expression of ' + subj + ' to ' + (typed || 'a different expression') +
+      '. Keep its position, size, distance, pose, clothing and equipment exactly as they are; only the expression on the face changes.' + rgTail();
+  } else if (a === 'bodypart') {
+    out = 'In Image 1, redraw ' + rgArticle(typed || 'malformed part') + ' of ' + subj +
+      ', which is currently malformed. Draw it correctly and anatomically naturally, at the same size and in the same position, consistent with the pose and in the same art style. Change nothing else about the figure: same face, same clothing, same equipment, same position and same size.' + rgTail();
+  } else if (a === 'reface') {
+    out = 'In Image 1, ' + subj + ' is meant to be ' + (who || 'the intended character') +
+      ', but is drawn as the wrong person. Redraw that same figure as ' + (who || 'the intended character') +
+      ', using the supplied reference image for the exact face, hair, build, skin, clothing and equipment. ' +
+      'Keep the figure in exactly the same place, at exactly the same size and the same distance from the viewer, in the same pose and the same lighting as now -- only the identity of the person changes. ' +
+      'Exactly one figure stands there when you are finished.' + (typed ? ' ' + typed : '') + rgTail();
+  } else if (a === 'appearance') {
+    out = 'In Image 1, change how ' + subj + ' looks: ' + (typed || 'adjust the appearance') +
+      '. Apply that change and nothing else. Keep the figure in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of the face, build and equipment as it is now.' + rgTail();
+  } else if (a === 'pose') {
+    out = 'In Image 1, change the pose of ' + subj + ' so that ' + (typed || 'the pose changes') +
+      (toP ? '. The gesture is aimed toward ' + toP : '') +
+      '. The pose reads clearly in silhouette and is not foreshortened toward or away from the viewer, so the movement is plainly visible. ' +
+      'It is the same person: keep the same face, hair, clothing, equipment and colouring, the same position in the frame, the same size and the same distance from the viewer. ' +
+      'Nothing about the figure is malformed and no anatomy needs correcting -- only the pose changes.' + rgTail();
+  } else if (a === 'extra') {
+    out = 'In Image 1, add ' + (typed || 'the figure') + ', positioned at ' + toP + '. ' +
+      rgDepthClause(rgVal('rg-depth'), 'it') +
+      ' It stands on the ground of the existing scene, with its feet meeting that ground naturally rather than floating in front of it. ' +
+      'Draw it in the existing art style of Image 1, matching its medium, line quality, texture, tone and lighting.' + rgTailAdd();
+  } else if (a === 'background') {
+    var lit = (rgVal('rg-relight') === 'relight')
+      ? 'Relight the figures so their light and shadows match the new setting, but change nothing else about them.'
+      : 'Keep the figures lit exactly as they are now, with the same shadows.';
+    out = 'In Image 1, replace everything behind the figures with ' + (typed || 'a new setting') + '. ' +
+      'Keep every figure exactly as it is now: the same faces, poses, clothing, equipment, sizes and positions in the frame. ' + lit + ' ' +
+      'Build the new setting outward from where they stand: first the ground at their feet, then the middle distance, then the far distance, then the horizon and the sky. ' +
+      'The new ground meets the ground they are standing on continuously, with no seam or edge, so they are standing IN the scene rather than in front of it. ' +
+      'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
+      'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
+  } else if (a === 'scene') {
+    out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
+      '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
+      (typed ? ' ' + typed : '');
+  }
+  return out;
+}
+
+function rgToggleFinal() {
+  var wrap = document.getElementById('retouch-final-wrap');
+  var btn = document.getElementById('retouch-final-btn');
+  if (!wrap || !btn) return;
+  if (!wrap.classList.contains('hidden')) {
+    wrap.classList.add('hidden');
+    btn.textContent = 'See the final prompt';
+    return;
+  }
+  rgBuildFinal(function () {
+    wrap.classList.remove('hidden');
+    btn.textContent = 'Hide the final prompt';
+  });
+}
+
+// The client template is built FIRST and is always a valid answer on its own.
+// The server rewrite is an improvement layered over it, so a failed call
+// degrades to the template rather than to nothing.
+function rgBuildFinal(done) {
+  var out = document.getElementById('retouch-final');
+  var note = document.getElementById('retouch-compose-note');
+  var raw = document.getElementById('retouch-instruction');
+  if (!out) { if (done) done(); return; }
+  var typed = raw ? String(raw.value || '').trim() : '';
+  var sel = document.getElementById('retouch-action');
+  var action = sel ? sel.value : 'none';
+  var tpl = rgCompose() || '';
+  if (!typed && !tpl) {
+    out.value = '';
+    if (note) note.textContent = 'Say what you want changed, or pick an action.';
+    if (done) done();
+    return;
+  }
+  out.value = tpl || typed;
+  if (note) note.textContent = 'Working on the wording...';
+  var body = {
+    moment_id: rgState.momentId,
+    action: action,
+    typed: typed,
+    template: tpl,
+    cell: rgState.from || rgState.to || null,
+    place: rgPlace(rgState.to || rgState.from),
+    cast: rgPanelCast().map(function (c) { return c.name; })
+  };
+  fetch('/api/images/retouch-prompt', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.prompt) { out.value = d.prompt; if (note) note.textContent = ''; }
+      else if (note) note.textContent = tpl ? 'Using the standard wording.' : 'Sending your words as written.';
+      if (done) done();
+    })
+    .catch(function () {
+      if (note) note.textContent = tpl ? 'Using the standard wording.' : 'Sending your words as written.';
+      if (done) done();
+    });
+}
+
+// What submitRetouch actually sends for a MOMENT. Null everywhere else, so the
+// character, asset, session-character and title paths are untouched.
+function rgFinalInstruction() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var out = document.getElementById('retouch-final');
+  var v = out ? String(out.value || '').trim() : '';
+  if (v) return v;
+  var tpl = rgCompose() || '';
+  return tpl || null;
+}
+
+function rgTeardown() {
+  var wrap = document.getElementById('retouch-grid-wrap');
+  if (wrap) wrap.classList.add('hidden');
+  var fr = document.getElementById('retouch-final-row');
+  if (fr) fr.classList.add('hidden');
+  rgResetFinal();
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.placeholder = RG_ACTIONS.none.ph;
+  rgState.momentId = null;
+  rgState.from = null;
+  rgState.to = null;
+  rgState.active = 'from';
+  rgState.cols = 0;
+  rgState.rows = 0;
+}
+
+// Only the MOMENT path gets the grid. The same modal serves character
+// references, session characters, assets and built titles, which are single
+// figures or lettering where a grid buys nothing.
+function rgSetup(momentId) {
+  rgTeardown();
+  if (!RG_ON) return;
+  var wrap = document.getElementById('retouch-grid-wrap');
+  var img = document.getElementById('retouch-grid-photo');
+  var cells = document.getElementById('retouch-grid-cells');
+  if (!wrap || !img || !cells) return;
+  var m = null;
+  var ms = (typeof state !== 'undefined' && state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) { if (ms[i] && String(ms[i].id) === String(momentId)) { m = ms[i]; break; } }
+  var url = m && (m.image || m.image_url);
+  if (!url) return;
+  var g = rgGrid(m.shape);
+  rgState.momentId = momentId;
+  rgState.cols = g.c;
+  rgState.rows = g.r;
+  img.src = url;
+  var html = '';
+  for (var n = 1; n <= g.c * g.r; n++) {
+    var col = (n - 1) % g.c, row = Math.floor((n - 1) / g.c);
+    html += '<div onclick="rgPickCell(' + n + ')" style="position:absolute;cursor:pointer;' +
+      'left:' + (col * 100 / g.c) + '%;top:' + (row * 100 / g.r) + '%;' +
+      'width:' + (100 / g.c) + '%;height:' + (100 / g.r) + '%;' +
+      'box-sizing:border-box;border:1px solid rgba(255,255,255,0.55);background:transparent;">' +
+      '<span style="position:absolute;left:2px;top:1px;font-size:10px;line-height:1.3;padding:0 3px;' +
+      'background:rgba(20,14,6,0.78);color:#fff;border-radius:3px;">' + n + '</span></div>';
+  }
+  cells.innerHTML = html;
+  var sel = document.getElementById('retouch-action');
+  if (sel) sel.value = '';
+  rgActionChange();
+  wrap.classList.remove('hidden');
+}
+
 function openRetouch(momentId) {
   state.retouchMomentId = momentId;
   state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
@@ -10802,11 +11372,13 @@ function openRetouch(momentId) {
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.remove('hidden');
+  rgSetup(momentId);
   if (ta) setTimeout(function(){ ta.focus(); }, 30);
 }
 
 function closeRetouch() {
   state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
+  rgTeardown();                // v3.0.750 -- the grid belongs to the moment path only
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -10873,6 +11445,9 @@ function submitRetouch() {
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
+  // v3.0.751 -- on the MOMENT path the composed prompt is what goes to fal.
+  var _rgFinal = (typeof rgFinalInstruction === 'function') ? rgFinalInstruction() : null;
+  if (_rgFinal) instruction = _rgFinal;
   if (!instruction) { if (ta) ta.focus(); return; }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.

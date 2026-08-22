@@ -41,7 +41,7 @@ var GENRES = [
     panels: 'Favour restraint, partial reveals, and a wrong detail in an ordinary frame.' },
   { slug: 'biography',  label: 'Biography',
     prose:  'A real life recounted. Ground every event in one person\u2019s arc.',
-    panels: 'Favour the subject; frame everyone else in relation to them.' },
+    panels: 'Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.' },
   { slug: 'mystery',    label: 'Mystery / Crime',
     prose:  'Withheld information. Plant what pays off. Let the reader work.',
     panels: 'Favour evidence, reaction, and the moment of noticing.' },
@@ -59,7 +59,7 @@ var GENRES = [
     panels: 'Favour the quiet frame; resist the obvious dramatic beat.' },
   { slug: 'nonfiction', label: 'Nonfiction',
     prose:  'Report what happened. Clarity over ornament. No invented interiority.',
-    panels: 'Favour the plain, legible depiction of events.' },
+    panels: 'Favour the plain, legible depiction of events. Real period dress, tools and places; never fantasy or costume.' },
   { slug: 'other',      label: 'Other (use Prompt)',
     prose:  '', panels: '' }
 ];

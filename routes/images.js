@@ -8,7 +8,7 @@ const { releaseImage, persistToR2 } = require('../storage/storage');
 const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
-const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
+const { IMAGE_MODELS, IMAGE_EDIT_MODELS, RETOUCH_MODEL } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance, recordGeneration } = require('./tokens');
@@ -1229,6 +1229,96 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     console.error('Image generation error:', e.message);
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment', message: 'Image generation failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, status: (e && e.status) || null, falBody: (e && e.body) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
     res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// POST /api/images/retouch-prompt -- v3.0.751.
+//
+// Turns what the reader typed into an instruction the IMAGE model can follow.
+// This is NOT a fal call: it costs no token and generates no picture. The
+// client has already built a template version and sends it along, so a failure
+// here degrades to that rather than to nothing.
+//
+// EVERY RULE BELOW WAS PAID FOR IN FAILED GENERATIONS ON 2026-08-22. They are
+// stated once here rather than once per template, and they are the reason this
+// route exists at all.
+router.post('/retouch-prompt', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const b = req.body || {};
+    const typed = String(b.typed || '').trim();
+    const template = String(b.template || '').trim();
+    if (!typed && !template) return res.json({ error: 'nothing to rewrite' });
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.json({ error: 'not configured' });
+
+    // The panel is only used for context, and only if the caller owns it.
+    let shape = null, panelText = '';
+    if (b.moment_id) {
+      const mrow = await db.prepare(
+        'SELECT m.shape, m.description, m.title, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+        'FROM moments m JOIN sessions s ON m.session_id = s.id ' +
+        'LEFT JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+      ).get(b.moment_id);
+      if (!mrow) return res.json({ error: 'not found' });
+      const myRole = await getCampaignRole(req.session.userId, mrow.campaign_id);
+      if (!myRole) return res.status(403).json({ error: 'Access denied' });
+      shape = mrow.shape || null;
+      panelText = String(mrow.title || '') + ' ' + String(mrow.description || '');
+    }
+
+    const cast = Array.isArray(b.cast) ? b.cast.filter(function (x) { return !!x; }).slice(0, 20) : [];
+    const place = String(b.place || '').trim();
+
+    const system = [
+      'You rewrite a reader\u2019s request into a single instruction for an image-editing model that is editing an existing picture (referred to as Image 1). Output ONLY the instruction. No preamble, no explanation, no quotation marks, no lists.',
+      '',
+      'RULES, all of which come from observed failures:',
+      '1. Describe every LOCATION relative to the FRAME only \u2014 thirds, halves, percentages across and down, corners, edges. NEVER relative to a person or an object. A phrase like \u201cleft of the giant\u201d gets resolved as the giant\u2019s own left and lands on the wrong side.',
+      '2. NEVER use a character or object as a landmark for position or scale. Naming one makes the model draw an extra copy of it. If you need a size, give it as a fraction of the image height.',
+      '3. Depth is not a position. If something must look further away, say it is smaller, softer-edged, lower in contrast, hazier, and that something in the foreground crosses in front of it. If nearer, say larger, sharper, higher contrast, in front of the scenery. Never just say \u201cfurther back\u201d.',
+      '4. A removal must be phrased as PAINTING, never as deleting: name the background that should occupy the area and state that nothing stands there. These models add reliably and subtract unreliably.',
+      '5. A move must also state that the place the subject came from becomes empty ground, painted over with the surrounding scenery.',
+      '6. Unless the reader is explicitly adding someone, end with an instruction that no new people, figures or creatures are added, that every existing figure stays where it is at its current size, and that the background, lighting, colours and art style are unchanged.',
+      '7. Preserve whatever the reader did not ask to change. Say so explicitly.',
+      '8. Never mention grid cells, cell numbers, or any interface terminology. Those are input devices and mean nothing to an image model.',
+      '9. Write plain declarative English regardless of the language the reader wrote in.',
+      '',
+      'A draft built from a fixed template may be supplied. If the reader\u2019s own words ask for something the draft does not cover, prefer the reader and keep the draft\u2019s protective clauses. If the reader typed nothing beyond the draft, return the draft essentially unchanged.'
+    ].join('\n');
+
+    const parts = [];
+    if (typed) parts.push('What the reader asked for, in their words:\n' + typed);
+    if (template) parts.push('Template draft:\n' + template);
+    if (place) parts.push('The place they indicated on the picture: ' + place);
+    if (shape) parts.push('Panel shape: ' + shape);
+    if (panelText.trim()) parts.push('What this panel depicts: ' + panelText.trim().slice(0, 600));
+    if (cast.length) parts.push('Characters cast on this panel (identity references are sent with the edit): ' + cast.join(', '));
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: RETOUCH_MODEL, max_tokens: 700, system: system, messages: [{ role: 'user', content: parts.join('\n\n') }] })
+    });
+    if (!resp.ok) {
+      try { await logDebug(req.session.userId, { level: 'warn', source: 'generation', page: 'Retouch prompt', fn: 'POST /retouch-prompt', message: 'Rewrite call failed with status ' + resp.status, detail: { moment_id: b.moment_id || null, status: resp.status } }); } catch (_e) {}
+      return res.json({ error: 'rewrite unavailable' });
+    }
+    const data = await resp.json();
+    const out = ((data && data.content) || [])
+      .map(function (c) { return (c && c.type === 'text') ? c.text : ''; })
+      .join('').trim();
+    if (!out) return res.json({ error: 'empty rewrite' });
+
+    // TD-513: the diagnosis belongs in debug_logs, never in what the reader sees.
+    // The EXPANDED prompt is logged because a bad picture is untraceable without
+    // the words that actually produced it.
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch prompt', fn: 'POST /retouch-prompt', message: 'Rewrote a retouch instruction', detail: { moment_id: b.moment_id || null, action: b.action || null, cell: b.cell || null, typed: typed, template: template, expanded: out, model: RETOUCH_MODEL } }); } catch (_e) {}
+
+    return res.json({ prompt: out });
+  } catch (e) {
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Retouch prompt', fn: 'POST /retouch-prompt', message: 'Rewrite threw: ' + (e && e.message), detail: { stack: (e && e.stack) || '' } }); } catch (_e) {}
+    return res.json({ error: 'rewrite failed' });
   }
 });
 

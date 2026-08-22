@@ -174,7 +174,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // v3.0.708 -- TD-511. IN THE SYSTEM PROMPT AS WELL, and that placement is the v3.0.704 lesson
   // applied rather than rediscovered: a rule that has to hold against an instruction the model has
   // been told is MANDATORY cannot live only in the same message as that instruction.
-  const systemPrompt = 'You are a graphic novel director and storyboard artist analyzing a TTRPG session transcript. ' +
+  // v3.0.744 -- TD-543. See the note above: the acronym was setting the WORLD, not the format.
+  const systemPrompt = 'You are a graphic novel director and storyboard artist analyzing a session transcript. ' +
+    'The transcript may be a game session, an interview, a recording or written notes, and may contain out-of-character talk, dice rolls, rules discussion and crosstalk, all of which you ignore. TAKE THE SETTING AND PERIOD FROM THE TRANSCRIPT ITSELF -- never assume a genre, and never invent clothing, weapons, technology or architecture that the material does not support. ' +
     'The "description", "prompt" and "establishing_scene" fields you return are internal machine input, never shown to a reader: ' +
     'you write them in ENGLISH ALWAYS, whatever language the transcript or the director instructions use, ' +
     'with every character, place and item name spelled exactly as the transcript spells it. ' +
@@ -620,7 +622,8 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
     });
 
     const instruction =
-      'You are reviewing a tabletop RPG session for PERMANENT physical changes to characters. ' +
+      // v3.0.744 -- TD-543. Same reason; this one decides whether a scar or a lost hand is real.
+      'You are reviewing a session transcript for PERMANENT physical changes to characters. ' +
       'You are given the session transcript AND the DM\'s session notes — check BOTH.\n\n' +
       'CHARACTERS IN THIS SESSION:\n' + charListText + '\n\n' +
       'Flag ONLY *significant permanent physical changes* — anything that changes how a ' +
