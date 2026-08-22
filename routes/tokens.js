@@ -883,6 +883,8 @@ async function linkSubscriptionCheckout(session) {
   if (!customerId && !subId) return;
   const db = await getDb();
   await db.prepare(
+    // v3.0.742 -- TD-539. A gcus_ is a GUEST and cannot open a billing portal, so storing one
+    // gives the reader a button that 500s. Better an empty field and no button.
     "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?"
   ).run(customerId, subId, userId);
 }
