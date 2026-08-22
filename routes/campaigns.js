@@ -34,11 +34,21 @@ router.get('/', requireAuth, async function(req, res) {
 router.post('/', requireAuth, checkCampaignLimit, async function(req, res) {
   const { name, description, lore } = req.body;
   if (!name) return res.json({ error: 'Campaign name required' });
+  // v3.0.743 -- TD-540. The create form now offers everything the settings form does, so create
+  // has to accept everything. Same sanitisers as the PUT below, deliberately: two sets of rules
+  // for one column is how the two paths drift apart.
+  var _newGenresIn = genres.sanitizeGenres(req.body.genres);
+  var _newGenres = (_newGenresIn === null) ? null : JSON.stringify(_newGenresIn);
+  var _newCprompt = (req.body.campaign_prompt !== undefined) ? genres.campaignPrompt(req.body.campaign_prompt) : null;
+  function _newFlag(v) { return (v === true || v === 'true' || v === 1 || v === '1') ? 1 : 0; }
+  var _newAllowNovel = _newFlag(req.body.allow_player_novel_access);
+  var _newAllowAssets = _newFlag(req.body.allow_member_assets);
   const db = await getDb();
   const now = new Date().toISOString();
   const result = await db.prepare(
-    'INSERT INTO campaigns (user_id, name, description, lore, created_at, created_by) VALUES (?,?,?,?,?,?)'
-  ).run(req.session.userId, name.trim(), description || '', String(lore || '').slice(0, 6000), now, req.session.userId);
+    'INSERT INTO campaigns (user_id, name, description, lore, genres, campaign_prompt, allow_player_novel_access, allow_member_assets, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, name.trim(), description || '', String(lore || '').slice(0, 6000),
+        _newGenres, _newCprompt, _newAllowNovel, _newAllowAssets, now, req.session.userId);
   const campaignId = result.lastInsertRowid;
 
   // Phase 2: the creator is also the initial DM member. The Phase 1

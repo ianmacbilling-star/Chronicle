@@ -2551,7 +2551,7 @@
 <div class="modal-overlay hidden" id="campaign-settings-modal">
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">
-      <div class="modal-title">Campaign details</div>
+      <div class="modal-title" id="campaign-settings-title">Campaign details</div>
       <button class="modal-close" onclick="closeCampaignSettings()">&times;</button>
     </div>
     <div id="campaign-settings-error" class="alert alert-error hidden"></div>
@@ -2567,18 +2567,11 @@
       <textarea class="form-textarea" id="cs-desc-input" rows="3" maxlength="2000" oninput="csDirty(true)"
                 placeholder="What is this campaign about?"></textarea>
     </div>
-    <label class="cs-toggle">
-      <input type="checkbox" id="cs-allow-novel" onchange="csDirty(true)" />
-      <span>Allow Members to Publish</span>
-    </label>
-    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can print and publish their own version of this book to the public library. When off, only you can — members can still view their sessions and set their layout, and you will build and publish their books for them. Off by default.</div>
-    <label class="cs-toggle" style="margin-top:14px;">
-      <input type="checkbox" id="cs-allow-assets" onchange="csDirty(true)" />
-      <span>Allow Members to add assets</span>
-    </label>
-    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can add assets (locations, NPCs, items) to this campaign. Asset limits still apply. Off by default.</div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:10px;">Campaign image</div>
+      <!-- v3.0.743 -- shown only while creating. Ian: "On new they will not have any pictures but
+           still show them the image options with the note. I want them to know it is there." -->
+      <div class="settings-section-desc hidden" id="cs-image-newnote" style="margin:0 0 10px;">Archive some images then come back here and set this.</div>
       <div style="display:flex;gap:12px;align-items:flex-start;">
         <div style="flex:0 0 96px;"><div class="prep-img-thumb" id="cs-image-thumb" onclick="openPrepImagePicker('campaign', _csCampaignId)"><span class="prep-thumb-plus">+</span></div></div>
         <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
@@ -2603,13 +2596,30 @@
       <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best." oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-cprompt-count"></div>
     </div>
-    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
+        <!-- v3.0.743 -- TD-540. The two permission toggles moved here from directly under
+         Description, to Ian order: name, description, image, genre, lore, prompt, then the
+         permissions, then delete. They govern what MEMBERS may do, which is a different kind
+         of decision from what the book is about, and it reads better after the creative
+         fields than interrupting them. -->
+<label class="cs-toggle">
+      <input type="checkbox" id="cs-allow-novel" onchange="csDirty(true)" />
+      <span>Allow Members to Publish</span>
+    </label>
+    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can print and publish their own version of this book to the public library. When off, only you can — members can still view their sessions and set their layout, and you will build and publish their books for them. Off by default.</div>
+    <label class="cs-toggle" style="margin-top:14px;">
+      <input type="checkbox" id="cs-allow-assets" onchange="csDirty(true)" />
+      <span>Allow Members to add assets</span>
+    </label>
+    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can add assets (locations, NPCs, items) to this campaign. Asset limits still apply. Off by default.</div>
+    <div class="cs-section" id="cs-delete-zone" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:#e57373;margin-bottom:8px;">Delete campaign</div>
       <div class="settings-section-desc" style="margin:0 0 10px;">Permanently deletes this campaign. Only works when it has no sessions, characters, assets, archived images, or other members.</div>
       <button class="btn" id="cs-delete-btn" onclick="deleteCampaign()" style="border-color:rgba(217,83,79,0.6);color:#e57373;">Delete this campaign</button>
       <div id="cs-delete-msg" class="settings-section-desc" style="margin-top:8px;"></div>
     </div>
     <div class="modal-footer" style="margin-top:20px;justify-content:space-between;align-items:center;">
+      <!-- v3.0.743 -- TD-540. Shown only in new mode; settings autosaves and needs no button. -->
+      <button class="btn btn-primary hidden" id="cs-create-btn" onclick="csCreateCampaign()" style="width:100%;margin:0 0 12px;">Create campaign</button>
       <span id="cs-save-state" class="settings-section-desc" style="margin:0;" aria-live="polite"></span>
       <button class="btn btn-primary" onclick="closeCampaignSettings()">Close</button>
     </div>

@@ -2128,7 +2128,12 @@ function selectCampaignNovel(id) {
   showCampaignSection('novel');
 }
 
+// v3.0.743 -- TD-540. Kept as an ALIAS, not deleted. All three call sites pass no argument, so
+// this only ever meant "new" -- but a function removed while something still calls it is a dead
+// button, and this file has produced two of those today. One line, and the old modal markup can
+// be retired separately once nothing has referenced it for a while.
 function openCampaignModal(editId) {
+  if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -12306,7 +12311,12 @@ function selectCampaignNovel(id) {
   showCampaignSection('novel');
 }
 
+// v3.0.743 -- TD-540. Kept as an ALIAS, not deleted. All three call sites pass no argument, so
+// this only ever meant "new" -- but a function removed while something still calls it is a dead
+// button, and this file has produced two of those today. One line, and the old modal markup can
+// be retired separately once nothing has referenced it for a while.
 function openCampaignModal(editId) {
+  if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -17051,7 +17061,54 @@ function openCampaignSettings(id, ev) {
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.remove('hidden');
   renderCampaignSettingsThumb();
+  // v3.0.743 -- TD-540. NEW MODE. id null means the campaign does not exist yet.
+  //
+  // Autosave needs no suppressing: csDirty() already returns early when _csCampaignId is falsy,
+  // so every keystroke is inert until Create writes the row. That guard was there for a different
+  // reason and happens to be exactly right here.
+  var _isNew = !id;
+  var _dz = document.getElementById('cs-delete-zone') || (document.getElementById('cs-delete-btn') || {}).parentNode;
+  if (_dz && _dz.classList) _dz.classList.toggle('hidden', _isNew);
+  var _note = document.getElementById('cs-image-newnote');
+  if (_note) _note.classList.toggle('hidden', !_isNew);
+  var _create = document.getElementById('cs-create-btn');
+  if (_create) _create.classList.toggle('hidden', !_isNew);
+  var _ttl = document.getElementById('campaign-settings-title');
+  if (_ttl) _ttl.textContent = _isNew ? 'New Campaign' : 'Campaign Settings';
   _csReady = true;   // every field is populated -- edits from here are the user's
+}
+
+// v3.0.743 -- TD-540. Create, from the same form. Ian: "someone can fill everything out and be
+// done in one shot." Everything the settings form collects is posted at once, which is why
+// POST /campaigns had to learn genres, campaign_prompt and both permission flags -- it accepted
+// three fields before, and a form that collects nine and saves three is worse than two forms.
+async function csCreateCampaign() {
+  var nm = (document.getElementById('cs-name-input') || {}).value || '';
+  if (!nm.trim()) { showModalError('campaign-settings-error', 'Campaign name is required.'); return; }
+  var btn = document.getElementById('cs-create-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+  try {
+    var body = {
+      name: nm.trim(),
+      description: (document.getElementById('cs-desc-input') || {}).value || '',
+      lore: (document.getElementById('cs-lore-input') || {}).value || '',
+      campaign_prompt: (document.getElementById('cs-cprompt-input') || {}).value || '',
+      genres: _csGenres || [],
+      allow_player_novel_access: !!(document.getElementById('cs-allow-novel') || {}).checked,
+      allow_member_assets: !!(document.getElementById('cs-allow-assets') || {}).checked
+    };
+    var r = await fetch('/api/campaigns', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    var d = await r.json();
+    if (!r.ok || (d && d.error)) { showModalError('campaign-settings-error', (d && d.error) || 'Could not create the campaign.'); return; }
+    closeCampaignSettings();
+    if (typeof loadCampaigns === 'function') loadCampaigns();
+  } catch (e) {
+    showModalError('campaign-settings-error', 'Could not create the campaign.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Create campaign'; }
+  }
 }
 
 function closeCampaignSettings() {
