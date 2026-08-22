@@ -141,7 +141,10 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
     ).run(
       req.body.name ? req.body.name.trim() : char.name,
       req.body.player_name !== undefined ? req.body.player_name.trim() : (char.player_name || ''),
-      req.body.cls ? req.body.cls.trim() : char.cls,
+      // v3.0.747 -- TD-546. `!== undefined`, matching player_name and description directly above
+      // and below. Absent leaves it alone; an empty string clears it, which is what Ian was
+      // trying to do and what the truthiness test made impossible.
+      req.body.cls !== undefined ? String(req.body.cls).trim() : (char.cls || ''),
       req.body.description !== undefined ? req.body.description.trim() : (char.description || ''),
       images.image, images.image_portrait, images.image_fullbody, images.image_action, images.image_other,
       npcVal,
