@@ -5148,7 +5148,8 @@ ${fCover ? `<!-- BACK COVER PAGE -->
 function sessionMarkerHTML(num, name, date) {
   return '<div class="session-marker">' +
     '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
-    '<div class="session-marker-label">Session ' + num + ' &mdash; ' + (name || '') +
+    // v3.0.745 -- TD-544. The name alone; "Session N" only when there is no name to show.
+    '<div class="session-marker-label">' + (name || ('Session ' + num)) +
       ' &middot; ' + formatDate(date) + '</div>' +
   '</div>';
 }
@@ -5158,7 +5159,8 @@ function sessionMarkerHTML(num, name, date) {
 function runningHeaderHTML(campaignName, num, name) {
   return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;padding-bottom:0.03in;z-index:6;">' +
     '<div class="page-header-campaign">' + (campaignName || '') + '</div>' +
-    '<div class="page-header-session">Session ' + num + ' &mdash; ' + (name || '') + '</div>' +
+    // v3.0.745 -- TD-544. Running head: the chapter name, not our word for it.
+    '<div class="page-header-session">' + (name || ('Session ' + num)) + '</div>' +
   '</div>';
 }
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
@@ -5552,7 +5554,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '<div style="position:relative;z-index:1;">' +
       (fHeader ? ('<div class="page-header">' +
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
-        '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
+        // v3.0.745 -- TD-544. The other renderer, same rule; these two must stay identical or
+        // the same book looks different depending on which path built it.
+        '<div class="page-header-session">' + (s.name || ('Session ' + (si+1))) + '</div>' +
       '</div>') : '') +
       '<div style="break-inside:avoid;">' + chapterHeading + titleImageHTML + '</div>' +   // keep the session marker glued to its establishing image across ALL layouts
       panelsHTML +
@@ -5561,7 +5565,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   }).join('');
 
   var tocRows = sessions.map(function(s, idx){
-    return '<div class="toc-row"><span class="toc-name">Session ' + (idx+1) + ' &mdash; ' + s.name + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
+    // v3.0.745 -- TD-544. Contents lists the chapter, not "Session 7".
+    return '<div class="toc-row"><span class="toc-name">' + (s.name || ('Session ' + (idx+1))) + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
   }).join('');
   var _tocCols = sessions.length <= 30 ? 1 : (sessions.length <= 70 ? 2 : 3);
   var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div><div class="toc-cols" style="column-count:' + _tocCols + ';">' + tocRows + '</div></div>';
