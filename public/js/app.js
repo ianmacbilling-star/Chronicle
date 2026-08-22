@@ -10880,6 +10880,12 @@ var RG_ACTIONS = {
     from: 'Which one? Tap the square they are in.',
     ph: 'What is wrong? e.g. the right hand has too many fingers'
   },
+  pose: {
+    cells: ['from', 'to'], optional: ['to'],
+    from: 'Who moves? Tap the square they are in.',
+    to: 'Aimed at what? Tap that square. Skip this if there is no target.',
+    ph: 'What should they be doing? e.g. pointing straight out to the distance'
+  },
   reface: {
     cells: ['from'], cast: 'Who it should be',
     from: 'Which figure is wrong? Tap the square they are in.',
@@ -11037,7 +11043,7 @@ function rgActionChange() {
   var row = document.getElementById('retouch-final-row');
   if (!sel || !box) return;
   var a = sel.value;
-  var def = RG_ACTIONS[a] || RG_ACTIONS.none;
+  var def = RG_ACTIONS[a] || RG_ACTIONS.none;   // blank falls back to the no-action shape
   rgState.from = null;
   rgState.to = null;
   rgState.active = def.cells.length ? def.cells[0] : null;
@@ -11141,8 +11147,10 @@ function rgCompose() {
   if (!sel) return '';
   var a = sel.value;
   var def = RG_ACTIONS[a];
-  if (!def || a === 'none') return '';
+  if (!def || !a || a === 'none') return '';
+  var optional = def.optional || [];
   for (var i = 0; i < def.cells.length; i++) {
+    if (optional.indexOf(def.cells[i]) >= 0) continue;
     if (!rgState[def.cells[i]]) {
       if (note) note.textContent = 'Tap the square for: ' + def[def.cells[i]].replace(/ Tap the square.*$/, '');
       return '';
@@ -11202,6 +11210,12 @@ function rgCompose() {
   } else if (a === 'appearance') {
     out = 'In Image 1, change how ' + subj + ' looks: ' + (typed || 'adjust the appearance') +
       '. Apply that change and nothing else. Keep the figure in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of the face, build and equipment as it is now.' + rgTail();
+  } else if (a === 'pose') {
+    out = 'In Image 1, change the pose of ' + subj + ' so that ' + (typed || 'the pose changes') +
+      (toP ? '. The gesture is aimed toward ' + toP : '') +
+      '. The pose reads clearly in silhouette and is not foreshortened toward or away from the viewer, so the movement is plainly visible. ' +
+      'It is the same person: keep the same face, hair, clothing, equipment and colouring, the same position in the frame, the same size and the same distance from the viewer. ' +
+      'Nothing about the figure is malformed and no anatomy needs correcting -- only the pose changes.' + rgTail();
   } else if (a === 'extra') {
     out = 'In Image 1, add ' + (typed || 'the figure') + ', positioned at ' + toP + '. ' +
       rgDepthClause(rgVal('rg-depth'), 'it') +
@@ -11343,7 +11357,7 @@ function rgSetup(momentId) {
   }
   cells.innerHTML = html;
   var sel = document.getElementById('retouch-action');
-  if (sel) sel.value = 'none';
+  if (sel) sel.value = '';
   rgActionChange();
   wrap.classList.remove('hidden');
 }
