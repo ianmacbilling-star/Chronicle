@@ -10835,6 +10835,19 @@ var RG_ACTIONS = {
     depth: true,
     ph: 'Anything about how they should appear? Optional.'
   },
+  // Ian, 2026-08-22: adding a CENTERFIELDER offered the cast picker and told him
+  // to regenerate. An extra is not a cast member -- 'Add a character' was doing
+  // two different jobs and giving the wrong advice for one of them.
+  extra: {
+    cells: ['to'],
+    to: 'Where? Tap the square it should appear in.',
+    depth: true,
+    ph: 'Who or what to add? e.g. a centerfielder on the outfield grass, glove up'
+  },
+  background: {
+    cells: [], relight: true,
+    ph: 'What should be behind them? e.g. the view from home plate out to centre field'
+  },
   remove: {
     cells: ['from'],
     from: 'What goes? Tap the square it is in.',
@@ -10916,6 +10929,22 @@ function rgPlace(n) {
 function rgSubject(n) {
   var p = rgPlace(n);
   return p ? ('the figure in and around ' + p) : 'the figure';
+}
+
+function rgResolveRefs(s) {
+  var v = String(s || '');
+  if (!rgState.cols) return v;
+  var max = rgState.cols * rgState.rows;
+  return v.replace(/\b(?:cell|panel|square|box|tile)s?\s*#?\s*(\d+)\b/gi, function (m, d) {
+    var n = parseInt(d, 10);
+    if (!n || n > max) return m;
+    return rgPlace(n);
+  });
+}
+
+// Add actions cannot use the standard tail, which forbids adding anyone.
+function rgTailAdd() {
+  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
 }
 
 function rgDepthClause(d, who) {
@@ -11021,6 +11050,7 @@ function rgActionChange() {
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
   if (def.dir) html += rgSelect('rg-dir', 'Facing', [['left', 'toward the left of the picture'], ['right', 'toward the right of the picture'], ['viewer', 'toward the viewer'], ['away', 'away from the viewer']]);
+  if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
   if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
   box.innerHTML = html;
 
@@ -11122,7 +11152,7 @@ function rgCompose() {
   var toP = rgPlace(rgState.to);
   var subj = rgSubject(rgState.from);
   var who = rgVal('rg-who');
-  var typed = rgVal('retouch-instruction');
+  var typed = rgResolveRefs(rgVal('retouch-instruction'));
   var out = '';
 
   if (a === 'move') {
@@ -11172,6 +11202,21 @@ function rgCompose() {
   } else if (a === 'appearance') {
     out = 'In Image 1, change how ' + subj + ' looks: ' + (typed || 'adjust the appearance') +
       '. Apply that change and nothing else. Keep the figure in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of the face, build and equipment as it is now.' + rgTail();
+  } else if (a === 'extra') {
+    out = 'In Image 1, add ' + (typed || 'the figure') + ', positioned at ' + toP + '. ' +
+      rgDepthClause(rgVal('rg-depth'), 'it') +
+      ' It stands on the ground of the existing scene, with its feet meeting that ground naturally rather than floating in front of it. ' +
+      'Draw it in the existing art style of Image 1, matching its medium, line quality, texture, tone and lighting.' + rgTailAdd();
+  } else if (a === 'background') {
+    var lit = (rgVal('rg-relight') === 'relight')
+      ? 'Relight the figures so their light and shadows match the new setting, but change nothing else about them.'
+      : 'Keep the figures lit exactly as they are now, with the same shadows.';
+    out = 'In Image 1, replace everything behind the figures with ' + (typed || 'a new setting') + '. ' +
+      'Keep every figure exactly as it is now: the same faces, poses, clothing, equipment, sizes and positions in the frame. ' + lit + ' ' +
+      'Build the new setting outward from where they stand: first the ground at their feet, then the middle distance, then the far distance, then the horizon and the sky. ' +
+      'The new ground meets the ground they are standing on continuously, with no seam or edge, so they are standing IN the scene rather than in front of it. ' +
+      'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
+      'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
   } else if (a === 'scene') {
     out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
