@@ -3464,6 +3464,32 @@ function renderHelpThread() {
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
 }
+var RG_HELP_HINTS = [
+  'A few things that make retouching go well:',
+  '',
+  'One change at a time. Combining several in one request tends to produce surprises -- do them as separate retouches instead.',
+  '',
+  'Name people rather than saying he or she. There may be more than one figure in the picture, and the wrong one can end up changed.',
+  '',
+  'Use the red circle to say WHICH thing you mean, and the green one for where it should go or what it should aim at. Clicking is far more reliable than describing.',
+  '',
+  'Say amounts as percentages where you can -- 25 percent smaller lands better than just smaller.',
+  '',
+  'Small details in a large picture are the hardest thing to change. Hands and faces that take up very little of the frame often will not come out, however the request is worded.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+
+function rgOpenHelp() {
+  try {
+    var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === RG_HELP_HINTS;
+    if (!seeded) _helpThread.push({ role: 'assistant', content: RG_HELP_HINTS });
+  } catch (e) { /* the hints are a courtesy; never block the panel */ }
+  openHelp();
+  var m = document.getElementById('help-panel');
+  if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
+}
+
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
   m.classList.remove('hidden');
@@ -3473,7 +3499,7 @@ function openHelp() {
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
-  var m = document.getElementById('help-panel'); if (m) m.classList.add('hidden');
+  var m = document.getElementById('help-panel'); if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
 function submitHelp() {
@@ -10930,6 +10956,11 @@ var RG_ACTIONS = {
     from: 'Which object? Click it.',
     ph: 'How is it wrong? e.g. the hammer head is on the wrong end'
   },
+  object: {
+    cells: ['from'], objsize: true,
+    from: 'Which object? Click it.',
+    ph: 'What should change about it? e.g. make it a darker red'
+  },
   reface: {
     cells: ['from'], cast: 'Who it should be',
     from: 'Which figure is wrong? Click them in the picture.',
@@ -11154,6 +11185,7 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.objsize) html += rgSelect('rg-objsize', 'Size', [['same', 'leave the size alone'], ['s25', 'a bit smaller (25%)'], ['half', 'half the size'], ['l25', 'a bit larger (25%)'], ['double', 'twice the size']]);
   if (def.turn) html += rgSelect('rg-turn', 'Which way', [['toward', 'to end up facing the camera'], ['away', 'to end up facing away from the camera'], ['marker', 'bring the shoulder I clicked toward the camera']]);
   if (def.amount) html += rgSelect('rg-amount', 'How far', [['little', 'a little'], ['part', 'part way'], ['half', 'half turn'], ['all', 'all the way']]);
   if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
@@ -11420,6 +11452,16 @@ function rgCompose() {
       ' ends up at ' + toP + '. Redraw the whole limb so the joints bend naturally into that new position and the shoulder or hip stays where it is. ' +
       (typed ? typed + ' ' : '') +
       'The rest of the body does not move. It is the same person: same face, hair, clothing, equipment and colouring, same position in the frame, same size and same distance from the viewer.' + rgTail();
+  } else if (a === 'object') {
+    var os = rgVal('rg-objsize');
+    var osc = (os === 's25') ? ' Make it about 25 percent smaller than it is now.'
+      : (os === 'half') ? ' Make it about half its current size.'
+      : (os === 'l25') ? ' Make it about 25 percent larger than it is now.'
+      : (os === 'double') ? ' Make it about twice its current size.'
+      : ' Keep it exactly the same size as it is now.';
+    out = 'In Image 1, change the object at ' + fromP + (typed ? ': ' + typed : '') + '.' + osc +
+      ' It stays the same object in the same place, at the same angle, in the same hand or resting in the same position, at the same distance from the viewer and lit the same way. ' +
+      'Nothing around it moves, resizes or is redrawn to accommodate it, and no other object changes.' + rgTail();
   } else if (a === 'reorient') {
     out = 'In Image 1, the object at ' + fromP + ' is oriented wrongly: ' + (typed || 'it is the wrong way round') +
       '. Rotate or flip that object so it is held and oriented correctly and naturally for the way the figure is gripping it. ' +

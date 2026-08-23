@@ -2526,12 +2526,12 @@
 </div>
 <div class="modal-overlay hidden" id="retouch-modal">
   <div class="modal archive-picker" style="max-width:480px;">
-    <div class="modal-header">
-      <div class="modal-title">Retouch panel</div>
-      <button class="modal-close" onclick="closeRetouch()">&times;</button>
+    <div class="modal-header" style="align-items:baseline;gap:8px;">
+      <div class="modal-title" style="white-space:nowrap;">Retouch panel</div>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--gold-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Changes only what you describe.</span>
+      <button class="btn btn-sm" type="button" onclick="rgOpenHelp()" title="Retouch tips, and ask us anything" aria-label="Retouch help" style="flex:none;">?s</button>
+      <button class="modal-close" onclick="closeRetouch()" style="flex:none;">&times;</button>
     </div>
-    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Keep this image exactly as-is and change only what you describe. Uses the current image as the reference.</p>
-    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.5;"><strong>One change at a time works best.</strong> Combining several in one request tends to produce surprises. And <strong>name people rather than saying &ldquo;he&rdquo; or &ldquo;she&rdquo;</strong> &mdash; there may be more than one in the picture.</p>
     <div id="retouch-grid-wrap" class="hidden" style="margin:0 0 12px;">
       <div id="retouch-grid-stage" onclick="rgStageClick(event)" onwheel="rgStageWheel(event)" style="position:relative;display:inline-block;max-width:100%;line-height:0;cursor:crosshair;">
         <img id="retouch-grid-photo" alt="" style="display:block;max-width:100%;max-height:230px;border-radius:6px;">
@@ -2554,6 +2554,7 @@
         <option value="pose">Change a pose or gesture</option>
         <option value="limb">Move a hand or foot</option>
         <option value="reorient">Turn an object the right way round</option>
+        <option value="object">Change an object</option>
         <option value="reface">Replace someone with their reference</option>
         <option value="appearance">Change how someone looks</option>
         <option value="background">Change the background</option>
