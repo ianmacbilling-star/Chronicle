@@ -20,6 +20,9 @@ const multer = require('multer');
 const { uploadFile } = require('../storage/storage');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
+// v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
+// on it, used by the image model as a LOCATION diagram only. Same multer shape.
+const markedUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 
 // Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
 // public origin for THIS environment (set in Railway), e.g. https://campaignia.com
@@ -428,7 +431,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl) {
   fal.config({ credentials: falKey });
   const ar = shapeAspectRatio(shape);
   const stylePrefix = style ? getStylePrefix(style) : '';
@@ -437,6 +440,18 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
   // Image 1 is always the current panel; references follow as Image 2+.
   var refs = (charBlock && charBlock.refs) || [];
   var imageUrls = [currentImageUrl].concat(refs.map(function (r) { return r.url; }));
+  // v3.0.757 -- the marked overlay is a DIAGRAM, not content. It is appended
+  // LAST so the Image 2..N reference numbering above it never shifts.
+  var markSection = '';
+  if (markedUrl) {
+    var markN = 'Image ' + (imageUrls.length + 1);
+    imageUrls = imageUrls.concat([markedUrl]);
+    markSection = '\n\n' + markN + ' IS NOT CONTENT AND IS NOT PART OF THE PICTURE. It is a copy of Image 1 with coloured rings drawn on top by the person requesting this change, to show WHERE they mean. ' +
+      'A RED ring marks the thing being referred to. A GREEN ring marks the destination or the target. ' +
+      'Read it ONLY to work out which part of the picture the instruction is about. ' +
+      'NEVER copy, trace or reproduce the rings, their colours, or any circle, outline, arrow or highlight into the output: the finished picture contains no rings of any kind. ' +
+      'Edit Image 1, which is the real picture.';
+  }
   var refSection = '';
   if (refs.length) {
     var refMap = refs.map(function (r, i) {
@@ -470,7 +485,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
-        'everything else untouched:\n\n') + instruction + refSection;
+        'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection;
   const submitted = await fal.queue.submit(IMAGE_EDIT_MODELS.nano2, {
     input: {
       prompt: editPrompt,
@@ -1283,6 +1298,8 @@ router.post('/retouch-prompt', requireAuth, async function (req, res) {
       '7. Preserve whatever the reader did not ask to change. Say so explicitly.',
       '8. Never mention grid cells, cell numbers, or any interface terminology. Those are input devices and mean nothing to an image model.',
       '9. Write plain declarative English regardless of the language the reader wrote in.',
+      '10. RESOLVE PRONOUNS AGAINST THE FIGURE THE READER INDICATED, and name that figure explicitly in your output. Never pass a bare he, she, they or it through when more than one figure is in the picture: the image model attaches it to the most prominent figure, not the intended one. This has put a costume change onto the wrong character.',
+      '11. If the reader has asked for more than one distinct change at once, still produce ONE instruction, but keep the changes clearly separated and state for each one exactly which figure or object it applies to.',
       '',
       'A draft built from a fixed template may be supplied. If the reader\u2019s own words ask for something the draft does not cover, prefer the reader and keep the draft\u2019s protective clauses. If the reader typed nothing beyond the draft, return the draft essentially unchanged.'
     ].join('\n');
@@ -1395,7 +1412,10 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const refsR = combineRefs(charListR.refs, assetListR.refs);
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
-    const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
+    var _markedUrl = String(req.body.marked_url || '').trim();
+    var _r2base = process.env.R2_PUBLIC_URL || '';
+    if (_markedUrl && (!_r2base || _markedUrl.indexOf(_r2base + '/') !== 0)) _markedUrl = '';
+    const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -2336,6 +2356,40 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
   } catch (e) {
     console.error('title-retouch error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// GET /api/images/proxy -- stream one of OUR OWN stored images from our own
+// origin. Strictly limited to R2_PUBLIC_URL: an open fetcher would be an SSRF
+// hole, and this exists only so a canvas can read a panel it is already showing.
+router.get('/proxy', requireAuth, async function (req, res) {
+  try {
+    const u = String(req.query.u || '');
+    const base = process.env.R2_PUBLIC_URL || '';
+    if (!base || !u || u.indexOf(base + '/') !== 0) return res.status(400).send('bad url');
+    const r = await fetch(u);
+    if (!r.ok) return res.status(502).send('upstream ' + r.status);
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.set('Content-Type', r.headers.get('content-type') || 'image/png');
+    res.set('Cache-Control', 'private, max-age=300');
+    return res.send(buf);
+  } catch (e) {
+    return res.status(500).send('proxy failed');
+  }
+});
+
+// POST /api/images/marked -- store a marked overlay and return its URL. No
+// generation and no token: this only persists a diagram so the next retouch
+// can point at it.
+router.post('/marked', requireAuth, guardUpload(markedUpload, 'marked'), async function (req, res) {
+  try {
+    if (!req.file || !req.file.buffer) return res.json({ error: 'No image received.' });
+    const name = 'marked-' + req.session.userId + '-' + Date.now() + '.png';
+    const url = await uploadFile(req.file.buffer, name, 'image/png');
+    return res.json({ url: url });
+  } catch (e) {
+    console.error('marked upload failed:', e && e.message);
+    return res.json({ error: 'Could not store that overlay.' });
   }
 });
 

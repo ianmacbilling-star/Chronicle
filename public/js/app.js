@@ -3464,6 +3464,32 @@ function renderHelpThread() {
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
 }
+var RG_HELP_HINTS = [
+  'A few things that make retouching go well:',
+  '',
+  'One change at a time. Combining several in one request tends to produce surprises -- do them as separate retouches instead.',
+  '',
+  'Name people rather than saying he or she. There may be more than one figure in the picture, and the wrong one can end up changed.',
+  '',
+  'Use the red circle to say WHICH thing you mean, and the green one for where it should go or what it should aim at. Clicking is far more reliable than describing.',
+  '',
+  'Say amounts as percentages where you can -- 25 percent smaller lands better than just smaller.',
+  '',
+  'Small details in a large picture are the hardest thing to change. Hands and faces that take up very little of the frame often will not come out, however the request is worded.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+
+function rgOpenHelp() {
+  try {
+    var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === RG_HELP_HINTS;
+    if (!seeded) _helpThread.push({ role: 'assistant', content: RG_HELP_HINTS });
+  } catch (e) { /* the hints are a courtesy; never block the panel */ }
+  openHelp();
+  var m = document.getElementById('help-panel');
+  if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
+}
+
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
   m.classList.remove('hidden');
@@ -3473,7 +3499,7 @@ function openHelp() {
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
-  var m = document.getElementById('help-panel'); if (m) m.classList.add('hidden');
+  var m = document.getElementById('help-panel'); if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
 function submitHelp() {
@@ -10816,22 +10842,52 @@ function archiveFilterBarHTML(f, onchange) {
 // ---------------------------------------------------------------------------
 var RG_ON = true;
 
-var rgState = { momentId: null, from: null, to: null, active: 'from', cols: 0, rows: 0 };
+// v3.0.757 -- send the marked copy to the image model as a location diagram.
+// Separate from RG_ON on purpose: if the rings confuse the model or start
+// appearing in output, turn THIS off and keep the markers as an input device.
+// BACK ON, 2026-08-22, Ian deciding with the evidence in front of him. It was
+// switched off in v3.0.758 after a green marker came back as a green flag on
+// the flagpole. Ian: "that green flag it made was very very subtle... i did not
+// even notice it" -- and turning it off cost the accuracy that made the feature
+// work, because a coordinate in text is a far weaker signal than a visible ring.
+// He also wants the vocabulary: "people will talk in terms of the red and green
+// circles." Watch finished pages for laundered markers; if they appear, the next
+// move is magenta crosshairs rather than filled rings, NOT more wording.
+var RG_MARK_ON = true;
+
+// Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
+// it is NEVER clear what cell the subject is in." A quantised cell cannot
+// point at something that straddles a boundary, which is most things. A
+// marker is a continuous point with a radius, so it can.
+//
+// from/to are null or { x, y, r } with every value a FRACTION of the image:
+// x and y of the width and height, r of the shorter side.
+var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0 };
+
+// Small means "this point". Large means "this whole thing". The size changes
+// the WORDING as well as the ring, and in the crop stage it will set the tile.
+var RG_SIZES = [0.035, 0.07, 0.12, 0.19];
+var RG_SIZE_NAMES = ['a point', 'small', 'medium', 'large'];
 
 // Every action declares which squares it needs and what each one asks. Adding
 // an action is a row here plus a template in rgCompose -- nothing else.
 var RG_ACTIONS = {
-  none: { cells: [], ph: 'Say what you want changed, in your own words.' },
+  none: {
+    cells: ['from', 'to'], optional: ['from', 'to'],
+    from: 'Optional: click the thing you mean.',
+    to: 'Optional: click a second spot.',
+    ph: 'Say what you want changed, in your own words. You can talk about the red and green circles.'
+  },
   move: {
     cells: ['from', 'to'],
-    from: 'Which one? Tap the square it is in now.',
-    to: 'Where to? Tap the square it should end up in.',
+    from: 'Which one? Click it in the picture.',
+    to: 'Where to? Click the spot.',
     depth: true,
     ph: 'Anything else about the move? Optional.'
   },
   add: {
     cells: ['to'], cast: 'Who to add',
-    to: 'Where? Tap the square they should appear in.',
+    to: 'Where? Click the spot.',
     depth: true,
     ph: 'Anything about how they should appear? Optional.'
   },
@@ -10840,7 +10896,7 @@ var RG_ACTIONS = {
   // two different jobs and giving the wrong advice for one of them.
   extra: {
     cells: ['to'],
-    to: 'Where? Tap the square it should appear in.',
+    to: 'Where? Click the spot.',
     depth: true,
     ph: 'Who or what to add? e.g. a centerfielder on the outfield grass, glove up'
   },
@@ -10850,60 +10906,97 @@ var RG_ACTIONS = {
   },
   remove: {
     cells: ['from'],
-    from: 'What goes? Tap the square it is in.',
+    from: 'What goes? Click it in the picture.',
     ph: 'What is there now? e.g. a small armoured figure'
   },
   effect: {
     cells: ['to'],
-    to: 'Where? Tap the square it should be centred on.',
+    to: 'Where? Click the spot.',
     size: true,
     ph: 'What is the effect? e.g. a burst of crackling white-blue lightning'
   },
   facing: {
     cells: ['from', 'to'],
-    from: 'Who turns? Tap the square they are in.',
-    to: 'Looking at what? Tap that square.',
+    from: 'Whose head turns? Click them.',
+    to: 'Looking at what? Click it.',
     ph: 'Anything else about the look? Optional.'
   },
   orient: {
-    cells: ['from'], dir: true,
-    from: 'Who turns? Tap the square they are in.',
+    cells: ['from', 'to'], optional: ['to'], turn: true, amount: true,
+    from: 'Who turns? Click them in the picture.',
+    to: 'Optional: click the shoulder that should come toward the camera.',
     ph: 'Anything else about the turn? Optional.'
   },
   expression: {
     cells: ['from'],
-    from: 'Whose face? Tap the square they are in.',
+    from: 'Whose face? Click them in the picture.',
     ph: 'What expression? e.g. furious, terrified, laughing'
   },
   bodypart: {
     cells: ['from'],
-    from: 'Which one? Tap the square they are in.',
+    from: 'Which one? Click them in the picture.',
     ph: 'What is wrong? e.g. the right hand has too many fingers'
   },
   pose: {
     cells: ['from', 'to'], optional: ['to'],
-    from: 'Who moves? Tap the square they are in.',
-    to: 'Aimed at what? Tap that square. Skip this if there is no target.',
-    ph: 'What should they be doing? e.g. pointing straight out to the distance'
+    from: 'Who moves? Click them in the picture.',
+    to: 'Aiming at what? Click the thing they should be aimed at. Skip if there is none.',
+    ph: 'What should they be doing? e.g. pointing straight out into the distance'
+  },
+  // The green ring here means WHERE THE HAND ENDS UP, which is the one
+  // reading the image model already obeys literally and well.
+  limb: {
+    cells: ['from', 'to'],
+    from: 'Which hand or foot? Click it.',
+    to: 'Where should it end up? Click the spot.',
+    ph: 'Anything else about the movement? Optional.'
+  },
+  reorient: {
+    cells: ['from'],
+    from: 'Which object? Click it.',
+    ph: 'How is it wrong? e.g. the hammer head is on the wrong end'
+  },
+  object: {
+    cells: ['from'], objsize: true,
+    from: 'Which object? Click it.',
+    ph: 'What should change about it? e.g. make it a darker red'
   },
   reface: {
     cells: ['from'], cast: 'Who it should be',
-    from: 'Which figure is wrong? Tap the square they are in.',
+    from: 'Which figure is wrong? Click them in the picture.',
     ph: 'Anything else? Optional.'
   },
   appearance: {
     cells: ['from'],
-    from: 'Who changes? Tap the square they are in.',
+    from: 'Who changes? Click them in the picture.',
     ph: 'What changes about how they look? e.g. a fresh scar across the left cheek'
   },
+  // No picker: the style is whatever the storyboard is set to, which the
+  // route already resolves and prepends to every retouch prompt. Repairs a
+  // panel whose medium has drifted, AND converts an archive picture that
+  // arrived in a different style -- the same operation from two directions.
+  restyle: { cells: [], convert: true, ph: 'Anything else? Optional.' },
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
 
-var RG_FROM_TINT = 'rgba(216,184,92,0.34)';
-var RG_TO_TINT = 'rgba(120,196,214,0.34)';
+var RG_FROM_TINT = 'rgba(226,72,72,0.22)';
+var RG_TO_TINT = 'rgba(86,196,116,0.22)';
+var RG_FROM_LINE = 'rgba(238,86,86,0.95)';
+var RG_TO_LINE = 'rgba(96,214,128,0.95)';
 
 // Grid geometry comes from the panel SHAPE. A fixed 3x3 on a tower panel gives
 // cells taller than the figures standing in them.
+// Height divided by width, matching the shapes the server renders.
+function rgShapeAspect(shape) {
+  if (shape === 'square') return 1;
+  if (shape === 'wide') return 9 / 16;
+  if (shape === 'panoramic') return 9 / 21;
+  if (shape === 'tower') return 4;
+  if (shape === 'tall') return 3 / 2;
+  if (shape === 'reference' || shape === 'fullpage') return 4 / 3;
+  return 3 / 4;
+}
+
 function rgGrid(shape) {
   if (shape === 'square') return { c: 3, r: 3 };
   if (shape === 'wide') return { c: 4, r: 2 };
@@ -10916,12 +11009,10 @@ function rgGrid(shape) {
 // FRAME-RELATIVE ONLY. Never relative to a person or an object: "left of the
 // giant" was resolved as the giant's own left and landed on the wrong side of
 // the picture, and naming a character as a landmark drew a second copy of them.
-function rgPlace(n) {
-  if (!n || !rgState.cols) return '';
-  var col = (n - 1) % rgState.cols;
-  var row = Math.floor((n - 1) / rgState.cols);
-  var fx = (col + 0.5) / rgState.cols;
-  var fy = (row + 0.5) / rgState.rows;
+// FRAME-RELATIVE ONLY. Never relative to a person or an object: "left of the
+// giant" was resolved as the giant's own left and landed on the wrong side of
+// the picture, and naming a character as a landmark drew a second copy.
+function rgFrame(fx, fy) {
   var h = (fx < 0.25) ? 'left' : (fx < 0.45) ? 'left-of-centre' : (fx < 0.55) ? 'central' : (fx < 0.75) ? 'right-of-centre' : 'right';
   var v = (fy < 0.3) ? 'upper' : (fy < 0.7) ? 'middle' : 'lower';
   var name = (h === 'central' && v === 'middle') ? 'the centre of the picture' : ('the ' + v + ' ' + h + ' area of the picture');
@@ -10929,14 +11020,41 @@ function rgPlace(n) {
          Math.round(fy * 100) + ' percent of the way down';
 }
 
-// A figure usually straddles two squares, so the SUBJECT is named loosely on
-// purpose. False precision makes the model hunt for a boundary that is not
-// there; "in and around" describes what a person actually pointed at.
+// A marker still describes a REGION rather than a pixel, because a reader
+// pointing at something is not claiming to have hit its centroid.
+function rgPlaceM(m) {
+  if (!m) return '';
+  return rgFrame(m.x, m.y);
+}
+
+// Kept for typed references like "cell 3": readers picked that vocabulary up
+// from the product and from earlier builds, and a stale habit should still
+// resolve rather than reach the image model as a meaningless token.
+function rgPlace(n) {
+  if (!n || !rgState.cols) return '';
+  var col = (n - 1) % rgState.cols;
+  var row = Math.floor((n - 1) / rgState.cols);
+  return rgFrame((col + 0.5) / rgState.cols, (row + 0.5) / rgState.rows);
+}
+// The ring size chooses the wording. A tight marker means the reader pointed
+// AT something; a wide one means they circled a whole figure. Both stay loose
+// about the boundary, because false precision makes the model hunt for an
+// edge that is not in the picture.
+function rgSubjectM(m) {
+  if (!m) return 'the figure';
+  var p = rgFrame(m.x, m.y);
+  if (m.r <= RG_SIZES[0]) return 'the thing at ' + p;
+  if (m.r >= RG_SIZES[3]) return 'the figure occupying the area around ' + p;
+  return 'the figure in and around ' + p;
+}
+
 function rgSubject(n) {
   var p = rgPlace(n);
   return p ? ('the figure in and around ' + p) : 'the figure';
 }
-
+// The reader's own word for a location is whatever the rest of the product
+// taught them. Resolve every spelling, so a bare number never reaches the
+// image model and the offline fallback is correct too.
 function rgResolveRefs(s) {
   var v = String(s || '');
   if (!rgState.cols) return v;
@@ -10949,6 +11067,23 @@ function rgResolveRefs(s) {
 }
 
 // Add actions cannot use the standard tail, which forbids adding anyone.
+function rgAmount(a) {
+  if (a === 'little') return 'about 20 degrees, a slight shift';
+  if (a === 'half') return 'about 90 degrees, so the figure is seen in profile';
+  if (a === 'all') return 'about 180 degrees, so the figure now faces the opposite direction';
+  return 'about 45 degrees, into a three-quarter view';
+}
+
+// Turning a figure that is MOVING is not a rotation, it is a redraw: the
+// stride, the trailing cloak and any streaming flame all carry momentum in
+// the old direction, and leaving them alone reads as badly wrong even when
+// the body is right. Worded conditionally rather than gated on English in
+// the typed text -- TD-512: a runtime classifier that reads English is a bug
+// in every other language.
+function rgMotionClause() {
+  return ' If the figure is moving -- running, walking, charging, falling or leaping -- then the stride, and any trailing cloak, robe, hair, scarf, sash or streaming flame, all reverse to match the new direction, trailing out behind the figure as it moves the new way rather than the old.';
+}
+
 function rgTailAdd() {
   return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
 }
@@ -10966,7 +11101,7 @@ function rgDepthClause(d, who) {
 // Appended to every template except Add. Mentioning a person is an invitation
 // to draw one -- that cost two duplicated figures before it was written down.
 function rgTail() {
-  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged.';
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
 }
 
 function rgArticle(s) {
@@ -11026,7 +11161,7 @@ function rgSelect(id, label, opts) {
 function rgCellRow(slot, question) {
   var filled = rgState[slot];
   var isActive = (rgState.active === slot);
-  var tint = (slot === 'from') ? RG_FROM_TINT : RG_TO_TINT;
+  var tint = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
   return '<div onclick="rgSetActive(\'' + slot + '\')" style="cursor:pointer;padding:6px 8px;border-radius:6px;' +
     'border:1px solid ' + (isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)') + ';' +
     'background:' + (isActive ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
@@ -11034,7 +11169,7 @@ function rgCellRow(slot, question) {
     ';border:1px solid rgba(255,255,255,0.4);margin-right:6px;vertical-align:middle;"></span>' +
     '<span style="font-size:11px;color:var(--gold-dim);">' + question + '</span>' +
     '<span id="rg-readout-' + slot + '" style="font-size:11px;color:var(--gold-light);margin-left:6px;">' +
-    (filled ? ('square ' + filled) : (isActive ? 'waiting for a tap' : '')) + '</span></div>';
+    (filled ? 'marked' : (isActive ? 'waiting for a click' : '')) + '</span></div>';
 }
 
 function rgActionChange() {
@@ -11055,15 +11190,27 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
-  if (def.dir) html += rgSelect('rg-dir', 'Facing', [['left', 'toward the left of the picture'], ['right', 'toward the right of the picture'], ['viewer', 'toward the viewer'], ['away', 'away from the viewer']]);
+  if (def.convert) {
+    var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
+    html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Reapplies the art style set at the top of the storyboard:' +
+      '<div style="margin-top:3px;color:var(--gold-light);font-size:13px;">' + rgEsc(_sn || 'the current art style') + '</div></div>';
+    html += rgSelect('rg-convert', 'What is happening', [['drift', 'this picture drifted and needs putting back'], ['cross', 'this picture is in a different style and needs converting']]);
+  }
+  if (def.objsize) html += rgSelect('rg-objsize', 'Size', [['same', 'leave the size alone'], ['s25', 'a bit smaller (25%)'], ['half', 'half the size'], ['l25', 'a bit larger (25%)'], ['double', 'twice the size']]);
+  if (def.turn) html += rgSelect('rg-turn', 'Which way', [['toward', 'to end up facing the camera'], ['away', 'to end up facing away from the camera'], ['marker', 'bring the shoulder I clicked toward the camera']]);
+  if (def.amount) html += rgSelect('rg-amount', 'How far', [['little', 'a little'], ['part', 'part way'], ['half', 'half turn'], ['all', 'all the way']]);
   if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
   if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
   box.innerHTML = html;
 
+  var srow = document.getElementById('retouch-size-row');
+  if (srow) { if (def.cells.length) srow.classList.remove('hidden'); else srow.classList.add('hidden'); }
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.placeholder = def.ph;
   if (row) row.classList.remove('hidden');
-  rgPaintCells();
+  rgPaintMarkers();
+  rgPaintPrompt();
+  rgPaintSizes();
   rgResetFinal();
   var note = document.getElementById('retouch-compose-note');
   if (note) note.textContent = '';
@@ -11090,7 +11237,7 @@ function rgRedrawRows() {
   for (var i = 0; i < def.cells.length; i++) {
     var slot = def.cells[i];
     var ro = document.getElementById('rg-readout-' + slot);
-    if (ro) ro.textContent = rgState[slot] ? ('square ' + rgState[slot]) : (rgState.active === slot ? 'waiting for a tap' : '');
+    if (ro) ro.textContent = rgState[slot] ? 'marked' : (rgState.active === slot ? 'waiting for a click' : '');
   }
   var box = document.getElementById('retouch-slots');
   if (!box) return;
@@ -11108,32 +11255,106 @@ function rgRedrawRows() {
   }
 }
 
-function rgPickCell(n) {
+function rgActiveDef() {
   var sel = document.getElementById('retouch-action');
-  var def = RG_ACTIONS[(sel && sel.value) || 'none'] || RG_ACTIONS.none;
+  return RG_ACTIONS[(sel && sel.value) || 'none'] || RG_ACTIONS.none;
+}
+
+// A click anywhere on the picture places the ACTIVE marker. There is no
+// boundary to miss and nothing to straddle.
+function rgStageClick(ev) {
+  var def = rgActiveDef();
   if (!def.cells.length) return;
+  var stage = document.getElementById('retouch-grid-stage');
+  if (!stage) return;
+  var b = stage.getBoundingClientRect();
+  if (!b.width || !b.height) return;
+  var x = (ev.clientX - b.left) / b.width;
+  var y = (ev.clientY - b.top) / b.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
   var slot = rgState.active || def.cells[0];
-  rgState[slot] = n;
-  // Advance to the next square this action still wants, so two taps fill both
-  // without the reader having to aim at the row in between.
+  rgState[slot] = { x: x, y: y, r: RG_SIZES[rgState.size] };
+  rgState.last = slot;   // scroll follows what you JUST put down
   var next = null;
   for (var i = 0; i < def.cells.length; i++) if (!rgState[def.cells[i]]) { next = def.cells[i]; break; }
   rgState.active = next || slot;
-  rgPaintCells();
+  rgPaintMarkers();
+  rgPaintPrompt();
   rgRedrawRows();
   rgResetFinal();
 }
 
-function rgPaintCells() {
-  var cells = document.getElementById('retouch-grid-cells');
-  if (!cells) return;
-  var kids = cells.children;
-  for (var i = 0; i < kids.length; i++) {
-    var n = i + 1;
-    kids[i].style.background = (rgState.from === n) ? RG_FROM_TINT : (rgState.to === n) ? RG_TO_TINT : 'transparent';
-  }
+// The wheel resizes. It also resizes a marker already placed in the active
+// slot, so the reader can drop a ring and then open it out around a figure.
+function rgStageWheel(ev) {
+  var def = rgActiveDef();
+  if (!def.cells.length) return;
+  ev.preventDefault();
+  rgSetSize(rgState.size + (ev.deltaY > 0 ? 1 : -1));
 }
 
+function rgSetSize(i) {
+  var n = Math.max(0, Math.min(RG_SIZES.length - 1, i));
+  rgState.size = n;
+  // The marker you just placed is the one you want to resize. Falling back to
+  // the active slot only matters before anything has been placed.
+  var slot = (rgState.last && rgState[rgState.last]) ? rgState.last : rgState.active;
+  if (slot && rgState[slot]) rgState[slot].r = RG_SIZES[n];
+  rgPaintMarkers();
+  rgPaintSizes();
+  rgPaintPrompt();
+}
+
+function rgPaintSizes() {
+  var box = document.getElementById('retouch-size-row');
+  if (!box) return;
+  var s = '<span style="font-size:11px;color:var(--gold-dim);margin-right:6px;">Marker size</span>';
+  for (var i = 0; i < RG_SIZES.length; i++) {
+    s += '<button class="btn btn-sm" onclick="rgSetSize(' + i + ')" style="margin-right:4px;' +
+      (i === rgState.size ? 'border-color:rgba(216,184,92,0.75);' : 'opacity:0.65;') + '">' + RG_SIZE_NAMES[i] + '</button>';
+  }
+  s += '<span style="font-size:11px;color:var(--gold-dim);margin-left:4px;">or scroll on the picture</span>';
+  box.innerHTML = s;
+}
+
+// Says, in the colour of the marker being asked for, what the next click
+// means. Silent once everything required is placed.
+function rgPaintPrompt() {
+  var el = document.getElementById('retouch-marker-prompt');
+  if (!el) return;
+  var def = rgActiveDef();
+  if (!def.cells.length) { el.innerHTML = ''; return; }
+  var slot = null;
+  for (var i = 0; i < def.cells.length; i++) { if (!rgState[def.cells[i]]) { slot = def.cells[i]; break; } }
+  if (!slot) { el.innerHTML = ''; return; }
+  var col = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
+  el.innerHTML = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + col +
+    ';margin-right:6px;vertical-align:middle;"></span><span style="font-size:12px;color:' + col + ';">' +
+    rgEsc(def[slot]) + '</span>';
+}
+
+function rgPaintMarkers() {
+  var layer = document.getElementById('retouch-grid-cells');
+  if (!layer) return;
+  var def = rgActiveDef();
+  var html = '';
+  for (var i = 0; i < def.cells.length; i++) {
+    var slot = def.cells[i];
+    var m = rgState[slot];
+    if (!m) continue;
+    var tint = (slot === 'from') ? RG_FROM_TINT : RG_TO_TINT;
+    var line = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
+    // r is a fraction of the SHORTER side, so a ring stays circular on a
+    // tower panel instead of stretching into an ellipse.
+    var pctW = (rgState.shortIsW ? m.r * 200 : m.r * 200 * rgState.hOverW);
+    var pctH = (rgState.shortIsW ? m.r * 200 / rgState.hOverW : m.r * 200);
+    html += '<div style="position:absolute;pointer-events:none;border-radius:50%;' +
+      'left:' + (m.x * 100) + '%;top:' + (m.y * 100) + '%;' +
+      'width:' + pctW + '%;height:' + pctH + '%;transform:translate(-50%,-50%);' +
+      'border:2px solid ' + line + ';background:' + tint + ';box-shadow:0 0 0 1px rgba(0,0,0,0.5);"></div>';
+  }
+  layer.innerHTML = html;
+}
 function rgVal(id) {
   var el = document.getElementById(id);
   return el ? String(el.value || '').trim() : '';
@@ -11147,18 +11368,29 @@ function rgCompose() {
   if (!sel) return '';
   var a = sel.value;
   var def = RG_ACTIONS[a];
-  if (!def || !a || a === 'none') return '';
+  if (!def || !a) return '';
+  if (a === 'none') {
+    // No template, but the rings still need naming, or "the red circle"
+    // means nothing when the overlay is off.
+    var ty = rgResolveRefs(rgVal('retouch-instruction'));
+    if (!ty) return '';
+    var bits = [];
+    if (rgState.from) bits.push('The red circle marks ' + rgPlaceM(rgState.from) + '.');
+    if (rgState.to) bits.push('The green circle marks ' + rgPlaceM(rgState.to) + '.');
+    if (!bits.length) return '';
+    return ty + ' ' + bits.join(' ') + ' Do not draw any circles, rings, outlines or highlights into the finished picture.';
+  }
   var optional = def.optional || [];
   for (var i = 0; i < def.cells.length; i++) {
     if (optional.indexOf(def.cells[i]) >= 0) continue;
     if (!rgState[def.cells[i]]) {
-      if (note) note.textContent = 'Tap the square for: ' + def[def.cells[i]].replace(/ Tap the square.*$/, '');
+      if (note) note.textContent = 'Still needed: ' + def[def.cells[i]].replace(/\s*(Click|Tap)\b.*$/, '');
       return '';
     }
   }
-  var fromP = rgPlace(rgState.from);
-  var toP = rgPlace(rgState.to);
-  var subj = rgSubject(rgState.from);
+  var fromP = rgPlaceM(rgState.from);
+  var toP = rgPlaceM(rgState.to);
+  var subj = rgSubjectM(rgState.from);
   var who = rgVal('rg-who');
   var typed = rgResolveRefs(rgVal('retouch-instruction'));
   var out = '';
@@ -11185,15 +11417,25 @@ function rgCompose() {
     out = 'In Image 1, add ' + (typed || 'the effect') + ' at ' + toP + '. ' + szc +
       ' Match the existing art style, lighting and colour of Image 1 exactly.' + rgTail();
   } else if (a === 'facing') {
-    out = 'In Image 1, turn ' + subj + ' so that it is looking toward ' + toP +
-      '. Its head and eyes are directed there. Keep its position, size, distance, pose, clothing and equipment exactly as they are; only the direction it faces and looks changes.' +
+    out = 'In Image 1, turn the HEAD of ' + subj + ' so that it is looking toward ' + toP +
+      '. The head and the eyes are directed there, and the neck turns naturally. ' +
+      'The BODY does not turn: the shoulders, torso, hips, arms and legs all stay exactly as they are, in the same pose and the same position in the frame, at the same size and the same distance from the viewer. Only the head and the gaze change.' +
       (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'orient') {
-    var d = rgVal('rg-dir');
-    var dl = (d === 'left') ? 'toward the left of the picture' : (d === 'right') ? 'toward the right of the picture'
-      : (d === 'viewer') ? 'toward the viewer' : 'away from the viewer';
-    out = 'In Image 1, turn ' + subj + ' so that it is facing ' + dl +
-      '. Keep it in exactly the same place, at the same size and the same distance from the viewer, with the same clothing and equipment; only its body orientation changes.' +
+    var tw = rgVal('rg-turn');
+    var turnPhrase;
+    if (tw === 'toward') {
+      turnPhrase = 'Rotate the whole body so that the figure ends up facing TOWARD the camera, turning however far is needed to get there and no further. ';
+    } else if (tw === 'away') {
+      turnPhrase = 'Rotate the whole body so that the figure ends up facing AWAY from the camera, with its back toward the viewer, turning however far is needed to get there and no further. ';
+    } else {
+      turnPhrase = 'The shoulder at ' + toP + ' swings toward the camera, and the opposite shoulder swings away from the camera, rotating the body ' + rgAmount(rgVal('rg-amount')) + '. ';
+    }
+    out = 'In Image 1, turn the whole body of ' + subj + '. ' + turnPhrase +
+      'The head turns with the body so the neck is natural, and anything the figure is holding, carrying or wearing turns with it. ' +
+      'If the figure is making a gesture -- pointing, reaching, waving, raising a weapon -- then the SAME arm continues that gesture after the turn. Do not move the gesture to the other arm.' +
+      rgMotionClause() +
+      ' The feet stay on the same spot of ground and the figure stays in exactly the same place in the frame, at the same size and the same distance from the viewer. It is the same person: same face, hair, clothing and equipment. Only the direction the body faces changes.' +
       (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'expression') {
     out = 'In Image 1, change the facial expression of ' + subj + ' to ' + (typed || 'a different expression') +
@@ -11212,10 +11454,29 @@ function rgCompose() {
       '. Apply that change and nothing else. Keep the figure in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of the face, build and equipment as it is now.' + rgTail();
   } else if (a === 'pose') {
     out = 'In Image 1, change the pose of ' + subj + ' so that ' + (typed || 'the pose changes') +
-      (toP ? '. The gesture is aimed toward ' + toP : '') +
-      '. The pose reads clearly in silhouette and is not foreshortened toward or away from the viewer, so the movement is plainly visible. ' +
+      (toP ? '. The gesture is aimed at whatever stands at ' + toP + ' -- aim THROUGH that point rather than placing a hand on it' : '') +
+      '. Use perspective to make the gesture readable: if a limb extends away from the viewer, shorten it correctly so the near part of the limb is longest and the far end smallest, and let it overlap the body so its direction is unmistakable. Do not raise a limb into the air merely to make it visible. ' +
       'It is the same person: keep the same face, hair, clothing, equipment and colouring, the same position in the frame, the same size and the same distance from the viewer. ' +
       'Nothing about the figure is malformed and no anatomy needs correcting -- only the pose changes.' + rgTail();
+  } else if (a === 'limb') {
+    out = 'In Image 1, move one limb of ' + subj + ': the hand or foot currently at ' + fromP +
+      ' ends up at ' + toP + '. Redraw the whole limb so the joints bend naturally into that new position and the shoulder or hip stays where it is. ' +
+      (typed ? typed + ' ' : '') +
+      'The rest of the body does not move. It is the same person: same face, hair, clothing, equipment and colouring, same position in the frame, same size and same distance from the viewer.' + rgTail();
+  } else if (a === 'object') {
+    var os = rgVal('rg-objsize');
+    var osc = (os === 's25') ? ' Make it about 25 percent smaller than it is now.'
+      : (os === 'half') ? ' Make it about half its current size.'
+      : (os === 'l25') ? ' Make it about 25 percent larger than it is now.'
+      : (os === 'double') ? ' Make it about twice its current size.'
+      : ' Keep it exactly the same size as it is now.';
+    out = 'In Image 1, change the object at ' + fromP + (typed ? ': ' + typed : '') + '.' + osc +
+      ' It stays the same object in the same place, at the same angle, in the same hand or resting in the same position, at the same distance from the viewer and lit the same way. ' +
+      'Nothing around it moves, resizes or is redrawn to accommodate it, and no other object changes.' + rgTail();
+  } else if (a === 'reorient') {
+    out = 'In Image 1, the object at ' + fromP + ' is oriented wrongly: ' + (typed || 'it is the wrong way round') +
+      '. Rotate or flip that object so it is held and oriented correctly and naturally for the way the figure is gripping it. ' +
+      'The object stays the same object, the same size, in the same place and in the same hand, and the person holding it does not move: same pose, same face, same clothing. Only the object turns.' + rgTail();
   } else if (a === 'extra') {
     out = 'In Image 1, add ' + (typed || 'the figure') + ', positioned at ' + toP + '. ' +
       rgDepthClause(rgVal('rg-depth'), 'it') +
@@ -11231,12 +11492,69 @@ function rgCompose() {
       'The new ground meets the ground they are standing on continuously, with no seam or edge, so they are standing IN the scene rather than in front of it. ' +
       'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
       'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
+  } else if (a === 'restyle') {
+    out = 'In Image 1, keep the picture exactly as it is composed: the same scene, the same figures in the same places and the same poses, the same faces and expressions, the same clothing and objects, the same framing and the same viewpoint. Nothing moves, nothing is added and nothing is removed. ' +
+      'Re-render the whole picture in the art style described at the top of this prompt, applying that style consistently to every part of the image -- the figures, the background, the lighting, the linework and the texture. ' +
+      ((rgVal('rg-convert') === 'cross')
+        ? 'This picture is currently in a DIFFERENT medium and style from the one described. Convert it completely: redraw every surface, line, edge and texture in the described medium, and do not leave any part of the original style behind or blend the two. Treat this as re-drawing the same scene from scratch in the new medium rather than filtering the existing picture. '
+        : 'This picture is meant to be in the described style already but has drifted away from it. Put it back: restore the medium, the linework, the texture and the palette of the described style across the whole image, and remove any trace of the style it drifted into. Change nothing else. ') +
+      (typed ? typed + ' ' : '') +
+      'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
   } else if (a === 'scene') {
     out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
       (typed ? ' ' + typed : '');
   }
   return out;
+}
+
+// Draws the panel plus the reader's rings onto a canvas and uploads it.
+// Resolves with a URL, or with null on ANY failure -- a missing overlay must
+// never block a retouch that would otherwise have worked.
+function rgSnapshotMarkers() {
+  if (!RG_ON || !RG_MARK_ON || !rgState.momentId) return null;
+  if (!rgState.from && !rgState.to) return null;
+  return { from: rgState.from, to: rgState.to };
+}
+
+function rgUploadMarked(snap) {
+  return new Promise(function (resolve) {
+    try {
+      if (!snap) return resolve(null);
+      var img = document.getElementById('retouch-grid-photo');
+      if (!img || !img.naturalWidth) return resolve(null);
+      var W = img.naturalWidth, H = img.naturalHeight;
+      var cap = 1536;
+      var scale = Math.min(1, cap / Math.max(W, H));
+      var cw = Math.max(1, Math.round(W * scale)), ch = Math.max(1, Math.round(H * scale));
+      var cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      var cx = cv.getContext('2d');
+      cx.drawImage(img, 0, 0, cw, ch);
+      var shortSide = Math.min(cw, ch);
+      [['from', 'rgba(238,70,70,0.95)'], ['to', 'rgba(80,214,110,0.95)']].forEach(function (pair) {
+        var m = snap[pair[0]];
+        if (!m) return;
+        var rad = Math.max(6, m.r * shortSide);
+        cx.beginPath();
+        cx.arc(m.x * cw, m.y * ch, rad, 0, Math.PI * 2);
+        cx.lineWidth = Math.max(3, Math.round(shortSide * 0.008));
+        cx.strokeStyle = pair[1];
+        cx.stroke();
+      });
+      cv.toBlob(function (blob) {
+        if (!blob) return resolve(null);
+        var fd = new FormData();
+        fd.append('image', blob, 'marked.png');
+        fetch('/api/images/marked', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { resolve((d && d.url) || null); })
+          .catch(function () { resolve(null); });
+      }, 'image/png');
+    } catch (e) {
+      resolve(null);
+    }
+  });
 }
 
 function rgToggleFinal() {
@@ -11300,6 +11618,36 @@ function rgBuildFinal(done) {
 
 // What submitRetouch actually sends for a MOMENT. Null everywhere else, so the
 // character, asset, session-character and title paths are untouched.
+// Returns a plain-English reason the chosen action cannot run yet, or null.
+// Consulted BEFORE anything is spent.
+function rgBlockReason() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var sel = document.getElementById('retouch-action');
+  var a = sel ? sel.value : '';
+  if (!a || a === 'none') return null;
+  var def = RG_ACTIONS[a];
+  if (!def) return null;
+  var optional = def.optional || [];
+  for (var i = 0; i < def.cells.length; i++) {
+    var c = def.cells[i];
+    if (optional.indexOf(c) >= 0) continue;
+    if (!rgState[c]) return def[c].replace(/\s*(Click|Tap)\b.*$/, '');
+  }
+  // A shoulder marker is optional UNTIL the reader asks to steer by it.
+  if (def.turn && rgVal('rg-turn') === 'marker' && !rgState.to) {
+    return 'Click the shoulder that should come toward the camera, or choose a different way to turn';
+  }
+  // Two markers in the same spot is a contradiction, not an instruction:
+  // "move it from here to here" and "aim at yourself" produce nothing.
+  if (rgState.from && rgState.to) {
+    var dx = rgState.from.x - rgState.to.x, dy = rgState.from.y - rgState.to.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 0.03) {
+      return 'The two markers are in the same place -- move the second one';
+    }
+  }
+  return null;
+}
+
 function rgFinalInstruction() {
   if (!RG_ON || !rgState.momentId) return null;
   var out = document.getElementById('retouch-final');
@@ -11317,10 +11665,19 @@ function rgTeardown() {
   rgResetFinal();
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.placeholder = RG_ACTIONS.none.ph;
+  var layer = document.getElementById('retouch-grid-cells');
+  if (layer) layer.innerHTML = '';
+  var mp = document.getElementById('retouch-marker-prompt');
+  if (mp) mp.innerHTML = '';
+  rgState.last = null;
+  var srow = document.getElementById('retouch-size-row');
+  if (srow) srow.classList.add('hidden');
+  rgState.imageUrl = null;
   rgState.momentId = null;
   rgState.from = null;
   rgState.to = null;
   rgState.active = 'from';
+  rgState.size = 1;
   rgState.cols = 0;
   rgState.rows = 0;
 }
@@ -11344,22 +11701,26 @@ function rgSetup(momentId) {
   rgState.momentId = momentId;
   rgState.cols = g.c;
   rgState.rows = g.r;
-  img.src = url;
-  var html = '';
-  for (var n = 1; n <= g.c * g.r; n++) {
-    var col = (n - 1) % g.c, row = Math.floor((n - 1) / g.c);
-    html += '<div onclick="rgPickCell(' + n + ')" style="position:absolute;cursor:pointer;' +
-      'left:' + (col * 100 / g.c) + '%;top:' + (row * 100 / g.r) + '%;' +
-      'width:' + (100 / g.c) + '%;height:' + (100 / g.r) + '%;' +
-      'box-sizing:border-box;border:1px solid rgba(255,255,255,0.55);background:transparent;">' +
-      '<span style="position:absolute;left:2px;top:1px;font-size:10px;line-height:1.3;padding:0 3px;' +
-      'background:rgba(20,14,6,0.78);color:#fff;border-radius:3px;">' + n + '</span></div>';
-  }
-  cells.innerHTML = html;
+  // Through our own origin: R2 is a different origin and a cross-origin draw
+  // taints the canvas, so toBlob would throw when the overlay is rendered.
+  rgState.imageUrl = url;
+  img.src = '/api/images/proxy?u=' + encodeURIComponent(url);
+  // A ring is drawn in percentages of width and height, which differ on a
+  // non-square panel. Record the aspect so a circle stays a circle.
+  var ar = rgShapeAspect(m.shape);
+  rgState.hOverW = ar;
+  rgState.shortIsW = (ar >= 1);
+  cells.innerHTML = '';
+  rgState.size = 1;
   var sel = document.getElementById('retouch-action');
   if (sel) sel.value = '';
   rgActionChange();
   wrap.classList.remove('hidden');
+  // Restart the animation by removing the class and forcing a reflow before
+  // adding it back -- a CSS animation does not replay on a class that is
+  // already there.
+  var hb = document.getElementById('retouch-help-btn');
+  if (hb) { hb.classList.remove('help-nudge'); void hb.offsetWidth; hb.classList.add('help-nudge'); }
 }
 
 function openRetouch(momentId) {
@@ -11445,9 +11806,19 @@ function submitRetouch() {
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
+  // v3.0.758 -- an incomplete action STOPS here. Falling through to the raw
+  // sentence spends a token and silently ignores what the reader chose.
+  var _rgWhy = (typeof rgBlockReason === 'function') ? rgBlockReason() : null;
+  if (_rgWhy) {
+    var _rgNote = document.getElementById('retouch-compose-note');
+    if (_rgNote) _rgNote.textContent = 'Still needed: ' + _rgWhy + '.';
+    return;
+  }
   // v3.0.751 -- on the MOMENT path the composed prompt is what goes to fal.
   var _rgFinal = (typeof rgFinalInstruction === 'function') ? rgFinalInstruction() : null;
   if (_rgFinal) instruction = _rgFinal;
+  // v3.0.758 -- grid words must resolve on the RAW path as well.
+  else if (typeof rgResolveRefs === 'function' && rgState.momentId) instruction = rgResolveRefs(instruction);
   if (!instruction) { if (ta) ta.focus(); return; }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.
@@ -11578,9 +11949,14 @@ function submitRetouch() {
   var momentId = state.retouchMomentId;
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
+  var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   closeRetouch();
   showPanelBusy(momentId, 'Retouching');
-  fetch('/api/images/retouch-moment', {
+  // v3.0.757 -- the overlay is rendered from the snapshot taken above, then the
+  // existing chain runs unchanged. rgUploadMarked never rejects: a failed
+  // overlay resolves null and the retouch proceeds exactly as it did before.
+  rgUploadMarked(_rgSnap).then(function (_markedUrl) {
+  return fetch('/api/images/retouch-moment', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
@@ -11589,8 +11965,10 @@ function submitRetouch() {
       campaign_id: state.currentCampaign.id,
       instruction: instruction,
       style: state.artStyle,
-      fal_key: getFalKey() || 'platform'
+      fal_key: getFalKey() || 'platform',
+      marked_url: _markedUrl || null
     })
+  });
   })
   .then(function(r){ return r.json(); })
   .then(function(data){

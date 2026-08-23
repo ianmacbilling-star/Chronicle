@@ -70,7 +70,7 @@
          already saying Copper. Its warning lives in the tier badge tooltip now. -->
     <span id="lone-badge" style="display:none;"></span>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
-    <button id="help-fab" class="btn btn-sm" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
+    <button id="help-fab" class="btn btn-sm help-nudge" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
     <div class="user-menu-wrap">
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
@@ -2526,33 +2526,40 @@
 </div>
 <div class="modal-overlay hidden" id="retouch-modal">
   <div class="modal archive-picker" style="max-width:480px;">
-    <div class="modal-header">
-      <div class="modal-title">Retouch panel</div>
-      <button class="modal-close" onclick="closeRetouch()">&times;</button>
+    <div class="modal-header" style="align-items:baseline;gap:8px;">
+      <div class="modal-title" style="white-space:nowrap;">Retouch panel</div>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--gold-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Changes only what you describe.</span>
+      <button class="btn btn-sm help-nudge" id="retouch-help-btn" type="button" onclick="rgOpenHelp()" title="Retouch tips, and ask us anything" aria-label="Retouch help" style="flex:none;">?s</button>
+      <button class="modal-close" onclick="closeRetouch()" style="flex:none;">&times;</button>
     </div>
-    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Keep this image exactly as-is and change only what you describe. Uses the current image as the reference.</p>
     <div id="retouch-grid-wrap" class="hidden" style="margin:0 0 12px;">
-      <div id="retouch-grid-stage" style="position:relative;display:inline-block;max-width:100%;line-height:0;">
+      <div id="retouch-grid-stage" onclick="rgStageClick(event)" onwheel="rgStageWheel(event)" style="position:relative;display:inline-block;max-width:100%;line-height:0;cursor:crosshair;">
         <img id="retouch-grid-photo" alt="" style="display:block;max-width:100%;max-height:230px;border-radius:6px;">
         <div id="retouch-grid-cells" style="position:absolute;left:0;top:0;right:0;bottom:0;"></div>
       </div>
+      <div id="retouch-marker-prompt" style="margin:7px 0 0;min-height:16px;line-height:1.3;"></div>
+      <div id="retouch-size-row" class="hidden" style="margin:8px 0 0;"></div>
       <select class="form-input" id="retouch-action" onchange="rgActionChange()" style="margin:10px 0 0;">
         <option value="">What are you changing?</option>
-        <option value="none">Just My Description</option>
+        <option value="none">I'll type it below</option>
         <option value="move">Move a character</option>
         <option value="add">Add a character</option>
         <option value="extra">Add a person or object</option>
         <option value="remove">Remove something</option>
         <option value="effect">Add an effect</option>
-        <option value="facing">Change who someone looks at</option>
-        <option value="orient">Change which way someone faces</option>
+        <option value="facing">Change where someone is looking</option>
+        <option value="orient">Turn a character's body</option>
         <option value="expression">Change an expression</option>
         <option value="bodypart">Fix a body part</option>
         <option value="pose">Change a pose or gesture</option>
+        <option value="limb">Move a hand or foot</option>
+        <option value="reorient">Turn an object the right way round</option>
+        <option value="object">Change an object</option>
         <option value="reface">Replace someone with their reference</option>
         <option value="appearance">Change how someone looks</option>
         <option value="background">Change the background</option>
         <option value="scene">Change time of day or weather</option>
+        <option value="restyle">Fix or reapply the art style</option>
       </select>
       <div id="retouch-slots" style="margin:9px 0 0;display:flex;flex-direction:column;gap:7px;"></div>
     </div>
