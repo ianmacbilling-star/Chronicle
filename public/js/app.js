@@ -10819,12 +10819,15 @@ var RG_ON = true;
 // v3.0.757 -- send the marked copy to the image model as a location diagram.
 // Separate from RG_ON on purpose: if the rings confuse the model or start
 // appearing in output, turn THIS off and keep the markers as an input device.
-// SHIPPED OFF, 2026-08-22. The overlay demonstrably WORKS -- the hand landed
-// exactly on the green ring -- but on the second real use the marker leaked
-// into the picture as a green flag. Wording alone has not been shown to hold
-// it. Markers remain a precise INPUT device with this off; only the diagram
-// sent to the image model is suppressed.
-var RG_MARK_ON = false;
+// BACK ON, 2026-08-22, Ian deciding with the evidence in front of him. It was
+// switched off in v3.0.758 after a green marker came back as a green flag on
+// the flagpole. Ian: "that green flag it made was very very subtle... i did not
+// even notice it" -- and turning it off cost the accuracy that made the feature
+// work, because a coordinate in text is a far weaker signal than a visible ring.
+// He also wants the vocabulary: "people will talk in terms of the red and green
+// circles." Watch finished pages for laundered markers; if they appear, the next
+// move is magenta crosshairs rather than filled rings, NOT more wording.
+var RG_MARK_ON = true;
 
 // Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
 // it is NEVER clear what cell the subject is in." A quantised cell cannot
