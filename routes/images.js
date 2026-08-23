@@ -431,7 +431,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName) {
   fal.config({ credentials: falKey });
   const ar = shapeAspectRatio(shape);
   const stylePrefix = style ? getStylePrefix(style) : '';
@@ -439,6 +439,15 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
   // retouch like "add the other character" has those identities to draw from.
   // Image 1 is always the current panel; references follow as Image 2+.
   var refs = (charBlock && charBlock.refs) || [];
+  // v3.0.772 -- a correction narrows the payload to the ONE chosen reference.
+  // Falls back to the full list if the name does not resolve, so a lookup miss
+  // degrades to the old behaviour rather than to no reference at all.
+  var narrowed = false;
+  if (onlyRefName) {
+    var _want = String(onlyRefName).trim().toLowerCase();
+    var _only = refs.filter(function (r) { return r && r.name && String(r.name).trim().toLowerCase() === _want; });
+    if (_only.length) { refs = [_only[0]]; narrowed = true; }
+  }
   var imageUrls = [currentImageUrl].concat(refs.map(function (r) { return r.url; }));
   // v3.0.757 -- the marked overlay is a DIAGRAM, not content. It is appended
   // LAST so the Image 2..N reference numbering above it never shifts.
@@ -464,7 +473,11 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       }
       return n + ' is the reference for ' + r.name + '.';
     }).join(' ');
-    refSection =
+    refSection = narrowed
+      ? ('\n\nREFERENCE IMAGE: exactly ONE reference picture is supplied with this request, and it is the reference for ' +
+         refs[0].name + '. There is no other reference and no choice to make. The change described above applies to ' +
+         refs[0].name + ' and to no one else. Use that reference picture for identity only -- face, hair, skin, build and gear -- and never copy its pose, framing, background or level of finish.')
+      :
       '\n\nREFERENCE IMAGES (identity and content source only \u2014 Image 1 is the panel being edited): ' + refMap + ' ' +
       'These are the characters, NPCs, locations, and items that belong in this panel. ' +
       'If the change above asks to add or include a character or element that is NOT already ' +
@@ -1421,7 +1434,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
         for (var ri = 0; ri < refsR.length; ri++) {
           var rn = refsR[ri] && refsR[ri].name;
           if (rn && String(rn).trim().toLowerCase() === want) {
-            return 'Image ' + (ri + 2) + ', the reference for ' + rn + ',';
+            return 'the single reference picture supplied with this request, which is the reference for ' + rn + ',';
           }
         }
         return 'the supplied reference image for ' + nm;
@@ -1439,12 +1452,12 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
         if (pn && String(pn).trim().toLowerCase() === _pickName.toLowerCase()) { _pickIdx = pi; break; }
       }
       _pinOutcome = (_pickIdx >= 0)
-        ? ('matched ' + refsR[_pickIdx].name + ' at Image ' + (_pickIdx + 2))
+        ? ('matched ' + refsR[_pickIdx].name + ' -- payload narrowed to that one reference')
         : 'NO MATCH -- the picked name is not in this route\'s reference list';
       if (_pickIdx >= 0) {
         instructionR = 'The character or object being corrected is ' + refsR[_pickIdx].name +
-          ', and the reference to use for it is Image ' + (_pickIdx + 2) +
-          '. Use no other reference image for this change, whatever else is supplied.\n\n' + instructionR;
+          '. The single reference picture supplied with this request is the reference for ' + refsR[_pickIdx].name +
+          ', and it is the only one supplied. Apply the change to ' + refsR[_pickIdx].name + ' and to no one else.\n\n' + instructionR;
       }
     }
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
@@ -1452,13 +1465,13 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     var _markedUrl = String(req.body.marked_url || '').trim();
     var _r2base = process.env.R2_PUBLIC_URL || '';
     if (_markedUrl && (!_r2base || _markedUrl.indexOf(_r2base + '/') !== 0)) _markedUrl = '';
-    const sub = await submitRetouch(moment.image, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null);
+    const sub = await submitRetouch(moment.image, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, nowTs, nowTs);
-    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', instruction_sent: instructionR } }); } catch (_le) {}
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, ref_url_sent: (function(){ for (var q=0;q<refsR.length;q++){ var rq=refsR[q]; if (rq && rq.name && _pickName && String(rq.name).trim().toLowerCase()===_pickName.toLowerCase()) return rq.url; } return null; })(), picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', instruction_sent: instructionR } }); } catch (_le) {}
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
     }
