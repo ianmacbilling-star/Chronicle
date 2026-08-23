@@ -1298,6 +1298,8 @@ router.post('/retouch-prompt', requireAuth, async function (req, res) {
       '7. Preserve whatever the reader did not ask to change. Say so explicitly.',
       '8. Never mention grid cells, cell numbers, or any interface terminology. Those are input devices and mean nothing to an image model.',
       '9. Write plain declarative English regardless of the language the reader wrote in.',
+      '10. RESOLVE PRONOUNS AGAINST THE FIGURE THE READER INDICATED, and name that figure explicitly in your output. Never pass a bare he, she, they or it through when more than one figure is in the picture: the image model attaches it to the most prominent figure, not the intended one. This has put a costume change onto the wrong character.',
+      '11. If the reader has asked for more than one distinct change at once, still produce ONE instruction, but keep the changes clearly separated and state for each one exactly which figure or object it applies to.',
       '',
       'A draft built from a fixed template may be supplied. If the reader\u2019s own words ask for something the draft does not cover, prefer the reader and keep the draft\u2019s protective clauses. If the reader typed nothing beyond the draft, return the draft essentially unchanged.'
     ].join('\n');

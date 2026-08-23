@@ -10896,9 +10896,9 @@ var RG_ACTIONS = {
     ph: 'Anything else about the look? Optional.'
   },
   orient: {
-    cells: ['from', 'to'], amount: true,
+    cells: ['from', 'to'], optional: ['to'], turn: true, amount: true,
     from: 'Who turns? Click them in the picture.',
-    to: 'Which shoulder comes toward the camera? Click that shoulder.',
+    to: 'Optional: click the shoulder that should come toward the camera.',
     ph: 'Anything else about the turn? Optional.'
   },
   expression: {
@@ -11154,6 +11154,7 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.turn) html += rgSelect('rg-turn', 'Which way', [['toward', 'to end up facing the camera'], ['away', 'to end up facing away from the camera'], ['marker', 'bring the shoulder I clicked toward the camera']]);
   if (def.amount) html += rgSelect('rg-amount', 'How far', [['little', 'a little'], ['part', 'part way'], ['half', 'half turn'], ['all', 'all the way']]);
   if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
   if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
@@ -11378,9 +11379,18 @@ function rgCompose() {
       'The BODY does not turn: the shoulders, torso, hips, arms and legs all stay exactly as they are, in the same pose and the same position in the frame, at the same size and the same distance from the viewer. Only the head and the gaze change.' +
       (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'orient') {
-    out = 'In Image 1, turn the whole body of ' + subj + '. The shoulder at ' + toP +
-      ' swings toward the camera, and the opposite shoulder swings away from the camera, rotating the body ' + rgAmount(rgVal('rg-amount')) + '. ' +
-      'The head turns with the body so the neck is natural, and anything the figure is holding, carrying or wearing turns with it.' +
+    var tw = rgVal('rg-turn');
+    var turnPhrase;
+    if (tw === 'toward') {
+      turnPhrase = 'Rotate the whole body so that the figure ends up facing TOWARD the camera, turning however far is needed to get there and no further. ';
+    } else if (tw === 'away') {
+      turnPhrase = 'Rotate the whole body so that the figure ends up facing AWAY from the camera, with its back toward the viewer, turning however far is needed to get there and no further. ';
+    } else {
+      turnPhrase = 'The shoulder at ' + toP + ' swings toward the camera, and the opposite shoulder swings away from the camera, rotating the body ' + rgAmount(rgVal('rg-amount')) + '. ';
+    }
+    out = 'In Image 1, turn the whole body of ' + subj + '. ' + turnPhrase +
+      'The head turns with the body so the neck is natural, and anything the figure is holding, carrying or wearing turns with it. ' +
+      'If the figure is making a gesture -- pointing, reaching, waving, raising a weapon -- then the SAME arm continues that gesture after the turn. Do not move the gesture to the other arm.' +
       rgMotionClause() +
       ' The feet stay on the same spot of ground and the figure stays in exactly the same place in the frame, at the same size and the same distance from the viewer. It is the same person: same face, hair, clothing and equipment. Only the direction the body faces changes.' +
       (typed ? ' ' + typed : '') + rgTail();
@@ -11561,6 +11571,10 @@ function rgBlockReason() {
     var c = def.cells[i];
     if (optional.indexOf(c) >= 0) continue;
     if (!rgState[c]) return def[c].replace(/\s*(Click|Tap)\b.*$/, '');
+  }
+  // A shoulder marker is optional UNTIL the reader asks to steer by it.
+  if (def.turn && rgVal('rg-turn') === 'marker' && !rgState.to) {
+    return 'Click the shoulder that should come toward the camera, or choose a different way to turn';
   }
   // Two markers in the same spot is a contradiction, not an instruction:
   // "move it from here to here" and "aim at yourself" produce nothing.
