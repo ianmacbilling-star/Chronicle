@@ -497,6 +497,9 @@ async function initPostgres() {
     // image_jobs.session_id routes a kind='session_establishing' generation back
     // to its session (the table already keys moment/character jobs by their ids).
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS session_id INTEGER',
+    // v3.0.773 -- a retouch that edits a TILE records the box and the panel it
+    // came from, so the webhook can paste the result back into the original.
+    'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS crop_meta TEXT',
     // Forgot-password flow. These were previously added to production by
     // hand and never captured as migrations, so a fresh DB (e.g. staging)
     // was missing them and forgot-password silently failed. Now migrated

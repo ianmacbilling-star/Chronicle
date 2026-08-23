@@ -4,7 +4,8 @@ const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
-const { releaseImage, persistToR2 } = require('../storage/storage');
+const { releaseImage, persistToR2, fetchFile } = require('../storage/storage');
+const imageCrop = require('../services/imageCrop');
 const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
@@ -431,9 +432,11 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName, isTile) {
   fal.config({ credentials: falKey });
-  const ar = shapeAspectRatio(shape);
+  // v3.0.773 -- a tile is square, and saying so is what stops the model
+  // stacking duplicates to fill an extreme aspect.
+  const ar = isTile ? '1:1' : shapeAspectRatio(shape);
   const stylePrefix = style ? getStylePrefix(style) : '';
   // Reference images for the characters/assets attached to this panel, so a
   // retouch like "add the other character" has those identities to draw from.
@@ -495,6 +498,8 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       // adjective, so a retouch could hand back a figure on a grey sweep or a floor. The staging
       // is now dictated here too, from the one shared string.
       ? 'You are editing an EXISTING single-character reference image, provided as Image 1. It shows ONE character. Keep that SAME single figure: identical face, body type, species, hair, distinctive features, outfit, colors, and pose, and change ONLY the following, leaving everything else untouched. Output exactly ONE figure: do NOT create a model sheet, turnaround, or multiple side-by-side copies, and do not add any other characters, creatures, or objects.\n\n' + CHAR_REF_STAGING
+      : isTile
+      ? 'You are editing a CLOSE-UP CROP taken from a larger picture, provided as Image 1. It will be pasted back into that picture exactly where it came from, so its edges must continue to match their surroundings: keep the same art style, medium, brushwork, line weight, texture, palette and lighting right up to all four borders, and do not move, rescale or reframe anything. Keep the composition of this crop the same and apply ONLY the following change:\n\n'
       : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
@@ -1465,13 +1470,38 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     var _markedUrl = String(req.body.marked_url || '').trim();
     var _r2base = process.env.R2_PUBLIC_URL || '';
     if (_markedUrl && (!_r2base || _markedUrl.indexOf(_r2base + '/') !== 0)) _markedUrl = '';
-    const sub = await submitRetouch(moment.image, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null);
+    // v3.0.773 -- CROP. When the reader marked a spot and asked for the change
+    // to be confined to it, the model is sent a TILE, not the whole picture.
+    // Everything outside the tile is then untouched by arithmetic rather than
+    // by instruction -- measured at zero changed pixels.
+    var _cropMeta = null, _sendUrl = moment.image, _isTile = false;
+    try {
+      var _cm = (req.body && req.body.crop) || null;
+      if (_cm && typeof _cm.x === 'number' && typeof _cm.y === 'number') {
+        var _panelBuf = await fetchFile(moment.image);
+        if (_panelBuf) {
+          var _cut = await imageCrop.cropTile(_panelBuf, _cm);
+          var _tileUrl = await uploadFile(_cut.buffer, 'tile-' + moment.id + '-' + Date.now() + '.png', 'image/png');
+          if (_tileUrl) {
+            _sendUrl = _tileUrl;
+            _isTile = true;
+            _cropMeta = JSON.stringify({ box: _cut.box, base: moment.image, panel: _cut.panel });
+          }
+        }
+      }
+    } catch (_ce) {
+      // A crop that fails falls back to the whole picture: a degraded retouch
+      // beats a retouch the reader paid for and did not get.
+      _cropMeta = null; _sendUrl = moment.image; _isTile = false;
+      try { await logDebug(req.session.userId, { level: 'warn', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Crop failed, sending the whole picture: ' + (_ce && _ce.message), detail: { moment_id: moment.id } }); } catch (_le2) {}
+    }
+    const sub = await submitRetouch(_sendUrl, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null, _isTile);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, nowTs, nowTs);
-    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, ref_url_sent: (function(){ for (var q=0;q<refsR.length;q++){ var rq=refsR[q]; if (rq && rq.name && _pickName && String(rq.name).trim().toLowerCase()===_pickName.toLowerCase()) return rq.url; } return null; })(), picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', instruction_sent: instructionR } }); } catch (_le) {}
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, crop_meta, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, _cropMeta, nowTs, nowTs);
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, ref_url_sent: (function(){ for (var q=0;q<refsR.length;q++){ var rq=refsR[q]; if (rq && rq.name && _pickName && String(rq.name).trim().toLowerCase()===_pickName.toLowerCase()) return rq.url; } return null; })(), picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', cropped: _isTile ? _cropMeta : 'no -- whole picture sent', instruction_sent: instructionR } }); } catch (_le) {}
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
     }
@@ -1831,14 +1861,37 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       // buttons handed back an opaque white box that erased its neighbours on the line-up.
       // A SCENE image still keeps every pixel: it has a real background and must not be cut.
       const _cutWhite = (job.kind === 'char_ref' || job.kind === 'session_ref');
-      const imageUrl = await persistToR2(falUrl, { cutWhite: _cutWhite });
+      // v3.0.773 -- a TILE job hands back a tile. Paste it into the picture it
+      // was cut from, and store THAT. Everything outside the box is untouched
+      // because it was never sent anywhere.
+      var imageUrl = null;
+      var _cropDone = false;
+      if (job.crop_meta) {
+        try {
+          var _cj = JSON.parse(job.crop_meta);
+          if (_cj && _cj.box && _cj.base) {
+            var _baseBuf = await fetchFile(_cj.base);
+            var _tileRes = await fetch(falUrl);
+            var _tileBuf = _tileRes && _tileRes.ok ? Buffer.from(await _tileRes.arrayBuffer()) : null;
+            if (_baseBuf && _tileBuf) {
+              var _merged = await imageCrop.compositeTile(_baseBuf, _tileBuf, _cj.box);
+              imageUrl = await uploadFile(_merged, 'merged-' + (job.moment_id || 0) + '-' + Date.now() + '.png', 'image/png');
+              _cropDone = !!imageUrl;
+            }
+          }
+        } catch (_xe) {
+          try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Composite failed, storing the tile as-is: ' + (_xe && _xe.message), detail: { moment_id: job.moment_id, crop_meta: job.crop_meta } }); } catch (_le3) {}
+        }
+      }
+      // No crop, or the composite failed: the original path, unchanged.
+      if (!imageUrl) imageUrl = await persistToR2(falUrl, { cutWhite: _cutWhite });
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
       // box gets cropped by object-fit:cover. Measuring the bytes gives the true aspect so the
       // box fits exactly. Falls through to whatever imgW/imgH already hold if measuring fails.
       try {
-        const _measured = await measureImageDims(imageUrl) || await measureImageDims(falUrl);
+        const _measured = await measureImageDims(imageUrl) || (_cropDone ? null : await measureImageDims(falUrl));
         if (_measured && _measured.width > 0 && _measured.height > 0) {
           imgW = _measured.width; imgH = _measured.height; dimsSource = 'measured';
         }

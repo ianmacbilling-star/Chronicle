@@ -10983,6 +10983,11 @@ var RG_ACTIONS = {
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
 
+// v3.0.773 -- actions that can be confined to a tile around the red marker.
+// A tile only makes sense for a change to ONE thing in ONE place: the
+// background, the weather and a whole-picture restyle cannot be cropped.
+var RG_CROPPABLE = ['reface', 'bodypart', 'pose', 'limb', 'reorient', 'object', 'appearance', 'expression', 'remove'];
+
 var RG_FROM_TINT = 'rgba(226,72,72,0.22)';
 var RG_TO_TINT = 'rgba(86,196,116,0.22)';
 var RG_FROM_LINE = 'rgba(238,86,86,0.95)';
@@ -11209,6 +11214,9 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (RG_CROPPABLE.indexOf(a) >= 0) {
+    html += rgSelect('rg-crop', 'How much to redraw', [['tile', 'just around the red marker (keeps the rest of the picture untouched)'], ['whole', 'the whole picture']]);
+  }
   if (def.scope) html += rgSelect('rg-scope', 'Apply it to', [['all', 'the whole picture'], ['one', 'just the figure I circle in red']]);
   if (def.convert) {
     var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
@@ -12000,6 +12008,14 @@ function submitRetouch() {
   if (!moment) return;
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+  var _rgCrop = null;
+  try {
+    var _cSel = document.getElementById('retouch-action');
+    var _cA = _cSel ? _cSel.value : '';
+    if (RG_CROPPABLE.indexOf(_cA) >= 0 && rgVal('rg-crop') !== 'whole' && rgState.from) {
+      _rgCrop = { x: rgState.from.x, y: rgState.from.y, r: rgState.from.r };
+    }
+  } catch (e) { /* a missing crop is a whole-picture retouch, not a failure */ }
   var _rgSaw = null, _rgFork = null;
   try {
     _rgSaw = (typeof rgPanelRefs === 'function') ? rgPanelRefs().map(function (x) { return x && x.name; }) : null;
@@ -12024,7 +12040,8 @@ function submitRetouch() {
       marked_url: _markedUrl || null,
       ref_name: _rgRef || null,
       picker_saw: _rgSaw || null,
-      picker_fork: _rgFork || null
+      picker_fork: _rgFork || null,
+      crop: _rgCrop
     })
   });
   })
