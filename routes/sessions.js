@@ -296,6 +296,46 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
+  // v3.0.767 -- attach each panel's REFERENCE-BEARING cast so the Retouch
+  // picker has something to show. Only entries that actually carry a
+  // reference image appear: a name with no picture behind it cannot be used
+  // to correct a figure, and offering it would be a lie.
+  try {
+    const _refChars = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(viewForkId, req.params.campaignId);
+    await imageHelpers.attachPriorReferences(db, _refChars, session.id, req.params.campaignId, viewForkId);
+    const _refAssets = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+
+    // One query for every explicit cast on this fork, rather than two per
+    // panel: a session can hold a great many panels.
+    const _mcAll = {}, _maAll = {};
+    (await db.prepare(
+      'SELECT mc.moment_id, mc.character_id FROM moment_characters mc JOIN moments m ON m.id = mc.moment_id WHERE m.fork_id = ?'
+    ).all(viewForkId)).forEach(function (r) { (_mcAll[r.moment_id] = _mcAll[r.moment_id] || []).push(r.character_id); });
+    (await db.prepare(
+      'SELECT ma.moment_id, ma.asset_id FROM moment_assets ma JOIN moments m ON m.id = ma.moment_id WHERE m.fork_id = ?'
+    ).all(viewForkId)).forEach(function (r) { (_maAll[r.moment_id] = _maAll[r.moment_id] || []).push(r.asset_id); });
+
+    moments.forEach(function (m) {
+      const _pt = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
+      const _ec = m.cast_explicit ? (_mcAll[m.id] || []) : null;
+      const _ea = m.cast_explicit ? (_maAll[m.id] || []) : null;
+      const _cb = imageHelpers.buildCharacterBlock(_refChars, _pt, m.panel_order, _ec);
+      const _ab = imageHelpers.buildAssetBlock(_refAssets, _pt, _ea);
+      m.characters = (_cb.refs || []).map(function (r) { return { name: r.name }; });
+      m.assets = (_ab.refs || []).map(function (r) { return { name: r.name, category: r.category }; });
+    });
+  } catch (_re) {
+    // A picker with nothing in it is a degraded panel, not a broken session.
+    console.error('panel reference attach failed:', _re && _re.message);
+  }
+
   res.json(Object.assign({}, session, {
     moments,
     fork_id: viewForkId,

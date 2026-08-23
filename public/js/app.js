@@ -10855,6 +10855,11 @@ var RG_ON = true;
 // move is magenta crosshairs rather than filled rings, NOT more wording.
 var RG_MARK_ON = true;
 
+// Set to true to send a TILE instead of the whole picture on the actions in
+// RG_CROPPABLE. See the note above before turning it back on: the compositing
+// is proven correct, the model is the problem.
+var RG_CROP_ON = false;
+
 // Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
 // it is NEVER clear what cell the subject is in." A quantised cell cannot
 // point at something that straddles a boundary, which is most things. A
@@ -10975,9 +10980,25 @@ var RG_ACTIONS = {
   // route already resolves and prepends to every retouch prompt. Repairs a
   // panel whose medium has drifted, AND converts an archive picture that
   // arrived in a different style -- the same operation from two directions.
-  restyle: { cells: [], convert: true, ph: 'Anything else? Optional.' },
+  restyle: {
+    cells: ['from'], optional: ['from'], convert: true, scope: true,
+    from: 'Optional: click the one figure that needs restyling.',
+    ph: 'Anything else? Optional.'
+  },
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
+
+// v3.0.773 -- actions that can be confined to a tile around the red marker.
+// A tile only makes sense for a change to ONE thing in ONE place: the
+// background, the weather and a whole-picture restyle cannot be cropped.
+// Actions confined to a tile. The reader is never asked: the action already
+// says whether the change is local. Background, weather, whole-picture
+// restyle and Add are whole-frame by definition and never crop.
+var RG_CROPPABLE = ['reface', 'bodypart', 'pose', 'limb', 'reorient', 'object', 'appearance', 'expression', 'remove', 'move', 'facing'];
+
+// These carry the subject somewhere else, so the tile must span BOTH markers:
+// a box around where it is cannot contain where it is going.
+var RG_SPAN_CROP = ['move', 'limb', 'pose', 'facing'];
 
 var RG_FROM_TINT = 'rgba(226,72,72,0.22)';
 var RG_TO_TINT = 'rgba(86,196,116,0.22)';
@@ -11085,7 +11106,7 @@ function rgMotionClause() {
 }
 
 function rgTailAdd() {
-  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
+  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. Anything you draw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering must never be copied across. The background, lighting, colours and art style are completely unchanged.';
 }
 
 function rgDepthClause(d, who) {
@@ -11101,7 +11122,7 @@ function rgDepthClause(d, who) {
 // Appended to every template except Add. Mentioning a person is an invitation
 // to draw one -- that cost two duplicated figures before it was written down.
 function rgTail() {
-  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Any figure you redraw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering, sharpness and finish must never be copied across. A reference image is a lookup for a face and its gear, never a picture to reproduce: never copy a reference pose, stance, camera angle, expression, framing or background into the scene, and never replace the pose a figure already has with the one in its reference. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
 }
 
 function rgArticle(s) {
@@ -11114,6 +11135,21 @@ function rgArticle(s) {
 // Only the panel CAST can be named: a typed name matching no row sends no
 // reference image, and the model then invents a stranger -- the very fault the
 // reface action exists to repair.
+// Characters AND assets: both are sent to the image model as references, so
+// both must be selectable. An asset drawn wrong was previously untargetable.
+function rgPanelRefs() {
+  var out = rgPanelCast();
+  var ms = (typeof state !== 'undefined' && state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) {
+    if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
+      var as = ms[i].assets || [];
+      for (var j = 0; j < as.length; j++) if (as[j] && as[j].name) out.push(as[j]);
+      break;
+    }
+  }
+  return out;
+}
+
 function rgPanelCast() {
   var out = [];
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
@@ -11130,16 +11166,16 @@ function rgPanelCast() {
 function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
 function rgCastSelect(label) {
-  var cs = rgPanelCast();
+  var cs = rgPanelRefs();
   if (!cs.length) {
-    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nobody is cast on this panel, so no reference picture was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
-      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div></div>';
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
+      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div></div>';
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
   for (var i = 0; i < cs.length; i++) s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(cs[i].name) + '</option>';
   return s + '</select></label>' +
-    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div>';
+    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div>';
 }
 
 function rgOpenCast() {
@@ -11190,6 +11226,7 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.scope) html += rgSelect('rg-scope', 'Apply it to', [['all', 'the whole picture'], ['one', 'just the figure I circle in red']]);
   if (def.convert) {
     var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
     html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Reapplies the art style set at the top of the storyboard:' +
@@ -11444,10 +11481,13 @@ function rgCompose() {
     out = 'In Image 1, redraw ' + rgArticle(typed || 'malformed part') + ' of ' + subj +
       ', which is currently malformed. Draw it correctly and anatomically naturally, at the same size and in the same position, consistent with the pose and in the same art style. Change nothing else about the figure: same face, same clothing, same equipment, same position and same size.' + rgTail();
   } else if (a === 'reface') {
-    out = 'In Image 1, ' + subj + ' is meant to be ' + (who || 'the intended character') +
-      ', but is drawn as the wrong person. Redraw that same figure as ' + (who || 'the intended character') +
-      ', using the supplied reference image for the exact face, hair, build, skin, clothing and equipment. ' +
+    var whoName = who || 'the intended character';
+    var refTok = who ? ('{{REF:' + who + '}}') : 'the supplied reference image';
+    out = 'In Image 1, ' + subj + ' is meant to be ' + whoName +
+      ', but is drawn as the wrong one. Redraw it as ' + whoName +
+      ', using ' + refTok + ' for the exact face, hair, build, skin, colouring, clothing and equipment. ' +
       'Keep the figure in exactly the same place, at exactly the same size and the same distance from the viewer, in the same pose and the same lighting as now -- only the identity of the person changes. ' +
+      'Use the reference ONLY as a lookup for the face, hair, skin, build, clothing and equipment. Do NOT copy the reference picture itself: not its pose, not its stance, not its camera angle, not its expression, not its framing, not its background and not its level of finish. The figure keeps the pose, angle, stance and expression it already has in Image 1, whatever those are. ' +
       'Exactly one figure stands there when you are finished.' + (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'appearance') {
     out = 'In Image 1, change how ' + subj + ' looks: ' + (typed || 'adjust the appearance') +
@@ -11493,6 +11533,16 @@ function rgCompose() {
       'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
       'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
   } else if (a === 'restyle') {
+    var scopeOne = (rgVal('rg-scope') === 'one' && rgState.from);
+    if (scopeOne) {
+      out = 'In Image 1, restyle ONLY the single figure at ' + fromP + '. ' +
+        'That figure keeps its exact position, size, pose, face, clothing and equipment -- nothing about it moves or changes shape. ' +
+        'Redraw that figure so its brushwork, edge quality, level of finish, texture and palette match the rest of Image 1 exactly, in the art style described at the top of this prompt. ' +
+        'It currently looks out of place because it is rendered more cleanly and sharply than its surroundings, as though copied in from a separate reference picture. ' +
+        'EVERY OTHER PART OF THE PICTURE IS UNTOUCHED: every other figure, the background, the lighting, the composition and the framing stay exactly as they are, pixel for pixel where possible. ' +
+        (typed ? typed + ' ' : '') +
+        'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
+    } else {
     out = 'In Image 1, keep the picture exactly as it is composed: the same scene, the same figures in the same places and the same poses, the same faces and expressions, the same clothing and objects, the same framing and the same viewpoint. Nothing moves, nothing is added and nothing is removed. ' +
       'Re-render the whole picture in the art style described at the top of this prompt, applying that style consistently to every part of the image -- the figures, the background, the lighting, the linework and the texture. ' +
       ((rgVal('rg-convert') === 'cross')
@@ -11500,6 +11550,7 @@ function rgCompose() {
         : 'This picture is meant to be in the described style already but has drifted away from it. Put it back: restore the medium, the linework, the texture and the palette of the described style across the whole image, and remove any trace of the style it drifted into. Change nothing else. ') +
       (typed ? typed + ' ' : '') +
       'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
+    }
   } else if (a === 'scene') {
     out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
@@ -11511,6 +11562,18 @@ function rgCompose() {
 // Draws the panel plus the reader's rings onto a canvas and uploads it.
 // Resolves with a URL, or with null on ANY failure -- a missing overlay must
 // never block a retouch that would otherwise have worked.
+// The reference the reader PICKED, read at submit time and sent as its own
+// field. Null unless the current action actually offers a picker.
+function rgChosenRef() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var sel = document.getElementById('retouch-action');
+  var a = sel ? sel.value : '';
+  var def = RG_ACTIONS[a];
+  if (!def || !def.cast) return null;
+  var v = rgVal('rg-who');
+  return v || null;
+}
+
 function rgSnapshotMarkers() {
   if (!RG_ON || !RG_MARK_ON || !rgState.momentId) return null;
   if (!rgState.from && !rgState.to) return null;
@@ -11634,6 +11697,9 @@ function rgBlockReason() {
     if (!rgState[c]) return def[c].replace(/\s*(Click|Tap)\b.*$/, '');
   }
   // A shoulder marker is optional UNTIL the reader asks to steer by it.
+  if (def.scope && rgVal('rg-scope') === 'one' && !rgState.from) {
+    return 'Click the figure that needs restyling, or apply it to the whole picture';
+  }
   if (def.turn && rgVal('rg-turn') === 'marker' && !rgState.to) {
     return 'Click the shoulder that should come toward the camera, or choose a different way to turn';
   }
@@ -11950,6 +12016,25 @@ function submitRetouch() {
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
+  var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+  var _rgCrop = null;
+  try {
+    var _cSel = document.getElementById('retouch-action');
+    var _cA = _cSel ? _cSel.value : '';
+    if (RG_CROP_ON && RG_CROPPABLE.indexOf(_cA) >= 0 && rgState.from) {
+      _rgCrop = { x: rgState.from.x, y: rgState.from.y, r: rgState.from.r };
+      // A move, a reach or a turn of the gaze ends somewhere else, so the tile
+      // has to reach that far too.
+      if (RG_SPAN_CROP.indexOf(_cA) >= 0 && rgState.to) {
+        _rgCrop.to = { x: rgState.to.x, y: rgState.to.y, r: rgState.to.r };
+      }
+    }
+  } catch (e) { /* a missing crop is a whole-picture retouch, not a failure */ }
+  var _rgSaw = null, _rgFork = null;
+  try {
+    _rgSaw = (typeof rgPanelRefs === 'function') ? rgPanelRefs().map(function (x) { return x && x.name; }) : null;
+    _rgFork = (state.currentSession && state.currentSession.fork_id) || null;
+  } catch (e) { /* diagnostics must never block a retouch */ }
   closeRetouch();
   showPanelBusy(momentId, 'Retouching');
   // v3.0.757 -- the overlay is rendered from the snapshot taken above, then the
@@ -11966,7 +12051,11 @@ function submitRetouch() {
       instruction: instruction,
       style: state.artStyle,
       fal_key: getFalKey() || 'platform',
-      marked_url: _markedUrl || null
+      marked_url: _markedUrl || null,
+      ref_name: _rgRef || null,
+      picker_saw: _rgSaw || null,
+      picker_fork: _rgFork || null,
+      crop: _rgCrop
     })
   });
   })
@@ -12775,7 +12864,10 @@ function renderStoryboard() {
     var _isDrawnTitle = false;
     try {
       var _mlm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : null;
-      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url);
+      // v3.0.777 -- the panel must BE the drawn title, not merely have been one.
+      // built_title.url is the live image while a title is current; once the art
+      // is regenerated or replaced the two diverge and the row holds a picture.
+      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url && m.image && String(_mlm.built_title.url) === String(m.image));
     } catch (e) { _isDrawnTitle = false; }
     var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
