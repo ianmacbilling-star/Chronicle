@@ -11105,7 +11105,7 @@ function rgDepthClause(d, who) {
 // Appended to every template except Add. Mentioning a person is an invitation
 // to draw one -- that cost two duplicated figures before it was written down.
 function rgTail() {
-  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Any figure you redraw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering, sharpness and finish must never be copied across. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Any figure you redraw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering, sharpness and finish must never be copied across. A reference image is a lookup for a face and its gear, never a picture to reproduce: never copy a reference pose, stance, camera angle, expression, framing or background into the scene, and never replace the pose a figure already has with the one in its reference. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
 }
 
 function rgArticle(s) {
@@ -11137,13 +11137,13 @@ function rgCastSelect(label) {
   var cs = rgPanelCast();
   if (!cs.length) {
     return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nobody is cast on this panel, so no reference picture was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
-      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div></div>';
+      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div></div>';
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
   for (var i = 0; i < cs.length; i++) s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(cs[i].name) + '</option>';
   return s + '</select></label>' +
-    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Open the cast picker</button></div>';
+    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div>';
 }
 
 function rgOpenCast() {
@@ -11453,6 +11453,7 @@ function rgCompose() {
       ', but is drawn as the wrong person. Redraw that same figure as ' + (who || 'the intended character') +
       ', using the supplied reference image for the exact face, hair, build, skin, clothing and equipment. ' +
       'Keep the figure in exactly the same place, at exactly the same size and the same distance from the viewer, in the same pose and the same lighting as now -- only the identity of the person changes. ' +
+      'Use the reference ONLY as a lookup for the face, hair, skin, build, clothing and equipment. Do NOT copy the reference picture itself: not its pose, not its stance, not its camera angle, not its expression, not its framing, not its background and not its level of finish. The figure keeps the pose, angle, stance and expression it already has in Image 1, whatever those are. ' +
       'Exactly one figure stands there when you are finished.' + (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'appearance') {
     out = 'In Image 1, change how ' + subj + ' looks: ' + (typed || 'adjust the appearance') +
