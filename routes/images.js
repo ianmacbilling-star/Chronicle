@@ -432,7 +432,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName, isTile) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName, isTile, wholeUrl) {
   fal.config({ credentials: falKey });
   // v3.0.773 -- a tile is square, and saying so is what stops the model
   // stacking duplicates to fill an extreme aspect.
@@ -454,6 +454,15 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
   var imageUrls = [currentImageUrl].concat(refs.map(function (r) { return r.url; }));
   // v3.0.757 -- the marked overlay is a DIAGRAM, not content. It is appended
   // LAST so the Image 2..N reference numbering above it never shifts.
+  var wholeSection = '';
+  if (isTile && wholeUrl) {
+    var wholeN = 'Image ' + (imageUrls.length + 1);
+    imageUrls = imageUrls.concat([wholeUrl]);
+    wholeSection = '\n\n' + wholeN + ' IS THE COMPLETE PICTURE THAT IMAGE 1 WAS CUT OUT OF. It is provided for CONTEXT ONLY and must never be edited, redrawn, copied, shrunk or included in your output. ' +
+      'Find the region of ' + wholeN + ' that matches Image 1: that is where your result will be pasted back. ' +
+      'Image 1 is a FRAGMENT of a larger picture, not a picture in its own right. It has no composition of its own and needs none: it does not need a subject, a focal point, a horizon, a sky, a border or a balanced arrangement, and any empty or flat area in it is a real part of the larger picture that simply continues past the edge of the crop. ' +
+      'Do not add anything to fill space. Do not draw a smaller copy of the picture inside it. Do not re-compose, re-frame or re-imagine the fragment. Return the SAME fragment with only the requested change made, so that it still lines up seamlessly with ' + wholeN + ' on all four sides.';
+  }
   var markSection = '';
   if (markedUrl) {
     var markN = 'Image ' + (imageUrls.length + 1);
@@ -506,7 +515,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
-        'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection;
+        'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection + wholeSection;
   const submitted = await fal.queue.submit(IMAGE_EDIT_MODELS.nano2, {
     input: {
       prompt: editPrompt,
@@ -1499,7 +1508,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       _cropMeta = null; _sendUrl = moment.image; _isTile = false;
       try { await logDebug(req.session.userId, { level: 'warn', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Crop failed, sending the whole picture: ' + (_ce && _ce.message), detail: { moment_id: moment.id } }); } catch (_le2) {}
     }
-    const sub = await submitRetouch(_sendUrl, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null, _isTile);
+    const sub = await submitRetouch(_sendUrl, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null, _isTile, _isTile ? moment.image : null);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, crop_meta, created_at, updated_at) ' +
