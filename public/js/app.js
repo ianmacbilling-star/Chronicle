@@ -10816,7 +10816,19 @@ function archiveFilterBarHTML(f, onchange) {
 // ---------------------------------------------------------------------------
 var RG_ON = true;
 
-var rgState = { momentId: null, from: null, to: null, active: 'from', cols: 0, rows: 0 };
+// Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
+// it is NEVER clear what cell the subject is in." A quantised cell cannot
+// point at something that straddles a boundary, which is most things. A
+// marker is a continuous point with a radius, so it can.
+//
+// from/to are null or { x, y, r } with every value a FRACTION of the image:
+// x and y of the width and height, r of the shorter side.
+var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0 };
+
+// Small means "this point". Large means "this whole thing". The size changes
+// the WORDING as well as the ring, and in the crop stage it will set the tile.
+var RG_SIZES = [0.035, 0.07, 0.12, 0.19];
+var RG_SIZE_NAMES = ['a point', 'small', 'medium', 'large'];
 
 // Every action declares which squares it needs and what each one asks. Adding
 // an action is a row here plus a template in rgCompose -- nothing else.
@@ -10824,14 +10836,14 @@ var RG_ACTIONS = {
   none: { cells: [], ph: 'Say what you want changed, in your own words.' },
   move: {
     cells: ['from', 'to'],
-    from: 'Which one? Tap the square it is in now.',
-    to: 'Where to? Tap the square it should end up in.',
+    from: 'Which one? Click it in the picture.',
+    to: 'Where to? Click the spot.',
     depth: true,
     ph: 'Anything else about the move? Optional.'
   },
   add: {
     cells: ['to'], cast: 'Who to add',
-    to: 'Where? Tap the square they should appear in.',
+    to: 'Where? Click the spot.',
     depth: true,
     ph: 'Anything about how they should appear? Optional.'
   },
@@ -10840,7 +10852,7 @@ var RG_ACTIONS = {
   // two different jobs and giving the wrong advice for one of them.
   extra: {
     cells: ['to'],
-    to: 'Where? Tap the square it should appear in.',
+    to: 'Where? Click the spot.',
     depth: true,
     ph: 'Who or what to add? e.g. a centerfielder on the outfield grass, glove up'
   },
@@ -10850,60 +10862,73 @@ var RG_ACTIONS = {
   },
   remove: {
     cells: ['from'],
-    from: 'What goes? Tap the square it is in.',
+    from: 'What goes? Click it in the picture.',
     ph: 'What is there now? e.g. a small armoured figure'
   },
   effect: {
     cells: ['to'],
-    to: 'Where? Tap the square it should be centred on.',
+    to: 'Where? Click the spot.',
     size: true,
     ph: 'What is the effect? e.g. a burst of crackling white-blue lightning'
   },
   facing: {
     cells: ['from', 'to'],
-    from: 'Who turns? Tap the square they are in.',
-    to: 'Looking at what? Tap that square.',
+    from: 'Who turns? Click them in the picture.',
+    to: 'Looking at what? Click it.',
     ph: 'Anything else about the look? Optional.'
   },
   orient: {
     cells: ['from'], dir: true,
-    from: 'Who turns? Tap the square they are in.',
+    from: 'Who turns? Click them in the picture.',
     ph: 'Anything else about the turn? Optional.'
   },
   expression: {
     cells: ['from'],
-    from: 'Whose face? Tap the square they are in.',
+    from: 'Whose face? Click them in the picture.',
     ph: 'What expression? e.g. furious, terrified, laughing'
   },
   bodypart: {
     cells: ['from'],
-    from: 'Which one? Tap the square they are in.',
+    from: 'Which one? Click them in the picture.',
     ph: 'What is wrong? e.g. the right hand has too many fingers'
   },
   pose: {
     cells: ['from', 'to'], optional: ['to'],
-    from: 'Who moves? Tap the square they are in.',
-    to: 'Aimed at what? Tap that square. Skip this if there is no target.',
+    from: 'Who moves? Click them in the picture.',
+    to: 'Aimed at what? Click it. Skip this if there is no target.',
     ph: 'What should they be doing? e.g. pointing straight out to the distance'
   },
   reface: {
     cells: ['from'], cast: 'Who it should be',
-    from: 'Which figure is wrong? Tap the square they are in.',
+    from: 'Which figure is wrong? Click them in the picture.',
     ph: 'Anything else? Optional.'
   },
   appearance: {
     cells: ['from'],
-    from: 'Who changes? Tap the square they are in.',
+    from: 'Who changes? Click them in the picture.',
     ph: 'What changes about how they look? e.g. a fresh scar across the left cheek'
   },
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
 
-var RG_FROM_TINT = 'rgba(216,184,92,0.34)';
-var RG_TO_TINT = 'rgba(120,196,214,0.34)';
+var RG_FROM_TINT = 'rgba(226,72,72,0.22)';
+var RG_TO_TINT = 'rgba(86,196,116,0.22)';
+var RG_FROM_LINE = 'rgba(238,86,86,0.95)';
+var RG_TO_LINE = 'rgba(96,214,128,0.95)';
 
 // Grid geometry comes from the panel SHAPE. A fixed 3x3 on a tower panel gives
 // cells taller than the figures standing in them.
+// Height divided by width, matching the shapes the server renders.
+function rgShapeAspect(shape) {
+  if (shape === 'square') return 1;
+  if (shape === 'wide') return 9 / 16;
+  if (shape === 'panoramic') return 9 / 21;
+  if (shape === 'tower') return 4;
+  if (shape === 'tall') return 3 / 2;
+  if (shape === 'reference' || shape === 'fullpage') return 4 / 3;
+  return 3 / 4;
+}
+
 function rgGrid(shape) {
   if (shape === 'square') return { c: 3, r: 3 };
   if (shape === 'wide') return { c: 4, r: 2 };
@@ -10916,12 +10941,10 @@ function rgGrid(shape) {
 // FRAME-RELATIVE ONLY. Never relative to a person or an object: "left of the
 // giant" was resolved as the giant's own left and landed on the wrong side of
 // the picture, and naming a character as a landmark drew a second copy of them.
-function rgPlace(n) {
-  if (!n || !rgState.cols) return '';
-  var col = (n - 1) % rgState.cols;
-  var row = Math.floor((n - 1) / rgState.cols);
-  var fx = (col + 0.5) / rgState.cols;
-  var fy = (row + 0.5) / rgState.rows;
+// FRAME-RELATIVE ONLY. Never relative to a person or an object: "left of the
+// giant" was resolved as the giant's own left and landed on the wrong side of
+// the picture, and naming a character as a landmark drew a second copy.
+function rgFrame(fx, fy) {
   var h = (fx < 0.25) ? 'left' : (fx < 0.45) ? 'left-of-centre' : (fx < 0.55) ? 'central' : (fx < 0.75) ? 'right-of-centre' : 'right';
   var v = (fy < 0.3) ? 'upper' : (fy < 0.7) ? 'middle' : 'lower';
   var name = (h === 'central' && v === 'middle') ? 'the centre of the picture' : ('the ' + v + ' ' + h + ' area of the picture');
@@ -10929,14 +10952,42 @@ function rgPlace(n) {
          Math.round(fy * 100) + ' percent of the way down';
 }
 
-// A figure usually straddles two squares, so the SUBJECT is named loosely on
-// purpose. False precision makes the model hunt for a boundary that is not
-// there; "in and around" describes what a person actually pointed at.
+// A marker still describes a REGION rather than a pixel, because a reader
+// pointing at something is not claiming to have hit its centroid.
+function rgPlaceM(m) {
+  if (!m) return '';
+  return rgFrame(m.x, m.y);
+}
+
+// Kept for typed references like "cell 3": readers picked that vocabulary up
+// from the product and from earlier builds, and a stale habit should still
+// resolve rather than reach the image model as a meaningless token.
+function rgPlace(n) {
+  if (!n || !rgState.cols) return '';
+  var col = (n - 1) % rgState.cols;
+  var row = Math.floor((n - 1) / rgState.cols);
+  return rgFrame((col + 0.5) / rgState.cols, (row + 0.5) / rgState.rows);
+}
+// The ring size chooses the wording. A tight marker means the reader pointed
+// AT something; a wide one means they circled a whole figure. Both stay loose
+// about the boundary, because false precision makes the model hunt for an
+// edge that is not in the picture.
+function rgSubjectM(m) {
+  if (!m) return 'the figure';
+  var p = rgFrame(m.x, m.y);
+  if (m.r <= RG_SIZES[0]) return 'the thing at ' + p;
+  if (m.r >= RG_SIZES[3]) return 'the figure occupying the area around ' + p;
+  return 'the figure in and around ' + p;
+}
+
 function rgSubject(n) {
   var p = rgPlace(n);
   return p ? ('the figure in and around ' + p) : 'the figure';
 }
-
+// The reader's own word for a location is whatever the rest of the product
+// taught them -- Ian typed "panel 5" because that is what these are called
+// elsewhere in Campaignia. Resolve every spelling, so a bare number never
+// reaches the image model and the offline fallback is correct too.
 function rgResolveRefs(s) {
   var v = String(s || '');
   if (!rgState.cols) return v;
@@ -11026,7 +11077,7 @@ function rgSelect(id, label, opts) {
 function rgCellRow(slot, question) {
   var filled = rgState[slot];
   var isActive = (rgState.active === slot);
-  var tint = (slot === 'from') ? RG_FROM_TINT : RG_TO_TINT;
+  var tint = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
   return '<div onclick="rgSetActive(\'' + slot + '\')" style="cursor:pointer;padding:6px 8px;border-radius:6px;' +
     'border:1px solid ' + (isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)') + ';' +
     'background:' + (isActive ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
@@ -11034,7 +11085,7 @@ function rgCellRow(slot, question) {
     ';border:1px solid rgba(255,255,255,0.4);margin-right:6px;vertical-align:middle;"></span>' +
     '<span style="font-size:11px;color:var(--gold-dim);">' + question + '</span>' +
     '<span id="rg-readout-' + slot + '" style="font-size:11px;color:var(--gold-light);margin-left:6px;">' +
-    (filled ? ('square ' + filled) : (isActive ? 'waiting for a tap' : '')) + '</span></div>';
+    (filled ? 'marked' : (isActive ? 'waiting for a click' : '')) + '</span></div>';
 }
 
 function rgActionChange() {
@@ -11060,10 +11111,13 @@ function rgActionChange() {
   if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
   box.innerHTML = html;
 
+  var srow = document.getElementById('retouch-size-row');
+  if (srow) { if (def.cells.length) srow.classList.remove('hidden'); else srow.classList.add('hidden'); }
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.placeholder = def.ph;
   if (row) row.classList.remove('hidden');
-  rgPaintCells();
+  rgPaintMarkers();
+  rgPaintSizes();
   rgResetFinal();
   var note = document.getElementById('retouch-compose-note');
   if (note) note.textContent = '';
@@ -11090,7 +11144,7 @@ function rgRedrawRows() {
   for (var i = 0; i < def.cells.length; i++) {
     var slot = def.cells[i];
     var ro = document.getElementById('rg-readout-' + slot);
-    if (ro) ro.textContent = rgState[slot] ? ('square ' + rgState[slot]) : (rgState.active === slot ? 'waiting for a tap' : '');
+    if (ro) ro.textContent = rgState[slot] ? 'marked' : (rgState.active === slot ? 'waiting for a click' : '');
   }
   var box = document.getElementById('retouch-slots');
   if (!box) return;
@@ -11108,32 +11162,85 @@ function rgRedrawRows() {
   }
 }
 
-function rgPickCell(n) {
+function rgActiveDef() {
   var sel = document.getElementById('retouch-action');
-  var def = RG_ACTIONS[(sel && sel.value) || 'none'] || RG_ACTIONS.none;
+  return RG_ACTIONS[(sel && sel.value) || 'none'] || RG_ACTIONS.none;
+}
+
+// A click anywhere on the picture places the ACTIVE marker. There is no
+// boundary to miss and nothing to straddle.
+function rgStageClick(ev) {
+  var def = rgActiveDef();
   if (!def.cells.length) return;
+  var stage = document.getElementById('retouch-grid-stage');
+  if (!stage) return;
+  var b = stage.getBoundingClientRect();
+  if (!b.width || !b.height) return;
+  var x = (ev.clientX - b.left) / b.width;
+  var y = (ev.clientY - b.top) / b.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
   var slot = rgState.active || def.cells[0];
-  rgState[slot] = n;
-  // Advance to the next square this action still wants, so two taps fill both
-  // without the reader having to aim at the row in between.
+  rgState[slot] = { x: x, y: y, r: RG_SIZES[rgState.size] };
   var next = null;
   for (var i = 0; i < def.cells.length; i++) if (!rgState[def.cells[i]]) { next = def.cells[i]; break; }
   rgState.active = next || slot;
-  rgPaintCells();
+  rgPaintMarkers();
   rgRedrawRows();
   rgResetFinal();
 }
 
-function rgPaintCells() {
-  var cells = document.getElementById('retouch-grid-cells');
-  if (!cells) return;
-  var kids = cells.children;
-  for (var i = 0; i < kids.length; i++) {
-    var n = i + 1;
-    kids[i].style.background = (rgState.from === n) ? RG_FROM_TINT : (rgState.to === n) ? RG_TO_TINT : 'transparent';
-  }
+// The wheel resizes. It also resizes a marker already placed in the active
+// slot, so the reader can drop a ring and then open it out around a figure.
+function rgStageWheel(ev) {
+  var def = rgActiveDef();
+  if (!def.cells.length) return;
+  ev.preventDefault();
+  rgSetSize(rgState.size + (ev.deltaY > 0 ? 1 : -1));
 }
 
+function rgSetSize(i) {
+  var n = Math.max(0, Math.min(RG_SIZES.length - 1, i));
+  rgState.size = n;
+  var slot = rgState.active;
+  if (slot && rgState[slot]) rgState[slot].r = RG_SIZES[n];
+  rgPaintMarkers();
+  rgPaintSizes();
+}
+
+function rgPaintSizes() {
+  var box = document.getElementById('retouch-size-row');
+  if (!box) return;
+  var s = '<span style="font-size:11px;color:var(--gold-dim);margin-right:6px;">Marker size</span>';
+  for (var i = 0; i < RG_SIZES.length; i++) {
+    s += '<button class="btn btn-sm" onclick="rgSetSize(' + i + ')" style="margin-right:4px;' +
+      (i === rgState.size ? 'border-color:rgba(216,184,92,0.75);' : 'opacity:0.65;') + '">' + RG_SIZE_NAMES[i] + '</button>';
+  }
+  s += '<span style="font-size:11px;color:var(--gold-dim);margin-left:4px;">or scroll on the picture</span>';
+  box.innerHTML = s;
+}
+
+function rgPaintMarkers() {
+  var layer = document.getElementById('retouch-grid-cells');
+  if (!layer) return;
+  var def = rgActiveDef();
+  var html = '';
+  for (var i = 0; i < def.cells.length; i++) {
+    var slot = def.cells[i];
+    var m = rgState[slot];
+    if (!m) continue;
+    var tint = (slot === 'from') ? RG_FROM_TINT : RG_TO_TINT;
+    var line = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
+    // r is a fraction of the SHORTER side, so a ring stays circular on a
+    // tower panel instead of stretching into an ellipse.
+    var pctW = (rgState.shortIsW ? m.r * 200 : m.r * 200 * rgState.hOverW);
+    var pctH = (rgState.shortIsW ? m.r * 200 / rgState.hOverW : m.r * 200);
+    html += '<div style="position:absolute;pointer-events:none;border-radius:50%;' +
+      'left:' + (m.x * 100) + '%;top:' + (m.y * 100) + '%;' +
+      'width:' + pctW + '%;height:' + pctH + '%;transform:translate(-50%,-50%);' +
+      'border:2px solid ' + line + ';background:' + tint + ';box-shadow:0 0 0 1px rgba(0,0,0,0.5);"></div>';
+  }
+  layer.innerHTML = html;
+}
 function rgVal(id) {
   var el = document.getElementById(id);
   return el ? String(el.value || '').trim() : '';
@@ -11152,13 +11259,13 @@ function rgCompose() {
   for (var i = 0; i < def.cells.length; i++) {
     if (optional.indexOf(def.cells[i]) >= 0) continue;
     if (!rgState[def.cells[i]]) {
-      if (note) note.textContent = 'Tap the square for: ' + def[def.cells[i]].replace(/ Tap the square.*$/, '');
+      if (note) note.textContent = 'Still needed: ' + def[def.cells[i]].replace(/\s*(Click|Tap)\b.*$/, '');
       return '';
     }
   }
-  var fromP = rgPlace(rgState.from);
-  var toP = rgPlace(rgState.to);
-  var subj = rgSubject(rgState.from);
+  var fromP = rgPlaceM(rgState.from);
+  var toP = rgPlaceM(rgState.to);
+  var subj = rgSubjectM(rgState.from);
   var who = rgVal('rg-who');
   var typed = rgResolveRefs(rgVal('retouch-instruction'));
   var out = '';
@@ -11317,10 +11424,15 @@ function rgTeardown() {
   rgResetFinal();
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.placeholder = RG_ACTIONS.none.ph;
+  var layer = document.getElementById('retouch-grid-cells');
+  if (layer) layer.innerHTML = '';
+  var srow = document.getElementById('retouch-size-row');
+  if (srow) srow.classList.add('hidden');
   rgState.momentId = null;
   rgState.from = null;
   rgState.to = null;
   rgState.active = 'from';
+  rgState.size = 1;
   rgState.cols = 0;
   rgState.rows = 0;
 }
@@ -11345,17 +11457,13 @@ function rgSetup(momentId) {
   rgState.cols = g.c;
   rgState.rows = g.r;
   img.src = url;
-  var html = '';
-  for (var n = 1; n <= g.c * g.r; n++) {
-    var col = (n - 1) % g.c, row = Math.floor((n - 1) / g.c);
-    html += '<div onclick="rgPickCell(' + n + ')" style="position:absolute;cursor:pointer;' +
-      'left:' + (col * 100 / g.c) + '%;top:' + (row * 100 / g.r) + '%;' +
-      'width:' + (100 / g.c) + '%;height:' + (100 / g.r) + '%;' +
-      'box-sizing:border-box;border:1px solid rgba(255,255,255,0.55);background:transparent;">' +
-      '<span style="position:absolute;left:2px;top:1px;font-size:10px;line-height:1.3;padding:0 3px;' +
-      'background:rgba(20,14,6,0.78);color:#fff;border-radius:3px;">' + n + '</span></div>';
-  }
-  cells.innerHTML = html;
+  // A ring is drawn in percentages of width and height, which differ on a
+  // non-square panel. Record the aspect so a circle stays a circle.
+  var ar = rgShapeAspect(m.shape);
+  rgState.hOverW = ar;
+  rgState.shortIsW = (ar >= 1);
+  cells.innerHTML = '';
+  rgState.size = 1;
   var sel = document.getElementById('retouch-action');
   if (sel) sel.value = '';
   rgActionChange();

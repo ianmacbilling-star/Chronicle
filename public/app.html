@@ -2532,10 +2532,11 @@
     </div>
     <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Keep this image exactly as-is and change only what you describe. Uses the current image as the reference.</p>
     <div id="retouch-grid-wrap" class="hidden" style="margin:0 0 12px;">
-      <div id="retouch-grid-stage" style="position:relative;display:inline-block;max-width:100%;line-height:0;">
+      <div id="retouch-grid-stage" onclick="rgStageClick(event)" onwheel="rgStageWheel(event)" style="position:relative;display:inline-block;max-width:100%;line-height:0;cursor:crosshair;">
         <img id="retouch-grid-photo" alt="" style="display:block;max-width:100%;max-height:230px;border-radius:6px;">
         <div id="retouch-grid-cells" style="position:absolute;left:0;top:0;right:0;bottom:0;"></div>
       </div>
+      <div id="retouch-size-row" class="hidden" style="margin:8px 0 0;"></div>
       <select class="form-input" id="retouch-action" onchange="rgActionChange()" style="margin:10px 0 0;">
         <option value="">What are you changing?</option>
         <option value="none">I'll type it below</option>
