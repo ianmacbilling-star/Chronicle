@@ -11118,6 +11118,21 @@ function rgArticle(s) {
 // Only the panel CAST can be named: a typed name matching no row sends no
 // reference image, and the model then invents a stranger -- the very fault the
 // reface action exists to repair.
+// Characters AND assets: both are sent to the image model as references, so
+// both must be selectable. An asset drawn wrong was previously untargetable.
+function rgPanelRefs() {
+  var out = rgPanelCast();
+  var ms = (typeof state !== 'undefined' && state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) {
+    if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
+      var as = ms[i].assets || [];
+      for (var j = 0; j < as.length; j++) if (as[j] && as[j].name) out.push(as[j]);
+      break;
+    }
+  }
+  return out;
+}
+
 function rgPanelCast() {
   var out = [];
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
@@ -11134,9 +11149,9 @@ function rgPanelCast() {
 function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
 function rgCastSelect(label) {
-  var cs = rgPanelCast();
+  var cs = rgPanelRefs();
   if (!cs.length) {
-    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nobody is cast on this panel, so no reference picture was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
       '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div></div>';
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
@@ -11449,9 +11464,11 @@ function rgCompose() {
     out = 'In Image 1, redraw ' + rgArticle(typed || 'malformed part') + ' of ' + subj +
       ', which is currently malformed. Draw it correctly and anatomically naturally, at the same size and in the same position, consistent with the pose and in the same art style. Change nothing else about the figure: same face, same clothing, same equipment, same position and same size.' + rgTail();
   } else if (a === 'reface') {
-    out = 'In Image 1, ' + subj + ' is meant to be ' + (who || 'the intended character') +
-      ', but is drawn as the wrong person. Redraw that same figure as ' + (who || 'the intended character') +
-      ', using the supplied reference image for the exact face, hair, build, skin, clothing and equipment. ' +
+    var whoName = who || 'the intended character';
+    var refTok = who ? ('{{REF:' + who + '}}') : 'the supplied reference image';
+    out = 'In Image 1, ' + subj + ' is meant to be ' + whoName +
+      ', but is drawn as the wrong one. Redraw it as ' + whoName +
+      ', using ' + refTok + ' for the exact face, hair, build, skin, colouring, clothing and equipment. ' +
       'Keep the figure in exactly the same place, at exactly the same size and the same distance from the viewer, in the same pose and the same lighting as now -- only the identity of the person changes. ' +
       'Use the reference ONLY as a lookup for the face, hair, skin, build, clothing and equipment. Do NOT copy the reference picture itself: not its pose, not its stance, not its camera angle, not its expression, not its framing, not its background and not its level of finish. The figure keeps the pose, angle, stance and expression it already has in Image 1, whatever those are. ' +
       'Exactly one figure stands there when you are finished.' + (typed ? ' ' + typed : '') + rgTail();

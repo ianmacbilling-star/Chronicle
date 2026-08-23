@@ -1410,6 +1410,21 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
     const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
     const refsR = combineRefs(charListR.refs, assetListR.refs);
+    // v3.0.766 -- resolve {{REF:Name}} placeholders to the actual image number.
+    // Falls back to the old wording when a name does not resolve, so an
+    // unmatched placeholder degrades to a working prompt rather than leaking.
+    if (instruction && instruction.indexOf('{{REF:') !== -1) {
+      instruction = instruction.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+        var want = String(nm || '').trim().toLowerCase();
+        for (var ri = 0; ri < refsR.length; ri++) {
+          var rn = refsR[ri] && refsR[ri].name;
+          if (rn && String(rn).trim().toLowerCase() === want) {
+            return 'Image ' + (ri + 2) + ', the reference for ' + rn + ',';
+          }
+        }
+        return 'the supplied reference image for ' + nm;
+      });
+    }
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     var _markedUrl = String(req.body.marked_url || '').trim();
