@@ -10971,6 +10971,11 @@ var RG_ACTIONS = {
     from: 'Who changes? Click them in the picture.',
     ph: 'What changes about how they look? e.g. a fresh scar across the left cheek'
   },
+  // No picker: the style is whatever the storyboard is set to, which the
+  // route already resolves and prepends to every retouch prompt. Repairs a
+  // panel whose medium has drifted, AND converts an archive picture that
+  // arrived in a different style -- the same operation from two directions.
+  restyle: { cells: [], convert: true, ph: 'Anything else? Optional.' },
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
 
@@ -11185,6 +11190,12 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.convert) {
+    var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
+    html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Reapplies the art style set at the top of the storyboard:' +
+      '<div style="margin-top:3px;color:var(--gold-light);font-size:13px;">' + rgEsc(_sn || 'the current art style') + '</div></div>';
+    html += rgSelect('rg-convert', 'What is happening', [['drift', 'this picture drifted and needs putting back'], ['cross', 'this picture is in a different style and needs converting']]);
+  }
   if (def.objsize) html += rgSelect('rg-objsize', 'Size', [['same', 'leave the size alone'], ['s25', 'a bit smaller (25%)'], ['half', 'half the size'], ['l25', 'a bit larger (25%)'], ['double', 'twice the size']]);
   if (def.turn) html += rgSelect('rg-turn', 'Which way', [['toward', 'to end up facing the camera'], ['away', 'to end up facing away from the camera'], ['marker', 'bring the shoulder I clicked toward the camera']]);
   if (def.amount) html += rgSelect('rg-amount', 'How far', [['little', 'a little'], ['part', 'part way'], ['half', 'half turn'], ['all', 'all the way']]);
@@ -11481,6 +11492,14 @@ function rgCompose() {
       'The new ground meets the ground they are standing on continuously, with no seam or edge, so they are standing IN the scene rather than in front of it. ' +
       'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
       'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
+  } else if (a === 'restyle') {
+    out = 'In Image 1, keep the picture exactly as it is composed: the same scene, the same figures in the same places and the same poses, the same faces and expressions, the same clothing and objects, the same framing and the same viewpoint. Nothing moves, nothing is added and nothing is removed. ' +
+      'Re-render the whole picture in the art style described at the top of this prompt, applying that style consistently to every part of the image -- the figures, the background, the lighting, the linework and the texture. ' +
+      ((rgVal('rg-convert') === 'cross')
+        ? 'This picture is currently in a DIFFERENT medium and style from the one described. Convert it completely: redraw every surface, line, edge and texture in the described medium, and do not leave any part of the original style behind or blend the two. Treat this as re-drawing the same scene from scratch in the new medium rather than filtering the existing picture. '
+        : 'This picture is meant to be in the described style already but has drifted away from it. Put it back: restore the medium, the linework, the texture and the palette of the described style across the whole image, and remove any trace of the style it drifted into. Change nothing else. ') +
+      (typed ? typed + ' ' : '') +
+      'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
   } else if (a === 'scene') {
     out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
@@ -11697,6 +11716,11 @@ function rgSetup(momentId) {
   if (sel) sel.value = '';
   rgActionChange();
   wrap.classList.remove('hidden');
+  // Restart the animation by removing the class and forcing a reflow before
+  // adding it back -- a CSS animation does not replay on a class that is
+  // already there.
+  var hb = document.getElementById('retouch-help-btn');
+  if (hb) { hb.classList.remove('help-nudge'); void hb.offsetWidth; hb.classList.add('help-nudge'); }
 }
 
 function openRetouch(momentId) {

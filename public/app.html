@@ -70,7 +70,7 @@
          already saying Copper. Its warning lives in the tier badge tooltip now. -->
     <span id="lone-badge" style="display:none;"></span>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
-    <button id="help-fab" class="btn btn-sm" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
+    <button id="help-fab" class="btn btn-sm help-nudge" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
     <div class="user-menu-wrap">
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
@@ -2529,7 +2529,7 @@
     <div class="modal-header" style="align-items:baseline;gap:8px;">
       <div class="modal-title" style="white-space:nowrap;">Retouch panel</div>
       <span style="flex:1;min-width:0;font-size:11px;color:var(--gold-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Changes only what you describe.</span>
-      <button class="btn btn-sm" type="button" onclick="rgOpenHelp()" title="Retouch tips, and ask us anything" aria-label="Retouch help" style="flex:none;">?s</button>
+      <button class="btn btn-sm help-nudge" id="retouch-help-btn" type="button" onclick="rgOpenHelp()" title="Retouch tips, and ask us anything" aria-label="Retouch help" style="flex:none;">?s</button>
       <button class="modal-close" onclick="closeRetouch()" style="flex:none;">&times;</button>
     </div>
     <div id="retouch-grid-wrap" class="hidden" style="margin:0 0 12px;">
@@ -2559,6 +2559,7 @@
         <option value="appearance">Change how someone looks</option>
         <option value="background">Change the background</option>
         <option value="scene">Change time of day or weather</option>
+        <option value="restyle">Fix or reapply the art style</option>
       </select>
       <div id="retouch-slots" style="margin:9px 0 0;display:flex;flex-direction:column;gap:7px;"></div>
     </div>
