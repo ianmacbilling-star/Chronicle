@@ -1413,8 +1413,9 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     // v3.0.766 -- resolve {{REF:Name}} placeholders to the actual image number.
     // Falls back to the old wording when a name does not resolve, so an
     // unmatched placeholder degrades to a working prompt rather than leaking.
-    if (instruction && instruction.indexOf('{{REF:') !== -1) {
-      instruction = instruction.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+    let instructionR = instruction;
+    if (instructionR && instructionR.indexOf('{{REF:') !== -1) {
+      instructionR = instructionR.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
         var want = String(nm || '').trim().toLowerCase();
         for (var ri = 0; ri < refsR.length; ri++) {
           var rn = refsR[ri] && refsR[ri].name;
@@ -1430,7 +1431,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     var _markedUrl = String(req.body.marked_url || '').trim();
     var _r2base = process.env.R2_PUBLIC_URL || '';
     if (_markedUrl && (!_r2base || _markedUrl.indexOf(_r2base + '/') !== 0)) _markedUrl = '';
-    const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null);
+    const sub = await submitRetouch(moment.image, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
