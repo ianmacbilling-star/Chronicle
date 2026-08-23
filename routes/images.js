@@ -1431,12 +1431,16 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     // to its image number. A token in prose did not survive the rewrite route;
     // this is assembled here, after refsR exists, and cannot be edited away.
     var _pickName = String((req.body && req.body.ref_name) || '').trim();
+    var _pinOutcome = _pickName ? 'not evaluated' : 'nothing picked';
     if (_pickName) {
       var _pickIdx = -1;
       for (var pi = 0; pi < refsR.length; pi++) {
         var pn = refsR[pi] && refsR[pi].name;
         if (pn && String(pn).trim().toLowerCase() === _pickName.toLowerCase()) { _pickIdx = pi; break; }
       }
+      _pinOutcome = (_pickIdx >= 0)
+        ? ('matched ' + refsR[_pickIdx].name + ' at Image ' + (_pickIdx + 2))
+        : 'NO MATCH -- the picked name is not in this route\'s reference list';
       if (_pickIdx >= 0) {
         instructionR = 'The character or object being corrected is ' + refsR[_pickIdx].name +
           ', and the reference to use for it is Image ' + (_pickIdx + 2) +
@@ -1454,7 +1458,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, nowTs, nowTs);
-    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, instruction: (req.body && req.body.instruction) || null, refs: (refsR || []).map(function(r){ return r && r.name; }) } }); } catch (_le) {}
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', instruction_sent: instructionR } }); } catch (_le) {}
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
     }

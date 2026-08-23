@@ -12000,6 +12000,11 @@ function submitRetouch() {
   if (!moment) return;
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+  var _rgSaw = null, _rgFork = null;
+  try {
+    _rgSaw = (typeof rgPanelRefs === 'function') ? rgPanelRefs().map(function (x) { return x && x.name; }) : null;
+    _rgFork = (state.currentSession && state.currentSession.fork_id) || null;
+  } catch (e) { /* diagnostics must never block a retouch */ }
   closeRetouch();
   showPanelBusy(momentId, 'Retouching');
   // v3.0.757 -- the overlay is rendered from the snapshot taken above, then the
@@ -12017,7 +12022,9 @@ function submitRetouch() {
       style: state.artStyle,
       fal_key: getFalKey() || 'platform',
       marked_url: _markedUrl || null,
-      ref_name: _rgRef || null
+      ref_name: _rgRef || null,
+      picker_saw: _rgSaw || null,
+      picker_fork: _rgFork || null
     })
   });
   })
