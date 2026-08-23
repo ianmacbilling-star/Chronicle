@@ -485,7 +485,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
-        'everything else untouched:\n\n') + instruction + refSection + markSection;
+        'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection;
   const submitted = await fal.queue.submit(IMAGE_EDIT_MODELS.nano2, {
     input: {
       prompt: editPrompt,

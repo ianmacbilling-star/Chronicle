@@ -10819,7 +10819,12 @@ var RG_ON = true;
 // v3.0.757 -- send the marked copy to the image model as a location diagram.
 // Separate from RG_ON on purpose: if the rings confuse the model or start
 // appearing in output, turn THIS off and keep the markers as an input device.
-var RG_MARK_ON = true;
+// SHIPPED OFF, 2026-08-22. The overlay demonstrably WORKS -- the hand landed
+// exactly on the green ring -- but on the second real use the marker leaked
+// into the picture as a green flag. Wording alone has not been shown to hold
+// it. Markers remain a precise INPUT device with this off; only the diagram
+// sent to the image model is suppressed.
+var RG_MARK_ON = false;
 
 // Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
 // it is NEVER clear what cell the subject is in." A quantised cell cannot
@@ -10900,8 +10905,21 @@ var RG_ACTIONS = {
   pose: {
     cells: ['from', 'to'], optional: ['to'],
     from: 'Who moves? Click them in the picture.',
-    to: 'Aimed at what? Click it. Skip this if there is no target.',
-    ph: 'What should they be doing? e.g. pointing straight out to the distance'
+    to: 'Aiming at what? Click the thing they should be aimed at. Skip if there is none.',
+    ph: 'What should they be doing? e.g. pointing straight out into the distance'
+  },
+  // The green ring here means WHERE THE HAND ENDS UP, which is the one
+  // reading the image model already obeys literally and well.
+  limb: {
+    cells: ['from', 'to'],
+    from: 'Which hand or foot? Click it.',
+    to: 'Where should it end up? Click the spot.',
+    ph: 'Anything else about the movement? Optional.'
+  },
+  reorient: {
+    cells: ['from'],
+    from: 'Which object? Click it.',
+    ph: 'How is it wrong? e.g. the hammer head is on the wrong end'
   },
   reface: {
     cells: ['from'], cast: 'Who it should be',
@@ -11021,7 +11039,7 @@ function rgDepthClause(d, who) {
 // Appended to every template except Add. Mentioning a person is an invitation
 // to draw one -- that cost two duplicated figures before it was written down.
 function rgTail() {
-  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged.';
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
 }
 
 function rgArticle(s) {
@@ -11323,10 +11341,19 @@ function rgCompose() {
       '. Apply that change and nothing else. Keep the figure in exactly the same place, at the same size, the same distance from the viewer and in the same pose, and keep every other detail of the face, build and equipment as it is now.' + rgTail();
   } else if (a === 'pose') {
     out = 'In Image 1, change the pose of ' + subj + ' so that ' + (typed || 'the pose changes') +
-      (toP ? '. The gesture is aimed toward ' + toP : '') +
-      '. The pose reads clearly in silhouette and is not foreshortened toward or away from the viewer, so the movement is plainly visible. ' +
+      (toP ? '. The gesture is aimed at whatever stands at ' + toP + ' -- aim THROUGH that point rather than placing a hand on it' : '') +
+      '. Use perspective to make the gesture readable: if a limb extends away from the viewer, shorten it correctly so the near part of the limb is longest and the far end smallest, and let it overlap the body so its direction is unmistakable. Do not raise a limb into the air merely to make it visible. ' +
       'It is the same person: keep the same face, hair, clothing, equipment and colouring, the same position in the frame, the same size and the same distance from the viewer. ' +
       'Nothing about the figure is malformed and no anatomy needs correcting -- only the pose changes.' + rgTail();
+  } else if (a === 'limb') {
+    out = 'In Image 1, move one limb of ' + subj + ': the hand or foot currently at ' + fromP +
+      ' ends up at ' + toP + '. Redraw the whole limb so the joints bend naturally into that new position and the shoulder or hip stays where it is. ' +
+      (typed ? typed + ' ' : '') +
+      'The rest of the body does not move. It is the same person: same face, hair, clothing, equipment and colouring, same position in the frame, same size and same distance from the viewer.' + rgTail();
+  } else if (a === 'reorient') {
+    out = 'In Image 1, the object at ' + fromP + ' is oriented wrongly: ' + (typed || 'it is the wrong way round') +
+      '. Rotate or flip that object so it is held and oriented correctly and naturally for the way the figure is gripping it. ' +
+      'The object stays the same object, the same size, in the same place and in the same hand, and the person holding it does not move: same pose, same face, same clothing. Only the object turns.' + rgTail();
   } else if (a === 'extra') {
     out = 'In Image 1, add ' + (typed || 'the figure') + ', positioned at ' + toP + '. ' +
       rgDepthClause(rgVal('rg-depth'), 'it') +
@@ -11460,6 +11487,32 @@ function rgBuildFinal(done) {
 
 // What submitRetouch actually sends for a MOMENT. Null everywhere else, so the
 // character, asset, session-character and title paths are untouched.
+// Returns a plain-English reason the chosen action cannot run yet, or null.
+// Consulted BEFORE anything is spent.
+function rgBlockReason() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var sel = document.getElementById('retouch-action');
+  var a = sel ? sel.value : '';
+  if (!a || a === 'none') return null;
+  var def = RG_ACTIONS[a];
+  if (!def) return null;
+  var optional = def.optional || [];
+  for (var i = 0; i < def.cells.length; i++) {
+    var c = def.cells[i];
+    if (optional.indexOf(c) >= 0) continue;
+    if (!rgState[c]) return def[c].replace(/\s*(Click|Tap)\b.*$/, '');
+  }
+  // Two markers in the same spot is a contradiction, not an instruction:
+  // "move it from here to here" and "aim at yourself" produce nothing.
+  if (rgState.from && rgState.to) {
+    var dx = rgState.from.x - rgState.to.x, dy = rgState.from.y - rgState.to.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 0.03) {
+      return 'The two markers are in the same place -- move the second one';
+    }
+  }
+  return null;
+}
+
 function rgFinalInstruction() {
   if (!RG_ON || !rgState.momentId) return null;
   var out = document.getElementById('retouch-final');
@@ -11610,9 +11663,19 @@ function submitRetouch() {
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
+  // v3.0.758 -- an incomplete action STOPS here. Falling through to the raw
+  // sentence spends a token and silently ignores what the reader chose.
+  var _rgWhy = (typeof rgBlockReason === 'function') ? rgBlockReason() : null;
+  if (_rgWhy) {
+    var _rgNote = document.getElementById('retouch-compose-note');
+    if (_rgNote) _rgNote.textContent = 'Still needed: ' + _rgWhy + '.';
+    return;
+  }
   // v3.0.751 -- on the MOMENT path the composed prompt is what goes to fal.
   var _rgFinal = (typeof rgFinalInstruction === 'function') ? rgFinalInstruction() : null;
   if (_rgFinal) instruction = _rgFinal;
+  // v3.0.758 -- grid words must resolve on the RAW path as well.
+  else if (typeof rgResolveRefs === 'function' && rgState.momentId) instruction = rgResolveRefs(instruction);
   if (!instruction) { if (ta) ta.focus(); return; }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.
