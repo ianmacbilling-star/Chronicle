@@ -10816,6 +10816,11 @@ function archiveFilterBarHTML(f, onchange) {
 // ---------------------------------------------------------------------------
 var RG_ON = true;
 
+// v3.0.757 -- send the marked copy to the image model as a location diagram.
+// Separate from RG_ON on purpose: if the rings confuse the model or start
+// appearing in output, turn THIS off and keep the markers as an input device.
+var RG_MARK_ON = true;
+
 // Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
 // it is NEVER clear what cell the subject is in." A quantised cell cannot
 // point at something that straddles a boundary, which is most things. A
@@ -10985,9 +10990,8 @@ function rgSubject(n) {
   return p ? ('the figure in and around ' + p) : 'the figure';
 }
 // The reader's own word for a location is whatever the rest of the product
-// taught them -- Ian typed "panel 5" because that is what these are called
-// elsewhere in Campaignia. Resolve every spelling, so a bare number never
-// reaches the image model and the offline fallback is correct too.
+// taught them. Resolve every spelling, so a bare number never reaches the
+// image model and the offline fallback is correct too.
 function rgResolveRefs(s) {
   var v = String(s || '');
   if (!rgState.cols) return v;
@@ -11346,6 +11350,55 @@ function rgCompose() {
   return out;
 }
 
+// Draws the panel plus the reader's rings onto a canvas and uploads it.
+// Resolves with a URL, or with null on ANY failure -- a missing overlay must
+// never block a retouch that would otherwise have worked.
+function rgSnapshotMarkers() {
+  if (!RG_ON || !RG_MARK_ON || !rgState.momentId) return null;
+  if (!rgState.from && !rgState.to) return null;
+  return { from: rgState.from, to: rgState.to };
+}
+
+function rgUploadMarked(snap) {
+  return new Promise(function (resolve) {
+    try {
+      if (!snap) return resolve(null);
+      var img = document.getElementById('retouch-grid-photo');
+      if (!img || !img.naturalWidth) return resolve(null);
+      var W = img.naturalWidth, H = img.naturalHeight;
+      var cap = 1536;
+      var scale = Math.min(1, cap / Math.max(W, H));
+      var cw = Math.max(1, Math.round(W * scale)), ch = Math.max(1, Math.round(H * scale));
+      var cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      var cx = cv.getContext('2d');
+      cx.drawImage(img, 0, 0, cw, ch);
+      var shortSide = Math.min(cw, ch);
+      [['from', 'rgba(238,70,70,0.95)'], ['to', 'rgba(80,214,110,0.95)']].forEach(function (pair) {
+        var m = snap[pair[0]];
+        if (!m) return;
+        var rad = Math.max(6, m.r * shortSide);
+        cx.beginPath();
+        cx.arc(m.x * cw, m.y * ch, rad, 0, Math.PI * 2);
+        cx.lineWidth = Math.max(3, Math.round(shortSide * 0.008));
+        cx.strokeStyle = pair[1];
+        cx.stroke();
+      });
+      cv.toBlob(function (blob) {
+        if (!blob) return resolve(null);
+        var fd = new FormData();
+        fd.append('image', blob, 'marked.png');
+        fetch('/api/images/marked', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { resolve((d && d.url) || null); })
+          .catch(function () { resolve(null); });
+      }, 'image/png');
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
 function rgToggleFinal() {
   var wrap = document.getElementById('retouch-final-wrap');
   var btn = document.getElementById('retouch-final-btn');
@@ -11428,6 +11481,7 @@ function rgTeardown() {
   if (layer) layer.innerHTML = '';
   var srow = document.getElementById('retouch-size-row');
   if (srow) srow.classList.add('hidden');
+  rgState.imageUrl = null;
   rgState.momentId = null;
   rgState.from = null;
   rgState.to = null;
@@ -11456,7 +11510,10 @@ function rgSetup(momentId) {
   rgState.momentId = momentId;
   rgState.cols = g.c;
   rgState.rows = g.r;
-  img.src = url;
+  // Through our own origin: R2 is a different origin and a cross-origin draw
+  // taints the canvas, so toBlob would throw when the overlay is rendered.
+  rgState.imageUrl = url;
+  img.src = '/api/images/proxy?u=' + encodeURIComponent(url);
   // A ring is drawn in percentages of width and height, which differ on a
   // non-square panel. Record the aspect so a circle stays a circle.
   var ar = rgShapeAspect(m.shape);
@@ -11686,9 +11743,14 @@ function submitRetouch() {
   var momentId = state.retouchMomentId;
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
+  var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   closeRetouch();
   showPanelBusy(momentId, 'Retouching');
-  fetch('/api/images/retouch-moment', {
+  // v3.0.757 -- the overlay is rendered from the snapshot taken above, then the
+  // existing chain runs unchanged. rgUploadMarked never rejects: a failed
+  // overlay resolves null and the retouch proceeds exactly as it did before.
+  rgUploadMarked(_rgSnap).then(function (_markedUrl) {
+  return fetch('/api/images/retouch-moment', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
@@ -11697,8 +11759,10 @@ function submitRetouch() {
       campaign_id: state.currentCampaign.id,
       instruction: instruction,
       style: state.artStyle,
-      fal_key: getFalKey() || 'platform'
+      fal_key: getFalKey() || 'platform',
+      marked_url: _markedUrl || null
     })
+  });
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
