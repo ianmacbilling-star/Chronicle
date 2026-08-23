@@ -10855,6 +10855,11 @@ var RG_ON = true;
 // move is magenta crosshairs rather than filled rings, NOT more wording.
 var RG_MARK_ON = true;
 
+// Set to true to send a TILE instead of the whole picture on the actions in
+// RG_CROPPABLE. See the note above before turning it back on: the compositing
+// is proven correct, the model is the problem.
+var RG_CROP_ON = false;
+
 // Ian, 2026-08-22: "the grid ALWAYS cuts through what I want to reference --
 // it is NEVER clear what cell the subject is in." A quantised cell cannot
 // point at something that straddles a boundary, which is most things. A
@@ -12016,7 +12021,7 @@ function submitRetouch() {
   try {
     var _cSel = document.getElementById('retouch-action');
     var _cA = _cSel ? _cSel.value : '';
-    if (RG_CROPPABLE.indexOf(_cA) >= 0 && rgState.from) {
+    if (RG_CROP_ON && RG_CROPPABLE.indexOf(_cA) >= 0 && rgState.from) {
       _rgCrop = { x: rgState.from.x, y: rgState.from.y, r: rgState.from.r };
       // A move, a reach or a turn of the gaze ends somewhere else, so the tile
       // has to reach that far too.
