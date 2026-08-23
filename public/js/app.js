@@ -10846,7 +10846,12 @@ var RG_SIZE_NAMES = ['a point', 'small', 'medium', 'large'];
 // Every action declares which squares it needs and what each one asks. Adding
 // an action is a row here plus a template in rgCompose -- nothing else.
 var RG_ACTIONS = {
-  none: { cells: [], ph: 'Say what you want changed, in your own words.' },
+  none: {
+    cells: ['from', 'to'], optional: ['from', 'to'],
+    from: 'Optional: click the thing you mean.',
+    to: 'Optional: click a second spot.',
+    ph: 'Say what you want changed, in your own words. You can talk about the red and green circles.'
+  },
   move: {
     cells: ['from', 'to'],
     from: 'Which one? Click it in the picture.',
@@ -10886,13 +10891,14 @@ var RG_ACTIONS = {
   },
   facing: {
     cells: ['from', 'to'],
-    from: 'Who turns? Click them in the picture.',
+    from: 'Whose head turns? Click them.',
     to: 'Looking at what? Click it.',
     ph: 'Anything else about the look? Optional.'
   },
   orient: {
-    cells: ['from'], dir: true,
+    cells: ['from', 'to'], amount: true,
     from: 'Who turns? Click them in the picture.',
+    to: 'Which shoulder comes toward the camera? Click that shoulder.',
     ph: 'Anything else about the turn? Optional.'
   },
   expression: {
@@ -11025,6 +11031,23 @@ function rgResolveRefs(s) {
 }
 
 // Add actions cannot use the standard tail, which forbids adding anyone.
+function rgAmount(a) {
+  if (a === 'little') return 'about 20 degrees, a slight shift';
+  if (a === 'half') return 'about 90 degrees, so the figure is seen in profile';
+  if (a === 'all') return 'about 180 degrees, so the figure now faces the opposite direction';
+  return 'about 45 degrees, into a three-quarter view';
+}
+
+// Turning a figure that is MOVING is not a rotation, it is a redraw: the
+// stride, the trailing cloak and any streaming flame all carry momentum in
+// the old direction, and leaving them alone reads as badly wrong even when
+// the body is right. Worded conditionally rather than gated on English in
+// the typed text -- TD-512: a runtime classifier that reads English is a bug
+// in every other language.
+function rgMotionClause() {
+  return ' If the figure is moving -- running, walking, charging, falling or leaping -- then the stride, and any trailing cloak, robe, hair, scarf, sash or streaming flame, all reverse to match the new direction, trailing out behind the figure as it moves the new way rather than the old.';
+}
+
 function rgTailAdd() {
   return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
 }
@@ -11131,7 +11154,7 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
-  if (def.dir) html += rgSelect('rg-dir', 'Facing', [['left', 'toward the left of the picture'], ['right', 'toward the right of the picture'], ['viewer', 'toward the viewer'], ['away', 'away from the viewer']]);
+  if (def.amount) html += rgSelect('rg-amount', 'How far', [['little', 'a little'], ['part', 'part way'], ['half', 'half turn'], ['all', 'all the way']]);
   if (def.relight) html += rgSelect('rg-relight', 'The figures', [['keep', 'stay lit exactly as they are'], ['relight', 'get relit to match the new setting']]);
   if (def.preset) html += rgSelect('rg-preset', 'Change to', [['night', 'night'], ['dawn', 'dawn'], ['dusk', 'dusk'], ['heavy overcast', 'heavy overcast'], ['pouring rain', 'pouring rain'], ['falling snow', 'falling snow'], ['thick fog', 'thick fog']]);
   box.innerHTML = html;
@@ -11142,6 +11165,7 @@ function rgActionChange() {
   if (ta) ta.placeholder = def.ph;
   if (row) row.classList.remove('hidden');
   rgPaintMarkers();
+  rgPaintPrompt();
   rgPaintSizes();
   rgResetFinal();
   var note = document.getElementById('retouch-compose-note');
@@ -11206,10 +11230,12 @@ function rgStageClick(ev) {
   if (x < 0 || x > 1 || y < 0 || y > 1) return;
   var slot = rgState.active || def.cells[0];
   rgState[slot] = { x: x, y: y, r: RG_SIZES[rgState.size] };
+  rgState.last = slot;   // scroll follows what you JUST put down
   var next = null;
   for (var i = 0; i < def.cells.length; i++) if (!rgState[def.cells[i]]) { next = def.cells[i]; break; }
   rgState.active = next || slot;
   rgPaintMarkers();
+  rgPaintPrompt();
   rgRedrawRows();
   rgResetFinal();
 }
@@ -11226,10 +11252,13 @@ function rgStageWheel(ev) {
 function rgSetSize(i) {
   var n = Math.max(0, Math.min(RG_SIZES.length - 1, i));
   rgState.size = n;
-  var slot = rgState.active;
+  // The marker you just placed is the one you want to resize. Falling back to
+  // the active slot only matters before anything has been placed.
+  var slot = (rgState.last && rgState[rgState.last]) ? rgState.last : rgState.active;
   if (slot && rgState[slot]) rgState[slot].r = RG_SIZES[n];
   rgPaintMarkers();
   rgPaintSizes();
+  rgPaintPrompt();
 }
 
 function rgPaintSizes() {
@@ -11242,6 +11271,22 @@ function rgPaintSizes() {
   }
   s += '<span style="font-size:11px;color:var(--gold-dim);margin-left:4px;">or scroll on the picture</span>';
   box.innerHTML = s;
+}
+
+// Says, in the colour of the marker being asked for, what the next click
+// means. Silent once everything required is placed.
+function rgPaintPrompt() {
+  var el = document.getElementById('retouch-marker-prompt');
+  if (!el) return;
+  var def = rgActiveDef();
+  if (!def.cells.length) { el.innerHTML = ''; return; }
+  var slot = null;
+  for (var i = 0; i < def.cells.length; i++) { if (!rgState[def.cells[i]]) { slot = def.cells[i]; break; } }
+  if (!slot) { el.innerHTML = ''; return; }
+  var col = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
+  el.innerHTML = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + col +
+    ';margin-right:6px;vertical-align:middle;"></span><span style="font-size:12px;color:' + col + ';">' +
+    rgEsc(def[slot]) + '</span>';
 }
 
 function rgPaintMarkers() {
@@ -11279,7 +11324,18 @@ function rgCompose() {
   if (!sel) return '';
   var a = sel.value;
   var def = RG_ACTIONS[a];
-  if (!def || !a || a === 'none') return '';
+  if (!def || !a) return '';
+  if (a === 'none') {
+    // No template, but the rings still need naming, or "the red circle"
+    // means nothing when the overlay is off.
+    var ty = rgResolveRefs(rgVal('retouch-instruction'));
+    if (!ty) return '';
+    var bits = [];
+    if (rgState.from) bits.push('The red circle marks ' + rgPlaceM(rgState.from) + '.');
+    if (rgState.to) bits.push('The green circle marks ' + rgPlaceM(rgState.to) + '.');
+    if (!bits.length) return '';
+    return ty + ' ' + bits.join(' ') + ' Do not draw any circles, rings, outlines or highlights into the finished picture.';
+  }
   var optional = def.optional || [];
   for (var i = 0; i < def.cells.length; i++) {
     if (optional.indexOf(def.cells[i]) >= 0) continue;
@@ -11317,15 +11373,16 @@ function rgCompose() {
     out = 'In Image 1, add ' + (typed || 'the effect') + ' at ' + toP + '. ' + szc +
       ' Match the existing art style, lighting and colour of Image 1 exactly.' + rgTail();
   } else if (a === 'facing') {
-    out = 'In Image 1, turn ' + subj + ' so that it is looking toward ' + toP +
-      '. Its head and eyes are directed there. Keep its position, size, distance, pose, clothing and equipment exactly as they are; only the direction it faces and looks changes.' +
+    out = 'In Image 1, turn the HEAD of ' + subj + ' so that it is looking toward ' + toP +
+      '. The head and the eyes are directed there, and the neck turns naturally. ' +
+      'The BODY does not turn: the shoulders, torso, hips, arms and legs all stay exactly as they are, in the same pose and the same position in the frame, at the same size and the same distance from the viewer. Only the head and the gaze change.' +
       (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'orient') {
-    var d = rgVal('rg-dir');
-    var dl = (d === 'left') ? 'toward the left of the picture' : (d === 'right') ? 'toward the right of the picture'
-      : (d === 'viewer') ? 'toward the viewer' : 'away from the viewer';
-    out = 'In Image 1, turn ' + subj + ' so that it is facing ' + dl +
-      '. Keep it in exactly the same place, at the same size and the same distance from the viewer, with the same clothing and equipment; only its body orientation changes.' +
+    out = 'In Image 1, turn the whole body of ' + subj + '. The shoulder at ' + toP +
+      ' swings toward the camera, and the opposite shoulder swings away from the camera, rotating the body ' + rgAmount(rgVal('rg-amount')) + '. ' +
+      'The head turns with the body so the neck is natural, and anything the figure is holding, carrying or wearing turns with it.' +
+      rgMotionClause() +
+      ' The feet stay on the same spot of ground and the figure stays in exactly the same place in the frame, at the same size and the same distance from the viewer. It is the same person: same face, hair, clothing and equipment. Only the direction the body faces changes.' +
       (typed ? ' ' + typed : '') + rgTail();
   } else if (a === 'expression') {
     out = 'In Image 1, change the facial expression of ' + subj + ' to ' + (typed || 'a different expression') +
@@ -11535,6 +11592,9 @@ function rgTeardown() {
   if (ta) ta.placeholder = RG_ACTIONS.none.ph;
   var layer = document.getElementById('retouch-grid-cells');
   if (layer) layer.innerHTML = '';
+  var mp = document.getElementById('retouch-marker-prompt');
+  if (mp) mp.innerHTML = '';
+  rgState.last = null;
   var srow = document.getElementById('retouch-size-row');
   if (srow) srow.classList.add('hidden');
   rgState.imageUrl = null;
