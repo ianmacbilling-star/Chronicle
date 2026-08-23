@@ -10975,7 +10975,11 @@ var RG_ACTIONS = {
   // route already resolves and prepends to every retouch prompt. Repairs a
   // panel whose medium has drifted, AND converts an archive picture that
   // arrived in a different style -- the same operation from two directions.
-  restyle: { cells: [], convert: true, ph: 'Anything else? Optional.' },
+  restyle: {
+    cells: ['from'], optional: ['from'], convert: true, scope: true,
+    from: 'Optional: click the one figure that needs restyling.',
+    ph: 'Anything else? Optional.'
+  },
   scene: { cells: [], preset: true, ph: 'Anything else about the change? Optional.' }
 };
 
@@ -11085,7 +11089,7 @@ function rgMotionClause() {
 }
 
 function rgTailAdd() {
-  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. The background, lighting, colours and art style are completely unchanged.';
+  return ' Do not add anything or anyone else. Every figure already in the picture stays exactly where it is, at its current size and distance, and is not duplicated. Anything you draw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering must never be copied across. The background, lighting, colours and art style are completely unchanged.';
 }
 
 function rgDepthClause(d, who) {
@@ -11101,7 +11105,7 @@ function rgDepthClause(d, who) {
 // Appended to every template except Add. Mentioning a person is an invitation
 // to draw one -- that cost two duplicated figures before it was written down.
 function rgTail() {
-  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
+  return ' Add no new people, figures or creatures. Every figure already in the picture stays exactly where it is, at its current size and distance. The background, lighting, colours and art style are completely unchanged, including the medium: keep the same drawing or painting technique, the same texture and any paper or border treatment. Any figure you redraw must match the brushwork, edge quality, level of finish and palette of the surrounding picture -- reference images are for IDENTITY ONLY and their rendering, sharpness and finish must never be copied across. Do not draw any circles, rings, outlines, arrows or highlights into the picture.';
 }
 
 function rgArticle(s) {
@@ -11190,6 +11194,7 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
+  if (def.scope) html += rgSelect('rg-scope', 'Apply it to', [['all', 'the whole picture'], ['one', 'just the figure I circle in red']]);
   if (def.convert) {
     var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
     html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Reapplies the art style set at the top of the storyboard:' +
@@ -11493,6 +11498,16 @@ function rgCompose() {
       'Keep the camera at the same angle, height and distance as now, and put the horizon at a natural height for that viewpoint. ' +
       'Keep the existing art style exactly: the same medium, line quality, texture, tone, and any paper or border treatment.' + rgTail();
   } else if (a === 'restyle') {
+    var scopeOne = (rgVal('rg-scope') === 'one' && rgState.from);
+    if (scopeOne) {
+      out = 'In Image 1, restyle ONLY the single figure at ' + fromP + '. ' +
+        'That figure keeps its exact position, size, pose, face, clothing and equipment -- nothing about it moves or changes shape. ' +
+        'Redraw that figure so its brushwork, edge quality, level of finish, texture and palette match the rest of Image 1 exactly, in the art style described at the top of this prompt. ' +
+        'It currently looks out of place because it is rendered more cleanly and sharply than its surroundings, as though copied in from a separate reference picture. ' +
+        'EVERY OTHER PART OF THE PICTURE IS UNTOUCHED: every other figure, the background, the lighting, the composition and the framing stay exactly as they are, pixel for pixel where possible. ' +
+        (typed ? typed + ' ' : '') +
+        'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
+    } else {
     out = 'In Image 1, keep the picture exactly as it is composed: the same scene, the same figures in the same places and the same poses, the same faces and expressions, the same clothing and objects, the same framing and the same viewpoint. Nothing moves, nothing is added and nothing is removed. ' +
       'Re-render the whole picture in the art style described at the top of this prompt, applying that style consistently to every part of the image -- the figures, the background, the lighting, the linework and the texture. ' +
       ((rgVal('rg-convert') === 'cross')
@@ -11500,6 +11515,7 @@ function rgCompose() {
         : 'This picture is meant to be in the described style already but has drifted away from it. Put it back: restore the medium, the linework, the texture and the palette of the described style across the whole image, and remove any trace of the style it drifted into. Change nothing else. ') +
       (typed ? typed + ' ' : '') +
       'Add no new people, figures or creatures, and do not draw any circles, rings, outlines or highlights into the picture.';
+    }
   } else if (a === 'scene') {
     out = 'In Image 1, change the time of day and weather to ' + rgVal('rg-preset') +
       '. Relight the whole scene consistently for that condition, adjusting the sky, the shadows and the colour temperature throughout. Every figure and object stays exactly where it is, at the same size and in the same pose. The composition, framing and art style are completely unchanged.' +
@@ -11634,6 +11650,9 @@ function rgBlockReason() {
     if (!rgState[c]) return def[c].replace(/\s*(Click|Tap)\b.*$/, '');
   }
   // A shoulder marker is optional UNTIL the reader asks to steer by it.
+  if (def.scope && rgVal('rg-scope') === 'one' && !rgState.from) {
+    return 'Click the figure that needs restyling, or apply it to the whole picture';
+  }
   if (def.turn && rgVal('rg-turn') === 'marker' && !rgState.to) {
     return 'Click the shoulder that should come toward the camera, or choose a different way to turn';
   }
