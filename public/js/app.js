@@ -11545,6 +11545,18 @@ function rgCompose() {
 // Draws the panel plus the reader's rings onto a canvas and uploads it.
 // Resolves with a URL, or with null on ANY failure -- a missing overlay must
 // never block a retouch that would otherwise have worked.
+// The reference the reader PICKED, read at submit time and sent as its own
+// field. Null unless the current action actually offers a picker.
+function rgChosenRef() {
+  if (!RG_ON || !rgState.momentId) return null;
+  var sel = document.getElementById('retouch-action');
+  var a = sel ? sel.value : '';
+  var def = RG_ACTIONS[a];
+  if (!def || !def.cast) return null;
+  var v = rgVal('rg-who');
+  return v || null;
+}
+
 function rgSnapshotMarkers() {
   if (!RG_ON || !RG_MARK_ON || !rgState.momentId) return null;
   if (!rgState.from && !rgState.to) return null;
@@ -11987,6 +11999,7 @@ function submitRetouch() {
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
+  var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
   closeRetouch();
   showPanelBusy(momentId, 'Retouching');
   // v3.0.757 -- the overlay is rendered from the snapshot taken above, then the
@@ -12003,7 +12016,8 @@ function submitRetouch() {
       instruction: instruction,
       style: state.artStyle,
       fal_key: getFalKey() || 'platform',
-      marked_url: _markedUrl || null
+      marked_url: _markedUrl || null,
+      ref_name: _rgRef || null
     })
   });
   })

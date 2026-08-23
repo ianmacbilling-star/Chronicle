@@ -1300,6 +1300,7 @@ router.post('/retouch-prompt', requireAuth, async function (req, res) {
       '9. Write plain declarative English regardless of the language the reader wrote in.',
       '10. RESOLVE PRONOUNS AGAINST THE FIGURE THE READER INDICATED, and name that figure explicitly in your output. Never pass a bare he, she, they or it through when more than one figure is in the picture: the image model attaches it to the most prominent figure, not the intended one. This has put a costume change onto the wrong character.',
       '11. If the reader has asked for more than one distinct change at once, still produce ONE instruction, but keep the changes clearly separated and state for each one exactly which figure or object it applies to.',
+      '12. If the draft contains a token of the form {{REF:Name}}, reproduce it EXACTLY as it appears, unchanged and unmoved. It is resolved later into a specific image number and rewriting it breaks that.',
       '',
       'A draft built from a fixed template may be supplied. If the reader\u2019s own words ask for something the draft does not cover, prefer the reader and keep the draft\u2019s protective clauses. If the reader typed nothing beyond the draft, return the draft essentially unchanged.'
     ].join('\n');
@@ -1425,6 +1426,22 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
         }
         return 'the supplied reference image for ' + nm;
       });
+    }
+    // v3.0.770 -- the reference the reader PICKED, stated as fact and pinned
+    // to its image number. A token in prose did not survive the rewrite route;
+    // this is assembled here, after refsR exists, and cannot be edited away.
+    var _pickName = String((req.body && req.body.ref_name) || '').trim();
+    if (_pickName) {
+      var _pickIdx = -1;
+      for (var pi = 0; pi < refsR.length; pi++) {
+        var pn = refsR[pi] && refsR[pi].name;
+        if (pn && String(pn).trim().toLowerCase() === _pickName.toLowerCase()) { _pickIdx = pi; break; }
+      }
+      if (_pickIdx >= 0) {
+        instructionR = 'The character or object being corrected is ' + refsR[_pickIdx].name +
+          ', and the reference to use for it is Image ' + (_pickIdx + 2) +
+          '. Use no other reference image for this change, whatever else is supplied.\n\n' + instructionR;
+      }
     }
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
