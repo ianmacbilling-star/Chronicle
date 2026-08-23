@@ -10986,7 +10986,14 @@ var RG_ACTIONS = {
 // v3.0.773 -- actions that can be confined to a tile around the red marker.
 // A tile only makes sense for a change to ONE thing in ONE place: the
 // background, the weather and a whole-picture restyle cannot be cropped.
-var RG_CROPPABLE = ['reface', 'bodypart', 'pose', 'limb', 'reorient', 'object', 'appearance', 'expression', 'remove'];
+// Actions confined to a tile. The reader is never asked: the action already
+// says whether the change is local. Background, weather, whole-picture
+// restyle and Add are whole-frame by definition and never crop.
+var RG_CROPPABLE = ['reface', 'bodypart', 'pose', 'limb', 'reorient', 'object', 'appearance', 'expression', 'remove', 'move', 'facing'];
+
+// These carry the subject somewhere else, so the tile must span BOTH markers:
+// a box around where it is cannot contain where it is going.
+var RG_SPAN_CROP = ['move', 'limb', 'pose', 'facing'];
 
 var RG_FROM_TINT = 'rgba(226,72,72,0.22)';
 var RG_TO_TINT = 'rgba(86,196,116,0.22)';
@@ -11214,9 +11221,6 @@ function rgActionChange() {
   }
   if (def.depth) html += rgSelect('rg-depth', 'Depth there', [['same', 'the same distance away'], ['further', 'further back'], ['closer', 'nearer the viewer']]);
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
-  if (RG_CROPPABLE.indexOf(a) >= 0) {
-    html += rgSelect('rg-crop', 'How much to redraw', [['tile', 'just around the red marker (keeps the rest of the picture untouched)'], ['whole', 'the whole picture']]);
-  }
   if (def.scope) html += rgSelect('rg-scope', 'Apply it to', [['all', 'the whole picture'], ['one', 'just the figure I circle in red']]);
   if (def.convert) {
     var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
@@ -12012,8 +12016,13 @@ function submitRetouch() {
   try {
     var _cSel = document.getElementById('retouch-action');
     var _cA = _cSel ? _cSel.value : '';
-    if (RG_CROPPABLE.indexOf(_cA) >= 0 && rgVal('rg-crop') !== 'whole' && rgState.from) {
+    if (RG_CROPPABLE.indexOf(_cA) >= 0 && rgState.from) {
       _rgCrop = { x: rgState.from.x, y: rgState.from.y, r: rgState.from.r };
+      // A move, a reach or a turn of the gaze ends somewhere else, so the tile
+      // has to reach that far too.
+      if (RG_SPAN_CROP.indexOf(_cA) >= 0 && rgState.to) {
+        _rgCrop.to = { x: rgState.to.x, y: rgState.to.y, r: rgState.to.r };
+      }
     }
   } catch (e) { /* a missing crop is a whole-picture retouch, not a failure */ }
   var _rgSaw = null, _rgFork = null;

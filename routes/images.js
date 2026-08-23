@@ -1483,7 +1483,8 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       if (_cm && typeof _cm.x === 'number' && typeof _cm.y === 'number') {
         var _panelBuf = await fetchFile(moment.image);
         if (_panelBuf) {
-          var _cut = await imageCrop.cropTile(_panelBuf, _cm);
+          // A second point means the change travels: span both.
+          var _cut = await imageCrop.cropTile(_panelBuf, _cm, _cm.to || null);
           var _tileUrl = await uploadFile(_cut.buffer, 'tile-' + moment.id + '-' + Date.now() + '.png', 'image/png');
           if (_tileUrl) {
             _sendUrl = _tileUrl;

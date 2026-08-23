@@ -37,6 +37,29 @@ const MIN_TILE = 256;
  * @param {object} m  marker as fractions: { x, y, r } where r is of the SHORTER side
  * @returns {{left:number, top:number, side:number}} clamped to the panel
  */
+// A tile covering TWO markers: the subject and its destination. Still square,
+// still clamped inside the panel. Falls back to the single-marker box when
+// only one point is supplied.
+function tileBoxSpan(W, H, a, b) {
+  if (!a && !b) return null;
+  if (!a || !b) return tileBox(W, H, a || b);
+  const shortSide = Math.min(W, H);
+  const ax = a.x * W, ay = a.y * H, bx = b.x * W, by = b.y * H;
+  const ra = Math.max((a.r || 0.07) * shortSide, MIN_TILE / (2 * TILE_MULTIPLE));
+  const rb = Math.max((b.r || 0.07) * shortSide, MIN_TILE / (2 * TILE_MULTIPLE));
+  // The span from one marker edge to the other, plus the usual context margin.
+  const spanX = Math.abs(bx - ax) + ra + rb;
+  const spanY = Math.abs(by - ay) + ra + rb;
+  let side = Math.round(Math.max(spanX, spanY) * 1.35);
+  side = Math.max(MIN_TILE, side);
+  side = Math.min(side, W, H);
+  let left = Math.round((ax + bx) / 2 - side / 2);
+  let top = Math.round((ay + by) / 2 - side / 2);
+  left = Math.max(0, Math.min(W - side, left));
+  top = Math.max(0, Math.min(H - side, top));
+  return { left, top, side };
+}
+
 function tileBox(W, H, m) {
   if (!W || !H || !m) return null;
   const shortSide = Math.min(W, H);
@@ -63,9 +86,9 @@ async function dimensions(buf) {
  * Cut the tile out of a panel.
  * @returns {{buffer:Buffer, box:{left,top,side}, panel:{width,height}}}
  */
-async function cropTile(panelBuf, marker) {
+async function cropTile(panelBuf, marker, marker2) {
   const { width, height } = await dimensions(panelBuf);
-  const box = tileBox(width, height, marker);
+  const box = marker2 ? tileBoxSpan(width, height, marker, marker2) : tileBox(width, height, marker);
   if (!box) throw new Error('could not compute a tile box');
   const buffer = await sharp(panelBuf)
     .extract({ left: box.left, top: box.top, width: box.side, height: box.side })
@@ -121,4 +144,4 @@ async function applyFeather(tileBuf, side, px) {
     .toBuffer();
 }
 
-module.exports = { tileBox, cropTile, compositeTile, dimensions, TILE_MULTIPLE, MIN_TILE };
+module.exports = { tileBox, tileBoxSpan, cropTile, compositeTile, dimensions, TILE_MULTIPLE, MIN_TILE };
