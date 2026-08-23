@@ -12859,7 +12859,10 @@ function renderStoryboard() {
     var _isDrawnTitle = false;
     try {
       var _mlm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : null;
-      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url);
+      // v3.0.777 -- the panel must BE the drawn title, not merely have been one.
+      // built_title.url is the live image while a title is current; once the art
+      // is regenerated or replaced the two diverge and the row holds a picture.
+      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url && m.image && String(_mlm.built_title.url) === String(m.image));
     } catch (e) { _isDrawnTitle = false; }
     var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'

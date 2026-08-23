@@ -1406,7 +1406,9 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   // The button is hidden in app.js. This is the rule.
   var _blt = null;
   try { var _lm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {}; _blt = _lm && _lm.built_title; } catch (e) { _blt = null; }
-  if (_blt && _blt.url) {
+  // Only when the LIVE image is the built title. A stale built_title left behind
+  // by a later regenerate or replace must not lock the panel out of retouching.
+  if (_blt && _blt.url && moment.image && String(_blt.url) === String(moment.image)) {
     return res.json({ error: 'TITLE_PANEL', message: 'This panel holds a chapter title from the Title Builder. Open the Title Builder to change it, or Regenerate to draw the scene instead.' });
   }
   try {
