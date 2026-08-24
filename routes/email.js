@@ -679,13 +679,94 @@ function orderProblemHTML(name, order) {
 </html>`;
 }
 
+// v3.0.783 -- TD-582. THE REPORT THAT LETS A PAID, UNSHIPPED ORDER BE RESEARCHED AND REFUNDED.
+//
+// Goes to SUPPORT, not to the customer, and carries the things a refund actually needs: who
+// they are, what they paid, the Stripe payment id (with a direct dashboard link), the vendor
+// job id if one was ever minted, and the error verbatim.
+//
+// NOT gated on ALERTS_ENABLED, unlike sendAlertEmail. That switch exists so monitoring noise can
+// be turned off in an environment; this is somebody's money in a state nobody has looked at, and
+// there is no environment where the right behaviour is silence.
+//
+// EVERY VALUE IS ESCAPED. The error text is vendor output and the order name is user input, and
+// both land in HTML -- the same care the feedback template takes for the same reason.
+function orderFailureReportHTML(o) {
+  function esc(v) {
+    return String(v == null || v === '' ? '\u2014' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function row(label, value, mono) {
+    return '<tr>' +
+      '<td style="padding:6px 12px 6px 0;vertical-align:top;color:#8a6a2a;white-space:nowrap;">' + esc(label) + '</td>' +
+      '<td style="padding:6px 0;vertical-align:top;color:#e8d5a3;' +
+        (mono ? 'font-family:Consolas,Menlo,monospace;font-size:12px;word-break:break-all;' : '') + '">' +
+        value + '</td></tr>';
+  }
+  function txt(label, value, mono) { return row(label, esc(value), mono); }
+  var money = (o.amount != null && o.amount !== '')
+    ? (esc(o.amount) + ' ' + esc(o.currency || 'USD')) : '\u2014';
+  // The one-click path to the refund. Stripe ids are prefixed and the prefix names the object,
+  // so the link is built from the id we hold rather than from a guess about which id it is.
+  var piLink = o.stripePaymentIntentId
+    ? ('<a href="https://dashboard.stripe.com/payments/' + esc(o.stripePaymentIntentId) + '" ' +
+       'style="color:#c9a84c;">' + esc(o.stripePaymentIntentId) + '</a>')
+    : '\u2014';
+  var card = (o.cardBrand || o.cardLast4)
+    ? (esc(o.cardBrand || 'card') + ' \u2022\u2022\u2022\u2022 ' + esc(o.cardLast4 || '????')) : '\u2014';
+  var fmt = [o.binding, o.colorTier, o.coverFinish, o.paper].filter(Boolean).map(esc).join(', ') || '\u2014';
+  var files =
+    (o.interiorPdfUrl ? '<a href="' + esc(o.interiorPdfUrl) + '" style="color:#c9a84c;">interior</a>' : 'interior missing') +
+    ' &nbsp;|&nbsp; ' +
+    (o.coverPdfUrl ? '<a href="' + esc(o.coverPdfUrl) + '" style="color:#c9a84c;">cover</a>' : 'cover missing');
+  return '<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:#0a0806;color:#e8d5a3;margin:0;padding:24px;">' +
+    '<div style="max-width:640px;margin:0 auto;border:1px solid rgba(201,168,76,0.25);padding:20px;">' +
+    '<h2 style="margin:0 0 4px;color:#c9a84c;font-size:18px;">Paid order did not reach the printer</h2>' +
+    '<div style="color:#8a6a2a;font-size:12px;margin-bottom:16px;">' +
+      'The customer has been charged and no print job exists. This needs a refund or a resubmission.</div>' +
+    '<table style="border-collapse:collapse;font-size:13px;width:100%;">' +
+      txt('Order', o.orderName || o.bookTitle) +
+      txt('Order number', o.externalId, true) +
+      txt('Book title', o.bookTitle) +
+      txt('Campaign', o.campaignName) +
+      txt('Customer', o.customerName) +
+      txt('Customer email', o.customerEmail, true) +
+      txt('User id', o.userId, true) +
+      row('Amount paid', money) +
+      row('Stripe payment', piLink, true) +
+      txt('Stripe session', o.stripeSessionId, true) +
+      row('Card', card) +
+      txt('Printer job id', o.providerOrderId || 'none -- never created', true) +
+      row('Format', fmt) +
+      txt('Pages / quantity', String(o.pageCount == null ? '?' : o.pageCount) + ' / ' + String(o.quantity == null ? '?' : o.quantity)) +
+      txt('Printer cost / tax', String(o.providerCost == null ? '?' : o.providerCost) + ' / ' + String(o.providerTax == null ? '?' : o.providerTax)) +
+      row('Print files', files) +
+      txt('Internal order id', o.orderId, true) +
+    '</table>' +
+    '<div style="margin-top:16px;padding:12px;border:1px solid rgba(201,168,76,0.25);">' +
+      '<div style="color:#8a6a2a;font-size:12px;margin-bottom:6px;">What failed</div>' +
+      '<div style="font-family:Consolas,Menlo,monospace;font-size:12px;word-break:break-word;">' + esc(o.error) + '</div>' +
+    '</div></div></body></html>';
+}
+async function sendOrderFailureReport(o) {
+  var order = o || {};
+  var to = process.env.SUPPORT_EMAIL || 'support@campaignia.com';
+  var subject = 'ACTION NEEDED: paid order did not reach the printer' +
+    (order.externalId ? ' (' + order.externalId + ')' : '') +
+    (order.customerEmail ? ' -- ' + order.customerEmail : '');
+  await sendEmail(to, subject, orderFailureReportHTML(order),
+    { replyTo: order.customerEmail || undefined });
+}
 async function sendOrderProblemEmail(opts) {
   // opts: { to_email, name, order }. Sends to the customer and BCCs support.
   try {
     var order = opts.order || {};
     var subject = 'There was a problem with your Campaignia order' + (order.orderNo ? ' (' + order.orderNo + ')' : '');
     var html = orderProblemHTML(opts.name, order);
-    await sendEmail(opts.to_email, subject, html, { bcc: 'Support@campaignia.com' });
+    // v3.0.783 -- TD-582. The BCC is gone: support receives sendOrderFailureReport instead, which
+    // carries the payment id and the amounts this message deliberately does not. Two emails to
+    // support would be worse than one, and the one that arrives should be the actionable one.
+    await sendEmail(opts.to_email, subject, html);
   } catch (e) {
     console.error('Order problem email error:', e.message); // Non-fatal
   }
@@ -977,4 +1058,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

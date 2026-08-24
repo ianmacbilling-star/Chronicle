@@ -72,6 +72,13 @@ const PAPER_CODE = '060UW444';
 // 60# uncoated cream. Lulu's SKU spec shows FC+cream is valid (060UC444);
 // SANDBOX-CONFIRM a cream quote before the first real cream order.
 const PAPER_CODE_CREAM = '060UC444';
+// v3.0.783 -- TD-579. NO CONFIRMED CREAM SKU EXISTS, SO THERE IS NO CREAM SKU.
+// Every other product in this file is a string that produced a real quote. The cream one was
+// the white one with four characters changed, which is a BELIEF, and it failed on first real
+// use -- the quote could not be priced at all. Add a verified entry here, keyed exactly like
+// SKU_OVERRIDES, and set available:true on cream in catalog.js; both are needed and neither
+// alone does anything.
+const CREAM_SKUS = {};
 
 // Confirmed SKUs win over the parametric builder so a future code change
 // can't silently break a known-good product. All entries below are
@@ -155,8 +162,20 @@ class LuluProvider extends PrintProvider {
       // Trailing Linen/Foil = 'XX' (none).
       sku = `${trim}${color}${quality}${bind}${PAPER_CODE}${finish}XX`;
     }
-    // Cream is a paper-code swap on the resolved SKU (white -> cream).
-    if (spec.paper === 'cream') sku = sku.replace(PAPER_CODE, PAPER_CODE_CREAM);
+    // v3.0.783 -- TD-579. A CONFIRMED CREAM SKU, OR NOTHING.
+    // This used to swap the paper code on the resolved white SKU and hope. It produced a string
+    // Lulu rejects, and the rejection surfaced as "could not get a price" with nothing naming
+    // the cause. Throwing here names it, and it is unreachable in normal use because catalog.js
+    // refuses cream before this is called -- which is the point: the picker, buildSpec and the
+    // SKU builder all say the same thing, so no one of them can be the only guard.
+    if (spec.paper === 'cream') {
+      var creamSku = CREAM_SKUS[overrideKey];
+      if (!creamSku) {
+        throw new Error('lulu: no confirmed cream paper SKU for ' + overrideKey +
+          '. Cream is not available for this product; nothing was sent to the printer.');
+      }
+      sku = creamSku;
+    }
     // Convert LAST: the cream swap above matches the legacy run, and the paper code
     // also sits whole between two dots, so either order works -- but converting last
     // keeps every constant in this file in the one form that is sandbox-confirmed.
