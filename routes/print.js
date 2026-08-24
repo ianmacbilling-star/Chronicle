@@ -199,10 +199,66 @@ async function recoverPrintJob(db, row) {
     return { unknown: true, detail: (e && e.message) || String(e) };
   }
 }
-// Rows that might be hiding a live print job: paid for, and no job id recorded.
+// v3.0.787 -- TD-587b. NARROWED TO THE STATES THAT ACTUALLY NEED IT.
+// v3.0.786 asked about any paid order with no job id -- which includes an order still being
+// submitted, because fulfillPrintOrder marks the row paid and THEN submits. On a slow vendor that
+// window is a minute and a half, and the sweep would race a request that is still in flight.
+// Harmless (the write is guarded on provider_order_id IS NULL) but pointless, and it muddies the
+// log with lookups for orders that are simply not finished yet.
+// The AUTOMATIC triggers use this. The BUTTON uses orderCanBeChecked below, which is wider.
 function orderNeedsRecovery(row) {
   return !!(row && !row.provider_order_id &&
+    (row.payment_status === 'paid' || row.payment_status === 'refunded') &&
+    (row.status === 'order_failed' || row.status === 'order_unknown'));
+}
+// The button may ask about ANY paid order with no job, including one stranded at 'paid' because
+// the process died between the payment write and the submit. Nothing automatic will ever look at
+// that row -- it never reaches a failure state -- so a deliberate human check is its only way
+// back, and a human pressing a button cannot race an in-flight submit the way a sweep can.
+function orderCanBeChecked(row) {
+  return !!(row && !row.provider_order_id &&
     (row.payment_status === 'paid' || row.payment_status === 'refunded'));
+}
+// v3.0.787 -- TD-588. KEEP A LIVE ORDER CURRENT, which is how tracking ever appears.
+//
+// getOrderStatus has always known how to read tracking and GET /order/:id has always known how to
+// store it -- and NOTHING IN THE CLIENT CALLS THAT ROUTE. The orders screen reads the list, which
+// reads the database and asks the vendor nothing. So `tracking_url` stayed null forever, the card
+// said "Awaiting Tracking" indefinitely, and the Track Shipment link could not appear on any
+// order however far it got. A correct function with no caller, the same shape as TD-585's
+// _skuError and the v3.0.726 tour.
+//
+// Only for orders that are LIVE AND UNFINISHED: shipped and delivered are terminal, and a
+// rejected or cancelled job will not change on its own either. Best-effort throughout -- a vendor
+// that is slow or down must never stop an order rendering.
+var ORDER_LIVE_STATES = ['created', 'accepted', 'in_production', 'paid'];
+function orderIsLive(row) {
+  return !!(row && row.provider_order_id && ORDER_LIVE_STATES.indexOf(String(row.status)) !== -1);
+}
+async function refreshLiveOrder(db, row) {
+  if (!orderIsLive(row)) return false;
+  try {
+    var provider = getPrintProvider();
+    var live = await provider.getOrderStatus(row.provider_order_id);
+    if (!live) return false;
+    var _st = live.status || row.status;
+    var _url = live.trackingUrl || row.tracking_url || null;
+    var _num = live.trackingNumber || row.tracking_number || null;
+    var _car = live.carrier || row.carrier || null;
+    // Write only when something actually moved: an UPDATE per render would churn updated_at and
+    // make "when did this last change" meaningless.
+    if (_st === row.status && _url === (row.tracking_url || null) &&
+        _num === (row.tracking_number || null) && _car === (row.carrier || null)) return false;
+    await db.prepare(
+      'UPDATE print_orders SET status = ?, tracking_url = ?, tracking_number = ?, carrier = ?, ' +
+      'updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(_st, _url, _num, _car, row.id);
+    row.status = _st; row.tracking_url = _url; row.tracking_number = _num; row.carrier = _car;
+    return true;
+  } catch (e) {
+    try { console.warn('[order-refresh] ' + (row.external_id || row.id) + ': ' + ((e && e.message) || e)); } catch (e2) {}
+    return false;
+  }
 }
 function requireSession(req, res, next) {
   if (!req.session || !req.session.userId) {
@@ -566,16 +622,11 @@ router.get('/order/:id', requireSession, async function (req, res) {
     if (!row || row.user_id !== req.session.userId) return res.status(404).json({ error: 'Not found' });
 
     if (row.provider_order_id) {
-      try {
-        const provider = getPrintProvider();
-        const live = await provider.getOrderStatus(row.provider_order_id);
-        if (live && live.status && live.status !== row.status) {
-          await db.prepare(
-            'UPDATE print_orders SET status = ?, tracking_url = ?, carrier = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(live.status, live.trackingUrl || null, live.carrier || null, row.id);
-          row.status = live.status; row.tracking_url = live.trackingUrl || null; row.carrier = live.carrier || null;
-        }
-      } catch (_e) { /* status refresh is best-effort */ }
+      // v3.0.787 -- TD-588. Was an inline copy that wrote only on a STATUS change, so a job that
+      // shipped without changing state -- or that gained tracking a moment after SHIPPED landed --
+      // never got its url stored. It also never captured the tracking NUMBER at all. One helper
+      // now, shared with the list sweep, so the two cannot drift.
+      await refreshLiveOrder(db, row);
     } else if (orderNeedsRecovery(row)) {
       // v3.0.786 -- TD-587. The missing else. This branch has always refreshed an order that HAS a
       // job id; an order that is paid and has none is the one that most needs asking about.
@@ -623,6 +674,11 @@ router.get('/orders', requireSession, async function (req, res) {
     try {
       var _needy = (rows || []).filter(orderNeedsRecovery).slice(-3);
       for (var _i = 0; _i < _needy.length; _i++) await recoverPrintJob(db, _needy[_i]);
+      // v3.0.787 -- TD-588. AND BRING LIVE ORDERS UP TO DATE, which is what makes tracking appear.
+      // Same bounded shape and the same reason: only orders that are at the printer and not yet
+      // finished, newest first because that is what someone opening this screen is looking at.
+      var _live = (rows || []).filter(orderIsLive).slice(0, 5);
+      for (var _j = 0; _j < _live.length; _j++) await refreshLiveOrder(db, _live[_j]);
     } catch (_e) { /* never let a recovery attempt stop the list rendering */ }
     res.json({ orders: rows || [] });
   } catch (e) {
@@ -648,7 +704,7 @@ router.post('/orders/:id/recover', requireSession, async function (req, res) {
       return res.json({ ok: true, found: true, already: true, providerOrderId: row.provider_order_id,
         message: 'This order is already with the printer as job ' + row.provider_order_id + '.' });
     }
-    if (!orderNeedsRecovery(row)) {
+    if (!orderCanBeChecked(row)) {
       return res.json({ ok: true, found: false, notPaid: true,
         message: 'This order was never paid for, so nothing was ever sent to the printer.' });
     }
