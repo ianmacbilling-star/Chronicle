@@ -78,7 +78,11 @@ const PAPER_CODE_CREAM = '060UC444';
 // use -- the quote could not be priced at all. Add a verified entry here, keyed exactly like
 // SKU_OVERRIDES, and set available:true on cream in catalog.js; both are needed and neither
 // alone does anything.
-const CREAM_SKUS = {};
+// v3.0.784 -- TD-585. Cream is a paper-code swap again, and this time only where the product
+// exists. v3.0.783 removed the swap because it was being applied to a FULL COLOUR SKU, which
+// Lulu rejects; the same swap on a BW SKU is Lulu's ordinary novel stock. The guard below is
+// what makes the difference, and it is an assertion about the vendor's catalogue, not a
+// preference -- so it throws rather than quietly substituting white.
 
 // Confirmed SKUs win over the parametric builder so a future code change
 // can't silently break a known-good product. All entries below are
@@ -105,11 +109,17 @@ function toDottedSku(sku) {
   return [s.slice(0, 9), s.slice(9, 11), s.slice(11, 14), s.slice(14, 16), s.slice(16, 24), s.slice(24, 27)].join('.');
 }
 
+// v3.0.784 -- TD-585. THE KEY GAINS THE INK, because quality alone no longer identifies a
+// product: 'paperback:premium:matte' was unambiguous when every book was full colour and now
+// describes two different SKUs. Rekeyed rather than extended, so an old key cannot match a new
+// product by accident -- a stale two-part key now simply misses and falls through to the
+// parametric builder instead of silently returning the colour SKU for a BW order.
+// The four strings themselves are UNCHANGED and still the sandbox-confirmed ones.
 const SKU_OVERRIDES = {
-  'paperback:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // $7.01 print
-  'paperback:standard:matte': '0850X1100FCSTDPB060UW444MXX', // $7.01 print
-  'paperback:premium:matte':  '0850X1100FCPREPB060UW444MXX', // $18.97 print
-  'hardcover:premium:matte':  '0850X1100FCPRECW060UW444MXX', // $28.57 print
+  'paperback:color:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // $7.01 print
+  'paperback:color:standard:matte': '0850X1100FCSTDPB060UW444MXX', // $7.01 print
+  'paperback:color:premium:matte':  '0850X1100FCPREPB060UW444MXX', // $18.97 print
+  'hardcover:color:premium:matte':  '0850X1100FCPRECW060UW444MXX', // $28.57 print
 };
 
 class LuluProvider extends PrintProvider {
@@ -151,7 +161,9 @@ class LuluProvider extends PrintProvider {
   _packageId(spec) {
     const quality = spec.quality === 'premium' ? 'PRE' : 'STD';
     const finishKey = spec.coverFinish === 'gloss' ? 'gloss' : 'matte';
-    const overrideKey = `${spec.binding}:${spec.quality === 'premium' ? 'premium' : 'standard'}:${finishKey}`;
+    // v3.0.784 -- TD-585. ink joins the key. See SKU_OVERRIDES above.
+    const inkKey = spec.ink === 'bw' ? 'bw' : 'color';
+    const overrideKey = `${spec.binding}:${inkKey}:${spec.quality === 'premium' ? 'premium' : 'standard'}:${finishKey}`;
     let sku = SKU_OVERRIDES[overrideKey];
     if (!sku) {
       const bind = BIND_CODE[spec.binding];
@@ -169,12 +181,14 @@ class LuluProvider extends PrintProvider {
     // refuses cream before this is called -- which is the point: the picker, buildSpec and the
     // SKU builder all say the same thing, so no one of them can be the only guard.
     if (spec.paper === 'cream') {
-      var creamSku = CREAM_SKUS[overrideKey];
-      if (!creamSku) {
-        throw new Error('lulu: no confirmed cream paper SKU for ' + overrideKey +
-          '. Cream is not available for this product; nothing was sent to the printer.');
+      // Cream exists as BW novel stock. On a full-colour SKU it is the combination that failed
+      // on 2026-08-24, so it is refused here as well as in the catalog -- the picker, buildSpec
+      // and the SKU builder all say the same thing, and no one of them is the only guard.
+      if (inkKey !== 'bw') {
+        throw new Error('lulu: cream paper is only available for black and white interiors (asked for ' +
+          overrideKey + '). Nothing was sent to the printer.');
       }
-      sku = creamSku;
+      sku = sku.replace(PAPER_CODE, PAPER_CODE_CREAM);
     }
     // Convert LAST: the cream swap above matches the legacy run, and the paper code
     // also sits whole between two dots, so either order works -- but converting last
@@ -285,18 +299,26 @@ class LuluProvider extends PrintProvider {
   // --- PrintProvider impl ----------------------------------------------
 
   async getQuote(req) {
-    const raw = await this._fetch('/print-job-cost-calculations/', {
-      method: 'POST',
-      body: {
-        line_items: [{
-          pod_package_id: this._packageId(req.spec),
-          page_count: req.spec.pageCount,
-          quantity: req.quantity,
-        }],
-        shipping_address: this._address(req.shipTo),
-        shipping_level: this._shippingLevel(req.shippingLevel),
-      },
-    });
+    // v3.0.784 -- TD-585. A quote is where a wrong product code shows up first, and it is the
+    // cheapest place to learn it: no money has moved and no job exists. _skuError names the SKU
+    // that was refused, which on 2026-08-24 was the single missing fact.
+    let raw;
+    try {
+      raw = await this._fetch('/print-job-cost-calculations/', {
+        method: 'POST',
+        body: {
+          line_items: [{
+            pod_package_id: this._packageId(req.spec),
+            page_count: req.spec.pageCount,
+            quantity: req.quantity,
+          }],
+          shipping_address: this._address(req.shipTo),
+          shipping_level: this._shippingLevel(req.shippingLevel),
+        },
+      });
+    } catch (err) {
+      throw this._skuError(err, req.spec);
+    }
     // v3.0.425 -- CARRY THE TAX, DO NOT JUST SWALLOW IT.
     // These were the incl-tax figures only, so tax sat inside the price and was invisible: nothing
     // logged it, nothing stored it, and the print markup was being applied on top of it. Lulu computes
@@ -352,6 +374,24 @@ class LuluProvider extends PrintProvider {
   // is 8-40 inches, 200-1000 millimetres or 600-3000 points, and those ranges do not
   // overlap. That is correct whether the unit parameter is honoured, ignored, or
   // named something else entirely.
+  // v3.0.784 -- TD-585. A REJECTED SKU MUST SAY WHICH SKU.
+  // The BW products are built parametrically and have never been confirmed against a live quote.
+  // When the cream order failed on 2026-08-24 the message named no product, and working out that
+  // the SKU was even involved took the rest of the session. Wrapping the two calls that carry a
+  // pod_package_id means a bad code identifies itself in the first line of the error, and the fix
+  // is one confirmed string in SKU_OVERRIDES rather than an investigation.
+  _skuError(err, spec) {
+    var sku = '(unknown)';
+    try { sku = this._packageId(spec); } catch (e) { sku = '(could not be built: ' + ((e && e.message) || e) + ')'; }
+    var msg = (err && err.message) || String(err);
+    if (msg.indexOf('pod_package_id') !== -1 || /\b400\b/.test(msg)) {
+      var e2 = new Error('lulu: the product code was not accepted -- pod_package_id ' + sku + '. ' + msg);
+      e2.podPackageId = sku;
+      return e2;
+    }
+    return err;
+  }
+
   async getCoverDimensions(spec, pageCount) {
     const sku = this._packageId(spec);
     const raw = await this._fetch('/cover-dimensions/', {
@@ -421,7 +461,9 @@ class LuluProvider extends PrintProvider {
       throw new Error('lulu: refusing to submit -- no usable ' + _missing.join(' or ') +
         ' file URL on this order. Nothing was sent to the printer, so this is not a problem with the PDF itself.');
     }
-    const raw = await this._fetch('/print-jobs/', {
+    let raw;
+    try {
+      raw = await this._fetch('/print-jobs/', {
       method: 'POST',
       body: {
         external_id: req.externalId,
@@ -446,7 +488,13 @@ class LuluProvider extends PrintProvider {
           return { production_delay: Math.max(60, Math.min(2880, n)) };
         })(),
       },
-    });
+      });
+    } catch (err) {
+      // v3.0.784 -- TD-585. Same treatment as the quote. A job POST can refuse a product code the
+      // cost endpoint accepted, and this one happens AFTER the customer has paid, so naming the
+      // SKU in the error is what turns a support ticket into a one-line fix.
+      throw this._skuError(err, req.spec);
+    }
     return this._toOrder(raw, req.externalId);
   }
 
