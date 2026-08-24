@@ -1014,8 +1014,14 @@ function handleBillingReturn() {
     // So: report the payment, which IS true, then watch for the answer. The webhook usually
     // lands in a second or two; six tries over about twenty seconds covers a slow one without
     // leaving a spinner behind if it never comes.
+    // v3.0.786 -- TD-587. THE WINDOW HAS TO OUTLIVE THE FAILURE.
+    // v3.0.782 watched for six tries at 3.5s -- about twenty seconds -- which was sized for a fast
+    // refusal. The failure that actually happened was a Cloudflare 504 at roughly a hundred
+    // seconds, plus three recovery attempts behind it, so the watcher had long since given up and
+    // Ian saw no error at all. Twenty-four tries at 5s is about two minutes, which covers a
+    // timeout AND the recovery that follows it.
     billingToast('Payment received. Handing your book to the printer...', 'success');
-    orderWatchAfterPayment(6);
+    orderWatchAfterPayment(24);
   } else if (order === 'cancel') {
     billingToast('Order canceled - no charge was made.', 'info');
   }
@@ -18775,6 +18781,17 @@ function reorderFromOrder(id) {
     // reached Lulu. This dialog told Ian the printer had rejected his files and that sending
     // them again would fail again. Both halves were untrue, and it is the more discouraging
     // of the two stories -- it points at the book rather than at the bug.
+    // v3.0.786 -- TD-587. AND A THIRD STORY: WE DO NOT KNOW.
+    // On po-7 the printer HAD the job and this dialog said the files were never seen and invited a
+    // reorder. That would have made a second book for a customer already being charged for one.
+    if (o.status === 'order_unknown') {
+      appNotice('We are not sure whether that order reached the printer',
+        'Your payment went through, but we never got an answer from the printer, so your book may ' +
+        'already be on its way. Ordering again could produce a second copy.',
+        'Open the order and press "Check with the printer" first. It will tell you which it is, and ' +
+        'reordering is safe once it says the printer has nothing.');
+      return;
+    }
     var _notSent = (o.status === 'order_failed');
     var _title = _notSent ? 'That order never reached the printer'
                           : 'That order was rejected by the printer';
@@ -19689,6 +19706,16 @@ function orderWatchAfterPayment(triesLeft) {
       .then(function (j) {
         var o = (j && j.orders && j.orders.length) ? j.orders[0] : null;   // ORDER BY id DESC
         if (!o) return orderWatchAfterPayment(triesLeft - 1);
+        if (o.status === 'order_unknown') {
+          // v3.0.786 -- TD-587. Neither success nor failure, and saying either would be a guess.
+          if (typeof loadOrders === 'function') loadOrders();
+          appNotice('We could not confirm your order with the printer',
+            'Your payment went through and your book may already be with them \u2014 we could not get an ' +
+            'answer either way, so nothing has been assumed. Do NOT order again yet: that could produce ' +
+            'a second book.',
+            'Open the order and press "Check with the printer" in a few minutes, and it will settle itself.');
+          return;
+        }
         if (o.status === 'order_failed' || o.status === 'rejected') {
           if (typeof loadOrders === 'function') loadOrders();
           var _notSent = (o.status === 'order_failed');
@@ -19711,7 +19738,7 @@ function orderWatchAfterPayment(triesLeft) {
         orderWatchAfterPayment(triesLeft - 1);
       })
       .catch(function () { orderWatchAfterPayment(triesLeft - 1); });
-  }, 3500);
+  }, 5000);
 }
 function loadOrders() {
   var list = document.getElementById('orders-list');
@@ -19755,11 +19782,47 @@ function orderStatusLabel(o) {
   if (p === 'stubbed') p = 'test payment';
   if (orderNeverPaid(o)) return 'Not completed \u2014 never paid for';
   if (o.status === 'order_failed') return 'Paid \u2014 but it never reached the printer';
+  // v3.0.786 -- TD-587. The state that admits it does not know. Reading this as a failure is what
+  // sent a reader toward a duplicate order on po-7.
+  if (o.status === 'order_unknown') return 'Paid \u2014 not yet confirmed with the printer';
   if (o.status === 'rejected') return 'Paid \u2014 the printer would not accept it';
   return (o.status || 'pending') + ' / ' + p;
 }
 
 // v3.0.668 -- TD-470. Delete an order that was never paid for, and its two print files with it.
+// v3.0.786 -- TD-587. ASK THE PRINTER WHETHER IT HAS THIS ORDER.
+// The button behind the recovery route. On po-7 this step was a SQL UPDATE typed by hand after
+// reading a job id off Lulu's dashboard; every ingredient for doing it automatically already
+// existed, and nothing ever went and looked.
+// Reports all three answers distinctly -- found, definitely-not-there, and could-not-ask -- because
+// the second means "safe to order again" and the third emphatically does not.
+function recoverOrder(id) {
+  var btn = document.querySelector('button[onclick="recoverOrder(' + id + ')"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
+  fetch('/api/print/orders/' + id + '/recover', { method: 'POST', credentials: 'same-origin' })
+    .then(function (r) { return r.json().catch(function () { return null; }); })
+    .then(function (j) {
+      if (!j || j.error) {
+        appNotice('We could not check just now', (j && j.error) || 'The check did not complete.',
+          'Nothing has changed. Please try again in a few minutes.');
+      } else if (j.found) {
+        appNotice('Your book is with the printer', j.message,
+          (j.duplicateCount > 1)
+            ? ('Note: ' + j.duplicateCount + ' print jobs carry this order number. Contact support so one can be cancelled.')
+            : 'Tracking will appear here once it ships.');
+      } else if (j.unknown) {
+        appNotice('Still not confirmed', j.message, 'Please do not order again until this says one way or the other.');
+      } else {
+        appNotice('The printer does not have this order', j.message, '');
+      }
+      if (typeof loadOrders === 'function') loadOrders();
+    })
+    .catch(function () {
+      appNotice('We could not reach the printer', 'The check did not complete and nothing has changed.',
+        'Please try again in a few minutes.');
+    })
+    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Check with the printer'; } });
+}
 function deleteOrder(id) {
   var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
   if (!o) return;
@@ -19809,7 +19872,12 @@ function orderCardHtml(o) {
   }
   var title = o.order_name || o.book_title || o.campaign_name || ('Order #' + o.id);
   var orderNo = o.external_id || ('po-' + o.id);
-  var fmt = [o.binding, o.color_tier, o.cover_finish].filter(Boolean).join(', ');
+  // v3.0.786 -- TD-587. The card printed the raw key: v3.0.784 made 'bwpremium' a real value and
+  // po-7's card read "paperback, bwpremium, matte" to a customer. Labels, with the raw value as the
+  // fallback so a tier added later degrades to something readable rather than to nothing.
+  var _tierLabels = { premium: 'Premium color', standard: 'Standard color',
+                      bwpremium: 'Premium black & white', bwstandard: 'Standard black & white' };
+  var fmt = [o.binding, (_tierLabels[o.color_tier] || o.color_tier), o.cover_finish].filter(Boolean).join(', ');
   var charge = (o.customer_charge != null) ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : '';
   var card = (o.card_brand && o.card_last4) ? maskedCard(o.card_brand, o.card_last4) : '';
   var when = o.created_at ? formatOrderDate(o.created_at) : '';
@@ -19835,6 +19903,11 @@ function orderCardHtml(o) {
   // is a financial record: it holds the tax columns v3.0.425 kept on purpose and the order_spec from
   // TD-465 that says what was sold. The server refuses those independently -- this only decides
   // whether the button is worth showing.
+  // v3.0.786 -- TD-587. The manual recovery, as a button. Offered on any paid order with no job id
+  // recorded -- exactly the shape po-7 was in while it sat at the printer unrecognised.
+  var checkBtn = (_everPaid && !o.provider_order_id)
+    ? '<button class="btn btn-sm" style="margin-top:10px;margin-right:8px;" onclick="recoverOrder(' + o.id + ')">Check with the printer</button>'
+    : '';
   var deleteBtn = orderNeverPaid(o)
     ? '<button class="btn btn-sm" style="margin-top:10px;margin-left:8px;" onclick="deleteOrder(' + o.id + ')">Delete</button>'
     : '';
@@ -19861,6 +19934,9 @@ function orderCardHtml(o) {
   }
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
+  // v3.0.786 -- TD-587. Before Reorder, deliberately: on an unconfirmed order, checking is the
+  // safe act and reordering is the one that can produce a second book.
+  if (checkBtn) html += checkBtn;
   if (reorderBtn) html += reorderBtn;
   if (deleteBtn) html += deleteBtn;
   html += '</div>';
