@@ -594,13 +594,15 @@
                   <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:4px;"></div>
 
                   <div class="ord-sec ord-sec-gap">FORMAT</div>
-                  <div class="ord-row">
+                  <div class="ord-row ord-row-align-controls">
                     <div class="ord-f1">
                       <label class="ord-lbl">Binding <span class="ord-lbl-dim">(page count dependent)</span></label>
                       <select id="print-binding" onchange="quotePrintOrder()" class="ord-in"></select>
                     </div>
                     <div class="ord-f2">
-                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(premium colour recommended)</span></label>
+                      <!-- v3.0.785 -- TD-586. Shorter, and "color" to match the options it describes:
+                           v3.0.784 wrote "colour" here while the dropdown says "Premium color". -->
+                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(premium recommended)</span></label>
                       <!-- v3.0.784 -- TD-585. Changing the ink changes which PAPERS exist, so this
                            has to rebuild the option lists as well as re-price. printOptionsChanged
                            does both, in that order, because pricing a paper that is about to be
