@@ -163,12 +163,39 @@ class LuluProvider extends PrintProvider {
     return SKU_DOTTED ? toDottedSku(sku) : sku;
   }
 
+  // v3.0.781 -- TD-575. THE FIELD NAMES WERE NOT LULU FIELD NAMES.
+  //
+  // This sent cover_source_url and interior_source_url. Those are not fields in the Lulu
+  // Print API. They were ignored as unknown, the fields Lulu DOES require arrived empty,
+  // and the first real live order came back:
+  //     400 {"interior":["This field may not be null."],"cover":["This field may not be null."]}
+  //
+  // Read that error literally, the way TD-434 says to: it names interior and cover, which
+  // are exactly the two fields we never sent. It names NOTHING ELSE -- so the address, the
+  // phone, the shipping level, the SKU, the quantity and the contact email all passed
+  // validation. One fault, not a broken order path.
+  //
+  // Lulu openapi_public.yml, line item schema: cover and interior are each either an object
+  // with a required source_url, or a bare URL string, and "if used together it can replace
+  // printable_normalization". The nested printable_normalization form is equivalent. The
+  // shorthand is used here because the 400 above is DIRECT EVIDENCE that the line-item
+  // serializer carries fields by these names -- evidence beats picking the prettier shape.
+  //
+  // The object form rather than the bare string, because it leaves room for source_md5_sum,
+  // which is how a half-uploaded PDF would be caught rather than printed.
+  //
+  // WHERE THE WRONG SHAPE CAME FROM, so it is not repeated: cover_source_url and
+  // interior_source_url are the keys a third-party Python client uses for ITS OWN input dict,
+  // which it then converts before posting. The shape was copied from a client library rather
+  // than from the vendor. The header of this file has always said these calls were written
+  // against documented shapes and never exercised live; the quote endpoint has since been
+  // exercised, and this one had not been until 2026-08-24.
   _lineItem(req) {
     return {
       external_id: req.externalId,
       title: req.title,
-      cover_source_url: req.coverPdfUrl,
-      interior_source_url: req.interiorPdfUrl,
+      cover: { source_url: req.coverPdfUrl },
+      interior: { source_url: req.interiorPdfUrl },
       pod_package_id: this._packageId(req.spec),
       quantity: req.quantity,
     };
@@ -361,6 +388,20 @@ class LuluProvider extends PrintProvider {
   }
 
   async createOrder(req) {
+    // v3.0.781 -- TD-575. DO NOT ASK LULU WHETHER WE FORGOT THE FILES.
+    // buildOrderRequest and buildOrderRequestFromRow both coalesce a missing url to an EMPTY
+    // STRING, so an order with no files reaches here looking well formed and comes back as a
+    // vendor 400 -- which is how a local omission gets reported as a printer problem, and the
+    // reorder dialog then tells the reader their FILES were rejected when nothing was sent.
+    // Checked here rather than at the route, because this is the last place before the wire
+    // and both callers pass through it.
+    const _missing = [];
+    if (!(typeof req.interiorPdfUrl === 'string' && /^https?:\/\//i.test(req.interiorPdfUrl))) _missing.push('interior');
+    if (!(typeof req.coverPdfUrl === 'string' && /^https?:\/\//i.test(req.coverPdfUrl))) _missing.push('cover');
+    if (_missing.length) {
+      throw new Error('lulu: refusing to submit -- no usable ' + _missing.join(' or ') +
+        ' file URL on this order. Nothing was sent to the printer, so this is not a problem with the PDF itself.');
+    }
     const raw = await this._fetch('/print-jobs/', {
       method: 'POST',
       body: {
