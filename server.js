@@ -409,6 +409,18 @@ getDb().then(async function() {
     startScheduler();
   });
 
+  // v3.0.779 -- A PDF RENDER IS A PLAIN SYNCHRONOUS GET that holds the socket
+  // open while Chromium paints a whole book. Node 18+ defaults requestTimeout
+  // to 5 minutes and headersTimeout to 60 seconds, and NOTHING was raising
+  // them -- so a large book would die on the server clock however patient
+  // Puppeteer was. Sixteen minutes, one longer than the render budget, so a
+  // render that overruns reports ITS OWN reason rather than a dropped socket.
+  // The real answer is an async render job; this makes the target size work.
+  server.requestTimeout = 960000;
+  server.headersTimeout = 965000;
+  server.keepAliveTimeout = 75000;
+  server.setTimeout(0);
+
   server.on('clientError', function(err, socket) {
     try { console.warn('clientError ' + (err && err.code) + ' from ' + (socket && socket.remoteAddress)); } catch (e) {}
     if (socket && socket.writable) { socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }

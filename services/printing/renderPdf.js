@@ -43,7 +43,14 @@ async function renderHtmlToPdf(html, options) {
     const page = await browser.newPage();
 
     // Load the document and wait for remote panel images (R2 URLs) to settle.
-    const navTimeout = options.timeoutMs || 120000;
+    // v3.0.779 -- a 400-page book is the target, and painting one is far
+    // slower than loading it. Fifteen minutes, overridable per call.
+    const navTimeout = options.timeoutMs || 900000;
+    // The SAME budget for painting. Loading a document and rasterising a
+    // 200-page book are not comparable jobs, and the second is the slow one.
+    if (typeof page.setDefaultTimeout === 'function') page.setDefaultTimeout(navTimeout);
+    if (typeof page.setDefaultNavigationTimeout === 'function') page.setDefaultNavigationTimeout(navTimeout);
+    var _renderStarted = Date.now();
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: navTimeout });
 
     // Belt-and-suspenders: make sure every <img> has finished (loaded or errored)
@@ -110,8 +117,8 @@ async function renderHtmlToPdf(html, options) {
         delete plainOpts.displayHeaderFooter;
         delete plainOpts.headerTemplate;
         delete plainOpts.footerTemplate;
-        var headedBuf = await page.pdf(pdfOpts);
-        var plainBuf = await page.pdf(plainOpts);
+        var headedBuf = await page.pdf(Object.assign({ timeout: navTimeout }, pdfOpts));
+        var plainBuf = await page.pdf(Object.assign({ timeout: navTimeout }, plainOpts));
         var PDFDocument = require('pdf-lib').PDFDocument;
         var dHead = await PDFDocument.load(headedBuf);
         var dPlain = await PDFDocument.load(plainBuf);
@@ -134,10 +141,28 @@ async function renderHtmlToPdf(html, options) {
         try { console.error('[renderPdf] matter-page head split failed, using plain export:', (e && e.message) || e); } catch (e2) {}
       }
     }
-    const buf = await page.pdf(pdfOpts);
+    const buf = await page.pdf(Object.assign({ timeout: navTimeout }, pdfOpts));
     // page.pdf returns a Uint8Array on newer Puppeteer; normalize to Buffer
     // so downstream (R2 uploadFile, res.send) always gets a Buffer.
     return Buffer.from(buf);
+  } catch (err) {
+    // A timeout here means the BOOK IS TOO BIG for the budget, not that a
+    // panel is broken. Saying so is the difference between a one-line fix and
+    // an hour spent chasing image URLs.
+    var _ms = Date.now() - (_renderStarted || Date.now());
+    var _isTimeout = err && (err.name === 'TimeoutError' || /Timed out/i.test(err.message || ''));
+    if (_isTimeout) {
+      var _e = new Error(
+        'The book took longer than the render budget of ' + Math.round(navTimeout / 1000) + ' seconds and was stopped after ' +
+        Math.round(_ms / 1000) + ' seconds. This is a SIZE problem, not a broken picture: try fewer sessions, or raise the budget. ' +
+        'Original: ' + (err.message || err)
+      );
+      _e.code = 'RENDER_TIMEOUT';
+      _e.elapsedMs = _ms;
+      _e.budgetMs = navTimeout;
+      throw _e;
+    }
+    throw err;
   } finally {
     await browser.close();
   }

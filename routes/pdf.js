@@ -13389,6 +13389,13 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
     res.set('Content-Disposition', 'inline; filename="packed-preview.pdf"');
     res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
   } catch (e) {
+    // v3.0.779 -- a render that ran out of time is a SIZE problem and says so.
+    // Tonight it presented as an rxjs stack and cost an hour of chasing image
+    // URLs and CORS headers that had nothing to do with it.
+    if (e && e.code === 'RENDER_TIMEOUT') {
+      try { console.error('[pack-render] campaign=' + req.params.campaignId + ' RENDER TIMEOUT after ' + Math.round((e.elapsedMs || 0) / 1000) + 's of a ' + Math.round((e.budgetMs || 0) / 1000) + 's budget -- the book is too large for one render.'); } catch (e2) {}
+      return res.status(504).json({ error: e.message, code: 'RENDER_TIMEOUT' });
+    }
     log500('pack-render', req, e);
     res.status(500).json({ error: (e && e.message) || 'pack-render failed' });
   }
