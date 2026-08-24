@@ -18576,7 +18576,7 @@ function ensureInterior() {
   }
   return runRenderJob(key, 'print-interior', function (secs) {
     // The reader is told it is still working, which is the whole point of a ticket.
-    try { showPrintBtnMsg('Building your interior file\u2026 ' + secs + 's', null); } catch (e) {}
+    try { showPrintBtnMsg('Building your interior file\u2026 ' + secs + 's', 'info'); } catch (e) {}
   })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {
@@ -18652,15 +18652,32 @@ function showPrintMsg(text, kind) {
 // Order feedback shown DOWN BY THE BUTTON (prepare/order failures + the
 // 'details changed' notice), as opposed to showPrintMsg which is the
 // top-of-form load-error slot.
+// v3.0.783 -- TD-583. TELLING SOMEONE WHAT IS HAPPENING IS NOT A WARNING.
+//
+// Ian: the message by the Get Price button goes red-orange while the cover and interior render,
+// which reads as something being wrong when it is only progress.
+//
+// THE CAUSE IS THE SHAPE OF THIS FUNCTION, not any one call site. It had exactly two states and
+// the second one was 'everything else', so anything that was not literally 'ok' came out in the
+// failure colour -- and NOT ONE caller has ever passed 'ok', so the green branch is dead code and
+// every message this slot has ever shown has been red. 'Building your interior file... 12s' and
+// 'Could not reach the payment service' were rendered identically.
+//
+// A default that means BAD makes silence expensive: forget the third argument and you have told
+// the reader their order is broken. So 'info' is explicit, and the sites that are genuinely
+// reporting a problem keep the colour they had rather than being recoloured by a new default.
+// Gold is the app's own progress colour -- the same family the Optimize log and the Adjust dialog
+// use -- so this reads as the product talking rather than as a new kind of alert.
 function showPrintBtnMsg(text, kind) {
   var el = document.getElementById('print-place-msg');
   if (!el) return;
   if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
   var ok = kind === 'ok';
+  var info = kind === 'info';
   el.style.display = 'block';
-  el.style.background = ok ? 'rgba(120,180,90,0.12)' : 'rgba(201,120,76,0.12)';
-  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : 'rgba(201,120,76,0.4)');
-  el.style.color = ok ? 'rgba(200,235,180,0.95)' : 'rgba(245,200,180,0.95)';
+  el.style.background = ok ? 'rgba(120,180,90,0.12)' : (info ? 'rgba(201,168,76,0.12)' : 'rgba(201,120,76,0.12)');
+  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : (info ? 'rgba(201,168,76,0.4)' : 'rgba(201,120,76,0.4)'));
+  el.style.color = ok ? 'rgba(200,235,180,0.95)' : (info ? 'rgba(232,213,163,0.95)' : 'rgba(245,200,180,0.95)');
   el.textContent = text;
 }
 function printProgress(pct) {
@@ -18898,7 +18915,7 @@ function reorderApplySelections() {
   if (b) b.textContent = 'Reorder \u2014 review & price';
   var when = '';
   try { if (R.when) when = ' from ' + new Date(R.when).toLocaleDateString(); } catch (e) {}
-  showPrintBtnMsg('Reordering order ' + R.label + when + '. Your original interior and cover files are ready, so nothing has to be rebuilt \u2014 press Reorder to price it at today\u2019s rates. Changing anything above cancels the reorder and starts a fresh one.', null);
+  showPrintBtnMsg('Reordering order ' + R.label + when + '. Your original interior and cover files are ready, so nothing has to be rebuilt \u2014 press Reorder to price it at today\u2019s rates. Changing anything above cancels the reorder and starts a fresh one.', 'info');
 }
 
 // The reorder's own review step. Same review panel, same confirm button, same submit -- only the
@@ -19231,7 +19248,7 @@ function invalidatePreparedOrder() {
   hideFinalConfirm();
   var place = document.getElementById('print-place-btn');
   if (place) { place.style.display = ''; place.disabled = false; place.textContent = 'Prepare Your Order'; }
-  showPrintBtnMsg('Your order details changed. Click Prepare Your Order to rebuild your print files and update the price.', null);
+  showPrintBtnMsg('Your order details changed. Click Prepare Your Order to rebuild your print files and update the price.', 'info');
 }
 
 // Attach change/input listeners to every order-affecting control once, so any
@@ -19331,7 +19348,7 @@ function reviewPrintOrder() {
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
       return runRenderJob(printCoverUrl(), 'print-cover', function (secs) {
-        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', null); } catch (e) {}
+        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
       });
     })
     .then(function (res) {

@@ -50,10 +50,35 @@ const COVER_FINISHES = {
 // warm stock offered for the aged look; Lulu positions it for B&W, so the UI
 // warns. The Lulu interior PDF is always rendered white; cream is the physical
 // paper (SKU swaps 060UW444 -> 060UC444).
+// v3.0.783 -- TD-579. CREAM IS NOT A PRODUCT WE CAN SELL, SO IT IS NOT OFFERED.
+//
+// It was in the picker from the start and had never once been bought. The first real attempt,
+// 2026-08-24, could not even get a PRICE: the cream SKU is the confirmed white one with the
+// paper code swapped, and Lulu rejects it. The comment on PAPER_CODE_CREAM in luluProvider.js
+// had said so all along -- "SANDBOX-CONFIRM a cream quote before the first real cream order" --
+// and nobody did.
+//
+// WHY REMOVING IT IS THE FIX RATHER THAN GUESSING A BETTER SKU. Every book this product makes
+// is full colour, and Lulu positions cream for black-and-white work; their own documentation
+// contradicts itself on whether full-colour cream exists at all, showing an FC cream SKU in an
+// example that describes a black-and-white book. Two builds were already spent guessing vendor
+// codes (v3.0.376, v3.0.429) and the lesson recorded from those was to read what the vendor
+// says rather than try a third string. An option that always fails is worse than an absent one:
+// the reader assumes the fault is their book.
+//
+// TO TURN IT BACK ON, one line: set available:true here, after a real quote has been confirmed
+// and a verified SKU has been added to CREAM_SKUS in luluProvider.js. This flag is the single
+// source of truth -- optionsForPageCount filters on it so the picker cannot offer what buildSpec
+// would refuse, and buildSpec refuses it so a hand-built request cannot get past the picker.
 const PAPERS = {
-  white: { label: 'White', isDefault: true },
-  cream: { label: 'Cream', note: 'Only recommended for black & white books' },
+  white: { label: 'White', isDefault: true, available: true },
+  cream: { label: 'Cream', note: 'Only recommended for black & white books', available: false,
+           unavailableReason: 'Lulu has no confirmed cream stock for a full-colour book of this size.' },
 };
+function paperIsAvailable(key) {
+  var p = PAPERS[key];
+  return !!(p && p.available !== false);
+}
 
 function roundUpToMultiple(n, m) {
   return Math.ceil(n / m) * m;
@@ -89,7 +114,10 @@ function optionsForPageCount(pageCount) {
     })),
     colorTiers: Object.keys(COLOR_TIERS).map((k) => ({ id: k, ...COLOR_TIERS[k] })),
     coverFinishes: Object.keys(COVER_FINISHES).map((k) => ({ id: k, ...COVER_FINISHES[k] })),
-    papers: Object.keys(PAPERS).map((k) => ({ id: k, ...PAPERS[k] })),
+    // v3.0.783 -- TD-579. Only papers we can actually sell. The Order tab fills its <select>
+    // straight from this array, so an unavailable stock disappears from the UI by construction
+    // rather than by a second rule in the client that could drift from this one.
+    papers: Object.keys(PAPERS).filter(paperIsAvailable).map((k) => ({ id: k, ...PAPERS[k] })),
     default: {
       binding: bindings.includes('paperback') ? 'paperback' : (bindings[0] || null),
       colorTier: 'premium',
@@ -111,6 +139,13 @@ function buildSpec(sel, pageCount) {
   if (!COLOR_TIERS[sel.colorTier]) errors.push('Unknown color tier: ' + sel.colorTier);
   if (!COVER_FINISHES[sel.coverFinish]) errors.push('Unknown cover finish: ' + sel.coverFinish);
   if (sel.paper && !PAPERS[sel.paper]) errors.push('Unknown paper: ' + sel.paper);
+  // v3.0.783 -- TD-579. A hidden control is not a rule. Anything that reaches buildSpec with an
+  // unavailable stock -- a stale form, a restored reorder, a hand-made request -- is refused here
+  // with the reason, rather than being quietly downgraded to white further down the path.
+  if (sel.paper && PAPERS[sel.paper] && !paperIsAvailable(sel.paper)) {
+    errors.push(PAPERS[sel.paper].unavailableReason ||
+      ('This paper is not currently available: ' + sel.paper));
+  }
   if (!(pageCount > 0)) errors.push('Invalid page count: ' + pageCount);
   if (BINDINGS[sel.binding] && pageCount > 0 && !availableBindings(pageCount).includes(sel.binding)) {
     const b = BINDINGS[sel.binding];
@@ -135,5 +170,5 @@ function buildSpec(sel, pageCount) {
 
 module.exports = {
   TRIM, BINDINGS, COLOR_TIERS, COVER_FINISHES, PAPERS,
-  printedPageCount, availableBindings, optionsForPageCount, buildSpec,
+  printedPageCount, availableBindings, optionsForPageCount, buildSpec, paperIsAvailable,
 };

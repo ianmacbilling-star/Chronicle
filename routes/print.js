@@ -29,7 +29,7 @@ const { friendlyError } = require('../middleware/friendlyErrors');
 const { getTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
-const { sendOrderConfirmationEmail, sendOrderProblemEmail } = require('./email');
+const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
 const stripeProvider = require('../services/billing/stripeProvider');
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
@@ -648,8 +648,16 @@ async function fulfillPrintOrder(session, eventId) {
   } catch (e) {}
 
   try {
+    // v3.0.783 -- TD-579. THE PAPER HAS TO SURVIVE THE ROUND TRIP.
+    // paper was not passed, and buildSpec ends with `paper: sel.paper === 'cream' ? 'cream' :
+    // 'white'` -- so an absent value became WHITE, silently. paper is part of the vendor SKU, so
+    // a cream order was quoted as cream, charged as cream and submitted as white, with the row
+    // holding the right value and nothing on the submission path reading it. Nothing threw and
+    // nothing logged. The column was added in v3.0.667 precisely because paper swaps the SKU and
+    // the price; this path never caught up.
     const built = catalog.buildSpec(
-      { binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish },
+      { binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish,
+        paper: row.paper || undefined },
       parseInt(row.page_count, 10)
     );
     if (!built.ok) throw new Error('Stored selection invalid: ' + (built.errors || []).join('; '));
@@ -699,6 +707,54 @@ async function fulfillPrintOrder(session, eventId) {
           coverFinish: row.cover_finish, pageCount: row.page_count, quantity: row.quantity
         }
       });
+    }
+    // v3.0.783 -- TD-582. A SEPARATE REPORT TO SUPPORT, BECAUSE IT IS A SEPARATE AUDIENCE.
+    //
+    // Ian wants everything needed to research and refund a failed order in one message. The
+    // obvious move was to put it in the customer email, which already BCC'd support -- and that
+    // is the one thing this file's own rule forbids: TWO AUDIENCES SHARING ONE STRING IS ALWAYS
+    // A BUG (TD-513, where 1500 characters of raw model output written for a log reached a
+    // reader in a 2.5-second toast). The customer gets a sentence and an action; support gets
+    // the Stripe payment id, the amounts and the vendor error. One body cannot serve both.
+    //
+    // Sent even when contactEmail is missing -- an order whose owner has no email is MORE in
+    // need of a report, not less, so this deliberately sits outside the block above.
+    //
+    // NEVER FATAL, and never silent: the whole point is that a paid order which did not ship
+    // must reach a human, so a send failure falls back to the server log carrying the same
+    // fields rather than being swallowed.
+    try {
+      await sendOrderFailureReport({
+        orderId: orderId,
+        externalId: externalId,
+        customerEmail: contactEmail,
+        customerName: contactName,
+        userId: row.user_id,
+        providerOrderId: row.provider_order_id || null,
+        amount: row.customer_charge,
+        currency: row.currency,
+        orderName: row.order_name,
+        bookTitle: row.book_title,
+        campaignName: row.campaign_name,
+        stripePaymentIntentId: paymentIntentId || null,
+        stripeSessionId: row.stripe_session_id || null,
+        cardBrand: cardBrand, cardLast4: cardLast4,
+        binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish,
+        paper: row.paper, pageCount: row.page_count, quantity: row.quantity,
+        providerCost: row.provider_cost, providerTax: row.provider_tax,
+        interiorPdfUrl: row.interior_pdf_url, coverPdfUrl: row.cover_pdf_url,
+        error: _msg
+      });
+    } catch (reportErr) {
+      try {
+        console.error('[order-failure] the support report could not be sent: ' +
+          ((reportErr && reportErr.message) || reportErr) +
+          ' -- order ' + externalId + ' user ' + row.user_id + ' <' + (contactEmail || 'no email') + '>' +
+          ' charged ' + row.customer_charge + ' ' + row.currency +
+          ' stripe_pi ' + (paymentIntentId || 'none') +
+          ' lulu ' + (row.provider_order_id || 'none') +
+          ' error: ' + _msg);
+      } catch (e2) {}
     }
   }
 }
