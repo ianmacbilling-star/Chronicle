@@ -12436,9 +12436,14 @@ function closeAdminLibrary() {
 // hiding a button protects nobody.
 // =================================================================================================
 var adminOrd = { cursor: 0, loading: false, done: false, any: false };
-function openAdminOrders() {
-  var m = document.getElementById('admin-orders-modal');
-  if (m) m.classList.remove('hidden');
+// v3.0.789 -- TD-589. Ian: "can you just create a tab on the Dashboard next to the Support tab and
+// put the orders there. We don't really need the order button."
+//
+// Called every time the tab is opened, so it RESETS rather than appending to whatever was there --
+// switching away and back must not show the first page twice. The scroll binding is the one thing
+// that must not reset: addEventListener stacks, and a second handler would fire a second page load
+// for every scroll event.
+function initAdminOrdersTab() {
   var list = document.getElementById('admin-orders-list');
   if (list) list.innerHTML = '';
   adminOrd = { cursor: 0, loading: false, done: false, any: false };
@@ -12449,10 +12454,6 @@ function openAdminOrders() {
     });
   }
   loadAdminOrders();
-}
-function closeAdminOrders() {
-  var m = document.getElementById('admin-orders-modal');
-  if (m) m.classList.add('hidden');
 }
 function loadAdminOrders() {
   if (adminOrd.loading || adminOrd.done) return;
@@ -16955,7 +16956,12 @@ var TIER_FIELD_LABELS = {
 // codes, financials, impersonation -- and the tab strip is decoration: hiding six buttons does not
 // stop anyone typing switchSettingsTab('financial') into a console. The refusal below is the second
 // line, and every endpoint behind those panes is requireAdmin server-side, which is the first.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support'];
+// v3.0.789 -- TD-589. 'orders' joins the registry, and that membership is the whole gate:
+// settingsTabsAllowed gives every tab to an admin, exactly one to a tester and none to anyone
+// else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
+// div, a button with its own check -- would be a second rule to keep in step with this one.
+// The route is gated independently; neither is load-bearing alone.
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support', 'orders'];
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --
@@ -17047,6 +17053,7 @@ function switchSettingsTab(tab) {
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
   if (tab === 'promos') loadPromoCodes();
+  if (tab === 'orders') initAdminOrdersTab();
 }
 
 // Populate the User Testing tab with the signed-in account's current state
