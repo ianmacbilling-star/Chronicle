@@ -410,6 +410,22 @@ class LuluProvider extends PrintProvider {
         line_items: [this._lineItem(req)],
         shipping_address: this._address(req.shipTo),
         shipping_level: this._shippingLevel(req.shippingLevel),
+        // v3.0.782 -- TD-578. HOW LONG BEFORE THIS BECOMES A REAL BOOK.
+        // Lulu holds a new job for production_delay minutes and only then sends it to print and
+        // charges the card on file. We never sent the field, so every job took Lulu default of
+        // 60 minutes -- fine for a customer, tight for anyone testing against the live endpoint,
+        // where a mistake is a printed book and a charge within the hour.
+        // Env-driven and OMITTED when unset, so the default behaviour is unchanged: set
+        // LULU_PRODUCTION_DELAY_MIN while testing, remove it after. Clamped to Lulu documented
+        // 60..2880 rather than trusted, because an out-of-range value is a 400 at the worst
+        // possible moment.
+        ...(function () {
+          var raw = process.env.LULU_PRODUCTION_DELAY_MIN;
+          if (raw == null || String(raw).trim() === '') return {};
+          var n = parseInt(String(raw).trim(), 10);
+          if (!Number.isFinite(n)) return {};
+          return { production_delay: Math.max(60, Math.min(2880, n)) };
+        })(),
       },
     });
     return this._toOrder(raw, req.externalId);

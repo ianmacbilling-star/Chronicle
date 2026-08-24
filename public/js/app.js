@@ -1006,8 +1006,16 @@ function handleBillingReturn() {
     setTimeout(refreshAccount, 600);
     setTimeout(refreshAccount, 2500);
   } else if (order === 'success') {
-    billingToast('Payment received - your book is being sent to the printer.', 'success');
-    setTimeout(function () { if (typeof loadOrders === 'function') loadOrders(); }, 1000);
+    // v3.0.782 -- TD-577. DO NOT PROMISE SOMETHING THAT HAS NOT HAPPENED YET.
+    // This said the book was being sent to the printer, at a moment when the handover had not
+    // been attempted: the submission runs in the Stripe webhook, after this page has loaded.
+    // On 2026-08-24 the handover failed and this line was the last thing the reader saw -- the
+    // failure was discoverable only by going to My Orders and pressing Reorder.
+    // So: report the payment, which IS true, then watch for the answer. The webhook usually
+    // lands in a second or two; six tries over about twenty seconds covers a slow one without
+    // leaving a spinner behind if it never comes.
+    billingToast('Payment received. Handing your book to the printer...', 'success');
+    orderWatchAfterPayment(6);
   } else if (order === 'cancel') {
     billingToast('Order canceled - no charge was made.', 'info');
   }
@@ -18745,10 +18753,24 @@ function reorderFromOrder(id) {
   var _failed = (o.status === 'rejected' || o.status === 'order_failed');
   if (_failed && !state._reorderWarned) {
     var _why = (o.error ? String(o.error).slice(0, 300) : '');
+    // v3.0.782 -- TD-577. THE WARNING HAS TO MATCH WHICH FAILURE IT WAS.
+    // On 2026-08-24 a live order failed because WE sent the wrong field names; nothing ever
+    // reached Lulu. This dialog told Ian the printer had rejected his files and that sending
+    // them again would fail again. Both halves were untrue, and it is the more discouraging
+    // of the two stories -- it points at the book rather than at the bug.
+    var _notSent = (o.status === 'order_failed');
+    var _title = _notSent ? 'That order never reached the printer'
+                          : 'That order was rejected by the printer';
+    var _body = _notSent
+      ? ('Your payment went through but the order could not be handed over, so no print job was ever ' +
+         'created and your print files were not the problem. ' +
+         (_why ? 'The reason recorded was: \u201c' + _why + '\u201d ' : '') +
+         'Reordering sends the same files, which is fine \u2014 they were never seen.')
+      : ((_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
+         ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.');
     appConfirm({
-      title: 'That order was rejected by the printer',
-      body: (_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
-            ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.',
+      title: _title,
+      body: _body,
       note: 'You will be shown the price before anything is charged.',
       okLabel: 'Reorder anyway',
       cancelLabel: 'Cancel',
@@ -19583,6 +19605,44 @@ function applyPaymentToBody(body) {
 }
 
 // ---- My Print Orders page --------------------------------------------------
+// v3.0.782 -- TD-577. WATCH FOR THE HANDOVER AND SAY WHAT HAPPENED.
+// Polls the reader's own orders list and stops on the first definite answer. Silence is the
+// bug this exists to kill: an order that fails must not require the reader to go looking.
+// It never invents an outcome -- if the webhook has not landed by the last try it simply
+// stops, leaving the list showing the truth, because a wrong reassurance is worse than none.
+function orderWatchAfterPayment(triesLeft) {
+  if (typeof loadOrders === 'function') loadOrders();
+  if (!(triesLeft > 0)) return;
+  setTimeout(function () {
+    fetch('/api/print/orders', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var o = (j && j.orders && j.orders.length) ? j.orders[0] : null;   // ORDER BY id DESC
+        if (!o) return orderWatchAfterPayment(triesLeft - 1);
+        if (o.status === 'order_failed' || o.status === 'rejected') {
+          if (typeof loadOrders === 'function') loadOrders();
+          var _notSent = (o.status === 'order_failed');
+          appNotice(
+            _notSent ? 'Your payment went through, but the order did not reach the printer'
+                     : 'Your payment went through, but the printer would not accept the order',
+            _notSent
+              ? 'No print job was created, so nothing is being printed and your book files are fine. ' +
+                'You have not lost the book \u2014 it is on the Publish page as it was.'
+              : 'The printer took the order and then refused it. This is usually about the print files themselves.',
+            'It is on your Orders page under ' + (o.external_id || ('order ' + o.id)) +
+            '. Nothing further will happen to it until you or we act.');
+          return;
+        }
+        if (o.provider_order_id) {
+          if (typeof loadOrders === 'function') loadOrders();
+          billingToast('Your book is with the printer.', 'success');
+          return;
+        }
+        orderWatchAfterPayment(triesLeft - 1);
+      })
+      .catch(function () { orderWatchAfterPayment(triesLeft - 1); });
+  }, 3500);
+}
 function loadOrders() {
   var list = document.getElementById('orders-list');
   if (list) list.innerHTML = '<div class="settings-section-desc">Loading...</div>';
@@ -19613,10 +19673,19 @@ function orderNeverPaid(o) {
   var p = o.payment_status || '';
   return p !== 'paid' && p !== 'refunded' && p !== 'stubbed';
 }
+// v3.0.782 -- TD-577. TWO FAILURES THAT LOOK ALIKE AND ARE NOT.
+//   order_failed -- we could not hand the job over. No print job exists, nothing was
+//                   downloaded, nothing appears in the printer dashboard, the files are
+//                   untouched. This is OUR problem.
+//   rejected     -- the printer took the job and then refused it, which is usually ABOUT
+//                   the files and reproduces exactly if they are sent again.
+// The reader was shown the raw enum for both -- 'order_failed / paid' -- which names neither.
 function orderStatusLabel(o) {
   var p = o.payment_status || 'pending';
   if (p === 'stubbed') p = 'test payment';
   if (orderNeverPaid(o)) return 'Not completed \u2014 never paid for';
+  if (o.status === 'order_failed') return 'Paid \u2014 but it never reached the printer';
+  if (o.status === 'rejected') return 'Paid \u2014 the printer would not accept it';
   return (o.status || 'pending') + ' / ' + p;
 }
 
