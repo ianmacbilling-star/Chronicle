@@ -156,6 +156,54 @@ async function vendorCanFetch(url) {
   }
   return out;
 }
+// v3.0.786 -- TD-587. GO AND SEE WHETHER THE JOB WE MAY HAVE CREATED EXISTS.
+//
+// The one thing that turns a lost reply into a non-event. Asks Lulu for the job stamped with this
+// order's external_id and, if it is there, records it exactly as the successful path would have.
+//
+// RETURNS one of three answers, and the third is the point:
+//   { found: true,  ... }  the job exists and the row now holds its id
+//   { found: false }       Lulu answered and has nothing -- the order really was not created
+//   { unknown: true }      Lulu could not be asked, so nothing has been learned
+// Collapsing the last two is the bug this exists to fix, one level down in _fetch. A recovery that
+// reports "no job" because the network was unwell would send a reader to press Reorder on a book
+// already in production.
+//
+// IDEMPOTENT AND SAFE TO CALL OFTEN. It only ever WRITES a provider_order_id where there is none,
+// and the UPDATE says so in its WHERE clause, so two callers racing cannot produce two answers.
+async function recoverPrintJob(db, row) {
+  if (!row) return { unknown: true };
+  if (row.provider_order_id) return { found: true, providerOrderId: row.provider_order_id, already: true };
+  var externalId = row.external_id || ('po-' + row.id);
+  try {
+    var provider = getPrintProvider();
+    if (typeof provider.findOrderByExternalId !== 'function') return { unknown: true };
+    var live = await provider.findOrderByExternalId(externalId);
+    if (!live || !live.providerOrderId) return { found: false };
+    await db.prepare(
+      'UPDATE print_orders SET provider_order_id = ?, status = ?, tracking_url = ?, carrier = ?, ' +
+      'error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND provider_order_id IS NULL'
+    ).run(live.providerOrderId, live.status || 'created', live.trackingUrl || null, live.carrier || null, row.id);
+    row.provider_order_id = live.providerOrderId;
+    row.status = live.status || 'created';
+    row.error = null;
+    try {
+      console.log('[order-recover] ' + externalId + ' was already at the printer as job ' +
+        live.providerOrderId + ' -- adopted' +
+        ((live.duplicateCount > 1) ? (' (WARNING: ' + live.duplicateCount + ' jobs carry this external id)') : ''));
+    } catch (e) {}
+    return { found: true, providerOrderId: live.providerOrderId, status: row.status,
+             duplicateCount: live.duplicateCount || 1 };
+  } catch (e) {
+    try { console.warn('[order-recover] could not ask the printer about ' + externalId + ': ' + ((e && e.message) || e)); } catch (e2) {}
+    return { unknown: true, detail: (e && e.message) || String(e) };
+  }
+}
+// Rows that might be hiding a live print job: paid for, and no job id recorded.
+function orderNeedsRecovery(row) {
+  return !!(row && !row.provider_order_id &&
+    (row.payment_status === 'paid' || row.payment_status === 'refunded'));
+}
 function requireSession(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -528,6 +576,10 @@ router.get('/order/:id', requireSession, async function (req, res) {
           row.status = live.status; row.tracking_url = live.trackingUrl || null; row.carrier = live.carrier || null;
         }
       } catch (_e) { /* status refresh is best-effort */ }
+    } else if (orderNeedsRecovery(row)) {
+      // v3.0.786 -- TD-587. The missing else. This branch has always refreshed an order that HAS a
+      // job id; an order that is paid and has none is the one that most needs asking about.
+      try { await recoverPrintJob(db, row); } catch (_e2) {}
     }
     res.json(row);
   } catch (e) {
@@ -560,9 +612,61 @@ router.get('/orders', requireSession, async function (req, res) {
               interior_pdf_url, cover_pdf_url, created_at, updated_at
          FROM print_orders WHERE user_id = ? ORDER BY id DESC`
     ).all(req.session.userId);
+    // v3.0.786 -- TD-587. RELOADING THIS SCREEN GOES AND LOOKS.
+    // Ian: "I should be able to put our order number back... and it should go find it if I reload
+    // the order screen?" -- yes, and this is where that happens.
+    //
+    // BOUNDED, deliberately. Each recovery is a live call to Lulu, and a list route that fans out
+    // one per row would make a long order history slow and would hammer the vendor for no benefit.
+    // Normally NOTHING matches: a paid order with no job id is the rare case. Oldest first, because
+    // if there is ever a backlog the oldest is the one closest to being forgotten.
+    try {
+      var _needy = (rows || []).filter(orderNeedsRecovery).slice(-3);
+      for (var _i = 0; _i < _needy.length; _i++) await recoverPrintJob(db, _needy[_i]);
+    } catch (_e) { /* never let a recovery attempt stop the list rendering */ }
     res.json({ orders: rows || [] });
   } catch (e) {
     res.status(500).json({ error: 'Could not load orders', detail: friendlyError(e, '') });
+  }
+});
+
+// v3.0.786 -- TD-587. ASK THE PRINTER, ON DEMAND.
+// The manual version of the recovery above, so the step Ian performed with a SQL UPDATE on po-7 is
+// a button. Also the honest answer to "did it run?" -- the automatic triggers are silent when they
+// find nothing, and a reader with a stuck order needs to be able to make something happen and see
+// what it said.
+// Answers in the reader's terms, and NEVER conflates "the printer has no such job" with "the
+// printer could not be reached": those need opposite next steps.
+router.post('/orders/:id/recover', requireSession, async function (req, res) {
+  try {
+    const db = await getDb();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad order id' });
+    const row = await db.prepare('SELECT * FROM print_orders WHERE id = ?').get(id);
+    if (!row || row.user_id !== req.session.userId) return res.status(404).json({ error: 'Order not found' });
+    if (row.provider_order_id) {
+      return res.json({ ok: true, found: true, already: true, providerOrderId: row.provider_order_id,
+        message: 'This order is already with the printer as job ' + row.provider_order_id + '.' });
+    }
+    if (!orderNeedsRecovery(row)) {
+      return res.json({ ok: true, found: false, notPaid: true,
+        message: 'This order was never paid for, so nothing was ever sent to the printer.' });
+    }
+    const out = await recoverPrintJob(db, row);
+    if (out.found) {
+      return res.json({ ok: true, found: true, providerOrderId: out.providerOrderId, status: out.status,
+        duplicateCount: out.duplicateCount || 1,
+        message: 'Found it. Your book is with the printer as job ' + out.providerOrderId + '.' });
+    }
+    if (out.unknown) {
+      return res.json({ ok: true, unknown: true,
+        message: 'The printer could not be reached just now, so we still do not know. Nothing has changed. Please try again in a few minutes.' });
+    }
+    return res.json({ ok: true, found: false,
+      message: 'The printer has no job for this order, so it really was not sent. You have been charged and it is safe to order again.' });
+  } catch (e) {
+    log500('order-recover', req, e);
+    return res.status(500).json({ error: 'Could not check with the printer.' });
   }
 });
 
@@ -690,6 +794,41 @@ async function fulfillPrintOrder(session, eventId) {
       });
     }
   } catch (submitErr) {
+    // v3.0.786 -- TD-587. BEFORE CALLING IT A FAILURE, GO AND LOOK.
+    // A refusal (4xx) is certain and needs no lookup. Anything else -- a timeout, a 5xx, a dropped
+    // socket -- may have created the job anyway, which is exactly what happened to po-7: Cloudflare
+    // returned 504, print job 3006840 existed, and we recorded the order as never sent.
+    // Three attempts over about half a minute, because Lulu does not necessarily index a new job
+    // the instant it is created and asking once would answer "no" too confidently.
+    var _refused = !!(submitErr && submitErr.refused);
+    if (!_refused) {
+      for (var _try = 0; _try < 3; _try++) {
+        await new Promise(function (r) { setTimeout(r, 5000 + _try * 5000); });
+        var _rec = await recoverPrintJob(db, row);
+        if (_rec.found) {
+          try {
+            console.log('[order-recover] ' + externalId + ' recovered after a failed submit -- the job existed all along');
+          } catch (e) {}
+          if (contactEmail) {
+            sendOrderConfirmationEmail({
+              to_email: contactEmail, name: contactName,
+              order: {
+                orderNo: externalId, providerOrderId: _rec.providerOrderId,
+                bookTitle: row.book_title, orderName: row.order_name, campaignName: row.campaign_name,
+                binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish,
+                pageCount: row.page_count, quantity: row.quantity,
+                total: row.customer_charge, currency: row.currency,
+                cardBrand: cardBrand, cardLast4: cardLast4,
+                trackingNumber: null, trackingUrl: null,
+                shipTo: { name: row.ship_name, street1: row.ship_street1, street2: row.ship_street2, city: row.ship_city, stateCode: row.ship_state, postcode: row.ship_postcode, countryCode: row.ship_country }
+              }
+            });
+          }
+          return;   // the order succeeded; only the reply was lost
+        }
+        if (_rec.found === false) break;   // Lulu answered and has nothing: stop asking
+      }
+    }
     // Paid but the print job did not go -> flag for refund/retry.
     // v3.0.782 -- TD-577. SAY THAT NOTHING REACHED THE PRINTER.
     // order_failed means the SUBMISSION threw: no print job was created, no id was minted,
@@ -698,11 +837,20 @@ async function fulfillPrintOrder(session, eventId) {
     // the files -- and the reader was being told the second story for both. The prefix travels
     // with the row so every surface that shows `error` inherits the distinction instead of
     // each one having to re-derive it.
+    // v3.0.786 -- TD-587. THREE OUTCOMES, NOT TWO.
+    //   order_failed  -- refused, and the recovery lookup confirmed no job exists. Safe to reorder.
+    //   order_unknown -- we could not establish whether a job exists. NOT safe to reorder.
+    // v3.0.782 wrote "NOT SENT TO THE PRINTER" on both, which was a promise we could not keep and
+    // which sat in front of a Reorder button.
     var _msg = String((submitErr && submitErr.message) || submitErr);
-    if (_msg.indexOf('NOT SENT') !== 0) _msg = 'NOT SENT TO THE PRINTER: ' + _msg;
+    var _state = _refused ? 'order_failed' : 'order_unknown';
+    var _prefix = _refused
+      ? 'NOT SENT TO THE PRINTER: '
+      : 'MAY OR MAY NOT HAVE REACHED THE PRINTER -- check external id ' + externalId + ': ';
+    if (_msg.indexOf('NOT SENT') !== 0 && _msg.indexOf('MAY OR MAY NOT') !== 0) _msg = _prefix + _msg;
     await db.prepare(
       'UPDATE print_orders SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run('order_failed', _msg, orderId);
+    ).run(_state, _msg, orderId);
     if (contactEmail) {
       sendOrderProblemEmail({
         to_email: contactEmail, name: contactName,

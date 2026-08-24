@@ -120,6 +120,12 @@ const SKU_OVERRIDES = {
   'paperback:color:standard:matte': '0850X1100FCSTDPB060UW444MXX', // $7.01 print
   'paperback:color:premium:matte':  '0850X1100FCPREPB060UW444MXX', // $18.97 print
   'hardcover:color:premium:matte':  '0850X1100FCPRECW060UW444MXX', // $28.57 print
+  // v3.0.786 -- CONFIRMED BY A REAL ORDER, not by reasoning. v3.0.784 shipped the black-and-white
+  // products DERIVED from the component codes and said so. Lulu accepted print job 3006840 on
+  // 2026-08-24 for a 56-page bwpremium paperback at 13.21 -- against 26.51 for the colour book --
+  // so this string has now produced a real job and belongs with the other confirmed ones.
+  // The standard grade and the cream variants remain derived until one of each has been ordered.
+  'paperback:bw:premium:matte':     '0850X1100BWPREPB060UW444MXX', // confirmed, print job 3006840
 };
 
 class LuluProvider extends PrintProvider {
@@ -279,21 +285,85 @@ class LuluProvider extends PrintProvider {
     return this._token;
   }
 
+  // v3.0.786 -- TD-587. A FAILURE THAT KNOWS WHETHER IT KNOWS.
+  //
+  // Two things were missing and the second one cost a real order. On 2026-08-24 a POST to
+  // /print-jobs/ came back 504 from Cloudflare: the request HAD reached Lulu, print job 3006840
+  // was created, and the reply was lost. Campaignia recorded the order as never sent and offered
+  // the reader a Reorder button that would have built a second book.
+  //
+  // (1) THERE WAS NO TIMEOUT AT ALL. This waited on whatever Cloudflare decided, which is about
+  //     a hundred seconds -- long enough to outlive every other budget in the request.
+  // (2) EVERY FAILURE LOOKED THE SAME. A 400 means the job was refused and certainly does not
+  //     exist. A timeout, a 5xx or a dropped socket mean NOTHING IS KNOWN. Treating the second as
+  //     the first is how a live print job gets recorded as a failure.
+  //
+  // So the error carries the distinction. `refused` is a promise that nothing was created;
+  // `inconclusive` is an admission that we cannot say. Nothing infers this from message text --
+  // that is the runtime-classifier fault recorded in TD-512, which breaks the moment the wording
+  // changes or arrives in another language.
   async _fetch(path, { method = 'GET', body } = {}) {
     const token = await this._getToken();
-    const res = await fetch(`${this.apiBase}${path}`, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: body != null ? JSON.stringify(body) : undefined,
-    });
+    const ms = Number(process.env.LULU_HTTP_TIMEOUT_MS || 45000);
+    const ctl = new AbortController();
+    const timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} },
+      (Number.isFinite(ms) && ms > 1000) ? ms : 45000);
+    let res;
+    try {
+      res = await fetch(`${this.apiBase}${path}`, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: body != null ? JSON.stringify(body) : undefined,
+        signal: ctl.signal,
+      });
+    } catch (netErr) {
+      // Aborted, DNS, reset, refused: the request may or may not have been acted on.
+      const e = new Error('lulu: ' + method + ' ' + path + ' did not complete (' +
+        ((netErr && netErr.name === 'AbortError')
+          ? ('no response within ' + Math.round(((Number.isFinite(ms) && ms > 1000) ? ms : 45000) / 1000) + 's')
+          : ((netErr && netErr.message) || 'network error')) + ')');
+      e.inconclusive = true;
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
-      throw new Error(`lulu: ${method} ${path} failed (${res.status}): ${await safeText(res)}`);
+      const err = new Error(`lulu: ${method} ${path} failed (${res.status}): ${await safeText(res)}`);
+      err.status = res.status;
+      // 4xx is the vendor refusing the request: it did not act on it. 5xx and 429 are the vendor
+      // failing to answer, which says nothing about whether it acted.
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) err.refused = true;
+      else err.inconclusive = true;
+      throw err;
     }
     return res.json();
+  }
+
+  // v3.0.786 -- TD-587. FIND A JOB WE MAY HAVE ALREADY CREATED.
+  //
+  // external_id is stamped on every print job BEFORE it is submitted, and Lulu's own
+  // documentation describes it as the field for connecting a job to your system. Every ingredient
+  // for this lookup existed on 2026-08-24 and nothing walked it: the recovery was performed by
+  // hand, with a SQL UPDATE, after reading the job id off Lulu's dashboard.
+  //
+  // Returns the order, or null when Lulu is certain it has nothing. THROWS when Lulu cannot be
+  // asked -- because "no answer" and "no job" must not collapse into the same return value; that
+  // collapse is the whole bug being fixed here, one level up.
+  async findOrderByExternalId(externalId) {
+    if (!externalId) return null;
+    const raw = await this._fetch('/print-jobs/?external_id=' + encodeURIComponent(externalId));
+    const results = (raw && (raw.results || raw.items)) || (Array.isArray(raw) ? raw : []);
+    if (!results.length) return null;
+    // Newest wins if a retry ever did create two: the later job is the one Lulu will act on, and
+    // a duplicate is a thing to be TOLD about rather than silently picked between.
+    const pick = results.slice().sort(function (a, b) { return (Number(b.id) || 0) - (Number(a.id) || 0); })[0];
+    const out = this._toOrder(pick, externalId);
+    out.duplicateCount = results.length;
+    return out;
   }
 
   // --- PrintProvider impl ----------------------------------------------
