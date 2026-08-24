@@ -368,6 +368,48 @@ router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
     if (limit < 1) limit = 1;
     if (limit > 50) limit = 50;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
+    // v3.0.790 -- TD-590. FILTERED IN SQL, NOT IN THE BROWSER.
+    //
+    // The list is keyset-paginated 25 at a time, so a client-side filter would only ever search
+    // the rows already fetched -- it would look like it worked and quietly miss everything past
+    // the first page. That is the worst kind of wrong for a search box.
+    //
+    // EVERY VALUE IS BOUND. No user input is concatenated into the statement, and the LIKE terms
+    // have their wildcards escaped as well: an unescaped % turns "find this customer" into "match
+    // everyone", which is a silent wrong answer rather than an error.
+    const where = [];
+    const params = [];
+    function like(v) {
+      // \ % and _ are LIKE metacharacters. Escape them so a literal search stays literal.
+      return '%' + String(v).replace(/[\\%_]/g, function (m) { return '\\' + m; }) + '%';
+    }
+    const qOrder = String(req.query.q || '').trim();
+    if (qOrder) {
+      // "Both order numbers": ours (po-N) and the printer's job id. A reader holding either one
+      // should not have to know which field it lives in.
+      where.push("(o.external_id ILIKE ? ESCAPE '\\' OR o.provider_order_id ILIKE ? ESCAPE '\\')");
+      params.push(like(qOrder), like(qOrder));
+    }
+    const qCust = String(req.query.customer || '').trim();
+    if (qCust) {
+      where.push("(u.email ILIKE ? ESCAPE '\\' OR u.name ILIKE ? ESCAPE '\\' OR o.ship_name ILIKE ? ESCAPE '\\')");
+      params.push(like(qCust), like(qCust), like(qCust));
+    }
+    const qTrack = String(req.query.tracking || '').trim();
+    if (qTrack) {
+      where.push("o.tracking_number ILIKE ? ESCAPE '\\'");
+      params.push(like(qTrack));
+    }
+    // Dates are inclusive of the whole TO day: a reader typing the same date in both boxes means
+    // "that day", not "the instant midnight began".
+    const qFrom = String(req.query.from || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(qFrom)) { where.push('o.created_at >= ?'); params.push(qFrom + ' 00:00:00'); }
+    const qTo = String(req.query.to || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(qTo)) { where.push('o.created_at <= ?'); params.push(qTo + ' 23:59:59'); }
+    const qMin = parseFloat(req.query.minPrice);
+    if (Number.isFinite(qMin)) { where.push('o.customer_charge >= ?'); params.push(qMin); }
+    const qMax = parseFloat(req.query.maxPrice);
+    if (Number.isFinite(qMax)) { where.push('o.customer_charge <= ?'); params.push(qMax); }
     let sql =
       'SELECT o.id, o.external_id, o.provider_order_id, o.created_at, o.updated_at, ' +
       '       o.order_name, o.book_title, o.campaign_name, ' +
@@ -378,8 +420,9 @@ router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
       '       o.tracking_url, o.tracking_number, o.carrier, ' +
       '       o.user_id, u.email AS user_email, u.name AS user_name ' +
       '  FROM print_orders o LEFT JOIN users u ON u.id = o.user_id';
-    const params = [];
-    if (beforeId > 0) { sql += ' WHERE o.id < ?'; params.push(beforeId); }
+    // The cursor is just another condition, so paging and filtering compose instead of fighting.
+    if (beforeId > 0) { where.push('o.id < ?'); params.push(beforeId); }
+    if (where.length) sql += ' WHERE ' + where.join(' AND ');
     sql += ' ORDER BY o.id DESC LIMIT ?';
     params.push(limit + 1);
     const stmt = db.prepare(sql);
@@ -392,7 +435,7 @@ router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
     // because it has not been confirmed against their portal -- a wrong link is one env var to
     // correct rather than a deploy, and guessing vendor strings is what cost us the cream SKU
     // and the print-job field names on 2026-08-24.
-    const luluTpl = process.env.LULU_DASHBOARD_URL || 'https://developers.lulu.com/print-jobs/{id}';
+    const luluTpl = process.env.LULU_DASHBOARD_URL || 'https://developers.lulu.com/print-jobs/detail/{id}';
     res.json({
       items: items.map(function (r) {
         return Object.assign({}, r, {
