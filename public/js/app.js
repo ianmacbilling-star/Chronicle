@@ -19092,9 +19092,35 @@ function probeCoverBindings(pageCount) {
       .catch(function () { if (!done) { done = true; resolve(null); } });
   });
 }
+// v3.0.784 -- TD-585. ONE HANDLER FOR "THE SHAPE OF THE ORDER CHANGED".
+// The ink control cannot simply re-price: changing it changes which papers exist, so the lists
+// have to be rebuilt first and the price taken afterwards. Bound from the markup so the ordering
+// lives in one place rather than in an inline onchange that a later edit could reorder.
+function printOptionsChanged() {
+  // printActualPages is the exact interior count once the file has been built; the estimate on
+  // printNovelInfo is the fallback before that. Both already exist and are what every other
+  // caller of refreshPrintOptions uses -- the first draft of this line invented a variable
+  // that was declared nowhere, which node --check accepts and which throws on first click.
+  var pc = (printActualPages > 0)
+    ? printActualPages
+    : ((printNovelInfo && printNovelInfo.pageEstimate) || 0);
+  var done = (pc > 0 && typeof refreshPrintOptions === 'function')
+    ? refreshPrintOptions(pc) : null;
+  if (done && typeof done.then === 'function') {
+    done.then(function () { try { quotePrintOrder(); } catch (e) {} });
+  } else {
+    try { quotePrintOrder(); } catch (e) {}
+  }
+}
 function refreshPrintOptions(pageCount) {
-  Promise.all([
-    fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount)).then(function (r) { return r.json(); }),
+  return Promise.all([
+    // v3.0.784 -- TD-585. The paper list depends on the interior ink, so send what is chosen.
+    // Read from the control rather than from a remembered value: this runs on first load, on a
+    // page-count change and on an ink change, and the control is the only thing true in all three.
+    fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount) +
+          '&colorTier=' + encodeURIComponent((function () {
+            var el = document.getElementById('print-color'); return (el && el.value) || '';
+          })())).then(function (r) { return r.json(); }),
     probeCoverBindings(pageCount)
   ])
     .then(function (both) {
@@ -19123,15 +19149,42 @@ function refreshPrintOptions(pageCount) {
           return '<option value="' + x.id + '">' + escapeHtmlPrint(x.label) + '</option>';
         }).join('');
       }
+      // v3.0.784 -- TD-585. KEEP WHAT WAS CHOSEN, AND SAY SO WHEN IT CANNOT BE KEPT.
+      // These <select> elements are rebuilt from scratch, so anything already chosen is about to
+      // be discarded and replaced by the default -- which is how a reader ends up proofing a
+      // cream book that is quietly going to print on white. Remember the current values first,
+      // put them back if they still exist, and when one does NOT survive, reset it and TELL them.
+      // Silence here is the exact failure TD-498 records: a wiped choice and a chosen default are
+      // indistinguishable afterwards, so nobody can be told they lost something.
+      var _wasColor = c ? c.value : '';
+      var _wasPaper = pp ? pp.value : '';
       fill(b, o.bindings);
       fill(c, o.colorTiers);
       fill(f, o.coverFinishes);
       fill(pp, o.papers);
+      var _paperStillOffered = !!(o.papers || []).filter(function (x) { return x.id === _wasPaper; }).length;
+      if (_wasPaper && !_paperStillOffered) {
+        var _lost = (o.papers || []).filter(function (x) { return x.isDefault; })[0] || (o.papers || [])[0];
+        if (pp && _lost) pp.value = _lost.id;
+        try {
+          showPrintBtnMsg('Your paper is now ' + ((_lost && _lost.label) || 'White') +
+            '. Cream stock is only made for black & white interiors, so it is not available with the ' +
+            'colour setting you just chose.', 'info');
+        } catch (e) {}
+      } else if (pp && _wasPaper && _paperStillOffered) {
+        pp.value = _wasPaper;
+      }
+      if (c && _wasColor) {
+        var _colorStillOffered = !!(o.colorTiers || []).filter(function (x) { return x.id === _wasColor; }).length;
+        if (_colorStillOffered) c.value = _wasColor;
+      }
+      // v3.0.784 -- TD-585. Defaults apply only where nothing was chosen. This used to run
+      // unconditionally, straight over the values restored above.
       if (o.default) {
-        if (b && o.default.binding) b.value = o.default.binding;
-        if (c && o.default.colorTier) c.value = o.default.colorTier;
-        if (f && o.default.coverFinish) f.value = o.default.coverFinish;
-        if (pp && o.default.paper) pp.value = o.default.paper;
+        if (b && o.default.binding && !b.value) b.value = o.default.binding;
+        if (c && o.default.colorTier && !_wasColor) c.value = o.default.colorTier;
+        if (f && o.default.coverFinish && !f.value) f.value = o.default.coverFinish;
+        if (pp && o.default.paper && !_wasPaper) pp.value = o.default.paper;
       }
       // v3.0.665 -- TD-464. LAST, because these lists were just rebuilt and the defaults above are
       // exactly what would overwrite a restored selection. Setting .value in script fires no change

@@ -600,8 +600,12 @@
                       <select id="print-binding" onchange="quotePrintOrder()" class="ord-in"></select>
                     </div>
                     <div class="ord-f2">
-                      <label class="ord-lbl">Color <span class="ord-lbl-dim">(premium recommended)</span></label>
-                      <select id="print-color" onchange="quotePrintOrder()" class="ord-in"></select>
+                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(premium colour recommended)</span></label>
+                      <!-- v3.0.784 -- TD-585. Changing the ink changes which PAPERS exist, so this
+                           has to rebuild the option lists as well as re-price. printOptionsChanged
+                           does both, in that order, because pricing a paper that is about to be
+                           taken away would quote a book nobody can order. -->
+                      <select id="print-color" onchange="printOptionsChanged()" class="ord-in"></select>
                     </div>
                   </div>
                   <div class="ord-row">
@@ -612,7 +616,11 @@
                            rendered white on purpose; the warmth is the physical stock. Without this
                            line a customer proofing a cream order sees white pages and reasonably
                            reports it as a bug -- which is exactly how this was found. -->
-                      <div class="ord-hint">Your pages are printed white &mdash; the cream comes from the paper stock itself, not from ink. Only recommended for black &amp; white books.</div>
+                      <!-- v3.0.784 -- TD-585. The hint no longer says "only recommended for": cream
+                           is now only OFFERED for black and white, so recommending against a
+                           combination that cannot be selected described a control that no longer
+                           exists. v3.0.783 removed the option and left this sentence behind. -->
+                      <div class="ord-hint">Cream stock is only made for black &amp; white interiors. Your pages are still printed white &mdash; the warmth comes from the paper itself, not from ink.</div>
                     </div>
                     <div class="ord-f2">
                       <label class="ord-lbl">Cover finish</label>

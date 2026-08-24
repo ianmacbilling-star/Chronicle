@@ -206,10 +206,15 @@ function buildOrderRequestFromRow(row, spec, externalId, contactEmail) {
 // ------------------------------------------------------------
 // GET /options?pageCount=76  -> bindings that fit + color/finish axes.
 // ------------------------------------------------------------
+// v3.0.784 -- TD-585. The paper list depends on the ink, so the current selection comes with the
+// request. Absent -> the catalog reports the conservative list, which is the right direction: an
+// option that appears once you pick black and white is a smaller surprise than one that is
+// offered and then refused at the price.
 router.get('/options', requireSession, function (req, res) {
   const pageCount = parseInt(req.query.pageCount, 10);
   if (!(pageCount > 0)) return res.status(400).json({ error: 'pageCount required' });
-  res.json(catalog.optionsForPageCount(pageCount));
+  const sel = { colorTier: req.query.colorTier || req.query.color || undefined };
+  res.json(catalog.optionsForPageCount(pageCount, sel));
 });
 
 // ------------------------------------------------------------

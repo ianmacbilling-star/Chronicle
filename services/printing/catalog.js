@@ -33,13 +33,38 @@ const BINDINGS = {
   hardcover: { label: 'Hardcover (casewrap)',       min: 24, max: 800,        multipleOf: 4, gutter: true  },
 };
 
-// Color tier: Premium is the quality-appropriate default for full-color
-// art on every page; Standard is the budget option (Lulu describes it as
-// for mostly-text books with a few color images).
+// v3.0.784 -- TD-585. INTERIOR PRINTING: INK AND GRADE, AS ONE CHOICE.
+//
+// `ink: 'color'` used to be a HARDCODED CONSTANT in buildSpec, so black-and-white was
+// unreachable -- _packageId has always carried `spec.ink === 'color' ? 'FC' : 'BW'` and nothing
+// could ever make it emit BW. Every order ever placed was a full-colour print, whatever the art
+// looked like, and full colour is the most expensive interior Lulu sells: the confirmed print
+// costs in luluProvider put standard colour at 7.01 and premium colour at 18.97 for this trim.
+// A charcoal book was paying for colour it did not use.
+//
+// FOUR ENTRIES IN ONE CONTROL, NOT TWO CONTROLS. The reader is answering one question -- how
+// should the inside be printed -- and a second control that only sometimes applies is the shape
+// TD-498 warns about, where "not shown" and "not chosen" stop being distinguishable. It also
+// means the answer rides in the EXISTING color_tier column: the order row, the order_spec
+// snapshot, reorder and the fulfilment rebuild all carry it today, with no new field to thread
+// through five places and forget in one -- which is precisely how TD-579 (paper dropped at
+// fulfilment) happened.
+//
+// EACH ENTRY DECLARES ITS OWN ink AND quality. buildSpec reads them from here rather than
+// parsing the key, so adding a grade is a line in this table and nothing else. The old code
+// derived quality with `sel.colorTier === 'standard' ? 'standard' : 'premium'`, which silently
+// makes every unknown value premium -- the expensive answer to a question nobody asked.
 const COLOR_TIERS = {
-  premium:  { label: 'Premium color',  note: 'Best for full-color art on every page', isDefault: true },
-  standard: { label: 'Standard color', note: 'Budget option; best for mostly-text books' },
+  premium:     { label: 'Premium color',  note: 'Best for full-color art on every page', ink: 'color', quality: 'premium', isDefault: true },
+  standard:    { label: 'Standard color', note: 'Budget option; best for mostly-text books', ink: 'color', quality: 'standard' },
+  bwpremium:   { label: 'Premium black & white', note: 'Best for detailed line art, charcoal and ink work', ink: 'bw', quality: 'premium' },
+  bwstandard:  { label: 'Standard black & white', note: 'Budget option; best for mostly-text books', ink: 'bw', quality: 'standard' },
 };
+/** The ink a colour tier prints in ('color' | 'bw'). Unknown tiers report null, never a default. */
+function inkForTier(tier) {
+  var t = COLOR_TIERS[tier];
+  return t ? t.ink : null;
+}
 
 const COVER_FINISHES = {
   matte: { label: 'Matte', isDefault: true },
@@ -70,14 +95,31 @@ const COVER_FINISHES = {
 // and a verified SKU has been added to CREAM_SKUS in luluProvider.js. This flag is the single
 // source of truth -- optionsForPageCount filters on it so the picker cannot offer what buildSpec
 // would refuse, and buildSpec refuses it so a hand-built request cannot get past the picker.
+// v3.0.784 -- TD-585. CREAM IS UNLOCKED BY BLACK AND WHITE, WHICH IS THE PRODUCT LULU SELLS.
+//
+// v3.0.783 removed cream outright after the first real cream order could not even be priced.
+// That was right at the time and the reason turns out to be one layer down: cream is uncoated
+// novel stock and Lulu pairs it with BW. We were asking for FULL COLOUR on cream, which is the
+// one combination least likely to exist -- so the SKU was not necessarily wrong in its
+// characters, the PRODUCT was. With black-and-white reachable, cream becomes an ordinary
+// pairing rather than a guess.
+//
+// AVAILABILITY IS NOW A QUESTION ABOUT A SELECTION, not a standing flag. A static available:false
+// cannot express "valid with BW, invalid with colour", and a picker that offers what buildSpec
+// would refuse is the fault this whole area keeps producing. One predicate, asked by the options
+// list AND by buildSpec, so the control and the rule cannot disagree.
 const PAPERS = {
-  white: { label: 'White', isDefault: true, available: true },
-  cream: { label: 'Cream', note: 'Only recommended for black & white books', available: false,
-           unavailableReason: 'Lulu has no confirmed cream stock for a full-colour book of this size.' },
+  white: { label: 'White', isDefault: true },
+  cream: { label: 'Cream', note: 'Warm stock for black & white books', requiresInk: 'bw',
+           unavailableReason: 'Cream paper is only available for black & white interiors.' },
 };
-function paperIsAvailable(key) {
+function paperIsAvailable(key, sel) {
   var p = PAPERS[key];
-  return !!(p && p.available !== false);
+  if (!p) return false;
+  if (!p.requiresInk) return true;
+  // No selection to judge against -> report the paper as unavailable rather than assuming a
+  // permissive default. An unknown answer must never be the yes.
+  return inkForTier((sel || {}).colorTier) === p.requiresInk;
 }
 
 function roundUpToMultiple(n, m) {
@@ -104,7 +146,11 @@ function availableBindings(pageCount) {
  * Full menu for a page count: fitting bindings + the color/finish axes +
  * a sensible default selection. This is what the order UI renders.
  */
-function optionsForPageCount(pageCount) {
+// v3.0.784 -- TD-585. The caller passes the selection so the paper list reflects the ink the
+// reader has actually chosen. Omitted (an older caller, a first load) -> cream is absent, which
+// is the safe direction: an option that appears late is a smaller surprise than one that
+// vanishes at the price.
+function optionsForPageCount(pageCount, sel) {
   const bindings = availableBindings(pageCount);
   return {
     trim: TRIM,
@@ -117,7 +163,7 @@ function optionsForPageCount(pageCount) {
     // v3.0.783 -- TD-579. Only papers we can actually sell. The Order tab fills its <select>
     // straight from this array, so an unavailable stock disappears from the UI by construction
     // rather than by a second rule in the client that could drift from this one.
-    papers: Object.keys(PAPERS).filter(paperIsAvailable).map((k) => ({ id: k, ...PAPERS[k] })),
+    papers: Object.keys(PAPERS).filter((k) => paperIsAvailable(k, sel)).map((k) => ({ id: k, ...PAPERS[k] })),
     default: {
       binding: bindings.includes('paperback') ? 'paperback' : (bindings[0] || null),
       colorTier: 'premium',
@@ -142,7 +188,7 @@ function buildSpec(sel, pageCount) {
   // v3.0.783 -- TD-579. A hidden control is not a rule. Anything that reaches buildSpec with an
   // unavailable stock -- a stale form, a restored reorder, a hand-made request -- is refused here
   // with the reason, rather than being quietly downgraded to white further down the path.
-  if (sel.paper && PAPERS[sel.paper] && !paperIsAvailable(sel.paper)) {
+  if (sel.paper && PAPERS[sel.paper] && !paperIsAvailable(sel.paper, sel)) {
     errors.push(PAPERS[sel.paper].unavailableReason ||
       ('This paper is not currently available: ' + sel.paper));
   }
@@ -160,8 +206,10 @@ function buildSpec(sel, pageCount) {
       trimHeightIn: TRIM.heightIn,
       pageCount: printedPageCount(pageCount, sel.binding),
       binding: sel.binding,
-      ink: 'color',
-      quality: sel.colorTier === 'standard' ? 'standard' : 'premium',
+      // v3.0.784 -- TD-585. Both read from the tier's own declaration. `ink` was the constant
+      // 'color'; `quality` was a ternary that resolved every unrecognised value to premium.
+      ink: COLOR_TIERS[sel.colorTier].ink,
+      quality: COLOR_TIERS[sel.colorTier].quality,
       coverFinish: sel.coverFinish === 'gloss' ? 'gloss' : 'matte',
       paper: sel.paper === 'cream' ? 'cream' : 'white',
     },
@@ -170,5 +218,5 @@ function buildSpec(sel, pageCount) {
 
 module.exports = {
   TRIM, BINDINGS, COLOR_TIERS, COVER_FINISHES, PAPERS,
-  printedPageCount, availableBindings, optionsForPageCount, buildSpec, paperIsAvailable,
+  printedPageCount, availableBindings, optionsForPageCount, buildSpec, paperIsAvailable, inkForTier,
 };
