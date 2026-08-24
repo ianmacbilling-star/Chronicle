@@ -100,6 +100,62 @@ function logQuoteTax(where, quote, m) {
   } catch (e) {}
 }
 
+// v3.0.782 -- TD-576. CAN THE PRINTER ACTUALLY GET THESE FILES?
+//
+// Lulu does not receive our PDFs, it DOWNLOADS them from the urls we hand over, some time
+// after the customer has paid. Everything between those two moments is unverified: an object
+// that never landed, a signed url whose expiry has passed, a bucket prefix that is not public.
+// Every one of those becomes a vendor rejection AFTER the charge, which is the one shape of
+// failure this product must not have.
+//
+// So we do what the vendor will do, from the same side of the network, before charging: ask
+// for the file. HEAD first, because it costs nothing; some object stores answer HEAD with 403
+// or 405 while serving GET perfectly well, so a refusal falls back to a one-byte ranged GET
+// rather than being believed.
+//
+// THE SNEAKY CASE IS A 200. A missing object behind a proxy answers 200 with an HTML error
+// page, which passes every naive "is it reachable" test and then fails at the printer as a
+// corrupt PDF. Content-type is therefore checked as well as status -- html is treated as
+// absent, because that is what it is.
+//
+// An INCONCLUSIVE answer is not a refusal. If the check itself times out or throws, the order
+// proceeds: refusing to sell someone a book because our own probe was slow would be a worse
+// bug than the one this prevents. Only a definite negative stops the sale.
+var ORDER_FILE_PROBE_MS = 15000;
+async function vendorCanFetch(url) {
+  var out = { ok: false, conclusive: false, status: 0, type: '', detail: '' };
+  if (!(typeof url === 'string' && /^https?:\/\//i.test(url))) {
+    out.conclusive = true; out.detail = 'not a fetchable url';
+    return out;
+  }
+  var ctl = null, timer = null;
+  try {
+    ctl = new AbortController();
+    timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, ORDER_FILE_PROBE_MS);
+    var res = await fetch(url, { method: 'HEAD', signal: ctl.signal, redirect: 'follow' });
+    if (res.status === 403 || res.status === 405 || res.status === 501) {
+      res = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' }, signal: ctl.signal, redirect: 'follow' });
+    }
+    out.status = res.status;
+    out.type = String(res.headers.get('content-type') || '').toLowerCase();
+    if (res.status >= 200 && res.status < 300) {
+      if (out.type.indexOf('html') !== -1) {
+        out.conclusive = true; out.detail = 'the url answers with a web page, not a file';
+      } else {
+        out.ok = true; out.conclusive = true;
+      }
+    } else if (res.status >= 400 && res.status < 500) {
+      out.conclusive = true; out.detail = 'the printer would get HTTP ' + res.status;
+    } else {
+      out.detail = 'HTTP ' + res.status;   // 5xx: the host is unwell, not the file. Inconclusive.
+    }
+  } catch (e) {
+    out.detail = (e && e.name === 'AbortError') ? 'the check timed out' : ((e && e.message) || 'unreachable');
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  return out;
+}
 function requireSession(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -283,6 +339,28 @@ router.post('/order', requireSession, async function (req, res) {
   } catch (e) { /* count lookup failure -> fall through */ }
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
+  }
+  // v3.0.782 -- TD-576. Before the quote, before the row, before the Checkout session: no
+  // money may move for a book whose files the printer demonstrably cannot collect. Placed
+  // here so a definite negative costs nothing at all -- no vendor call, no database row.
+  try {
+    var _fInt = await vendorCanFetch(body.interiorPdfUrl);
+    var _fCov = await vendorCanFetch(body.coverPdfUrl);
+    var _bad = [];
+    if (_fInt.conclusive && !_fInt.ok) _bad.push('interior (' + _fInt.detail + ')');
+    if (_fCov.conclusive && !_fCov.ok) _bad.push('cover (' + _fCov.detail + ')');
+    if (_bad.length) {
+      console.error('[order] refused before payment -- unfetchable print file(s): ' + _bad.join('; '));
+      return res.status(409).json({
+        error: 'FILES_UNREACHABLE',
+        message: 'We could not hand these print files to the printer, so nothing has been charged. ' +
+                 'Open the Publish page, build the book again, and try the order once more.',
+        detail: _bad.join('; ')
+      });
+    }
+  } catch (e) {
+    // The probe itself failing is NOT a refusal -- see vendorCanFetch.
+    try { console.error('[order] file probe failed, continuing: ' + ((e && e.message) || e)); } catch (e2) {}
   }
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
@@ -600,9 +678,18 @@ async function fulfillPrintOrder(session, eventId) {
     }
   } catch (submitErr) {
     // Paid but the print job did not go -> flag for refund/retry.
+    // v3.0.782 -- TD-577. SAY THAT NOTHING REACHED THE PRINTER.
+    // order_failed means the SUBMISSION threw: no print job was created, no id was minted,
+    // the files were never downloaded, and nothing appears in the vendor dashboard. That is a
+    // different event from `rejected`, which means the printer took the job and then refused
+    // the files -- and the reader was being told the second story for both. The prefix travels
+    // with the row so every surface that shows `error` inherits the distinction instead of
+    // each one having to re-derive it.
+    var _msg = String((submitErr && submitErr.message) || submitErr);
+    if (_msg.indexOf('NOT SENT') !== 0) _msg = 'NOT SENT TO THE PRINTER: ' + _msg;
     await db.prepare(
       'UPDATE print_orders SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run('order_failed', String(submitErr && submitErr.message || submitErr), orderId);
+    ).run('order_failed', _msg, orderId);
     if (contactEmail) {
       sendOrderProblemEmail({
         to_email: contactEmail, name: contactName,

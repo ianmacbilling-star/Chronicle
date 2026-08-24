@@ -1006,8 +1006,16 @@ function handleBillingReturn() {
     setTimeout(refreshAccount, 600);
     setTimeout(refreshAccount, 2500);
   } else if (order === 'success') {
-    billingToast('Payment received - your book is being sent to the printer.', 'success');
-    setTimeout(function () { if (typeof loadOrders === 'function') loadOrders(); }, 1000);
+    // v3.0.782 -- TD-577. DO NOT PROMISE SOMETHING THAT HAS NOT HAPPENED YET.
+    // This said the book was being sent to the printer, at a moment when the handover had not
+    // been attempted: the submission runs in the Stripe webhook, after this page has loaded.
+    // On 2026-08-24 the handover failed and this line was the last thing the reader saw -- the
+    // failure was discoverable only by going to My Orders and pressing Reorder.
+    // So: report the payment, which IS true, then watch for the answer. The webhook usually
+    // lands in a second or two; six tries over about twenty seconds covers a slow one without
+    // leaving a spinner behind if it never comes.
+    billingToast('Payment received. Handing your book to the printer...', 'success');
+    orderWatchAfterPayment(6);
   } else if (order === 'cancel') {
     billingToast('Order canceled - no charge was made.', 'info');
   }
@@ -18745,10 +18753,24 @@ function reorderFromOrder(id) {
   var _failed = (o.status === 'rejected' || o.status === 'order_failed');
   if (_failed && !state._reorderWarned) {
     var _why = (o.error ? String(o.error).slice(0, 300) : '');
+    // v3.0.782 -- TD-577. THE WARNING HAS TO MATCH WHICH FAILURE IT WAS.
+    // On 2026-08-24 a live order failed because WE sent the wrong field names; nothing ever
+    // reached Lulu. This dialog told Ian the printer had rejected his files and that sending
+    // them again would fail again. Both halves were untrue, and it is the more discouraging
+    // of the two stories -- it points at the book rather than at the bug.
+    var _notSent = (o.status === 'order_failed');
+    var _title = _notSent ? 'That order never reached the printer'
+                          : 'That order was rejected by the printer';
+    var _body = _notSent
+      ? ('Your payment went through but the order could not be handed over, so no print job was ever ' +
+         'created and your print files were not the problem. ' +
+         (_why ? 'The reason recorded was: \u201c' + _why + '\u201d ' : '') +
+         'Reordering sends the same files, which is fine \u2014 they were never seen.')
+      : ((_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
+         ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.');
     appConfirm({
-      title: 'That order was rejected by the printer',
-      body: (_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
-            ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.',
+      title: _title,
+      body: _body,
       note: 'You will be shown the price before anything is charged.',
       okLabel: 'Reorder anyway',
       cancelLabel: 'Cancel',
@@ -19583,6 +19605,44 @@ function applyPaymentToBody(body) {
 }
 
 // ---- My Print Orders page --------------------------------------------------
+// v3.0.782 -- TD-577. WATCH FOR THE HANDOVER AND SAY WHAT HAPPENED.
+// Polls the reader's own orders list and stops on the first definite answer. Silence is the
+// bug this exists to kill: an order that fails must not require the reader to go looking.
+// It never invents an outcome -- if the webhook has not landed by the last try it simply
+// stops, leaving the list showing the truth, because a wrong reassurance is worse than none.
+function orderWatchAfterPayment(triesLeft) {
+  if (typeof loadOrders === 'function') loadOrders();
+  if (!(triesLeft > 0)) return;
+  setTimeout(function () {
+    fetch('/api/print/orders', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var o = (j && j.orders && j.orders.length) ? j.orders[0] : null;   // ORDER BY id DESC
+        if (!o) return orderWatchAfterPayment(triesLeft - 1);
+        if (o.status === 'order_failed' || o.status === 'rejected') {
+          if (typeof loadOrders === 'function') loadOrders();
+          var _notSent = (o.status === 'order_failed');
+          appNotice(
+            _notSent ? 'Your payment went through, but the order did not reach the printer'
+                     : 'Your payment went through, but the printer would not accept the order',
+            _notSent
+              ? 'No print job was created, so nothing is being printed and your book files are fine. ' +
+                'You have not lost the book \u2014 it is on the Publish page as it was.'
+              : 'The printer took the order and then refused it. This is usually about the print files themselves.',
+            'It is on your Orders page under ' + (o.external_id || ('order ' + o.id)) +
+            '. Nothing further will happen to it until you or we act.');
+          return;
+        }
+        if (o.provider_order_id) {
+          if (typeof loadOrders === 'function') loadOrders();
+          billingToast('Your book is with the printer.', 'success');
+          return;
+        }
+        orderWatchAfterPayment(triesLeft - 1);
+      })
+      .catch(function () { orderWatchAfterPayment(triesLeft - 1); });
+  }, 3500);
+}
 function loadOrders() {
   var list = document.getElementById('orders-list');
   if (list) list.innerHTML = '<div class="settings-section-desc">Loading...</div>';
@@ -19613,10 +19673,19 @@ function orderNeverPaid(o) {
   var p = o.payment_status || '';
   return p !== 'paid' && p !== 'refunded' && p !== 'stubbed';
 }
+// v3.0.782 -- TD-577. TWO FAILURES THAT LOOK ALIKE AND ARE NOT.
+//   order_failed -- we could not hand the job over. No print job exists, nothing was
+//                   downloaded, nothing appears in the printer dashboard, the files are
+//                   untouched. This is OUR problem.
+//   rejected     -- the printer took the job and then refused it, which is usually ABOUT
+//                   the files and reproduces exactly if they are sent again.
+// The reader was shown the raw enum for both -- 'order_failed / paid' -- which names neither.
 function orderStatusLabel(o) {
   var p = o.payment_status || 'pending';
   if (p === 'stubbed') p = 'test payment';
   if (orderNeverPaid(o)) return 'Not completed \u2014 never paid for';
+  if (o.status === 'order_failed') return 'Paid \u2014 but it never reached the printer';
+  if (o.status === 'rejected') return 'Paid \u2014 the printer would not accept it';
   return (o.status || 'pending') + ' / ' + p;
 }
 
@@ -21496,6 +21565,16 @@ function finalizeBuildNav(first, last) {
 var _fixOptions = {};        // viewerPage -> { heldIn, overBox, options:[{label,verdict,reason}] }
 var _fixBusy = false;
 var _fixPage = null;
+// v3.0.780 -- TD-574. THE BOOK ON SCREEN AND THE LAYOUT BEHIND THE BUTTONS CAN DISAGREE.
+// null when they agree; { rendered, planned } when they do not. The check itself is older -- it
+// has written a FIX OFFSET SUSPECT line into the diagnostics bundle since v3.0.407 -- but it only
+// ever whispered into a file nobody reads mid-session, and then the dialog went on giving
+// confident advice about a page the reader was not looking at. A prediction that might be about a
+// different book has to say so where the decision is being made.
+// NOT a disable. v3.0.399 settled that: our prediction has been wrong before and a wrong
+// prediction must not be what stops someone fixing their own book. It warns and names the remedy.
+var _fixOffsetSuspect = null;
+var _fixOffsetSaid = '';   // the last mismatch announced, so the log says it once and not per render
 // The op each label maps to. Written from the READER's point of view standing on the page; three of
 // the six are one op read from different ends, and getting that backwards has caused three separate
 // bugs (TD-173, TD-193, and the direction missing from the first draft of this feature).
@@ -21516,16 +21595,40 @@ var FIX_OPS = {
 var _finalizeRestoreWait = null;
 function finalizeLoadFixOptions() {
   if (!(state && state.currentCampaign)) return Promise.resolve();
+  // v3.0.780 -- TD-572. NOT WHILE A RUN IS IN FLIGHT.
+  // finalizeDecorateNavFix has always REMOVED the buttons during a run, but the fetch behind them
+  // still fired on every render -- and each one costs a full server-side re-pack of the book. It is
+  // also the one moment the answer cannot be trusted, since the layout changes under it every pass.
+  // Same condition as the display gate, deliberately: two tests of the same thing drift.
+  if (window._aiLoopRunning) return Promise.resolve();
   var _gate = _finalizeRestoreWait || Promise.resolve();
   return _gate.then(function () { return finalizeLoadFixOptionsNow(); });
 }
 function finalizeLoadFixOptionsNow() {
   if (!(state && state.currentCampaign)) return Promise.resolve();
-  return fetch('/api/pdf/page-fix-options/' + state.currentCampaign.id + finalizeBookQuery(), { credentials: 'same-origin' })
+  // v3.0.780 -- TD-572. TELL THE SERVER WHEN AN APPLIED EDIT IS STILL UNSAVED.
+  // The server reloads the saved layout when its run stores have gone cold, which is exactly right
+  // after a completed run and exactly wrong when an Edit has been applied and not yet saved: that
+  // work lives only in those stores, and reloading would discard it. Only the client knows.
+  // fixdirty is NOT part of composedCacheKey, so adding it cannot move the cache key.
+  var _fq = finalizeBookQuery();
+  var _dirty = (_finalizeFixPending && !_finalizeSavedReady) ? '1' : '0';
+  var _url = '/api/pdf/page-fix-options/' + state.currentCampaign.id +
+             (_fq ? (_fq + '&fixdirty=' + _dirty) : ('?fixdirty=' + _dirty));
+  return fetch(_url, { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
       _fixOptions = {};
       if (j && j.pages) j.pages.forEach(function (p) { _fixOptions[p.viewerPage] = p; });
+      // v3.0.780 -- TD-572. SAY WHEN THE SAVED LAYOUT HAD TO BE PULLED BACK IN.
+      // It happens at most once per book per half hour -- after that the stores are warm and the
+      // server answers 'already_loaded' -- so this is not noise, it is the one line that explains
+      // why the buttons started agreeing with the page again.
+      try {
+        if (j && j.restored) {
+          optimizeLogLine('Reloaded your saved layout, so Edit is working on the same book you are looking at.', 'ok');
+        }
+      } catch (e) {}
       // v3.0.407 -- CHECK THE OFFSET AGAINST THE RENDERED BOOK. The server COMPUTES front matter as
       // 2 + cover + toc + cast, one page each. If a cast or a contents spills to a second page that
       // is wrong by one, and every Fix button then describes its neighbour -- silently, which is the
@@ -21537,15 +21640,28 @@ function finalizeLoadFixOptionsNow() {
         if (j && j.contentCount != null && j.frontMatter != null && _finalizeAfterPages > 0) {
           var _extra = _finalizeAfterPages - j.frontMatter - j.contentCount;
           if (_extra !== 0 && _extra !== 1) {
+            var _planned = j.frontMatter + j.contentCount;
             optimizeDumpLine('FIX OFFSET SUSPECT: the pane rendered ' + _finalizeAfterPages + ' pages, but ' +
               j.frontMatter + ' front + ' + j.contentCount + ' content leaves ' + _extra + ' unaccounted for ' +
               '(expected 0 or 1 for a back cover). The Fix buttons may be one page out.');
+            // v3.0.780 -- TD-574. AND SAY IT WHERE THE DECISION IS MADE, not only in the bundle.
+            _fixOffsetSuspect = { rendered: _finalizeAfterPages, planned: _planned };
+            var _sig = _finalizeAfterPages + ':' + _planned;
+            if (_fixOffsetSaid !== _sig) {
+              _fixOffsetSaid = _sig;
+              optimizeLogLine('<strong>Edit may be describing a different version of this book.</strong> ' +
+                'The book on screen has ' + _finalizeAfterPages + ' pages and the layout behind the Edit ' +
+                'buttons makes ' + _planned + '. Press Load Last Optimized File to bring the two back ' +
+                'together before making changes.', 'stop');
+            }
+          } else {
+            _fixOffsetSuspect = null; _fixOffsetSaid = '';
           }
         }
       } catch (e) {}
       finalizeDecorateNavFix();
     })
-    .catch(function () { _fixOptions = {}; });
+    .catch(function () { _fixOptions = {}; _fixOffsetSuspect = null; });   // v3.0.780 -- a stale warning is worse than none
 }
 // Added AFTER the spine is built rather than inside it, so a slow or failed fetch never delays or
 // breaks the page navigation itself.
@@ -21688,7 +21804,20 @@ function finalizeOpenFixDialog(viewerPage) {
   var COL = { GREEN: '#4f9d5d', AMBER: '#b07d1e', GREY: '#8a6a2a' };
   // v3.0.413 -- the page measurement moves up beside the title, in a colour that can be READ. It was
   // cream at 80 percent on a light dialog, which Ian could not see at all.
-  var h = '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
+  // v3.0.780 -- TD-574. THE WARNING GOES FIRST, WHERE IT CANNOT BE SCROLLED PAST.
+  // Muted gold at full opacity like every other line in this dialog (v3.0.397: the reasons are the
+  // most useful part of it and they were the least legible thing in it), on a tinted panel so it
+  // reads as a caution rather than as another option.
+  var h = '';
+  if (_fixOffsetSuspect) {
+    h += '<div style="font-size:11px;color:#8a5a1e;background:rgba(176,125,30,0.12);' +
+      'border:1px solid rgba(176,125,30,0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
+      '<strong>This may not be the page you are looking at.</strong> The book on screen has ' +
+      _fixOffsetSuspect.rendered + ' pages and the layout behind these options makes ' +
+      _fixOffsetSuspect.planned + ', so they may describe a different page. Press ' +
+      '<strong>Load Last Optimized File</strong> first to bring the two back together.</div>';
+  }
+  h += '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
   info.options.forEach(function (o, ix) {
     // v3.0.399 -- NOTHING IS DISABLED. The colour is what we EXPECT; the applier decides. A grey
