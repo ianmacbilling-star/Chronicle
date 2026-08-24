@@ -343,6 +343,75 @@ router.get('/library', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
+// v3.0.788 -- TD-589. EVERY ORDER, EVERY USER, NEWEST FIRST.
+//
+// The operational view: what was bought, by whom, for how much, and where it is. Roughly the
+// field set of the failed-order support email (TD-582), because that email was written by asking
+// what is needed to research and refund an order -- and the same answer applies to looking at one.
+//
+// ADMIN ONLY, AT THE ROUTE. requireAuth + requireAdmin, exactly like /library and /stories.
+// This is the one screen that puts every customer's email, postal address and payment id in one
+// place, so the gate has to be the endpoint and not the button: a hidden control protects nobody.
+//
+// Keyset pagination on id, the same shape /library uses, so a growing order table never turns
+// this into a full scan and the client can lazy-load by scrolling.
+//
+// NO PDF LINKS AND NO SHIPPING ADDRESS. Both are on the row and neither is needed to answer
+// "what happened to this order" -- the address is the most sensitive field here and the print
+// files are a customer's book. The support email carries them because it fires for ONE order that
+// needs acting on; a browsable list of everything is a different exposure, and the narrower
+// answer is the right default. Add them later if an actual task needs them.
+router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    let limit = parseInt(req.query.limit, 10) || 25;
+    if (limit < 1) limit = 1;
+    if (limit > 50) limit = 50;
+    const beforeId = parseInt(req.query.beforeId, 10) || 0;
+    let sql =
+      'SELECT o.id, o.external_id, o.provider_order_id, o.created_at, o.updated_at, ' +
+      '       o.order_name, o.book_title, o.campaign_name, ' +
+      '       o.customer_charge, o.currency, o.provider_cost, o.provider_tax, ' +
+      '       o.payment_status, o.status, o.error, ' +
+      '       o.stripe_payment_intent_id, o.stripe_session_id, o.card_brand, o.card_last4, ' +
+      '       o.binding, o.color_tier, o.cover_finish, o.paper, o.page_count, o.quantity, ' +
+      '       o.tracking_url, o.tracking_number, o.carrier, ' +
+      '       o.user_id, u.email AS user_email, u.name AS user_name ' +
+      '  FROM print_orders o LEFT JOIN users u ON u.id = o.user_id';
+    const params = [];
+    if (beforeId > 0) { sql += ' WHERE o.id < ?'; params.push(beforeId); }
+    sql += ' ORDER BY o.id DESC LIMIT ?';
+    params.push(limit + 1);
+    const stmt = db.prepare(sql);
+    const rows = await stmt.all.apply(stmt, params);
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const nextCursor = items.length ? items[items.length - 1].id : null;
+    // The two deep links, built HERE so the client never assembles a vendor URL from parts.
+    // Stripe's is certain and already used by the support email. Lulu's is env-overridable
+    // because it has not been confirmed against their portal -- a wrong link is one env var to
+    // correct rather than a deploy, and guessing vendor strings is what cost us the cream SKU
+    // and the print-job field names on 2026-08-24.
+    const luluTpl = process.env.LULU_DASHBOARD_URL || 'https://developers.lulu.com/print-jobs/{id}';
+    res.json({
+      items: items.map(function (r) {
+        return Object.assign({}, r, {
+          stripeUrl: r.stripe_payment_intent_id
+            ? ('https://dashboard.stripe.com/payments/' + encodeURIComponent(r.stripe_payment_intent_id))
+            : null,
+          luluUrl: r.provider_order_id
+            ? luluTpl.replace('{id}', encodeURIComponent(r.provider_order_id))
+            : null,
+        });
+      }),
+      hasMore: hasMore, nextCursor: nextCursor,
+    });
+  } catch (e) {
+    console.error('admin orders list error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/admin/library/:archiveId/unpublish -- pull an image from the public
 // Library (public=false). The owner's archived copy is untouched.
 router.post('/library/:archiveId/unpublish', requireAuth, requireAdmin, async function (req, res) {

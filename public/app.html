@@ -1257,6 +1257,10 @@
         <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
              now reachable by testers and impersonation must never be. -->
         <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
+        <!-- v3.0.789 -- TD-589. Orders becomes a real tab rather than a modal behind a button.
+             Membership of SETTINGS_TABS_ALL is what gates it: admins get every tab, testers get
+             only User Testing, everyone else gets none. The route is gated independently. -->
+        <button class="settings-tab" id="settings-tab-orders" onclick="switchSettingsTab('orders')">Orders</button>
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
@@ -1599,6 +1603,19 @@
            element and dragged every User Testing control in here with it -- leaving that tab
            blank. The div COUNT stayed balanced, which is why the check passed: moving a closing
            tag does not change how many there are. This move was made by walking tag depth. -->
+      <!-- v3.0.789 -- TD-589. ALL ORDERS, ALL USERS, NEWEST FIRST.
+           The list keeps its OWN scroll box rather than growing the page, because the lazy load is
+           driven by that element's scroll position -- letting the tab grow instead would need a
+           window listener and a different mechanism for the same result. -->
+      <div class="settings-pane" id="settings-pane-orders" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Orders &mdash; All Users</div>
+          <div class="settings-section-desc">Every physical book order, newest first. Scroll for more.</div>
+          <div id="admin-orders-list" style="max-height:68vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
+          <div id="admin-orders-status" class="muted" style="text-align:center;padding:14px;"></div>
+        </div>
+      </div>
+
       <div class="settings-pane" id="settings-pane-support" style="display:none;">
 <!-- ============================================================================
            SUPPORT ACCESS (impersonation) -- TD-179 stage 4, v3.0.590.

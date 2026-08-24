@@ -12425,6 +12425,102 @@ function closeAdminLibrary() {
   var m = document.getElementById('admin-library-modal');
   if (m) m.classList.add('hidden');
 }
+// =================================================================================================
+// v3.0.788 -- TD-589. ADMIN ORDERS. Every order, every user, newest first, lazy-loaded.
+//
+// The field set is roughly the failed-order support email's (TD-582), and deliberately so: that
+// email was built by asking what someone needs to research and refund an order, and looking at a
+// list is the same question asked continuously.
+//
+// The gate is /api/admin/orders (requireAuth + requireAdmin). Nothing here is a permission check;
+// hiding a button protects nobody.
+// =================================================================================================
+var adminOrd = { cursor: 0, loading: false, done: false, any: false };
+// v3.0.789 -- TD-589. Ian: "can you just create a tab on the Dashboard next to the Support tab and
+// put the orders there. We don't really need the order button."
+//
+// Called every time the tab is opened, so it RESETS rather than appending to whatever was there --
+// switching away and back must not show the first page twice. The scroll binding is the one thing
+// that must not reset: addEventListener stacks, and a second handler would fire a second page load
+// for every scroll event.
+function initAdminOrdersTab() {
+  var list = document.getElementById('admin-orders-list');
+  if (list) list.innerHTML = '';
+  adminOrd = { cursor: 0, loading: false, done: false, any: false };
+  if (list && !list._scrollBound) {
+    list._scrollBound = true;
+    list.addEventListener('scroll', function () {
+      if (list.scrollTop + list.clientHeight >= list.scrollHeight - 400) loadAdminOrders();
+    });
+  }
+  loadAdminOrders();
+}
+function loadAdminOrders() {
+  if (adminOrd.loading || adminOrd.done) return;
+  adminOrd.loading = true;
+  var st = document.getElementById('admin-orders-status');
+  if (st) st.textContent = 'Loading...';
+  var url = '/api/admin/orders?limit=25' + (adminOrd.cursor ? '&beforeId=' + adminOrd.cursor : '');
+  fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+    adminOrd.loading = false;
+    var list = document.getElementById('admin-orders-list');
+    var items = (d && d.items) || [];
+    items.forEach(function (it) { adminOrd.any = true; if (list) list.appendChild(adminOrderCard(it)); });
+    if (d && d.nextCursor) adminOrd.cursor = d.nextCursor;
+    if (!d || !d.hasMore || !d.nextCursor) {
+      adminOrd.done = true;
+      if (st) st.textContent = adminOrd.any ? 'End of list.' : 'No orders yet.';
+    } else if (st) { st.textContent = ''; }
+  }).catch(function () {
+    adminOrd.loading = false;
+    if (st) st.textContent = 'Could not load. Please try again.';
+  });
+}
+function adminOrderCard(o) {
+  function esc(s) { return escapeHtmlPrint(s == null || s === '' ? '\u2014' : s); }
+  var card = document.createElement('div');
+  // A failed or unconfirmed order is the reason to open this screen, so it is visible at a glance
+  // rather than needing the status line to be read.
+  var _bad = (o.status === 'order_failed' || o.status === 'rejected');
+  var _warn = (o.status === 'order_unknown');
+  var edge = _bad ? 'rgba(201,120,76,0.55)' : (_warn ? 'rgba(201,168,76,0.55)' : 'rgba(201,168,76,0.2)');
+  card.style.cssText = 'border:1px solid ' + edge + ';border-left-width:3px;border-radius:8px;' +
+    'background:rgba(12,8,4,0.5);padding:10px 12px;font-size:12px;line-height:1.5;';
+  function cell(label, value) {
+    return '<div style="min-width:150px;"><span style="color:rgba(201,168,76,0.6);">' + esc(label) +
+      '</span> <span style="color:var(--text);">' + esc(value) + '</span></div>';
+  }
+  var money = (o.customer_charge != null)
+    ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : null;
+  var cost = (o.provider_cost != null) ? ('$' + Number(o.provider_cost).toFixed(2)) : null;
+  var card4 = (o.card_brand && o.card_last4) ? (o.card_brand + ' \u2022\u2022\u2022\u2022 ' + o.card_last4) : null;
+  // Reuses orderStatusLabel so the admin view and the customer's card can never tell different
+  // stories about the same row -- the fault TD-577 was opened for.
+  var status = (typeof orderStatusLabel === 'function') ? orderStatusLabel(o) : (o.status || '');
+  var fmt = [o.binding, orderTierLabel(o.color_tier), o.cover_finish, o.paper].filter(Boolean).join(', ');
+  var links = '';
+  if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;margin-right:14px;">Stripe</a>';
+  if (o.luluUrl) links += '<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;margin-right:14px;">Lulu ' + esc(o.provider_order_id) + '</a>';
+  if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Track</a>';
+  var html =
+    '<div style="display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin-bottom:4px;">' +
+      '<strong style="color:var(--gold);font-size:13px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<span style="color:var(--text);">' + esc(o.book_title || o.order_name || o.campaign_name) + '</span>' +
+      '<span style="color:rgba(201,168,76,0.6);">' + esc(formatOrderDate(o.created_at)) + '</span>' +
+    '</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:2px 14px;">' +
+      cell('Customer', (o.user_name || '') + (o.user_email ? (' <' + o.user_email + '>') : '')) +
+      cell('Paid', money) + cell('Our cost', cost) + cell('Card', card4) +
+      cell('Status', status) +
+      cell('Format', fmt) +
+      cell('Pages/Qty', String(o.page_count == null ? '?' : o.page_count) + ' / ' + String(o.quantity == null ? '?' : o.quantity)) +
+      cell('Tracking', o.tracking_number) +
+    '</div>' +
+    (links ? ('<div style="margin-top:6px;">' + links + '</div>') : '') +
+    (o.error ? ('<div style="margin-top:6px;color:rgba(245,200,180,0.95);word-break:break-word;">' + esc(String(o.error).slice(0, 400)) + '</div>') : '');
+  card.innerHTML = html;
+  return card;
+}
 function loadAdminLibrary() {
   if (adminLib.loading || adminLib.done) return;
   adminLib.loading = true;
@@ -16860,7 +16956,12 @@ var TIER_FIELD_LABELS = {
 // codes, financials, impersonation -- and the tab strip is decoration: hiding six buttons does not
 // stop anyone typing switchSettingsTab('financial') into a console. The refusal below is the second
 // line, and every endpoint behind those panes is requireAdmin server-side, which is the first.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support'];
+// v3.0.789 -- TD-589. 'orders' joins the registry, and that membership is the whole gate:
+// settingsTabsAllowed gives every tab to an admin, exactly one to a tester and none to anyone
+// else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
+// div, a button with its own check -- would be a second rule to keep in step with this one.
+// The route is gated independently; neither is load-bearing alone.
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support', 'orders'];
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --
@@ -16952,6 +17053,7 @@ function switchSettingsTab(tab) {
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
   if (tab === 'promos') loadPromoCodes();
+  if (tab === 'orders') initAdminOrdersTab();
 }
 
 // Populate the User Testing tab with the signed-in account's current state
@@ -19863,6 +19965,14 @@ function renderOrders(orders) {
   list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
 }
 
+// v3.0.788 -- TD-589. ONE LABEL MAP FOR THE INTERIOR TIER.
+// v3.0.786 put this inline in the customer card because that was the only place showing it; the
+// admin list is the second, and a second copy is how the two drift into disagreeing about the same
+// row. Raw value as the fallback, so a tier added later degrades to something readable rather
+// than to nothing.
+var ORDER_TIER_LABELS = { premium: 'Premium color', standard: 'Standard color',
+                          bwpremium: 'Premium black & white', bwstandard: 'Standard black & white' };
+function orderTierLabel(t) { return ORDER_TIER_LABELS[t] || t; }
 function orderCardHtml(o) {
   function esc(s) { return escapeHtmlPrint(s); }
   function row(label, value) {
@@ -19872,12 +19982,7 @@ function orderCardHtml(o) {
   }
   var title = o.order_name || o.book_title || o.campaign_name || ('Order #' + o.id);
   var orderNo = o.external_id || ('po-' + o.id);
-  // v3.0.786 -- TD-587. The card printed the raw key: v3.0.784 made 'bwpremium' a real value and
-  // po-7's card read "paperback, bwpremium, matte" to a customer. Labels, with the raw value as the
-  // fallback so a tier added later degrades to something readable rather than to nothing.
-  var _tierLabels = { premium: 'Premium color', standard: 'Standard color',
-                      bwpremium: 'Premium black & white', bwstandard: 'Standard black & white' };
-  var fmt = [o.binding, (_tierLabels[o.color_tier] || o.color_tier), o.cover_finish].filter(Boolean).join(', ');
+  var fmt = [o.binding, orderTierLabel(o.color_tier), o.cover_finish].filter(Boolean).join(', ');
   var charge = (o.customer_charge != null) ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : '';
   var card = (o.card_brand && o.card_last4) ? maskedCard(o.card_brand, o.card_last4) : '';
   var when = o.created_at ? formatOrderDate(o.created_at) : '';

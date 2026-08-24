@@ -589,6 +589,7 @@ class LuluProvider extends PrintProvider {
       externalId: externalId || raw?.external_id || '',
       status: this.normalizeStatus(statusName),
       trackingUrl: tracking.url,
+      trackingNumber: tracking.number,   // v3.0.787 -- TD-588. Never carried before; the card has always displayed it.
       carrier: tracking.carrier,
       raw,
     };
@@ -603,14 +604,43 @@ function pad4(inches) {
   return String(hundredths).padStart(4, '0');
 }
 
+// v3.0.787 -- TD-588. LULU PUTS TRACKING IN TWO PLACES, AND WE READ ONE.
+//
+// This looked only at line_items[].tracking_urls. Lulu's own shipped example puts it under
+// status.line_item_statuses[].messages -- tracking_id, tracking_urls and carrier_name together --
+// and the print-job detail carries it on the line item as well. Reading one shape means a book
+// can ship and the link never appear.
+//
+// AND THE NUMBER WAS NEVER CAPTURED AT ALL. The order card has printed
+// `o.tracking_number` since it was written; nothing has ever set it, so that row could not
+// appear however far an order got. Same family as the caller-less refresh in TD-588: the display
+// existed and the value never arrived.
+//
+// Both shapes are read, line items first because that is the authoritative record, falling back
+// to the status messages. Anything found is returned whole -- a url with no number is still worth
+// showing, and so is a number with no url.
 function firstTracking(raw) {
+  function fromUrls(t) {
+    if (Array.isArray(t) && t.length) return t[0];
+    if (typeof t === 'string' && t) return t;
+    return undefined;
+  }
   const items = (raw && raw.line_items) || [];
   for (const li of items) {
-    const t = li.tracking_urls || li.tracking_url;
-    if (Array.isArray(t) && t.length) return { url: t[0], carrier: li.carrier_name };
-    if (typeof t === 'string') return { url: t, carrier: li.carrier_name };
+    const url = fromUrls(li.tracking_urls || li.tracking_url);
+    if (url || li.tracking_id) {
+      return { url: url, number: li.tracking_id || undefined, carrier: li.carrier_name };
+    }
   }
-  return { url: undefined, carrier: undefined };
+  const stats = (raw && raw.status && raw.status.line_item_statuses) || [];
+  for (const st of stats) {
+    const m = st.messages || {};
+    const url = fromUrls(m.tracking_urls || m.tracking_url);
+    if (url || m.tracking_id) {
+      return { url: url, number: m.tracking_id || undefined, carrier: m.carrier_name };
+    }
+  }
+  return { url: undefined, number: undefined, carrier: undefined };
 }
 
 async function safeText(res) {
