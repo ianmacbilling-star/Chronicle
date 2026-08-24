@@ -4269,6 +4269,66 @@ async function approvedStateFor(req, campaignId, arrange) {
     return null;
   }
 }
+// v3.0.780 -- TD-572. PUT THE APPROVED LAYOUT BACK BEFORE ANYTHING RE-PACKS FOR A READER.
+//
+// WHY THIS EXISTS. The Edit control cannot read a PDF, so to answer "what is on page 10 and what
+// could move" it REBUILDS the book and replays the moves and grows the run recorded. Those live in
+// _runMoves and _runGrows, which are in memory with a 30 minute TTL measured from the last WRITE --
+// reads do not refresh them. Come back to a finished book 31 minutes later and the rebuild replays
+// nothing and produces the NATURAL book, while the pane still shows the optimized one, because a
+// rendered PDF needs none of that state.
+//
+// MEASURED ON THE STRANGERS, 2026-08-24. Run ended 11:33:45, bundle taken 12:05:15 -- 31m30s later.
+// The saved PDF holds 71 pages (5 front + 65 content + 1 back). The rebuild behind the Edit buttons
+// held 67 content pages, its RUN-MOVES ledger read "recorded 0", and page 1 was back at scale 1.00
+// where the run had left it at 0.47. Viewer page 10 held a picture on screen and no picture at all
+// in the rebuild, so the shrink was refused with "no image placement on page" -- a correct answer
+// about a page the reader was not looking at.
+//
+// Load Last Optimized File already fixes this by hand (restore-optimized). This is the same call,
+// made automatically, at the two doors a reader can arrive through.
+//
+// FOUR REFUSALS, AND EACH ONE IS LOAD BEARING:
+//   already_loaded  -- either store present means a live or restored layout is in hand. Both are
+//                      checked: a manual shrink writes _runGrows and NOT _runMoves, so testing the
+//                      move store alone would discard an unsaved shrink.
+//   unsaved_edit    -- the client says an applied edit has not been saved yet. Restoring would
+//                      throw it away. fixdirty is NOT part of composedCacheKey, so passing it
+//                      cannot move the cache key.
+//   run_in_flight   -- never touch the stores of a running optimize. Per USER, matching the run
+//                      lock, which is the stricter and simpler rule.
+//   settings_changed-- the saved layout was built under different Layout Settings, so it is not
+//                      this book. Same test restore-optimized uses.
+//
+// Returns a plain report rather than throwing: a failed restore must leave the Edit buttons working
+// exactly as they did before, never remove them.
+async function ensureApprovedLayoutForFix(req, campaignId, arrange) {
+  var out = { restored: false, reason: 'not_needed', moves: 0 };
+  try {
+    var k = composedCacheKey(campaignId, req);
+    if (runMovesGet(k) != null || runGrowsGetMap(k) != null) { out.reason = 'already_loaded'; return out; }
+    if (req && req.query && String(req.query.fixdirty || '') === '1') { out.reason = 'unsaved_edit'; return out; }
+    if (optimizeRunGet(req.session && req.session.userId)) { out.reason = 'run_in_flight'; return out; }
+    var st = await approvedStateFor(req, campaignId, arrange);
+    if (!st) { out.reason = 'no_saved_layout'; return out; }
+    if ((st.co || '') !== ((req.query && req.query.co) || '')) { out.reason = 'settings_changed'; return out; }
+    composedCachePut(campaignId, req, st.arrange || arrange, st.body, st.campaignName || '', st.planText || null);
+    runMovesSet(k, st.moves || []);
+    runGrowsSetMap(k, st.grows || {});
+    out.restored = true;
+    out.reason = 'restored';
+    out.moves = (st.moves || []).length;
+    try {
+      console.log('[fix-restore] proc ' + PROC_ID + ' reloaded the approved ' + (st.arrange || arrange) +
+        ' layout for campaign ' + campaignId + ' before a reader edit (' + out.moves + ' recorded move(s))');
+    } catch (e) {}
+    return out;
+  } catch (e) {
+    out.reason = 'error';
+    try { console.error('[fix-restore] failed for campaign ' + campaignId + ': ' + ((e && e.message) || e)); } catch (e2) {}
+    return out;
+  }
+}
 var _mzBands = null;
 
 // RUN-SCOPED image grow/scale state. Optimization changes (grows for magazine, shrinks for paired)
@@ -10849,6 +10909,9 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var _arr = _cco.arrange || 'paired';
     var _mag = (_arr === 'magazine' || _arr === 'gazette');
+    // v3.0.780 -- TD-572. The options below come from a REBUILD, so the layout the run
+    // produced has to be in hand before the rebuild happens, not after it.
+    var _fixRestore = await ensureApprovedLayoutForFix(req, req.params.campaignId, _arr);
     // v3.0.396 -- every layout answers. Ian: the Fix buttons belong on every page, in every layout.
     var _plan, _dbg, _rows;
     if (_mag) {
@@ -10871,6 +10934,12 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
       // frontMatter is computed (2 + cover + toc + cast), not measured, so a cast that spills to a
       // second page shifts every button by one with nothing to show for it.
       ok: true, arrange: _arr, frontMatter: _fmN, contentCount: _rows.length,
+      // v3.0.780 -- TD-572. So the reader is told when the saved layout had to be pulled
+      // back in. Silence is the bug: the buttons quietly changing which book they describe
+      // is exactly the fault this fixes.
+      restored: !!(_fixRestore && _fixRestore.restored),
+      restoredMoves: (_fixRestore && _fixRestore.moves) || 0,
+      restoreReason: (_fixRestore && _fixRestore.reason) || 'not_needed',
       pages: rows.map(function (r) {
         return {
           page: r.page, viewerPage: r.page + _fmN + 1,
@@ -11490,6 +11559,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     if (!_manualFix && !(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
 
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    // v3.0.780 -- TD-572. A reader Edit must act on the book the reader can see. The stores
+    // can expire between the dialog opening and Try It being pressed, so this is checked
+    // here as well as in page-fix-options -- the two doors are half an hour apart.
+    // MANUAL ONLY: the AI loop keeps its own live stores and must never have them replaced
+    // mid-run. ensureApprovedLayoutForFix refuses a live run too, so this is belt and braces.
+    if (_manualFix) { try { await ensureApprovedLayoutForFix(req, req.params.campaignId, _cco.arrange || 'paired'); } catch (e) {} }
     // ===== MAGAZINE / GAZETTE apply (growMul on cells + text-cell moves) =====
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
@@ -11925,8 +12000,19 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       // this does -- it does not store packedM.dbg, which would swap one wrong document for another.
       // COST: one extra full re-measure per apply. Accepted deliberately: the alternative is a dump
       // that cannot be trusted, and every hour spent arguing with one costs more than the render.
+      // v3.0.780 -- TD-573. NOTHING APPLIED MEANS NOTHING CHANGED.
+      // This wrote the composed cache unconditionally, so a REFUSED adjust replaced the
+      // cached book with whatever this rebuild produced -- and save-optimized reads that
+      // cache. With cold run stores the rebuild is the NATURAL book, so two failed clicks
+      // were enough to leave a Save pointing at an un-optimized book. Measured on The
+      // Strangers: the bundle taken at 12:05:15 carried a composed stamp of 12:04:55,
+      // twenty seconds earlier, written by the refusal itself.
+      // The body is still composed and still rendered -- only the STORING is gated. Building
+      // the plan text costs a full Chromium re-measure and exists only to be cached, so it
+      // is gated with it, which also makes a refused adjust markedly faster.
+      var _mCacheApplied = (mApplied.length > 0);
       var _planTxtM = null;
-      try {
+      if (_mCacheApplied) try {
         var _dbgM = Object.assign({}, (packedM && packedM.dbg) || {});
         _dbgM.pages = mzDbgPagesFrom(mbands, mplan.pages, null);
         // Rebuild the `sized` header from the MUTATED cells too. packedM.dbg.grow is the pack-time
@@ -11957,8 +12043,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         }
         _planTxtM = magazinePlanText({ dbg: _dbgM });
       } catch (e) { _planTxtM = null; console.error('magazine composed plan text failed:', e && e.message); }
-      composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName, _planTxtM);
-      try { console.log('[layout-apply] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's cached the composed magazine book; the cache now holds ' + _composedCache.size + ' entr(ies)'); } catch (e) {}
+      if (_mCacheApplied) {
+        composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName, _planTxtM);
+        try { console.log('[layout-apply] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's cached the composed magazine book; the cache now holds ' + _composedCache.size + ' entr(ies)'); } catch (e) {}
+      } else {
+        try { console.log('[layout-apply] proc ' + PROC_ID + ' applied nothing to the magazine book -- the composed cache was left alone'); } catch (e) {}
+      }
       var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
       if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
       var mPdf = await renderHtmlToPdf(mBuilt.html, {});
@@ -12400,8 +12490,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // text after the run finishes. Only a manual adjust has no fill behind it, so only a manual
     // adjust needs this. Ian asked the right question -- 'can what you are doing have ill effects
     // there?' -- about a change I made without checking who else walked the path.
+    // v3.0.780 -- TD-573. See the magazine branch above: the cache is written only when
+    // something actually applied, because save-optimized reads it and a refusal must not be
+    // able to replace a good book with a rebuild of a different one.
+    var _pCacheApplied = (applied.length > 0);
     var _planTxtA = null;
-    if (_manualFix) try {
+    if (_manualFix && _pCacheApplied) try {
       var _dbgA = Object.assign({}, (packed && packed.dbg) || {});
       var _realA = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
       if (_realA && !_realA._error) {
@@ -12418,7 +12512,11 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       }
       _planTxtA = pairedPlanText({ plan: plan, beats: beats, campaign: campaignName || null, dbg: _dbgA, co: _pco0 }, { fixOptions: true });
     } catch (e) { _planTxtA = null; }
-    composedCachePut(req.params.campaignId, req, 'paired', body, campaignName, _planTxtA);
+    if (_pCacheApplied) {
+      composedCachePut(req.params.campaignId, req, 'paired', body, campaignName, _planTxtA);
+    } else {
+      try { console.log('[layout-apply] proc ' + PROC_ID + ' applied nothing -- the composed cache was left alone'); } catch (e) {}
+    }
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
     if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
     var pdf = await renderHtmlToPdf(rbuilt.html, {});
