@@ -12455,12 +12455,42 @@ function initAdminOrdersTab() {
   }
   loadAdminOrders();
 }
+// v3.0.790 -- TD-590. Read straight off the controls, so there is no second copy of the filter
+// to fall out of step with what is on screen. Blank boxes are simply absent from the query.
+function adminOrderFilterQuery() {
+  function v(id) { var el = document.getElementById(id); return el && el.value ? String(el.value).trim() : ''; }
+  var parts = [];
+  [['q', 'ord-f-q'], ['customer', 'ord-f-customer'], ['from', 'ord-f-from'], ['to', 'ord-f-to'],
+   ['minPrice', 'ord-f-min'], ['maxPrice', 'ord-f-max'], ['tracking', 'ord-f-tracking']]
+    .forEach(function (p) {
+      var val = v(p[1]);
+      if (val) parts.push(p[0] + '=' + encodeURIComponent(val));
+    });
+  return parts.length ? ('&' + parts.join('&')) : '';
+}
+// Applying a filter is a NEW list, not more of the old one: the cursor and the done flag have to
+// go back to the start or the first page of the new query would be appended under the last page
+// of the previous one.
+function applyAdminOrderFilters() {
+  var list = document.getElementById('admin-orders-list');
+  if (list) list.innerHTML = '';
+  adminOrd = { cursor: 0, loading: false, done: false, any: false };
+  loadAdminOrders();
+}
+function clearAdminOrderFilters() {
+  ['ord-f-q', 'ord-f-customer', 'ord-f-from', 'ord-f-to', 'ord-f-min', 'ord-f-max', 'ord-f-tracking']
+    .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+  applyAdminOrderFilters();
+}
 function loadAdminOrders() {
   if (adminOrd.loading || adminOrd.done) return;
   adminOrd.loading = true;
   var st = document.getElementById('admin-orders-status');
   if (st) st.textContent = 'Loading...';
-  var url = '/api/admin/orders?limit=25' + (adminOrd.cursor ? '&beforeId=' + adminOrd.cursor : '');
+  // v3.0.790 -- TD-590. The filter goes on EVERY page, not just the first. Reading it from the
+  // controls each time rather than remembering it means the query and the boxes can never disagree.
+  var url = '/api/admin/orders?limit=25' + (adminOrd.cursor ? '&beforeId=' + adminOrd.cursor : '') +
+            adminOrderFilterQuery();
   fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
     adminOrd.loading = false;
     var list = document.getElementById('admin-orders-list');
@@ -12469,7 +12499,10 @@ function loadAdminOrders() {
     if (d && d.nextCursor) adminOrd.cursor = d.nextCursor;
     if (!d || !d.hasMore || !d.nextCursor) {
       adminOrd.done = true;
-      if (st) st.textContent = adminOrd.any ? 'End of list.' : 'No orders yet.';
+      // v3.0.790 -- TD-590. An empty FILTERED list is not an empty system, and saying "No orders
+      // yet" to someone who has just typed a search would be a plainly false statement.
+      if (st) st.textContent = adminOrd.any ? 'End of list.'
+        : (adminOrderFilterQuery() ? 'No orders match that filter.' : 'No orders yet.');
     } else if (st) { st.textContent = ''; }
   }).catch(function () {
     adminOrd.loading = false;
@@ -12479,16 +12512,21 @@ function loadAdminOrders() {
 function adminOrderCard(o) {
   function esc(s) { return escapeHtmlPrint(s == null || s === '' ? '\u2014' : s); }
   var card = document.createElement('div');
-  // A failed or unconfirmed order is the reason to open this screen, so it is visible at a glance
-  // rather than needing the status line to be read.
+  // v3.0.790 -- TD-590. THE SAME SHAPE AS THE EXISTING CODES LIST ON THE PROMO TAB.
+  // Ian: "the colors on this tab are rough... get rid of the grey background."
+  // The previous version painted rgba(12,8,4,0.5) -- a dark panel -- and then wrote var(--text) on
+  // it, which is #1a1410 in a LIGHT palette. Dark text on a dark box. The theme variables here are
+  // light (--bg #f9f7f4, --border #e2ddd5), so anything that supplies its own dark surface is
+  // fighting them. Promo rows carry no background at all and separate with a rule; inheriting that
+  // means this list cannot be wrong about the theme, now or if the theme changes.
   var _bad = (o.status === 'order_failed' || o.status === 'rejected');
   var _warn = (o.status === 'order_unknown');
-  var edge = _bad ? 'rgba(201,120,76,0.55)' : (_warn ? 'rgba(201,168,76,0.55)' : 'rgba(201,168,76,0.2)');
-  card.style.cssText = 'border:1px solid ' + edge + ';border-left-width:3px;border-radius:8px;' +
-    'background:rgba(12,8,4,0.5);padding:10px 12px;font-size:12px;line-height:1.5;';
+  card.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;' +
+    'border-top:1px solid var(--border);';
+  // Label in the muted tone, value inheriting -- exactly the weighting the promo rows use.
   function cell(label, value) {
-    return '<div style="min-width:150px;"><span style="color:rgba(201,168,76,0.6);">' + esc(label) +
-      '</span> <span style="color:var(--text);">' + esc(value) + '</span></div>';
+    return '<span style="min-width:150px;"><span style="color:var(--text-muted);">' + esc(label) +
+      '</span> ' + esc(value) + '</span>';
   }
   var money = (o.customer_charge != null)
     ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : null;
@@ -12499,25 +12537,26 @@ function adminOrderCard(o) {
   var status = (typeof orderStatusLabel === 'function') ? orderStatusLabel(o) : (o.status || '');
   var fmt = [o.binding, orderTierLabel(o.color_tier), o.cover_finish, o.paper].filter(Boolean).join(', ');
   var links = '';
-  if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;margin-right:14px;">Stripe</a>';
-  if (o.luluUrl) links += '<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;margin-right:14px;">Lulu ' + esc(o.provider_order_id) + '</a>';
-  if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Track</a>';
+  var lnk = 'color:var(--crimson);text-decoration:underline;margin-right:10px;';
+  if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Stripe</a>';
+  if (o.luluUrl) links += '<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Lulu</a>';
+  if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="' + lnk + '">Track</a>';
+  // The status carries the only colour that changes: gold for an order needing attention, crimson
+  // for one that failed, muted otherwise. Same vocabulary the promo rows use for Active/Inactive.
+  var statusColor = _bad ? 'var(--crimson)' : (_warn ? 'var(--gold)' : 'var(--text-muted)');
   var html =
-    '<div style="display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin-bottom:4px;">' +
-      '<strong style="color:var(--gold);font-size:13px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
-      '<span style="color:var(--text);">' + esc(o.book_title || o.order_name || o.campaign_name) + '</span>' +
-      '<span style="color:rgba(201,168,76,0.6);">' + esc(formatOrderDate(o.created_at)) + '</span>' +
-    '</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:2px 14px;">' +
-      cell('Customer', (o.user_name || '') + (o.user_email ? (' <' + o.user_email + '>') : '')) +
-      cell('Paid', money) + cell('Our cost', cost) + cell('Card', card4) +
-      cell('Status', status) +
-      cell('Format', fmt) +
-      cell('Pages/Qty', String(o.page_count == null ? '?' : o.page_count) + ' / ' + String(o.quantity == null ? '?' : o.quantity)) +
-      cell('Tracking', o.tracking_number) +
-    '</div>' +
-    (links ? ('<div style="margin-top:6px;">' + links + '</div>') : '') +
-    (o.error ? ('<div style="margin-top:6px;color:rgba(245,200,180,0.95);word-break:break-word;">' + esc(String(o.error).slice(0, 400)) + '</div>') : '');
+      '<strong style="color:var(--gold);min-width:110px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<span style="min-width:170px;">' + esc(o.book_title || o.order_name || o.campaign_name) + '</span>' +
+      '<span style="min-width:110px;color:var(--text-muted);">' + esc(formatOrderDate(o.created_at)) + '</span>' +
+      cell('', (o.user_name || '') + (o.user_email ? (' <' + o.user_email + '>') : '')) +
+      '<span style="min-width:110px;">' + esc(money) + '</span>' +
+      cell('cost', cost) + cell('card', card4) +
+      '<span style="min-width:210px;color:' + statusColor + ';">' + esc(status) + '</span>' +
+      cell('', fmt) +
+      cell('pp/qty', String(o.page_count == null ? '?' : o.page_count) + '/' + String(o.quantity == null ? '?' : o.quantity)) +
+      cell('track', o.tracking_number) +
+      (links ? ('<span style="min-width:150px;">' + links + '</span>') : '') +
+      (o.error ? ('<span style="flex:1 1 100%;color:var(--crimson);word-break:break-word;">' + esc(String(o.error).slice(0, 400)) + '</span>') : '');
   card.innerHTML = html;
   return card;
 }

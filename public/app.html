@@ -1611,7 +1611,30 @@
         <div class="settings-section">
           <div class="settings-section-title">Orders &mdash; All Users</div>
           <div class="settings-section-desc">Every physical book order, newest first. Scroll for more.</div>
-          <div id="admin-orders-list" style="max-height:68vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
+          <!-- v3.0.790 -- TD-590. Filters run in SQL, so they search every order rather than the
+               25 rows already on screen. Enter applies from any box; Clear empties them all. -->
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:12px 0 4px;">
+            <div><label class="ord-lbl">Order no. <span class="ord-lbl-dim">(ours or the printer&#39;s)</span></label>
+              <input class="form-input" id="ord-f-q" style="width:180px;" onkeydown="if(event.key==='Enter')applyAdminOrderFilters()" placeholder="po-7 or 3006840"></div>
+            <div><label class="ord-lbl">Customer</label>
+              <input class="form-input" id="ord-f-customer" style="width:190px;" onkeydown="if(event.key==='Enter')applyAdminOrderFilters()" placeholder="name or email"></div>
+            <div><label class="ord-lbl">From</label>
+              <input class="form-input" id="ord-f-from" type="date" style="width:150px;" onchange="applyAdminOrderFilters()"></div>
+            <div><label class="ord-lbl">To</label>
+              <input class="form-input" id="ord-f-to" type="date" style="width:150px;" onchange="applyAdminOrderFilters()"></div>
+            <div><label class="ord-lbl">Price min</label>
+              <input class="form-input" id="ord-f-min" type="number" step="0.01" style="width:100px;" onkeydown="if(event.key==='Enter')applyAdminOrderFilters()"></div>
+            <div><label class="ord-lbl">Price max</label>
+              <input class="form-input" id="ord-f-max" type="number" step="0.01" style="width:100px;" onkeydown="if(event.key==='Enter')applyAdminOrderFilters()"></div>
+            <div><label class="ord-lbl">Tracking</label>
+              <input class="form-input" id="ord-f-tracking" style="width:160px;" onkeydown="if(event.key==='Enter')applyAdminOrderFilters()"></div>
+            <button class="btn btn-primary btn-sm" onclick="applyAdminOrderFilters()">Filter</button>
+            <button class="btn btn-sm" onclick="clearAdminOrderFilters()">Clear</button>
+          </div>
+          <!-- v3.0.790 -- TD-590. Styled like the Existing codes list on the Promo Codes tab: no
+               background, no boxes, rows separated by a rule. The previous version painted a dark
+               panel behind text coloured for a light theme, which is why it read as grey. -->
+          <div id="admin-orders-list" class="settings-section-desc" style="max-height:62vh;overflow-y:auto;margin-top:6px;"></div>
           <div id="admin-orders-status" class="muted" style="text-align:center;padding:14px;"></div>
         </div>
       </div>
