@@ -12539,13 +12539,25 @@ function adminOrderCard(o) {
   var links = '';
   var lnk = 'color:var(--crimson);text-decoration:underline;margin-right:10px;';
   if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Stripe</a>';
-  if (o.luluUrl) links += '<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Lulu</a>';
   if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="' + lnk + '">Track</a>';
   // The status carries the only colour that changes: gold for an order needing attention, crimson
   // for one that failed, muted otherwise. Same vocabulary the promo rows use for Active/Inactive.
   var statusColor = _bad ? 'var(--crimson)' : (_warn ? 'var(--gold)' : 'var(--text-muted)');
   var html =
+      // v3.0.793 -- TD-593. Ian: "list the Lulu order number alongside the Campaignia order number so
+      // I can see it in the list." It was only ever the LABEL of a link, so finding an order from a
+      // printer reference meant opening rows one at a time -- and reconciling po-7 against job
+      // 3006840 by hand is exactly the task this tab exists to remove.
+      // Both numbers side by side, and the printer's one IS the link, so nothing is said twice.
+      // An order with no job yet prints a dash rather than leaving a gap that reads as a fault.
       '<strong style="color:var(--gold);min-width:110px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<span style="min-width:150px;color:var(--text-muted);">Lulu ' +
+        (o.provider_order_id
+          ? (o.luluUrl
+              ? ('<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--crimson);text-decoration:underline;">' + esc(o.provider_order_id) + '</a>')
+              : esc(o.provider_order_id))
+          : '\u2014') +
+      '</span>' +
       '<span style="min-width:170px;">' + esc(o.book_title || o.order_name || o.campaign_name) + '</span>' +
       '<span style="min-width:110px;color:var(--text-muted);">' + esc(formatOrderDate(o.created_at)) + '</span>' +
       cell('', (o.user_name || '') + (o.user_email ? (' <' + o.user_email + '>') : '')) +
