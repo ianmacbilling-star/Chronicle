@@ -17312,6 +17312,8 @@ function renderStats(d) {
   }
   var html = '<div class="stats-list">';
   html += row('Total active users', d.active_users);
+  // v3.0.792 -- TD-592. First of the three windows, so the shortest is read first.
+  html += row('New users (last 5 days)', d.new_users_5);
   html += row('New users (last 30 days)', d.new_users_30);
   html += row('New users (last 90 days)', d.new_users_90);
   html += row('Moments generated (last 30 days)', d.moments_30);
@@ -17323,7 +17325,10 @@ function renderStats(d) {
   html += '</div>';
   var tiers = d.tier_counts || {};
   html += '<div class="stats-subhead">Users by tier</div><div class="stats-list">';
-  [['copper', 'Copper'], ['silver', 'Silver'], ['gold', 'Gold'], ['platinum', 'Platinum']].forEach(function (t) {
+  // v3.0.792 -- TD-592. Free Trial first: it is the tier everyone starts in, so it is the top of
+  // the funnel and reads oddly anywhere but the top. Labelled "Free Trial" rather than the raw
+  // key 'trial', which is the same fault the order card had with 'bwpremium'.
+  [['trial', 'Free Trial'], ['copper', 'Copper'], ['silver', 'Silver'], ['gold', 'Gold'], ['platinum', 'Platinum']].forEach(function (t) {
     html += row(t[1], (tiers[t[0]] === null || tiers[t[0]] === undefined) ? 0 : tiers[t[0]]);
   });
   html += '</div>';
@@ -18514,6 +18519,9 @@ function renderTrends(data) {
     { name: 'Tokens purchased', color: 'var(--gold)', points: data.tokens_purchased || [] }
   ]));
   html += trendBlock('Users by tier (weekly)', svgFromSeries([
+    // v3.0.792 -- TD-592. A muted green, chosen to sit apart from the four metal colours rather
+    // than compete with them -- trial is not a rung on the same ladder.
+    { name: 'Free Trial', color: '#7fa87f', points: tc.trial || [] },
     { name: 'Copper', color: '#c87f4a', points: tc.copper || [] },
     { name: 'Silver', color: '#b9c2cc', points: tc.silver || [] },
     { name: 'Gold', color: '#d8b84c', points: tc.gold || [] },

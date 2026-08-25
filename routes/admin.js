@@ -12,6 +12,16 @@ const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 
 const TIER_ORDER = ['copper', 'silver', 'gold', 'platinum', 'trial'];
+// v3.0.792 -- TD-592. THE TIER LIST WAS WRITTEN OUT THREE MORE TIMES, AND ALL THREE FORGOT TRIAL.
+// TIER_ORDER above has always included it -- the tier editor has been showing it since it was
+// added -- but /stats, runSnapshot and /trends each carried their own literal
+// { copper, silver, gold, platinum }, so free-trial users were counted nowhere and snapshotted
+// never. Derived from the one list now, so a sixth tier is one edit rather than four.
+function emptyTierMap(init) {
+  var out = {};
+  TIER_ORDER.forEach(function (t) { out[t] = (typeof init === 'function') ? init() : 0; });
+  return out;
+}
 
 // GET /api/admin/tier-config
 // Returns the EFFECTIVE (code defaults merged with DB overrides) value of
@@ -62,6 +72,9 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
     const q = function (sql) { return db.prepare(sql).get(); };
     const results = await Promise.all([
       q("SELECT COUNT(*) AS c FROM users WHERE status = 'active'"),
+      // v3.0.792 -- TD-592. Ian wants the recent window at the top of the tab. 30 and 90 days are
+      // both long enough that a quiet week disappears into them.
+      q("SELECT COUNT(*) AS c FROM users WHERE created_at >= NOW() - INTERVAL '5 days'"),
       q("SELECT COUNT(*) AS c FROM users WHERE created_at >= NOW() - INTERVAL '30 days'"),
       q("SELECT COUNT(*) AS c FROM users WHERE created_at >= NOW() - INTERVAL '90 days'"),
       q("SELECT COUNT(*) AS c FROM moments WHERE created_at >= NOW() - INTERVAL '30 days'"),
@@ -74,20 +87,24 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
     const n = function (r) { return (r && r.c != null) ? Number(r.c) : 0; };
     // Users per tier (all four represented, 0 if none).
     const tierRows = await db.prepare('SELECT tier, COUNT(*) AS c FROM users GROUP BY tier').all();
-    const tier_counts = { copper: 0, silver: 0, gold: 0, platinum: 0 };
+    const tier_counts = emptyTierMap();
     tierRows.forEach(function (row) {
       if (row && row.tier && Object.prototype.hasOwnProperty.call(tier_counts, row.tier)) tier_counts[row.tier] = Number(row.c);
     });
     res.json({
+      // v3.0.792 -- every index below shifted by one when the 5-day count was inserted at [1].
+      // Positional reads into a Promise.all are exactly the kind of thing that silently reports
+      // the wrong number, so the whole block is renumbered together rather than patched in place.
       active_users: n(results[0]),
-      new_users_30: n(results[1]),
-      new_users_90: n(results[2]),
-      moments_30: n(results[3]),
-      moments_90: n(results[4]),
-      fal_calls: n(results[5]),
-      active_campaigns: n(results[6]),
-      tokens_purchased_30: n(results[7]),
-      tokens_purchased_90: n(results[8]),
+      new_users_5: n(results[1]),
+      new_users_30: n(results[2]),
+      new_users_90: n(results[3]),
+      moments_30: n(results[4]),
+      moments_90: n(results[5]),
+      fal_calls: n(results[6]),
+      active_campaigns: n(results[7]),
+      tokens_purchased_30: n(results[8]),
+      tokens_purchased_90: n(results[9]),
       tier_counts: tier_counts
     });
   } catch (e) {
@@ -126,7 +143,9 @@ async function runSnapshot(db) {
   const weekStart = mondayOf(new Date());
   const active = await db.prepare("SELECT COUNT(*) AS c FROM users WHERE status = 'active'").get();
   const tierRows = await db.prepare('SELECT tier, COUNT(*) AS c FROM users GROUP BY tier').all();
-  const tierMap = { copper: 0, silver: 0, gold: 0, platinum: 0 };
+  // v3.0.792 -- TD-592. THIS is the one that mattered for Trends: a tier absent here is a tier
+  // with no history, so the chart line would exist and be empty however the client was written.
+  const tierMap = emptyTierMap();
   tierRows.forEach(function (r) {
     if (r && r.tier && Object.prototype.hasOwnProperty.call(tierMap, r.tier)) tierMap[r.tier] = Number(r.c);
   });
@@ -177,7 +196,7 @@ router.get('/trends', requireAuth, requireAdmin, async function (req, res) {
       "SELECT date_trunc('week', created_at)::date AS week_start, COALESCE(SUM(amount),0) AS value " +
       "FROM token_ledger WHERE event_type = 'purchase' AND created_at >= " + since + " GROUP BY week_start ORDER BY week_start"
     ).all();
-    const tier_counts = { copper: [], silver: [], gold: [], platinum: [] };
+    const tier_counts = emptyTierMap(function () { return []; });
     tierRows.forEach(function (r) {
       if (r && r.tier && tier_counts[r.tier]) tier_counts[r.tier].push({ week_start: r.week_start, value: Number(r.value) });
     });
