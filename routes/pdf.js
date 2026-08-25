@@ -7042,7 +7042,16 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and
     // 0.035in inside the trim on a paperback -- inside the cut tolerance. Missing from both books,
     // present on both proofs, which is exactly what a trimmed-off element looks like.
-    '.wc-spine-logo { position:absolute; left:50%; bottom:' + (0.16 + _extraY).toFixed(3) + 'in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
+    // v3.0.795 -- TD-595. LEVEL WITH THE TWO WORDMARKS, instead of jammed against the bottom edge.
+    // MEASURED off the v3.0.791 hardcover wrap: 0.16 put the logo 0.215in above the bottom trim
+    // edge, with the spine title centred at 6.4in and four and a half inches of empty spine
+    // between them. 791 stopped it falling off the board; it did not make the number right, and
+    // the number never was -- sheet-relative, 0.16in meant 0.035in inside the trim on a paperback,
+    // which is inside the cut tolerance. It was always falling off, just less visibly.
+    // 0.5 is not a taste: .wc-mark on BOTH panels sits at 0.5 + _extraY, so the spine logo, the
+    // back wordmark and the front wordmark now land on one line across the whole wrap. Sharing the
+    // constant with the thing it lines up with is what stops the two drifting apart later.
+    '.wc-spine-logo { position:absolute; left:50%; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; }' +
     COVER_HAZE_CSS +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
