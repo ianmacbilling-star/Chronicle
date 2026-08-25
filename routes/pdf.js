@@ -6899,6 +6899,56 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
   var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
 
+  // v3.0.791 -- TD-591. THE FRAME WAS MEASURED FROM THE SHEET, AND THE SHEET IS NOT THE BOOK.
+  //
+  // Ian, 2026-08-25, holding both books: on the HARDBACK the frame lines barely make it onto the
+  // cover, the inner line sits right at the top and bottom edge, and the word CAMPAIGNIA cannot be
+  // seen at all because it wraps around the binding. The paperback is fine. Neither book shows the
+  // spine logo, though both PROOFS do.
+  //
+  // ONE CAUSE, THREE SYMPTOMS. Every inset below was a constant measured from the edge of the
+  // printed sheet, and the sheet carries a different allowance per binding:
+  //   paperback  bleed 0.125in  ->  a 0.5in inset lands 0.375in INSIDE the trim. Visible.
+  //   hardcover  wrap  0.875in  ->  the same 0.5in lands 0.375in OUTSIDE it. On the fold.
+  // The 0.875 is not a guess: computeCoverDims records Lulu correcting us from 0.750 to 0.875 for
+  // exactly this trim. .wc-mark at bottom:0.5in and .wc-spine-logo at bottom:0.16in are the same
+  // arithmetic, which is why the wordmark went round the board and the spine logo went with it.
+  // On the PAPERBACK the spine logo sat 0.035in inside the trim -- inside the cut tolerance -- so it
+  // was trimmed off there too. Both books, one fault.
+  //
+  // NOTHING HERE IS A CONSTANT. The allowance is derived from the sheet Lulu returned against the
+  // trim we asked for, so it is exact for any trim size, page count or binding, and a future
+  // casewrap with a different wrap needs no edit.
+  var _trimW = Number(spec.trimWidthIn) || 8.5;
+  var _trimH = Number(spec.trimHeightIn) || 11;
+  var _wrapY = Math.max(0, (H - _trimH) / 2);
+  var _wrapX = Math.max(0, sideW - _trimW);
+  // The insets below were authored against a 0.125in bleed, so only the DIFFERENCE is added --
+  // otherwise a correct paperback would move for no reason.
+  var _designBleed = 0.125;
+  // Ian: "if you want to add an 8th inch safety to that I think that would be better than a full
+  // quarter. But yes make that tunable." A book is expensive to get wrong and cheap to inset.
+  var _safe = Number(process.env.COVER_SAFE_MARGIN_IN);
+  if (!Number.isFinite(_safe) || _safe < 0 || _safe > 0.5) _safe = 0.125;
+  var _extraY = Math.max(0, _wrapY - _designBleed) + _safe;
+  var _extraX = Math.max(0, _wrapX - _designBleed) + _safe;
+  // THE SPINE SIDE GETS NOTHING. The inner edge of each panel is the hinge; it has no wrap, and
+  // insetting it would pull the artwork away from the spine for no reason. So the frames are
+  // asymmetric: outer, top and bottom move, the spine edge stays put.
+  function _insetCss(base, backPanel) {
+    var t = (base + _extraY).toFixed(3) + 'in';
+    var outer = (base + _extraX).toFixed(3) + 'in';
+    var inner = base.toFixed(3) + 'in';
+    // On the BACK panel the spine is on the RIGHT; on the FRONT it is on the LEFT.
+    return backPanel ? (t + ' ' + inner + ' ' + t + ' ' + outer)
+                     : (t + ' ' + outer + ' ' + t + ' ' + inner);
+  }
+  try {
+    console.log('[cover-frame] ' + spec.binding + ' sheet ' + W.toFixed(3) + 'x' + H.toFixed(3) +
+      'in, trim ' + _trimW + 'x' + _trimH + ', wrap x=' + _wrapX.toFixed(3) + ' y=' + _wrapY.toFixed(3) +
+      ', safety ' + _safe + ' -> pulled in x+' + _extraX.toFixed(3) + ' y+' + _extraY.toFixed(3));
+  } catch (e) {}
+
   var framing = '<div class="wc-bg"></div><div class="wc-border"></div><div class="wc-border-inner"></div>';
   var mark = '<div class="wc-mark">CAMPAIGNIA</div>';
   var frontInner = frontImg
@@ -6973,18 +7023,26 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-spine { left:' + sideW + 'in; width:' + spineW + 'in; display:flex; align-items:center; justify-content:center; background:#0a0604; border-left:1px solid rgba(201,168,76,0.18); border-right:1px solid rgba(201,168,76,0.18); }' +
     '.wc-img, .cover-art-img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }' +
     '.wc-bg { position:absolute; inset:0; background:radial-gradient(ellipse at center, #3a2010 0%, #0a0604 70%); }' +
-    '.wc-border { position:absolute; inset:0.5in; border:2px solid rgba(201,168,76,0.4); pointer-events:none; }' +
-    '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
-    '.wc-frame { position:absolute; inset:0.8in; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
+    // v3.0.791 -- TD-591. Per panel, because the spine-side edge has no wrap to clear.
+    '.wc-front .wc-border { position:absolute; inset:' + _insetCss(0.5, false) + '; border:2px solid rgba(201,168,76,0.4); pointer-events:none; }' +
+    '.wc-back  .wc-border { position:absolute; inset:' + _insetCss(0.5, true)  + '; border:2px solid rgba(201,168,76,0.4); pointer-events:none; }' +
+    '.wc-front .wc-border-inner { position:absolute; inset:' + _insetCss(0.6, false) + '; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
+    '.wc-back  .wc-border-inner { position:absolute; inset:' + _insetCss(0.6, true)  + '; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
+    '.wc-front .wc-frame { position:absolute; inset:' + _insetCss(0.8, false) + '; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
+    '.wc-back  .wc-frame { position:absolute; inset:' + _insetCss(0.8, true)  + '; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
     '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
     // v3.0.699 -- the same rule for the POD wrap, so the printed cover and the preview agree
     // about what a cover with no picture looks like. Two answers to that question is how the
     // proof and the book end up different objects.
     '.wc-frame.no-art { border:none; background:transparent; box-shadow:none; }' +
-    '.wc-mark { position:absolute; left:50%; bottom:0.5in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
+    // v3.0.791 -- TD-591. Sits ON the inner border line, so it rises with it or it is orphaned.
+    '.wc-mark { position:absolute; left:50%; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
-    '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
+    // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and
+    // 0.035in inside the trim on a paperback -- inside the cut tolerance. Missing from both books,
+    // present on both proofs, which is exactly what a trimmed-off element looks like.
+    '.wc-spine-logo { position:absolute; left:50%; bottom:' + (0.16 + _extraY).toFixed(3) + 'in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; }' +
     COVER_HAZE_CSS +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +

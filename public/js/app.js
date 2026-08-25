@@ -12539,13 +12539,25 @@ function adminOrderCard(o) {
   var links = '';
   var lnk = 'color:var(--crimson);text-decoration:underline;margin-right:10px;';
   if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Stripe</a>';
-  if (o.luluUrl) links += '<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Lulu</a>';
   if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="' + lnk + '">Track</a>';
   // The status carries the only colour that changes: gold for an order needing attention, crimson
   // for one that failed, muted otherwise. Same vocabulary the promo rows use for Active/Inactive.
   var statusColor = _bad ? 'var(--crimson)' : (_warn ? 'var(--gold)' : 'var(--text-muted)');
   var html =
+      // v3.0.793 -- TD-593. Ian: "list the Lulu order number alongside the Campaignia order number so
+      // I can see it in the list." It was only ever the LABEL of a link, so finding an order from a
+      // printer reference meant opening rows one at a time -- and reconciling po-7 against job
+      // 3006840 by hand is exactly the task this tab exists to remove.
+      // Both numbers side by side, and the printer's one IS the link, so nothing is said twice.
+      // An order with no job yet prints a dash rather than leaving a gap that reads as a fault.
       '<strong style="color:var(--gold);min-width:110px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<span style="min-width:150px;color:var(--text-muted);">Lulu ' +
+        (o.provider_order_id
+          ? (o.luluUrl
+              ? ('<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--crimson);text-decoration:underline;">' + esc(o.provider_order_id) + '</a>')
+              : esc(o.provider_order_id))
+          : '\u2014') +
+      '</span>' +
       '<span style="min-width:170px;">' + esc(o.book_title || o.order_name || o.campaign_name) + '</span>' +
       '<span style="min-width:110px;color:var(--text-muted);">' + esc(formatOrderDate(o.created_at)) + '</span>' +
       cell('', (o.user_name || '') + (o.user_email ? (' <' + o.user_email + '>') : '')) +
@@ -17312,6 +17324,8 @@ function renderStats(d) {
   }
   var html = '<div class="stats-list">';
   html += row('Total active users', d.active_users);
+  // v3.0.792 -- TD-592. First of the three windows, so the shortest is read first.
+  html += row('New users (last 5 days)', d.new_users_5);
   html += row('New users (last 30 days)', d.new_users_30);
   html += row('New users (last 90 days)', d.new_users_90);
   html += row('Moments generated (last 30 days)', d.moments_30);
@@ -17323,7 +17337,10 @@ function renderStats(d) {
   html += '</div>';
   var tiers = d.tier_counts || {};
   html += '<div class="stats-subhead">Users by tier</div><div class="stats-list">';
-  [['copper', 'Copper'], ['silver', 'Silver'], ['gold', 'Gold'], ['platinum', 'Platinum']].forEach(function (t) {
+  // v3.0.792 -- TD-592. Free Trial first: it is the tier everyone starts in, so it is the top of
+  // the funnel and reads oddly anywhere but the top. Labelled "Free Trial" rather than the raw
+  // key 'trial', which is the same fault the order card had with 'bwpremium'.
+  [['trial', 'Free Trial'], ['copper', 'Copper'], ['silver', 'Silver'], ['gold', 'Gold'], ['platinum', 'Platinum']].forEach(function (t) {
     html += row(t[1], (tiers[t[0]] === null || tiers[t[0]] === undefined) ? 0 : tiers[t[0]]);
   });
   html += '</div>';
@@ -18514,6 +18531,9 @@ function renderTrends(data) {
     { name: 'Tokens purchased', color: 'var(--gold)', points: data.tokens_purchased || [] }
   ]));
   html += trendBlock('Users by tier (weekly)', svgFromSeries([
+    // v3.0.792 -- TD-592. A muted green, chosen to sit apart from the four metal colours rather
+    // than compete with them -- trial is not a rung on the same ladder.
+    { name: 'Free Trial', color: '#7fa87f', points: tc.trial || [] },
     { name: 'Copper', color: '#c87f4a', points: tc.copper || [] },
     { name: 'Silver', color: '#b9c2cc', points: tc.silver || [] },
     { name: 'Gold', color: '#d8b84c', points: tc.gold || [] },
