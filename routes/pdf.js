@@ -4217,12 +4217,69 @@ async function lastOptimizedAny(req, campaignId) {
     return best;
   } catch (e) { return null; }
 }
+// v3.0.801 -- TD-611. THE CLIENT IS NO LONGER ASKED WHAT IS ON SCREEN.
+//
+// Ian, still seeing two different answers on one screen after v3.0.800: the publish card said
+// Sessions AND Layout AND Title and cover; the order tab said Sessions only. v3.0.800 fixed an
+// ABSENT co being read as the defaults. This one is a co that is PRESENT and WRONG.
+//
+// WHY IT KEEPS HAPPENING. `customOpts` on the client starts as CUSTOM_LAYOUT_DEFAULTS and is
+// replaced when `loadCampaignLayoutOpts` -> `applyCampaignLayoutOpts` returns from the DB. Anything
+// that asks in that window sends a real, complete, WRONG options string. The publish card asks from
+// `updateNovelPublishGuard`, which fires on version-picker refreshes; the order tab asks later. Two
+// surfaces, two moments, two answers -- and chasing the right MOMENT on the client is how this
+// recurs a third time.
+//
+// SO STOP ASKING IT. `applyCampaignLayoutOpts` gets the layout from `meta.layout_opts`, which is the
+// fork_book_prefs blob -- a thing this server can read directly, at the moment of the question, with
+// no timing to lose. The comparison is now server-against-server: the co recorded when the book was
+// saved, against the layout stored for this fork right now.
+//
+// AND WHEN IT CANNOT BE READ CONFIDENTLY, IT IS NOT GUESSED. An unrecognised blob, or a layout that
+// is not active, returns null and the options are simply not compared -- v3.0.800's rule, that not
+// knowing must be reported as nothing rather than as a difference.
+//
+// Mirrors _normalizeLayoutBlob in public/js/app.js, including the legacy {opts:{session,novel}}
+// shape. The client normalisation stays where it is; this is the same question asked by the server,
+// not a second implementation of a client behaviour -- if the shapes ever diverge, the guard below
+// notices, because a blob it does not recognise turns the comparison off rather than on.
+function storedLayoutCo(prefs) {
+  try {
+    var blob = prefs && prefs.layout_opts;
+    if (typeof blob === 'string') { try { blob = JSON.parse(blob); } catch (e) { return null; } }
+    if (!blob || typeof blob !== 'object') return null;
+    var o = blob.opts, a = blob.active;
+    if (o && typeof o === 'object' && (o.session || o.novel)) {
+      var act = (a && typeof a === 'object') ? !!(a.novel || a.session) : !!a;
+      if (!act) return null;
+      o = o.novel || o.session || {};
+    } else {
+      if (!a) return null;          // no custom layout is active: nothing to compare against
+      o = o || {};
+    }
+    if (typeof o !== 'object') return null;
+    var parts = [];
+    for (var k in o) { if (Object.prototype.hasOwnProperty.call(o, k)) parts.push(k + ':' + o[k]); }
+    if (!parts.length) return null;
+    return parts.join(',');
+  } catch (e) { return null; }
+}
 async function resolveBookMismatch(req, campaignId, coStr) {
   var none = { saved: false, sessions: false, layout: false, titlecover: false, any: false, categories: [], optionsChecked: false };
   try {
-    var co = coStr ? parseCustomOpts(coStr) : null;
-    var lo = co ? await lastOptimizedEntry(req, campaignId, co.arrange)
-                : await lastOptimizedAny(req, campaignId);
+    var db0 = await getDb();
+    var _sc = await bookPrefsScope(db0, req, campaignId);
+    // The layout the RENDER would use, read with inherit:true exactly as every other reader of
+    // these prefs does (getForkBookPrefs, TD-440).
+    var _layoutPrefs = await getForkBookPrefs(db0, _sc.chooser, _sc.fork, campaignId, { inherit: true, versionId: _sc.versionId });
+    var nowCo = storedLayoutCo(_layoutPrefs);
+    // The bucket: the stored layout's arrange first, the caller's hint second, and only then the
+    // most recently saved entry whatever it was arranged as.
+    var _arr = null;
+    if (nowCo) { try { _arr = parseCustomOpts(nowCo).arrange; } catch (e) { _arr = null; } }
+    if (!_arr && coStr) { try { _arr = parseCustomOpts(coStr).arrange; } catch (e) { _arr = null; } }
+    var lo = _arr ? await lastOptimizedEntry(req, campaignId, _arr)
+                  : await lastOptimizedAny(req, campaignId);
     // Nothing saved means nothing to differ FROM. optimize_required already covers that case and
     // says something far more useful than "everything is different".
     if (!lo) return none;
@@ -4237,7 +4294,7 @@ async function resolveBookMismatch(req, campaignId, coStr) {
     var _bv = await resolveBookVersion(db, campaign.id, req);
     var incMap = await effectiveIncludeMap(db, campaign.id, asUser,
       _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-    var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, coStr);
+    var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, nowCo);
     m.saved = true;
     // THE LOG CARRIES THE DETAIL THE MESSAGE DELIBERATELY DOES NOT. Ian: "don't give too many
     // details" ON SCREEN. When two surfaces disagreed there was nothing to read afterwards, so the
@@ -4248,7 +4305,8 @@ async function resolveBookMismatch(req, campaignId, coStr) {
         console.warn('[book-mismatch] campaign ' + campaignId + ' -> ' + m.categories.join('; ') +
           (m.optionsChecked ? '' : ' (options NOT compared: the request carried no co)') +
           ' | approved inc: ' + (lo.inc || '(none)') + ' | now: ' + includeFingerprint(incMap) +
-          ' | approved co: ' + (lo.co || '(none)') + ' | now co: ' + (coStr || '(none)') +
+          ' | approved co: ' + (lo.co || '(none)') + ' | stored co: ' + (nowCo || '(none, or no active layout)') +
+          ' | the caller sent: ' + (coStr || '(none)') +
           (m.keys && m.keys.length ? ' | differing keys: ' + m.keys.join(', ') : ''));
       } catch (_e) {}
     }

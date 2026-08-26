@@ -22121,9 +22121,12 @@ function finalizeLoadFixOptionsNow() {
               // Ian: "just tell them it doesn't match, not what to do about it." Until TD-597
               // persists the run state there IS no reliable instruction to give, and inventing one
               // sends people round a loop that returns them here.
-              optimizeLogLine('<strong>Edit may be describing a different version of this book.</strong> ' +
-                'The book on screen has ' + _finalizeAfterPages + ' pages and the layout behind the Edit ' +
-                'buttons makes ' + _planned + '.', 'stop');
+              // v3.0.801 -- TD-611. Ian's wording: name the Prep & Preview tab and drop the jargon.
+              // "Edit may be describing" and "the layout behind the Edit buttons" both asked the
+              // reader to know which internal thing was meant. The selections are what they set.
+              optimizeLogLine('<strong>The selections on the Prep &amp; Preview tab describe a different ' +
+                'version of this book.</strong> The book on screen has ' + _finalizeAfterPages +
+                ' pages and those selections make ' + _planned + '.', 'stop');
             }
           } else {
             _fixOffsetSuspect = null; _fixOffsetSaid = '';
@@ -22285,9 +22288,10 @@ function finalizeOpenFixDialog(viewerPage) {
       'border:1px solid rgba(176,125,30,0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
       // v3.0.799 -- TD-609. Same removal as the run-log line above, for the same reason: this
       // banner carried the identical instruction and it cannot do what it promises (TD-597).
-      '<strong>This may not be the page you are looking at.</strong> The book on screen has ' +
-      _fixOffsetSuspect.rendered + ' pages and the layout behind these options makes ' +
-      _fixOffsetSuspect.planned + ', so they may describe a different page.</div>';
+      // v3.0.801 -- TD-611. Same wording change as the run-log line, same reason.
+      '<strong>The selections on the Prep &amp; Preview tab describe a different version of this ' +
+      'book.</strong> The book on screen has ' + _fixOffsetSuspect.rendered + ' pages and those ' +
+      'selections make ' + _fixOffsetSuspect.planned + ', so these options may describe a different page.</div>';
   }
   h += '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
