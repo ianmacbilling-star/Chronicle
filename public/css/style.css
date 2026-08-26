@@ -2152,6 +2152,12 @@ html.staging-env .app-logo-text{color:#2b1400;}
 @media (max-width: 640px) {
   .app-header { padding: 0 0.75rem; gap: 8px; }
   .app-logo-text { display: none; }            /* keep just the logo mark */
+  /* v3.0.796 -- TD-600. THE BUILD STAMP NEVER APPEARS ON A PHONE, admin or not. Ian: it takes up
+     too much space on mobile. It lives inside .app-logo beside the wordmark, and the wordmark
+     itself is already hidden one line up -- the header has no room to spare.
+     !important is LOAD-BEARING: the /version handler in app.html reveals the stamp with
+     `el.style.display = 'inline'`, an INLINE style, which a plain rule cannot beat. */
+  #build-stamp { display: none !important; }
   #user-name { display: none; }                /* avatar-only menu button */
   #header-campaigns-btn { display: none; }      /* still reachable via the breadcrumb */
   .app-header-right { gap: 7px; }

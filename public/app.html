@@ -602,7 +602,11 @@
                     <div class="ord-f2">
                       <!-- v3.0.785 -- TD-586. Shorter, and "color" to match the options it describes:
                            v3.0.784 wrote "colour" here while the dropdown says "Premium color". -->
-                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(premium recommended)</span></label>
+                      <!-- v3.0.796 -- TD-605. "(premium recommended)" recommended a choice against an
+                           alternative that no longer exists: both standard grades came off the picker
+                           because Lulu's own upload form warns that Standard cannot hold this much ink.
+                           A hint that describes a decision the reader cannot make is noise. -->
+                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(color or black &amp; white)</span></label>
                       <!-- v3.0.784 -- TD-585. Changing the ink changes which PAPERS exist, so this
                            has to rebuild the option lists as well as re-price. printOptionsChanged
                            does both, in that order, because pricing a paper that is about to be
@@ -2882,7 +2886,7 @@
     fetch('/version', { cache: 'no-store' })
       .then(function(r){ return r.json(); })
       .then(function(v){
-        if (!v || !v.show) return;   // admins / debug-mode users only
+        if (!v || !v.show) return;   // v3.0.796 -- TD-600: admins and TESTERS only, decided server-side
         var el = document.getElementById('build-stamp');
         if (!el) return;
         el.textContent = 'v' + (v.version || '?') + (v.env && v.env !== 'production' ? ' \u00b7 ' + v.env : '');

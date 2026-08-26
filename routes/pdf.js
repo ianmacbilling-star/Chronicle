@@ -6943,6 +6943,35 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     return backPanel ? (t + ' ' + inner + ' ' + t + ' ' + outer)
                      : (t + ' ' + outer + ' ' + t + ' ' + inner);
   }
+  // v3.0.796 -- TD-604. THE FRAME MOVED AND THE WORDMARK DID NOT.
+  //
+  // Ian, holding the hardcover: "the word Campaignia in the frame at the bottom of the front and
+  // back cover is off center a little... when we adjusted the cover dimensions it moved it."
+  //
+  // MEASURED on the v3.0.795 paperback render, not eyeballed: the back panel's border line runs
+  // x 62 -> 812 px at 100dpi, centre 437.5, and the CAMPAIGNIA knockout centres at 431.0. The
+  // front panel's border runs 942 -> 1691, centre 1316.8, knockout centre 1323.0. Both are out by
+  // 6.4px = 0.064in, OUTWARD, and _extraX/2 is 0.0625.
+  //
+  // THE CAUSE IS THAT _insetCss IS DELIBERATELY ASYMMETRIC. TD-591 pulls the outer, top and bottom
+  // edges in by the wrap allowance and leaves the SPINE edge alone, because the hinge has no wrap
+  // to clear. So the border box is no longer centred in its panel -- its centre sits _extraX/2
+  // toward the spine -- while .wc-mark was still left:50%, centred on the PANEL. The word is
+  // centred on the wrong box, and has been since the geometry changed underneath it.
+  //
+  // IT IS SEVEN TIMES WORSE ON A CASEWRAP, which is why it took a printed hardcover to see. On the
+  // paperback _extraX is 0.125 and the error is 0.063in; on the hardcover _extraX is 0.875 and the
+  // error is 0.438in -- nearly half an inch off the centre of the frame it is supposed to sit on.
+  //
+  // DERIVED FROM _extraX, NOT RE-MEASURED. The border's left/right insets and this offset are the
+  // same one variable read twice, so a future trim size or binding moves both together. Writing a
+  // second constant here is exactly how the 0.5in and 0.16in in TD-591 went stale.
+  function _markLeftCss(backPanel) {
+    // Back panel: spine on the RIGHT, so the border's centre is to the RIGHT of the panel's.
+    // Front panel: spine on the LEFT, so it is to the LEFT. Same magnitude, opposite sign.
+    var d = (_extraX / 2).toFixed(4);
+    return 'calc(50% ' + (backPanel ? '+ ' : '- ') + d + 'in)';
+  }
   try {
     console.log('[cover-frame] ' + spec.binding + ' sheet ' + W.toFixed(3) + 'x' + H.toFixed(3) +
       'in, trim ' + _trimW + 'x' + _trimH + ', wrap x=' + _wrapX.toFixed(3) + ' y=' + _wrapY.toFixed(3) +
@@ -7036,7 +7065,11 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // proof and the book end up different objects.
     '.wc-frame.no-art { border:none; background:transparent; box-shadow:none; }' +
     // v3.0.791 -- TD-591. Sits ON the inner border line, so it rises with it or it is orphaned.
-    '.wc-mark { position:absolute; left:50%; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
+    // v3.0.796 -- TD-604. And CENTRED ON THAT LINE rather than on the panel: the line is asymmetric
+    // (see _markLeftCss above) and left:50% put the word 0.44in off centre on a casewrap.
+    '.wc-mark { position:absolute; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
+    '.wc-front .wc-mark { left:' + _markLeftCss(false) + '; }' +
+    '.wc-back  .wc-mark { left:' + _markLeftCss(true)  + '; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
     // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and

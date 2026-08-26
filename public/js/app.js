@@ -19336,6 +19336,26 @@ function refreshPrintOptions(pageCount) {
       // indistinguishable afterwards, so nobody can be told they lost something.
       var _wasColor = c ? c.value : '';
       var _wasPaper = pp ? pp.value : '';
+      // v3.0.796 -- TD-601. THE OTHER TWO SELECTS WERE NEVER REMEMBERED, AND HARDCOVER COULD NOT SURVIVE.
+      //
+      // Ian: "I chose hard cover and it switched it." Confirmed, and it is not intermittent.
+      // v3.0.784 wrote the remember-and-restore above for colour and paper and stopped there, so
+      // fill(b, ...) below wiped the binding and the select landed on its FIRST option. For any book
+      // over 48 pages that list is [paperback, hardcover] -- so Hardcover reverted to Paperback on
+      // every refresh, and refreshPrintOptions runs when the Order tab learns the page count AND on
+      // every printOptionsChanged. Picking hardcover and then touching Interior Printing was enough.
+      //
+      // THE GUARD BELOW COULD NEVER HAVE CAUGHT IT. `if (b && o.default.binding && !b.value)` tests
+      // for an empty value, and a <select> that has options always has one -- the first. So the
+      // branch meant to restore a default was skipped while the value it was guarding had already
+      // been silently replaced.
+      //
+      // WHAT IT COST: reviewPrintOrder read the form, rendered the interior, and read it AGAIN for
+      // the cover. Between those two reads the binding reverted -- so a hardcover order was placed
+      // with a PAPERBACK cover sheet, 17.54 x 11.25 where Lulu wanted 19.25 x 12.75, and the only
+      // thing that caught it was Lulu's own upload form.
+      var _wasBinding = b ? b.value : '';
+      var _wasFinish = f ? f.value : '';
       fill(b, o.bindings);
       fill(c, o.colorTiers);
       fill(f, o.coverFinishes);
@@ -19356,12 +19376,40 @@ function refreshPrintOptions(pageCount) {
         var _colorStillOffered = !!(o.colorTiers || []).filter(function (x) { return x.id === _wasColor; }).length;
         if (_colorStillOffered) c.value = _wasColor;
       }
+      // v3.0.796 -- TD-601. The binding, restored the same way -- and SPOKEN ABOUT when it cannot be.
+      // A binding can genuinely stop being available: the page count crosses saddle stitch's 48-page
+      // ceiling, or probeCoverBindings finds Lulu will not size a cover for it. That is a real
+      // change and the reader has to be told, because a silently swapped binding is a different
+      // book at a different price with a differently sized cover.
+      if (b && _wasBinding) {
+        var _bindingStillOffered = !!(o.bindings || []).filter(function (x) { return x.id === _wasBinding; }).length;
+        if (_bindingStillOffered) {
+          b.value = _wasBinding;
+        } else {
+          var _newB = (o.bindings || []).filter(function (x) { return x.id === b.value; })[0] || (o.bindings || [])[0];
+          try {
+            showPrintBtnMsg('Your binding is now ' + ((_newB && _newB.label) || b.value) +
+              '. The one you had chosen is not available for a book this length.', 'info');
+          } catch (e) {}
+        }
+      }
+      // The finish list does not vary today, but it is rebuilt from scratch like the rest, so it is
+      // remembered for the same reason. Silence is right here: nothing can remove a finish, so a
+      // lost value would be a bug rather than a product fact.
+      if (f && _wasFinish) {
+        var _finishStillOffered = !!(o.coverFinishes || []).filter(function (x) { return x.id === _wasFinish; }).length;
+        if (_finishStillOffered) f.value = _wasFinish;
+      }
       // v3.0.784 -- TD-585. Defaults apply only where nothing was chosen. This used to run
       // unconditionally, straight over the values restored above.
       if (o.default) {
-        if (b && o.default.binding && !b.value) b.value = o.default.binding;
+        // v3.0.796 -- TD-601. TESTED AGAINST WHAT WAS CHOSEN, not against .value. A <select> holding
+        // options always reports a value -- its first one -- so `!b.value` and `!f.value` were false
+        // the instant fill() ran and these two branches were unreachable. The colour and paper lines
+        // beside them already tested the remembered value, which is why only these two drifted.
+        if (b && o.default.binding && !_wasBinding) b.value = o.default.binding;
         if (c && o.default.colorTier && !_wasColor) c.value = o.default.colorTier;
-        if (f && o.default.coverFinish && !f.value) f.value = o.default.coverFinish;
+        if (f && o.default.coverFinish && !_wasFinish) f.value = o.default.coverFinish;
         if (pp && o.default.paper && !_wasPaper) pp.value = o.default.paper;
       }
       // v3.0.665 -- TD-464. LAST, because these lists were just rebuilt and the defaults above are
@@ -19530,12 +19578,20 @@ function printInteriorUrl() {
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
-function printCoverUrl() {
+function printCoverUrl(selOverride) {
   // The wrap cover is sized to the chosen format (binding + page count drive
   // the spine), so it carries the format selection + page count, plus co for
   // the Platinum hide-logo flag, plus as_user so a member's own cover art is used.
-  var sel = printSelectionBody();
-  var s = (sel && sel.selection) || {};
+  // v3.0.796 -- TD-601. TAKE THE SELECTION, DO NOT GO AND READ IT AGAIN.
+  //
+  // reviewPrintOrder read the form three times at three different moments -- once for the order
+  // body, once here after the interior had rendered, and once more in renderPrintReview for the
+  // summary line. Anything that reset a control in between (and refreshPrintOptions did exactly
+  // that, on the page count landing) put a PAPERBACK cover on a HARDCOVER order, with the summary
+  // free to disagree with both. Fixing the reset is TD-601's other half; this is what stops the
+  // same class of drift from any future cause, because one read cannot disagree with itself.
+  // Still falls back to reading the form, for callers that have no selection in hand.
+  var s = selOverride || ((printSelectionBody() || {}).selection) || {};
   var pc = currentPageCount();
   return '/api/pdf/print-cover/' + state.currentCampaign.id +
     '?binding=' + encodeURIComponent(s.binding || '') +
@@ -19578,7 +19634,7 @@ function reviewPrintOrder() {
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
-      return runRenderJob(printCoverUrl(), 'print-cover', function (secs) {
+      return runRenderJob(printCoverUrl(body.selection), 'print-cover', function (secs) {
         try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
       });
     })
@@ -19638,14 +19694,29 @@ function renderPrintReview(body, quote) {
       '<span style="color:rgba(245,232,200,0.55);">' + escapeHtmlPrint(label) + '</span>' +
       '<span style="color:var(--cream);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
   }
-  function lbl(id) { var el = document.getElementById(id); return (el && el.options && el.options[el.selectedIndex]) ? el.options[el.selectedIndex].text : ''; }
+  // v3.0.796 -- TD-601. NAME THE VALUE BEING ORDERED, not whatever the control says now.
+  // lbl() reads the live <select>, so this line described the form at render time rather than the
+  // selection inside `body` -- the one that is actually being priced and printed. When the two
+  // disagreed the summary sided with the form, which is the surface least likely to be right.
+  // Falls back to the raw value so an unmatched option prints something true rather than nothing.
+  function lblFor(id, value) {
+    if (!value) return '';
+    var el = document.getElementById(id);
+    if (el && el.options) {
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === value) return el.options[i].text;
+      }
+    }
+    return String(value);
+  }
   var versionTxt = (document.getElementById('print-version-display') || {}).value || (state.novelAsUser ? 'Player version' : 'Canonical');
   var ship = body.shipTo;
   var addr = [ship.name, ship.street1, ship.street2, [ship.city, ship.stateCode, ship.postcode].filter(Boolean).join(' '), ship.countryCode].filter(Boolean).join(', ');
   var html = '';
   html += row('Order name', body.orderName || '(none)');
   html += row('Version', versionTxt);
-  html += row('Format', [lbl('print-binding'), lbl('print-color'), lbl('print-finish')].filter(Boolean).join(', '));
+  var _fmt = (body && body.selection) || {};
+  html += row('Format', [lblFor('print-binding', _fmt.binding), lblFor('print-color', _fmt.colorTier), lblFor('print-finish', _fmt.coverFinish)].filter(Boolean).join(', '));
   html += row('Quantity', String(body.quantity));
   html += row('Ship to', addr);
   html += row('Shipping', body.shippingLevel);
