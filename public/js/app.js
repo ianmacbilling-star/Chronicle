@@ -6984,11 +6984,61 @@ function canEditFork() {
 // defaults to their OWN version; the SM defaults to the canonical book. Publishing
 // is always your own (enforced server-side); updateNovelPublishGuard keeps the
 // Publish button disabled unless you are viewing your own version.
+// v3.0.798 -- TD-608. ONE RENDERER, THREE PLACES.
+//
+// Ian, 2026-08-26: "The book you are about to publish doesn't match the book loaded in the
+// Prep & Preview tab. You can list what doesn't match... don't give too many details but just say
+// Sessions don't match, or Layout options don't match or Title and cover options don't match...
+// Then just say you can reoptimize or continue with the publish."
+//
+// The server decides the CATEGORIES (routes/pdf.js bookMismatch) and this only renders them. Two
+// copies of the bucketing rule -- one deciding, one describing -- is the DERIVE DO NOT PAIR fault
+// this codebase keeps re-finding, so the client is deliberately given no opinion about what a
+// category means.
+//
+// NOTHING IT SITS BESIDE IS EVER DISABLED.
+function bookMismatchHtml(m, verb) {
+  if (!m || !m.any || !m.categories || !m.categories.length) return '';
+  var items = m.categories.map(function (c) {
+    return '<li>' + escapeHtmlPrint(c) + '</li>';
+  }).join('');
+  return '<b>The book you are about to ' + escapeHtmlPrint(verb) +
+    ' doesn\u2019t match the book loaded in the Prep &amp; Preview tab.</b>' +
+    '<ul>' + items + '</ul>' +
+    '<div class="bm-foot">You can re-optimize, or continue with the ' + escapeHtmlPrint(verb) + '.</div>';
+}
+function renderBookMismatch(elId, m, verb) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var html = bookMismatchHtml(m, verb);
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
+}
+// Asked BEFORE the publish, not reported after it -- a POST to publish-story has already put the
+// book on the Library by the time it answers. Never throws and never blocks: a failed check hides
+// the notice rather than inventing one.
+function refreshPublishMismatch() {
+  var el = document.getElementById('book-mismatch-publish');
+  if (!el || !state.currentCampaign) return;
+  var _qs = [];
+  var _au = novelAsUserQ('');            // '' or 'as_user=..&as_version=..'
+  if (_au) _qs.push(_au);
+  var _co = customOptsQ('novel', '');    // '' or 'co=..'
+  if (_co) _qs.push(_co);
+  var url = '/api/pdf/book-mismatch/' + state.currentCampaign.id + (_qs.length ? ('?' + _qs.join('&')) : '');
+  fetch(url, { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) { renderBookMismatch('book-mismatch-publish', m, 'publish'); })
+    .catch(function () { renderBookMismatch('book-mismatch-publish', null, 'publish'); });
+}
 function updateNovelPublishGuard() {
   var btn = document.getElementById('novel-publish-btn');
   if (!btn) return;
   var ownView = novelOwnView();
   var st = document.getElementById('novel-publish-status');
+  // v3.0.798 -- TD-608. This runs whenever the publish card is (re)shown or the version changes,
+  // which is exactly when the answer could differ, so it is the right hook and needs no new one.
+  try { refreshPublishMismatch(); } catch (e) {}
   if (ownView) {
     btn.disabled = false;
     if (st && st.dataset && st.dataset.guard) { st.style.display = 'none'; st.textContent = ''; delete st.dataset.guard; }
@@ -18642,7 +18692,7 @@ var printNovelInfo = null;
 // We render once (on tab open), cache it by the interior URL, and reuse that
 // same file at Place Order so we never render twice for the same book.
 var printActualPages = 0;
-var printInteriorCache = { key: '', url: '', pages: 0 };
+var printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
 
 function currentPageCount() {
   if (printActualPages > 0) return printActualPages;
@@ -18739,7 +18789,10 @@ function runRenderJob(url, kind, onTick) {
 function ensureInterior() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.url) {
-    return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages });
+    // v3.0.798 -- TD-608. The cached answer carries the mismatch too. Dropping it here would make
+    // the notice appear on the first Prepare and vanish on every one after -- the kind of
+    // intermittent that gets reported as "it works sometimes".
+    return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages, mismatch: printInteriorCache.mismatch || null });
   }
   return runRenderJob(key, 'print-interior', function (secs) {
     // The reader is told it is still working, which is the whole point of a ticket.
@@ -18749,8 +18802,8 @@ function ensureInterior() {
       if (!res.ok || !res.j || !res.j.url) {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
       }
-      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
-      return { url: res.j.url, pages: (res.j.pages || 0) };
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      return { url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
     });
 }
 
@@ -18762,6 +18815,7 @@ function prepareInteriorCount() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
+    try { renderBookMismatch('book-mismatch-order', printInteriorCache.mismatch, 'order'); } catch (e) {}
     updatePrintPageDisplay(printActualPages, true);
     refreshPrintOptions(printActualPages);
     return;
@@ -18781,7 +18835,11 @@ function prepareInteriorCount() {
         if (_why && _pe) { _pe.textContent = _why; return; }
         updatePrintPageDisplay(-1, false); return;
       }
-      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      // v3.0.798 -- TD-608. print-interior builds the APPROVED book and now says when that is not
+      // the book on screen. This is the tab-open path, so the notice is there before anything is
+      // clicked; reviewPrintOrder re-renders it from the same field when Prepare runs.
+      try { renderBookMismatch('book-mismatch-order', res.j.mismatch, 'order'); } catch (e) {}
       if (res.j.pages && res.j.pages > 0) {
         printActualPages = res.j.pages;
         updatePrintPageDisplay(printActualPages, true);
@@ -19202,7 +19260,7 @@ function loadPrintTab() {
       printNovelInfo = res.j;
       syncPrintVersionDisplay();
       printActualPages = 0;
-      printInteriorCache = { key: '', url: '', pages: 0 };
+      printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
       updatePrintPageDisplay(-1, false);
       // v3.0.430 -- ASK THE SAVED BOOK FIRST. The binding list is derived from the page count, and
       // opening on pageEstimate meant it was derived from a GUESS and then visibly changed its mind a
@@ -19642,6 +19700,11 @@ function reviewPrintOrder() {
         body.pageCount = intr.pages;
         updatePrintPageDisplay(intr.pages, true);
       }
+      // v3.0.798 -- TD-608. Carried onto the order body so renderPrintReview shows it above the
+      // total. The tab-open notice is easy to scroll past; the review panel is the last thing read
+      // before paying, and that is the moment this is actually for.
+      body.mismatch = intr.mismatch || null;
+      try { renderBookMismatch('book-mismatch-order', body.mismatch, 'order'); } catch (e) {}
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
@@ -19724,6 +19787,11 @@ function renderPrintReview(body, quote) {
   var ship = body.shipTo;
   var addr = [ship.name, ship.street1, ship.street2, [ship.city, ship.stateCode, ship.postcode].filter(Boolean).join(' '), ship.countryCode].filter(Boolean).join(', ');
   var html = '';
+  // v3.0.798 -- TD-608. FIRST in the panel, above the format and the total.
+  try {
+    var _bm = bookMismatchHtml(body && body.mismatch, 'order');
+    if (_bm) html += '<div class="book-mismatch" style="margin-top:0;">' + _bm + '</div>';
+  } catch (e) {}
   html += row('Order name', body.orderName || '(none)');
   html += row('Version', versionTxt);
   var _fmt = (body && body.selection) || {};
@@ -19851,7 +19919,7 @@ function resetPrintForm() {
   preparedCoverUrl = '';
   preparedSignature = '';
   printActualPages = 0;
-  printInteriorCache = { key: '', url: '', pages: 0 };
+  printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
   if (printNovelInfo) {
     updatePrintPageDisplay(-1, false);
     refreshPrintOptions(printNovelInfo.pageEstimate);

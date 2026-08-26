@@ -2195,6 +2195,18 @@ html.staging-env .app-logo-text{color:#2b1400;}
   #novel-tab-preview .btn { padding: 5px 9px; font-size: 11.5px; }
 }
 
+/* v3.0.798 -- TD-608. The "this is not the book on screen" notice, on the publish card and on
+   the order review. GOLD, NOT RED: it is information about a legitimate choice, not a failure --
+   v3.0.783 (TD-583) is the note about everything in this app having been rendered in the failure
+   colour by default. Nothing it appears beside is ever disabled. */
+.book-mismatch { margin: 10px 0; padding: 10px 12px; border: 1px solid rgba(201,168,76,0.45);
+  border-left-width: 3px; border-radius: 8px; background: rgba(201,168,76,0.08);
+  color: rgba(245,232,200,0.92); font-size: 12px; line-height: 1.45; }
+.book-mismatch b { color: var(--gold); font-weight: 600; }
+.book-mismatch ul { margin: 6px 0 6px 18px; padding: 0; }
+.book-mismatch li { margin: 2px 0; }
+.book-mismatch .bm-foot { opacity: 0.85; }
+
 /* ===== Pre-Publish Prep panel (Preview & Export tab) ===== */
 .novel-preview-layout { display:flex; gap:0; align-items:flex-start; }
 .novel-preview-col { order:3; flex:1 1 0; min-width:0; }

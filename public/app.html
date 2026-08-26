@@ -690,6 +690,9 @@
               <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
             </div>
             <div class="ord-actions">
+              <!-- v3.0.798 -- TD-608. Above the button that starts the order, for the same reason
+                   as the publish one: it exists to be read before it is pressed. Never disables. -->
+              <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
               <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
             </div>
@@ -724,6 +727,9 @@
             <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+            <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is
+                 pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
+            <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
             <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
             <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">your Account page</a>.</div>

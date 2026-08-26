@@ -4104,6 +4104,64 @@ function includeFingerprint(incMap) {
     return ids.join(',');
   } catch (e) { return ''; }
 }
+// v3.0.798 -- TD-608. SAY WHAT DOES NOT MATCH. DO NOT STOP ANYONE.
+//
+// Ian, 2026-08-26: "When a book is loaded from the last save... sometimes it doesn't match what the
+// current settings are. They need to be able to still publish it. So we tell them that it doesn't
+// match what they are about to publish but don't stop them... Warning not hard stop."
+//
+// This replaces the v3.0.588 REFUSAL in both print-interior and publish-story, and it finishes a
+// job v3.0.496 started. Before today the two kinds of mismatch sat at opposite extremes and neither
+// was a warning: a SETTINGS difference went to the server log and the reader was told nothing, and
+// an INCLUDES difference was a hard 409. Both now produce the same thing -- a named category on
+// screen, and nothing disabled.
+//
+// WHY DROPPING THE BLOCK IS SAFE, given v3.0.588 argued the opposite. Its reasoning was that the
+// on-screen review cannot catch this one, "because the interior they would be shown is the OLD one
+// and looks perfectly correct". True, and the answer is to TELL them rather than to refuse: the
+// book that exists is the approved one, loading a saved book on purpose is a normal thing to do,
+// and a stop that cannot be cleared without re-running a paid Optimize is a worse outcome than an
+// informed choice.
+//
+// CATEGORIES, NOT DIFFS. Ian: "don't give too many details but just say... Sessions don't match, or
+// Layout options don't match or Title and cover options don't match. Don't list every sub detail."
+//
+// COMPARED PARSED, AND ONLY ON KEYS WITH A CONTROL. v3.0.496 measured the raw-string compare firing
+// on pano, aside, companion, emphasis and watermark -- five keys with NO UI anywhere, so the reader
+// could not have changed them, could not see them, and could not clear the warning by changing
+// anything back. Same for hidelogo, and paper/narr are force-normalised by parseCustomOpts. A
+// warning nobody can act on is one people learn to scroll past, which costs the warnings that
+// matter. So the list below is the set of keys that actually have a control (`cl-*` / `pcl-*`),
+// confirmed against app.html rather than assumed.
+//
+// HONEST LIMIT: the approval records only `co` and `inc`, so a changed book TITLE TEXT, SUBTITLE or
+// COVER IMAGE is not detected -- only the title's style, size and placement. Widening that means
+// recording more at save time, not comparing harder here.
+var CO_TITLE_KEYS = { titleStyle: 1, titlePlace: 1, titleSize: 1 };
+var CO_COMPARABLE = {
+  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1,
+  toc: 1, header: 1, markers: 1, markerbreak: 1,
+  titleStyle: 1, titlePlace: 1, titleSize: 1
+};
+function bookMismatch(approvedInc, nowInc, approvedCo, nowCo) {
+  var m = { sessions: false, layout: false, titlecover: false, any: false, categories: [] };
+  // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before v3.0.588 have none and
+  // must behave exactly as they do today -- silent.
+  if (approvedInc != null && String(approvedInc) !== String(nowInc)) m.sessions = true;
+  try {
+    var a = parseCustomOpts(approvedCo || '');
+    var b = parseCustomOpts(nowCo || '');
+    for (var k in CO_COMPARABLE) {
+      if (String(a[k]) === String(b[k])) continue;
+      if (CO_TITLE_KEYS[k]) m.titlecover = true; else m.layout = true;
+    }
+  } catch (e) {}
+  if (m.sessions)   m.categories.push('Sessions don\'t match');
+  if (m.layout)     m.categories.push('Layout options don\'t match');
+  if (m.titlecover) m.categories.push('Title and cover options don\'t match');
+  m.any = m.categories.length > 0;
+  return m;
+}
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   // v3.0.454 -- as_version joins the key. Two versions belonging to ONE user share an as_user, so
@@ -6561,6 +6619,7 @@ async function printInteriorHandler(req, res) {
   // No token is charged -- the reader already paid to Optimize; printing must not re-charge.
   var html = null;
   var _apprAt = null;   // v3.0.423 -- when the layout being printed was approved; returned to the client
+  var _mismatch = null; // v3.0.798 -- TD-608; which categories differ from the screen, returned to the client
   var _stripped = null; // v3.0.424 -- set when the interior came from the saved PDF rather than a render
   if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
     // v3.0.422 -- THE PRINTED BOOK IS THE SAVED BOOK, OR THERE IS NO PRINTED BOOK. TD-214.
@@ -6585,13 +6644,15 @@ async function printInteriorHandler(req, res) {
     // because the interior they would be shown is the OLD one and looks perfectly correct.
     // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT: entries saved before this build have none
     // and must keep ordering exactly as they do today.
+    // v3.0.798 -- TD-608. WAS A 409. Now it names what differs and builds the book anyway.
+    // The categories cover BOTH kinds of mismatch, so the `co` comparison that used to log
+    // silently a few lines down now reaches the reader through the same channel.
     {
       var _loInc = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
       var _nowFp = includeFingerprint(_incMap);
-      if (_loInc && _loInc.inc != null && _loInc.inc !== _nowFp) {
-        try { console.warn('[print-interior] refused: included sessions changed since approval. approved: ' + (_loInc.inc || '(none)') + ' | now: ' + _nowFp); } catch (e) {}
-        return res.status(409).json({ error: 'includes_changed',
-          message: 'The sessions included in this book have changed since this layout was approved, so the approved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then order.' });
+      _mismatch = bookMismatch(_loInc && _loInc.inc, _nowFp, _loInc && _loInc.co, req.query.co);
+      if (_mismatch.any) {
+        try { console.warn('[print-interior] building the APPROVED book; it differs from the screen (' + _mismatch.categories.join('; ') + '). approved inc: ' + ((_loInc && _loInc.inc) || '(none)') + ' | now: ' + _nowFp); } catch (e) {}
       }
     }
     // v3.0.496 -- ORDERING NO LONGER REFUSES ON A SETTINGS MISMATCH EITHER.
@@ -6741,7 +6802,8 @@ async function printInteriorHandler(req, res) {
     var pages = await pdfPageCount(pdfBuffer);
     // v3.0.423 -- approvedAt lets the Order tab name the version it is about to print.
     return res.json({ url: url, bytes: pdfBuffer.length, pages: pages, approvedAt: _apprAt,
-      builtBy: (_stripped ? 'strip' : 'render') });   // v3.0.424 -- which path produced this file
+      builtBy: (_stripped ? 'strip' : 'render'),      // v3.0.424 -- which path produced this file
+      mismatch: _mismatch });                          // v3.0.798 -- TD-608
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -7284,7 +7346,47 @@ async function printCoverHandler(req, res) {
 // when they are the DM/owner, their player fork otherwise). There is no path to
 // publish someone else's fork -- any client as_user is ignored.
 // ============================================================
+// v3.0.798 -- TD-608. ASK BEFORE, NOT AFTER.
+//
+// The order path learns about a mismatch from print-interior, which runs at Prepare -- before any
+// money moves, so the answer arrives in time. PUBLISH has no such step: the POST publishes. A field
+// on that response would tell the reader what was wrong with something already on the Library.
+//
+// So the publish card asks this first. Same helper, same categories, no side effects.
+router.get('/book-mismatch/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+    var arrange = (co && co.arrange) || 'grid';
+    var _lo = await lastOptimizedEntry(req, req.params.campaignId, arrange);
+    // No saved book means there is nothing to differ FROM. The optimize_required path already
+    // covers that case and says something far more useful than "nothing matches".
+    if (!_lo) return res.json({ saved: false, any: false, categories: [] });
+    // The include map is resolved exactly as publish-story resolves it -- same db, same asUser
+    // rule, same version -- because comparing against a DIFFERENT set of includes than the one
+    // publish will use would produce a warning about a book nobody is publishing.
+    var db = await getDb();
+    var campaign = await db.prepare(
+      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    ).get(req.params.campaignId, req.session.userId);
+    if (!campaign) return res.status(403).json({ error: 'Access denied' });
+    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+    var _bv = await resolveBookVersion(db, campaign.id, req);
+    var _incMap = await effectiveIncludeMap(db, campaign.id, asUser,
+      _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+    var m = bookMismatch(_lo.inc, includeFingerprint(_incMap), _lo.co, req.query.co);
+    m.saved = true;
+    return res.json(m);
+  } catch (e) {
+    // NEVER fail the publish card on this. An unknown answer is reported as "no mismatch found"
+    // rather than as a scary unknown -- the same reasoning as the cover probe in TD-576: refusing
+    // to let someone act on the strength of our own failed check is the worse bug.
+    try { console.warn('[book-mismatch] ' + ((e && e.message) || e)); } catch (_e) {}
+    return res.json({ saved: false, any: false, categories: [], error: 'check_failed' });
+  }
+});
+
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
+  var _mismatch = null;   // v3.0.798 -- TD-608; which categories differ from the screen
   // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
   // v3.0.492 was described as making publishing sub-second on the strength of reading the
   // code rather than watching it run, and the real number was 20-30s -- on a path that
@@ -7489,12 +7591,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // snapshot.
     // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before this build have none,
     // and must keep publishing exactly as they do today.
-    if (_loE.inc != null && _loE.inc !== includeFingerprint(_incMap)) {
-      try { console.warn('[publish-story] refused: the included sessions have changed since this layout was approved. approved: ' + (_loE.inc || '(none)') + ' | now: ' + includeFingerprint(_incMap)); } catch (e) {}
-      return res.status(409).json({ error: 'includes_changed', message: 'The sessions included in this book have changed since this layout was approved, so the saved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then publish.' });
-    }
-    if ((_loE.co || '') !== (req.query.co || '')) {
-      try { console.log('[publish-story] publishing the SAVED layout; current settings differ. saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
+    // v3.0.798 -- TD-608. WAS A 409, AND THE co CHECK BELOW IT WAS A SILENT LOG.
+    // Both now speak through one channel and neither stops the publish. The v3.0.588 argument for
+    // refusing here was that a published story is a permanent snapshot -- true, and it is also
+    // republishable, while the reader loading a saved book is usually publishing exactly the book
+    // they meant to. Naming what differs is the honest version of that protection.
+    _mismatch = bookMismatch(_loE.inc, includeFingerprint(_incMap), _loE.co, req.query.co);
+    if (_mismatch.any) {
+      try { console.warn('[publish-story] publishing the SAVED book; it differs from the screen (' + _mismatch.categories.join('; ') + '). approved inc: ' + (_loE.inc || '(none)') + ' | now: ' + includeFingerprint(_incMap) + ' | saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
     }
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
@@ -7651,6 +7755,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   try { console.log('[publish-story] campaign ' + campaign.id + ' path=' + _pubSrc + ' ' + _ptPhase.join(' ') + ' TOTAL=' + (Date.now() - _pt0) + 'ms'); } catch (e) {}
   var _outId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
+    mismatch: _mismatch,                                        // v3.0.798 -- TD-608
     storyId: _outId, slug: slug || null,
     storyUrl: _outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null });
 });
