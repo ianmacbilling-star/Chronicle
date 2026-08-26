@@ -19590,16 +19590,27 @@ function printCoverUrl(selOverride) {
   // that, on the page count landing) put a PAPERBACK cover on a HARDCOVER order, with the summary
   // free to disagree with both. Fixing the reset is TD-601's other half; this is what stops the
   // same class of drift from any future cause, because one read cannot disagree with itself.
-  // Still falls back to reading the form, for callers that have no selection in hand.
-  var s = selOverride || ((printSelectionBody() || {}).selection) || {};
-  var pc = currentPageCount();
+  // Still falls back to reading the form, for callers that have no body in hand.
+  //
+  // v3.0.797 -- TD-607. IT TAKES THE WHOLE BODY, NOT JUST .selection, AND THAT IS THE POINT.
+  // v3.0.796 passed `body.selection` here and deleted the `var sel = printSelectionBody()` line
+  // above -- but the bookTitle argument three lines down still read `sel`, so this threw
+  // "sel is not defined" on every Prepare. bookTitle lives at the TOP of the body, beside
+  // selection rather than inside it, so half the answer was being passed in and the other half
+  // was still being fetched. Taking the whole body is what makes "read the form once" actually
+  // true: every field this URL needs now comes from the same read.
+  var body = selOverride || printSelectionBody() || {};
+  var s = body.selection || {};
+  // The page count from the SAME body when there is one -- reviewPrintOrder overwrites
+  // body.pageCount with the interior's exact count before calling here.
+  var pc = (body.pageCount > 0) ? body.pageCount : currentPageCount();
   return '/api/pdf/print-cover/' + state.currentCampaign.id +
     '?binding=' + encodeURIComponent(s.binding || '') +
     '&color=' + encodeURIComponent(s.colorTier || '') +
     '&finish=' + encodeURIComponent(s.coverFinish || '') +
     '&paper=' + encodeURIComponent(s.paper || '') +
     '&pageCount=' + encodeURIComponent(pc) +
-    '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
+    '&bookTitle=' + encodeURIComponent(body.bookTitle || '') +
     '&titleColor=' + encodeURIComponent((document.getElementById('print-title-color') || {}).value || '') +
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
@@ -19634,7 +19645,7 @@ function reviewPrintOrder() {
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
-      return runRenderJob(printCoverUrl(body.selection), 'print-cover', function (secs) {
+      return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
         try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
       });
     })
