@@ -602,7 +602,11 @@
                     <div class="ord-f2">
                       <!-- v3.0.785 -- TD-586. Shorter, and "color" to match the options it describes:
                            v3.0.784 wrote "colour" here while the dropdown says "Premium color". -->
-                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(premium recommended)</span></label>
+                      <!-- v3.0.796 -- TD-605. "(premium recommended)" recommended a choice against an
+                           alternative that no longer exists: both standard grades came off the picker
+                           because Lulu's own upload form warns that Standard cannot hold this much ink.
+                           A hint that describes a decision the reader cannot make is noise. -->
+                      <label class="ord-lbl">Interior printing <span class="ord-lbl-dim">(color or black &amp; white)</span></label>
                       <!-- v3.0.784 -- TD-585. Changing the ink changes which PAPERS exist, so this
                            has to rebuild the option lists as well as re-price. printOptionsChanged
                            does both, in that order, because pricing a paper that is about to be
@@ -687,6 +691,12 @@
             </div>
             <div class="ord-actions">
               <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
+              <!-- v3.0.799 -- TD-609. TO THE RIGHT OF THE BUTTON, in the same slot every other
+                   message on this row uses. v3.0.798 put it FIRST in the flex row, which had no
+                   basis of its own, so it took a whole line above the button and pushed everything
+                   down. Ian: "Put the message to the right of the button... there is plenty of
+                   space to the right." Same flex sizing as #print-place-msg beside it. -->
+              <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
             </div>
             <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
@@ -720,6 +730,9 @@
             <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+            <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is
+                 pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
+            <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
             <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
             <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">your Account page</a>.</div>
@@ -2882,7 +2895,7 @@
     fetch('/version', { cache: 'no-store' })
       .then(function(r){ return r.json(); })
       .then(function(v){
-        if (!v || !v.show) return;   // admins / debug-mode users only
+        if (!v || !v.show) return;   // v3.0.796 -- TD-600: admins and TESTERS only, decided server-side
         var el = document.getElementById('build-stamp');
         if (!el) return;
         el.textContent = 'v' + (v.version || '?') + (v.env && v.env !== 'production' ? ' \u00b7 ' + v.env : '');

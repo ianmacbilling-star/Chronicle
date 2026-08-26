@@ -54,11 +54,42 @@ const BINDINGS = {
 // parsing the key, so adding a grade is a line in this table and nothing else. The old code
 // derived quality with `sel.colorTier === 'standard' ? 'standard' : 'premium'`, which silently
 // makes every unknown value premium -- the expensive answer to a question nobody asked.
+// v3.0.796 -- TD-605. THE STANDARD GRADES ARE NOT OFFERED, AND THE PRINTER IS WHY.
+//
+// Ian gets this from Lulu's own upload form, every time, on a book made by this product:
+//
+//   "Ink Coverage: Your file contains inks with high ink coverage requirements. Using Standard
+//    print for content with high ink coverage requirements may result in poor print quality.
+//    Please select Premium print or adjust your file to include lower ink coverage.
+//    Found on pages 5, 7, 9, 29, 33, and 57."
+//
+// Six pages of a 104-page book, which makes it the normal case rather than an edge one: every book
+// this thing makes is full-bleed art. The VENDOR is saying Standard cannot print it well. That is a
+// better reason than any argument from taste, and it is the only kind this file accepts.
+//
+// UNOFFERED, NOT UNAVAILABLE -- AND THE DIFFERENCE IS LOAD-BEARING.
+//
+// Cream (below) is filtered by `paperIsAvailable` AND refused by buildSpec, because TD-579 settled
+// that a hidden control is not a rule: cream genuinely CANNOT be sold, Lulu rejects the SKU, so
+// anything that reaches buildSpec with it must be stopped.
+//
+// These two are different. `0850X1100FCSTDPB060UW444MXX` is a confirmed product that returned a
+// real $7.01 quote -- Lulu will print it. We have simply decided not to sell it. So buildSpec is
+// left ALONE and only the picker filters:
+//   - every order already placed on a standard tier still prices, fulfils and REORDERS. The answer
+//     rides in `color_tier` (TD-585) and rows holding it must stay valid, or a past order becomes
+//     unreorderable with no route to a value anything accepts.
+//   - bringing them back is `offered: true` and nothing else.
+// DO NOT "tidy" this into the cream rule by adding a buildSpec check. Collapsing *unavailable* into
+// *unoffered* breaks every historical row; collapsing it the other way makes cream sellable again.
+//
+// Premium black & white stays, so cream stays with it: `paperIsAvailable` asks only whether the
+// chosen tier's ink is 'bw', and bwpremium answers yes.
 const COLOR_TIERS = {
   premium:     { label: 'Premium color',  note: 'Best for full-color art on every page', ink: 'color', quality: 'premium', isDefault: true },
-  standard:    { label: 'Standard color', note: 'Budget option; best for mostly-text books', ink: 'color', quality: 'standard' },
+  standard:    { label: 'Standard color', note: 'Budget option; best for mostly-text books', ink: 'color', quality: 'standard', offered: false },
   bwpremium:   { label: 'Premium black & white', note: 'Best for detailed line art, charcoal and ink work', ink: 'bw', quality: 'premium' },
-  bwstandard:  { label: 'Standard black & white', note: 'Budget option; best for mostly-text books', ink: 'bw', quality: 'standard' },
+  bwstandard:  { label: 'Standard black & white', note: 'Budget option; best for mostly-text books', ink: 'bw', quality: 'standard', offered: false },
 };
 /** The ink a colour tier prints in ('color' | 'bw'). Unknown tiers report null, never a default. */
 function inkForTier(tier) {
@@ -158,7 +189,10 @@ function optionsForPageCount(pageCount, sel) {
     bindings: bindings.map((k) => ({
       id: k, ...BINDINGS[k], printedPageCount: printedPageCount(pageCount, k),
     })),
-    colorTiers: Object.keys(COLOR_TIERS).map((k) => ({ id: k, ...COLOR_TIERS[k] })),
+    // v3.0.796 -- TD-605. Only the grades we offer. Same shape as the `papers` line below, so the
+    // <select> loses them by construction rather than by a second rule in the client that could
+    // drift from this one. buildSpec still accepts them -- see the note on COLOR_TIERS.
+    colorTiers: Object.keys(COLOR_TIERS).filter((k) => COLOR_TIERS[k].offered !== false).map((k) => ({ id: k, ...COLOR_TIERS[k] })),
     coverFinishes: Object.keys(COVER_FINISHES).map((k) => ({ id: k, ...COVER_FINISHES[k] })),
     // v3.0.783 -- TD-579. Only papers we can actually sell. The Order tab fills its <select>
     // straight from this array, so an unavailable stock disappears from the UI by construction

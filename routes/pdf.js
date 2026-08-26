@@ -4104,6 +4104,220 @@ function includeFingerprint(incMap) {
     return ids.join(',');
   } catch (e) { return ''; }
 }
+// v3.0.798 -- TD-608. SAY WHAT DOES NOT MATCH. DO NOT STOP ANYONE.
+//
+// Ian, 2026-08-26: "When a book is loaded from the last save... sometimes it doesn't match what the
+// current settings are. They need to be able to still publish it. So we tell them that it doesn't
+// match what they are about to publish but don't stop them... Warning not hard stop."
+//
+// This replaces the v3.0.588 REFUSAL in both print-interior and publish-story, and it finishes a
+// job v3.0.496 started. Before today the two kinds of mismatch sat at opposite extremes and neither
+// was a warning: a SETTINGS difference went to the server log and the reader was told nothing, and
+// an INCLUDES difference was a hard 409. Both now produce the same thing -- a named category on
+// screen, and nothing disabled.
+//
+// WHY DROPPING THE BLOCK IS SAFE, given v3.0.588 argued the opposite. Its reasoning was that the
+// on-screen review cannot catch this one, "because the interior they would be shown is the OLD one
+// and looks perfectly correct". True, and the answer is to TELL them rather than to refuse: the
+// book that exists is the approved one, loading a saved book on purpose is a normal thing to do,
+// and a stop that cannot be cleared without re-running a paid Optimize is a worse outcome than an
+// informed choice.
+//
+// CATEGORIES, NOT DIFFS. Ian: "don't give too many details but just say... Sessions don't match, or
+// Layout options don't match or Title and cover options don't match. Don't list every sub detail."
+//
+// COMPARED PARSED, AND ONLY ON KEYS WITH A CONTROL. v3.0.496 measured the raw-string compare firing
+// on pano, aside, companion, emphasis and watermark -- five keys with NO UI anywhere, so the reader
+// could not have changed them, could not see them, and could not clear the warning by changing
+// anything back. Same for hidelogo, and paper/narr are force-normalised by parseCustomOpts. A
+// warning nobody can act on is one people learn to scroll past, which costs the warnings that
+// matter. So the list below is the set of keys that actually have a control (`cl-*` / `pcl-*`),
+// confirmed against app.html rather than assumed.
+//
+// HONEST LIMIT: the approval records only `co` and `inc`, so a changed book TITLE TEXT, SUBTITLE or
+// COVER IMAGE is not detected -- only the title's style, size and placement. Widening that means
+// recording more at save time, not comparing harder here.
+var CO_TITLE_KEYS = { titleStyle: 1, titlePlace: 1, titleSize: 1 };
+var CO_COMPARABLE = {
+  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1,
+  toc: 1, header: 1, markers: 1, markerbreak: 1,
+  titleStyle: 1, titlePlace: 1, titleSize: 1
+};
+// v3.0.800 -- TD-610. AN ABSENT co IS "WE WERE NOT TOLD", NOT "THE DEFAULTS".
+//
+// Ian, with a screenshot of both notices on ONE screen disagreeing: the publish card said Sessions
+// AND Layout AND Title and cover; the order tab said Sessions only. "I don't think the cover and
+// layouts are wrong, I think it's just the session list."
+//
+// MEASURED, not reasoned: `parseCustomOpts('')` returns the SERVER defaults -- arrange:grid,
+// border:none -- so comparing a real saved book against an absent co manufactures a difference
+// out of nothing:
+//     saved co vs the same co   -> []
+//     saved co vs an absent co  -> ["Layout options don't match"]
+// And `customOptsQ` returns an EMPTY STRING whenever `customActive` is false, which is exactly the
+// sort of thing that differs between two surfaces built at different moments.
+//
+// So the options comparison is now GATED on having been told. Not knowing is reported as nothing,
+// because a manufactured difference is worse than a missed one here: it teaches the reader that
+// this notice is noise, and the notice that matters is the session list.
+function bookMismatch(approvedInc, nowInc, approvedCo, nowCo, opts) {
+  var m = { sessions: false, layout: false, titlecover: false, any: false, categories: [], keys: [], optionsChecked: false };
+  // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before v3.0.588 have none and
+  // must behave exactly as they do today -- silent.
+  if (approvedInc != null && String(approvedInc) !== String(nowInc)) m.sessions = true;
+  // A blank string and an absent argument are the same statement: nobody told us what is on screen.
+  var told = !!(nowCo && String(nowCo).length);
+  if (opts && opts.compareOptions === false) told = false;
+  m.optionsChecked = told;
+  if (told) {
+    try {
+      var a = parseCustomOpts(approvedCo || '');
+      var b = parseCustomOpts(nowCo || '');
+      for (var k in CO_COMPARABLE) {
+        if (String(a[k]) === String(b[k])) continue;
+        m.keys.push(k + ': ' + a[k] + ' -> ' + b[k]);   // for the LOG only; never rendered
+        if (CO_TITLE_KEYS[k]) m.titlecover = true; else m.layout = true;
+      }
+    } catch (e) {}
+  }
+  if (m.sessions)   m.categories.push('Sessions don\'t match');
+  if (m.layout)     m.categories.push('Layout options don\'t match');
+  if (m.titlecover) m.categories.push('Title and cover options don\'t match');
+  m.any = m.categories.length > 0;
+  return m;
+}
+// v3.0.800 -- TD-610. ONE RESOLVER. THREE SURFACES CANNOT DISAGREE IF THERE IS ONLY ONE ANSWER.
+//
+// v3.0.798 wrote this comparison at THREE call sites -- print-interior, publish-story and the
+// pre-flight route -- each resolving the saved entry and the include map for itself. They put two
+// different answers on one screen within the hour. That is the DERIVE, DO NOT PAIR fault this file
+// records over and over (TD-336, v3.0.575's five copies of the fork-meta block), and it was freshly
+// introduced rather than inherited. Everything now goes through here.
+//
+// WHICH SAVED BOOK. With a co in hand the bucket is co.arrange, as it has always been. WITHOUT one
+// the old pre-flight route defaulted to 'grid' -- a guess that silently looks up a bucket the reader
+// may never have saved into. It now takes the most recently saved entry across every bucket, which
+// is the book they last approved whatever it was arranged as.
+async function lastOptimizedAny(req, campaignId) {
+  try {
+    var db = await getDb();
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var prefs = await getForkBookPrefs(db, _sc.chooser, _sc.fork, campaignId, { inherit: false, versionId: _sc.versionId });
+    var lo = (prefs && prefs.lastOptimized) || null;
+    if (!lo) return null;
+    var best = null, bestAt = -1;
+    for (var k in lo) {
+      var e = lo[k];
+      if (!e) continue;
+      var t = 0;
+      try { t = e.at ? new Date(e.at).getTime() : 0; } catch (_e) { t = 0; }
+      if (!(t > 0)) t = 0;
+      if (best === null || t > bestAt) { best = e; bestAt = t; }
+    }
+    return best;
+  } catch (e) { return null; }
+}
+// v3.0.801 -- TD-611. THE CLIENT IS NO LONGER ASKED WHAT IS ON SCREEN.
+//
+// Ian, still seeing two different answers on one screen after v3.0.800: the publish card said
+// Sessions AND Layout AND Title and cover; the order tab said Sessions only. v3.0.800 fixed an
+// ABSENT co being read as the defaults. This one is a co that is PRESENT and WRONG.
+//
+// WHY IT KEEPS HAPPENING. `customOpts` on the client starts as CUSTOM_LAYOUT_DEFAULTS and is
+// replaced when `loadCampaignLayoutOpts` -> `applyCampaignLayoutOpts` returns from the DB. Anything
+// that asks in that window sends a real, complete, WRONG options string. The publish card asks from
+// `updateNovelPublishGuard`, which fires on version-picker refreshes; the order tab asks later. Two
+// surfaces, two moments, two answers -- and chasing the right MOMENT on the client is how this
+// recurs a third time.
+//
+// SO STOP ASKING IT. `applyCampaignLayoutOpts` gets the layout from `meta.layout_opts`, which is the
+// fork_book_prefs blob -- a thing this server can read directly, at the moment of the question, with
+// no timing to lose. The comparison is now server-against-server: the co recorded when the book was
+// saved, against the layout stored for this fork right now.
+//
+// AND WHEN IT CANNOT BE READ CONFIDENTLY, IT IS NOT GUESSED. An unrecognised blob, or a layout that
+// is not active, returns null and the options are simply not compared -- v3.0.800's rule, that not
+// knowing must be reported as nothing rather than as a difference.
+//
+// Mirrors _normalizeLayoutBlob in public/js/app.js, including the legacy {opts:{session,novel}}
+// shape. The client normalisation stays where it is; this is the same question asked by the server,
+// not a second implementation of a client behaviour -- if the shapes ever diverge, the guard below
+// notices, because a blob it does not recognise turns the comparison off rather than on.
+function storedLayoutCo(prefs) {
+  try {
+    var blob = prefs && prefs.layout_opts;
+    if (typeof blob === 'string') { try { blob = JSON.parse(blob); } catch (e) { return null; } }
+    if (!blob || typeof blob !== 'object') return null;
+    var o = blob.opts, a = blob.active;
+    if (o && typeof o === 'object' && (o.session || o.novel)) {
+      var act = (a && typeof a === 'object') ? !!(a.novel || a.session) : !!a;
+      if (!act) return null;
+      o = o.novel || o.session || {};
+    } else {
+      if (!a) return null;          // no custom layout is active: nothing to compare against
+      o = o || {};
+    }
+    if (typeof o !== 'object') return null;
+    var parts = [];
+    for (var k in o) { if (Object.prototype.hasOwnProperty.call(o, k)) parts.push(k + ':' + o[k]); }
+    if (!parts.length) return null;
+    return parts.join(',');
+  } catch (e) { return null; }
+}
+async function resolveBookMismatch(req, campaignId, coStr) {
+  var none = { saved: false, sessions: false, layout: false, titlecover: false, any: false, categories: [], optionsChecked: false };
+  try {
+    var db0 = await getDb();
+    var _sc = await bookPrefsScope(db0, req, campaignId);
+    // The layout the RENDER would use, read with inherit:true exactly as every other reader of
+    // these prefs does (getForkBookPrefs, TD-440).
+    var _layoutPrefs = await getForkBookPrefs(db0, _sc.chooser, _sc.fork, campaignId, { inherit: true, versionId: _sc.versionId });
+    var nowCo = storedLayoutCo(_layoutPrefs);
+    // The bucket: the stored layout's arrange first, the caller's hint second, and only then the
+    // most recently saved entry whatever it was arranged as.
+    var _arr = null;
+    if (nowCo) { try { _arr = parseCustomOpts(nowCo).arrange; } catch (e) { _arr = null; } }
+    if (!_arr && coStr) { try { _arr = parseCustomOpts(coStr).arrange; } catch (e) { _arr = null; } }
+    var lo = _arr ? await lastOptimizedEntry(req, campaignId, _arr)
+                  : await lastOptimizedAny(req, campaignId);
+    // Nothing saved means nothing to differ FROM. optimize_required already covers that case and
+    // says something far more useful than "everything is different".
+    if (!lo) return none;
+    var db = await getDb();
+    var campaign = await db.prepare(
+      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    ).get(campaignId, req.session.userId);
+    if (!campaign) return none;
+    // Resolved exactly as publish-story and print-interior resolve it, because comparing against a
+    // DIFFERENT include map than the one they use would warn about a book nobody is producing.
+    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+    var _bv = await resolveBookVersion(db, campaign.id, req);
+    var incMap = await effectiveIncludeMap(db, campaign.id, asUser,
+      _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+    var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, nowCo);
+    m.saved = true;
+    // THE LOG CARRIES THE DETAIL THE MESSAGE DELIBERATELY DOES NOT. Ian: "don't give too many
+    // details" ON SCREEN. When two surfaces disagreed there was nothing to read afterwards, so the
+    // argument could only be settled by rebuilding the theory. Both co strings and the exact keys
+    // go here, once, whenever something differs.
+    if (m.any) {
+      try {
+        console.warn('[book-mismatch] campaign ' + campaignId + ' -> ' + m.categories.join('; ') +
+          (m.optionsChecked ? '' : ' (options NOT compared: the request carried no co)') +
+          ' | approved inc: ' + (lo.inc || '(none)') + ' | now: ' + includeFingerprint(incMap) +
+          ' | approved co: ' + (lo.co || '(none)') + ' | stored co: ' + (nowCo || '(none, or no active layout)') +
+          ' | the caller sent: ' + (coStr || '(none)') +
+          (m.keys && m.keys.length ? ' | differing keys: ' + m.keys.join(', ') : ''));
+      } catch (_e) {}
+    }
+    return m;
+  } catch (e) {
+    // Never fail a publish or an order on this check. TD-576's rule: declining to let someone act
+    // on the strength of our own failed probe is a worse bug than the one it prevents.
+    try { console.warn('[book-mismatch] check failed: ' + ((e && e.message) || e)); } catch (_e) {}
+    return none;
+  }
+}
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   // v3.0.454 -- as_version joins the key. Two versions belonging to ONE user share an as_user, so
@@ -6561,6 +6775,7 @@ async function printInteriorHandler(req, res) {
   // No token is charged -- the reader already paid to Optimize; printing must not re-charge.
   var html = null;
   var _apprAt = null;   // v3.0.423 -- when the layout being printed was approved; returned to the client
+  var _mismatch = null; // v3.0.798 -- TD-608; which categories differ from the screen, returned to the client
   var _stripped = null; // v3.0.424 -- set when the interior came from the saved PDF rather than a render
   if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
     // v3.0.422 -- THE PRINTED BOOK IS THE SAVED BOOK, OR THERE IS NO PRINTED BOOK. TD-214.
@@ -6585,15 +6800,12 @@ async function printInteriorHandler(req, res) {
     // because the interior they would be shown is the OLD one and looks perfectly correct.
     // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT: entries saved before this build have none
     // and must keep ordering exactly as they do today.
-    {
-      var _loInc = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
-      var _nowFp = includeFingerprint(_incMap);
-      if (_loInc && _loInc.inc != null && _loInc.inc !== _nowFp) {
-        try { console.warn('[print-interior] refused: included sessions changed since approval. approved: ' + (_loInc.inc || '(none)') + ' | now: ' + _nowFp); } catch (e) {}
-        return res.status(409).json({ error: 'includes_changed',
-          message: 'The sessions included in this book have changed since this layout was approved, so the approved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then order.' });
-      }
-    }
+    // v3.0.798 -- TD-608. WAS A 409. Now it names what differs and builds the book anyway.
+    // v3.0.800 -- TD-610. Through the ONE resolver, so this and the publish card cannot answer the
+    // same question differently. It stays inside this branch on purpose: only the composer layouts
+    // print the SAVED book, and the branch below re-renders from current settings, where the
+    // printed interior IS what is on screen and there is nothing to warn about.
+    _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
     // v3.0.496 -- ORDERING NO LONGER REFUSES ON A SETTINGS MISMATCH EITHER.
     // The previous comment here read: "a different border, preset or paper produces a
     // different book, and neither answer is safe to pick silently." That reasoning was
@@ -6741,7 +6953,8 @@ async function printInteriorHandler(req, res) {
     var pages = await pdfPageCount(pdfBuffer);
     // v3.0.423 -- approvedAt lets the Order tab name the version it is about to print.
     return res.json({ url: url, bytes: pdfBuffer.length, pages: pages, approvedAt: _apprAt,
-      builtBy: (_stripped ? 'strip' : 'render') });   // v3.0.424 -- which path produced this file
+      builtBy: (_stripped ? 'strip' : 'render'),      // v3.0.424 -- which path produced this file
+      mismatch: _mismatch });                          // v3.0.798 -- TD-608
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -6943,6 +7156,35 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     return backPanel ? (t + ' ' + inner + ' ' + t + ' ' + outer)
                      : (t + ' ' + outer + ' ' + t + ' ' + inner);
   }
+  // v3.0.796 -- TD-604. THE FRAME MOVED AND THE WORDMARK DID NOT.
+  //
+  // Ian, holding the hardcover: "the word Campaignia in the frame at the bottom of the front and
+  // back cover is off center a little... when we adjusted the cover dimensions it moved it."
+  //
+  // MEASURED on the v3.0.795 paperback render, not eyeballed: the back panel's border line runs
+  // x 62 -> 812 px at 100dpi, centre 437.5, and the CAMPAIGNIA knockout centres at 431.0. The
+  // front panel's border runs 942 -> 1691, centre 1316.8, knockout centre 1323.0. Both are out by
+  // 6.4px = 0.064in, OUTWARD, and _extraX/2 is 0.0625.
+  //
+  // THE CAUSE IS THAT _insetCss IS DELIBERATELY ASYMMETRIC. TD-591 pulls the outer, top and bottom
+  // edges in by the wrap allowance and leaves the SPINE edge alone, because the hinge has no wrap
+  // to clear. So the border box is no longer centred in its panel -- its centre sits _extraX/2
+  // toward the spine -- while .wc-mark was still left:50%, centred on the PANEL. The word is
+  // centred on the wrong box, and has been since the geometry changed underneath it.
+  //
+  // IT IS SEVEN TIMES WORSE ON A CASEWRAP, which is why it took a printed hardcover to see. On the
+  // paperback _extraX is 0.125 and the error is 0.063in; on the hardcover _extraX is 0.875 and the
+  // error is 0.438in -- nearly half an inch off the centre of the frame it is supposed to sit on.
+  //
+  // DERIVED FROM _extraX, NOT RE-MEASURED. The border's left/right insets and this offset are the
+  // same one variable read twice, so a future trim size or binding moves both together. Writing a
+  // second constant here is exactly how the 0.5in and 0.16in in TD-591 went stale.
+  function _markLeftCss(backPanel) {
+    // Back panel: spine on the RIGHT, so the border's centre is to the RIGHT of the panel's.
+    // Front panel: spine on the LEFT, so it is to the LEFT. Same magnitude, opposite sign.
+    var d = (_extraX / 2).toFixed(4);
+    return 'calc(50% ' + (backPanel ? '+ ' : '- ') + d + 'in)';
+  }
   try {
     console.log('[cover-frame] ' + spec.binding + ' sheet ' + W.toFixed(3) + 'x' + H.toFixed(3) +
       'in, trim ' + _trimW + 'x' + _trimH + ', wrap x=' + _wrapX.toFixed(3) + ' y=' + _wrapY.toFixed(3) +
@@ -7036,13 +7278,26 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // proof and the book end up different objects.
     '.wc-frame.no-art { border:none; background:transparent; box-shadow:none; }' +
     // v3.0.791 -- TD-591. Sits ON the inner border line, so it rises with it or it is orphaned.
-    '.wc-mark { position:absolute; left:50%; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
+    // v3.0.796 -- TD-604. And CENTRED ON THAT LINE rather than on the panel: the line is asymmetric
+    // (see _markLeftCss above) and left:50% put the word 0.44in off centre on a casewrap.
+    '.wc-mark { position:absolute; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
+    '.wc-front .wc-mark { left:' + _markLeftCss(false) + '; }' +
+    '.wc-back  .wc-mark { left:' + _markLeftCss(true)  + '; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
     // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and
     // 0.035in inside the trim on a paperback -- inside the cut tolerance. Missing from both books,
     // present on both proofs, which is exactly what a trimmed-off element looks like.
-    '.wc-spine-logo { position:absolute; left:50%; bottom:' + (0.16 + _extraY).toFixed(3) + 'in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
+    // v3.0.795 -- TD-595. LEVEL WITH THE TWO WORDMARKS, instead of jammed against the bottom edge.
+    // MEASURED off the v3.0.791 hardcover wrap: 0.16 put the logo 0.215in above the bottom trim
+    // edge, with the spine title centred at 6.4in and four and a half inches of empty spine
+    // between them. 791 stopped it falling off the board; it did not make the number right, and
+    // the number never was -- sheet-relative, 0.16in meant 0.035in inside the trim on a paperback,
+    // which is inside the cut tolerance. It was always falling off, just less visibly.
+    // 0.5 is not a taste: .wc-mark on BOTH panels sits at 0.5 + _extraY, so the spine logo, the
+    // back wordmark and the front wordmark now land on one line across the whole wrap. Sharing the
+    // constant with the thing it lines up with is what stops the two drifting apart later.
+    '.wc-spine-logo { position:absolute; left:50%; bottom:' + (0.5 + _extraY).toFixed(3) + 'in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; }' +
     COVER_HAZE_CSS +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
@@ -7242,7 +7497,24 @@ async function printCoverHandler(req, res) {
 // when they are the DM/owner, their player fork otherwise). There is no path to
 // publish someone else's fork -- any client as_user is ignored.
 // ============================================================
+// v3.0.798 -- TD-608. ASK BEFORE, NOT AFTER.
+//
+// The order path learns about a mismatch from print-interior, which runs at Prepare -- before any
+// money moves, so the answer arrives in time. PUBLISH has no such step: the POST publishes. A field
+// on that response would tell the reader what was wrong with something already on the Library.
+//
+// So the publish card asks this first. Same helper, same categories, no side effects.
+router.get('/book-mismatch/:campaignId', requireAuth, async function (req, res) {
+  // v3.0.800 -- TD-610. This route used to resolve everything for itself -- its own arrange guess,
+  // its own include map -- and that is how it came to disagree with the order tab on one screen.
+  // It is now four lines around the shared resolver.
+  var m = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
+  res.set('Cache-Control', 'no-store');
+  return res.json(m);
+});
+
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
+  var _mismatch = null;   // v3.0.798 -- TD-608; which categories differ from the screen
   // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
   // v3.0.492 was described as making publishing sub-second on the strength of reading the
   // code rather than watching it run, and the real number was 20-30s -- on a path that
@@ -7447,13 +7719,13 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // snapshot.
     // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before this build have none,
     // and must keep publishing exactly as they do today.
-    if (_loE.inc != null && _loE.inc !== includeFingerprint(_incMap)) {
-      try { console.warn('[publish-story] refused: the included sessions have changed since this layout was approved. approved: ' + (_loE.inc || '(none)') + ' | now: ' + includeFingerprint(_incMap)); } catch (e) {}
-      return res.status(409).json({ error: 'includes_changed', message: 'The sessions included in this book have changed since this layout was approved, so the saved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then publish.' });
-    }
-    if ((_loE.co || '') !== (req.query.co || '')) {
-      try { console.log('[publish-story] publishing the SAVED layout; current settings differ. saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
-    }
+    // v3.0.798 -- TD-608. WAS A 409, AND THE co CHECK BELOW IT WAS A SILENT LOG.
+    // Both now speak through one channel and neither stops the publish. The v3.0.588 argument for
+    // refusing here was that a published story is a permanent snapshot -- true, and it is also
+    // republishable, while the reader loading a saved book is usually publishing exactly the book
+    // they meant to. Naming what differs is the honest version of that protection.
+    // v3.0.800 -- TD-610. Through the ONE resolver, which also does the logging.
+    _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
     // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
@@ -7609,6 +7881,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   try { console.log('[publish-story] campaign ' + campaign.id + ' path=' + _pubSrc + ' ' + _ptPhase.join(' ') + ' TOTAL=' + (Date.now() - _pt0) + 'ms'); } catch (e) {}
   var _outId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
+    mismatch: _mismatch,                                        // v3.0.798 -- TD-608
     storyId: _outId, slug: slug || null,
     storyUrl: _outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null });
 });

@@ -7,6 +7,7 @@ const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
 const { sendAlertEmail } = require('./routes/email');
 const { startScheduler } = require('./scheduler');
+const { isTesterEmail } = require('./middleware/auth');   // v3.0.796 -- TD-600, the /version gate
 
 const app = express();
 
@@ -31,37 +32,6 @@ app.get('/health', async function(req, res) {
   } catch (e) {
     res.status(503).json({ status: 'degraded', db: 'down', ts: new Date().toISOString() });
   }
-});
-
-// Build stamp: lets admins / debug-mode users confirm exactly which deploy is live.
-// The version comes from version-info.json (bumped every push); the commit sha is
-// Railway-injected at runtime. `show` is true only for admins or debug-mode users,
-// so the stamp never renders for normal users.
-app.get('/version', async function(req, res) {
-  var info = {};
-  try { info = require('./version-info.json'); } catch (e) { info = {}; }
-  var pkg = {};
-  try { pkg = require('./package.json'); } catch (e) { pkg = {}; }
-  var version = info.version || pkg.version || '3.0.0';
-  var sha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '';
-  // NOTE: temporarily ungated (show to everyone) so it works as a deploy indicator while we
-  // debug. Re-gate to admins/debug-mode once stable (the query is kept below, commented).
-  var show = true;
-  // try {
-  //   if (req.session && req.session.userId) {
-  //     const db = await getDb();
-  //     const u = await db.prepare('SELECT is_admin, debug_mode FROM users WHERE id = ?').get(req.session.userId);
-  //     show = !!(u && (u.is_admin || u.debug_mode));
-  //   }
-  // } catch (e) { show = false; }
-  res.set('Cache-Control', 'no-store');
-  res.json({
-    version: version,
-    commit: sha ? String(sha).slice(0, 7) : 'dev',
-    env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local',
-    show: show,
-    ts: new Date().toISOString()
-  });
 });
 
 // Session store — PostgreSQL in production, memory locally
@@ -105,6 +75,76 @@ function buildSessionMiddleware() {
 }
 
 app.use(buildSessionMiddleware());
+
+// ------------------------------------------------------------
+// Build stamp: lets an ADMIN or a TESTER confirm exactly which deploy is live. The version comes
+// from version-info.json (bumped every push); the commit sha is Railway-injected at runtime.
+//
+// v3.0.796 -- TD-600. RE-GATED, AND MOVED TO WHERE THE GATE CAN WORK.
+//
+// Ian: "Get rid of the version number at the top banner for all non-admin users and testers."
+//
+// The gate this restores was written in v3.0.679, commented out, with `var show = true;` above it
+// and a note saying re-gate once stable. It could never have worked if it HAD been uncommented,
+// for two independent reasons -- and the first is why this block MOVED rather than just changing:
+//
+//   1. IT SAT ABOVE THE SESSION MIDDLEWARE. The route was mounted at the top of the file beside
+//      /health, which is deliberately before `app.use(buildSessionMiddleware())` so uptime pings
+//      create no session rows. `req.session` was therefore UNDEFINED here, the guard
+//      `if (req.session && req.session.userId)` could never fire, and `show` would have stayed
+//      true for everyone -- a gate that reads as working while showing the stamp to the world.
+//   2. `is_admin` IS NOT A COLUMN. Admin is the ADMIN_EMAILS env var compared against the user's
+//      email (routes/auth.js, and every admin route re-reads it). The commented query selected a
+//      column that does not exist, so it would have thrown, the catch would have set show = false,
+//      and the stamp would have disappeared for admins as well. Both faults, one line apart.
+//
+// Moving it below the session middleware costs nothing: `saveUninitialized: false`, so an
+// anonymous GET /version still creates no session row -- the /health reasoning does not apply.
+//
+// WHO SEES IT: admin OR tester. Both come from env vars read fresh on every call, so adding or
+// removing someone takes effect on their next request with no row to clean up (TD-475). The list
+// and the case-sensitive comparison are the ones in routes/auth.js on purpose -- a different rule
+// here would be its own bug the first time an address differed in case. The one difference is that
+// the stored address is trimmed before comparing, which routes/auth.js does not do.
+//
+// `debug_mode` is DELIBERATELY NOT IN THE GATE. Any reader can turn Debug Mode on by tapping the
+// version label seven times, so including it would let the stamp unhide itself.
+//
+// WHAT IS NOT GATED: version, commit and env still go to everybody. `/version` is the deploy
+// indicator (`curl https://campaignia.com/version`), and the diagnostics bundle reads `env` and
+// `version` off it to name the file (public/js/app.js, v3.0.369). Only `show` is a permission --
+// gating the whole response would silently rename every bundle downloaded from now on.
+// ------------------------------------------------------------
+app.get('/version', async function(req, res) {
+  var info = {};
+  try { info = require('./version-info.json'); } catch (e) { info = {}; }
+  var pkg = {};
+  try { pkg = require('./package.json'); } catch (e) { pkg = {}; }
+  var version = info.version || pkg.version || '3.0.0';
+  var sha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '';
+  // DEFAULT DENY. Failing to answer "may this person see it" is not a yes -- the v3.0.679 version
+  // defaulted to true and stayed true for two hundred builds.
+  var show = false;
+  try {
+    if (req.session && req.session.userId) {
+      const db = await getDb();
+      const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+      const _email = u && u.email ? String(u.email).trim() : '';
+      if (_email) {
+        const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+        show = adminEmails.includes(_email) || isTesterEmail(_email);
+      }
+    }
+  } catch (e) { show = false; }
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    version: version,
+    commit: sha ? String(sha).slice(0, 7) : 'dev',
+    env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local',
+    show: show,
+    ts: new Date().toISOString()
+  });
+});
 
 // ------------------------------------------------------------
 // Rate limiting (scaling hardening). Two layers:

@@ -6984,11 +6984,61 @@ function canEditFork() {
 // defaults to their OWN version; the SM defaults to the canonical book. Publishing
 // is always your own (enforced server-side); updateNovelPublishGuard keeps the
 // Publish button disabled unless you are viewing your own version.
+// v3.0.798 -- TD-608. ONE RENDERER, THREE PLACES.
+//
+// Ian, 2026-08-26: "The book you are about to publish doesn't match the book loaded in the
+// Prep & Preview tab. You can list what doesn't match... don't give too many details but just say
+// Sessions don't match, or Layout options don't match or Title and cover options don't match...
+// Then just say you can reoptimize or continue with the publish."
+//
+// The server decides the CATEGORIES (routes/pdf.js bookMismatch) and this only renders them. Two
+// copies of the bucketing rule -- one deciding, one describing -- is the DERIVE DO NOT PAIR fault
+// this codebase keeps re-finding, so the client is deliberately given no opinion about what a
+// category means.
+//
+// NOTHING IT SITS BESIDE IS EVER DISABLED.
+function bookMismatchHtml(m, verb) {
+  if (!m || !m.any || !m.categories || !m.categories.length) return '';
+  var items = m.categories.map(function (c) {
+    return '<li>' + escapeHtmlPrint(c) + '</li>';
+  }).join('');
+  return '<b>The book you are about to ' + escapeHtmlPrint(verb) +
+    ' doesn\u2019t match the book loaded in the Prep &amp; Preview tab.</b>' +
+    '<ul>' + items + '</ul>' +
+    '<div class="bm-foot">You can re-optimize, or continue with the ' + escapeHtmlPrint(verb) + '.</div>';
+}
+function renderBookMismatch(elId, m, verb) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var html = bookMismatchHtml(m, verb);
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
+}
+// Asked BEFORE the publish, not reported after it -- a POST to publish-story has already put the
+// book on the Library by the time it answers. Never throws and never blocks: a failed check hides
+// the notice rather than inventing one.
+function refreshPublishMismatch() {
+  var el = document.getElementById('book-mismatch-publish');
+  if (!el || !state.currentCampaign) return;
+  var _qs = [];
+  var _au = novelAsUserQ('');            // '' or 'as_user=..&as_version=..'
+  if (_au) _qs.push(_au);
+  var _co = customOptsQ('novel', '');    // '' or 'co=..'
+  if (_co) _qs.push(_co);
+  var url = '/api/pdf/book-mismatch/' + state.currentCampaign.id + (_qs.length ? ('?' + _qs.join('&')) : '');
+  fetch(url, { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) { renderBookMismatch('book-mismatch-publish', m, 'publish'); })
+    .catch(function () { renderBookMismatch('book-mismatch-publish', null, 'publish'); });
+}
 function updateNovelPublishGuard() {
   var btn = document.getElementById('novel-publish-btn');
   if (!btn) return;
   var ownView = novelOwnView();
   var st = document.getElementById('novel-publish-status');
+  // v3.0.798 -- TD-608. This runs whenever the publish card is (re)shown or the version changes,
+  // which is exactly when the answer could differ, so it is the right hook and needs no new one.
+  try { refreshPublishMismatch(); } catch (e) {}
   if (ownView) {
     btn.disabled = false;
     if (st && st.dataset && st.dataset.guard) { st.style.display = 'none'; st.textContent = ''; delete st.dataset.guard; }
@@ -18642,7 +18692,7 @@ var printNovelInfo = null;
 // We render once (on tab open), cache it by the interior URL, and reuse that
 // same file at Place Order so we never render twice for the same book.
 var printActualPages = 0;
-var printInteriorCache = { key: '', url: '', pages: 0 };
+var printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
 
 function currentPageCount() {
   if (printActualPages > 0) return printActualPages;
@@ -18739,7 +18789,10 @@ function runRenderJob(url, kind, onTick) {
 function ensureInterior() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.url) {
-    return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages });
+    // v3.0.798 -- TD-608. The cached answer carries the mismatch too. Dropping it here would make
+    // the notice appear on the first Prepare and vanish on every one after -- the kind of
+    // intermittent that gets reported as "it works sometimes".
+    return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages, mismatch: printInteriorCache.mismatch || null });
   }
   return runRenderJob(key, 'print-interior', function (secs) {
     // The reader is told it is still working, which is the whole point of a ticket.
@@ -18749,8 +18802,8 @@ function ensureInterior() {
       if (!res.ok || !res.j || !res.j.url) {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
       }
-      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
-      return { url: res.j.url, pages: (res.j.pages || 0) };
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      return { url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
     });
 }
 
@@ -18762,6 +18815,7 @@ function prepareInteriorCount() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
+    try { renderBookMismatch('book-mismatch-order', printInteriorCache.mismatch, 'order'); } catch (e) {}
     updatePrintPageDisplay(printActualPages, true);
     refreshPrintOptions(printActualPages);
     return;
@@ -18781,7 +18835,11 @@ function prepareInteriorCount() {
         if (_why && _pe) { _pe.textContent = _why; return; }
         updatePrintPageDisplay(-1, false); return;
       }
-      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      // v3.0.798 -- TD-608. print-interior builds the APPROVED book and now says when that is not
+      // the book on screen. This is the tab-open path, so the notice is there before anything is
+      // clicked; reviewPrintOrder re-renders it from the same field when Prepare runs.
+      try { renderBookMismatch('book-mismatch-order', res.j.mismatch, 'order'); } catch (e) {}
       if (res.j.pages && res.j.pages > 0) {
         printActualPages = res.j.pages;
         updatePrintPageDisplay(printActualPages, true);
@@ -19202,7 +19260,7 @@ function loadPrintTab() {
       printNovelInfo = res.j;
       syncPrintVersionDisplay();
       printActualPages = 0;
-      printInteriorCache = { key: '', url: '', pages: 0 };
+      printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
       updatePrintPageDisplay(-1, false);
       // v3.0.430 -- ASK THE SAVED BOOK FIRST. The binding list is derived from the page count, and
       // opening on pageEstimate meant it was derived from a GUESS and then visibly changed its mind a
@@ -19336,6 +19394,26 @@ function refreshPrintOptions(pageCount) {
       // indistinguishable afterwards, so nobody can be told they lost something.
       var _wasColor = c ? c.value : '';
       var _wasPaper = pp ? pp.value : '';
+      // v3.0.796 -- TD-601. THE OTHER TWO SELECTS WERE NEVER REMEMBERED, AND HARDCOVER COULD NOT SURVIVE.
+      //
+      // Ian: "I chose hard cover and it switched it." Confirmed, and it is not intermittent.
+      // v3.0.784 wrote the remember-and-restore above for colour and paper and stopped there, so
+      // fill(b, ...) below wiped the binding and the select landed on its FIRST option. For any book
+      // over 48 pages that list is [paperback, hardcover] -- so Hardcover reverted to Paperback on
+      // every refresh, and refreshPrintOptions runs when the Order tab learns the page count AND on
+      // every printOptionsChanged. Picking hardcover and then touching Interior Printing was enough.
+      //
+      // THE GUARD BELOW COULD NEVER HAVE CAUGHT IT. `if (b && o.default.binding && !b.value)` tests
+      // for an empty value, and a <select> that has options always has one -- the first. So the
+      // branch meant to restore a default was skipped while the value it was guarding had already
+      // been silently replaced.
+      //
+      // WHAT IT COST: reviewPrintOrder read the form, rendered the interior, and read it AGAIN for
+      // the cover. Between those two reads the binding reverted -- so a hardcover order was placed
+      // with a PAPERBACK cover sheet, 17.54 x 11.25 where Lulu wanted 19.25 x 12.75, and the only
+      // thing that caught it was Lulu's own upload form.
+      var _wasBinding = b ? b.value : '';
+      var _wasFinish = f ? f.value : '';
       fill(b, o.bindings);
       fill(c, o.colorTiers);
       fill(f, o.coverFinishes);
@@ -19356,12 +19434,40 @@ function refreshPrintOptions(pageCount) {
         var _colorStillOffered = !!(o.colorTiers || []).filter(function (x) { return x.id === _wasColor; }).length;
         if (_colorStillOffered) c.value = _wasColor;
       }
+      // v3.0.796 -- TD-601. The binding, restored the same way -- and SPOKEN ABOUT when it cannot be.
+      // A binding can genuinely stop being available: the page count crosses saddle stitch's 48-page
+      // ceiling, or probeCoverBindings finds Lulu will not size a cover for it. That is a real
+      // change and the reader has to be told, because a silently swapped binding is a different
+      // book at a different price with a differently sized cover.
+      if (b && _wasBinding) {
+        var _bindingStillOffered = !!(o.bindings || []).filter(function (x) { return x.id === _wasBinding; }).length;
+        if (_bindingStillOffered) {
+          b.value = _wasBinding;
+        } else {
+          var _newB = (o.bindings || []).filter(function (x) { return x.id === b.value; })[0] || (o.bindings || [])[0];
+          try {
+            showPrintBtnMsg('Your binding is now ' + ((_newB && _newB.label) || b.value) +
+              '. The one you had chosen is not available for a book this length.', 'info');
+          } catch (e) {}
+        }
+      }
+      // The finish list does not vary today, but it is rebuilt from scratch like the rest, so it is
+      // remembered for the same reason. Silence is right here: nothing can remove a finish, so a
+      // lost value would be a bug rather than a product fact.
+      if (f && _wasFinish) {
+        var _finishStillOffered = !!(o.coverFinishes || []).filter(function (x) { return x.id === _wasFinish; }).length;
+        if (_finishStillOffered) f.value = _wasFinish;
+      }
       // v3.0.784 -- TD-585. Defaults apply only where nothing was chosen. This used to run
       // unconditionally, straight over the values restored above.
       if (o.default) {
-        if (b && o.default.binding && !b.value) b.value = o.default.binding;
+        // v3.0.796 -- TD-601. TESTED AGAINST WHAT WAS CHOSEN, not against .value. A <select> holding
+        // options always reports a value -- its first one -- so `!b.value` and `!f.value` were false
+        // the instant fill() ran and these two branches were unreachable. The colour and paper lines
+        // beside them already tested the remembered value, which is why only these two drifted.
+        if (b && o.default.binding && !_wasBinding) b.value = o.default.binding;
         if (c && o.default.colorTier && !_wasColor) c.value = o.default.colorTier;
-        if (f && o.default.coverFinish && !f.value) f.value = o.default.coverFinish;
+        if (f && o.default.coverFinish && !_wasFinish) f.value = o.default.coverFinish;
         if (pp && o.default.paper && !_wasPaper) pp.value = o.default.paper;
       }
       // v3.0.665 -- TD-464. LAST, because these lists were just rebuilt and the defaults above are
@@ -19530,20 +19636,39 @@ function printInteriorUrl() {
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
-function printCoverUrl() {
+function printCoverUrl(selOverride) {
   // The wrap cover is sized to the chosen format (binding + page count drive
   // the spine), so it carries the format selection + page count, plus co for
   // the Platinum hide-logo flag, plus as_user so a member's own cover art is used.
-  var sel = printSelectionBody();
-  var s = (sel && sel.selection) || {};
-  var pc = currentPageCount();
+  // v3.0.796 -- TD-601. TAKE THE SELECTION, DO NOT GO AND READ IT AGAIN.
+  //
+  // reviewPrintOrder read the form three times at three different moments -- once for the order
+  // body, once here after the interior had rendered, and once more in renderPrintReview for the
+  // summary line. Anything that reset a control in between (and refreshPrintOptions did exactly
+  // that, on the page count landing) put a PAPERBACK cover on a HARDCOVER order, with the summary
+  // free to disagree with both. Fixing the reset is TD-601's other half; this is what stops the
+  // same class of drift from any future cause, because one read cannot disagree with itself.
+  // Still falls back to reading the form, for callers that have no body in hand.
+  //
+  // v3.0.797 -- TD-607. IT TAKES THE WHOLE BODY, NOT JUST .selection, AND THAT IS THE POINT.
+  // v3.0.796 passed `body.selection` here and deleted the `var sel = printSelectionBody()` line
+  // above -- but the bookTitle argument three lines down still read `sel`, so this threw
+  // "sel is not defined" on every Prepare. bookTitle lives at the TOP of the body, beside
+  // selection rather than inside it, so half the answer was being passed in and the other half
+  // was still being fetched. Taking the whole body is what makes "read the form once" actually
+  // true: every field this URL needs now comes from the same read.
+  var body = selOverride || printSelectionBody() || {};
+  var s = body.selection || {};
+  // The page count from the SAME body when there is one -- reviewPrintOrder overwrites
+  // body.pageCount with the interior's exact count before calling here.
+  var pc = (body.pageCount > 0) ? body.pageCount : currentPageCount();
   return '/api/pdf/print-cover/' + state.currentCampaign.id +
     '?binding=' + encodeURIComponent(s.binding || '') +
     '&color=' + encodeURIComponent(s.colorTier || '') +
     '&finish=' + encodeURIComponent(s.coverFinish || '') +
     '&paper=' + encodeURIComponent(s.paper || '') +
     '&pageCount=' + encodeURIComponent(pc) +
-    '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
+    '&bookTitle=' + encodeURIComponent(body.bookTitle || '') +
     '&titleColor=' + encodeURIComponent((document.getElementById('print-title-color') || {}).value || '') +
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
@@ -19575,10 +19700,15 @@ function reviewPrintOrder() {
         body.pageCount = intr.pages;
         updatePrintPageDisplay(intr.pages, true);
       }
+      // v3.0.798 -- TD-608. Carried onto the order body so renderPrintReview shows it above the
+      // total. The tab-open notice is easy to scroll past; the review panel is the last thing read
+      // before paying, and that is the moment this is actually for.
+      body.mismatch = intr.mismatch || null;
+      try { renderBookMismatch('book-mismatch-order', body.mismatch, 'order'); } catch (e) {}
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
-      return runRenderJob(printCoverUrl(), 'print-cover', function (secs) {
+      return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
         try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
       });
     })
@@ -19638,14 +19768,34 @@ function renderPrintReview(body, quote) {
       '<span style="color:rgba(245,232,200,0.55);">' + escapeHtmlPrint(label) + '</span>' +
       '<span style="color:var(--cream);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
   }
-  function lbl(id) { var el = document.getElementById(id); return (el && el.options && el.options[el.selectedIndex]) ? el.options[el.selectedIndex].text : ''; }
+  // v3.0.796 -- TD-601. NAME THE VALUE BEING ORDERED, not whatever the control says now.
+  // lbl() reads the live <select>, so this line described the form at render time rather than the
+  // selection inside `body` -- the one that is actually being priced and printed. When the two
+  // disagreed the summary sided with the form, which is the surface least likely to be right.
+  // Falls back to the raw value so an unmatched option prints something true rather than nothing.
+  function lblFor(id, value) {
+    if (!value) return '';
+    var el = document.getElementById(id);
+    if (el && el.options) {
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === value) return el.options[i].text;
+      }
+    }
+    return String(value);
+  }
   var versionTxt = (document.getElementById('print-version-display') || {}).value || (state.novelAsUser ? 'Player version' : 'Canonical');
   var ship = body.shipTo;
   var addr = [ship.name, ship.street1, ship.street2, [ship.city, ship.stateCode, ship.postcode].filter(Boolean).join(' '), ship.countryCode].filter(Boolean).join(', ');
   var html = '';
+  // v3.0.799 -- TD-609. THE NOTICE IS NOT REPEATED HERE. v3.0.798 put it on the button row AND at
+  // the head of this panel, on the reasoning that the review is the last thing read before paying.
+  // Both are on screen at once, so that was the same sentence twice, six inches apart. Ian, with a
+  // screenshot: "we don't need the message twice." The button-row copy stays visible while this
+  // panel is open, so nothing is lost by removing this one.
   html += row('Order name', body.orderName || '(none)');
   html += row('Version', versionTxt);
-  html += row('Format', [lbl('print-binding'), lbl('print-color'), lbl('print-finish')].filter(Boolean).join(', '));
+  var _fmt = (body && body.selection) || {};
+  html += row('Format', [lblFor('print-binding', _fmt.binding), lblFor('print-color', _fmt.colorTier), lblFor('print-finish', _fmt.coverFinish)].filter(Boolean).join(', '));
   html += row('Quantity', String(body.quantity));
   html += row('Ship to', addr);
   html += row('Shipping', body.shippingLevel);
@@ -19769,7 +19919,7 @@ function resetPrintForm() {
   preparedCoverUrl = '';
   preparedSignature = '';
   printActualPages = 0;
-  printInteriorCache = { key: '', url: '', pages: 0 };
+  printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
   if (printNovelInfo) {
     updatePrintPageDisplay(-1, false);
     refreshPrintOptions(printNovelInfo.pageEstimate);
@@ -21959,10 +22109,24 @@ function finalizeLoadFixOptionsNow() {
             var _sig = _finalizeAfterPages + ':' + _planned;
             if (_fixOffsetSaid !== _sig) {
               _fixOffsetSaid = _sig;
-              optimizeLogLine('<strong>Edit may be describing a different version of this book.</strong> ' +
-                'The book on screen has ' + _finalizeAfterPages + ' pages and the layout behind the Edit ' +
-                'buttons makes ' + _planned + '. Press Load Last Optimized File to bring the two back ' +
-                'together before making changes.', 'stop');
+              // v3.0.799 -- TD-609. THE REMEDY SENTENCE IS GONE, AND NOT FOR TIDINESS.
+              // It read "Press Load Last Optimized File to bring the two back together before
+              // making changes." Ian saw this banner IMMEDIATELY AFTER loading the last optimized
+              // file -- the message was telling him to do the thing he had just done.
+              // IT CANNOT WORK, AND TD-597 SAYS WHY. Loading restores the saved BOOK; it does not
+              // restore `_runMoves` / `_runGrows`, which live in process memory with a TTL. So the
+              // rebuild behind the Edit buttons is still the natural book -- which is exactly the
+              // shape of Ian's numbers, 22 rendered against 43 planned, an un-optimized rebuild
+              // nearly twice the length of the optimized book on screen.
+              // Ian: "just tell them it doesn't match, not what to do about it." Until TD-597
+              // persists the run state there IS no reliable instruction to give, and inventing one
+              // sends people round a loop that returns them here.
+              // v3.0.801 -- TD-611. Ian's wording: name the Prep & Preview tab and drop the jargon.
+              // "Edit may be describing" and "the layout behind the Edit buttons" both asked the
+              // reader to know which internal thing was meant. The selections are what they set.
+              optimizeLogLine('<strong>The selections on the Prep &amp; Preview tab describe a different ' +
+                'version of this book.</strong> The book on screen has ' + _finalizeAfterPages +
+                ' pages and those selections make ' + _planned + '.', 'stop');
             }
           } else {
             _fixOffsetSuspect = null; _fixOffsetSaid = '';
@@ -22122,10 +22286,12 @@ function finalizeOpenFixDialog(viewerPage) {
   if (_fixOffsetSuspect) {
     h += '<div style="font-size:11px;color:#8a5a1e;background:rgba(176,125,30,0.12);' +
       'border:1px solid rgba(176,125,30,0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
-      '<strong>This may not be the page you are looking at.</strong> The book on screen has ' +
-      _fixOffsetSuspect.rendered + ' pages and the layout behind these options makes ' +
-      _fixOffsetSuspect.planned + ', so they may describe a different page. Press ' +
-      '<strong>Load Last Optimized File</strong> first to bring the two back together.</div>';
+      // v3.0.799 -- TD-609. Same removal as the run-log line above, for the same reason: this
+      // banner carried the identical instruction and it cannot do what it promises (TD-597).
+      // v3.0.801 -- TD-611. Same wording change as the run-log line, same reason.
+      '<strong>The selections on the Prep &amp; Preview tab describe a different version of this ' +
+      'book.</strong> The book on screen has ' + _fixOffsetSuspect.rendered + ' pages and those ' +
+      'selections make ' + _fixOffsetSuspect.planned + ', so these options may describe a different page.</div>';
   }
   h += '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
