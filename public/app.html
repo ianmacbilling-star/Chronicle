@@ -690,10 +690,13 @@
               <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
             </div>
             <div class="ord-actions">
-              <!-- v3.0.798 -- TD-608. Above the button that starts the order, for the same reason
-                   as the publish one: it exists to be read before it is pressed. Never disables. -->
-              <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
+              <!-- v3.0.799 -- TD-609. TO THE RIGHT OF THE BUTTON, in the same slot every other
+                   message on this row uses. v3.0.798 put it FIRST in the flex row, which had no
+                   basis of its own, so it took a whole line above the button and pushed everything
+                   down. Ian: "Put the message to the right of the button... there is plenty of
+                   space to the right." Same flex sizing as #print-place-msg beside it. -->
+              <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
             </div>
             <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>

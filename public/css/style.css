@@ -2206,6 +2206,10 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .book-mismatch ul { margin: 6px 0 6px 18px; padding: 0; }
 .book-mismatch li { margin: 2px 0; }
 .book-mismatch .bm-foot { opacity: 0.85; }
+/* v3.0.799 -- TD-609. On the order button's row it is a flex ITEM, not a block: without a basis
+   it claimed a full line of its own and pushed the button up away from it. 260px matches the
+   240px #print-place-msg beside it closely enough to wrap at the same point. */
+.ord-actions .book-mismatch { flex: 1 1 260px; min-width: 0; margin: 0; }
 
 /* ===== Pre-Publish Prep panel (Preview & Export tab) ===== */
 .novel-preview-layout { display:flex; gap:0; align-items:flex-start; }

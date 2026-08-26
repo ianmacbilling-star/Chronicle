@@ -19787,11 +19787,11 @@ function renderPrintReview(body, quote) {
   var ship = body.shipTo;
   var addr = [ship.name, ship.street1, ship.street2, [ship.city, ship.stateCode, ship.postcode].filter(Boolean).join(' '), ship.countryCode].filter(Boolean).join(', ');
   var html = '';
-  // v3.0.798 -- TD-608. FIRST in the panel, above the format and the total.
-  try {
-    var _bm = bookMismatchHtml(body && body.mismatch, 'order');
-    if (_bm) html += '<div class="book-mismatch" style="margin-top:0;">' + _bm + '</div>';
-  } catch (e) {}
+  // v3.0.799 -- TD-609. THE NOTICE IS NOT REPEATED HERE. v3.0.798 put it on the button row AND at
+  // the head of this panel, on the reasoning that the review is the last thing read before paying.
+  // Both are on screen at once, so that was the same sentence twice, six inches apart. Ian, with a
+  // screenshot: "we don't need the message twice." The button-row copy stays visible while this
+  // panel is open, so nothing is lost by removing this one.
   html += row('Order name', body.orderName || '(none)');
   html += row('Version', versionTxt);
   var _fmt = (body && body.selection) || {};
@@ -22109,10 +22109,21 @@ function finalizeLoadFixOptionsNow() {
             var _sig = _finalizeAfterPages + ':' + _planned;
             if (_fixOffsetSaid !== _sig) {
               _fixOffsetSaid = _sig;
+              // v3.0.799 -- TD-609. THE REMEDY SENTENCE IS GONE, AND NOT FOR TIDINESS.
+              // It read "Press Load Last Optimized File to bring the two back together before
+              // making changes." Ian saw this banner IMMEDIATELY AFTER loading the last optimized
+              // file -- the message was telling him to do the thing he had just done.
+              // IT CANNOT WORK, AND TD-597 SAYS WHY. Loading restores the saved BOOK; it does not
+              // restore `_runMoves` / `_runGrows`, which live in process memory with a TTL. So the
+              // rebuild behind the Edit buttons is still the natural book -- which is exactly the
+              // shape of Ian's numbers, 22 rendered against 43 planned, an un-optimized rebuild
+              // nearly twice the length of the optimized book on screen.
+              // Ian: "just tell them it doesn't match, not what to do about it." Until TD-597
+              // persists the run state there IS no reliable instruction to give, and inventing one
+              // sends people round a loop that returns them here.
               optimizeLogLine('<strong>Edit may be describing a different version of this book.</strong> ' +
                 'The book on screen has ' + _finalizeAfterPages + ' pages and the layout behind the Edit ' +
-                'buttons makes ' + _planned + '. Press Load Last Optimized File to bring the two back ' +
-                'together before making changes.', 'stop');
+                'buttons makes ' + _planned + '.', 'stop');
             }
           } else {
             _fixOffsetSuspect = null; _fixOffsetSaid = '';
@@ -22272,10 +22283,11 @@ function finalizeOpenFixDialog(viewerPage) {
   if (_fixOffsetSuspect) {
     h += '<div style="font-size:11px;color:#8a5a1e;background:rgba(176,125,30,0.12);' +
       'border:1px solid rgba(176,125,30,0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
+      // v3.0.799 -- TD-609. Same removal as the run-log line above, for the same reason: this
+      // banner carried the identical instruction and it cannot do what it promises (TD-597).
       '<strong>This may not be the page you are looking at.</strong> The book on screen has ' +
       _fixOffsetSuspect.rendered + ' pages and the layout behind these options makes ' +
-      _fixOffsetSuspect.planned + ', so they may describe a different page. Press ' +
-      '<strong>Load Last Optimized File</strong> first to bring the two back together.</div>';
+      _fixOffsetSuspect.planned + ', so they may describe a different page.</div>';
   }
   h += '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
