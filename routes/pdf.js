@@ -4143,24 +4143,122 @@ var CO_COMPARABLE = {
   toc: 1, header: 1, markers: 1, markerbreak: 1,
   titleStyle: 1, titlePlace: 1, titleSize: 1
 };
-function bookMismatch(approvedInc, nowInc, approvedCo, nowCo) {
-  var m = { sessions: false, layout: false, titlecover: false, any: false, categories: [] };
+// v3.0.800 -- TD-610. AN ABSENT co IS "WE WERE NOT TOLD", NOT "THE DEFAULTS".
+//
+// Ian, with a screenshot of both notices on ONE screen disagreeing: the publish card said Sessions
+// AND Layout AND Title and cover; the order tab said Sessions only. "I don't think the cover and
+// layouts are wrong, I think it's just the session list."
+//
+// MEASURED, not reasoned: `parseCustomOpts('')` returns the SERVER defaults -- arrange:grid,
+// border:none -- so comparing a real saved book against an absent co manufactures a difference
+// out of nothing:
+//     saved co vs the same co   -> []
+//     saved co vs an absent co  -> ["Layout options don't match"]
+// And `customOptsQ` returns an EMPTY STRING whenever `customActive` is false, which is exactly the
+// sort of thing that differs between two surfaces built at different moments.
+//
+// So the options comparison is now GATED on having been told. Not knowing is reported as nothing,
+// because a manufactured difference is worse than a missed one here: it teaches the reader that
+// this notice is noise, and the notice that matters is the session list.
+function bookMismatch(approvedInc, nowInc, approvedCo, nowCo, opts) {
+  var m = { sessions: false, layout: false, titlecover: false, any: false, categories: [], keys: [], optionsChecked: false };
   // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before v3.0.588 have none and
   // must behave exactly as they do today -- silent.
   if (approvedInc != null && String(approvedInc) !== String(nowInc)) m.sessions = true;
-  try {
-    var a = parseCustomOpts(approvedCo || '');
-    var b = parseCustomOpts(nowCo || '');
-    for (var k in CO_COMPARABLE) {
-      if (String(a[k]) === String(b[k])) continue;
-      if (CO_TITLE_KEYS[k]) m.titlecover = true; else m.layout = true;
-    }
-  } catch (e) {}
+  // A blank string and an absent argument are the same statement: nobody told us what is on screen.
+  var told = !!(nowCo && String(nowCo).length);
+  if (opts && opts.compareOptions === false) told = false;
+  m.optionsChecked = told;
+  if (told) {
+    try {
+      var a = parseCustomOpts(approvedCo || '');
+      var b = parseCustomOpts(nowCo || '');
+      for (var k in CO_COMPARABLE) {
+        if (String(a[k]) === String(b[k])) continue;
+        m.keys.push(k + ': ' + a[k] + ' -> ' + b[k]);   // for the LOG only; never rendered
+        if (CO_TITLE_KEYS[k]) m.titlecover = true; else m.layout = true;
+      }
+    } catch (e) {}
+  }
   if (m.sessions)   m.categories.push('Sessions don\'t match');
   if (m.layout)     m.categories.push('Layout options don\'t match');
   if (m.titlecover) m.categories.push('Title and cover options don\'t match');
   m.any = m.categories.length > 0;
   return m;
+}
+// v3.0.800 -- TD-610. ONE RESOLVER. THREE SURFACES CANNOT DISAGREE IF THERE IS ONLY ONE ANSWER.
+//
+// v3.0.798 wrote this comparison at THREE call sites -- print-interior, publish-story and the
+// pre-flight route -- each resolving the saved entry and the include map for itself. They put two
+// different answers on one screen within the hour. That is the DERIVE, DO NOT PAIR fault this file
+// records over and over (TD-336, v3.0.575's five copies of the fork-meta block), and it was freshly
+// introduced rather than inherited. Everything now goes through here.
+//
+// WHICH SAVED BOOK. With a co in hand the bucket is co.arrange, as it has always been. WITHOUT one
+// the old pre-flight route defaulted to 'grid' -- a guess that silently looks up a bucket the reader
+// may never have saved into. It now takes the most recently saved entry across every bucket, which
+// is the book they last approved whatever it was arranged as.
+async function lastOptimizedAny(req, campaignId) {
+  try {
+    var db = await getDb();
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var prefs = await getForkBookPrefs(db, _sc.chooser, _sc.fork, campaignId, { inherit: false, versionId: _sc.versionId });
+    var lo = (prefs && prefs.lastOptimized) || null;
+    if (!lo) return null;
+    var best = null, bestAt = -1;
+    for (var k in lo) {
+      var e = lo[k];
+      if (!e) continue;
+      var t = 0;
+      try { t = e.at ? new Date(e.at).getTime() : 0; } catch (_e) { t = 0; }
+      if (!(t > 0)) t = 0;
+      if (best === null || t > bestAt) { best = e; bestAt = t; }
+    }
+    return best;
+  } catch (e) { return null; }
+}
+async function resolveBookMismatch(req, campaignId, coStr) {
+  var none = { saved: false, sessions: false, layout: false, titlecover: false, any: false, categories: [], optionsChecked: false };
+  try {
+    var co = coStr ? parseCustomOpts(coStr) : null;
+    var lo = co ? await lastOptimizedEntry(req, campaignId, co.arrange)
+                : await lastOptimizedAny(req, campaignId);
+    // Nothing saved means nothing to differ FROM. optimize_required already covers that case and
+    // says something far more useful than "everything is different".
+    if (!lo) return none;
+    var db = await getDb();
+    var campaign = await db.prepare(
+      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    ).get(campaignId, req.session.userId);
+    if (!campaign) return none;
+    // Resolved exactly as publish-story and print-interior resolve it, because comparing against a
+    // DIFFERENT include map than the one they use would warn about a book nobody is producing.
+    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+    var _bv = await resolveBookVersion(db, campaign.id, req);
+    var incMap = await effectiveIncludeMap(db, campaign.id, asUser,
+      _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+    var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, coStr);
+    m.saved = true;
+    // THE LOG CARRIES THE DETAIL THE MESSAGE DELIBERATELY DOES NOT. Ian: "don't give too many
+    // details" ON SCREEN. When two surfaces disagreed there was nothing to read afterwards, so the
+    // argument could only be settled by rebuilding the theory. Both co strings and the exact keys
+    // go here, once, whenever something differs.
+    if (m.any) {
+      try {
+        console.warn('[book-mismatch] campaign ' + campaignId + ' -> ' + m.categories.join('; ') +
+          (m.optionsChecked ? '' : ' (options NOT compared: the request carried no co)') +
+          ' | approved inc: ' + (lo.inc || '(none)') + ' | now: ' + includeFingerprint(incMap) +
+          ' | approved co: ' + (lo.co || '(none)') + ' | now co: ' + (coStr || '(none)') +
+          (m.keys && m.keys.length ? ' | differing keys: ' + m.keys.join(', ') : ''));
+      } catch (_e) {}
+    }
+    return m;
+  } catch (e) {
+    // Never fail a publish or an order on this check. TD-576's rule: declining to let someone act
+    // on the strength of our own failed probe is a worse bug than the one it prevents.
+    try { console.warn('[book-mismatch] check failed: ' + ((e && e.message) || e)); } catch (_e) {}
+    return none;
+  }
 }
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
@@ -6645,16 +6743,11 @@ async function printInteriorHandler(req, res) {
     // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT: entries saved before this build have none
     // and must keep ordering exactly as they do today.
     // v3.0.798 -- TD-608. WAS A 409. Now it names what differs and builds the book anyway.
-    // The categories cover BOTH kinds of mismatch, so the `co` comparison that used to log
-    // silently a few lines down now reaches the reader through the same channel.
-    {
-      var _loInc = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
-      var _nowFp = includeFingerprint(_incMap);
-      _mismatch = bookMismatch(_loInc && _loInc.inc, _nowFp, _loInc && _loInc.co, req.query.co);
-      if (_mismatch.any) {
-        try { console.warn('[print-interior] building the APPROVED book; it differs from the screen (' + _mismatch.categories.join('; ') + '). approved inc: ' + ((_loInc && _loInc.inc) || '(none)') + ' | now: ' + _nowFp); } catch (e) {}
-      }
-    }
+    // v3.0.800 -- TD-610. Through the ONE resolver, so this and the publish card cannot answer the
+    // same question differently. It stays inside this branch on purpose: only the composer layouts
+    // print the SAVED book, and the branch below re-renders from current settings, where the
+    // printed interior IS what is on screen and there is nothing to warn about.
+    _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
     // v3.0.496 -- ORDERING NO LONGER REFUSES ON A SETTINGS MISMATCH EITHER.
     // The previous comment here read: "a different border, preset or paper produces a
     // different book, and neither answer is safe to pick silently." That reasoning was
@@ -7354,35 +7447,12 @@ async function printCoverHandler(req, res) {
 //
 // So the publish card asks this first. Same helper, same categories, no side effects.
 router.get('/book-mismatch/:campaignId', requireAuth, async function (req, res) {
-  try {
-    var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    var arrange = (co && co.arrange) || 'grid';
-    var _lo = await lastOptimizedEntry(req, req.params.campaignId, arrange);
-    // No saved book means there is nothing to differ FROM. The optimize_required path already
-    // covers that case and says something far more useful than "nothing matches".
-    if (!_lo) return res.json({ saved: false, any: false, categories: [] });
-    // The include map is resolved exactly as publish-story resolves it -- same db, same asUser
-    // rule, same version -- because comparing against a DIFFERENT set of includes than the one
-    // publish will use would produce a warning about a book nobody is publishing.
-    var db = await getDb();
-    var campaign = await db.prepare(
-      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
-    ).get(req.params.campaignId, req.session.userId);
-    if (!campaign) return res.status(403).json({ error: 'Access denied' });
-    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
-    var _bv = await resolveBookVersion(db, campaign.id, req);
-    var _incMap = await effectiveIncludeMap(db, campaign.id, asUser,
-      _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-    var m = bookMismatch(_lo.inc, includeFingerprint(_incMap), _lo.co, req.query.co);
-    m.saved = true;
-    return res.json(m);
-  } catch (e) {
-    // NEVER fail the publish card on this. An unknown answer is reported as "no mismatch found"
-    // rather than as a scary unknown -- the same reasoning as the cover probe in TD-576: refusing
-    // to let someone act on the strength of our own failed check is the worse bug.
-    try { console.warn('[book-mismatch] ' + ((e && e.message) || e)); } catch (_e) {}
-    return res.json({ saved: false, any: false, categories: [], error: 'check_failed' });
-  }
+  // v3.0.800 -- TD-610. This route used to resolve everything for itself -- its own arrange guess,
+  // its own include map -- and that is how it came to disagree with the order tab on one screen.
+  // It is now four lines around the shared resolver.
+  var m = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
+  res.set('Cache-Control', 'no-store');
+  return res.json(m);
 });
 
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
@@ -7596,10 +7666,8 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // refusing here was that a published story is a permanent snapshot -- true, and it is also
     // republishable, while the reader loading a saved book is usually publishing exactly the book
     // they meant to. Naming what differs is the honest version of that protection.
-    _mismatch = bookMismatch(_loE.inc, includeFingerprint(_incMap), _loE.co, req.query.co);
-    if (_mismatch.any) {
-      try { console.warn('[publish-story] publishing the SAVED book; it differs from the screen (' + _mismatch.categories.join('; ') + '). approved inc: ' + (_loE.inc || '(none)') + ' | now: ' + includeFingerprint(_incMap) + ' | saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
-    }
+    // v3.0.800 -- TD-610. Through the ONE resolver, which also does the logging.
+    _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
     // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
