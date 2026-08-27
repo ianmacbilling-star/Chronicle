@@ -1966,6 +1966,15 @@ function showView(view) {
   // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
   // tester gets exactly one.
   if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
+  // v3.0.803 -- TD-613. REMEMBER WHERE MY PRINT ORDERS WAS OPENED FROM, so its Back button can
+  // return there -- the same mechanism the Asset Library and Archives already use (sectionBack).
+  // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
+  // display:block, so one line later the answer is always 'orders' and the button would go home to
+  // Sessions from wherever you actually were.
+  if (view === 'orders') {
+    var _curV = _visibleViewId();
+    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -12571,8 +12580,9 @@ function adminOrderCard(o) {
   // means this list cannot be wrong about the theme, now or if the theme changes.
   var _bad = (o.status === 'order_failed' || o.status === 'rejected');
   var _warn = (o.status === 'order_unknown');
-  card.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;' +
-    'border-top:1px solid var(--border);';
+  // v3.0.803 -- TD-613. A CLASS, NOT AN INLINE STYLE -- because :nth-child cannot be written
+  // inline, and the zebra striping Ian asked for is the whole point. See .adm-ord-row in style.css.
+  card.className = 'adm-ord-row';
   // Label in the muted tone, value inheriting -- exactly the weighting the promo rows use.
   function cell(label, value) {
     return '<span style="min-width:150px;"><span style="color:var(--text-muted);">' + esc(label) +
@@ -12600,7 +12610,7 @@ function adminOrderCard(o) {
       // 3006840 by hand is exactly the task this tab exists to remove.
       // Both numbers side by side, and the printer's one IS the link, so nothing is said twice.
       // An order with no job yet prints a dash rather than leaving a gap that reads as a fault.
-      '<strong style="color:var(--gold);min-width:110px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<strong class="adm-row-id">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
       '<span style="min-width:150px;color:var(--text-muted);">Lulu ' +
         (o.provider_order_id
           ? (o.luluUrl
@@ -13391,6 +13401,15 @@ function showView(view) {
   // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
   // tester gets exactly one.
   if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
+  // v3.0.803 -- TD-613. REMEMBER WHERE MY PRINT ORDERS WAS OPENED FROM, so its Back button can
+  // return there -- the same mechanism the Asset Library and Archives already use (sectionBack).
+  // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
+  // display:block, so one line later the answer is always 'orders' and the button would go home to
+  // Sessions from wherever you actually were.
+  if (view === 'orders') {
+    var _curV = _visibleViewId();
+    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -17193,7 +17212,9 @@ function renderPromoCodes(codes) {
     var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
     var badge = c.active ? 'Active' : 'Inactive';
     return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
-      '<strong style="color:var(--gold);min-width:110px;">' + escapeHtml(c.code) + '</strong>' +
+      // v3.0.803 -- TD-613. Same unreadable gold as the Orders tab had, on the list the Orders
+      // rows were modelled on. Found by the guard written for the other one.
+      '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
       '<span style="min-width:140px;">' + escapeHtml(c.label || '') + '</span>' +
       '<span style="min-width:100px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
       '<span style="min-width:90px;">' + escapeHtml(String(c.per_user_limit || 1)) + '/user</span>' +

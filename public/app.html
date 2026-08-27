@@ -1079,6 +1079,13 @@
           <div class="page-title">My Print Orders</div>
           <div class="page-subtitle">Your physical book orders and their status</div>
         </div>
+        <!-- v3.0.803 -- TD-613. Ian: a Back button "like we have on the Archive page, to take you
+             back wherever you were." Identical markup and the identical handler -- sectionBack()
+             already knew about 'orders' in both of its view lists; only the button and the
+             remembering were missing. -->
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
+        </div>
       </div>
       <div id="orders-list" style="margin-top:8px;">
         <div class="settings-section-desc">Loading...</div>
