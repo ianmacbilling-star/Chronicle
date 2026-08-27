@@ -1079,6 +1079,13 @@
           <div class="page-title">My Print Orders</div>
           <div class="page-subtitle">Your physical book orders and their status</div>
         </div>
+        <!-- v3.0.803 -- TD-613. Ian: a Back button "like we have on the Archive page, to take you
+             back wherever you were." Identical markup and the identical handler -- sectionBack()
+             already knew about 'orders' in both of its view lists; only the button and the
+             remembering were missing. -->
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
+        </div>
       </div>
       <div id="orders-list" style="margin-top:8px;">
         <div class="settings-section-desc">Loading...</div>
@@ -1647,7 +1654,14 @@
           <!-- v3.0.790 -- TD-590. Styled like the Existing codes list on the Promo Codes tab: no
                background, no boxes, rows separated by a rule. The previous version painted a dark
                panel behind text coloured for a light theme, which is why it read as grey. -->
-          <div id="admin-orders-list" class="settings-section-desc" style="max-height:62vh;overflow-y:auto;margin-top:6px;"></div>
+          <!-- v3.0.804 -- TD-614. THE INNER SCROLL BOX IS GONE, so the tab has ONE scrollbar.
+               v3.0.789 gave this list max-height:62vh + overflow-y:auto and said why: the lazy load
+               was driven by THIS element's scrollTop, and letting the tab grow instead "would need a
+               window listener and a different mechanism for the same result." It needs neither --
+               an IntersectionObserver on the status line below asks the browser to say when the end
+               of the list comes into view, whichever thing is doing the scrolling. So the mechanism
+               got simpler and the second scrollbar went with it. -->
+          <div id="admin-orders-list" class="settings-section-desc" style="margin-top:6px;"></div>
           <div id="admin-orders-status" class="muted" style="text-align:center;padding:14px;"></div>
         </div>
       </div>

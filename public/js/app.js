@@ -1966,6 +1966,15 @@ function showView(view) {
   // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
   // tester gets exactly one.
   if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
+  // v3.0.803 -- TD-613. REMEMBER WHERE MY PRINT ORDERS WAS OPENED FROM, so its Back button can
+  // return there -- the same mechanism the Asset Library and Archives already use (sectionBack).
+  // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
+  // display:block, so one line later the answer is always 'orders' and the button would go home to
+  // Sessions from wherever you actually were.
+  if (view === 'orders') {
+    var _curV = _visibleViewId();
+    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -12493,15 +12502,56 @@ var adminOrd = { cursor: 0, loading: false, done: false, any: false };
 // switching away and back must not show the first page twice. The scroll binding is the one thing
 // that must not reset: addEventListener stacks, and a second handler would fire a second page load
 // for every scroll event.
+// v3.0.804 -- TD-614. THE PITFALL IN THE OBSERVER, HANDLED RATHER THAN DISCOVERED LATER.
+//
+// IntersectionObserver fires on a CHANGE of intersection, not while something stays visible. On a
+// tall screen the first 25 rows may not fill the viewport, so the end-of-list marker never leaves
+// it, never re-enters it, and paging stops dead at page one with more waiting. The old scrollTop
+// listener had the same hole and hid it behind a 62vh box that was always scrollable.
+//
+// So after every page lands, ask once more whether the tail is still within reach. loadAdminOrders
+// is guarded by `loading` and `done`, so this cannot run away: it stops the moment the server says
+// there is no more, or the list finally grows past the fold.
+function adminOrdersTopUp() {
+  if (adminOrd.loading || adminOrd.done) return;
+  var tail = document.getElementById('admin-orders-status');
+  if (!tail || !tail.offsetParent) return;      // tab not visible -- nothing to top up
+  var r = tail.getBoundingClientRect();
+  var h = window.innerHeight || document.documentElement.clientHeight;
+  if (r.top - 400 <= h) loadAdminOrders();
+}
 function initAdminOrdersTab() {
   var list = document.getElementById('admin-orders-list');
   if (list) list.innerHTML = '';
   adminOrd = { cursor: 0, loading: false, done: false, any: false };
-  if (list && !list._scrollBound) {
-    list._scrollBound = true;
-    list.addEventListener('scroll', function () {
-      if (list.scrollTop + list.clientHeight >= list.scrollHeight - 400) loadAdminOrders();
-    });
+  // v3.0.804 -- TD-614. Ian: "get rid of the double scroll bar on the orders tab."
+  //
+  // The list had its own scroll box ONLY because the lazy load read its scrollTop. Watching the
+  // element that marks the END of the list instead means the browser reports when more is needed,
+  // whoever is scrolling -- the box, the pane, or the window. The inner box is gone with it.
+  //
+  // BOUND ONCE, and the observer is kept on the node: initAdminOrdersTab runs on every visit to the
+  // tab, and a second observer on the same target would fire loadAdminOrders twice per intersection.
+  // rootMargin keeps the old 400px lead-in, so a fast scroll still fetches before the reader lands.
+  //
+  // FALLS BACK. IntersectionObserver is everywhere this app already requires, but a browser without
+  // it must not silently lose paging -- it gets the window scroll listener instead, which is the
+  // thing v3.0.789 was avoiding and is perfectly fine as a fallback.
+  var tail = document.getElementById('admin-orders-status');
+  if (tail && !tail._ordObserved) {
+    tail._ordObserved = true;
+    if (typeof IntersectionObserver === 'function') {
+      new IntersectionObserver(function (entries) {
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].isIntersecting) { loadAdminOrders(); break; }
+        }
+      }, { rootMargin: '400px' }).observe(tail);
+    } else {
+      window.addEventListener('scroll', function () {
+        var r = tail.getBoundingClientRect();
+        if (r.top - 400 <= (window.innerHeight || document.documentElement.clientHeight)) loadAdminOrders();
+      }, { passive: true });
+    }
   }
   loadAdminOrders();
 }
@@ -12547,6 +12597,9 @@ function loadAdminOrders() {
     var items = (d && d.items) || [];
     items.forEach(function (it) { adminOrd.any = true; if (list) list.appendChild(adminOrderCard(it)); });
     if (d && d.nextCursor) adminOrd.cursor = d.nextCursor;
+    // v3.0.804 -- TD-614. See adminOrdersTopUp: a page that does not fill the screen must ask for
+    // the next one itself, because the observer will not fire again while the tail never moved.
+    if (d && d.hasMore && d.nextCursor) setTimeout(adminOrdersTopUp, 0);
     if (!d || !d.hasMore || !d.nextCursor) {
       adminOrd.done = true;
       // v3.0.790 -- TD-590. An empty FILTERED list is not an empty system, and saying "No orders
@@ -12571,8 +12624,9 @@ function adminOrderCard(o) {
   // means this list cannot be wrong about the theme, now or if the theme changes.
   var _bad = (o.status === 'order_failed' || o.status === 'rejected');
   var _warn = (o.status === 'order_unknown');
-  card.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;' +
-    'border-top:1px solid var(--border);';
+  // v3.0.803 -- TD-613. A CLASS, NOT AN INLINE STYLE -- because :nth-child cannot be written
+  // inline, and the zebra striping Ian asked for is the whole point. See .adm-ord-row in style.css.
+  card.className = 'adm-ord-row';
   // Label in the muted tone, value inheriting -- exactly the weighting the promo rows use.
   function cell(label, value) {
     return '<span style="min-width:150px;"><span style="color:var(--text-muted);">' + esc(label) +
@@ -12600,7 +12654,7 @@ function adminOrderCard(o) {
       // 3006840 by hand is exactly the task this tab exists to remove.
       // Both numbers side by side, and the printer's one IS the link, so nothing is said twice.
       // An order with no job yet prints a dash rather than leaving a gap that reads as a fault.
-      '<strong style="color:var(--gold);min-width:110px;">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
+      '<strong class="adm-row-id">' + esc(o.external_id || ('po-' + o.id)) + '</strong>' +
       '<span style="min-width:150px;color:var(--text-muted);">Lulu ' +
         (o.provider_order_id
           ? (o.luluUrl
@@ -13391,6 +13445,15 @@ function showView(view) {
   // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
   // tester gets exactly one.
   if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
+  // v3.0.803 -- TD-613. REMEMBER WHERE MY PRINT ORDERS WAS OPENED FROM, so its Back button can
+  // return there -- the same mechanism the Asset Library and Archives already use (sectionBack).
+  // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
+  // display:block, so one line later the answer is always 'orders' and the button would go home to
+  // Sessions from wherever you actually were.
+  if (view === 'orders') {
+    var _curV = _visibleViewId();
+    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -17193,7 +17256,9 @@ function renderPromoCodes(codes) {
     var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
     var badge = c.active ? 'Active' : 'Inactive';
     return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
-      '<strong style="color:var(--gold);min-width:110px;">' + escapeHtml(c.code) + '</strong>' +
+      // v3.0.803 -- TD-613. Same unreadable gold as the Orders tab had, on the list the Orders
+      // rows were modelled on. Found by the guard written for the other one.
+      '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
       '<span style="min-width:140px;">' + escapeHtml(c.label || '') + '</span>' +
       '<span style="min-width:100px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
       '<span style="min-width:90px;">' + escapeHtml(String(c.per_user_limit || 1)) + '/user</span>' +

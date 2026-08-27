@@ -13,6 +13,44 @@
 // and it will be used instead of Puppeteer's bundled binary.
 // ============================================================
 
+// v3.0.805 -- TD-615. WHERE THE TIME ACTUALLY GOES IN A RENDER.
+//
+// Ian has two data points and they disagree with the obvious model: a 100-page book with almost no
+// decorations rendered fine, a 60-page book with gold frames did not. Page count is clearly not the
+// only factor, and nobody can say what the other one costs because nothing has ever been timed.
+//
+// TWO THINGS WORTH KNOWING BEFORE ANY ARCHITECTURE IS CHOSEN:
+//   1. LOAD vs PAINT. `setContent` builds the document; `page.pdf` rasterises it. TD-567 found the
+//      second is far the slower and that it was the call which timed out. If decorations cost in
+//      PAINT, chunking helps and a bigger budget only defers. If they cost in LOAD, the fix is
+//      different again. One number settles it.
+//   2. THE DOCUMENT IS EXPORTED TWICE when running heads are on -- see the head-split below. On a
+//      400-page book that is 800 pages of paint. TD-567 noted "a book near the limit hits it at
+//      half the size it otherwise would" and nobody has ever measured what the second pass costs.
+//      If it is expensive, halving it is one function rather than an architecture.
+//
+// COSTS NOTHING AND CHANGES NOTHING. Date.now() around work that already happens, one log line per
+// render, and a small ring kept in memory so the diagnostics dump can show the last few without
+// anyone having to be watching the logs at the time.
+var RENDER_TIMING_KEEP = 20;
+var _renderTimings = [];
+function _recordRenderTiming(rec) {
+  try {
+    _renderTimings.push(rec);
+    while (_renderTimings.length > RENDER_TIMING_KEEP) _renderTimings.shift();
+    var parts = [];
+    for (var k in rec.phases) parts.push(k + '=' + rec.phases[k] + 'ms');
+    console.log('[render-timing] ' + (rec.label || 'render') + ' pages=' + (rec.pages != null ? rec.pages : '?') +
+      ' bytes=' + (rec.bytes || 0) + ' ' + parts.join(' ') + ' TOTAL=' + rec.totalMs + 'ms' +
+      (rec.doubleExport ? '  (DOUBLE EXPORT: running heads)' : ''));
+  } catch (e) {}
+}
+// Newest first. Optionally filtered to one label, for the dump.
+function recentRenderTimings(label) {
+  var out = _renderTimings.slice().reverse();
+  if (label) out = out.filter(function (r) { return String(r.label || '').indexOf(label) === 0; });
+  return out;
+}
 async function renderHtmlToPdf(html, options) {
   options = options || {};
   // Ensure relative asset URLs (Campaignia logo, paper textures) resolve: Puppeteer's
@@ -51,7 +89,12 @@ async function renderHtmlToPdf(html, options) {
     if (typeof page.setDefaultTimeout === 'function') page.setDefaultTimeout(navTimeout);
     if (typeof page.setDefaultNavigationTimeout === 'function') page.setDefaultNavigationTimeout(navTimeout);
     var _renderStarted = Date.now();
+    // v3.0.805 -- TD-615. One lap per phase. _tMark moves; _renderStarted does not, so the
+    // RENDER_TIMEOUT message below still reports the true elapsed time.
+    var _tMark = _renderStarted, _phases = {};
+    function _lap(name) { var n = Date.now(); _phases[name] = n - _tMark; _tMark = n; }
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: navTimeout });
+    _lap('load');
 
     // Belt-and-suspenders: make sure every <img> has finished (loaded or errored)
     // before we snapshot to PDF, so panels are never half-painted.
@@ -65,6 +108,7 @@ async function renderHtmlToPdf(html, options) {
         });
       }));
     });
+    _lap('images');
 
     const pdfOpts = {
       printBackground: true,
@@ -117,8 +161,14 @@ async function renderHtmlToPdf(html, options) {
         delete plainOpts.displayHeaderFooter;
         delete plainOpts.headerTemplate;
         delete plainOpts.footerTemplate;
+        // v3.0.805 -- TD-615. THE TWO EXPORTS ARE TIMED SEPARATELY, because the whole question is
+        // whether the second one is nearly free (layout is already computed, so it re-serialises
+        // paint only) or nearly as expensive as the first. On a 400-page book that is the
+        // difference between 400 pages of paint and 800.
         var headedBuf = await page.pdf(Object.assign({ timeout: navTimeout }, pdfOpts));
+        _lap('paint_headed');
         var plainBuf = await page.pdf(Object.assign({ timeout: navTimeout }, plainOpts));
+        _lap('paint_plain');
         var PDFDocument = require('pdf-lib').PDFDocument;
         var dHead = await PDFDocument.load(headedBuf);
         var dPlain = await PDFDocument.load(plainBuf);
@@ -126,7 +176,11 @@ async function renderHtmlToPdf(html, options) {
         var head = Math.min(_skipHead, total);
         var tail = Math.min(_skipTail, Math.max(0, total - head));
         var bodyEnd = total - tail;   // interior is [head, bodyEnd)
-        if (head <= 0 && tail <= 0) return Buffer.from(headedBuf);
+        if (head <= 0 && tail <= 0) {
+          _recordRenderTiming({ label: options.timingLabel || 'render', pages: total, bytes: headedBuf.length,
+            phases: _phases, totalMs: Date.now() - _renderStarted, doubleExport: true });
+          return Buffer.from(headedBuf);
+        }
         var out = await PDFDocument.create();
         var i, idx, cp;
         idx = []; for (i = 0; i < head; i++) idx.push(i);
@@ -135,16 +189,26 @@ async function renderHtmlToPdf(html, options) {
         if (idx.length) { cp = await out.copyPages(dHead, idx); cp.forEach(function (pg) { out.addPage(pg); }); }
         idx = []; for (i = bodyEnd; i < total; i++) idx.push(i);
         if (idx.length) { cp = await out.copyPages(dPlain, idx); cp.forEach(function (pg) { out.addPage(pg); }); }
-        return Buffer.from(await out.save());
+        var _stitched = Buffer.from(await out.save());
+        _lap('stitch');
+        _recordRenderTiming({ label: options.timingLabel || 'render', pages: total, bytes: _stitched.length,
+          phases: _phases, totalMs: Date.now() - _renderStarted, doubleExport: true });
+        return _stitched;
       } catch (e) {
         // Never fail a render over the running head: fall through to the normal single export.
         try { console.error('[renderPdf] matter-page head split failed, using plain export:', (e && e.message) || e); } catch (e2) {}
       }
     }
     const buf = await page.pdf(Object.assign({ timeout: navTimeout }, pdfOpts));
+    _lap('paint');
     // page.pdf returns a Uint8Array on newer Puppeteer; normalize to Buffer
     // so downstream (R2 uploadFile, res.send) always gets a Buffer.
-    return Buffer.from(buf);
+    var _out = Buffer.from(buf);
+    // v3.0.805 -- TD-615. Page count is not known here without parsing the PDF, and parsing a
+    // 400-page document just to log a number would be its own cost. The caller knows it.
+    _recordRenderTiming({ label: options.timingLabel || 'render', pages: options.timingPages || null,
+      bytes: _out.length, phases: _phases, totalMs: Date.now() - _renderStarted, doubleExport: false });
+    return _out;
   } catch (err) {
     // A timeout here means the BOOK IS TOO BIG for the budget, not that a
     // panel is broken. Saying so is the difference between a one-line fix and
@@ -160,6 +224,14 @@ async function renderHtmlToPdf(html, options) {
       _e.code = 'RENDER_TIMEOUT';
       _e.elapsedMs = _ms;
       _e.budgetMs = navTimeout;
+      // v3.0.805 -- TD-615. A RENDER THAT RAN OUT OF TIME IS THE MOST INFORMATIVE ONE THERE IS, and
+      // until now it recorded nothing about WHERE the time went -- only that it was gone. The laps
+      // taken so far say whether it died loading or painting, which is the whole question.
+      try {
+        _recordRenderTiming({ label: (options.timingLabel || 'render') + ':TIMEOUT',
+          pages: options.timingPages || null, bytes: 0, phases: _phases || {},
+          totalMs: _ms, doubleExport: false });
+      } catch (e2) {}
       throw _e;
     }
     throw err;
@@ -168,4 +240,4 @@ async function renderHtmlToPdf(html, options) {
   }
 }
 
-module.exports = { renderHtmlToPdf };
+module.exports = { renderHtmlToPdf, recentRenderTimings };

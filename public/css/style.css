@@ -2082,6 +2082,42 @@ body.role-player #stab-export { display: block !important; }
 .settings-section .form-input{background:#fff;border-color:var(--border);color:var(--text);}
 .settings-section .form-input::placeholder{color:var(--text-light);}
 .settings-section .form-input:focus{border-color:var(--gold);}
+/* v3.0.803 -- TD-613. THE SAME FAULT THIS BLOCK EXISTS FOR, ON A CLASS IT DID NOT KNOW ABOUT.
+   Ian, on the admin Orders tab: "the lettering its yellow on white which is really hard to read."
+   .ord-lbl is rgba(245,232,200,0.75) -- cream, correct on the DARK Order tab it was written for,
+   and the admin filters reuse it inside a WHITE .settings-section. Cream on white.
+   The comment above this block already prescribes the fix: pin the control inside the known light
+   panels rather than restyling per field. So these two lines sit beside the .form-label ones they
+   copy, and the dark Order tab is untouched -- its labels live in .ord-col / .ord-sec, not in a
+   .settings-section, which was checked rather than assumed. */
+.settings-section .ord-lbl,
+.modal .ord-lbl,
+.panel-light .ord-lbl { color: var(--text-muted); }
+.settings-section .ord-lbl-dim,
+.modal .ord-lbl-dim,
+.panel-light .ord-lbl-dim { color: var(--text-light); }
+
+/* v3.0.803 -- TD-613. THE ORDERS GRID, STRIPED.
+   Ian: "have every other row alternate a background color, make the other color more of an
+   off white/cream, make sure the lettering is darker... see if you can find something in the CSS
+   that is already proven to work."
+   IT IS THE THEME'S OWN TWO SURFACES. --surface is #ffffff and --bg is #f9f7f4, the off-white the
+   whole light palette already sits on. Nothing new is invented, nothing can drift from the theme,
+   and if the palette ever changes the stripes follow it.
+   v3.0.790 moved these rows OFF an inline dark panel for exactly that reason (TD-590: a dark box
+   painted under light-theme text). The layout moves out of an inline cssText for the same reason
+   plus one more -- :nth-child cannot be expressed inline at all. */
+.adm-ord-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:9px 10px; border-top:1px solid var(--border); color:var(--text); }
+.adm-ord-row:nth-child(even) { background: var(--bg); }
+.adm-ord-row:first-child { border-top:none; }
+/* The order number was var(--gold) -- #d8b85c on white, which is 1.9:1 against the panel. It is
+   the identifier you scan the column for, so it takes the darkest text the palette has: 17.1:1.
+   ONE CLASS FOR BOTH ADMIN LISTS. The Promo tab's Existing codes list carried the identical inline
+   gold -- it is the list v3.0.790 deliberately modelled the Orders rows on, so it had the same bug
+   and nobody had looked at it yet. Two classes for one concept is how the two drift apart, which is
+   the fault this file keeps recording. */
+.adm-row-id { min-width:110px; font-weight:700; color:var(--text); }
 /* Transparent/dark panel variant -- must follow the light rules to win the cascade. */
 .panel-dark{background:rgba(20,14,6,0.5);border-color:rgba(201,168,76,0.18);}
 .panel-dark .settings-section-title{color:var(--gold-light);}
