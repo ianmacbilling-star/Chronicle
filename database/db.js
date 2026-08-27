@@ -1696,6 +1696,14 @@ async function migrateCasting(pool) {
   // narrative_sections) is TEXT, and one row shape that reads differently from all its neighbours is
   // a trap for the next person. Nothing queries inside it -- paper has its own column for that.
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS paper TEXT');
+  // v3.0.802 -- TD-612. WHEN THE VENDOR WAS LAST ASKED ABOUT THIS ORDER.
+  //
+  // DELIBERATELY NOT updated_at. That column means "when something about this order CHANGED", and
+  // v3.0.787 protects it: refreshLiveOrder writes nothing when the vendor's answer matches what we
+  // hold, precisely so "when did this last move" stays meaningful. A check that found no change is
+  // not a change -- but it IS the thing an hourly rule has to remember, so it gets its own column.
+  // NULL means never asked, which correctly reads as "due now".
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS provider_checked_at TIMESTAMP');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_spec TEXT');
 
   // v3.0.669 -- TD-473. THE FAILED PAYMENTS NOBODY WAS WRITING DOWN.
