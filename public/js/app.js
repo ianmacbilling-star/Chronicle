@@ -23980,12 +23980,33 @@ function _runLayoutAiOptimize() {
       // running before it starts another, every branch out of the review settles, and the loop's
       // own then/catch settle as a backstop.
       var _liveNow = null;
+      var _liveMsg = '';
+      // v3.0.808 -- TD-623 follow-up. KEEP WHAT THE LINE WAS ABOUT.
+      // v3.0.807's backstop settled the live line with the bare text 'Optimize stopped.', and
+      // optimizeProgressLive.fail REPLACES the line rather than appending to it. So on the first
+      // real failure the panel read:
+      //     v AI Loop 1: reviewed -- 70 changes to make.
+      //     . Optimize stopped.
+      // and the applying line appeared never to have existed -- which is precisely the confusion
+      // v3.0.807 was built to end. It HAD existed; it was overwritten by its own epitaph.
+      // Settling with no message now keeps the line's own subject and adds the outcome to it:
+      //     . AI Loop 1: applying 70 changes -- stopped.
+      // which tells the reader WHERE it stopped, the one thing worth knowing.
       function _settleLive(ok, msg) {
-        try { if (_liveNow) { if (ok) _liveNow.done(msg); else _liveNow.fail(msg); } } catch (e) {}
-        _liveNow = null;
+        try {
+          if (_liveNow) {
+            var _m = msg || (_liveMsg ? (_liveMsg + ' &mdash; stopped.') : undefined);
+            if (ok) _liveNow.done(_m); else _liveNow.fail(_m);
+          }
+        } catch (e) {}
+        _liveNow = null; _liveMsg = '';
       }
       function _liveStart(msg) {
-        try { _settleLive(false); _liveNow = optimizeProgressLive(msg); } catch (e) { _liveNow = null; }
+        // A leftover ticker here is being SUPERSEDED, not stopped, so it settles to its own plain
+        // text with no outcome attached -- claiming it stopped would be a second wrong epitaph.
+        try { if (_liveNow) _liveNow.fail(_liveMsg || undefined); } catch (e) {}
+        _liveNow = null; _liveMsg = '';
+        try { _liveNow = optimizeProgressLive(msg); _liveMsg = msg; } catch (e) { _liveNow = null; _liveMsg = ''; }
         return _liveNow;
       }
       function _plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
@@ -24441,9 +24462,28 @@ function _runLayoutAiOptimize() {
         // v3.0.807 -- TD-623. A throw must never strand a TICKER either, for the same reason it must
         // never strand the lock: a line still counting seconds on a run that died is a worse lie
         // than the silence this change removed.
-        _settleLive(false, 'Optimize stopped.');
+        _settleLive(false);   // keeps the line's own subject: "applying 70 changes -- stopped."
         window._aiLoopRunning = false;
         if (!window._aiFinishing) optimizeLockStop();   // v3.0.350 -- a throw must never strand the lock
+        // v3.0.808 -- TELL THE SERVER WE GAVE UP. optimizeLockStop is PURELY LOCAL: it clears the
+        // browser's lock and stops the heartbeat and says nothing to anyone. So when the apply
+        // request died -- which is what brought us into this catch -- the server's claim stayed up
+        // and Ian was refused on EVERY book for the next quarter of an hour with nothing running:
+        //     "An Optimize run for another book is already going in the background, started about
+        //      11 minutes ago."
+        // The Cancel button has told the server since v3.0.610; the FAILURE path never has.
+        // STOP, NOT RELEASE, and the difference matters. optimize-release only drops the claim; if
+        // the server is genuinely still grinding -- and after a proxy timeout it usually is -- that
+        // leaves a live run mutating the same composed cache and move store as whatever starts
+        // next, which is the exact corruption v3.0.610 exists to prevent. optimize-stop tombstones
+        // the run id so the old run refuses at its next step, then frees the claim. Best effort and
+        // deliberately unawaited: the 15-minute stale timeout is still the real safety net, this
+        // only saves the reader from sitting through it.
+        try {
+          fetch('/api/pdf/optimize-stop', { method: 'POST', credentials: 'same-origin' })
+            .then(function () { window._optimizeRunId = null; })
+            .catch(function () {});
+        } catch (e2) {}
         removeLoopBar();
         var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
         _revLbl.textContent = 'After (optimized)';
