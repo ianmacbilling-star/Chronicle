@@ -10,7 +10,7 @@ const genresvc = require('../services/genres');   // v3.0.487 -- Library genre s
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile, fetchFile, copyObject } = require('../storage/storage');
-const { renderHtmlToPdf } = require('../services/printing/renderPdf');
+const { renderHtmlToPdf, recentRenderTimings } = require('../services/printing/renderPdf');   // v3.0.805 -- TD-615
 const { flattenPdf } = require('../services/printing/flattenPdf');
 // v3.0.686 -- TD-406. The cover scrim is a PNG alpha ramp, not a CSS gradient: Ghostscript
 // cannot reproduce the construct Chromium emits for a gradient, and the flatten erased it from
@@ -6911,7 +6911,7 @@ async function printInteriorHandler(req, res) {
     pdfBuffer = _stripped.buffer;
   } else {
     try {
-      pdfBuffer = await renderHtmlToPdf(html, {});
+      pdfBuffer = await renderHtmlToPdf(html, { timingLabel: 'print-interior' });
     } catch (e) {
       console.error('[print-interior] render failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') });
@@ -7448,7 +7448,7 @@ async function printCoverHandler(req, res) {
 
     var pdfBuffer;
     try {
-      pdfBuffer = await renderHtmlToPdf(html, { widthIn: dims.widthIn, heightIn: dims.heightIn });
+      pdfBuffer = await renderHtmlToPdf(html, { widthIn: dims.widthIn, heightIn: dims.heightIn, timingLabel: 'print-cover' });
     } catch (e) {
       console.error('[print-cover] render failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Cover render failed', detail: friendlyError(e, '') });
@@ -7772,7 +7772,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
 
     let pdfBuffer;
     try {
-      pdfBuffer = await renderHtmlToPdf(html, {});
+      pdfBuffer = await renderHtmlToPdf(html, { timingLabel: 'publish-story' });
     } catch (e) {
       console.error('[publish-story] render failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
@@ -11303,6 +11303,45 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
 // READ-ONLY ONLY. This produces a dump. The OTHER admin easter egg on that page -- reset AI image
 // grows -- MUTATES the reader's book and is deliberately left admin-gated: seeing why a book is
 // broken is support, rewriting it underneath somebody is not.
+// v3.0.805 -- TD-615. THE TIMINGS GO IN THE DUMP, because that is the artefact Ian actually sends.
+//
+// The [render-timing] log line is the primary record, but reading it means being in the logs at the
+// right moment for the right deploy. The dump is a file he downloads after the fact and can hand
+// over -- so the last few renders ride along in it, newest first, and a failure that has already
+// scrolled out of view is still readable.
+//
+// LOAD vs PAINT is the column that matters. Two of Ian's books disagree with the page-count model
+// -- 100 pages plain rendered, 60 pages with gold frames did not -- and until something separates
+// building the document from rasterising it, "decorations are slow" is a belief.
+function renderTimingsBlock() {
+  var rows;
+  try { rows = recentRenderTimings(); } catch (e) { rows = []; }
+  var out = '\n\nRENDER TIMINGS  (this process, newest first, last ' + (rows.length || 0) + ')\n';
+  out += 'A render is LOAD (build the document) then PAINT (rasterise it). TD-567 measured paint as\n';
+  out += 'far the slower and the call that timed out. paint_headed + paint_plain means the document\n';
+  out += 'was exported TWICE for the running head -- on a 400-page book that is 800 pages of paint.\n';
+  if (!rows.length) {
+    out += '\n  (nothing recorded yet -- this process has rendered nothing since it started, which after a\n';
+    out += '   deploy is normal. Render once, then take the dump.)\n';
+    return out;
+  }
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    var ph = r.phases || {};
+    var parts = [];
+    for (var k in ph) parts.push(k + ' ' + (ph[k] / 1000).toFixed(1) + 's');
+    out += '\n  ' + String(r.label || 'render') +
+           '  pages=' + (r.pages != null ? r.pages : '?') +
+           '  ' + ((r.bytes || 0) / 1048576).toFixed(1) + 'MB' +
+           '  TOTAL ' + ((r.totalMs || 0) / 1000).toFixed(1) + 's\n' +
+           '      ' + (parts.join('  ') || '(no phases)') +
+           (r.doubleExport ? '   << exported twice (running heads)' : '') + '\n';
+    if (r.pages > 0 && r.totalMs > 0) {
+      out += '      ' + Math.round(r.totalMs / r.pages) + 'ms per page\n';
+    }
+  }
+  return out;
+}
 router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
@@ -11335,7 +11374,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, a
         _dlName = String(_ccM.campaignName || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.set('Content-Disposition', 'attachment; filename="' + _dlName + '_After_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
-        return res.send(txt);
+        return res.send(txt + renderTimingsBlock());
       }
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true, flowSim: _flow });
       // v3.0.354 -- SAY WHAT THIS IS. The magazine branch has ALWAYS re-packed from scratch:
@@ -11388,7 +11427,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, a
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
     res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_wantRef ? '_Reference' : (_flow ? '_Before' : '_After')) +
             '_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
-    return res.send(txt);
+    return res.send(txt + renderTimingsBlock());
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
     return res.status(500).send('pack-debug error:\n' + ((e && e.stack) || (e && e.message) || e));
@@ -13394,7 +13433,7 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
     var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
     _job.step = 'render';
-    var pdfBuffer = await renderHtmlToPdf(html, {});
+    var pdfBuffer = await renderHtmlToPdf(html, { timingLabel: 'save-optimized' });
     var pages = 0; try { pages = await countPdfPages(pdfBuffer); } catch (e) {}
     // v3.0.424 -- HOW MANY COVER PAGES THIS FILE HAS, so the POD interior can be produced by
     // REMOVING them from this exact PDF instead of rendering the whole book a second time.
@@ -13776,7 +13815,8 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
         composedCachePut(req.params.campaignId, req, _cco.arrange, bodyM, _cco.campaignName);   // the print interior reuses this
         var rbuiltM = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: bodyM });
         if (req.query.pane === '1') rbuiltM.html = paneSafeHtml(rbuiltM.html);
-        var pdfM = await renderHtmlToPdf(rbuiltM.html, {});
+        // v3.0.805 -- TD-615. Labelled so the dump can say WHICH render each timing came from.
+        var pdfM = await renderHtmlToPdf(rbuiltM.html, { timingLabel: 'optimize:' + (_cco.arrange || 'magazine') });
         var _mPages = 0; try { _mPages = await countPdfPages(pdfM); } catch (e) {}
         // v3.0.356 -- FLAT 1 TOKEN for the composer/packer. Was ceil(pages/10). The AI passes are
         // now metered separately in layout-review, so this covers only the deterministic pack,
@@ -13800,7 +13840,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       composedCachePut(req.params.campaignId, req, 'paired', body, _cco.campaignName);   // the print interior reuses this
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       if (req.query.pane === '1') rbuiltC.html = paneSafeHtml(rbuiltC.html);   // preview-safe gradients in the Finalize After pane only
-      var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
+      var pdfC = await renderHtmlToPdf(rbuiltC.html, { timingLabel: 'optimize:paired' });
       var _cPages = 0; try { _cPages = await countPdfPages(pdfC); } catch (e) {}
       var _cCost = 1;   // v3.0.356 -- flat 1 token for the composer/packer; AI passes metered separately
       try { res.set('X-Optimize-Tokens', String(_cCost)); res.set('Access-Control-Expose-Headers', 'X-Optimize-Tokens'); } catch (e) {}   // v3.0.360
@@ -13813,7 +13853,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
     var packed = await computePairedPack(req, req.params.campaignId);
     req.query.packRender = '1';
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, packed.overrides);
-    var pdf = await renderHtmlToPdf(rbuilt.html, {});
+    var pdf = await renderHtmlToPdf(rbuilt.html, { timingLabel: 'optimize:flow' });
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', 'inline; filename="packed-preview.pdf"');
     res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
