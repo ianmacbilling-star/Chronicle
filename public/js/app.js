@@ -23958,6 +23958,37 @@ function _runLayoutAiOptimize() {
       // showing one labelled as the other would read as a bug. Held across passes so each line can
       // say what moved rather than just what the number is now.
       var _lastPlanPages = null;
+      // v3.0.807 -- TD-623. THE PANEL MUST NOT GO QUIET WHILE THE RUN IS STILL WORKING.
+      // Ian, 2026-08-27, on a run he killed twice believing it had died: "it looked like it stopped...
+      // The progress bar stopped and no logging." It had not stopped. The server was mid-apply with
+      // hundreds of whole-book measures still to go, and the reason nothing moved on screen is that
+      // on the SUCCESS path -- the AI returns ops and we go and apply them -- there was no
+      // optimizeProgress line between the review returning and the apply landing. Every other
+      // optimizeProgress call in that stretch is a FAILURE branch: stopped, unreachable, retrying,
+      // nothing to do. So the panel sat on "AI Loop 1: reviewing the layout" for the single longest
+      // step in the run, two to six minutes on a 129-page book.
+      // aiLog did say "applying" -- but aiLog only renders behind the admin easter egg. loopStatus
+      // did update -- but it writes to the After-pane label on the RIGHT, and so does the progress
+      // bar, and the panel being watched is on the LEFT. Three things reporting progress and none of
+      // them where the user is looking. That cost six tokens and an hour to two false failures.
+      // optimizeProgressLive already solves exactly this and has since v3.0.389, where it was built
+      // for the same complaint about the save: "have something going until it is completely
+      // finished." It ticks dots and an elapsed counter and settles into an ordinary log line. This
+      // uses it rather than inventing a second mechanism.
+      // ONE TICKER AT A TIME, AND IT ALWAYS SETTLES. A leaked setInterval ticks forever on a dead
+      // run, which is a worse lie than the silence it replaces -- so _liveStart settles whatever is
+      // running before it starts another, every branch out of the review settles, and the loop's
+      // own then/catch settle as a backstop.
+      var _liveNow = null;
+      function _settleLive(ok, msg) {
+        try { if (_liveNow) { if (ok) _liveNow.done(msg); else _liveNow.fail(msg); } } catch (e) {}
+        _liveNow = null;
+      }
+      function _liveStart(msg) {
+        try { _settleLive(false); _liveNow = optimizeProgressLive(msg); } catch (e) { _liveNow = null; }
+        return _liveNow;
+      }
+      function _plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
       // A visible log panel so Ian can SEE what each pass does. Appended below the After pane; each pass
       // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
@@ -24028,7 +24059,7 @@ function _runLayoutAiOptimize() {
         }
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
-        optimizeProgress('AI Loop ' + roundNum + ': reviewing the layout&hellip;');
+        _liveStart('AI Loop ' + roundNum + ': reviewing the layout');   // v3.0.807 -- TD-623, ticks while it waits
         // v3.0.649 -- the run id goes with every pass so a stop can actually reach this loop.
         var _runQ = window._optimizeRunId ? ((_q.indexOf('?') === -1 ? '?' : '&') + 'run=' + encodeURIComponent(window._optimizeRunId)) : '';
         return fetch('/api/pdf/layout-review/' + _cid + _q + _runQ, { credentials: 'same-origin' })
@@ -24041,6 +24072,7 @@ function _runLayoutAiOptimize() {
               window._optimizeCancelled = true;
               window._aiLoopRunning = false;
               aiLog('This run was stopped from another tab. Nothing further will be saved from it.');
+              _settleLive(false, 'AI Loop ' + roundNum + ': stopped.');
               optimizeProgress('This Optimize run was stopped.', { done: true });
               var _rb2 = document.getElementById('layoutai-run-btn');
               if (_rb2) { _rb2.disabled = false; _rb2.textContent = 'Optimize layout'; _rb2.classList.add('has-token'); }
@@ -24108,6 +24140,7 @@ function _runLayoutAiOptimize() {
                 if (!_reviewRetried) {
                   _reviewRetried = true;
                   aiLog('Pass ' + roundNum + ': retrying once in 6s...', 'skip');
+                  _settleLive(false, 'AI Loop ' + roundNum + ': the AI could not be reached.');
                   optimizeProgress('The AI could not be reached (' + String(j.error).slice(0, 80) + ') &mdash; retrying...', { dim: true });
                   // v3.0.402 -- lastBlob DOES NOT EXIST HERE, and never has.
                   // It is a parameter of iterate(), which is a SIBLING of runRound -- so this line has
@@ -24119,15 +24152,23 @@ function _runLayoutAiOptimize() {
                   // HAS the blob, does the waiting and the re-entry.
                   return { retry: true, done: false, applied: 0, blob: null, report: null };
                 }
+                _settleLive(false, 'AI Loop ' + roundNum + ': the AI service was unavailable.');
                 optimizeProgress('Stopped early &mdash; the AI service was unavailable. Your book was NOT fully optimized; try again shortly.', { done: true });
                 return { done: true, applied: 0, blob: null, report: null, failed: true };
               }
               aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
+              _settleLive(true, 'AI Loop ' + roundNum + ': reviewed.');
               optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
               return { done: true, applied: 0, blob: null, report: null };
             }
             aiLog('Pass ' + roundNum + ': AI proposed ' + _ops.length + ' op(s) -- applying...');
             loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
+            // v3.0.807 -- TD-623. THE LINE THAT WAS MISSING. Everything above this point reported
+            // itself; from here the run went dark for minutes. The apply is the longest step in the
+            // pass -- it re-measures the whole book after essentially every op -- so it is the step
+            // that most needs to be seen working, and it was the only one with nothing to show.
+            _settleLive(true, 'AI Loop ' + roundNum + ': reviewed &mdash; ' + _plural(_ops.length, 'change') + ' to make.');
+            _liveStart('AI Loop ' + roundNum + ': applying ' + _plural(_ops.length, 'change'));
             return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
               method: 'POST', credentials: 'same-origin',
               headers: { 'Content-Type': 'application/json' },
@@ -24137,6 +24178,10 @@ function _runLayoutAiOptimize() {
               var _rep = r.headers.get('X-Apply-Report');
               return r.blob().then(function (b) {
                 var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
+                // v3.0.807 -- TD-623. Settle here, not further down: the bytes have arrived, so the
+                // wait this line describes is genuinely over. Reading the count off the report keeps
+                // the settled line a fact rather than a repeat of the promise made when it started.
+                _settleLive(true, 'AI Loop ' + roundNum + ': applied ' + _plural((rep && rep.appliedCount) || 0, 'change') + '.');
                 try { if (window._optimizeCapture) window._optimizeCapture.applies.push({ pass: roundNum, report: rep }); } catch (e) {}
                 // Log the detail of what actually happened this pass.
                 if (rep) {
@@ -24387,11 +24432,16 @@ function _runLayoutAiOptimize() {
       }
 
       iterate(1, null).then(function () {
+        _settleLive(true);   // v3.0.807 -- TD-623 backstop: no ticker outlives the loop
         window._aiLoopRunning = false;
         if (!window._aiFinishing) optimizeLockStop();   // v3.0.350 -- cancelled / converged with no finish
         removeLoopBar();
         var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
       }).catch(function (e) {
+        // v3.0.807 -- TD-623. A throw must never strand a TICKER either, for the same reason it must
+        // never strand the lock: a line still counting seconds on a run that died is a worse lie
+        // than the silence this change removed.
+        _settleLive(false, 'Optimize stopped.');
         window._aiLoopRunning = false;
         if (!window._aiFinishing) optimizeLockStop();   // v3.0.350 -- a throw must never strand the lock
         removeLoopBar();
