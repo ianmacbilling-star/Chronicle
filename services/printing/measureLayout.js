@@ -32,6 +32,51 @@ var _mIdleTimer = null;
 var _mFontsOk = false;
 var MEASURE_FONT_WAIT_MS = 750;   // was 5000, and 5000 was pure waste -- see below
 var MEASURE_BROWSER_IDLE_MS = 5 * 60 * 1000;   // release the browser after five idle minutes
+// ===== MEASURE TIMING INSTRUMENTATION (v3.0.806, TD-616) ========================================
+// renderPdf.js was instrumented in v3.0.805 and the answer it gave was that the RENDER is not where
+// an Optimize pass spends its time: on the 129-page book of 2026-08-27 the three renders were 81s
+// of a 575s run -- 14%. The other 63% is layout-apply composing and RE-MEASURING, and the note at
+// the top of this file already says why: one shrinkImage costs four whole-book measures while it
+// bisects, and remeasureComposed* has twelve call sites, several of them inside loops.
+//
+// The open question is therefore arithmetic, not architecture: is a pass expensive because a single
+// measure is expensive, or because there are dozens of them? Those two answers lead to completely
+// different fixes -- narrowing what each measure looks at, versus cutting how many run -- and the
+// wrong one has already been chosen twice today on reasoning alone. So this counts instead.
+//
+// COSTS NOTHING AND CHANGES NOTHING. Date.now() around work that already happens, one log line per
+// measure, a small ring so the diagnostics dump can show the last few without anyone watching the
+// logs at the time, and cumulative counters so one request can report its own delta.
+var MEASURE_TIMING_KEEP = 40;   // several measures per pass, so a deeper ring than render's 20
+var _measureTimings = [];
+var _measureTotals = { calls: 0, ms: 0 };
+function _recordMeasureTiming(rec) {
+  try {
+    _measureTotals.calls += 1;
+    _measureTotals.ms += (rec.totalMs || 0);
+    _measureTimings.push(rec);
+    while (_measureTimings.length > MEASURE_TIMING_KEEP) _measureTimings.shift();
+    var parts = [];
+    for (var k in rec.phases) parts.push(k + '=' + rec.phases[k] + 'ms');
+    console.log('[measure-timing] ' + (rec.label || 'measure') +
+      ' pages=' + (rec.pages != null ? rec.pages : '?') +
+      ' blocks=' + (rec.blocks != null ? rec.blocks : '?') +
+      ' ' + parts.join(' ') + ' TOTAL=' + rec.totalMs + 'ms');
+  } catch (e) {}
+}
+// Newest first. Optionally filtered to one label, for the dump.
+function recentMeasureTimings(label) {
+  var out = _measureTimings.slice().reverse();
+  if (label) out = out.filter(function (r) { return String(r.label || '').indexOf(label) === 0; });
+  return out;
+}
+// Cumulative since process start. A caller snapshots this on the way in and again on the way out and
+// reports the DIFFERENCE, which is how layout-apply can say "this pass ran 11 measures" without any
+// request state being threaded through twelve call sites. Deliberately never reset: deltas only, so
+// two overlapping requests cannot corrupt each other's count -- they can only over-attribute, and a
+// second concurrent Optimize on one process is already prevented by the run lock.
+function measureCounters() { return { calls: _measureTotals.calls, ms: _measureTotals.ms }; }
+
 function _mLaunchOpts() {
   var o = {
     headless: true,
@@ -109,8 +154,17 @@ function _mWithTimeout(p, ms, label) {
 }
 async function measureDocument(html, options) {
   options = options || {};
+  // v3.0.806 (TD-616) -- laps around work that already happens. _t0 is taken BEFORE _mGetBrowser so
+  // a cold launch is attributed to this measure rather than vanishing; that is the whole point of
+  // the 'browser' lap being separate from 'load'.
+  var _t0 = Date.now();
+  var _tMark = _t0;
+  var _phases = {};
+  var _recorded = false;
+  function _lap(name) { var _n = Date.now(); _phases[name] = _n - _tMark; _tMark = _n; }
   const browser = await _mGetBrowser();   // shared, not launched per call
   const page = await browser.newPage();
+  _lap('browser');
   try {
 
     // Block image + media requests: layout is instant and never waits on R2.
@@ -122,6 +176,7 @@ async function measureDocument(html, options) {
     });
 
     await page.setContent(html, { waitUntil: 'load', timeout: options.timeoutMs || 60000 });
+    _lap('load');
 
     // Wait for web fonts so measured text height matches the real PDF metrics.
     // BOUNDED: setContent above carries a timeout; this did not, and a font that never settles hung
@@ -216,6 +271,7 @@ async function measureDocument(html, options) {
       try { console.log('[measure] fonts confirmed on this browser in ' + _fMs + 'ms (' + _fs + ') -- later measures skip the wait'); } catch (e) {}
     }
     }   // end: not yet confirmed on this browser
+    _lap('fonts');
 
     // v3.0.510 -- READ THE ENV VAR IN NODE AND PASS IT IN.
     // v3.0.508 put `process.env.DEBUG_BOXOVERFLOW` INSIDE this evaluate body, which runs in the
@@ -403,17 +459,44 @@ async function measureDocument(html, options) {
       return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes, boxOverflows: boxOverflows };
     }, _boxScanOn);
 
+    _lap('measure');
+
     var total = 0;
     data.blocks.forEach(function (b) { total += b.heightIn; });
     data.blockCount = data.blocks.length;
     data.totalBlockHeightIn = Math.round(total * 1000) / 1000;
     data.imagesBlocked = true;
+    // v3.0.806 (TD-616) -- PAGES, not blocks. The composed measure emits one cp:N marker per page
+    // (see remeasureComposedPaired), so counting those is the only honest page number available
+    // here; a book measured pre-compose has no cp: markers at all and reports null rather than
+    // guessing from the block count, which is beats and would read as a page count four times too
+    // large. Never let this throw -- it is a log line, not a result.
+    var _pages = null;
+    try {
+      var _cp = 0;
+      data.blocks.forEach(function (b) { if (/^cp:\d+$/.test(b.id || '')) _cp++; });
+      if (_cp > 0) _pages = _cp;
+    } catch (e) { _pages = null; }
+    _recorded = true;
+    _recordMeasureTiming({ label: options.measureLabel || 'measure', pages: _pages,
+      blocks: data.blockCount, bytes: (html && html.length) || 0,
+      phases: _phases, totalMs: Date.now() - _t0 });
     return data;
   } finally {
     // Close the PAGE only -- the browser is shared and lives on. A failure here must never mask the
     // real error or abort the caller, but a leaked page is a leaked tab, so it is still attempted.
     try { await page.close(); } catch (e) {}
+    // v3.0.806 (TD-616) -- a measure that THREW still cost the time it burned, and those are exactly
+    // the ones worth seeing. Recording it here rather than swallowing it keeps the ring honest about
+    // a run that fell over; the flag stops a successful measure being counted twice.
+    if (!_recorded) {
+      try {
+        _recordMeasureTiming({ label: (options.measureLabel || 'measure') + ':FAILED', pages: null,
+          blocks: null, bytes: (html && html.length) || 0,
+          phases: _phases, totalMs: Date.now() - _t0 });
+      } catch (e) {}
+    }
   }
 }
 
-module.exports = { measureDocument };
+module.exports = { measureDocument, recentMeasureTimings, measureCounters };

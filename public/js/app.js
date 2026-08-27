@@ -23952,6 +23952,12 @@ function _runLayoutAiOptimize() {
       }
 
       var totalApplied = 0;
+      // v3.0.806 -- TD-616. Ian: "Page count from 54 to 53 ... etc etc." The apply report now carries
+      // the PLAN's page count (planPages). This is the plan's count, NOT the rendered PDF's -- the
+      // rendered book adds front and back matter, so the two legitimately differ by several pages and
+      // showing one labelled as the other would read as a bug. Held across passes so each line can
+      // say what moved rather than just what the number is now.
+      var _lastPlanPages = null;
 
       // A visible log panel so Ian can SEE what each pass does. Appended below the After pane; each pass
       // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
@@ -24172,6 +24178,21 @@ function _runLayoutAiOptimize() {
                     aiLog('   skipped ' + r2.op + ' viewer p.' + (r2.viewerPage != null ? r2.viewerPage : '?') + ' -- ' + (r2.reason || 'rejected'), 'reject');
                   });
                   aiLog('Pass ' + roundNum + ': applied ' + (rep.appliedCount || 0) + ', skipped ' + (rep.rejectedCount || 0) + (rep.deferredCount ? (', deferred ' + rep.deferredCount) : '') + '.');
+                  // v3.0.806 -- TD-616. Say what the pass did to the LENGTH of the book. With the
+                  // intermediate render on its way out, this becomes the only signal the reader has
+                  // that the book is still getting shorter, so it goes to the user-facing progress
+                  // log as well as the admin one -- but only when it actually moved. A line that
+                  // says "page count 121" on three consecutive passes is noise, not progress.
+                  if (rep.planPages != null) {
+                    if (_lastPlanPages != null && rep.planPages !== _lastPlanPages) {
+                      var _dir = (rep.planPages < _lastPlanPages) ? 'Page count from ' : 'Page count grew from ';
+                      aiLog('   ' + _dir + _lastPlanPages + ' to ' + rep.planPages + '.', 'applied');
+                      optimizeProgress(_dir + _lastPlanPages + ' to ' + rep.planPages + '.', { dim: true });
+                    } else if (_lastPlanPages == null) {
+                      aiLog('   Page count ' + rep.planPages + ' after pass ' + roundNum + '.');
+                    }
+                    _lastPlanPages = rep.planPages;
+                  }
                   // Friendly note when a pass changed nothing, so the user-facing log doesn't dead-end on "reviewing".
                   if ((rep.appliedCount || 0) === 0) optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
                 }

@@ -19,7 +19,7 @@ const { flattenPdf } = require('../services/printing/flattenPdf');
 // needs no direction, so top / middle / bottom now share one image instead of three that could
 // drift. scrimCss stays exported for reference; nothing here reads it any more.
 const { coverHazeCss: COVER_HAZE_CSS } = require('../services/printing/scrimRamp');
-const { measureDocument } = require('../services/printing/measureLayout');
+const { measureDocument, recentMeasureTimings, measureCounters } = require('../services/printing/measureLayout');   // v3.0.806 -- TD-616
 const { packPaired } = require('../services/printing/packPaired');
 const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
 const { fontCss, baseFontCss, bookFontCss, fontsPresent } = require('../services/printing/fonts');
@@ -6353,7 +6353,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _mco.arrange = 'comicpage';
       _mco.measureTag = true;
       var _mhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _mco, { noCover: true });
-      var _measured = await measureDocument(_mhtml, {});
+      var _measured = await measureDocument(_mhtml, { measureLabel: 'comic:session-pack' });
       try {
         var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
         _measured.plan = packComic(_measured.blocks, { pageHeightIn: 9.7, gapIn: 0.12, maxPages: _maxPP });
@@ -6367,7 +6367,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     if (req.query.measure2 === '1' || req.query.measure2 === 'true') {
       var _c2 = co || {}; _c2.arrange = 'comicpage'; _c2.measureChunks = true; _c2.twoPass = false; _c2.measureTag = false;
       var _h2 = buildSessionHTML(session, moments, campaign, characters, narrative, _c2, { noCover: true });
-      var _m2 = await measureDocument(_h2, {});
+      var _m2 = await measureDocument(_h2, { measureLabel: 'comic:session-repack' });
       var _imgInfo = moments.map(function (m, idx) {
         return { moment: idx, aspect: Math.round(momentAspect(m) * 1000) / 1000, prominence: lmProminence(m), tier: lmSizeTier(m), hasImage: !!m.image };
       });
@@ -6384,7 +6384,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       var _emco = {}; for (var _ek in _eco) { if (Object.prototype.hasOwnProperty.call(_eco, _ek)) _emco[_ek] = _eco[_ek]; }
       _emco.measureChunks = true; _emco.engine = false; _emco.twoPass = false; _emco.measureTag = false;
       var _emhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _emco, { noCover: true });
-      var _em = await measureDocument(_emhtml, {});
+      var _em = await measureDocument(_emhtml, { measureLabel: 'comic:engine-plan' });
       var _byM = {};
       (_em.blocks || []).forEach(function (b) {
         var mm = /^m(\d+)_c(\d+)_w(\d+)$/.exec(b.id || '');
@@ -7441,7 +7441,8 @@ async function printCoverHandler(req, res) {
     var _wrapSub = null;
     if (req.query.subtitle != null) _wrapSub = String(req.query.subtitle);
     else if (campaign._memberSubtitle != null) _wrapSub = campaign._memberSubtitle;
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it   // v3.0.575 -- the stored colour, same as the title beside it
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it
+   // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
@@ -8138,7 +8139,7 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
     // 1) measure narration heights
     req.query.measurePaired = '1';
     var measBuilt = await assembleNovelHtml(req, req.params.campaignId, null);
-    var measured = await measureDocument(measBuilt.html, {});
+    var measured = await measureDocument(measBuilt.html, { measureLabel: 'novel-packed' });
     delete req.query.measurePaired;
     var blocks = measured.blocks || [];
     var pageH = 9.7;
@@ -8562,7 +8563,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (packOpts && packOpts.debug) _imgProbeOn = true;   // emit per-image geometry probes for the dump (AI input contract)
   req.query.measurePaired = '1';
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
-  var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
+  var blocks = (await measureDocument(mbuilt.html, { measureLabel: 'paired:pack-bands' })).blocks || [];
   delete req.query.measurePaired;
   var pageH = 9.7;
   // Decoration costs from the registry. Line height is taken from the measure pass so any
@@ -9216,7 +9217,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     _mzComposed = { plan: { pages: pgs }, bands: bnds };
     req.query.measureComposed = '1';
     var cbuilt = await assembleNovelHtml(req, campaignId, null);
-    var _cmeas = await measureDocument(cbuilt.html, {});
+    var _cmeas = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:magazine' });
     var cblocks = _cmeas.blocks || [];
     if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
     if (_cmeas.imgProbes && _cmeas.imgProbes.length) realH._imgProbes = _cmeas.imgProbes;
@@ -9273,7 +9274,7 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
     var _body = composeBook(plan, beats, Object.assign({}, cOpts || {}, { measureComposed: true }));
         var _extra = { packComposedBody: _body, arrange: 'paired' };
     var cbuilt = await assembleNovelHtml(req, campaignId, null, _extra);
-    var _cmeasP = await measureDocument(cbuilt.html, {});
+    var _cmeasP = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:paired' });
     var cblocks = _cmeasP.blocks || [];
     if (_cmeasP.imgProbes && _cmeasP.imgProbes.length) realH._imgProbes = _cmeasP.imgProbes;
     cblocks.forEach(function (bl) {
@@ -9454,7 +9455,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
   if (MZ_OPT_SHRINK_FEATURES) { req.query.mzCapFeatures = '1'; req.query.mzFloatShrunk = '1'; }
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
   _mzFlowSim = false;   // bands are built; do not leak the flag past band construction
-  var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
+  var meas = magazineMeasure((await measureDocument(mbuilt.html, { measureLabel: 'magazine:pack' })).blocks || []);
   var bandH = meas.h;
   var bands = _mzBands || [];
   fillMissingMagazineLines(meas, bands);
@@ -9567,7 +9568,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
   if (Object.keys(grow).length) {
     _mzGrow = grow; _mzBands = [];
     var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
-    var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, {})).blocks || []);
+    var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, { measureLabel: 'magazine:repack' })).blocks || []);
     var bands2 = _mzBands || [];
     fillMissingMagazineLines(meas2, bands2);
     bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow, splitAllow);
@@ -11342,6 +11343,50 @@ function renderTimingsBlock() {
   }
   return out;
 }
+// v3.0.806 -- TD-616. The companion to renderTimingsBlock, and the more important of the two.
+// v3.0.805 answered "how long does a render take" and the answer turned out to be "not long enough
+// to matter": three renders were 81s of a 575s run on the 129-page book of 2026-08-27. The other
+// 63% is layout-apply COMPOSING AND RE-MEASURING -- remeasureComposedPaired has twelve call sites,
+// several inside the scale bisection, and each one loads the WHOLE BOOK into Chromium.
+// So the question this block exists to settle is: count, or unit cost? If a measure is 20s and
+// there are six, the fix is to run fewer. If a measure is 2s and there are sixty, the fix is the
+// same but the lever is different -- and if it is 20s and there are sixty, only narrowing the SCOPE
+// of each measure helps. Two diagnoses have already been wrong today from reasoning alone; this one
+// is arithmetic.
+function measureTimingsBlock() {
+  var rows;
+  try { rows = recentMeasureTimings(); } catch (e) { rows = []; }
+  var tot = null;
+  try { tot = measureCounters(); } catch (e) { tot = null; }
+  var out = '\n\nMEASURE TIMINGS  (this process, newest first, last ' + (rows.length || 0) + ')\n';
+  out += 'A measure loads the composed book into Chromium and reads back every page height. Images\n';
+  out += 'are BLOCKED during a measure, so it is cheaper than a render -- but the optimize loop runs\n';
+  out += 'many per pass: one shrinkImage costs four whole-book measures while it bisects.\n';
+  if (tot) {
+    out += 'PROCESS TOTAL: ' + tot.calls + ' measure(s), ' + (tot.ms / 1000).toFixed(1) + 's' +
+           (tot.calls ? ('  (mean ' + (tot.ms / tot.calls / 1000).toFixed(1) + 's)') : '') + '\n';
+  }
+  if (!rows.length) {
+    out += '\n  (nothing recorded yet -- this process has measured nothing since it started, which\n';
+    out += '   after a deploy is normal. Pack or optimize once, then take the dump.)\n';
+    return out;
+  }
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    var ph = r.phases || {};
+    var parts = [];
+    for (var k in ph) parts.push(k + ' ' + (ph[k] / 1000).toFixed(1) + 's');
+    out += '\n  ' + String(r.label || 'measure') +
+           '  pages=' + (r.pages != null ? r.pages : '?') +
+           '  blocks=' + (r.blocks != null ? r.blocks : '?') +
+           '  TOTAL ' + ((r.totalMs || 0) / 1000).toFixed(1) + 's\n' +
+           '      ' + (parts.join('  ') || '(no phases)') + '\n';
+    if (r.pages > 0 && r.totalMs > 0) {
+      out += '      ' + Math.round(r.totalMs / r.pages) + 'ms per page\n';
+    }
+  }
+  return out;
+}
 router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
@@ -11374,7 +11419,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, a
         _dlName = String(_ccM.campaignName || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.set('Content-Disposition', 'attachment; filename="' + _dlName + '_After_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
-        return res.send(txt + renderTimingsBlock());
+        return res.send(txt + renderTimingsBlock() + measureTimingsBlock());
       }
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true, flowSim: _flow });
       // v3.0.354 -- SAY WHAT THIS IS. The magazine branch has ALWAYS re-packed from scratch:
@@ -11427,7 +11472,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, a
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
     res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_wantRef ? '_Reference' : (_flow ? '_Before' : '_After')) +
             '_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
-    return res.send(txt + renderTimingsBlock());
+    return res.send(txt + renderTimingsBlock() + measureTimingsBlock());
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
     return res.status(500).send('pack-debug error:\n' + ((e && e.stack) || (e && e.message) || e));
@@ -11886,6 +11931,38 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
 // finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
 // pack-render route has always relied on -- removing requireAdmin opens no new surface.
 router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) {
+  // v3.0.806 -- TD-616. WHAT DID THIS PASS ACTUALLY SPEND? The debug log records the round trip
+  // (88-180s per pass across the two books measured on 2026-08-27) and v3.0.805 records the render
+  // inside it (~25s). The gap between those two numbers is the whole question, and until now it was
+  // unattributed. Snapshot the process-wide measure counters on the way in and report the DELTA on
+  // the way out: no request state is threaded through twelve call sites, and a route that returns
+  // through any of its several exits still gets counted, because 'finish' fires once per response
+  // however it ended. Deliberately attached BEFORE the try -- a pass that throws burned the time too
+  // and is the more interesting case.
+  var _mc0 = null; try { _mc0 = measureCounters(); } catch (e) {}
+  var _mcT0 = Date.now();
+  try {
+    res.on('finish', function () {
+      try {
+        if (!_mc0) return;
+        var _mc1 = measureCounters();
+        var _calls = _mc1.calls - _mc0.calls;
+        var _ms = _mc1.ms - _mc0.ms;
+        var _wall = Date.now() - _mcT0;
+        var _ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops.length : 0;
+        var _shrinks = 0, _grows = 0;
+        if (req.body && Array.isArray(req.body.ops)) req.body.ops.forEach(function (o) {
+          if (o && o.op === 'shrinkImage') _shrinks++;
+          if (o && o.op === 'growImage') _grows++;
+        });
+        console.log('[apply-cost] campaign ' + req.params.campaignId +
+          ' ops=' + _ops + ' (shrink ' + _shrinks + ', grow ' + _grows + ')' +
+          ' measures=' + _calls + ' measureMs=' + _ms +
+          ' wallMs=' + _wall +
+          ' measureShare=' + (_wall > 0 ? Math.round((_ms / _wall) * 100) : 0) + '%');
+      } catch (e) {}
+    });
+  } catch (e) {}
   try {
     var ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops : null;
     if (!ops) return res.status(400).json({ error: 'POST a JSON body { "ops": [ ... ] }.' });
@@ -12428,7 +12505,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
         try { res.set('X-Apply-Report', JSON.stringify({
-          appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
+          planPages: mplan.pages.length, appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
           // v3.0.372 -- CARRY belowFloor ACROSS THE WIRE. v3.0.371 added the flag on the server and
           // the display on the client and never checked the wire between them: the optimize loop takes
           // the pdf=1 path, this header is the whole report it sees, and the mapping dropped the field.
@@ -12441,7 +12518,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
       }
       return res.json({ campaign: mName, arrange: _cco.arrange, applied: true, clipLine: MCLIP,
-        appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
+        planPages: mplan.pages.length, appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
         appliedOps: mApplied, rejectedOps: mRejected, deferredOps: mDeferred,
         note: 'Magazine grow/shrink applied and confirmed by real re-measure. Text/tower moves deferred (pass 1 already densifies magazine).' });
     }
@@ -12903,7 +12980,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
       try { res.set('X-Apply-Report', JSON.stringify({
-        appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
+        planPages: plan.pageCount, appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
         applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo, movedKind: a.movedKind, shrankFrom: a.shrankFrom, shrankTo: a.shrankTo, capMul: (a.capMul != null ? a.capMul : null) }; }),
         rejected: rejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
       })); } catch (e) {}
@@ -12914,7 +12991,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // After render shows the result.
     return res.json({
       campaign: campaignName, arrange: 'paired', applied: true, clipLine: CLIP,
-      appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
+      planPages: plan.pageCount, appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
       appliedOps: applied, rejectedOps: rejected, deferredOps: deferred,
       note: 'Scale ops applied and confirmed by real re-measure; the composed book is cached. Re-open the After view to see it. Text-move ops are deferred to the next build.'
     });
@@ -13878,7 +13955,7 @@ router.get('/pack-paired/:campaignId', requireAuth, async function (req, res) {
   try {
     req.query.measurePaired = '1';
     var built = await assembleNovelHtml(req, req.params.campaignId, null);
-    var measured = await measureDocument(built.html, {});
+    var measured = await measureDocument(built.html, { measureLabel: 'pack-paired' });
     var blocks = measured.blocks || [];
     var pageH = 9.7;
     var bi = 0;
@@ -13912,7 +13989,7 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
   try {
     req.query.measurePaired = '1';
     var built = await assembleNovelHtml(req, req.params.campaignId, null);
-    var measured = await measureDocument(built.html, {});
+    var measured = await measureDocument(built.html, { measureLabel: 'measure-paired' });
     res.json({
       campaign: built.campaign ? built.campaign.name : null,
       layout: built.layoutStyle,
