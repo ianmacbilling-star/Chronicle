@@ -9211,12 +9211,33 @@ function fillMissingMagazineLines(meas, bands) {
 // Set DEBUG_CLIP=1 to bring it back (same convention as DEBUG_PROMPT in routes/images.js) for the
 // case the dump cannot cover: watching a live run that is not going to produce a bundle.
 function clipLogOn() { return !!process.env.DEBUG_CLIP; }
+// ===== COMPOSE TIMING (v3.0.810, TD-616) ==========================================================
+// THE GAP v3.0.806 LEFT, AND IT IS MOST OF THE RUN.
+// v3.0.806 timed measureDocument and the answer was that Chromium is cheap: 441 measures cost 94.7s
+// on the 129-page Dojo book, a mean of 0.2s. But an apply on that book takes ~150s, of which the
+// render is 28s and the measures ~20s. That leaves ~100 SECONDS PER APPLY -- 68% -- attributed to
+// nothing at all.
+// The suspect is directly above every measure and is timed by no one: remeasureComposed* rebuilds
+// the WHOLE BOOK (composeBook) and then the WHOLE DOCUMENT (assembleNovelHtml) before it measures
+// anything, and it does that once per op. ~98 remeasures per apply against ~100s unaccounted is
+// almost exactly one second each, which is entirely plausible for composing a 123-page book.
+// THAT IS A HYPOTHESIS AND THIS IS HOW IT STOPS BEING ONE. Four diagnoses have been made about this
+// loop in a single day -- render, page-count scaling, measure count, and now compose -- and three
+// of them were wrong. Each was argued from reading the code. So this counts instead, and it counts
+// BEFORE anything is rebuilt on the strength of it.
+// Cumulative only, deliberately: unlike a measure, a compose has no interesting internal phases and
+// there are hundreds per pass. The total and the call count are the whole question.
+var _composeTotals = { calls: 0, ms: 0 };
+function composeCounters() { return { calls: _composeTotals.calls, ms: _composeTotals.ms }; }
+function _composeTick(t0) { try { _composeTotals.calls += 1; _composeTotals.ms += (Date.now() - t0); } catch (e) {} }
 async function remeasureComposedPages(req, campaignId, pgs, bnds) {
   var realH = {};
   try {
+    var _cT0m = Date.now();   // v3.0.810 -- TD-616: same lap on the magazine path, for comparison
     _mzComposed = { plan: { pages: pgs }, bands: bnds };
     req.query.measureComposed = '1';
     var cbuilt = await assembleNovelHtml(req, campaignId, null);
+    _composeTick(_cT0m);
     var _cmeas = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:magazine' });
     var cblocks = _cmeas.blocks || [];
     if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
@@ -9271,9 +9292,11 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
 async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
   var realH = {};
   try {
+    var _cT0 = Date.now();   // v3.0.810 -- TD-616: the untimed 68%
     var _body = composeBook(plan, beats, Object.assign({}, cOpts || {}, { measureComposed: true }));
         var _extra = { packComposedBody: _body, arrange: 'paired' };
     var cbuilt = await assembleNovelHtml(req, campaignId, null, _extra);
+    _composeTick(_cT0);
     var _cmeasP = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:paired' });
     var cblocks = _cmeasP.blocks || [];
     if (_cmeasP.imgProbes && _cmeasP.imgProbes.length) realH._imgProbes = _cmeasP.imgProbes;
@@ -11366,6 +11389,19 @@ function measureTimingsBlock() {
     out += 'PROCESS TOTAL: ' + tot.calls + ' measure(s), ' + (tot.ms / 1000).toFixed(1) + 's' +
            (tot.calls ? ('  (mean ' + (tot.ms / tot.calls / 1000).toFixed(1) + 's)') : '') + '\n';
   }
+  // v3.0.810 -- TD-616. The line that answers the question v3.0.806 could not.
+  // Every measure is preceded by a full composeBook + assembleNovelHtml, and until now that cost was
+  // attributed to nothing. If this total dwarfs the measure total above it, the loop's problem was
+  // never Chromium -- it is that the book is rebuilt from scratch once per op.
+  try {
+    var ctot = composeCounters();
+    out += 'COMPOSE TOTAL: ' + ctot.calls + ' compose(s), ' + (ctot.ms / 1000).toFixed(1) + 's' +
+           (ctot.calls ? ('  (mean ' + (ctot.ms / ctot.calls / 1000).toFixed(2) + 's)') : '') +
+           '   <-- rebuilding the book, NOT measuring it\n';
+    if (tot && (ctot.ms + tot.ms) > 0) {
+      out += '   compose is ' + Math.round((ctot.ms / (ctot.ms + tot.ms)) * 100) + '% of compose+measure time.\n';
+    }
+  } catch (e) {}
   if (!rows.length) {
     out += '\n  (nothing recorded yet -- this process has measured nothing since it started, which\n';
     out += '   after a deploy is normal. Pack or optimize once, then take the dump.)\n';
@@ -11959,6 +11995,7 @@ async function layoutApplyWork(req, res) {
   // however it ended. Deliberately attached BEFORE the try -- a pass that throws burned the time too
   // and is the more interesting case.
   var _mc0 = null; try { _mc0 = measureCounters(); } catch (e) {}
+  try { req._composeAtStart = composeCounters(); } catch (e) {}   // v3.0.810 -- TD-616
   var _mcT0 = Date.now();
   try {
     res.on('finish', function () {
@@ -11974,11 +12011,18 @@ async function layoutApplyWork(req, res) {
           if (o && o.op === 'shrinkImage') _shrinks++;
           if (o && o.op === 'growImage') _grows++;
         });
+        // v3.0.810 -- TD-616. composeMs alongside measureMs, because measureShare alone told us the
+        // measures were only ~13% of a pass and left the other 68% nameless.
+        var _cc0 = req._composeAtStart || { calls: 0, ms: 0 };
+        var _cc1 = composeCounters();
+        var _cCalls = _cc1.calls - _cc0.calls, _cMs = _cc1.ms - _cc0.ms;
         console.log('[apply-cost] campaign ' + req.params.campaignId +
           ' ops=' + _ops + ' (shrink ' + _shrinks + ', grow ' + _grows + ')' +
           ' measures=' + _calls + ' measureMs=' + _ms +
+          ' composes=' + _cCalls + ' composeMs=' + _cMs +
           ' wallMs=' + _wall +
-          ' measureShare=' + (_wall > 0 ? Math.round((_ms / _wall) * 100) : 0) + '%');
+          ' measureShare=' + (_wall > 0 ? Math.round((_ms / _wall) * 100) : 0) + '%' +
+          ' composeShare=' + (_wall > 0 ? Math.round((_cMs / _wall) * 100) : 0) + '%');
       } catch (e) {}
     });
   } catch (e) {}
