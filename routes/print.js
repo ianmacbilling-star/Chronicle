@@ -235,11 +235,82 @@ var ORDER_LIVE_STATES = ['created', 'accepted', 'in_production', 'paid'];
 function orderIsLive(row) {
   return !!(row && row.provider_order_id && ORDER_LIVE_STATES.indexOf(String(row.status)) !== -1);
 }
+// v3.0.802 -- TD-612. ASK BY STALENESS, NOT BY COUNT -- AND ASK IN PARALLEL.
+//
+// Ian: "Why only 5 at a time? Why not all that are still open?" The 5 was a backstop against a
+// pathological history and on a single customer's own list it almost never bound. The real cost was
+// never the count: the sweep was a `for` loop with `await`, so it was five SEQUENTIAL round trips
+// to Lulu before the page could render, and raising the number made the page slower in proportion.
+//
+// So the shape changes rather than the number.
+//   - An order is asked about only if nobody has asked in the last hour (Ian's number). Reloading
+//     the screen three times now costs ONE vendor call instead of fifteen, and the normal answer to
+//     "what is due?" is nothing at all.
+//   - What remains runs CONCURRENTLY, a few at a time, so ten due orders cost one round trip's
+//     latency rather than ten.
+//   - With those two, "all the open ones" is affordable, which is what Ian actually asked for.
+//
+// THE ABSOLUTE CAP SURVIVES AS A BACKSTOP AND SAYS SO WHEN IT BITES. A silent truncation reads as
+// "everything is up to date" when it is not -- the fault this file records as "no silent caps".
+//
+// UNVERIFIED, AND DELIBERATELY CONSERVATIVE: Lulu's documented rate limit has not been read. Four
+// at a time is prudence, not a measured number. Raise it against their documentation, not against
+// a hunch, and not by discovering the limit through being throttled.
+var ORDER_CHECK_CONCURRENCY = 4;
+var ORDER_CHECK_MAX_PER_REQUEST = 25;
+function orderCheckMaxAgeMs() {
+  var m = Number(process.env.ORDER_STATUS_MAX_AGE_MIN);
+  if (!Number.isFinite(m) || m < 1 || m > 1440) m = 60;   // Ian, 2026-08-26: "only ask for ones older than an hour"
+  return m * 60 * 1000;
+}
+// Live, and nobody has asked recently. A NULL provider_checked_at is "never asked" -> due.
+function orderNeedsVendorCheck(row) {
+  if (!orderIsLive(row)) return false;
+  if (!row.provider_checked_at) return true;
+  var t = 0;
+  try { t = new Date(row.provider_checked_at).getTime(); } catch (e) { t = 0; }
+  if (!(t > 0)) return true;          // unreadable timestamp -> ask, rather than never ask again
+  return (Date.now() - t) >= orderCheckMaxAgeMs();
+}
+// Bounded-concurrency map. Never rejects: one order's vendor failure must not take the list down.
+async function _inFlight(items, limit, fn) {
+  var i = 0;
+  var workers = [];
+  for (var w = 0; w < Math.min(limit, items.length); w++) {
+    workers.push((async function () {
+      while (true) {
+        var ix = i++;
+        if (ix >= items.length) return;
+        try { await fn(items[ix]); } catch (e) { /* refreshLiveOrder already swallows and logs */ }
+      }
+    })());
+  }
+  await Promise.all(workers);
+}
+// Refresh every live order that is due. `where` names the caller for the log.
+async function sweepLiveOrders(db, rows, where) {
+  var due = (rows || []).filter(orderNeedsVendorCheck);
+  if (!due.length) return 0;
+  var dropped = 0;
+  if (due.length > ORDER_CHECK_MAX_PER_REQUEST) {
+    dropped = due.length - ORDER_CHECK_MAX_PER_REQUEST;
+    due = due.slice(0, ORDER_CHECK_MAX_PER_REQUEST);
+  }
+  await _inFlight(due, ORDER_CHECK_CONCURRENCY, function (r) { return refreshLiveOrder(db, r); });
+  if (dropped) {
+    try { console.warn('[order-refresh] ' + where + ': checked ' + due.length + ' of ' + (due.length + dropped) +
+      ' due orders; ' + dropped + ' were left for the next load. They are NOT up to date.'); } catch (e) {}
+  }
+  return due.length;
+}
 async function refreshLiveOrder(db, row) {
   if (!orderIsLive(row)) return false;
   try {
     var provider = getPrintProvider();
     var live = await provider.getOrderStatus(row.provider_order_id);
+    // v3.0.802 -- TD-612. A check that produced no answer is still a check, but it must NOT stamp
+    // provider_checked_at: a vendor that is down would otherwise buy itself an hour of silence on
+    // every order it failed. Only a real answer resets the clock.
     if (!live) return false;
     var _st = live.status || row.status;
     var _url = live.trackingUrl || row.tracking_url || null;
@@ -248,12 +319,21 @@ async function refreshLiveOrder(db, row) {
     // Write only when something actually moved: an UPDATE per render would churn updated_at and
     // make "when did this last change" meaningless.
     if (_st === row.status && _url === (row.tracking_url || null) &&
-        _num === (row.tracking_number || null) && _car === (row.carrier || null)) return false;
+        _num === (row.tracking_number || null) && _car === (row.carrier || null)) {
+      // v3.0.802 -- TD-612. Nothing moved, so updated_at is left alone exactly as before -- but the
+      // clock is stamped, which is the whole point of the hourly rule.
+      try {
+        await db.prepare('UPDATE print_orders SET provider_checked_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
+        row.provider_checked_at = new Date().toISOString();
+      } catch (e) {}
+      return false;
+    }
     await db.prepare(
       'UPDATE print_orders SET status = ?, tracking_url = ?, tracking_number = ?, carrier = ?, ' +
-      'updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      'updated_at = CURRENT_TIMESTAMP, provider_checked_at = CURRENT_TIMESTAMP WHERE id = ?'
     ).run(_st, _url, _num, _car, row.id);
     row.status = _st; row.tracking_url = _url; row.tracking_number = _num; row.carrier = _car;
+    row.provider_checked_at = new Date().toISOString();
     return true;
   } catch (e) {
     try { console.warn('[order-refresh] ' + (row.external_id || row.id) + ': ' + ((e && e.message) || e)); } catch (e2) {}
@@ -675,10 +755,9 @@ router.get('/orders', requireSession, async function (req, res) {
       var _needy = (rows || []).filter(orderNeedsRecovery).slice(-3);
       for (var _i = 0; _i < _needy.length; _i++) await recoverPrintJob(db, _needy[_i]);
       // v3.0.787 -- TD-588. AND BRING LIVE ORDERS UP TO DATE, which is what makes tracking appear.
-      // Same bounded shape and the same reason: only orders that are at the printer and not yet
-      // finished, newest first because that is what someone opening this screen is looking at.
-      var _live = (rows || []).filter(orderIsLive).slice(0, 5);
-      for (var _j = 0; _j < _live.length; _j++) await refreshLiveOrder(db, _live[_j]);
+      // v3.0.802 -- TD-612. ALL of them now, not the newest five: bounded by an hour since the last
+      // check rather than by a count, and run a few at a time instead of one after another.
+      await sweepLiveOrders(db, rows, 'my-orders user ' + req.session.userId);
     } catch (_e) { /* never let a recovery attempt stop the list rendering */ }
     res.json({ orders: rows || [] });
   } catch (e) {
@@ -969,5 +1048,8 @@ async function fulfillPrintOrder(session, eventId) {
 }
 
 router.fulfillPrintOrder = fulfillPrintOrder;
+// v3.0.802 -- TD-612. The admin Orders tab needs the same sweep, and a second copy of this logic is
+// how two surfaces come to disagree about the same order (TD-610, one build ago).
+router.sweepLiveOrders = sweepLiveOrders;
 
 module.exports = router;

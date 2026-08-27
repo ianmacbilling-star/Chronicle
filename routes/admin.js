@@ -436,7 +436,7 @@ router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
       '       o.payment_status, o.status, o.error, ' +
       '       o.stripe_payment_intent_id, o.stripe_session_id, o.card_brand, o.card_last4, ' +
       '       o.binding, o.color_tier, o.cover_finish, o.paper, o.page_count, o.quantity, ' +
-      '       o.tracking_url, o.tracking_number, o.carrier, ' +
+      '       o.tracking_url, o.tracking_number, o.carrier, o.provider_checked_at, ' +
       '       o.user_id, u.email AS user_email, u.name AS user_name ' +
       '  FROM print_orders o LEFT JOIN users u ON u.id = o.user_id';
     // The cursor is just another condition, so paging and filtering compose instead of fighting.
@@ -448,6 +448,22 @@ router.get('/orders', requireAuth, requireAdmin, async function (req, res) {
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit);
+    // v3.0.802 -- TD-612. THIS SCREEN ASKED THE PRINTER NOTHING.
+    //
+    // v3.0.788 built the admin Orders tab as a pure database read, and v3.0.787 had put the vendor
+    // refresh on the CUSTOMER's list only. So an order's status became current when its OWNER
+    // happened to open My Orders, and not otherwise: a customer who orders a book and never looks
+    // again leaves this tab showing `in_production` while the book is on their shelf. This is the
+    // screen used to answer "where is this person's book", and it was the one surface that never
+    // asked -- TD-588's shape, one level up.
+    //
+    // The SAME helper as the customer list, exported rather than reimplemented: two copies of this
+    // logic is exactly how two surfaces came to disagree about one book in TD-610, one build ago.
+    // Bounded by the hour rule, so paging through the tab does not re-ask anything.
+    try {
+      const _print = require('./print');
+      if (typeof _print.sweepLiveOrders === 'function') await _print.sweepLiveOrders(db, items, 'admin orders tab');
+    } catch (_e) { /* never let a vendor call stop the admin list rendering */ }
     const nextCursor = items.length ? items[items.length - 1].id : null;
     // The two deep links, built HERE so the client never assembles a vendor URL from parts.
     // Stripe's is certain and already used by the support email. Lulu's is env-overridable
