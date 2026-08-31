@@ -23811,7 +23811,17 @@ function _runLayoutAiOptimize() {
   if (out) out.innerHTML = '';
   var _d0 = document.getElementById('layoutai-delta'); if (_d0) _d0.innerHTML = '';
   // Plain-language progress for everyone (the friendly readout in the left pane).
-  optimizeProgress('Analyzing your book&hellip;', { reset: true });
+  // v3.0.811 -- TD-627. SAY HOW LONG THIS IS AND WHAT IT IS DOING, BEFORE IT STARTS.
+  // Ian: "give a message that says to sit back while our editor does its thing on your book."
+  // Optimize is minutes on a long book -- ten and a half on the 144-page one -- and until now it
+  // opened straight into 'Analyzing your book' and left the reader to work out whether minutes of
+  // near-silence were normal. Two working runs were killed by hand on 2026-08-27 for exactly that
+  // reason. Setting the expectation costs one line and is the cheapest fix in this whole build.
+  // It is also the honest place to say the tab has to stay open: the work runs on the server, but
+  // this page is what collects the result, so closing it abandons the run.
+  optimizeProgress('Sit back &mdash; our editor is working through your book.', { reset: true });
+  optimizeProgress('On a long book this takes several minutes. Keep this tab open and it will keep going; you can watch each change appear below.', { dim: true });
+  optimizeProgress('Analyzing your book&hellip;');
   optimizeProgress('Composing the pages&hellip;');
   // Composer is deterministic and fast -- a lightweight status line, no progress bar.
   if (status) status.textContent = 'Composing the book page by page...';
@@ -24028,7 +24038,14 @@ function _runLayoutAiOptimize() {
       var APPLY_POLL_MS = 2000;
       var APPLY_POLL_FAILS_MAX = 10;   // ~20s of unreachable server before we call the pass lost
       function _applyStart(cid, q, ops, roundNum) {
-        var url = '/api/pdf/layout-apply/' + cid + (q ? (q + '&pdf=1&job=1') : '?pdf=1&job=1');
+        // v3.0.811 -- TD-618. NO pdf=1. The loop no longer asks each pass to render a book, because
+        // nothing kept the result: the After pane's final draw reads the SAVED file, and the in-loop
+        // draw was already known to disagree with it (see the v3.0.341 note at the finish path).
+        // Measured on the 144-page book: ~31s to render plus ~35s to ship 364MB to the browser, four
+        // times over -- about 40% of the run, spent on a picture that was replaced at the end anyway.
+        // The report still comes back; the server now sets X-Apply-Report on the JSON path too, so
+        // every per-op line and the page count carry on exactly as before.
+        var url = '/api/pdf/layout-apply/' + cid + (q ? (q + '&job=1') : '?job=1');
         return fetch(url, {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -24040,6 +24057,13 @@ function _runLayoutAiOptimize() {
           if (r.status !== 202) {
             if (!r.ok) return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); });
             var _rep0 = r.headers.get('X-Apply-Report');
+            // v3.0.811 -- TD-618. Since the loop stopped asking for pdf=1, a 200 on this fallback is
+            // JSON, not a PDF. Calling .blob() on it would hand the caller a JSON blob and the After
+            // pane would try to render it as a book. Decide by Content-Type rather than by assuming.
+            var _ct = String(r.headers.get('Content-Type') || '');
+            if (_ct.indexOf('application/pdf') === -1) {
+              return r.json().then(function (j) { return { repRaw: _rep0 || (j ? JSON.stringify(j) : null), blob: null }; });
+            }
             return r.blob().then(function (b) { return { repRaw: _rep0, blob: b }; });
           }
           return r.json().then(function (j) {
@@ -25012,12 +25036,37 @@ function renderPdfInto(url, containerId, isBefore) {
     } catch (e) {}
   } else { _finalizeAfterPages = 0; _finalizeAfterDone = false; }
   var flagged = [];
-  // The server generates the whole PDF (~20s). Nothing to show real progress on during
-  // that fetch, so creep the bar to ~45% so it's obviously working, not stuck.
+  // v3.0.811 -- TD-626. A BAR THAT STOPS IS A BAR THAT SAYS THE WORK STOPPED.
+  // This crept to 45% and then CLAMPED there -- `if (creepPct > 45) creepPct = 45` -- reaching the
+  // cap in about eight seconds and sitting motionless for the rest of the render. On a short book
+  // nobody noticed. On the 144-page Dojo book the first render is 66 seconds, so the bar spent a
+  // full minute frozen at 45%, and Ian read it exactly as it looked: "the progress bar on the very
+  // first render on the optimizer stalls out about half way... I think it's still working." It was.
+  // TWO CHANGES, AND NEITHER PRETENDS TO KNOW A PERCENTAGE WE CANNOT KNOW.
+  // The bar now SWEEPS: on reaching the cap it drops back and climbs again, so it is always moving.
+  // Ian: "Keep progress bars moving. If you need to start them over that's fine." A sweep is honest
+  // in a way a frozen bar is not -- it claims activity, which is true, rather than progress, which
+  // we cannot measure. And the elapsed counter beside it only ever climbs, so the one number on
+  // screen that could mislead is the one that cannot go backwards.
   var creepPct = 0;
-  var creepTimer = setInterval(function () { creepPct += Math.max(0.5, (45 - creepPct) * 0.05); if (creepPct > 45) creepPct = 45; if (pf) pf.style.width = creepPct.toFixed(1) + '%'; }, 300);
+  var _creepT0 = Date.now();
+  var creepTimer = setInterval(function () {
+    creepPct += Math.max(0.5, (45 - creepPct) * 0.05);
+    if (creepPct >= 44.5) creepPct = 6;                      // sweep again rather than sit at the cap
+    if (pf) pf.style.width = creepPct.toFixed(1) + '%';
+    try {
+      var _el = Date.now() - _creepT0;
+      // The counter appears only after a few seconds: on a book that renders in two it would flash
+      // up and vanish, which reads as a glitch rather than reassurance.
+      if (pm && _el >= 4000) pm.textContent = 'Building your book\u2026 (' + _fmtDur(_el) + ')';
+    } catch (e) {}
+  }, 300);
   ensurePdfJs().then(function (pdfjsLib) {
-    if (pm) pm.textContent = 'Generating the book (~20s)...';
+    // v3.0.811 -- TD-626. '~20s' was measured on a small book and is simply wrong on a large one --
+    // the first render of the 144-page Dojo book is 66 seconds. A promise the software then breaks is
+    // worse than no promise, and the elapsed counter above replaces this line after four seconds
+    // anyway, so it says what is happening rather than guessing how long it will take.
+    if (pm) pm.textContent = 'Building your book…';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
       // v3.0.360 -- the composer/packer charge rides back on a header (the body is a PDF). Only
       // pack-render sets it, so every other render through here is unaffected.
