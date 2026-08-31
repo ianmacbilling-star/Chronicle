@@ -12559,15 +12559,35 @@ async function layoutApplyWork(req, res) {
       } else {
         try { console.log('[layout-apply] proc ' + PROC_ID + ' applied nothing to the magazine book -- the composed cache was left alone'); } catch (e) {}
       }
-      var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
-      if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
-      var mPdf = await renderHtmlToPdf(mBuilt.html, {});
+      // v3.0.811 -- TD-618. DO NOT RENDER A BOOK NOBODY IS GOING TO LOOK AT.
+      // This render ran UNCONDITIONALLY, above the pdf=1 check, so every pass paid for a PDF whether
+      // or not the caller wanted one. Measured on the 144-page Dojo book, 2026-08-31: the render is
+      // ~31s of a ~74s apply, and shipping the 364MB result to the browser is another ~35s of the
+      // pass. Four passes, so about 260 seconds of a 635-second run -- more than the measures and the
+      // composes put together.
+      // AND NOTHING DOWNSTREAM KEPT IT. The After pane's final draw reads the SAVED FILE
+      // (/last-optimized-file, see the v3.0.341 note in app.js), because the in-loop draw was already
+      // known to disagree with the book that ships -- it held pass 5's output while the fill and
+      // collapse sweeps went on to compose something shorter. So these renders were not merely
+      // expensive, they were painting a picture the finished book contradicts.
+      // Ian, day one of this investigation: "Let's get rid of the renders after every pass. It's kind
+      // of an all or nothing thing anyway."
+      var _mWantPdf = (req.query.pdf === '1' || req.query.pdf === 'true');
+      var mPdf = null;
+      if (_mWantPdf) {
+        var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
+        if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
+        mPdf = await renderHtmlToPdf(mBuilt.html, { timingLabel: 'layout-apply:magazine' });
+      }
       // No per-pass charge -- the run was charged once at compose (ceil(pages/10)).
       try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 0, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
-      if (req.query.pdf === '1' || req.query.pdf === 'true') {
-        res.set('Content-Type', 'application/pdf');
-        res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
-        try { res.set('X-Apply-Report', JSON.stringify({
+      // v3.0.811 -- TD-618. THE REPORT IS SET ON BOTH PATHS NOW, and that is what makes dropping the
+      // render free rather than a loss. The run log -- every "Reflowing text on page 42", the page
+      // count line, the applied/skipped counts -- is written from this header. It used to be set only
+      // when a PDF was streamed, so a pass that returned JSON would have gone silent, which is exactly
+      // the narration Ian asked to keep. A header on a JSON response costs nothing and means the
+      // client needs no second code path.
+      try { res.set('X-Apply-Report', JSON.stringify({
           planPages: mplan.pages.length, appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
           // v3.0.372 -- CARRY belowFloor ACROSS THE WIRE. v3.0.371 added the flag on the server and
           // the display on the client and never checked the wire between them: the optimize loop takes
@@ -12578,6 +12598,9 @@ async function layoutApplyWork(req, res) {
           applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo, belowFloor: !!a.belowFloor, normalFloor: (a.normalFloor != null ? a.normalFloor : null), capMul: (a.capMul != null ? a.capMul : null) }; }),
           rejected: mRejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
         })); } catch (e) {}
+      if (_mWantPdf) {
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
         return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
       }
       return res.json({ campaign: mName, arrange: _cco.arrange, applied: true, clipLine: MCLIP,
@@ -13045,9 +13068,15 @@ async function layoutApplyWork(req, res) {
     } else {
       try { console.log('[layout-apply] proc ' + PROC_ID + ' applied nothing -- the composed cache was left alone'); } catch (e) {}
     }
-    var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
-    if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
-    var pdf = await renderHtmlToPdf(rbuilt.html, {});
+    // v3.0.811 -- TD-618. The paired half of the same change; see the magazine branch above for the
+    // measurements. This is the one that matters, because Picture Book is what the big books use.
+    var _wantPdf = (req.query.pdf === '1' || req.query.pdf === 'true');
+    var pdf = null;
+    if (_wantPdf) {
+      var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
+      if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
+      pdf = await renderHtmlToPdf(rbuilt.html, { timingLabel: 'layout-apply:paired' });
+    }
     // No per-pass charge -- the run was charged once at compose (ceil(pages/10)).
     try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 0, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
@@ -13057,14 +13086,16 @@ async function layoutApplyWork(req, res) {
     // If pdf=1, stream the rendered PDF so the After pane can display the applied book directly
     // (the double-click flow uses this: advisor -> apply -> render the result in place). The applied
     // op report is returned in a header so the caller can still show what changed.
-    if (req.query.pdf === '1' || req.query.pdf === 'true') {
-      res.set('Content-Type', 'application/pdf');
-      res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
-      try { res.set('X-Apply-Report', JSON.stringify({
+    // v3.0.811 -- TD-618. Set on BOTH paths: the run log is written from this header, so a pass that
+    // returns JSON must still carry it or the narration goes silent. See the magazine branch.
+    try { res.set('X-Apply-Report', JSON.stringify({
         planPages: plan.pageCount, appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
         applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo, movedKind: a.movedKind, shrankFrom: a.shrankFrom, shrankTo: a.shrankTo, capMul: (a.capMul != null ? a.capMul : null) }; }),
         rejected: rejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
       })); } catch (e) {}
+    if (_wantPdf) {
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
       return res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
     }
 
