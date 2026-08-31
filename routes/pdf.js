@@ -9211,12 +9211,33 @@ function fillMissingMagazineLines(meas, bands) {
 // Set DEBUG_CLIP=1 to bring it back (same convention as DEBUG_PROMPT in routes/images.js) for the
 // case the dump cannot cover: watching a live run that is not going to produce a bundle.
 function clipLogOn() { return !!process.env.DEBUG_CLIP; }
+// ===== COMPOSE TIMING (v3.0.810, TD-616) ==========================================================
+// THE GAP v3.0.806 LEFT, AND IT IS MOST OF THE RUN.
+// v3.0.806 timed measureDocument and the answer was that Chromium is cheap: 441 measures cost 94.7s
+// on the 129-page Dojo book, a mean of 0.2s. But an apply on that book takes ~150s, of which the
+// render is 28s and the measures ~20s. That leaves ~100 SECONDS PER APPLY -- 68% -- attributed to
+// nothing at all.
+// The suspect is directly above every measure and is timed by no one: remeasureComposed* rebuilds
+// the WHOLE BOOK (composeBook) and then the WHOLE DOCUMENT (assembleNovelHtml) before it measures
+// anything, and it does that once per op. ~98 remeasures per apply against ~100s unaccounted is
+// almost exactly one second each, which is entirely plausible for composing a 123-page book.
+// THAT IS A HYPOTHESIS AND THIS IS HOW IT STOPS BEING ONE. Four diagnoses have been made about this
+// loop in a single day -- render, page-count scaling, measure count, and now compose -- and three
+// of them were wrong. Each was argued from reading the code. So this counts instead, and it counts
+// BEFORE anything is rebuilt on the strength of it.
+// Cumulative only, deliberately: unlike a measure, a compose has no interesting internal phases and
+// there are hundreds per pass. The total and the call count are the whole question.
+var _composeTotals = { calls: 0, ms: 0 };
+function composeCounters() { return { calls: _composeTotals.calls, ms: _composeTotals.ms }; }
+function _composeTick(t0) { try { _composeTotals.calls += 1; _composeTotals.ms += (Date.now() - t0); } catch (e) {} }
 async function remeasureComposedPages(req, campaignId, pgs, bnds) {
   var realH = {};
   try {
+    var _cT0m = Date.now();   // v3.0.810 -- TD-616: same lap on the magazine path, for comparison
     _mzComposed = { plan: { pages: pgs }, bands: bnds };
     req.query.measureComposed = '1';
     var cbuilt = await assembleNovelHtml(req, campaignId, null);
+    _composeTick(_cT0m);
     var _cmeas = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:magazine' });
     var cblocks = _cmeas.blocks || [];
     if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
@@ -9271,9 +9292,11 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
 async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
   var realH = {};
   try {
+    var _cT0 = Date.now();   // v3.0.810 -- TD-616: the untimed 68%
     var _body = composeBook(plan, beats, Object.assign({}, cOpts || {}, { measureComposed: true }));
         var _extra = { packComposedBody: _body, arrange: 'paired' };
     var cbuilt = await assembleNovelHtml(req, campaignId, null, _extra);
+    _composeTick(_cT0);
     var _cmeasP = await measureDocument(cbuilt.html, { measureLabel: 'remeasure:paired' });
     var cblocks = _cmeasP.blocks || [];
     if (_cmeasP.imgProbes && _cmeasP.imgProbes.length) realH._imgProbes = _cmeasP.imgProbes;
@@ -11366,6 +11389,19 @@ function measureTimingsBlock() {
     out += 'PROCESS TOTAL: ' + tot.calls + ' measure(s), ' + (tot.ms / 1000).toFixed(1) + 's' +
            (tot.calls ? ('  (mean ' + (tot.ms / tot.calls / 1000).toFixed(1) + 's)') : '') + '\n';
   }
+  // v3.0.810 -- TD-616. The line that answers the question v3.0.806 could not.
+  // Every measure is preceded by a full composeBook + assembleNovelHtml, and until now that cost was
+  // attributed to nothing. If this total dwarfs the measure total above it, the loop's problem was
+  // never Chromium -- it is that the book is rebuilt from scratch once per op.
+  try {
+    var ctot = composeCounters();
+    out += 'COMPOSE TOTAL: ' + ctot.calls + ' compose(s), ' + (ctot.ms / 1000).toFixed(1) + 's' +
+           (ctot.calls ? ('  (mean ' + (ctot.ms / ctot.calls / 1000).toFixed(2) + 's)') : '') +
+           '   <-- rebuilding the book, NOT measuring it\n';
+    if (tot && (ctot.ms + tot.ms) > 0) {
+      out += '   compose is ' + Math.round((ctot.ms / (ctot.ms + tot.ms)) * 100) + '% of compose+measure time.\n';
+    }
+  } catch (e) {}
   if (!rows.length) {
     out += '\n  (nothing recorded yet -- this process has measured nothing since it started, which\n';
     out += '   after a deploy is normal. Pack or optimize once, then take the dump.)\n';
@@ -11930,7 +11966,26 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
 // which never had a gate, so a non-admin was already paying for a run this route refused to
 // finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
 // pack-render route has always relied on -- removing requireAdmin opens no new surface.
-router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) {
+// v3.0.809 -- TD-624. THE APPLY BECOMES A JOB.
+//
+// WHY. layout-apply does minutes of work inside ONE HTTP request -- it re-measures the whole book
+// after essentially every op, and on the 129-page Dojo book of 2026-08-27 that ran 130-180s per
+// pass when the container was fast and past six minutes when it was not. A request that runs for
+// minutes eventually loses to a proxy, and on 2026-08-27 it did: the client's fetch died, the
+// server carried on grinding, and the run appeared to have stopped. save-optimized hit the same
+// wall on a 49-page book -- see the note there, "a proxy ceiling of about 100" -- and was converted
+// to a job for exactly this reason. This is that conversion, for the same reason, in the same shape.
+//
+// NAMED, so the job wrapper can drive THE SAME function. printInteriorHandler already does this in
+// this file and says why: one code path, two entry points, rather than a second copy that has to be
+// kept in step. NOTHING inside this function changed. It still answers through `res`; on the job
+// path `res` is a shim that records what it would have sent.
+//
+// THE SYNCHRONOUS PATH IS UNTOUCHED AND STILL THE DEFAULT. The manual Fix control calls this route
+// too, with a handful of ops and no bisection, and it is nowhere near the ceiling. Only a caller
+// that asks for ?job=1 gets the job. That keeps the blast radius of this change to the optimize
+// loop, which is the only caller that has ever hit the wall.
+async function layoutApplyWork(req, res) {
   // v3.0.806 -- TD-616. WHAT DID THIS PASS ACTUALLY SPEND? The debug log records the round trip
   // (88-180s per pass across the two books measured on 2026-08-27) and v3.0.805 records the render
   // inside it (~25s). The gap between those two numbers is the whole question, and until now it was
@@ -11940,6 +11995,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
   // however it ended. Deliberately attached BEFORE the try -- a pass that throws burned the time too
   // and is the more interesting case.
   var _mc0 = null; try { _mc0 = measureCounters(); } catch (e) {}
+  try { req._composeAtStart = composeCounters(); } catch (e) {}   // v3.0.810 -- TD-616
   var _mcT0 = Date.now();
   try {
     res.on('finish', function () {
@@ -11955,11 +12011,18 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           if (o && o.op === 'shrinkImage') _shrinks++;
           if (o && o.op === 'growImage') _grows++;
         });
+        // v3.0.810 -- TD-616. composeMs alongside measureMs, because measureShare alone told us the
+        // measures were only ~13% of a pass and left the other 68% nameless.
+        var _cc0 = req._composeAtStart || { calls: 0, ms: 0 };
+        var _cc1 = composeCounters();
+        var _cCalls = _cc1.calls - _cc0.calls, _cMs = _cc1.ms - _cc0.ms;
         console.log('[apply-cost] campaign ' + req.params.campaignId +
           ' ops=' + _ops + ' (shrink ' + _shrinks + ', grow ' + _grows + ')' +
           ' measures=' + _calls + ' measureMs=' + _ms +
+          ' composes=' + _cCalls + ' composeMs=' + _cMs +
           ' wallMs=' + _wall +
-          ' measureShare=' + (_wall > 0 ? Math.round((_ms / _wall) * 100) : 0) + '%');
+          ' measureShare=' + (_wall > 0 ? Math.round((_ms / _wall) * 100) : 0) + '%' +
+          ' composeShare=' + (_wall > 0 ? Math.round((_cMs / _wall) * 100) : 0) + '%');
       } catch (e) {}
     });
   } catch (e) {}
@@ -12731,6 +12794,24 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     });
     for (var oi = 0; oi < ops.length; oi++) {
       var op = ops[oi];
+      // v3.0.809 -- TD-624. SAY WHERE WE ARE, WHILE WE ARE THERE.
+      // The apply's whole problem is that it is long and silent: it re-measures the entire book after
+      // essentially every op, so seventy ops is several hundred whole-book Chromium passes and, until
+      // now, one wait with nothing to show for it. Ian killed two healthy runs on 2026-08-27 because a
+      // working apply and a wedged one looked identical. This is one Map write per op -- it costs
+      // nothing and it is the difference between "still going" and "stuck on op 23".
+      // ALSO BEATS THE RUN LOCK. optimizeRunGet expires a claim after fifteen minutes without a
+      // heartbeat, and the heartbeat came only from the browser. A tab that closed mid-apply left the
+      // server working and the claim decaying; beating it from the work itself means the claim lives
+      // exactly as long as the work does, which is what it was always supposed to mean.
+      if (req._applyJob) {
+        try {
+          req._applyJob.progress = { op: oi + 1, of: ops.length,
+                                     note: (op && op.op) ? String(op.op) : '',
+                                     viewerPage: (op && op.viewerPage != null) ? op.viewerPage : null };
+          optimizeRunBeat(req.session.userId, 'apply ' + (oi + 1) + '/' + ops.length);
+        } catch (e) {}
+      }
 
       // ---- Text moves: pullLines (fromPage -> page) / pushLines (page -> page+1) ----
       // DISTINCT NAMES FOR MOVING A PICTURE. pullLines and pushLines say LINES, and after two full runs
@@ -12998,6 +13079,148 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
   } catch (e) {
     log500('layout-apply', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-apply failed' });
+  }
+}
+// v3.0.809 -- TD-624. The job store, the response shim, and the three routes that replace one.
+//
+// IN MEMORY, ON PURPOSE, exactly as the save and render job stores are, and for the same reason:
+// the composed cache this work reads and writes is already in-process, so an apply can only ever be
+// served by the process that holds its pack. An out-of-process job store would not make this
+// survive a restart, it would only look as if it might. What matters is the FAILURE MODE, and it is
+// the same one those two settled on -- an unknown job id answers state=unknown rather than an
+// error, and the client starts the pass again rather than being told a lie.
+// SMALLER AND SHORTER-LIVED THAN THE OTHER TWO JOB STORES, DELIBERATELY. A save job holds a URL; an
+// apply job holds THE BOOK -- 322MB on the 129-page Dojo book of 2026-08-27, and ~2.5MB per page on
+// every book measured, so a 400-page book is close to a gigabyte. Twenty finished jobs at those
+// sizes is not a cache, it is an out-of-memory error with a countdown. The buffer is released the
+// moment it is collected (see the result route), released again when the same user starts another
+// pass, and the store itself is capped low and expires fast so nothing uncollected lingers.
+var _applyJobs = new Map();
+var APPLY_JOB_TTL_MS = 10 * 60 * 1000;   // a pass's rendered result is worthless long before this
+var APPLY_JOB_MAX = 6;
+function applyJobPrune() {
+  try {
+    var now = Date.now();
+    _applyJobs.forEach(function (j, id) {
+      if (now - (j.finishedAt || j.startedAt || now) > APPLY_JOB_TTL_MS) _applyJobs.delete(id);
+    });
+    while (_applyJobs.size > APPLY_JOB_MAX) {
+      var oldest = _applyJobs.keys().next();
+      if (oldest.done) break;
+      var _drop = _applyJobs.get(oldest.value);
+      if (_drop) _drop.buf = null;   // a dropped job must not keep a 300MB PDF alive
+      _applyJobs.delete(oldest.value);
+    }
+  } catch (e) {}
+}
+// A `res` that records instead of sending. The handler above is a thousand lines with a dozen
+// exits; rewriting all of them to report through a job would have been the change most likely to
+// break something that currently works. This adapter is the whole conversion.
+//
+// res.on('finish') IS HONOURED, deliberately. The v3.0.806 [apply-cost] instrumentation hangs off
+// it, and that line -- ops, measures, measureMs, wallMs -- is the only per-pass cost record we have.
+// A shim that quietly dropped it would have silently removed the instrument on the exact path we
+// most need to measure.
+function applyJobShim(job) {
+  var _h = {}, _st = 0, _fin = [];
+  var shim = {
+    headersSent: false,
+    set: function (k, v) { _h[String(k)] = v; return shim; },
+    setHeader: function (k, v) { _h[String(k)] = v; return shim; },
+    status: function (n) { _st = n; return shim; },
+    json: function (b) { return _finish(_st || 200, b, null); },
+    send: function (b) { return _finish(_st || 200, null, Buffer.isBuffer(b) ? b : Buffer.from(String(b == null ? '' : b))); },
+    on: function (ev, cb) { if (ev === 'finish' && typeof cb === 'function') _fin.push(cb); return shim; }
+  };
+  function _finish(status, body, buf) {
+    if (shim.headersSent) return shim;      // mirrors express: the second send is ignored, not fatal
+    shim.headersSent = true;
+    job.status = status;
+    job.headers = _h;
+    job.body = body;
+    job.buf = buf;
+    job.state = (status >= 400) ? 'error' : 'done';
+    job.finishedAt = Date.now();
+    _fin.forEach(function (cb) { try { cb(); } catch (e) {} });
+    return shim;
+  }
+  return shim;
+}
+router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) {
+  // The default is unchanged: run it inline and answer from it. Only ?job=1 takes the ticket.
+  if (!(req.query.job === '1' || req.query.job === 'true')) return layoutApplyWork(req, res);
+  var jobId = PROC_ID + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  var job = { id: jobId, userId: req.session.userId, campaignId: String(req.params.campaignId),
+              state: 'running', startedAt: Date.now(), finishedAt: 0,
+              status: 0, headers: null, body: null, buf: null,
+              progress: { op: 0, of: (req.body && Array.isArray(req.body.ops)) ? req.body.ops.length : 0, note: '' } };
+  // One run per user is already enforced by the optimize lock, so any FINISHED job still holding a
+  // buffer for this user is a pass whose bytes were never collected -- a closed tab, a reload, a
+  // pass the loop abandoned. Nobody is coming back for them and each one is the whole book.
+  try {
+    _applyJobs.forEach(function (j) {
+      if (j && j.userId === req.session.userId && j.state !== 'running') j.buf = null;
+    });
+  } catch (e) {}
+  applyJobPrune();
+  _applyJobs.set(jobId, job);
+  // 202: accepted, not completed. jobId and async let a client tell this apart from the old shape
+  // without guessing, the same signal save-optimized sends.
+  res.status(202).json({ ok: true, async: true, jobId: jobId, ops: job.progress.of, startedAt: job.startedAt });
+  var shim = applyJobShim(job);
+  req._applyJob = job;
+  try {
+    await layoutApplyWork(req, shim);
+  } catch (e) {
+    if (!shim.headersSent) {
+      job.state = 'error'; job.status = 500; job.finishedAt = Date.now();
+      job.body = { error: (e && e.message) || 'layout-apply failed' };
+    }
+    try { console.error('[layout-apply-job] ' + jobId + ' failed: ' + ((e && e.message) || e)); } catch (e2) {}
+  }
+  return;
+});
+// Progress and outcome. Deliberately does NOT carry the PDF: a status poll every two seconds must
+// stay cheap, and the book is 300MB. The report rides here (it is small and it is what the run log
+// is written from); the bytes are collected once, from the result route below.
+router.get('/layout-apply-status/:jobId', requireAuth, function (req, res) {
+  try {
+    var job = _applyJobs.get(String(req.params.jobId || ''));
+    if (!job) return res.json({ state: 'unknown', proc: PROC_ID, up: Math.round(process.uptime()) });
+    if (job.userId !== req.session.userId) return res.status(403).json({ state: 'error', error: 'not_yours' });
+    if (job.state === 'running') {
+      return res.json({ state: 'running', elapsedMs: Date.now() - job.startedAt, progress: job.progress });
+    }
+    var _rep = null;
+    try { if (job.headers && job.headers['X-Apply-Report']) _rep = JSON.parse(job.headers['X-Apply-Report']); } catch (e) {}
+    if (job.state === 'error') {
+      return res.json({ state: 'error', status: job.status || 500, body: job.body || { error: 'layout-apply failed' } });
+    }
+    return res.json({ state: 'done', status: job.status || 200, report: _rep,
+                      json: (job.buf ? null : job.body), hasPdf: !!job.buf,
+                      elapsedMs: (job.finishedAt || Date.now()) - job.startedAt });
+  } catch (e) {
+    return res.status(500).json({ state: 'error', error: 'status_failed' });
+  }
+});
+// Collect the bytes, once. The buffer is released the moment it has been handed over -- a finished
+// job sitting on a 300MB PDF nobody is coming back for is the memory failure this route exists to
+// avoid, and the TTL prune is too slow to be the only answer.
+router.get('/layout-apply-result/:jobId', requireAuth, function (req, res) {
+  try {
+    var job = _applyJobs.get(String(req.params.jobId || ''));
+    if (!job) return res.status(404).json({ error: 'unknown_job' });
+    if (job.userId !== req.session.userId) return res.status(403).json({ error: 'not_yours' });
+    if (job.state === 'running') return res.status(409).json({ error: 'still_running' });
+    if (!job.buf) return res.status(404).json({ error: 'no_pdf' });
+    var buf = job.buf;
+    job.buf = null;
+    if (job.headers && job.headers['X-Apply-Report']) res.set('X-Apply-Report', job.headers['X-Apply-Report']);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
+    return res.send(buf);
+  } catch (e) {
+    return res.status(500).json({ error: 'result_failed' });
   }
 });
 // Reset persisted AI grows/shrinks for a campaign: clears layout_meta.imgGrow from every moment so the

@@ -21947,7 +21947,13 @@ function optimizeProgressLive(msg) {
   }
   return {
     done: function (finalMsg) { settle('&#10003;', finalMsg); },
-    fail: function (finalMsg) { settle('&#8226;', finalMsg); }
+    fail: function (finalMsg) { settle('&#8226;', finalMsg); },
+    // v3.0.809 -- TD-624. RETITLE THE LINE IN PLACE. Once the apply is a job the client learns
+    // where it has got to ("change 23 of 70") every couple of seconds, and appending that as a new
+    // line would bury the run log under seventy near-identical entries. One line that keeps its
+    // elapsed counter and changes its subject is the readable form. settle() already prefers
+    // finalMsg over msg, so an update leaves the settled text correct without any further wiring.
+    update: function (nextMsg) { if (nextMsg) { msg = nextMsg; try { paint(); } catch (e) {} } }
   };
 }
 function optimizeProgressDone() {
@@ -24009,7 +24015,85 @@ function _runLayoutAiOptimize() {
         try { _liveNow = optimizeProgressLive(msg); _liveMsg = msg; } catch (e) { _liveNow = null; _liveMsg = ''; }
         return _liveNow;
       }
+      function _liveNote(msg) {
+        // Retitle the ticking line without adding another one. _liveMsg follows it so that if the
+        // run dies here the epitaph names where it actually was, not where it started.
+        try { if (_liveNow && _liveNow.update) { _liveNow.update(msg); _liveMsg = msg; } } catch (e) {}
+      }
       function _plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+      // v3.0.809 -- TD-624. THE APPLY IS A JOB NOW; THIS IS THE CLIENT HALF.
+      // Start it, poll it, collect the bytes. The pass no longer sits inside one long request, so a
+      // proxy has nothing to time out -- which is the fault that killed the 129-page book on
+      // 2026-08-27 and would have killed every book bigger than it.
+      var APPLY_POLL_MS = 2000;
+      var APPLY_POLL_FAILS_MAX = 10;   // ~20s of unreachable server before we call the pass lost
+      function _applyStart(cid, q, ops, roundNum) {
+        var url = '/api/pdf/layout-apply/' + cid + (q ? (q + '&pdf=1&job=1') : '?pdf=1&job=1');
+        return fetch(url, {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ops: ops })
+        }).then(function (r) {
+          // A server that does not know ?job=1 answers the old way, synchronously, with the PDF and
+          // the report header. Honour that rather than failing: a client can reach a server one
+          // deploy behind it, and the old shape is still correct, merely fragile.
+          if (r.status !== 202) {
+            if (!r.ok) return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); });
+            var _rep0 = r.headers.get('X-Apply-Report');
+            return r.blob().then(function (b) { return { repRaw: _rep0, blob: b }; });
+          }
+          return r.json().then(function (j) {
+            if (!j || !j.jobId) throw new Error('the apply job did not start');
+            return _applyPoll(j.jobId, roundNum, ops.length);
+          });
+        });
+      }
+      function _applyPoll(jobId, roundNum, opsN) {
+        return new Promise(function (resolve, reject) {
+          var fails = 0;
+          function tick() {
+            if (window._optimizeCancelled) { reject(new Error('cancelled')); return; }
+            fetch('/api/pdf/layout-apply-status/' + encodeURIComponent(jobId), { credentials: 'same-origin' })
+              .then(function (r) { return r.json(); })
+              .then(function (s) {
+                if (!s) throw new Error('empty status');
+                fails = 0;
+                if (s.state === 'running') {
+                  var p = s.progress || {};
+                  if (p.of) {
+                    _liveNote('AI Loop ' + roundNum + ': applying change ' + p.op + ' of ' + p.of +
+                              (p.viewerPage != null ? (' &mdash; page ' + p.viewerPage) : ''));
+                  }
+                  setTimeout(tick, APPLY_POLL_MS);
+                  return;
+                }
+                // UNKNOWN IS NOT A LIE ABOUT SUCCESS. A redeploy or an aged-out job lands here and
+                // the honest answer is that we no longer know -- say so plainly rather than
+                // reporting a failure that may not have happened, which is the rule the save job
+                // settled on for the same reason.
+                if (s.state === 'unknown') { reject(new Error('the server restarted during this pass -- run Optimize again')); return; }
+                if (s.state === 'error') { reject(new Error((s.body && (s.body.error || s.body.message)) || 'apply failed')); return; }
+                if (!s.hasPdf) { resolve({ repRaw: s.report ? JSON.stringify(s.report) : null, blob: null }); return; }
+                fetch('/api/pdf/layout-apply-result/' + encodeURIComponent(jobId), { credentials: 'same-origin' })
+                  .then(function (rr) {
+                    if (!rr.ok) throw new Error('could not collect the applied book (' + rr.status + ')');
+                    var _rep = rr.headers.get('X-Apply-Report');
+                    return rr.blob().then(function (b) { resolve({ repRaw: _rep, blob: b }); });
+                  })
+                  .catch(reject);
+              })
+              .catch(function (e) {
+                // A poll that fails is not a pass that failed -- the work is on the server and does
+                // not care whether this one request got through. Keep asking, but not forever: a
+                // server that has genuinely gone must not leave the loop polling a ghost.
+                fails++;
+                if (fails >= APPLY_POLL_FAILS_MAX) { reject(new Error('lost contact with the server during this pass')); return; }
+                setTimeout(tick, APPLY_POLL_MS);
+              });
+          }
+          tick();
+        });
+      }
 
       // A visible log panel so Ian can SEE what each pass does. Appended below the After pane; each pass
       // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
@@ -24190,14 +24274,14 @@ function _runLayoutAiOptimize() {
             // that most needs to be seen working, and it was the only one with nothing to show.
             _settleLive(true, 'AI Loop ' + roundNum + ': reviewed &mdash; ' + _plural(_ops.length, 'change') + ' to make.');
             _liveStart('AI Loop ' + roundNum + ': applying ' + _plural(_ops.length, 'change'));
-            return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
-              method: 'POST', credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ops: _ops })
-            }).then(function (r) {
-              if (!r.ok) { return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); }); }
-              var _rep = r.headers.get('X-Apply-Report');
-              return r.blob().then(function (b) {
+            // v3.0.809 -- TD-624. Was one fetch that held the connection open for the length of the
+            // apply. Everything below this line is unchanged: _applyStart hands back the same two
+            // things the response used to carry -- the raw X-Apply-Report header and the PDF blob --
+            // so the report handling, the friendly per-op log and the page-count line all read
+            // exactly as they did.
+            return _applyStart(_cid, _q, _ops, roundNum).then(function (_res) {
+              var _rep = _res.repRaw;
+              return Promise.resolve(_res.blob).then(function (b) {
                 var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
                 // v3.0.807 -- TD-623. Settle here, not further down: the bytes have arrived, so the
                 // wait this line describes is genuinely over. Reading the count off the report keeps
