@@ -21614,6 +21614,10 @@ var _finalizeAfterHeights = {};   // ...and the same for the After pane
 var _finalizeSessInc = null, _finalizeSessTotal = null;
 var _finalizeBeforePages = 0, _finalizeAfterPages = 0;
 var _finalizeBeforeDone = false, _finalizeAfterDone = false;
+// v3.0.812 -- TD-631. Fired when the After pane's PDF has been PARSED (page count known), not when
+// its pages have finished rasterising. The optimize loop hangs off this one; the stats still hang off
+// OnDone below, because they read per-page fill that does not exist until the pages are painted.
+var _finalizeAfterOnLoaded = null;
 var _finalizeAfterOnDone = null;   // Optimize registers a callback here; renderPdfInto fires it the
                                    // instant the After render resolves, so the stats no longer depend
                                    // on a polling interval surviving a background tab.
@@ -24650,10 +24654,32 @@ function _runLayoutAiOptimize() {
             _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none';
           }
         } catch (e) {}
-        // ONE-CLICK: now that Optimize has rendered the After pane, automatically run the AI optimize
-        // loop (review -> apply -> re-render, iterating). Fires once per Optimize; the loop's own guard
-        // prevents a double-run if the user also double-clicks. The After progress bar keeps running
-        // through the loop because each loop render re-shows it.
+        // v3.0.812 -- TD-631. The loop start USED TO LIVE HERE and no longer does; see _startLoopOnce
+        // below. It is still called from here as a backstop, because a render that finishes without
+        // ever having reported itself loaded must not strand the run.
+        _startLoopOnce();
+    }
+  }
+  // v3.0.812 -- TD-631. THE RUN WAITED FOR 150 CANVASES BEFORE IT WOULD START THINKING.
+  // renderPdfInto rasterises EVERY page eagerly at print intent -- `for (var n = first; n <= last;
+  // n++) _loop(n)` -- and the optimize loop was chained off that whole chain completing. On a
+  // 16-page book that is seconds. On the 144-page Dojo book it is 365MB into a browser tab and 150
+  // full-resolution canvases, and the run simply never began: the dump of 2026-08-31 19:23 reads
+  // 'over 0 measured pass(es)' after five and a half minutes, with both server renders long
+  // finished. Three attempts, three times nothing, on that book alone.
+  // THE LOOP NEVER NEEDED THE PICTURES. It needs the COMPOSE, which the server has already done by
+  // then. The preview is display. So the loop now starts when the document is PARSED -- page count
+  // known, a second or two -- and the pages carry on painting behind it. Ian wanted the whole book
+  // on screen to look at while it works: he still gets it, and now it fills in DURING the run
+  // instead of gating it.
+  // THE STATS STAY WHERE THEY WERE, deliberately. _writeOptimizeStats reads per-page fill
+  // (_finalizeAfterHeights), which only exists once the pages have actually rasterised, so firing
+  // it early would print a blank or wrong density. Two different things were bundled into one
+  // function; this splits them and moves only the half that was waiting for no reason.
+  var _loopStarted = false;
+  function _startLoopOnce() {
+    if (_loopStarted) return;
+    _loopStarted = true;
         try {
           if (window._optimizeCancelled) {
             optimizeProgress('Stopped before optimizing &mdash; showing the un-optimized layout.', { done: true });
@@ -24671,14 +24697,14 @@ function _runLayoutAiOptimize() {
             optimizePreloopRelease();
           }
         } catch (e) {}
-    }
   }
-  _finalizeAfterOnDone = _writeOptimizeStats;   // primary path: fires the moment the render resolves
+  _finalizeAfterOnDone = _writeOptimizeStats;   // stats: still on full render completion, they need the fills
+  _finalizeAfterOnLoaded = _startLoopOnce;      // v3.0.812 -- the LOOP starts as soon as the document parses   // primary path: fires the moment the render resolves
   var _composeWatch = setInterval(function () { if (_finalizeAfterDone) _writeOptimizeStats(); }, 500);
   // Long stop only. If the render really did finish, still write the stats rather than discarding them.
   setTimeout(function () {
     if (_finalizeAfterDone) { _writeOptimizeStats(); return; }
-    clearInterval(_composeWatch); _finalizeAfterOnDone = null; optimizePreloopRelease(); finish();
+    clearInterval(_composeWatch); _finalizeAfterOnDone = null; _finalizeAfterOnLoaded = null; optimizePreloopRelease(); finish();
   }, 900000);
 }
 // DIAGNOSTIC (temporary): draw a line on the preview canvas at the scan's detected content
@@ -25109,6 +25135,15 @@ function renderPdfInto(url, containerId, isBefore) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
       if (isBefore) _finalizeBeforePages = total; else _finalizeAfterPages = total;   // truth, not a DOM guess
+      // v3.0.812 -- TD-631. THE DOCUMENT IS PARSED; THE LOOP CAN GO. Everything below this line is
+      // painting -- 150 canvases at print intent on a big book -- and the optimize loop was waiting
+      // behind all of it for no reason. The page count, which is the only thing anyone downstream
+      // actually needs from here, is known right now. Fired before the paint loop starts so a slow
+      // or failing rasterise cannot hold the run hostage; the pages keep filling in behind it.
+      if (!isBefore && typeof _finalizeAfterOnLoaded === 'function') {
+        var _cbL = _finalizeAfterOnLoaded; _finalizeAfterOnLoaded = null;
+        try { _cbL(); } catch (e) {}
+      }
       if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
       if (_cntEl) _cntEl.innerHTML = finalizeCountLabel(total, null);
