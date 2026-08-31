@@ -6222,6 +6222,9 @@ function selLayout(el, layout) {
 // added here would have to be removed on every one of the stopping paths -- and a bar left sheening
 // after it finished would be a new way to look stuck.
 var CREEP_ASYMPTOTE = 99.6;
+// v3.0.813 -- TD-628. How long a render may sweep before we admit it is not coming. See the note at
+// the creep timer in renderPdfInto for why ten minutes and not some other number.
+var CREEP_GIVE_UP_MS = 10 * 60 * 1000;
 function creepBar(fill, from, ease, ms) {
   var pct = (typeof from === 'number') ? from : 0;
   if (fill) fill.style.width = pct.toFixed(2) + '%';
@@ -23824,7 +23827,7 @@ function _runLayoutAiOptimize() {
   // It is also the honest place to say the tab has to stay open: the work runs on the server, but
   // this page is what collects the result, so closing it abandons the run.
   optimizeProgress('Sit back &mdash; our editor is working through your book.', { reset: true });
-  optimizeProgress('On a long book this takes several minutes. Keep this tab open and it will keep going; you can watch each change appear below.', { dim: true });
+  optimizeProgress('On a long book this takes several minutes. Keep this tab open and it will keep going; you can monitor its progress below.', { dim: true });
   optimizeProgress('Analyzing your book&hellip;');
   optimizeProgress('Composing the pages&hellip;');
   // Composer is deterministic and fast -- a lightweight status line, no progress bar.
@@ -25080,11 +25083,43 @@ function renderPdfInto(url, containerId, isBefore) {
     creepPct += Math.max(0.5, (45 - creepPct) * 0.05);
     if (creepPct >= 44.5) creepPct = 6;                      // sweep again rather than sit at the cap
     if (pf) pf.style.width = creepPct.toFixed(1) + '%';
+    // v3.0.813 -- TD-628. THE SWEEP MUST NOT OUTLIVE HOPE, AND THIS ONE IS MINE.
+    // v3.0.811 replaced a bar that froze at 45% with one that sweeps forever. Then on 2026-08-31
+    // Ian's connection dropped mid-render: the fetch hung -- neither resolving nor rejecting, so
+    // NEITHER renderPdfInto's success path nor its .catch ever ran -- and the bar swept convincingly
+    // over a corpse for several minutes while he tried to work out what was happening. The frozen
+    // bar was wrong, but it at least LOOKED wrong. I made a dead render look healthier than a live
+    // one, which is the opposite of what TD-626 was for.
+    // So the sweep now has a ceiling. Past it: stop moving, say plainly that contact was lost, and
+    // give the claim back -- otherwise a compose that died silently holds the lock for the full
+    // fifteen minutes and locks the reader out of every book they own (the same fault TD-434
+    // records from 2026-08-12, arriving by a different road).
+    // TEN MINUTES, and the first number I chose was WRONG. v3.0.813 said five, reasoning from a 66s
+    // server render. Ian then measured a HEALTHY first render at FOUR AND A HALF MINUTES on the
+    // 144-page book -- inside my margin, so that ceiling would have started killing good runs on
+    // exactly the books that need them. A ceiling that kills healthy work is far worse than one that
+    // waits too long: this is double the observed worst case, and still under the server's fifteen
+    // minute stale lock so it stays useful.
+    // The long wait costs nothing now either, because the message below breaks the silence at ninety
+    // seconds. Reassuring early and giving up late are two different jobs; one number was doing both,
+    // and doing both badly.
+    if ((Date.now() - _creepT0) > CREEP_GIVE_UP_MS) {
+      try { clearInterval(creepTimer); } catch (e) {}
+      if (pf) pf.style.width = '0%';
+      if (pm) pm.textContent = 'Lost contact while building the book. Reload the page and try again.';
+      // Mirrors the .catch below: a compose that will not arrive must not keep the claim.
+      try { if (String(url).indexOf('compose=1') !== -1) fetch('/api/pdf/optimize-release', { method: 'POST', credentials: 'same-origin' }).catch(function () {}); } catch (e) {}
+      return;
+    }
     try {
       var _el = Date.now() - _creepT0;
       // The counter appears only after a few seconds: on a book that renders in two it would flash
       // up and vanish, which reads as a glitch rather than reassurance.
-      if (pm && _el >= 4000) pm.textContent = 'Building your book\u2026 (' + _fmtDur(_el) + ')';
+      // v3.0.814. Two stages, because "is it working?" and "has it died?" are different questions.
+      // A big book legitimately takes minutes; saying so at ninety seconds is what actually stops the
+      // wondering, and it lets the give-up ceiling sit safely high instead of guessing.
+      if (pm && _el >= 90000) pm.textContent = 'Still building \u2014 a large book can take several minutes\u2026 (' + _fmtDur(_el) + ')';
+      else if (pm && _el >= 4000) pm.textContent = 'Building your book\u2026 (' + _fmtDur(_el) + ')';
     } catch (e) {}
   }, 300);
   ensurePdfJs().then(function (pdfjsLib) {
@@ -25106,6 +25141,21 @@ function renderPdfInto(url, containerId, isBefore) {
         if (_or) window._optimizeRunId = _or;
       } catch (e) {}
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
+      // v3.0.814 -- TD-631, CORRECTED. v3.0.812 fired this after getDocument resolved, believing that
+      // was 'as soon as the document is parsed'. It is not: getDocument cannot resolve until the WHOLE
+      // BODY has downloaded, and on the 144-page book that body is 364MB. Measured on production
+      // 2026-08-31: the server finished rendering in 31.6s and the pane appeared at 4.5 MINUTES. So
+      // v3.0.812 moved the loop start by seconds rather than minutes, and Ian confirmed it: 'the
+      // looping didn't start until after the render'. Right diagnosis, wrong line.
+      // fetch() RESOLVES ON HEADERS; the body streams afterwards. So this point -- right here -- is
+      // the moment the server has finished composing and rendering, ~32s in, and everything after it
+      // is download and paint. The run id was read out of these same headers two lines above, which
+      // is proof the compose completed: there is nothing left for the loop to wait for. The 364MB
+      // carries on downloading behind the run, and the pages paint when it lands.
+      if (!isBefore && typeof _finalizeAfterOnLoaded === 'function') {
+        var _cbL = _finalizeAfterOnLoaded; _finalizeAfterOnLoaded = null;
+        try { _cbL(); } catch (e) {}
+      }
       // v3.0.333 -- same-origin, so these headers are readable. Only the Before pane is the source of
       // truth: it renders the book as it actually stands, from the route that computes the include map.
       if (isBefore) {
@@ -25135,15 +25185,6 @@ function renderPdfInto(url, containerId, isBefore) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
       if (isBefore) _finalizeBeforePages = total; else _finalizeAfterPages = total;   // truth, not a DOM guess
-      // v3.0.812 -- TD-631. THE DOCUMENT IS PARSED; THE LOOP CAN GO. Everything below this line is
-      // painting -- 150 canvases at print intent on a big book -- and the optimize loop was waiting
-      // behind all of it for no reason. The page count, which is the only thing anyone downstream
-      // actually needs from here, is known right now. Fired before the paint loop starts so a slow
-      // or failing rasterise cannot hold the run hostage; the pages keep filling in behind it.
-      if (!isBefore && typeof _finalizeAfterOnLoaded === 'function') {
-        var _cbL = _finalizeAfterOnLoaded; _finalizeAfterOnLoaded = null;
-        try { _cbL(); } catch (e) {}
-      }
       if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
       if (_cntEl) _cntEl.innerHTML = finalizeCountLabel(total, null);
