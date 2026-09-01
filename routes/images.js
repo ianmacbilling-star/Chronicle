@@ -1034,8 +1034,42 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   // the shadow by construction instead of by per-image nudging.
   const refPrompt =
     IP_GUARD_IMG +
+    // v3.0.819 -- TD-644 CLOSED, AND v3.0.815's REPLACEMENT WAS THE FAULT.
+    //
+    // v3.0.815 removed the hardcoded 'comic book art style' from here and put
+    // 'in a clean, neutral illustration style' in its place, to stop the model
+    // drifting photoreal -- the canonical reference is the one image that is
+    // DISPLAYED, on the Company page. TD-644 recorded it as the only edit in
+    // that batch whose visual result had not been checked, and marked it
+    // VERIFY FIRST. It was checked on 2026-09-01, by opening a real reference.
+    //
+    // IT IS OUTLINED LINE ART. For this model a 'clean illustration' is line
+    // and fill -- black contours round the coat, the straps, the boots and the
+    // face, over flat shading. That is barely distinguishable from what the
+    // comic wording produced. One instruction was swapped for a synonym.
+    //
+    // AND IT COSTS TWICE. The reference is fed to every panel as the identity
+    // source, and the system prompt then unifies the whole picture toward it,
+    // so the contours spread onto the rocks and the sky (TD-645). Second, the
+    // panel is told to keep the character EXACTLY as the reference shows --
+    // and a reference with smooth, unworn surfaces CAPS THE DETAIL of every
+    // panel that character appears in. Ian, comparing a panel with the art he
+    // wants: "It's good but no where near as good as those." You cannot render
+    // detail the reference does not have.
+    //
+    // SO: still neutral, still an illustration rather than a photograph, but
+    // fully rendered and WITHOUT CONTOURS. Note what is asked for and what is
+    // not: surface MATERIAL (weave, grain, pitting) is a rendering instruction
+    // and is safe; a mood, a palette or a light source would not be -- this
+    // image must stay re-renderable into watercolour or charcoal as easily as
+    // into an oil (TD-644: the canonical reference stays STYLE-NEUTRAL).
     'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
-    'in a clean, neutral illustration style, even soft lighting.\n\n' +
+    'even soft lighting. Render the figure FULLY and in HIGH DETAIL in a neutral ' +
+    'painted style, modelled with soft tonal shading: NO ink outlines, NO contour ' +
+    'lines drawn around shapes, NO flat cel shading, and nothing left simplified ' +
+    'or flat. Give every material its real surface \u2014 the weave and folds of ' +
+    'cloth, the grain and wear of leather, the pitting and scratches on metal, ' +
+    'individual strands of hair.\n\n' +
     CHAR_REF_STAGING +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
@@ -1081,7 +1115,14 @@ function buildAssetReferenceInput(descriptionText, category, modelKey) {
   const refPrompt =
     IP_GUARD_IMG +
     'Reference image of a single ' + catWord + ', centered on a plain neutral ' +
-    'background, even soft lighting, in a clean, neutral illustration style. Show only the ' + catWord +
+    // v3.0.819 -- the same fault and the same fix as the character reference
+    // above. These are the griffons, the locations and the items, and on a
+    // panel like a four-griffon flight they occupy far more of the frame than
+    // the characters do (TD-648).
+    'background, even soft lighting, rendered FULLY and in HIGH DETAIL in a ' +
+    'neutral painted style with soft tonal shading: NO ink outlines, NO contour ' +
+    'lines drawn around shapes, NO flat cel shading. Give every material its ' +
+    'real surface \u2014 grain, wear, pitting, scratches and weave. Show only the ' + catWord +
     ' itself, with no extra characters, text, logos, or watermarks.\n\n' +
     catLabel + ': ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
