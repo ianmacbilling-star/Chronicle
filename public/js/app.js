@@ -2706,6 +2706,9 @@ function renderSessionCharacters(rows) {
   // earlier choice, which is the precedence generation itself uses; deciding
   // it on the client would let the chips claim a style the panels will not use.
   scRefreshStyleBar(rows);
+  // v3.0.818 -- the list's innerHTML was just replaced, so any card that is
+  // still regenerating has lost its spinner. Put it back.
+  scRepaintBusy();
   scLoadVersionArtStyle(function() {
     var cur = state.sessionCharacterRows || [];
     for (var i = 0; i < cur.length; i++) {
@@ -2728,6 +2731,40 @@ function renderSessionCharacters(rows) {
 // regenerate/retouch already use, so pollRefJob, the webhook, the spend and
 // the logging are untouched. Only Approve is new, and it writes the image
 // WITHOUT touching change_status -- a restyle is not an appearance amendment.
+// v3.0.818 -- BUSY STATE HAS TO SURVIVE A RE-RENDER, FOR THE SAME REASON DRAFTS DO.
+//
+// Approving one card calls loadSessionCharacters(), which rebuilds the whole
+// list's innerHTML -- and that throws away the busy overlay sitting on whichever
+// card is still regenerating. Ian: "if it's rendering one character while a
+// Approve another it looks like it stops... i lose the regen spinner. it
+// eventually comes back but it looks like it stops."
+//
+// Nothing had stopped. The fetch and its poll were still running; only the
+// spinner was destroyed, and the card sat there looking dead until the poll
+// returned and scPaintDraft found it again. THE SAME FAULT AS v3.0.817's
+// reverting thumbnails, one layer along: local in-flight UI painted straight
+// onto the DOM, then a server-driven re-render that knows nothing about it.
+//
+// So the overlay is STATE, not just DOM, and the renderer re-applies it. Fixing
+// it here covers every re-render -- approve, discard, revert, the end of a run
+// -- rather than the one path that happened to be noticed.
+function scBusy() { state.restyleBusy = state.restyleBusy || {}; return state.restyleBusy; }
+function scBusyOn(charId, label, sub) {
+  scBusy()[charId] = { label: label, sub: sub };
+  if (typeof showBusyOverlay === 'function') showBusyOverlay('sc-card-' + charId, label, sub);
+}
+function scBusyOff(charId) {
+  delete scBusy()[charId];
+  if (typeof hideBusyOverlay === 'function') hideBusyOverlay('sc-card-' + charId);
+}
+// Re-apply every in-flight overlay after the list has been rebuilt.
+function scRepaintBusy() {
+  var b = scBusy();
+  for (var id in b) {
+    if (!Object.prototype.hasOwnProperty.call(b, id)) continue;
+    if (typeof showBusyOverlay === 'function') showBusyOverlay('sc-card-' + id, b[id].label, b[id].sub);
+  }
+}
 function scStyledDrafts() {
   state.draftStyleRef = state.draftStyleRef || {};
   return state.draftStyleRef;
@@ -2745,11 +2782,11 @@ function scStyleStripHtml(r) {
     return '<div class="sc-style-row">' +
       '<span class="sc-style-chip sc-style-chip-draft">New image ready — not saved yet</span>' +
       '<button class="btn btn-xs btn-primary" onclick="approveStyledReference(' + id + ')" ' +
-        'title="Keep this image as the reference for this session">✓ Approve</button>' +
+        'title="Keep this image as the reference for this session">Approve</button>' +
       '<button class="btn btn-xs" onclick="toggleStyledRetouch(' + id + ')" ' +
-        'title="Adjust this image without changing who the character is">✎ Retouch</button>' +
+        'title="Adjust this image without changing who the character is">Retouch</button>' +
       '<button class="btn btn-xs" onclick="discardStyledDraft(' + id + ')" ' +
-        'title="Throw this image away and keep the current reference">✕ Discard</button>' +
+        'title="Throw this image away and keep the current reference">Discard</button>' +
       '</div>' +
       '<div class="sc-style-retouch" id="sc-style-retouch-' + id + '" style="display:none;">' +
         '<input type="text" class="form-input" id="sc-style-retouch-text-' + id + '" ' +
@@ -2765,11 +2802,11 @@ function scStyleStripHtml(r) {
     return '<div class="sc-style-row">' +
       '<span class="sc-style-chip' + (stale ? ' sc-style-chip-stale' : '') + '" title="' +
         (stale ? 'This reference was rendered in a different art style from the one this version now uses.' : 'This reference matches the version’s art style.') + '">' +
-        (stale ? '⚠ Rendered in ' + escapeHtml(label) + ' — this version now uses ' + escapeHtml(curLabel)
-               : '✓ Rendered in ' + escapeHtml(label)) +
+        (stale ? 'Rendered in ' + escapeHtml(label) + ' — this version now uses ' + escapeHtml(curLabel)
+               : 'Rendered in ' + escapeHtml(label)) +
       '</span>' +
       '<button class="btn btn-xs" onclick="revertStyledReference(' + id + ')" ' +
-        'title="Put back the reference image that was here before it was regenerated in an art style">↺ Revert</button>' +
+        'title="Put back the reference image that was here before it was regenerated in an art style">Revert</button>' +
       '</div>';
   }
   return '';
@@ -2789,7 +2826,7 @@ function scRefreshStyleBar(rows) {
   });
   if (stale.length && canAct) {
     var curLabel = (typeof artStyleName === 'function') ? artStyleName(cur) : cur;
-    warn.innerHTML = '⚠ ' + stale.length + ' character' + (stale.length === 1 ? '’s' : 's’') +
+    warn.innerHTML = '' + stale.length + ' character' + (stale.length === 1 ? '’s' : 's’') +
       ' reference image' + (stale.length === 1 ? ' was' : 's were') +
       ' rendered in a different art style from this version’s (' + escapeHtml(curLabel) + '). ' +
       'Story images may not match. Regenerate them, or leave it — nothing is blocked.';
@@ -2852,7 +2889,7 @@ function runRestyleAll(rows) {
   var i = 0;
   function next() {
     if (i >= rows.length) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '✨ Regenerate in Art Style'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Regenerate in Art Style'; }
       loadSessionCharacters();
       return;
     }
@@ -2860,7 +2897,7 @@ function runRestyleAll(rows) {
     if (btn) { btn.textContent = 'Regenerating ' + i + ' of ' + rows.length + '…'; }
     restyleOneReference(r.character_id, function(ok, fatal) {
       if (fatal) {
-        if (btn) { btn.disabled = false; btn.innerHTML = '✨ Regenerate in Art Style'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Regenerate in Art Style'; }
         loadSessionCharacters();
         return;
       }
@@ -2871,8 +2908,7 @@ function runRestyleAll(rows) {
 }
 
 function restyleOneReference(charId, done) {
-  var wrapId = 'sc-card-' + charId;
-  if (typeof showBusyOverlay === 'function') showBusyOverlay(wrapId, 'Regenerating', 'Re-rendering in the art style…');
+  scBusyOn(charId, 'Regenerating', 'Re-rendering in the art style…');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/restyle-reference' + forkQ(), {
     method: 'POST',
@@ -2883,19 +2919,19 @@ function restyleOneReference(charId, done) {
     .then(function(data) {
       if (data && data.job_id) {
         pollRefJob(data.job_id, function(url) {
-          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scBusyOff(charId);
           scStyledDrafts()[charId] = url;
           scPaintDraft(charId, url);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
           if (done) done(true, false);
         }, function(err) {
-          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scBusyOff(charId);
           scCardMessage(charId, 'Could not regenerate: ' + err);
           if (done) done(false, false);
         });
         return;
       }
-      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scBusyOff(charId);
       // Out of tokens or a locked style stops the WHOLE run -- every remaining
       // character would fail the same way, and firing four more doomed
       // requests just to print the same message four more times is rude.
@@ -2904,7 +2940,7 @@ function restyleOneReference(charId, done) {
       if (done) done(false, fatal);
     })
     .catch(function() {
-      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scBusyOff(charId);
       scCardMessage(charId, 'Could not regenerate.');
       if (done) done(false, false);
     });
@@ -2993,8 +3029,7 @@ function applyStyledRetouch(charId) {
   var t = document.getElementById('sc-style-retouch-text-' + charId);
   var instruction = t ? (t.value || '').trim() : '';
   if (!instruction) { if (t) t.focus(); return; }
-  var wrapId = 'sc-card-' + charId;
-  if (typeof showBusyOverlay === 'function') showBusyOverlay(wrapId, 'Retouching', 'Applying your change…');
+  scBusyOn(charId, 'Retouching', 'Applying your change…');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/retouch-reference' + forkQ(), {
     method: 'POST',
@@ -3005,21 +3040,21 @@ function applyStyledRetouch(charId) {
     .then(function(data) {
       if (data && data.job_id) {
         pollRefJob(data.job_id, function(url) {
-          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scBusyOff(charId);
           scStyledDrafts()[charId] = url;
           scPaintDraft(charId, url);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
         }, function(err) {
-          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scBusyOff(charId);
           scCardMessage(charId, 'Could not retouch: ' + err);
         });
         return;
       }
-      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scBusyOff(charId);
       scCardMessage(charId, (data && (data.message || data.error)) || 'Could not retouch.');
     })
     .catch(function() {
-      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scBusyOff(charId);
       scCardMessage(charId, 'Could not retouch.');
     });
 }
