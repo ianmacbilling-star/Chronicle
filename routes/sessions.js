@@ -516,7 +516,8 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
   if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
   const rows = await db.prepare(
     'SELECT sc.id, sc.character_id, sc.fork_id, sc.prompt, sc.change_note, sc.edited_at, ' +
-    'sc.reference_url, sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
+    'sc.reference_url, sc.pre_style_reference_url, sc.styled_art_style, ' +
+    'sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
     'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody, ch.canonical_reference_url, ' +
     'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = sc.character_id AND ca.fork_id = sc.fork_id AND ca.source_url = COALESCE(sc.reference_url, ch.canonical_reference_url) AND ca.archived_by = ?) AS archived ' +
     'FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id ' +
@@ -692,6 +693,226 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
   } catch(e) {
     console.error('retouch-reference error:', e.message);
     res.json({ error: 'Could not retouch: ' + e.message });
+  }
+});
+
+// ===========================================================================
+// v3.0.816 -- TD-645. RENDER THIS VERSION'S CHARACTER REFERENCES IN ITS ART STYLE.
+//
+// WHY THIS EXISTS. v3.0.815 stopped the pipeline telling the model it was
+// drawing a comic on every image. It did NOT touch the reference images that
+// were already generated under the old hardcoded 'comic book art style', and
+// those are the strongest visual input in the whole prompt. Worse, the system
+// prompt then says "render the ENTIRE image in ONE single, consistent art
+// style -- every character, NPC, location and item included, not just the
+// background", so the model faithfully unifies the picture TOWARD the ink-
+// outlined references and drags contour lines onto the rocks and the sky.
+//
+// Ian, 2026-09-01, on a Dark Fantasy party panel generated on staging AFTER
+// v3.0.815: "the characters and the whole pic still didn't go far enough."
+// The whole picture had gone comic, not just the figures -- which is the
+// unify rule doing exactly what it is told with the wrong reference.
+//
+// So this is the second half of TD-634, not a separate feature.
+//
+// WHAT IT DOES NOT DO, DELIBERATELY:
+//   * It never touches characters.canonical_reference_url. The canonical
+//     reference stays STYLE-NEUTRAL (TD-644) -- it is the identity master,
+//     it is displayed on the Company page, and a campaign can change art
+//     style mid-book. Only this fork's snapshot is restyled.
+//   * It changes nothing in the panel generator. buildPanelInput already
+//     prefers session_characters.reference_url over the canonical, so a
+//     styled snapshot flows into panels with no change to generation.
+//   * It does not write anything forward into later sessions (TD-269).
+// ===========================================================================
+
+// The art style THIS version renders in, resolved with the same precedence the
+// session view uses: the fork's own override, then the session's canonical
+// value, then the version's most recent earlier choice. Never guesses across
+// versions -- that was TD-252, and getting it wrong here would restyle a
+// character into a style this version does not use.
+async function resolveVersionArtStyle(db, sessionId, forkId) {
+  try {
+    const sf = await db.prepare('SELECT art_style_override, version_id FROM session_forks WHERE id = ?').get(forkId);
+    if (sf && sf.art_style_override) return sf.art_style_override;
+    const s = await db.prepare('SELECT art_style FROM sessions WHERE id = ?').get(sessionId);
+    if (s && s.art_style) return s.art_style;
+    const d = await versionStyleDefaults(db, sf ? sf.version_id : null, sessionId);
+    return (d && d.art_style_override) || null;
+  } catch (e) {
+    console.error('resolveVersionArtStyle error:', e.message);
+    return null;
+  }
+}
+
+// The instruction sent with the restyle. It is a REFERENCE-shaped retouch, so
+// submitRetouch already contributes the identity-preservation wording and the
+// dictated white staging (CHAR_REF_STAGING, TD-342) -- this only has to say
+// what is changing. Say MEDIUM and say it narrowly: the one thing that must
+// not change is who this is.
+const RESTYLE_REF_INSTRUCTION =
+  'Re-render this character in the art style described above. Change ONLY the ' +
+  'artistic medium and rendering technique -- the brushwork, line, colour ' +
+  'treatment, shading and finish. Do NOT change WHO this is or WHAT they are ' +
+  'wearing: keep the same face, facial structure, expression, species, skin ' +
+  'tone, hair colour and style, build, height, pose, and every piece of ' +
+  'clothing, armour, and equipment exactly as it is now, in the same places. ' +
+  'This is the same character painted by a different artist, not a different ' +
+  'character.';
+
+// POST restyle one character's session reference into this version's art style.
+// Mirrors retouch-reference exactly -- same draft/approve contract, same token
+// gate, same job kind -- so the existing webhook and the client's pollRefJob
+// need no changes at all. The ONLY differences are that a real style is passed
+// (retouch-reference deliberately passes '') and the instruction is fixed.
+router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const characterId = req.params.characterId;
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+    if (!ch) return res.json({ error: 'Character not found' });
+
+    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+    const sc = await db.prepare(
+      'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
+    ).get(fork, characterId);
+
+    const artStyle = await resolveVersionArtStyle(db, req.params.id, fork);
+    if (!artStyle) {
+      return res.json({ error: 'NO_ART_STYLE', message: 'Pick an art style for this version first, then regenerate the references.' });
+    }
+    // Tier gate, and it REFUSES rather than falling back. A silent fallback here
+    // would restyle every character into High fantasy and look like the feature
+    // simply did nothing.
+    const effRank = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+    if (!artStyleAllowed(effRank, artStyle)) {
+      return res.json({ error: 'STYLE_LOCKED', message: "That art style isn't available on your current plan. Pick another, or upgrade for more styles." });
+    }
+
+    const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    if (!falKey) return res.json({ error: 'Image generation not configured.' });
+
+    // Restyle FROM the current reference - session snapshot first, then the
+    // canonical, then an uploaded portrait. Same precedence as retouch.
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
+      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
+
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You’re out of tokens. Add more to keep generating.' });
+    }
+    const _resv = await characterReserveStatus(req.session.userId, cost);
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
+    }
+
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+
+    // 'reference' framing keeps ONE figure, full body, on the dictated white
+    // ground. A real style is passed here, which is the whole point.
+    const sub = await imageHelpers.submitRetouch(baseImage, RESTYLE_REF_INSTRUCTION, artStyle, falKey, webhookUrl, null, 'reference');
+    const nowTs = new Date().toISOString();
+    // Draft job, same as every other session_ref: the webhook persists to R2,
+    // spends and logs, but session_characters is written only on Approve.
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, fork_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), parseInt(characterId, 10), fork, 'session_ref', 'queued', sub.model, cost, baseImage || null, nowTs, nowTs);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid, art_style: artStyle });
+  } catch(e) {
+    console.error('restyle-reference error:', e.message);
+    res.json({ error: 'Could not regenerate in the art style: ' + e.message });
+  }
+});
+
+// POST approve a styled reference draft. Body: { image_url }.
+//
+// DELIBERATELY NOT approve-change. That endpoint also writes prompt,
+// change_note and change_status='accepted' because it approves an APPEARANCE
+// AMENDMENT -- a broken horn, a new scar. A restyle is not an appearance
+// change: the character has not changed, the paint has. Reusing it would mark
+// every restyled character as having a permanent story change and would push
+// that into the change-review UI. This writes the image and nothing else.
+router.post('/:id/characters/:characterId/approve-styled-reference', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const imageUrl = (req.body && req.body.image_url) || null;
+    if (!imageUrl) return res.json({ error: 'No image to approve.' });
+    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+    const sc = await db.prepare('SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?').get(fork, req.params.characterId);
+    if (!sc) return res.json({ error: 'Session character not found' });
+
+    const artStyle = await resolveVersionArtStyle(db, req.params.id, fork);
+    const now = new Date().toISOString();
+
+    // ARM THE UNDO SLOT ONLY IF IT IS EMPTY.
+    //
+    // Ian, 2026-09-01: "The revert should show what was there before." That
+    // means the reference as it stood before the FIRST restyle -- not before
+    // the most recent one. Restyle twice and the second press must not
+    // overwrite the original with the first styled attempt, or Revert quietly
+    // stops meaning what the button says.
+    const arm = sc.pre_style_reference_url ? sc.pre_style_reference_url : (sc.reference_url || null);
+
+    await db.prepare(
+      'UPDATE session_characters SET reference_url = ?, pre_style_reference_url = ?, styled_art_style = ?, edited_at = ?, edited_by = ? ' +
+      'WHERE fork_id = ? AND character_id = ?'
+    ).run(imageUrl, arm, artStyle || null, now, req.session.userId, fork, req.params.characterId);
+
+    // NOTE: releaseImage is NOT called on the image being replaced. It is the
+    // one Revert restores, so its bytes must stay referenced. This is TD-501's
+    // rule -- reverting away from an image and releasing it is how the choice
+    // stopped being merely hidden and became gone.
+    res.json({ success: true, reference_url: imageUrl, styled_art_style: artStyle || null });
+  } catch(e) {
+    console.error('approve-styled-reference error:', e.message);
+    res.json({ error: 'Could not approve the image.' });
+  }
+});
+
+// POST revert a styled reference back to what was there before the restyle.
+//
+// One-way by design, and it does NOT release the styled image. Ian asked for
+// "what was there before", not a toggle, so pressing Revert twice does
+// nothing rather than bouncing back to the styled version. The styled bytes
+// are left referenced rather than collected: an orphaned object is cheap, and
+// TD-501 is the record of what happens when revert releases what it replaced.
+router.post('/:id/characters/:characterId/revert-styled-reference', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+    const sc = await db.prepare('SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?').get(fork, req.params.characterId);
+    if (!sc) return res.json({ error: 'Session character not found' });
+    if (!sc.pre_style_reference_url) return res.json({ error: 'There is no earlier reference image to go back to.' });
+    const now = new Date().toISOString();
+    await db.prepare(
+      'UPDATE session_characters SET reference_url = ?, pre_style_reference_url = NULL, styled_art_style = NULL, edited_at = ?, edited_by = ? ' +
+      'WHERE fork_id = ? AND character_id = ?'
+    ).run(sc.pre_style_reference_url, now, req.session.userId, fork, req.params.characterId);
+    res.json({ success: true, reference_url: sc.pre_style_reference_url });
+  } catch(e) {
+    console.error('revert-styled-reference error:', e.message);
+    res.json({ error: 'Could not revert the image.' });
+  }
+});
+
+// GET the art style this version renders in, so the Characters tab can label
+// the button and warn when the stored references no longer match it.
+router.get('/:id/version-art-style', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const viewForkId = await getViewableForkId(db, req.params.id, req.session.userId, req.query.fork_id);
+    if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
+    const artStyle = await resolveVersionArtStyle(db, req.params.id, viewForkId);
+    res.json({ art_style: artStyle || null });
+  } catch(e) {
+    res.json({ art_style: null });
   }
 });
 

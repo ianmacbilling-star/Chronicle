@@ -917,7 +917,11 @@
           <button class="btn" onclick="switchSessionTab('notes')">Go to Story</button>
         </div>
         <div id="sc-content" style="display:none;">
-          <div class="form-hint" style="margin-bottom:14px;">These are the character descriptions used to generate this session's images. Each carries forward from the prior session, or the character's base prompt.</div>
+          <div class="sc-style-bar">
+            <div class="form-hint" style="margin:0;flex:1 1 320px;">These are the character descriptions used to generate this session's images. Each carries forward from the prior session, or the character's base prompt.</div>
+            <button class="btn btn-sm" id="sc-restyle-all-btn" onclick="restyleAllReferences()" title="Story images are often better when the character reference images match the version's art style.">&#10024; Regenerate in Art Style</button>
+          </div>
+          <div class="sc-style-warning" id="sc-style-warning" style="display:none;"></div>
           <div id="sc-list"></div>
         </div>
       </div>

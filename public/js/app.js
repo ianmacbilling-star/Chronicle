@@ -2681,10 +2681,320 @@ function renderSessionCharacters(rows) {
       changeBadge +
       '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '">' +
         (r.prompt || '') + '</div>' +
+      '<div class="sc-style-strip" id="sc-style-strip-' + r.character_id + '">' +
+        scStyleStripHtml(r) + '</div>' +
     '</div>';
   }).join('');
   // Keep the rows available for the review screen.
   state.sessionCharacterRows = rows;
+  // v3.0.816 -- TD-645. Paint the strips immediately from what we already
+  // know, then resolve the version's art style SERVER-SIDE and repaint. The
+  // server applies fork override -> session -> the version's most recent
+  // earlier choice, which is the precedence generation itself uses; deciding
+  // it on the client would let the chips claim a style the panels will not use.
+  scRefreshStyleBar(rows);
+  scLoadVersionArtStyle(function() {
+    var cur = state.sessionCharacterRows || [];
+    for (var i = 0; i < cur.length; i++) {
+      var el = document.getElementById('sc-style-strip-' + cur[i].character_id);
+      if (el) el.innerHTML = scStyleStripHtml(cur[i]);
+    }
+    scRefreshStyleBar(cur);
+  });
+}
+
+// ---- v3.0.816 -- TD-645. REGENERATE THIS SESSION'S CHARACTER REFERENCES IN THE VERSION'S ART STYLE.
+//
+// The second half of TD-634. v3.0.815 stopped the prompt asking for comics;
+// the stored reference images were still DRAWN as comics, and the system
+// prompt's "render the ENTIRE image in ONE consistent style" then unifies the
+// panel toward them -- which is why a Dark Fantasy party panel came back with
+// ink contours on the griffons, the rocks and the brazier.
+//
+// Every draft here goes through the SAME session_ref job the existing
+// regenerate/retouch already use, so pollRefJob, the webhook, the spend and
+// the logging are untouched. Only Approve is new, and it writes the image
+// WITHOUT touching change_status -- a restyle is not an appearance amendment.
+function scStyledDrafts() {
+  state.draftStyleRef = state.draftStyleRef || {};
+  return state.draftStyleRef;
+}
+
+// The per-card strip. Three states, and only one is ever shown:
+//   draft waiting   -> Approve / Retouch / Discard
+//   styled + saved  -> which style it was rendered in, and Revert
+//   neither         -> nothing at all, so the tab looks exactly as it did
+function scStyleStripHtml(r) {
+  var id = r.character_id;
+  var drafts = scStyledDrafts();
+  var draft = drafts[id];
+  if (draft) {
+    return '<div class="sc-style-row">' +
+      '<span class="sc-style-chip sc-style-chip-draft">New image ready — not saved yet</span>' +
+      '<button class="btn btn-xs btn-primary" onclick="approveStyledReference(' + id + ')" ' +
+        'title="Keep this image as the reference for this session">✓ Approve</button>' +
+      '<button class="btn btn-xs" onclick="toggleStyledRetouch(' + id + ')" ' +
+        'title="Adjust this image without changing who the character is">✎ Retouch</button>' +
+      '<button class="btn btn-xs" onclick="discardStyledDraft(' + id + ')" ' +
+        'title="Throw this image away and keep the current reference">✕ Discard</button>' +
+      '</div>' +
+      '<div class="sc-style-retouch" id="sc-style-retouch-' + id + '" style="display:none;">' +
+        '<input type="text" class="form-input" id="sc-style-retouch-text-' + id + '" ' +
+          'placeholder="e.g. make the cloak darker" />' +
+        '<button class="btn btn-xs" onclick="applyStyledRetouch(' + id + ')">Apply</button>' +
+      '</div>';
+  }
+  if (r.styled_art_style) {
+    var cur = state.versionArtStyle || null;
+    var stale = cur && String(r.styled_art_style) !== String(cur);
+    var label = (typeof artStyleName === 'function') ? artStyleName(r.styled_art_style) : r.styled_art_style;
+    var curLabel = cur ? ((typeof artStyleName === 'function') ? artStyleName(cur) : cur) : '';
+    return '<div class="sc-style-row">' +
+      '<span class="sc-style-chip' + (stale ? ' sc-style-chip-stale' : '') + '" title="' +
+        (stale ? 'This reference was rendered in a different art style from the one this version now uses.' : 'This reference matches the version’s art style.') + '">' +
+        (stale ? '⚠ Rendered in ' + escapeHtml(label) + ' — this version now uses ' + escapeHtml(curLabel)
+               : '✓ Rendered in ' + escapeHtml(label)) +
+      '</span>' +
+      '<button class="btn btn-xs" onclick="revertStyledReference(' + id + ')" ' +
+        'title="Put back the reference image that was here before it was regenerated in an art style">↺ Revert</button>' +
+      '</div>';
+  }
+  return '';
+}
+
+// The bar above the list: the button, and a warning (never a block) when any
+// stored reference was rendered in a style this version no longer uses.
+function scRefreshStyleBar(rows) {
+  var btn = document.getElementById('sc-restyle-all-btn');
+  var warn = document.getElementById('sc-style-warning');
+  var canAct = (typeof forkOnScreenIsMine === 'function') ? forkOnScreenIsMine() : true;
+  if (btn) btn.style.display = canAct ? '' : 'none';
+  if (!warn) return;
+  var cur = state.versionArtStyle || null;
+  var stale = (rows || []).filter(function(r) {
+    return r.styled_art_style && cur && String(r.styled_art_style) !== String(cur);
+  });
+  if (stale.length && canAct) {
+    var curLabel = (typeof artStyleName === 'function') ? artStyleName(cur) : cur;
+    warn.innerHTML = '⚠ ' + stale.length + ' character' + (stale.length === 1 ? '’s' : 's’') +
+      ' reference image' + (stale.length === 1 ? ' was' : 's were') +
+      ' rendered in a different art style from this version’s (' + escapeHtml(curLabel) + '). ' +
+      'Story images may not match. Regenerate them, or leave it — nothing is blocked.';
+    warn.style.display = '';
+  } else {
+    warn.style.display = 'none';
+    warn.innerHTML = '';
+  }
+}
+
+// Read the version's art style from the server rather than trusting whatever
+// the picker happens to be showing. The server resolves fork override ->
+// session -> the version's most recent earlier choice, which is the same
+// precedence generation uses; guessing it on the client is how you restyle a
+// character into a style this version does not actually render in.
+function scLoadVersionArtStyle(done) {
+  if (!state.currentCampaign || !state.currentSession) { if (done) done(); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/version-art-style' + forkQ(), { headers: { 'Accept': 'application/json' } })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { state.versionArtStyle = (d && d.art_style) || null; if (done) done(); })
+    .catch(function() { if (done) done(); });
+}
+
+// Regenerate EVERY character on the tab, one at a time.
+//
+// SEQUENTIAL ON PURPOSE. Firing a party of five at fal at once races the token
+// ledger, and a mid-batch INSUFFICIENT_TOKENS would leave some characters
+// styled and others not with no clear record of which. One at a time means a
+// failure stops the run with everything before it intact and approvable.
+function restyleAllReferences() {
+  if (typeof ensureGenFree === 'function' && !ensureGenFree()) return;
+  var rows = state.sessionCharacterRows || [];
+  if (!rows.length) return;
+  if (!state.versionArtStyle) {
+    scLoadVersionArtStyle(function() {
+      if (!state.versionArtStyle) {
+        alert('Pick an art style for this version first, then regenerate the references.');
+        return;
+      }
+      restyleAllReferences();
+    });
+    return;
+  }
+  var styleLabel = (typeof artStyleName === 'function') ? artStyleName(state.versionArtStyle) : state.versionArtStyle;
+  if (!confirm('Regenerate ' + rows.length + ' character reference image' + (rows.length === 1 ? '' : 's') +
+               ' in ' + styleLabel + '?\n\nEach one costs the same as any other image regeneration, and each ' +
+               'comes back for you to approve or discard. Nothing is saved until you approve it.')) return;
+  var btn = document.getElementById('sc-restyle-all-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Regenerating…'; }
+  var i = 0;
+  function next() {
+    if (i >= rows.length) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '✨ Regenerate in Art Style'; }
+      loadSessionCharacters();
+      return;
+    }
+    var r = rows[i++];
+    if (btn) { btn.textContent = 'Regenerating ' + i + ' of ' + rows.length + '…'; }
+    restyleOneReference(r.character_id, function(ok, fatal) {
+      if (fatal) {
+        if (btn) { btn.disabled = false; btn.innerHTML = '✨ Regenerate in Art Style'; }
+        loadSessionCharacters();
+        return;
+      }
+      next();
+    });
+  }
+  next();
+}
+
+function restyleOneReference(charId, done) {
+  var wrapId = 'sc-card-' + charId;
+  if (typeof showBusyOverlay === 'function') showBusyOverlay(wrapId, 'Regenerating', 'Re-rendering in the art style…');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/restyle-reference' + forkQ(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function(url) {
+          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scStyledDrafts()[charId] = url;
+          scPaintDraft(charId, url);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          if (done) done(true, false);
+        }, function(err) {
+          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scCardMessage(charId, 'Could not regenerate: ' + err);
+          if (done) done(false, false);
+        });
+        return;
+      }
+      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      // Out of tokens or a locked style stops the WHOLE run -- every remaining
+      // character would fail the same way, and firing four more doomed
+      // requests just to print the same message four more times is rude.
+      var fatal = !!(data && (data.error === 'INSUFFICIENT_TOKENS' || data.error === 'STYLE_LOCKED' || data.error === 'NO_ART_STYLE'));
+      scCardMessage(charId, (data && (data.message || data.error)) || 'Could not regenerate.');
+      if (done) done(false, fatal);
+    })
+    .catch(function() {
+      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scCardMessage(charId, 'Could not regenerate.');
+      if (done) done(false, false);
+    });
+}
+
+// Swap the thumbnail for the draft and show the approve strip, without a full
+// re-render -- a reload here would drop the other cards' pending drafts.
+function scPaintDraft(charId, url) {
+  var card = document.getElementById('sc-card-' + charId);
+  if (!card) return;
+  var img = card.querySelector('.sc-thumb');
+  if (img && img.tagName === 'IMG') { img.src = url; }
+  else if (img) {
+    img.outerHTML = '<img src="' + url + '" class="sc-thumb" alt="reference" style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" />';
+  }
+  var strip = document.getElementById('sc-style-strip-' + charId);
+  var rows = state.sessionCharacterRows || [];
+  var r = null;
+  for (var i = 0; i < rows.length; i++) { if (rows[i].character_id === charId) { r = rows[i]; break; } }
+  if (strip && r) strip.innerHTML = scStyleStripHtml(r);
+}
+
+function scCardMessage(charId, text) {
+  var strip = document.getElementById('sc-style-strip-' + charId);
+  if (strip) strip.innerHTML = '<div class="sc-style-row"><span class="sc-style-chip sc-style-chip-stale">' + escapeHtml(text) + '</span></div>';
+}
+
+function approveStyledReference(charId) {
+  var url = scStyledDrafts()[charId];
+  if (!url) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/approve-styled-reference' + forkQ(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image_url: url })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && d.success) { delete scStyledDrafts()[charId]; loadSessionCharacters(); }
+      else { scCardMessage(charId, (d && d.error) || 'Could not approve.'); }
+    })
+    .catch(function() { scCardMessage(charId, 'Could not approve.'); });
+}
+
+function discardStyledDraft(charId) {
+  delete scStyledDrafts()[charId];
+  loadSessionCharacters();
+}
+
+function revertStyledReference(charId) {
+  if (!confirm('Put back the reference image that was here before it was regenerated in an art style?')) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/revert-styled-reference' + forkQ(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && d.success) { delete scStyledDrafts()[charId]; loadSessionCharacters(); }
+      else { scCardMessage(charId, (d && d.error) || 'Could not revert.'); }
+    })
+    .catch(function() { scCardMessage(charId, 'Could not revert.'); });
+}
+
+function toggleStyledRetouch(charId) {
+  var box = document.getElementById('sc-style-retouch-' + charId);
+  if (!box) return;
+  box.style.display = (box.style.display === 'none') ? '' : 'none';
+  if (box.style.display === '') {
+    var t = document.getElementById('sc-style-retouch-text-' + charId);
+    if (t) t.focus();
+  }
+}
+
+// Retouch the DRAFT through the existing retouch-reference endpoint, which
+// passes an empty style on purpose -- "keep the existing look, change only the
+// instruction". That is exactly right on an already-styled image: we do not
+// want the style paragraph applied a second time.
+function applyStyledRetouch(charId) {
+  var t = document.getElementById('sc-style-retouch-text-' + charId);
+  var instruction = t ? (t.value || '').trim() : '';
+  if (!instruction) { if (t) t.focus(); return; }
+  var wrapId = 'sc-card-' + charId;
+  if (typeof showBusyOverlay === 'function') showBusyOverlay(wrapId, 'Retouching', 'Applying your change…');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/retouch-reference' + forkQ(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ instruction: instruction })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function(url) {
+          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scStyledDrafts()[charId] = url;
+          scPaintDraft(charId, url);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        }, function(err) {
+          if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+          scCardMessage(charId, 'Could not retouch: ' + err);
+        });
+        return;
+      }
+      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scCardMessage(charId, (data && (data.message || data.error)) || 'Could not retouch.');
+    })
+    .catch(function() {
+      if (typeof hideBusyOverlay === 'function') hideBusyOverlay(wrapId);
+      scCardMessage(charId, 'Could not retouch.');
+    });
 }
 
 function startEditSnapshot(charId) {
