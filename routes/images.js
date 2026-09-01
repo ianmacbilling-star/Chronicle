@@ -126,6 +126,50 @@ var FADE_WHITE = ' EDGES: render as a loose vignette where the medium thins and 
 var FADE_STYLES = { 'Fantasy oil painting': 1, 'Fantasy pastel': 1, 'Charcoal drawing': 1, 'Classic pen and ink': 1 };
 function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
+// v3.0.815 -- TD-634. THE COMIC VOCABULARY IS PER-STYLE, NOT GLOBAL.
+// Five places used to tell nano-banana-2 it was drawing a COMIC on every single
+// image, whatever style the user had actually chosen: the illustrator role in the
+// system prompt, the noun in the panel prompt, that same noun in both retouch
+// paths, and a capitalised DRAWN that was written to mean INTEGRATED and reads as
+// LINE ART. A watercolour book was therefore asked for comics four times before
+// its own style paragraph ever spoke, and the four went first.
+// PROVEN ON 2026-09-01, not theorised: the same model, at the same size, with none
+// of this wording, painted an image with no contour line anywhere in it. See
+// CUSTOM_ART_STYLE_SPEC.md section 1.
+//
+// The words were never wrong -- they were in the wrong place. They belong to the
+// styles that ARE comics. Ian chose the membership on 2026-09-01:
+//   comic   : High fantasy illustration, Dark gritty comic book,
+//             Comic book cel-shaded, Anime manga style
+//   neutral : Watercolor painterly, Fantasy oil painting, Classic pen and ink,
+//             Fantasy pastel, Charcoal drawing, Dark Fantasy
+//
+// HIGH FANTASY IS DELIBERATELY ON THE COMIC SIDE. It is the Campaignia default and
+// very nearly every book in existence is drawn in it, so it keeps the v3.0.814
+// wording EXACTLY. This batch must not repaint books that already shipped. All
+// four comic styles assemble BYTE-IDENTICAL prompts to v3.0.814 and the apply
+// script asserts exactly that against the pre-image.
+//
+// A CUSTOM STYLE ARRIVES AS A RAW 'STYLE:' PARAGRAPH AND MUST LAND NEUTRAL. It
+// does, because it is not a key in this map. DO NOT rewrite this as a test against
+// the prefixes map in getStylePrefix() -- that would put every custom style back on
+// the comic side and undo the entire point of the change.
+var COMIC_STYLES = { 'High fantasy illustration': 1, 'Dark gritty comic book': 1, 'Comic book cel-shaded': 1, 'Anime manga style': 1 };
+function isComicStyle(s){ return !!COMIC_STYLES[s]; }
+// role  -- the illustrator the model is told it is. Probably load-bearing for scene
+//          staging, so it is REPLACED, never removed.
+// panel -- the noun for one picture.
+// unify -- the word meaning 'one medium throughout'. Accurate for a comic,
+//          actively misleading for paint.
+function styleVoice(style) {
+  var comic = isComicStyle(style);
+  return {
+    role:  comic ? 'graphic-novel illustrator' : 'narrative illustrator',
+    panel: comic ? 'comic panel' : 'illustrated panel',
+    unify: comic ? 'DRAWN' : 'UNIFIED'
+  };
+}
+
 var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original characters, creatures, locations, and items as described and as shown in any reference images. Do NOT draw, imitate, or incorporate any recognizable copyrighted or trademarked character, creature, mascot, logo, costume, vehicle, or branded design from any other franchise (films, video games, comics, anime, novels, toys, or another game publisher). If a name or description resembles a famous character or property from another franchise, treat it as the user\'s OWN original creation and render an original design \u2014 NEVER that franchise\'s likeness. A thematic motif (for example a bat, spider, or star) may appear ONLY as original armor or decoration; you must NEVER add that franchise\'s identifying marks: no chest emblem, logo, insignia, or symbol associated with a known character, and never copy a known character\'s signature silhouette such as a distinctive cowl, mask, cape, ear shape, or helmet. Keep the design generic-fantasy and original \u2014 evocative is fine, iconic is not.';
 
 // Balanced composition steer for STORY PANELS ONLY (injected via the panel `hint`,
@@ -206,10 +250,11 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   // than the content prompt (which competes with scene text + reference images).
   // Flux has no system_prompt, so it keeps the style in the prompt (styleFinal).
   const stylePrefix = getStylePrefix(style);
+  const _voice = styleVoice(style);
   const styleSystem =
-    'You are a graphic-novel illustrator.' + IP_GUARD_IMG + ' Render the ENTIRE image in ONE single, ' +
+    'You are a ' + _voice.role + '.' + IP_GUARD_IMG + ' Render the ENTIRE image in ONE single, ' +
     'consistent art style — every character, NPC, location, and item included, ' +
-    'not just the background — so everything looks genuinely DRAWN in this ' +
+    'not just the background — so everything looks genuinely ' + _voice.unify + ' in this ' +
     'style rather than pasted on top of it. A consistent art style means one shared ' +
     'rendering MEDIUM and technique; it does NOT mean making the characters look ' +
     'alike — each character, NPC, and creature stays a separate, distinct individual ' +
@@ -219,7 +264,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     'NOT copy their rendering style — re-render every referenced element in ' +
     'this art style.' + edgeDirective + ' The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
-    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
+    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks ' + _voice.unify + ' in this style rather than placed on top of it. ' + stylePrefix
     : '';
   const CHAR_HEADING = '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n';
   const charSection = charText ? CHAR_HEADING + charText : '';
@@ -273,7 +318,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
       'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSectionTrim + assetSection + hint;
+      'Draw this ' + _voice.panel + ': ' + prompt + charSectionTrim + assetSection + hint;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -409,7 +454,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
   // reference retouch). Moments always pass a real style, so they're unchanged.
   const stylePrefix = style ? getStylePrefix(style) : '';
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
-    'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
+    'You are editing an EXISTING ' + styleVoice(style).panel + ', provided as Image 1. Reproduce it '+
     'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
     'background, colors, lighting, and art style \u2014 and change ONLY the '+
     'following, leaving everything else untouched:\n\n' + instruction;
@@ -512,7 +557,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
         'This crop will be pasted straight back into the larger picture in the exact place it was cut from, so it must line up: keep the same art style, medium, brushwork, line weight, texture, palette and lighting right up to all four borders, and do not move, rescale, reframe or re-compose anything. ' +
         'The background continues across the WHOLE crop, behind and around and beneath every figure, right to all four edges. NEVER leave any area flat, empty, blank, black or filled with a plain colour, and never replace the surroundings with a backdrop: the ground beneath the figures and the scenery behind them must be drawn in full, exactly as they are now. ' +
         'Apply ONLY the following change:\n\n'
-      : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
+      : 'You are editing an EXISTING ' + styleVoice(style).panel + ', provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
         'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection + wholeSection;
@@ -857,7 +902,15 @@ function getStylePrefix(style) {
     'Fantasy oil painting': 'STYLE: Fantasy oil painting inspired by classic sword-and-sorcery cover art and old fantasy rulebook art plates, in the tradition of Frank Frazetta, Boris Vallejo, and Charles Marion Russell. LARGE, bold, loose brushstrokes with thick visible impasto and broad palette-knife marks, where each individual stroke of paint is clearly visible. Rich, saturated oil-paint textures, dramatic lighting, bold high-contrast highlights. Heroic anatomy, powerful poses, sculpted musculature. Epic, atmospheric backgrounds with mist, firelight, or stormy skies. Deep intense colors, warm skin tones, metallic reflections. The painting fades into loose, ragged brushstrokes toward the edges and does NOT reach the frame; everywhere the paint does not cover is PURE WHITE (#ffffff), with NO rectangular frame or border, like a painting set straight onto a clean white page.',
     'Comic book cel-shaded': 'STYLE: EXTREME comic-book cel-shaded art in the style of Borderlands. VERY THICK, heavy black ink outlines: bold brush-inked contours around every character, prop, and shape, plus strong interior ink linework. HARD cel shading with flat blocks of light and shadow, razor-sharp shadow edges and NO smooth gradients, dramatic high-contrast lighting. Visible halftone dots and crosshatching in the shadow areas. Punchy, saturated graphic-novel colors. Heavy hand-painted marker texture with visible strokes and sketch lines. Exaggerated silhouettes, dynamic angles, expressive faces, stylized proportions. Loud, graphic, over-the-top comic-book energy.',
     'Fantasy pastel': 'STYLE: Fantasy pastel and soft-chalk art in the great pastel tradition of Edgar Degas and Mary Cassatt. BOLD, large chalk and pastel strokes with thick, visible, grainy chalk marks and broad soft-pastel sweeps, generous smudging, and the texture of chalk dragged across rough paper. Soft, blended pastel colors with gentle gradients and a dreamy, magical atmosphere. Warm light, glowing highlights, a whimsical airy feeling. Lightly stylized, ethereal, expressive characters. The chalk and pastel work fades into loose, feathered strokes toward the edges and does NOT reach the frame; everywhere the chalk does not cover is PURE WHITE (#ffffff), with NO rectangular frame or border, like a drawing set straight onto a clean white page.',
-    'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.'
+    'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.',
+    // v3.0.815 -- TD-642. Approved by Ian on 2026-09-01 from a ONE-PASS
+    // analysis of a wolf-rider reference ("Very Usable!"); shipped exactly as
+    // tested. is_fade NO -- this one runs full bleed. KNOWN CONSTRAINT: it
+    // needs a single warm source in gloom, so taverns, caves and night camps
+    // suit it and a bright afternoon meadow fights it (TD-641). KNOWN AND
+    // UNTESTED: dropping the word "oils" and cooling the palette is the
+    // round-2 edit -- the reference has no canvas weave and this does.
+    'Dark Fantasy': 'STYLE: Paint in dense, opaque dark-fantasy oils, keeping the whole image low-key with deep near-black shadow occupying most of the value range and a single warm amber light source leaving everything else in gloom. Render every surface to a fine, dry-brushed, almost etched precision \u2014 individual hairs of fur, bark grain, worn and pitted metal, ragged torn cloth. Use an extremely limited near-monochrome palette of charcoal, soot black, cold grey and warm brown, with amber-gold the only true colour anywhere. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through, and let smoke and atmospheric haze thicken and soften the far distance.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
@@ -982,7 +1035,7 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   const refPrompt =
     IP_GUARD_IMG +
     'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
-    'comic book art style, even soft lighting.\n\n' +
+    'in a clean, neutral illustration style, even soft lighting.\n\n' +
     CHAR_REF_STAGING +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
@@ -1028,7 +1081,7 @@ function buildAssetReferenceInput(descriptionText, category, modelKey) {
   const refPrompt =
     IP_GUARD_IMG +
     'Reference image of a single ' + catWord + ', centered on a plain neutral ' +
-    'background, even soft lighting, comic book art style. Show only the ' + catWord +
+    'background, even soft lighting, in a clean, neutral illustration style. Show only the ' + catWord +
     ' itself, with no extra characters, text, logos, or watermarks.\n\n' +
     catLabel + ': ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';

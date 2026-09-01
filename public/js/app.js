@@ -4297,7 +4297,8 @@ var ART_STYLE_META = [
   { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' },
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
-  { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' }
+  { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
+  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Dense, near-monochrome oils lit by one warm source in deep gloom \u2014 etched detail, no linework. Suits taverns, caves and night scenes.' }
 ];
 
 function artStyleName(v) {

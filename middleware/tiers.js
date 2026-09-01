@@ -531,7 +531,8 @@ const ART_STYLE_MIN_RANK = {
   'Anime manga style': 2,           // Silver   (was Platinum)
   'Fantasy oil painting': 3,        // Gold     (was Platinum)
   'Comic book cel-shaded': 3,       // Gold     (was Platinum)
-  'Fantasy pastel': 3               // Gold     (was Platinum)
+  'Fantasy pastel': 3,              // Gold     (was Platinum)
+  'Dark Fantasy': 4                 // Platinum -- v3.0.815, TD-642
 };
 
 const NARRATIVE_STYLE_MIN_RANK = {
