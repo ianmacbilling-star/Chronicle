@@ -2639,3 +2639,14 @@ module.exports.submitReference = submitReference;
 module.exports.submitAssetReference = submitAssetReference;
 module.exports.submitEditReference = submitEditReference;
 module.exports.submitRetouch = submitRetouch;
+// v3.0.817 -- TD-645. The session-character restyle in routes/sessions.js needs
+// BOTH of these.
+//   resolveGenStyle -- an art style id can be 'custom:<n>', and handing that
+//     straight to getStylePrefix returns High fantasy SILENTLY (TD-647). A
+//     Platinum user's own custom style would therefore have restyled every
+//     character into the default and looked like the button did nothing.
+//   getStylePrefix -- the style paragraph has to be placed INSIDE the restyle
+//     instruction, scoped to the figure, instead of riding at the top of the
+//     prompt where it paints a background over the white reference staging.
+module.exports.resolveGenStyle = resolveGenStyle;
+module.exports.getStylePrefix = getStylePrefix;

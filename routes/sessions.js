@@ -750,15 +750,55 @@ async function resolveVersionArtStyle(db, sessionId, forkId) {
 // dictated white staging (CHAR_REF_STAGING, TD-342) -- this only has to say
 // what is changing. Say MEDIUM and say it narrowly: the one thing that must
 // not change is who this is.
-const RESTYLE_REF_INSTRUCTION =
-  'Re-render this character in the art style described above. Change ONLY the ' +
-  'artistic medium and rendering technique -- the brushwork, line, colour ' +
-  'treatment, shading and finish. Do NOT change WHO this is or WHAT they are ' +
-  'wearing: keep the same face, facial structure, expression, species, skin ' +
-  'tone, hair colour and style, build, height, pose, and every piece of ' +
-  'clothing, armour, and equipment exactly as it is now, in the same places. ' +
-  'This is the same character painted by a different artist, not a different ' +
-  'character.';
+// The instruction sent with the restyle.
+//
+// v3.0.817 -- THE STYLE PARAGRAPH IS SCOPED TO THE FIGURE, AND IT SITS INSIDE
+// THE INSTRUCTION RATHER THAN ABOVE IT.
+//
+// v3.0.816 handed the art style to submitRetouch as an ordinary style prefix,
+// which puts it at the TOP of the prompt as a global directive. Every style
+// paragraph in this product describes a whole PICTURE, not a figure:
+//   Dark Fantasy   "deep near-black shadow occupying most of the value range",
+//                  "everything else in gloom", "smoke and atmospheric haze"
+//   Fantasy oil    "epic, atmospheric backgrounds with mist, firelight, or
+//                  stormy skies"
+//   High fantasy   "detailed backgrounds"      Anime  "detailed backgrounds"
+//   Dark gritty    "noir atmosphere"
+// CHAR_REF_STAGING says the exact opposite -- PURE WHITE, completely empty edge
+// to edge, no floor, no cast shadow, no gradient, no vignette. The model is
+// relentlessly literal and obeyed BOTH, so Ian got characters standing in gloom
+// instead of cut out on white. That breaks the Company page, which has nothing
+// to cut against (TD-343), and the contact-shadow placement that assumes the
+// margin under the feet (TD-342).
+//
+// So the style goes in the instruction, explicitly applied to the CHARACTER
+// ONLY, and the staging is restated AFTERWARDS so the last thing the model
+// reads is the white background. The offending words are named one by one --
+// haze, smoke, gloom, vignette -- because naming precisely is the only thing
+// that has ever worked on this model.
+function restyleRefInstruction(stylePara) {
+  return 'Repaint this character in a different artistic style.\n\n' +
+    'THE ART STYLE, WHICH APPLIES TO THE CHARACTER ONLY:\n' + (stylePara || '') + '\n\n' +
+    'HOW TO APPLY IT: change ONLY the artistic medium and rendering technique -- ' +
+    'the brushwork, line, colour treatment, shading and finish. Do NOT change WHO ' +
+    'this is or WHAT they are wearing: keep the same face, facial structure, ' +
+    'expression, species, skin tone, hair colour and style, build, height, pose, ' +
+    'and every piece of clothing, armour, and equipment exactly as it is now, in ' +
+    'the same places. This is the same character painted by a different artist, ' +
+    'not a different character.\n\n' +
+    'THE ART STYLE MUST NOT PAINT A SCENE. Ignore every part of the style ' +
+    'description above that refers to backgrounds, settings, landscapes, skies, ' +
+    'weather, atmosphere, haze, mist, smoke, gloom, darkness filling the frame, ' +
+    'vignettes, or light sources in an environment. There is no environment in ' +
+    'this image. The background stays PURE WHITE (#FFFFFF), completely empty, ' +
+    'edge to edge -- NO floor, NO ground, NO stage, NO horizon line, NO cast ' +
+    'shadow on the ground, NO scenery, NO props, NO texture, NO gradient, NO ' +
+    'vignette, NO tint, and never parchment, cream, beige or grey. The character ' +
+    'is cut out against white as if on a blank page. Show the ENTIRE body from ' +
+    'the top of the head to the soles of both feet, with a SMALL EVEN MARGIN of ' +
+    'empty white beneath them -- roughly one twentieth of the image height. Do ' +
+    'not crop any part of the character, and do not add text, labels or borders.';
+}
 
 // POST restyle one character's session reference into this version's art style.
 // Mirrors retouch-reference exactly -- same draft/approve contract, same token
@@ -814,7 +854,20 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
 
     // 'reference' framing keeps ONE figure, full body, on the dictated white
     // ground. A real style is passed here, which is the whole point.
-    const sub = await imageHelpers.submitRetouch(baseImage, RESTYLE_REF_INSTRUCTION, artStyle, falKey, webhookUrl, null, 'reference');
+    // v3.0.817 -- RESOLVE THE STYLE BEFORE USING IT. resolveGenStyle is what the
+    // panel generator itself uses: it turns 'custom:<n>' into that style's own
+    // STYLE: paragraph and refuses a lapsed one. Passing the raw id through to
+    // getStylePrefix, as v3.0.816 did, silently rendered every custom style as
+    // High fantasy (TD-647).
+    const _rsty = await imageHelpers.resolveGenStyle(db, artStyle, req.session.userId, req.params.campaignId);
+    if (_rsty && _rsty.locked) {
+      return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style is not available right now. Pick another, or upgrade for more styles.' });
+    }
+    const stylePara = imageHelpers.getStylePrefix((_rsty && _rsty.styleForGen) || artStyle);
+    // Style passed as '' ON PURPOSE. The paragraph rides INSIDE the instruction
+    // instead, scoped to the figure, so it cannot paint a scene over the white
+    // reference staging that the Company page and the contact shadow depend on.
+    const sub = await imageHelpers.submitRetouch(baseImage, restyleRefInstruction(stylePara), '', falKey, webhookUrl, null, 'reference');
     const nowTs = new Date().toISOString();
     // Draft job, same as every other session_ref: the webhook persists to R2,
     // spends and logs, but session_characters is written only on Approve.

@@ -874,6 +874,8 @@ function uiConfirm(message, opts) {
     //                      multi-paragraph warning collapses into one wall of text, which is the
     //                      surest way to have it not read.
     //   opts.danger        red confirm button, for an action that cannot be undone
+    //   opts.hideCancel    OK only, for a message that has nothing to cancel
+    //                      (v3.0.817). Opt-in, so every existing caller is unchanged.
     var head = null;
     if (opts.title) {
       head = document.createElement('div');
@@ -887,7 +889,8 @@ function uiConfirm(message, opts) {
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
     var ok = document.createElement('button'); ok.className = 'btn btn-sm ' + (opts.danger ? 'btn-danger' : 'btn-primary'); ok.textContent = opts.okText || 'OK';
-    row.appendChild(cancel); row.appendChild(ok);
+    if (!opts.hideCancel) row.appendChild(cancel);
+    row.appendChild(ok);
     if (head) box.appendChild(head);
     box.appendChild(msg); box.appendChild(row); overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -2640,7 +2643,17 @@ function renderSessionCharacters(rows) {
   list.innerHTML = rows.map(function(r) {
     var isNpc = (r.is_npc === true || r.is_npc === 1 || r.is_npc === '1');
     // Reference image is the preferred thumbnail.
-    var img = r.reference_url || r.canonical_reference_url || r.image_portrait || r.image || r.image_fullbody;
+    // v3.0.817 -- A PENDING DRAFT WINS OVER THE SAVED REFERENCE.
+    // v3.0.816 painted each draft straight onto its card and then called
+    // loadSessionCharacters() when the run finished. That refetches from the
+    // server, where the drafts do NOT exist -- nothing is written until Approve --
+    // so every thumbnail snapped back to the old picture while the strips still
+    // said "New image ready". Ian: "they all reverted back to the original
+    // pictures... I got the new image ready option and approve but i was looking
+    // at the old images." Honouring the draft HERE fixes it for every re-render
+    // rather than for the one that happened to be noticed.
+    var _draft = (state.draftStyleRef || {})[r.character_id];
+    var img = _draft || r.reference_url || r.canonical_reference_url || r.image_portrait || r.image || r.image_fullbody;
     var thumb = img
       ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" ' +
         'style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
@@ -2814,7 +2827,8 @@ function restyleAllReferences() {
   if (!state.versionArtStyle) {
     scLoadVersionArtStyle(function() {
       if (!state.versionArtStyle) {
-        alert('Pick an art style for this version first, then regenerate the references.');
+        uiConfirm('Pick an art style for this version first, then regenerate the references.',
+          { title: 'No art style chosen yet', okText: 'OK', hideCancel: true });
         return;
       }
       restyleAllReferences();
@@ -2822,9 +2836,17 @@ function restyleAllReferences() {
     return;
   }
   var styleLabel = (typeof artStyleName === 'function') ? artStyleName(state.versionArtStyle) : state.versionArtStyle;
-  if (!confirm('Regenerate ' + rows.length + ' character reference image' + (rows.length === 1 ? '' : 's') +
-               ' in ' + styleLabel + '?\n\nEach one costs the same as any other image regeneration, and each ' +
-               'comes back for you to approve or discard. Nothing is saved until you approve it.')) return;
+  // v3.0.817 -- our own modal, not the browser's confirm(). uiConfirm is what
+  // this app uses everywhere else; preserveLines keeps the cost sentence from
+  // collapsing into the question.
+  uiConfirm('Regenerate ' + rows.length + ' character reference image' + (rows.length === 1 ? '' : 's') +
+            ' in ' + styleLabel + '?\n\nEach one costs the same as any other image regeneration, and each ' +
+            'comes back for you to approve or discard. Nothing is saved until you approve it.',
+            { title: 'Regenerate in Art Style', preserveLines: true, okText: 'Regenerate', cancelText: 'Cancel' })
+    .then(function(go) { if (go) runRestyleAll(rows); });
+}
+
+function runRestyleAll(rows) {
   var btn = document.getElementById('sc-restyle-all-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Regenerating…'; }
   var i = 0;
@@ -2933,7 +2955,12 @@ function discardStyledDraft(charId) {
 }
 
 function revertStyledReference(charId) {
-  if (!confirm('Put back the reference image that was here before it was regenerated in an art style?')) return;
+  uiConfirm('Put back the reference image that was here before it was regenerated in an art style?',
+    { title: 'Revert reference image', okText: 'Revert', cancelText: 'Cancel' })
+    .then(function(go) { if (go) doRevertStyledReference(charId); });
+}
+
+function doRevertStyledReference(charId) {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/revert-styled-reference' + forkQ(), {
     method: 'POST',
