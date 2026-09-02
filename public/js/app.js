@@ -9394,7 +9394,7 @@ function titleBuildArchiveToggle() {
         if (d && d.error) { _tbErr(d.message || d.error); return; }
         state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
         _tbSyncArchivePill();
-        if (typeof showAlert === 'function') showError('Removed from your Archive.');
+        if (typeof showAlert === 'function') showAlert('Removed from your Archive.');   // v3.0.826 -- TD-660: the guard already named the right function; the call did not
       })
       .catch(function () { _tbErr('Could not update the Archive.'); });
     return;
@@ -13243,7 +13243,7 @@ async function deleteArchive(id) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.success) {
-        showError('Removed from the Archive.');
+        showAlert('Removed from the Archive.');   // v3.0.826 -- TD-660: was showError, which renders a "Something went wrong." modal
         state.archives = (state.archives || []).filter(function(a){ return a.id !== id; });
         renderArchives();
       } else {
