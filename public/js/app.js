@@ -17892,6 +17892,7 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   // dropped on every reload -- it would set, serialise once, and then quietly forget itself.
   // The server has the identical trap in CO_DEFAULTS, and this is its twin.
   castnpc:0,
+  castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -18054,12 +18055,13 @@ var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
 // whichever half somebody remembered.
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc'];   // v3.0.616 -- hidelogo retired
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc','castimg'];   // v3.0.616 -- hidelogo retired
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
 function clSyncCastNpc(){
   var ck=document.getElementById('cl-cast');
+  clGateCastImg(ck, 'cl-castimg', 'cl-castimg-label');   // v3.0.823 -- TD-657
   var cn=document.getElementById('cl-castnpc');
   var cnl=document.getElementById('cl-castnpc-label');
   if(!cn) return;
@@ -18157,8 +18159,23 @@ function prepSyncMarkerBreak(){
 // v3.0.611 -- NPCs are meaningless with no character page, so the toggle follows it exactly as the
 // page-break toggle follows Session dividers. Same shape on purpose: a second convention for the
 // same idea is how two controls that should behave alike drift apart.
+// v3.0.823 -- TD-657. castimg follows the cast page exactly as castnpc does, with
+// ONE deliberate difference: it is DISABLED but never UNCHECKED. Clearing
+// "Include NPCs" when the page is off keeps the options coherent -- NPCs on a page
+// that does not exist mean nothing. castimg is a choice between two images, and
+// resetting it would silently throw away the user's preference each time the cast
+// page was toggled off and on, for no gain: the value is simply unread meanwhile.
+function clGateCastImg(ck, id, labelId){
+  var ci=document.getElementById(id);
+  if(!ci) return;
+  var on = ck ? !!ck.checked : true;
+  ci.disabled = !on;
+  var cil=document.getElementById(labelId);
+  if(cil){ cil.style.opacity = on ? '1' : '0.55'; }
+}
 function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
+  clGateCastImg(ck, 'pcl-castimg', 'pcl-castimg-label');   // v3.0.823 -- TD-657
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
   if(!cn) return;
@@ -18188,7 +18205,8 @@ function prepSyncCastNpc(){
 // other control greyed out and this one stayed live, because it was never a member.
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
-                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
+                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
+                       'pcl-castimg'];
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {

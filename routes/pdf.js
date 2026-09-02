@@ -808,6 +808,13 @@ var CO_DEFAULTS = {
   // print. NUMBER-typed like every other toggle: parseCustomOpts drops any key that is not in
   // this object, and reads it back through the type it finds here.
   castnpc: 0,
+  // v3.0.823 -- TD-657. WHICH character portrait the Company page uses.
+  // 0 = the OLDEST reference in this version, 1 = the NEWEST. Ian: "Add a check
+  // box on the Layout that gives characters oldest image or newest image. With
+  // Oldest the default." Number-typed like every other toggle, because
+  // parseCustomOpts drops any key not in this object and reads it back through
+  // the type it finds here.
+  castimg: 0,
   hidelogo: 0,
   // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
   // and paper, so they reach every render path automatically and persist through layout_opts with
@@ -4139,7 +4146,7 @@ function includeFingerprint(incMap) {
 // recording more at save time, not comparing harder here.
 var CO_TITLE_KEYS = { titleStyle: 1, titlePlace: 1, titleSize: 1 };
 var CO_COMPARABLE = {
-  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1,
+  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1, castimg: 1,
   toc: 1, header: 1, markers: 1, markerbreak: 1,
   titleStyle: 1, titlePlace: 1, titleSize: 1
 };
@@ -5006,7 +5013,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
 
   // Character roster for cast page
   const castHTML = characters.map(function(c) {
-    var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var primaryImg = castRefFor(c, false);
     return '<div class="cast-member">' +
       (primaryImg ? '<img class="cast-portrait" src="' + primaryImg + '" alt="' + c.name + '" />' : '<div class="cast-portrait cast-no-img">' + c.name.charAt(0) + '</div>') +
       '<div class="cast-name">' + c.name + '</div>' +
@@ -5440,6 +5447,110 @@ function runningHeaderHTML(campaignName, num, name) {
     '<div class="page-header-session">' + (name || ('Session ' + num)) + '</div>' +
   '</div>';
 }
+// v3.0.823 -- TD-657. THE COMPANY PAGE STOPS USING ONE CAMPAIGN-WIDE PORTRAIT.
+//
+// Ian: "It gets the character reference images from the First session of that
+// version book... This way the characters could be the appropriate art style for
+// that books version."
+//
+// The cast pages started at c.canonical_reference_url -- ONE image per character,
+// campaign-wide, with no version and no art style. Every version's book therefore
+// drew the same portrait, which is why a Dark Fantasy book could open on a cast
+// page in whatever style that character was last rendered in.
+//
+// session_characters(character_id, fork_id, reference_url) joined through
+// session_forks.version_id IS the per-version reference. attachPriorReferences in
+// routes/images.js already walks these joins BACKWARDS from a session; this walks
+// the whole version in one pass instead.
+//
+// TWO QUERIES FOR THE WHOLE BOOK, NOT TWO PER CHARACTER. This runs on the print
+// and Optimize paths, where a per-character loop would add three round trips per
+// character to every render. The rows come back ordered and the choosing is done
+// in memory by pickVersionRefs, which is a PURE function precisely so it can be
+// executed and asserted rather than described.
+//
+// NON-FATAL BY DESIGN, like attachPriorReferences: a book that cannot resolve a
+// per-version portrait must still print, falling through to exactly the chain it
+// used before this existed.
+function pickVersionRefs(characters, verRows, styledRows) {
+  var oldest = {}, newest = {}, styled = {};
+  // verRows and styledRows arrive ordered session_date ASC, fork id ASC. First
+  // wins for oldest and for styled; last wins for newest.
+  (verRows || []).forEach(function (r) {
+    if (!r || !r.reference_url) return;
+    var k = String(r.character_id);
+    if (oldest[k] === undefined) oldest[k] = r.reference_url;
+    newest[k] = r.reference_url;
+  });
+  (styledRows || []).forEach(function (r) {
+    if (!r || !r.reference_url) return;
+    var k = String(r.character_id);
+    if (styled[k] === undefined) styled[k] = r.reference_url;
+  });
+  (characters || []).forEach(function (c) {
+    var k = String(c.id);
+    c.version_ref_oldest = oldest[k] || null;
+    c.version_ref_newest = newest[k] || null;
+    c.version_ref_styled = styled[k] || null;
+  });
+  return characters;
+}
+
+// THE CHAIN, IN ONE PLACE. Both cast pages used to carry their own copy of it.
+// Ian's order: this version's reference first, oldest or newest as the box says;
+// then "fall back to the First with that art style if nothing else available";
+// then the canonical and the image_* fields, which is exactly what shipped before
+// v3.0.823. A character with no per-version reference is therefore untouched, and
+// so is every render that never calls attachVersionReferences at all.
+function castRefFor(c, wantNewest) {
+  if (!c) return null;
+  var v = wantNewest ? (c.version_ref_newest || c.version_ref_oldest)
+                     : (c.version_ref_oldest || c.version_ref_newest);
+  return v || c.version_ref_styled || c.canonical_reference_url || c.image_portrait ||
+         c.image_fullbody || c.image_action || c.image_other || c.image || null;
+}
+
+async function attachVersionReferences(db, characters, campaignId, versionId) {
+  try {
+    if (!characters || !characters.length) return;
+    if (!versionId) { pickVersionRefs(characters, [], []); return; }
+    // The style this book renders in: the version's FIRST session, a fork's
+    // art_style_override beating the session's own style. Only used for the
+    // fallback, so a book with no resolvable style simply never fires it.
+    var st = await db.prepare(
+      'SELECT COALESCE(sf.art_style_override, s.art_style) AS style ' +
+      'FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
+      'WHERE sf.version_id = ? AND s.campaign_id = ? ' +
+      'ORDER BY s.session_date ASC, sf.id ASC LIMIT 1'
+    ).get(versionId, campaignId);
+    var bookStyle = (st && st.style) ? st.style : null;
+    var verRows = await db.prepare(
+      'SELECT sc.character_id, sc.reference_url FROM session_characters sc ' +
+      'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+      'JOIN sessions s ON s.id = sf.session_id ' +
+      'WHERE sf.version_id = ? AND sc.reference_url IS NOT NULL ' +
+      'ORDER BY s.session_date ASC, sf.id ASC'
+    ).all(versionId);
+    var styledRows = [];
+    if (bookStyle) {
+      // The campaign-wide fallback deliberately ignores version: the point is to
+      // find ANY portrait already drawn in this book's style when this version
+      // has none of its own. styled_art_style is stamped by the restyle approve,
+      // so the database already knows which style a reference is in.
+      styledRows = await db.prepare(
+        'SELECT sc.character_id, sc.reference_url FROM session_characters sc ' +
+        'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+        'JOIN sessions s ON s.id = sf.session_id ' +
+        'WHERE s.campaign_id = ? AND sc.styled_art_style = ? AND sc.reference_url IS NOT NULL ' +
+        'ORDER BY s.session_date ASC, sf.id ASC'
+      ).all(campaignId, bookStyle);
+    }
+    pickVersionRefs(characters, verRows, styledRows);
+  } catch (e) {
+    console.error('attachVersionReferences error (non-fatal):', e.message);
+  }
+}
+
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
@@ -5461,6 +5572,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
   var fCastNpc = co ? !!co.castnpc  : false;   // v3.0.611 -- NPCs on the Company page; off unless asked
+  var fCastNewest = co ? !!co.castimg : false;  // v3.0.823 -- TD-657; 0/absent = OLDEST, which is the default
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
@@ -5699,7 +5811,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         var _left = _x0 + j * _S + (_wRow - _fw) / 2;
         var _bottom = _H * _raiseU[i];
         var _dim = Math.max(0.22, 0.42 - _rowDist(i) * 0.05);
-        var _img = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+        var _img = castRefFor(c, fCastNewest);
         _slotX.push({ l: _left, w: _fw });
         _slots.push(
           '<div class="cast-slot" style="left:' + _left.toFixed(3) + 'in;bottom:' + _bottom.toFixed(3) +
@@ -6467,6 +6579,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   // Load moments and narrative for each session
+  // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
+  // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
+  // four builders, and this is the first line after both at every one of them.
+  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
@@ -6722,6 +6838,10 @@ async function printInteriorHandler(req, res) {
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
+  // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
+  // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
+  // four builders, and this is the first line after both at every one of them.
+  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
@@ -7586,6 +7706,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
+  // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
+  // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
+  // four builders, and this is the first line after both at every one of them.
+  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
@@ -8019,6 +8143,10 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
+  // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
+  // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
+  // four builders, and this is the first line after both at every one of them.
+  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
