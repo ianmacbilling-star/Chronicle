@@ -1755,6 +1755,42 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
   }
 });
 
+// v3.0.822 -- TD-656. A DRAWN CHAPTER TITLE IS NOT A PANEL THE BATCH MAY REDRAW.
+//
+// Ian: "If there is an image build with the title builder then don't overwrite it
+// with a full Session Generate Image button. Everything else stays the same."
+//
+// THE TEST IS PROVENANCE, NOT POSITION. It is the opening panel that carries a
+// built title in practice, but the rule asks whether the Title Builder made this
+// image -- a title panel anywhere is the same object, and a panel_order === 0
+// test would quietly stop protecting it the moment anyone reordered a session.
+//
+// LIVE IMAGE ONLY, AND THAT CONDITION IS LOAD-BEARING. layout_meta.built_title
+// SURVIVES a later regenerate -- the regenerate path writes image and leaves the
+// record behind. Testing built_title alone would therefore lock a panel out of
+// every future batch on the strength of a title it no longer holds. It counts
+// only while built_title.url IS the image on the panel right now.
+//
+// THIS IS TD-444's RULE, COPIED ON PURPOSE RATHER THAN REINVENTED. The retouch
+// route (v3.0.653) decides the same question the same way; two different answers
+// to "is this a title panel" is the fault that would actually hurt. The guard
+// asserts the retouch route still carries its own copy unchanged.
+//
+// SINGLE-PANEL REGENERATE IS UNTOUCHED, AND THAT IS DELIBERATE. Ian, 2026-08-12:
+// "I had chapter text in the panel... I regenerated and got an actual picture."
+// Regenerate is the documented way back from a title to a scene. If the batch and
+// the button both refused, a title panel would be unrecoverable. Batch protects;
+// the button is the escape hatch.
+function momentHoldsBuiltTitle(m) {
+  if (!m || !m.image) return false;
+  var blt = null;
+  try {
+    var lm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : {};
+    blt = lm && lm.built_title;
+  } catch (e) { blt = null; }
+  return !!(blt && blt.url && String(blt.url) === String(m.image));
+}
+
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
   const { session_id, campaign_id, style } = req.body;
@@ -1796,10 +1832,19 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
   // Image locking — skip locked panels (don't regenerate, don't charge for them).
   const lockedCount = moments.filter(function(m){ return m.locked; }).length;
-  const toGenerate = moments.filter(function(m){ return !m.locked; });
+  // v3.0.822 -- TD-656. Counted among the UNLOCKED only, so a panel that is both
+  // locked and a title is reported once, under the reason the user chose.
+  const titleCount = moments.filter(function(m){ return !m.locked && momentHoldsBuiltTitle(m); }).length;
+  const toGenerate = moments.filter(function(m){ return !m.locked && !momentHoldsBuiltTitle(m); });
 
   if (!toGenerate.length) {
-    return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
+    // The message must name the reason that actually applies: after TD-656 an
+    // empty batch is no longer proof that everything was locked.
+    var _emptyMsg;
+    if (lockedCount && titleCount) _emptyMsg = 'Nothing to generate — every panel is either locked or holds a chapter title. Unlock a panel, or use Regenerate on a title panel to draw the scene instead.';
+    else if (titleCount)           _emptyMsg = 'Nothing to generate — the only panel here holds a chapter title from the Title Builder, and Generate Images leaves those alone. Use Regenerate on it to draw the scene instead.';
+    else                           _emptyMsg = 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.';
+    return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, skipped_title: titleCount, message: _emptyMsg });
   }
 
   // Load all campaign characters once; the per-panel block is built inside
@@ -1913,7 +1958,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
 
-  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
+  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, skipped_title: titleCount, submit_failed: submitFailed });
 });
 
 
