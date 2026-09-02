@@ -185,12 +185,34 @@ var COMPOSITION_IMG = ' COMPOSITION AND EYELINES (IMPORTANT): stage each panel a
 // scene-text cues only (the extraction prose must name the ranged action); melee stays close.
 var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or creature making a ranged or projectile attack \u2014 bow, crossbow, thrown spear or knife, sling, firearm, or a ranged spell such as a fireball, lightning bolt, magic missile, or eldritch blast \u2014 stage the attacker and the target SEPARATED BY A CLEAR DISTANCE across the frame, with open ground, air, or terrain between them, and show the projectile, bolt, or spell effect travelling across that gap. Do NOT place a ranged attacker and their target at melee/hand-to-hand range as if trading blows, UNLESS the scene text specifically says they are in close range (a rare, deliberate case). Melee attacks (swords, claws, fists) stay close; ranged attacks read at range.';
 
+// v3.0.821 -- TD-654. THE MODEL SIGNS THE PICTURE AND NOTHING SAID NOT TO.
+// A fabricated artist signature printed in a customer's book (panel 22 of
+// "The Strangers"). All 36 interiors were corner-scanned and it was the only
+// one -- which is the danger: one in thirty-six clears a page-turn review
+// every time, and then it is on paper. NO_BORDER governs edges and bars,
+// IP_GUARD_IMG governs other people's IP; nothing governed marks.
+//
+// IN-WORLD TEXT IS DELIBERATELY EXEMPT. A ban on "text" would take carved
+// runes, tavern signs, banners and the page of an open book with it, and
+// fantasy panels are full of those. The rule is about a mark laid ON TOP of
+// the artwork, not about what the depicted world contains.
+//
+// NOT the place for an "AI" corner mark. Tiny legible text is the least
+// reliable thing a diffusion model can be asked for -- it arrives as a smudge,
+// in a different corner each time. If that mark is wanted it is stamped at
+// layout time, where it is exact, identical on every plate and switchable.
+//
+// RETOUCH IS NOT COVERED: retouchImage() does not call buildPanelInput. A
+// retouch preserves the image it is given, so it cannot introduce a mark that
+// was not already there -- but it cannot remove one either.
+var NO_MARKS = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date, caption, title, or credit anywhere in the image, in any corner or along any edge. Text that genuinely belongs to the scene itself \u2014 a sign, a banner, runes carved in stone, writing on an open page \u2014 is fine; a mark laid on top of the picture is not.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
   var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
-  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective;
+  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + NO_MARKS;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
   // It must land here and not only in extract.js, because extract writes each
   // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
@@ -262,7 +284,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     'averaged, or merged with another. If reference images are provided, treat ' +
     'them ONLY as identity and content sources (who or what each element is); do ' +
     'NOT copy their rendering style — re-render every referenced element in ' +
-    'this art style.' + edgeDirective + ' The required art style is: ' + stylePrefix;
+    'this art style.' + edgeDirective + NO_MARKS + ' The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
     ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks ' + _voice.unify + ' in this style rather than placed on top of it. ' + stylePrefix
     : '';
@@ -910,7 +932,55 @@ function getStylePrefix(style) {
     // suit it and a bright afternoon meadow fights it (TD-641). KNOWN AND
     // UNTESTED: dropping the word "oils" and cooling the palette is the
     // round-2 edit -- the reference has no canvas weave and this does.
-    'Dark Fantasy': 'STYLE: Paint in dense, opaque dark-fantasy oils, keeping the whole image low-key with deep near-black shadow occupying most of the value range and a single warm amber light source leaving everything else in gloom. Render every surface to a fine, dry-brushed, almost etched precision \u2014 individual hairs of fur, bark grain, worn and pitted metal, ragged torn cloth. Use an extremely limited near-monochrome palette of charcoal, soot black, cold grey and warm brown, with amber-gold the only true colour anywhere. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through, and let smoke and atmospheric haze thicken and soften the far distance.'
+    // v3.0.821 -- TD-651 (the drama clause) and TD-655 (the atmosphere clause).
+    //
+    // THE DRAMA CLAUSE. Six traits are common to every reference Ian gathered on
+    // 2026-09-01 and he confirmed them line by line. Five are written in below.
+    // THE SIXTH IS DELIBERATELY ABSENT: "a dark foreground that reads as a
+    // silhouette" is true of all seven references because in them the near-black
+    // shape is FRAMING -- foliage, a hooded back. Campaignia puts the PARTY in the
+    // foreground, so that rule would turn the characters into featureless black
+    // shapes and the product is people looking at their own characters. Written as
+    // darkest-values-toward-the-EDGES instead: same depth, faces intact. Same
+    // reason composition never goes in a style paragraph (spec, invariant 1).
+    //
+    // MEASURED BEFORE IT SHIPPED, AND IT IS A CONDITIONAL WIN. drama-test.js, six
+    // images: on GRIMSKULL, whose scene text names no light source, Ian called it
+    // "way better". On TAVERN, already "lamplit... a fire off to one side", he
+    // called it "about even". LOAD-BEARING WHERE THE SCENE DOES NOT DESCRIBE ITS
+    // OWN LIGHT, REDUNDANT WHERE IT DOES. Do not assume it lifts every panel.
+    //
+    // 'WARM' IS GONE FROM THE LIGHT CLAUSE, AND THAT IS THE WHOLE DIFFERENCE FROM
+    // THE UNSHIPPED v3.0.820. That build said "a single dominant WARM source".
+    // Ian disproved it with one reference -- an image saturated end to end in hot
+    // pink, fully rendered, deep atmosphere, no outlines, more surface detail than
+    // anything we produce: "The color is not necessarily the problem." The hue of
+    // the dominant source belongs to the SCENE. The palette line below is
+    // untouched on purpose -- an earlier diagnosis blamed it for the off-style
+    // panels and was WRONG (TD-653); the real fault is ink arriving from the
+    // reference image, and it is not fixed in here.
+    //
+    // THE ATMOSPHERE CLAUSE (TD-655). Ian has asked for the same thing four ways:
+    // "the thing they all have in common is DETAIL", "more artisticness", "no
+    // where near as good as those", and "more things floating in the air, smoke,
+    // snow, ash, dust, leaves, debris, whisps". Our panels have clean empty air
+    // between the figures and the background; every reference he admires has
+    // matter suspended in the light. INVARIANT 2 IS THE DIFFICULTY: naming snow
+    // puts snow in the tavern, exactly as 'bark grain' quietly asked for trees.
+    // So the clause names the CLASS and hands the choice to the scene, with an
+    // explicit brake against inventing matter the scene would not have.
+    // SCOPED TO DARK FANTASY by Ian's decision, though it is content rather than
+    // medium and would carry to the other nine if it proves out here.
+    //
+    // AND HALF OF "DETAIL" IS NOT IN THIS PARAGRAPH AT ALL -- it is TD-635. At
+    // resolution '1K' there are not enough pixels to hold a dust mote, a hair or a
+    // scratch, and asking harder yields mush. Do not read a weak result here as
+    // the wording failing until that is settled.
+    //
+    // STILL TRUE (TD-641): this style needs gloom. A bright afternoon meadow
+    // fights it and the drama clause leans the same way -- same failure mode as
+    // before, slightly stronger, not a new one.
+    'Dark Fantasy': 'STYLE: Paint in dense, opaque dark-fantasy oils, keeping the whole image low-key with deep near-black shadow occupying most of the value range. Light every scene from a single dominant source, its colour taken from whatever is actually giving off that light in the scene, and let everything it does not reach fall away into gloom. Render every surface to a fine, dry-brushed, almost etched precision, and give every surface a history \u2014 individual strands of hair and fur, worn, pitted and scratched metal, damp skin, frayed and torn cloth, grain in wood and stone \u2014 so nothing looks new or clean. Fill the air with fine suspended matter, whatever this particular scene\'s own air would carry, caught and lit by the scene\'s own light and thickening with distance; never add airborne matter the scene would not have. Use an extremely limited near-monochrome palette of charcoal, soot black, cold grey and warm brown, with amber-gold the only true colour anywhere. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through. Separate near, middle and far with smoke and atmospheric haze, the darkest values gathering toward the edges of the frame and the far distance dissolving entirely.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
