@@ -340,7 +340,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
       'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this ' + _voice.panel + ': ' + prompt + charSectionTrim + assetSection + hint;
+      'Draw this ' + _voice.panel + ': ' + prompt + charSectionTrim + assetSection + hint + styleFinal;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -353,7 +353,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint,
+      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint + styleFinal,
       num_images: 1,
       aspect_ratio: ar,
       output_format: 'png',
@@ -375,9 +375,46 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     }
   }
 
-  // Nano Banana 2 only: the art style rides in system_prompt (a dedicated style
-  // channel) instead of the prompt body. thinking_level is off unless the env
-  // dial is set — the hook for a future "Render quality" campaign setting.
+  // v3.0.824 -- TD-658. THE ART STYLE NOW RIDES IN BOTH CHANNELS, NOT ONE.
+  //
+  // Ian: "We need to make sure that every image gets the art style, period."
+  // Measured rate before this change: about one image in three off-style.
+  //
+  // WHAT THIS LINE USED TO BE THE WHOLE OF. styleFinal was built for every panel
+  // and then handed ONLY to the Flux branch, so on nano2 -- which is what
+  // production runs -- the art style existed in system_prompt and NOWHERE ELSE.
+  // The /edit body merely POINTED at it ("the unified art style for this image
+  // (provided as a separate style instruction)"), and the text-to-image body did
+  // not mention style at all. Everything rested on one field.
+  //
+  // WHAT PROVED IT. A wagon-camp panel with NO characters and NO assets -- no
+  // reference images of any kind, so the text-to-image branch, so a prompt body
+  // with not one word about art style -- came back a flat inked cartoon. Ian
+  // regenerated the identical scene and got a fully painted, low-key, atmospheric
+  // version. SAME PROMPT, DIFFERENT SAMPLE. Not content, not the references, not
+  // the palette: a one-channel instruction honoured intermittently.
+  //
+  // IT COULD ALSO BE server-side truncation of system_prompt at fal, which we
+  // cannot observe -- the debug log records what we SENT, and that was complete
+  // and correct every time. From outside, "dropped" and "weakly honoured" are
+  // indistinguishable, AND THEY DO NOT NEED DISTINGUISHING: stating the style in
+  // the body as well defeats both.
+  //
+  // WHY TD-649 DID NOT ALREADY CATCH THIS. channel-ab.js measured body-above
+  // VERSUS system and Ian called them "about even", so the swap was dropped.
+  // Nobody tested body AND system, which is strictly more signal than either --
+  // and that A/B took ONE sample per cell, so it could not have detected an
+  // intermittent fault even had it been the right comparison. Measure a RATE.
+  //
+  // ADDITIVE, NOT A SWAP. system_prompt is unchanged and still carries the style;
+  // styleFinal is now appended to both nano2 prompt bodies as well, where it lands
+  // LAST -- which in the /edit branch is the only position after a reference block
+  // that declares itself HIGHEST PRIORITY. styleFinal is '' when there is no style
+  // prefix, so a styleless render is byte-identical to before. Flux is untouched:
+  // it has always had styleFinal in its body and has no system_prompt at all.
+  //
+  // thinking_level is off unless the env dial is set -- the hook for a future
+  // "Render quality" campaign setting.
   if (key === 'nano2') {
     input.system_prompt = styleSystem;
     var _tl = (thinkingLevel === 'minimal' || thinkingLevel === 'high') ? thinkingLevel : NANO_THINKING_LEVEL;
