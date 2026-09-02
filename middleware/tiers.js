@@ -532,7 +532,16 @@ const ART_STYLE_MIN_RANK = {
   'Fantasy oil painting': 3,        // Gold     (was Platinum)
   'Comic book cel-shaded': 3,       // Gold     (was Platinum)
   'Fantasy pastel': 3,              // Gold     (was Platinum)
-  'Dark Fantasy': 4                 // Platinum -- v3.0.815, TD-642
+  // v3.0.825 -- TD-659. DARK FANTASY DROPS TO GOLD. Ian: "Let's drop it to Gold.
+  // Custom art styles are platinum." It was the ONLY style at rank 4, which made
+  // Platinum's art advantage one preset -- and it is the style every improvement
+  // of 2026-09-01/02 was scoped to (the drama and atmosphere clauses, TD-651 and
+  // TD-655), so at rank 4 that whole body of work reached Platinum and trials and
+  // nobody else. CUSTOM ART STYLES ARE UNAFFECTED and remain the Platinum art
+  // feature: they are gated somewhere else entirely, by a hard 'the OWNING party
+  // must currently be true Platinum' check in resolveGenStyle (routes/images.js),
+  // not by this map -- a 'custom:N' id is not a key here and never was.
+  'Dark Fantasy': 3                 // Gold -- v3.0.825, TD-659 (was Platinum, v3.0.815, TD-642)
 };
 
 const NARRATIVE_STYLE_MIN_RANK = {
