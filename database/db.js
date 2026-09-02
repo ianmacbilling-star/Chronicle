@@ -459,6 +459,13 @@ async function initPostgres() {
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_detail TEXT',
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_moment_index INTEGER',
     "ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_status TEXT DEFAULT 'none'",
+    // v3.0.816 -- TD-645. The undo slot for "Regenerate in Art Style", and the art
+    // style the stored reference was actually rendered in (which is what makes the
+    // staleness warning possible -- without it there is no way to know the refs no
+    // longer match the version). Both nullable and read by nothing that shipped
+    // before, so a row that has not been migrated behaves exactly as it does today.
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS pre_style_reference_url TEXT',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS styled_art_style TEXT',
     // Phase 3 multi-user — character claim state + session access status.
     // is_claimed = true means the character is fully owned (either a
     // normal DM-created PC/NPC, OR a stub that's been claimed via an

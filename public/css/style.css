@@ -2843,3 +2843,19 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .tb-result img { max-width:100%; height:auto; display:block; }
 .tb-empty { color:var(--text-muted); font-size:13px; text-align:center;
   display:flex; flex-direction:column; align-items:center; gap:10px; }   /* v3.0.629 -- holds the Replace pill */
+
+/* v3.0.816 -- TD-645. Regenerate in Art Style: the bar above the character
+   list, the per-card strip, and the staleness warning. Additive only -- no
+   existing rule is touched, so the tab is unchanged until a reference is
+   actually restyled. */
+.sc-style-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px; }
+.sc-style-warning { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
+  color:#c9a84c; border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:14px; line-height:1.45; }
+.sc-style-strip:empty { display:none; }
+.sc-style-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; }
+.sc-style-chip { font-size:11px; padding:2px 8px; border-radius:10px; border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.72); white-space:normal; }
+.sc-style-chip-draft { border-color:rgba(201,168,76,0.6); color:#c9a84c; }
+.sc-style-chip-stale { border-color:rgba(224,122,95,0.65); color:#e07a5f; }
+.sc-style-retouch { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.sc-style-retouch .form-input { flex:1 1 200px; font-size:12px; padding:5px 8px; }

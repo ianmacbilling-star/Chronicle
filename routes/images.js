@@ -126,6 +126,50 @@ var FADE_WHITE = ' EDGES: render as a loose vignette where the medium thins and 
 var FADE_STYLES = { 'Fantasy oil painting': 1, 'Fantasy pastel': 1, 'Charcoal drawing': 1, 'Classic pen and ink': 1 };
 function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
+// v3.0.815 -- TD-634. THE COMIC VOCABULARY IS PER-STYLE, NOT GLOBAL.
+// Five places used to tell nano-banana-2 it was drawing a COMIC on every single
+// image, whatever style the user had actually chosen: the illustrator role in the
+// system prompt, the noun in the panel prompt, that same noun in both retouch
+// paths, and a capitalised DRAWN that was written to mean INTEGRATED and reads as
+// LINE ART. A watercolour book was therefore asked for comics four times before
+// its own style paragraph ever spoke, and the four went first.
+// PROVEN ON 2026-09-01, not theorised: the same model, at the same size, with none
+// of this wording, painted an image with no contour line anywhere in it. See
+// CUSTOM_ART_STYLE_SPEC.md section 1.
+//
+// The words were never wrong -- they were in the wrong place. They belong to the
+// styles that ARE comics. Ian chose the membership on 2026-09-01:
+//   comic   : High fantasy illustration, Dark gritty comic book,
+//             Comic book cel-shaded, Anime manga style
+//   neutral : Watercolor painterly, Fantasy oil painting, Classic pen and ink,
+//             Fantasy pastel, Charcoal drawing, Dark Fantasy
+//
+// HIGH FANTASY IS DELIBERATELY ON THE COMIC SIDE. It is the Campaignia default and
+// very nearly every book in existence is drawn in it, so it keeps the v3.0.814
+// wording EXACTLY. This batch must not repaint books that already shipped. All
+// four comic styles assemble BYTE-IDENTICAL prompts to v3.0.814 and the apply
+// script asserts exactly that against the pre-image.
+//
+// A CUSTOM STYLE ARRIVES AS A RAW 'STYLE:' PARAGRAPH AND MUST LAND NEUTRAL. It
+// does, because it is not a key in this map. DO NOT rewrite this as a test against
+// the prefixes map in getStylePrefix() -- that would put every custom style back on
+// the comic side and undo the entire point of the change.
+var COMIC_STYLES = { 'High fantasy illustration': 1, 'Dark gritty comic book': 1, 'Comic book cel-shaded': 1, 'Anime manga style': 1 };
+function isComicStyle(s){ return !!COMIC_STYLES[s]; }
+// role  -- the illustrator the model is told it is. Probably load-bearing for scene
+//          staging, so it is REPLACED, never removed.
+// panel -- the noun for one picture.
+// unify -- the word meaning 'one medium throughout'. Accurate for a comic,
+//          actively misleading for paint.
+function styleVoice(style) {
+  var comic = isComicStyle(style);
+  return {
+    role:  comic ? 'graphic-novel illustrator' : 'narrative illustrator',
+    panel: comic ? 'comic panel' : 'illustrated panel',
+    unify: comic ? 'DRAWN' : 'UNIFIED'
+  };
+}
+
 var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original characters, creatures, locations, and items as described and as shown in any reference images. Do NOT draw, imitate, or incorporate any recognizable copyrighted or trademarked character, creature, mascot, logo, costume, vehicle, or branded design from any other franchise (films, video games, comics, anime, novels, toys, or another game publisher). If a name or description resembles a famous character or property from another franchise, treat it as the user\'s OWN original creation and render an original design \u2014 NEVER that franchise\'s likeness. A thematic motif (for example a bat, spider, or star) may appear ONLY as original armor or decoration; you must NEVER add that franchise\'s identifying marks: no chest emblem, logo, insignia, or symbol associated with a known character, and never copy a known character\'s signature silhouette such as a distinctive cowl, mask, cape, ear shape, or helmet. Keep the design generic-fantasy and original \u2014 evocative is fine, iconic is not.';
 
 // Balanced composition steer for STORY PANELS ONLY (injected via the panel `hint`,
@@ -141,12 +185,34 @@ var COMPOSITION_IMG = ' COMPOSITION AND EYELINES (IMPORTANT): stage each panel a
 // scene-text cues only (the extraction prose must name the ranged action); melee stays close.
 var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or creature making a ranged or projectile attack \u2014 bow, crossbow, thrown spear or knife, sling, firearm, or a ranged spell such as a fireball, lightning bolt, magic missile, or eldritch blast \u2014 stage the attacker and the target SEPARATED BY A CLEAR DISTANCE across the frame, with open ground, air, or terrain between them, and show the projectile, bolt, or spell effect travelling across that gap. Do NOT place a ranged attacker and their target at melee/hand-to-hand range as if trading blows, UNLESS the scene text specifically says they are in close range (a rare, deliberate case). Melee attacks (swords, claws, fists) stay close; ranged attacks read at range.';
 
+// v3.0.821 -- TD-654. THE MODEL SIGNS THE PICTURE AND NOTHING SAID NOT TO.
+// A fabricated artist signature printed in a customer's book (panel 22 of
+// "The Strangers"). All 36 interiors were corner-scanned and it was the only
+// one -- which is the danger: one in thirty-six clears a page-turn review
+// every time, and then it is on paper. NO_BORDER governs edges and bars,
+// IP_GUARD_IMG governs other people's IP; nothing governed marks.
+//
+// IN-WORLD TEXT IS DELIBERATELY EXEMPT. A ban on "text" would take carved
+// runes, tavern signs, banners and the page of an open book with it, and
+// fantasy panels are full of those. The rule is about a mark laid ON TOP of
+// the artwork, not about what the depicted world contains.
+//
+// NOT the place for an "AI" corner mark. Tiny legible text is the least
+// reliable thing a diffusion model can be asked for -- it arrives as a smudge,
+// in a different corner each time. If that mark is wanted it is stamped at
+// layout time, where it is exact, identical on every plate and switchable.
+//
+// RETOUCH IS NOT COVERED: retouchImage() does not call buildPanelInput. A
+// retouch preserves the image it is given, so it cannot introduce a mark that
+// was not already there -- but it cannot remove one either.
+var NO_MARKS = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date, caption, title, or credit anywhere in the image, in any corner or along any edge. Text that genuinely belongs to the scene itself \u2014 a sign, a banner, runes carved in stone, writing on an open page \u2014 is fine; a mark laid on top of the picture is not.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
   var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
-  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective;
+  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + NO_MARKS;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
   // It must land here and not only in extract.js, because extract writes each
   // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
@@ -206,10 +272,11 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   // than the content prompt (which competes with scene text + reference images).
   // Flux has no system_prompt, so it keeps the style in the prompt (styleFinal).
   const stylePrefix = getStylePrefix(style);
+  const _voice = styleVoice(style);
   const styleSystem =
-    'You are a graphic-novel illustrator.' + IP_GUARD_IMG + ' Render the ENTIRE image in ONE single, ' +
+    'You are a ' + _voice.role + '.' + IP_GUARD_IMG + ' Render the ENTIRE image in ONE single, ' +
     'consistent art style — every character, NPC, location, and item included, ' +
-    'not just the background — so everything looks genuinely DRAWN in this ' +
+    'not just the background — so everything looks genuinely ' + _voice.unify + ' in this ' +
     'style rather than pasted on top of it. A consistent art style means one shared ' +
     'rendering MEDIUM and technique; it does NOT mean making the characters look ' +
     'alike — each character, NPC, and creature stays a separate, distinct individual ' +
@@ -217,9 +284,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     'averaged, or merged with another. If reference images are provided, treat ' +
     'them ONLY as identity and content sources (who or what each element is); do ' +
     'NOT copy their rendering style — re-render every referenced element in ' +
-    'this art style.' + edgeDirective + ' The required art style is: ' + stylePrefix;
+    'this art style.' + edgeDirective + NO_MARKS + ' The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
-    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
+    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks ' + _voice.unify + ' in this style rather than placed on top of it. ' + stylePrefix
     : '';
   const CHAR_HEADING = '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n';
   const charSection = charText ? CHAR_HEADING + charText : '';
@@ -273,7 +340,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
       'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSectionTrim + assetSection + hint;
+      'Draw this ' + _voice.panel + ': ' + prompt + charSectionTrim + assetSection + hint + styleFinal;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -286,7 +353,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint,
+      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint + styleFinal,
       num_images: 1,
       aspect_ratio: ar,
       output_format: 'png',
@@ -308,9 +375,46 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     }
   }
 
-  // Nano Banana 2 only: the art style rides in system_prompt (a dedicated style
-  // channel) instead of the prompt body. thinking_level is off unless the env
-  // dial is set — the hook for a future "Render quality" campaign setting.
+  // v3.0.824 -- TD-658. THE ART STYLE NOW RIDES IN BOTH CHANNELS, NOT ONE.
+  //
+  // Ian: "We need to make sure that every image gets the art style, period."
+  // Measured rate before this change: about one image in three off-style.
+  //
+  // WHAT THIS LINE USED TO BE THE WHOLE OF. styleFinal was built for every panel
+  // and then handed ONLY to the Flux branch, so on nano2 -- which is what
+  // production runs -- the art style existed in system_prompt and NOWHERE ELSE.
+  // The /edit body merely POINTED at it ("the unified art style for this image
+  // (provided as a separate style instruction)"), and the text-to-image body did
+  // not mention style at all. Everything rested on one field.
+  //
+  // WHAT PROVED IT. A wagon-camp panel with NO characters and NO assets -- no
+  // reference images of any kind, so the text-to-image branch, so a prompt body
+  // with not one word about art style -- came back a flat inked cartoon. Ian
+  // regenerated the identical scene and got a fully painted, low-key, atmospheric
+  // version. SAME PROMPT, DIFFERENT SAMPLE. Not content, not the references, not
+  // the palette: a one-channel instruction honoured intermittently.
+  //
+  // IT COULD ALSO BE server-side truncation of system_prompt at fal, which we
+  // cannot observe -- the debug log records what we SENT, and that was complete
+  // and correct every time. From outside, "dropped" and "weakly honoured" are
+  // indistinguishable, AND THEY DO NOT NEED DISTINGUISHING: stating the style in
+  // the body as well defeats both.
+  //
+  // WHY TD-649 DID NOT ALREADY CATCH THIS. channel-ab.js measured body-above
+  // VERSUS system and Ian called them "about even", so the swap was dropped.
+  // Nobody tested body AND system, which is strictly more signal than either --
+  // and that A/B took ONE sample per cell, so it could not have detected an
+  // intermittent fault even had it been the right comparison. Measure a RATE.
+  //
+  // ADDITIVE, NOT A SWAP. system_prompt is unchanged and still carries the style;
+  // styleFinal is now appended to both nano2 prompt bodies as well, where it lands
+  // LAST -- which in the /edit branch is the only position after a reference block
+  // that declares itself HIGHEST PRIORITY. styleFinal is '' when there is no style
+  // prefix, so a styleless render is byte-identical to before. Flux is untouched:
+  // it has always had styleFinal in its body and has no system_prompt at all.
+  //
+  // thinking_level is off unless the env dial is set -- the hook for a future
+  // "Render quality" campaign setting.
   if (key === 'nano2') {
     input.system_prompt = styleSystem;
     var _tl = (thinkingLevel === 'minimal' || thinkingLevel === 'high') ? thinkingLevel : NANO_THINKING_LEVEL;
@@ -409,7 +513,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
   // reference retouch). Moments always pass a real style, so they're unchanged.
   const stylePrefix = style ? getStylePrefix(style) : '';
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
-    'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
+    'You are editing an EXISTING ' + styleVoice(style).panel + ', provided as Image 1. Reproduce it '+
     'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
     'background, colors, lighting, and art style \u2014 and change ONLY the '+
     'following, leaving everything else untouched:\n\n' + instruction;
@@ -512,7 +616,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
         'This crop will be pasted straight back into the larger picture in the exact place it was cut from, so it must line up: keep the same art style, medium, brushwork, line weight, texture, palette and lighting right up to all four borders, and do not move, rescale, reframe or re-compose anything. ' +
         'The background continues across the WHOLE crop, behind and around and beneath every figure, right to all four edges. NEVER leave any area flat, empty, blank, black or filled with a plain colour, and never replace the surroundings with a backdrop: the ground beneath the figures and the scenery behind them must be drawn in full, exactly as they are now. ' +
         'Apply ONLY the following change:\n\n'
-      : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
+      : 'You are editing an EXISTING ' + styleVoice(style).panel + ', provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
         'everything else untouched. Output ONE single continuous image: do not divide the picture into panels, do not stack or repeat the composition, and do not produce more than one version of the scene.\n\n') + instruction + refSection + markSection + wholeSection;
@@ -857,7 +961,63 @@ function getStylePrefix(style) {
     'Fantasy oil painting': 'STYLE: Fantasy oil painting inspired by classic sword-and-sorcery cover art and old fantasy rulebook art plates, in the tradition of Frank Frazetta, Boris Vallejo, and Charles Marion Russell. LARGE, bold, loose brushstrokes with thick visible impasto and broad palette-knife marks, where each individual stroke of paint is clearly visible. Rich, saturated oil-paint textures, dramatic lighting, bold high-contrast highlights. Heroic anatomy, powerful poses, sculpted musculature. Epic, atmospheric backgrounds with mist, firelight, or stormy skies. Deep intense colors, warm skin tones, metallic reflections. The painting fades into loose, ragged brushstrokes toward the edges and does NOT reach the frame; everywhere the paint does not cover is PURE WHITE (#ffffff), with NO rectangular frame or border, like a painting set straight onto a clean white page.',
     'Comic book cel-shaded': 'STYLE: EXTREME comic-book cel-shaded art in the style of Borderlands. VERY THICK, heavy black ink outlines: bold brush-inked contours around every character, prop, and shape, plus strong interior ink linework. HARD cel shading with flat blocks of light and shadow, razor-sharp shadow edges and NO smooth gradients, dramatic high-contrast lighting. Visible halftone dots and crosshatching in the shadow areas. Punchy, saturated graphic-novel colors. Heavy hand-painted marker texture with visible strokes and sketch lines. Exaggerated silhouettes, dynamic angles, expressive faces, stylized proportions. Loud, graphic, over-the-top comic-book energy.',
     'Fantasy pastel': 'STYLE: Fantasy pastel and soft-chalk art in the great pastel tradition of Edgar Degas and Mary Cassatt. BOLD, large chalk and pastel strokes with thick, visible, grainy chalk marks and broad soft-pastel sweeps, generous smudging, and the texture of chalk dragged across rough paper. Soft, blended pastel colors with gentle gradients and a dreamy, magical atmosphere. Warm light, glowing highlights, a whimsical airy feeling. Lightly stylized, ethereal, expressive characters. The chalk and pastel work fades into loose, feathered strokes toward the edges and does NOT reach the frame; everywhere the chalk does not cover is PURE WHITE (#ffffff), with NO rectangular frame or border, like a drawing set straight onto a clean white page.',
-    'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.'
+    'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.',
+    // v3.0.815 -- TD-642. Approved by Ian on 2026-09-01 from a ONE-PASS
+    // analysis of a wolf-rider reference ("Very Usable!"); shipped exactly as
+    // tested. is_fade NO -- this one runs full bleed. KNOWN CONSTRAINT: it
+    // needs a single warm source in gloom, so taverns, caves and night camps
+    // suit it and a bright afternoon meadow fights it (TD-641). KNOWN AND
+    // UNTESTED: dropping the word "oils" and cooling the palette is the
+    // round-2 edit -- the reference has no canvas weave and this does.
+    // v3.0.821 -- TD-651 (the drama clause) and TD-655 (the atmosphere clause).
+    //
+    // THE DRAMA CLAUSE. Six traits are common to every reference Ian gathered on
+    // 2026-09-01 and he confirmed them line by line. Five are written in below.
+    // THE SIXTH IS DELIBERATELY ABSENT: "a dark foreground that reads as a
+    // silhouette" is true of all seven references because in them the near-black
+    // shape is FRAMING -- foliage, a hooded back. Campaignia puts the PARTY in the
+    // foreground, so that rule would turn the characters into featureless black
+    // shapes and the product is people looking at their own characters. Written as
+    // darkest-values-toward-the-EDGES instead: same depth, faces intact. Same
+    // reason composition never goes in a style paragraph (spec, invariant 1).
+    //
+    // MEASURED BEFORE IT SHIPPED, AND IT IS A CONDITIONAL WIN. drama-test.js, six
+    // images: on GRIMSKULL, whose scene text names no light source, Ian called it
+    // "way better". On TAVERN, already "lamplit... a fire off to one side", he
+    // called it "about even". LOAD-BEARING WHERE THE SCENE DOES NOT DESCRIBE ITS
+    // OWN LIGHT, REDUNDANT WHERE IT DOES. Do not assume it lifts every panel.
+    //
+    // 'WARM' IS GONE FROM THE LIGHT CLAUSE, AND THAT IS THE WHOLE DIFFERENCE FROM
+    // THE UNSHIPPED v3.0.820. That build said "a single dominant WARM source".
+    // Ian disproved it with one reference -- an image saturated end to end in hot
+    // pink, fully rendered, deep atmosphere, no outlines, more surface detail than
+    // anything we produce: "The color is not necessarily the problem." The hue of
+    // the dominant source belongs to the SCENE. The palette line below is
+    // untouched on purpose -- an earlier diagnosis blamed it for the off-style
+    // panels and was WRONG (TD-653); the real fault is ink arriving from the
+    // reference image, and it is not fixed in here.
+    //
+    // THE ATMOSPHERE CLAUSE (TD-655). Ian has asked for the same thing four ways:
+    // "the thing they all have in common is DETAIL", "more artisticness", "no
+    // where near as good as those", and "more things floating in the air, smoke,
+    // snow, ash, dust, leaves, debris, whisps". Our panels have clean empty air
+    // between the figures and the background; every reference he admires has
+    // matter suspended in the light. INVARIANT 2 IS THE DIFFICULTY: naming snow
+    // puts snow in the tavern, exactly as 'bark grain' quietly asked for trees.
+    // So the clause names the CLASS and hands the choice to the scene, with an
+    // explicit brake against inventing matter the scene would not have.
+    // SCOPED TO DARK FANTASY by Ian's decision, though it is content rather than
+    // medium and would carry to the other nine if it proves out here.
+    //
+    // AND HALF OF "DETAIL" IS NOT IN THIS PARAGRAPH AT ALL -- it is TD-635. At
+    // resolution '1K' there are not enough pixels to hold a dust mote, a hair or a
+    // scratch, and asking harder yields mush. Do not read a weak result here as
+    // the wording failing until that is settled.
+    //
+    // STILL TRUE (TD-641): this style needs gloom. A bright afternoon meadow
+    // fights it and the drama clause leans the same way -- same failure mode as
+    // before, slightly stronger, not a new one.
+    'Dark Fantasy': 'STYLE: Paint in dense, opaque dark-fantasy oils, keeping the whole image low-key with deep near-black shadow occupying most of the value range. Light every scene from a single dominant source, its colour taken from whatever is actually giving off that light in the scene, and let everything it does not reach fall away into gloom. Render every surface to a fine, dry-brushed, almost etched precision, and give every surface a history \u2014 individual strands of hair and fur, worn, pitted and scratched metal, damp skin, frayed and torn cloth, grain in wood and stone \u2014 so nothing looks new or clean. Fill the air with fine suspended matter, whatever this particular scene\'s own air would carry, caught and lit by the scene\'s own light and thickening with distance; never add airborne matter the scene would not have. Use an extremely limited near-monochrome palette of charcoal, soot black, cold grey and warm brown, with amber-gold the only true colour anywhere. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through. Separate near, middle and far with smoke and atmospheric haze, the darkest values gathering toward the edges of the frame and the far distance dissolving entirely.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
@@ -981,8 +1141,42 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   // the shadow by construction instead of by per-image nudging.
   const refPrompt =
     IP_GUARD_IMG +
+    // v3.0.819 -- TD-644 CLOSED, AND v3.0.815's REPLACEMENT WAS THE FAULT.
+    //
+    // v3.0.815 removed the hardcoded 'comic book art style' from here and put
+    // 'in a clean, neutral illustration style' in its place, to stop the model
+    // drifting photoreal -- the canonical reference is the one image that is
+    // DISPLAYED, on the Company page. TD-644 recorded it as the only edit in
+    // that batch whose visual result had not been checked, and marked it
+    // VERIFY FIRST. It was checked on 2026-09-01, by opening a real reference.
+    //
+    // IT IS OUTLINED LINE ART. For this model a 'clean illustration' is line
+    // and fill -- black contours round the coat, the straps, the boots and the
+    // face, over flat shading. That is barely distinguishable from what the
+    // comic wording produced. One instruction was swapped for a synonym.
+    //
+    // AND IT COSTS TWICE. The reference is fed to every panel as the identity
+    // source, and the system prompt then unifies the whole picture toward it,
+    // so the contours spread onto the rocks and the sky (TD-645). Second, the
+    // panel is told to keep the character EXACTLY as the reference shows --
+    // and a reference with smooth, unworn surfaces CAPS THE DETAIL of every
+    // panel that character appears in. Ian, comparing a panel with the art he
+    // wants: "It's good but no where near as good as those." You cannot render
+    // detail the reference does not have.
+    //
+    // SO: still neutral, still an illustration rather than a photograph, but
+    // fully rendered and WITHOUT CONTOURS. Note what is asked for and what is
+    // not: surface MATERIAL (weave, grain, pitting) is a rendering instruction
+    // and is safe; a mood, a palette or a light source would not be -- this
+    // image must stay re-renderable into watercolour or charcoal as easily as
+    // into an oil (TD-644: the canonical reference stays STYLE-NEUTRAL).
     'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
-    'comic book art style, even soft lighting.\n\n' +
+    'even soft lighting. Render the figure FULLY and in HIGH DETAIL in a neutral ' +
+    'painted style, modelled with soft tonal shading: NO ink outlines, NO contour ' +
+    'lines drawn around shapes, NO flat cel shading, and nothing left simplified ' +
+    'or flat. Give every material its real surface \u2014 the weave and folds of ' +
+    'cloth, the grain and wear of leather, the pitting and scratches on metal, ' +
+    'individual strands of hair.\n\n' +
     CHAR_REF_STAGING +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
@@ -1028,7 +1222,14 @@ function buildAssetReferenceInput(descriptionText, category, modelKey) {
   const refPrompt =
     IP_GUARD_IMG +
     'Reference image of a single ' + catWord + ', centered on a plain neutral ' +
-    'background, even soft lighting, comic book art style. Show only the ' + catWord +
+    // v3.0.819 -- the same fault and the same fix as the character reference
+    // above. These are the griffons, the locations and the items, and on a
+    // panel like a four-griffon flight they occupy far more of the frame than
+    // the characters do (TD-648).
+    'background, even soft lighting, rendered FULLY and in HIGH DETAIL in a ' +
+    'neutral painted style with soft tonal shading: NO ink outlines, NO contour ' +
+    'lines drawn around shapes, NO flat cel shading. Give every material its ' +
+    'real surface \u2014 grain, wear, pitting, scratches and weave. Show only the ' + catWord +
     ' itself, with no extra characters, text, logos, or watermarks.\n\n' +
     catLabel + ': ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
@@ -1591,6 +1792,42 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
   }
 });
 
+// v3.0.822 -- TD-656. A DRAWN CHAPTER TITLE IS NOT A PANEL THE BATCH MAY REDRAW.
+//
+// Ian: "If there is an image build with the title builder then don't overwrite it
+// with a full Session Generate Image button. Everything else stays the same."
+//
+// THE TEST IS PROVENANCE, NOT POSITION. It is the opening panel that carries a
+// built title in practice, but the rule asks whether the Title Builder made this
+// image -- a title panel anywhere is the same object, and a panel_order === 0
+// test would quietly stop protecting it the moment anyone reordered a session.
+//
+// LIVE IMAGE ONLY, AND THAT CONDITION IS LOAD-BEARING. layout_meta.built_title
+// SURVIVES a later regenerate -- the regenerate path writes image and leaves the
+// record behind. Testing built_title alone would therefore lock a panel out of
+// every future batch on the strength of a title it no longer holds. It counts
+// only while built_title.url IS the image on the panel right now.
+//
+// THIS IS TD-444's RULE, COPIED ON PURPOSE RATHER THAN REINVENTED. The retouch
+// route (v3.0.653) decides the same question the same way; two different answers
+// to "is this a title panel" is the fault that would actually hurt. The guard
+// asserts the retouch route still carries its own copy unchanged.
+//
+// SINGLE-PANEL REGENERATE IS UNTOUCHED, AND THAT IS DELIBERATE. Ian, 2026-08-12:
+// "I had chapter text in the panel... I regenerated and got an actual picture."
+// Regenerate is the documented way back from a title to a scene. If the batch and
+// the button both refused, a title panel would be unrecoverable. Batch protects;
+// the button is the escape hatch.
+function momentHoldsBuiltTitle(m) {
+  if (!m || !m.image) return false;
+  var blt = null;
+  try {
+    var lm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : {};
+    blt = lm && lm.built_title;
+  } catch (e) { blt = null; }
+  return !!(blt && blt.url && String(blt.url) === String(m.image));
+}
+
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
   const { session_id, campaign_id, style } = req.body;
@@ -1632,10 +1869,19 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
   // Image locking — skip locked panels (don't regenerate, don't charge for them).
   const lockedCount = moments.filter(function(m){ return m.locked; }).length;
-  const toGenerate = moments.filter(function(m){ return !m.locked; });
+  // v3.0.822 -- TD-656. Counted among the UNLOCKED only, so a panel that is both
+  // locked and a title is reported once, under the reason the user chose.
+  const titleCount = moments.filter(function(m){ return !m.locked && momentHoldsBuiltTitle(m); }).length;
+  const toGenerate = moments.filter(function(m){ return !m.locked && !momentHoldsBuiltTitle(m); });
 
   if (!toGenerate.length) {
-    return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
+    // The message must name the reason that actually applies: after TD-656 an
+    // empty batch is no longer proof that everything was locked.
+    var _emptyMsg;
+    if (lockedCount && titleCount) _emptyMsg = 'Nothing to generate — every panel is either locked or holds a chapter title. Unlock a panel, or use Regenerate on a title panel to draw the scene instead.';
+    else if (titleCount)           _emptyMsg = 'Nothing to generate — the only panel here holds a chapter title from the Title Builder, and Generate Images leaves those alone. Use Regenerate on it to draw the scene instead.';
+    else                           _emptyMsg = 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.';
+    return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, skipped_title: titleCount, message: _emptyMsg });
   }
 
   // Load all campaign characters once; the per-panel block is built inside
@@ -1749,7 +1995,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
 
-  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
+  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, skipped_title: titleCount, submit_failed: submitFailed });
 });
 
 
@@ -2586,3 +2832,14 @@ module.exports.submitReference = submitReference;
 module.exports.submitAssetReference = submitAssetReference;
 module.exports.submitEditReference = submitEditReference;
 module.exports.submitRetouch = submitRetouch;
+// v3.0.817 -- TD-645. The session-character restyle in routes/sessions.js needs
+// BOTH of these.
+//   resolveGenStyle -- an art style id can be 'custom:<n>', and handing that
+//     straight to getStylePrefix returns High fantasy SILENTLY (TD-647). A
+//     Platinum user's own custom style would therefore have restyled every
+//     character into the default and looked like the button did nothing.
+//   getStylePrefix -- the style paragraph has to be placed INSIDE the restyle
+//     instruction, scoped to the figure, instead of riding at the top of the
+//     prompt where it paints a background over the white reference staging.
+module.exports.resolveGenStyle = resolveGenStyle;
+module.exports.getStylePrefix = getStylePrefix;
