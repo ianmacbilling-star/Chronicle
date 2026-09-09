@@ -9909,7 +9909,54 @@ function prepCommitFields() {
     if (typeof prepSaveTitleColor === 'function') prepSaveTitleColor();
   } catch (e) {}
 }
+// ============================================================
+// v3.0.840 -- TD-686. THE LINK-ONLY CHOICE ON THE PUBLISH CARD.
+//
+// A campaign is sensitive if ANY of its genres is (Family Story, Skill Story, Biography),
+// and the verdict comes from the SERVER on the campaign row -- campaignSafety() in
+// services/genres.js, the same call the publish route and the archive gate make. This page
+// does not decide it and must not learn how.
+function prepCampaignSensitive() {
+  var c = state.currentCampaign;
+  return !!(c && c.sensitive === true);
+}
+
+// Tick it for a sensitive campaign, every time the panel syncs. The campaign-switch reset
+// clears both boxes and then calls prepPanelSync, so this runs after the clear -- which is
+// the order that matters: a tick carried over from another campaign is TD-678's fault, and
+// a tick RE-DERIVED for the campaign on screen is not.
+function prepSyncUnlisted() {
+  var el = document.getElementById('prep-unlisted');
+  var note = document.getElementById('prep-unlisted-note');
+  if (!el) return;
+  var sens = prepCampaignSensitive();
+  if (sens) el.checked = true;
+  if (note) {
+    note.style.display = sens ? 'block' : 'none';
+    note.textContent = sens
+      ? 'This kind of story can show a real person, so it is set to link only. You can untick it.'
+      : '';
+  }
+}
+
+// UNTICKING IT ON A SENSITIVE CAMPAIGN ASKS FIRST. Ian, 2026-09-09. Declining re-ticks the
+// box rather than leaving it in the state the user did not confirm. THIS IS THE INFORMED
+// PART OF INFORMED CONSENT AND NOT THE ENFORCEMENT -- the server refuses a sensitive
+// campaign publishing public without consent whatever this page does.
+function prepUnlistedChanged(el) {
+  if (!el || el.checked) return;
+  if (!prepCampaignSensitive()) return;
+  if (typeof uiConfirm !== 'function') { el.checked = true; return; }
+  uiConfirm(
+    'You are about to make public what might be a personal story about a real individual.\n\n' +
+    'Listing it in the Library makes it browsable by anyone and offers it to search engines. Only ' +
+    'continue if you have permission to share their name and likeness publicly.',
+    { okText: 'List it publicly', cancelText: 'Keep it link only' }
+  ).then(function (okd) { if (!okd) el.checked = true; });
+}
+
 function prepPanelSync() {
+  prepSyncUnlisted();   // v3.0.840 -- TD-686
   prepLoadBookMeta(function(){
     var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
     if (isSM && !state.novelAsUser) prepSeedCoverFromCampaignImage();
@@ -10269,13 +10316,16 @@ async function publishStory() {
   if (prepUseMember() && _title) { _prepMetaWrite({ book_title: _title }); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
-  // v3.0.831 -- TD-677. Unticked means SAY NOTHING, not "say public". The server already
-  // decides a default it knows more about than this page does -- a sensitive campaign
-  // publishes link-only on its own -- and a client that helpfully sent "public" would
-  // silently overrule it. Sending the field only when it NARROWS is what makes this box
-  // safe to add before the consent gate (TD-667) exists.
+  // v3.0.831 -- TD-677. Unticked meant SAY NOTHING, not "say public", because a client that
+  // helpfully sent "public" would have overruled a server default it could not know about.
+  // v3.0.840 -- TD-686. THAT IS NO LONGER TRUE FOR A SENSITIVE CAMPAIGN, and the difference
+  // is consent. Unticking the box there is now a deliberate act the user was warned about,
+  // so the request says "public" and carries the consent flag -- and the server refuses that
+  // transition without it, so saying it is not the same as being allowed it. For every other
+  // campaign the rule is unchanged: send the field only when it NARROWS.
   var _unlistedEl = document.getElementById('prep-unlisted');
   var _wantUnlisted = _unlistedEl ? !!_unlistedEl.checked : false;
+  var _wantPublicConsent = (!_wantUnlisted && !!_unlistedEl && prepCampaignSensitive());
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
@@ -10300,6 +10350,7 @@ async function publishStory() {
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
   var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
   if (_wantUnlisted) _pubBody.visibility = 'unlisted';
+  else if (_wantPublicConsent) { _pubBody.visibility = 'public'; _pubBody.consent = true; }   // v3.0.840 -- TD-686
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){

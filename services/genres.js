@@ -51,7 +51,13 @@ var GENRES = [
     panels: 'Favour restraint, partial reveals, and a wrong detail in an ordinary frame.' },
   { slug: 'biography',  label: 'Biography',
     prose:  'A real life recounted. Ground every event in one person\u2019s arc.',
-    panels: 'Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.' },
+    panels: 'Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.',
+    // v3.0.840 -- TD-685. THE LITERAL, NOT THE CONSTANT (see family/skillstory below).
+    // A Biography is about a real person, which is the whole argument that made the other
+    // two sensitive. Ian, 2026-09-09, choosing this over a second 'warn but do not gate'
+    // flag. No defaultArt/defaultVoice: Calm & Literal is a preparation voice and wrong
+    // for a life story, and re-pointing an existing campaign's styles is a separate call.
+    safety: 'sensitive' },
   { slug: 'mystery',    label: 'Mystery / Crime',
     prose:  'Withheld information. Plant what pays off. Let the reader work.',
     panels: 'Favour evidence, reaction, and the moment of noticing.' },

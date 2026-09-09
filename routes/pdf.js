@@ -7679,6 +7679,32 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     return res.status(403).json({ error: 'Publishing to the Library requires a paid plan, or playing in a campaign run by a subscriber.', code: 'publish_requires_subscription' });
   }
 
+  // v3.0.840 -- TD-686. WHO WILL BE ABLE TO SEE THIS, DECIDED BEFORE ANY WORK IS DONE.
+  //
+  // v3.0.831 put a "link only" tick on the publish card and v3.0.828 made a sensitive
+  // campaign publish unlisted WHATEVER THE CARD SAID -- the ask could only narrow, never
+  // widen. So the box was real, it was unticked, and unticking it did nothing: Ian, "it
+  // defaulted my story to link only even though I never checked that box." He never checked
+  // it and it would not have mattered if he had. THAT FORCE IS WHAT THIS REPLACES.
+  //
+  // NOW IT IS A DEFAULT WITH A CONFIRMATION, which is what he asked for. A sensitive
+  // campaign still publishes link-only unless the publisher explicitly asks for public AND
+  // consents; a standard campaign is public unless it asks to narrow, exactly as before.
+  //
+  // THE REFUSAL REUSES storyVisibilityRefusal -- the SAME function the My Stories flip goes
+  // through. Two doors onto one transition is how TD-601 keeps happening; there is one rule
+  // here and both doors call it. (Declared below; function declarations hoist.)
+  var _pubSafety = genresvc.campaignSafety(campaign && campaign.genres);
+  var _pubSensitive = (_pubSafety === genresvc.SAFETY_SENSITIVE);
+  var _askVis = (req.body && typeof req.body.visibility === 'string') ? req.body.visibility.trim() : '';
+  var _askUnlisted = (_askVis === 'unlisted');
+  var _askPublic = (_askVis === 'public');
+  var _pubVis = _pubSensitive
+    ? ((_askPublic && !_askUnlisted) ? 'public' : 'unlisted')
+    : (_askUnlisted ? 'unlisted' : 'public');
+  var _visRefusal = storyVisibilityRefusal(_pubSensitive, _pubVis === 'public', !!(req.body && req.body.consent === true));
+  if (_visRefusal) return res.status(_visRefusal.status).json(_visRefusal.body);
+
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
   const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
   // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
@@ -8009,26 +8035,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // TD-219 -- the published thing is the thing that was published. Resolved via
     // services/genres.js so NULL and junk still land as fantasy.
     var _pubGenres = '{' + genresvc.campaignGenres(campaign && campaign.genres).join(',') + '}';
-    // v3.0.828 -- TD-673. VISIBILITY IS DECIDED HERE AND FROZEN, exactly like the genre
-    // snapshot above it and for the same TD-219 reason: the published thing is the thing
-    // that was published, and a later edit to the campaign must not silently re-file it.
-    // A SENSITIVE story publishes UNLISTED (Ian, 2026-09-09) -- reachable by anyone with
-    // the link, absent from the directory and the sitemap -- and its owner can promote it
-    // afterwards. No genre is sensitive as of v3.0.828, so today this is always public.
-    // v3.0.831 -- TD-677. The publisher may ask for link-only ON the publish card. The ask
-    // can only NARROW: an explicit "unlisted" is honoured, and anything else falls through
-    // to the default this route computes from the campaign itself. There is deliberately no
-    // way for a request to widen a sensitive campaign to public from here -- that transition
-    // is what TD-667's consent gate is for, and until it exists the safe answer is that the
-    // client cannot make it at all. Unreachable today; no genre is sensitive until TD-668.
-    var _askUnlisted = !!(req.body && String(req.body.visibility || '').trim() === 'unlisted');
-    // v3.0.832 -- TD-666. RESOLVED ONCE. The verdict that gets stored and the verdict the
-    // visibility default is derived from are now provably the same value -- two calls to
-    // campaignSafety() could not disagree today, but they are exactly the kind of pair
-    // that drifts when someone edits one of them.
-    var _pubSafety = genresvc.campaignSafety(campaign && campaign.genres);
-    var _pubSensitive = (_pubSafety === genresvc.SAFETY_SENSITIVE);
-    var _pubVis = (_askUnlisted || _pubSensitive) ? 'unlisted' : 'public';
+    // v3.0.840 -- TD-686. _pubSafety, _pubSensitive and _pubVis ARE DECIDED AT THE TOP OF
+    // THIS ROUTE, before any rendering, because the consent refusal has to happen before the
+    // work rather than after it. They are still frozen onto the row here for the TD-219
+    // reason: the published thing is the thing that was published, and a later edit to the
+    // campaign must not silently re-file it. RESOLVED ONCE (v3.0.832, TD-666) and now more
+    // literally so -- there is exactly one campaignSafety() call in this route.
     var _shareToken = makeShareToken();
     var _ins = await db.prepare(
       'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, safety_level, public, created_at, updated_at) ' +
