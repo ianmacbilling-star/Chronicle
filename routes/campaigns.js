@@ -28,7 +28,19 @@ router.get('/', requireAuth, async function(req, res) {
     'WHERE cm.user_id = ? ' +
     'ORDER BY c.created_at DESC'
   ).all(req.session.userId);
-  res.json(campaigns);
+  // v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, RESOLVED HERE AND NOWHERE ELSE.
+  // genreDefaults() returns null for thirteen of the fifteen genres, so genre_defaults is null
+  // on almost every campaign and the client's existing behaviour is untouched for them.
+  // `sensitive` rides along from the SAME resolver the publish path and the archive gate use
+  // (campaignSafety), so the page can never disagree with the server about which campaigns are
+  // sensitive -- there is one definition and this is a read of it, not a second copy.
+  res.json((campaigns || []).map(function (c) {
+    try {
+      c.genre_defaults = genres.genreDefaults(c);
+      c.sensitive = genres.isSensitive(c);
+    } catch (e) { c.genre_defaults = null; c.sensitive = false; }
+    return c;
+  }));
 });
 
 router.post('/', requireAuth, checkCampaignLimit, async function(req, res) {

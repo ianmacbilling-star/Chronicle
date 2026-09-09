@@ -361,7 +361,31 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
   // Narrative Style (Narrative Styles feature) — this version's VOICE preset.
   // Null/unknown falls back to 'classic' (the original behavior).
-  const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : 'classic';
+  // v3.0.839 -- TD-669. A GENRE THAT DECLARES A VOICE SUPPLIES IT WHEN NOTHING ELSE HAS.
+  // Only when this fork carries no style of its own, so the moment anyone picks one this
+  // never runs again for that version -- Ian: "They can then be changed... Just defaulted."
+  //
+  // THIRTEEN OF THE FIFTEEN GENRES DECLARE NOTHING, so for them genreDefaults() returns null
+  // and narrStyleId is byte-for-byte the expression that was here before.
+  //
+  // GATED ON THE TIER, because this is the server and the picker's lock is the client. An
+  // ungated default would hand out a voice the picker itself refuses -- the same asymmetry
+  // that let art styles be sent from the page without a check.
+  //
+  // AND IT FALLS THROUGH TO classic ON ANY FAILURE (TD-587): an unknown id, a tier lookup
+  // that throws, a campaign row that has gone. The old behaviour is the failure mode.
+  var _gdVoice = null;
+  if (!(fkSteer && fkSteer.narrative_style)) {
+    try {
+      const _cgRow = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(session.campaign_id);
+      const _gd = genresvc.genreDefaults(_cgRow);
+      if (_gd && _gd.narrative && NARRATIVE_STYLES[_gd.narrative]) {
+        const _effR = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+        if (narrativeStyleAllowed(_effR, _gd.narrative)) _gdVoice = _gd.narrative;
+      }
+    } catch (e) { _gdVoice = null; }
+  }
+  const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : (_gdVoice || 'classic');
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
   const isDialogue = (narrStyleId === 'dialogue');
   // Verbosity dial: 'low' | 'med' | 'high' (default med for new forks; existing books backfilled to high). Length only --

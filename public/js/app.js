@@ -2598,7 +2598,7 @@ function selectSession(id) {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -4799,9 +4799,53 @@ function refreshArtStyleButtons() {
 // Was referenced on session load but never defined (a no-op). Now it sets the
 // art style from the session's saved value and refreshes the Art buttons so the
 // label is truthful for the session being opened.
+// ============================================================
+// v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, WHEN NOTHING ELSE HAS SAID.
+//
+// The VALUES come from the server (campaign.genre_defaults, resolved by services/genres.js)
+// rather than from a list in this file. CS_GENRES already mirrors the slugs and labels and
+// the apply script checks that mirror; a second mirror carrying style ids would drift with
+// nothing watching it.
+//
+// THE TIER TEST IS THE PICKER'S OWN, character for character (see openStylePicker), so a
+// default can never pre-select something the picker draws as locked. ONE DELIBERATE
+// DIFFERENCE: the picker treats a missing tierInfo as rank 99 and fails OPEN, which is right
+// for drawing a list; here it is 0 and fails CLOSED. A default is a decision made on the
+// user's behalf, and making it while we do not know their tier is how someone silently gets
+// a style they cannot use.
+function genreDefaultStyle(kind) {
+  var c = state.currentCampaign;
+  var gd = c && c.genre_defaults;
+  if (!gd) return null;
+  var id = (kind === 'art') ? gd.art : gd.narrative;
+  if (!id) return null;
+  var locks = (kind === 'art') ? (state.tierInfo && state.tierInfo.art_locks)
+                                : (state.tierInfo && state.tierInfo.narrative_locks);
+  var eff = (state.tierInfo && state.tierInfo.effective_rank) || 0;
+  var min = (locks && locks[id]) || 1;
+  if (min > eff) return null;
+  return id;
+}
+
+// The voice this version opens on. Three call sites used to carry this expression
+// separately; they now share one, because a rule that lives in three places is the
+// TD-601 shape and two of the three would eventually be right.
+function narrativeStyleFor(data) {
+  if (data && data.narrative_style) return data.narrative_style;
+  return genreDefaultStyle('narrative') || 'classic';
+}
+
 function loadLastArtStyle(artStyle, layoutStyle) {
   if (artStyle) state.artStyle = artStyle;
-  else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
+  else {
+    // v3.0.839 -- TD-669. Nothing saved on this version. A genre default wins over whatever
+    // the LAST campaign left in state -- that carry-over is the reason opening a Skill Story
+    // after a Fantasy one would otherwise still say High fantasy, which is TD-680's _default
+    // lesson on a second field.
+    var _gdArt = genreDefaultStyle('art');
+    if (_gdArt) state.artStyle = _gdArt;
+    else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
+  }
   if (layoutStyle && !state.layoutStyle) state.layoutStyle = layoutStyle;
   refreshArtStyleButtons();
   refreshLayoutStyleButtons();
@@ -9865,7 +9909,54 @@ function prepCommitFields() {
     if (typeof prepSaveTitleColor === 'function') prepSaveTitleColor();
   } catch (e) {}
 }
+// ============================================================
+// v3.0.840 -- TD-686. THE LINK-ONLY CHOICE ON THE PUBLISH CARD.
+//
+// A campaign is sensitive if ANY of its genres is (Family Story, Skill Story, Biography),
+// and the verdict comes from the SERVER on the campaign row -- campaignSafety() in
+// services/genres.js, the same call the publish route and the archive gate make. This page
+// does not decide it and must not learn how.
+function prepCampaignSensitive() {
+  var c = state.currentCampaign;
+  return !!(c && c.sensitive === true);
+}
+
+// Tick it for a sensitive campaign, every time the panel syncs. The campaign-switch reset
+// clears both boxes and then calls prepPanelSync, so this runs after the clear -- which is
+// the order that matters: a tick carried over from another campaign is TD-678's fault, and
+// a tick RE-DERIVED for the campaign on screen is not.
+function prepSyncUnlisted() {
+  var el = document.getElementById('prep-unlisted');
+  var note = document.getElementById('prep-unlisted-note');
+  if (!el) return;
+  var sens = prepCampaignSensitive();
+  if (sens) el.checked = true;
+  if (note) {
+    note.style.display = sens ? 'block' : 'none';
+    note.textContent = sens
+      ? 'This kind of story can show a real person, so it is set to link only. You can untick it.'
+      : '';
+  }
+}
+
+// UNTICKING IT ON A SENSITIVE CAMPAIGN ASKS FIRST. Ian, 2026-09-09. Declining re-ticks the
+// box rather than leaving it in the state the user did not confirm. THIS IS THE INFORMED
+// PART OF INFORMED CONSENT AND NOT THE ENFORCEMENT -- the server refuses a sensitive
+// campaign publishing public without consent whatever this page does.
+function prepUnlistedChanged(el) {
+  if (!el || el.checked) return;
+  if (!prepCampaignSensitive()) return;
+  if (typeof uiConfirm !== 'function') { el.checked = true; return; }
+  uiConfirm(
+    'You are about to make public what might be a personal story about a real individual.\n\n' +
+    'Listing it in the Library makes it browsable by anyone and offers it to search engines. Only ' +
+    'continue if you have permission to share their name and likeness publicly.',
+    { okText: 'List it publicly', cancelText: 'Keep it link only' }
+  ).then(function (okd) { if (!okd) el.checked = true; });
+}
+
 function prepPanelSync() {
+  prepSyncUnlisted();   // v3.0.840 -- TD-686
   prepLoadBookMeta(function(){
     var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
     if (isSM && !state.novelAsUser) prepSeedCoverFromCampaignImage();
@@ -10225,13 +10316,16 @@ async function publishStory() {
   if (prepUseMember() && _title) { _prepMetaWrite({ book_title: _title }); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
-  // v3.0.831 -- TD-677. Unticked means SAY NOTHING, not "say public". The server already
-  // decides a default it knows more about than this page does -- a sensitive campaign
-  // publishes link-only on its own -- and a client that helpfully sent "public" would
-  // silently overrule it. Sending the field only when it NARROWS is what makes this box
-  // safe to add before the consent gate (TD-667) exists.
+  // v3.0.831 -- TD-677. Unticked meant SAY NOTHING, not "say public", because a client that
+  // helpfully sent "public" would have overruled a server default it could not know about.
+  // v3.0.840 -- TD-686. THAT IS NO LONGER TRUE FOR A SENSITIVE CAMPAIGN, and the difference
+  // is consent. Unticking the box there is now a deliberate act the user was warned about,
+  // so the request says "public" and carries the consent flag -- and the server refuses that
+  // transition without it, so saying it is not the same as being allowed it. For every other
+  // campaign the rule is unchanged: send the field only when it NARROWS.
   var _unlistedEl = document.getElementById('prep-unlisted');
   var _wantUnlisted = _unlistedEl ? !!_unlistedEl.checked : false;
+  var _wantPublicConsent = (!_wantUnlisted && !!_unlistedEl && prepCampaignSensitive());
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
@@ -10256,6 +10350,7 @@ async function publishStory() {
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
   var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
   if (_wantUnlisted) _pubBody.visibility = 'unlisted';
+  else if (_wantPublicConsent) { _pubBody.visibility = 'public'; _pubBody.consent = true; }   // v3.0.840 -- TD-686
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){
@@ -14395,7 +14490,7 @@ function selectSession(id) {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -17319,7 +17414,7 @@ function reloadSessionForFork() {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
