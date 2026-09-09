@@ -2598,7 +2598,7 @@ function selectSession(id) {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -4799,9 +4799,53 @@ function refreshArtStyleButtons() {
 // Was referenced on session load but never defined (a no-op). Now it sets the
 // art style from the session's saved value and refreshes the Art buttons so the
 // label is truthful for the session being opened.
+// ============================================================
+// v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, WHEN NOTHING ELSE HAS SAID.
+//
+// The VALUES come from the server (campaign.genre_defaults, resolved by services/genres.js)
+// rather than from a list in this file. CS_GENRES already mirrors the slugs and labels and
+// the apply script checks that mirror; a second mirror carrying style ids would drift with
+// nothing watching it.
+//
+// THE TIER TEST IS THE PICKER'S OWN, character for character (see openStylePicker), so a
+// default can never pre-select something the picker draws as locked. ONE DELIBERATE
+// DIFFERENCE: the picker treats a missing tierInfo as rank 99 and fails OPEN, which is right
+// for drawing a list; here it is 0 and fails CLOSED. A default is a decision made on the
+// user's behalf, and making it while we do not know their tier is how someone silently gets
+// a style they cannot use.
+function genreDefaultStyle(kind) {
+  var c = state.currentCampaign;
+  var gd = c && c.genre_defaults;
+  if (!gd) return null;
+  var id = (kind === 'art') ? gd.art : gd.narrative;
+  if (!id) return null;
+  var locks = (kind === 'art') ? (state.tierInfo && state.tierInfo.art_locks)
+                                : (state.tierInfo && state.tierInfo.narrative_locks);
+  var eff = (state.tierInfo && state.tierInfo.effective_rank) || 0;
+  var min = (locks && locks[id]) || 1;
+  if (min > eff) return null;
+  return id;
+}
+
+// The voice this version opens on. Three call sites used to carry this expression
+// separately; they now share one, because a rule that lives in three places is the
+// TD-601 shape and two of the three would eventually be right.
+function narrativeStyleFor(data) {
+  if (data && data.narrative_style) return data.narrative_style;
+  return genreDefaultStyle('narrative') || 'classic';
+}
+
 function loadLastArtStyle(artStyle, layoutStyle) {
   if (artStyle) state.artStyle = artStyle;
-  else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
+  else {
+    // v3.0.839 -- TD-669. Nothing saved on this version. A genre default wins over whatever
+    // the LAST campaign left in state -- that carry-over is the reason opening a Skill Story
+    // after a Fantasy one would otherwise still say High fantasy, which is TD-680's _default
+    // lesson on a second field.
+    var _gdArt = genreDefaultStyle('art');
+    if (_gdArt) state.artStyle = _gdArt;
+    else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
+  }
   if (layoutStyle && !state.layoutStyle) state.layoutStyle = layoutStyle;
   refreshArtStyleButtons();
   refreshLayoutStyleButtons();
@@ -14395,7 +14439,7 @@ function selectSession(id) {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -17319,7 +17363,7 @@ function reloadSessionForFork() {
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
-      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
