@@ -10196,6 +10196,13 @@ async function publishStory() {
   if (prepUseMember() && _title) { _prepMetaWrite({ book_title: _title }); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
+  // v3.0.831 -- TD-677. Unticked means SAY NOTHING, not "say public". The server already
+  // decides a default it knows more about than this page does -- a sensitive campaign
+  // publishes link-only on its own -- and a client that helpfully sent "public" would
+  // silently overrule it. Sending the field only when it NARROWS is what makes this box
+  // safe to add before the consent gate (TD-667) exists.
+  var _unlistedEl = document.getElementById('prep-unlisted');
+  var _wantUnlisted = _unlistedEl ? !!_unlistedEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
@@ -10218,7 +10225,9 @@ async function publishStory() {
   // This was the twelfth. Same shape as TD-284 and the six queries: a rule
   // consolidated in one place, with one caller never routed through it.
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: _publishSource, title: _title, blurb: _blurb, attested: _attested }) })
+  var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
+  if (_wantUnlisted) _pubBody.visibility = 'unlisted';
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;

@@ -731,6 +731,13 @@
             <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+            <!-- v3.0.831 -- TD-677. The choice belongs HERE, not on the account page after the
+                 fact. Until this shipped, the only route to link-only was publish first and flip
+                 second, which left a family story sitting in the public directory for however
+                 long that took. THE BOX CAN ONLY NARROW: ticked sends visibility=unlisted;
+                 unticked sends NOTHING and the server keeps whatever default it computes, so a
+                 sensitive campaign can never be widened by a client that forgot to ask. -->
+            <label class="prep-attest"><input type="checkbox" id="prep-unlisted" /> <span>Publish as <strong>link only</strong> &mdash; anyone with the link can read it, but it will not be listed in the public Library or offered to search engines. You can change this later from your account page.</span></label>
             <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is
                  pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>

@@ -7970,7 +7970,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // A SENSITIVE story publishes UNLISTED (Ian, 2026-09-09) -- reachable by anyone with
     // the link, absent from the directory and the sitemap -- and its owner can promote it
     // afterwards. No genre is sensitive as of v3.0.828, so today this is always public.
-    var _pubVis = genresvc.isSensitive(campaign && campaign.genres) ? 'unlisted' : 'public';
+    // v3.0.831 -- TD-677. The publisher may ask for link-only ON the publish card. The ask
+    // can only NARROW: an explicit "unlisted" is honoured, and anything else falls through
+    // to the default this route computes from the campaign itself. There is deliberately no
+    // way for a request to widen a sensitive campaign to public from here -- that transition
+    // is what TD-667's consent gate is for, and until it exists the safe answer is that the
+    // client cannot make it at all. Unreachable today; no genre is sensitive until TD-668.
+    var _askUnlisted = !!(req.body && String(req.body.visibility || '').trim() === 'unlisted');
+    var _pubVis = (_askUnlisted || genresvc.isSensitive(campaign && campaign.genres)) ? 'unlisted' : 'public';
     var _shareToken = makeShareToken();
     var _ins = await db.prepare(
       'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, public, created_at, updated_at) ' +
@@ -7988,6 +7995,28 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (_storyId) {
       var _imgSet = {};
       if (coverUrl) _imgSet[coverUrl] = true;
+      // v3.0.831 -- TD-676. CHARACTER PORTRAITS WERE NEVER IN THIS SET.
+      // public_story_images exists so releaseImage() cannot delete bytes a published story
+      // still points at, and it covered the cover and the panel images and nothing else --
+      // while the snapshot ALSO carries every character with its portrait already resolved.
+      // TD-646 says releaseImage already fires when a canonical reference is reverted, so a
+      // published book could lose its cast art with nothing to stop it.
+      // EVERY portrait field is protected, not just the one that renders. Working out which
+      // one castRefFor() would pick means re-deriving a chain that depends on a checkbox the
+      // reader can change; protecting a url that is never drawn costs one row, and guessing
+      // wrong costs a customer their book. Over-protect deliberately.
+      var _PORTRAIT_FIELDS = [
+        'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'canonical_reference_url',
+        'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'image'
+      ];
+      for (var _cx = 0; _cx < (characters || []).length; _cx++) {
+        var _ch = characters[_cx];
+        if (!_ch) continue;
+        for (var _fx = 0; _fx < _PORTRAIT_FIELDS.length; _fx++) {
+          var _u = _ch[_PORTRAIT_FIELDS[_fx]];
+          if (_u && typeof _u === 'string') _imgSet[_u] = true;
+        }
+      }
       for (var _sx = 0; _sx < sessionsWithData.length; _sx++) {
         var _mz = sessionsWithData[_sx].moments || [];
         for (var _mx = 0; _mx < _mz.length; _mx++) { if (_mz[_mx] && _mz[_mx].image) _imgSet[_mz[_mx].image] = true; }
