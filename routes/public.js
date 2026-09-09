@@ -107,7 +107,7 @@ router.get('/stories', async function (req, res) {
     // absent from this directory and from the sitemap, and present everywhere a reader
     // who already holds the link needs it -- including the report form below, which is
     // deliberately still `public = TRUE` alone.
-    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, created_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";
+    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
@@ -120,7 +120,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

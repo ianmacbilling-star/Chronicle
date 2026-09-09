@@ -1550,7 +1550,9 @@ function loadMyStories() {
 // The public Library grid deliberately still links id/slug: those are navigation
 // links inside an indexed page, and pointing them at tokens would fight the canonical.
 function storyShareUrl(it) {
-  if (it && it.share_token) return '/library/story/s/' + it.share_token;
+  // v3.0.830 -- TD-675. token + slug: the token is the identity, the slug keeps the
+  // words in the url for humans and crawlers.
+  if (it && it.share_token) return '/library/story/s/' + it.share_token + '/' + ((it && it.slug) || 'story');
   // Fallback for a row that somehow has no token. Not expected after the v3.0.828
   // backfill, and a dead link is still better than a broken card.
   return '/library/story/' + (it && it.id) + '/' + ((it && it.slug) || 'story');
