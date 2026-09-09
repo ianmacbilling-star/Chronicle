@@ -2573,6 +2573,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      if (typeof applyGenreHints === 'function') applyGenreHints();   // v3.0.835 -- TD-680
       renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
@@ -14367,6 +14368,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      if (typeof applyGenreHints === 'function') applyGenreHints();   // v3.0.835 -- TD-680
       renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
@@ -18777,6 +18779,55 @@ var CS_GENRES = [
   ['skillstory', 'Skill Story'],
   ['other', 'Other (use Prompt)']
 ];
+// v3.0.835 -- TD-680. THE EXAMPLES IN THE SESSION BOXES WERE FANTASY ON EVERY GENRE.
+// Ian, 2026-09-09: "Weren't you going to change the example text written into the Story
+// Instructions when it's a Skill Story or Family Story? Instead of the Fantasy stuff."
+// He is right, and `campaignia_genre_flags_spec.md` 6 asked for it -- it was dropped from
+// the v3.0.834 build without being written down, which is the omission this project keeps
+// calling out in other people's code.
+//
+// A Skill Story has no transcript to paste and no betrayal to stage. Being told to paste a
+// session transcript, and shown an example about Zara betraying the party, is not a small
+// cosmetic mismatch: it is the product telling someone writing about their child's dentist
+// appointment that they are in the wrong place.
+//
+// DISPLAY TEXT, SO IT LIVES HERE. Same line the comment above CS_GENRES already draws.
+// The DEFAULT entry is not decoration: applyGenreHints ALWAYS writes both boxes, so
+// switching from a Skill Story campaign back to a Fantasy one restores the fantasy
+// examples. A hint that only ever gets set is a hint that leaks between campaigns --
+// which is TD-678, and it is not being repeated here.
+var CS_GENRE_HINTS = {
+  _default: {
+    transcript: 'Paste your session transcript here...',
+    notes: 'Give the AI specific instructions...\n\nMANDATORY SCENES:\n- I want a panel showing the moment Zara betrayed the party\n\nVISUAL STYLE:\n- Dark gothic tone, candlelit crypts\n\nCOMPOSITION:\n- Theron should always be shown with his wolf Shadow'
+  },
+  skillstory: {
+    transcript: 'Describe what will happen, one step per line. There is no transcript to paste -- just the steps, in the order they happen.\n\nJohnny is in the waiting room with Mum.\nThe assistant calls Johnny\u2019s name.\nJohnny sits in the big chair and it goes up.\nThe dentist counts Johnny\u2019s teeth.\nJohnny picks a sticker on the way out.',
+    notes: 'Anything specific about this person or this day...\n\nWHO IT IS FOR:\n- Johnny, 6, going for the first time\n\nWORTH EMPHASISING:\n- The chair goes up and down, and that part is fun\n\nBE HONEST ABOUT:\n- The cleaning feels scratchy for a moment. Do not say it will not.'
+  },
+  family: {
+    transcript: 'Tell the story in the order it happened. Paste letters, notes or a recorded conversation if you have them -- or just write it out.\n\nNana grew up on the farm outside Ennis.\nShe met Grandad at the dance hall in 1961.\nThey saved for two years to buy the blue car.',
+    notes: 'Anything specific about this family or this book...\n\nMUST INCLUDE:\n- The story about the blue car\n\nTONE:\n- Warm and gentle; this is for her 80th\n\nNAMES:\n- Always Nana, never Grandmother'
+  }
+};
+
+// Set the example text for whichever genre this campaign is. FIRST declaring genre wins,
+// matching genreDefaults() on the server: a campaign is primarily whatever it named first.
+function applyGenreHints() {
+  try {
+    var t = document.getElementById('transcript-input');
+    var n = document.getElementById('session-notes-input');
+    if (!t && !n) return;
+    var slugs = [];
+    try { slugs = csGenresFrom(state.currentCampaign && state.currentCampaign.genres); } catch (e) { slugs = []; }
+    var hint = null;
+    for (var i = 0; i < slugs.length; i++) { if (CS_GENRE_HINTS[slugs[i]]) { hint = CS_GENRE_HINTS[slugs[i]]; break; } }
+    if (!hint) hint = CS_GENRE_HINTS._default;
+    if (t) t.setAttribute('placeholder', hint.transcript);
+    if (n) n.setAttribute('placeholder', hint.notes);
+  } catch (e) {}
+}
+
 var CS_GENRE_MAX = 3;
 var CS_GENRE_EXCLUSIVE = 'other';
 var _csGenres = [];
