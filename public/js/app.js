@@ -11452,6 +11452,19 @@ function ensureArchivesLoaded(cb, campaignId) {
   }).catch(function(){ state.archives = state.archives || []; cb(); });
 }
 
+// v3.0.844 -- TD-692. THE MOMENT NAME BOX BELOW CARRIES THE v3.0.509 AUTOFILL OPT-OUTS.
+// It was a bare <input type="text"> with a placeholder and no name, no id and no
+// autocomplete -- the exact shape a heuristic filler guesses at -- and Ian was getting his
+// email address dropped into it.
+//
+// The set is copied from the panel-title input (search this file for data-bwignore), which
+// hit the same symptom in v3.0.509: autocomplete="off" alone is widely ignored by password
+// managers, so it also carries 1Password, LastPass, Bitwarden and Dashlane opt-outs. THE
+// ABSENCE OF A `name` IS PART OF THAT DECISION, not an oversight -- a named field is more
+// attractive to a heuristic filler and nothing in this bar submits a form.
+//
+// This function builds the filter bar for BOTH the Archive page and the replace-from-archive
+// picker, so there is one box to fix rather than two that could disagree.
 function archiveFilterBarHTML(f, onchange) {
   var rows = state.archives || [];
   var sessions = {}, moments = {}, creators = {}, styles = {}, versions = {}, characters = {};
@@ -11470,7 +11483,11 @@ function archiveFilterBarHTML(f, onchange) {
   }
   return '<select class="archive-filter" onchange="' + onchange + '(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
-    '<input type="text" class="archive-filter archive-filter-search" placeholder="Moment Name" value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
+    // v3.0.844 -- TD-692. The v3.0.509 opt-out set, verbatim, including no `name` attribute.
+    '<input type="text" class="archive-filter archive-filter-search" placeholder="Moment Name"'
+      + ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
+      + ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"'
+      + ' value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
@@ -13048,11 +13065,28 @@ function renderArchiveGrid() {
   }).join('');
 }
 
-function setArchivePublic(id, makePublic) {
+// v3.0.844 -- TD-691. WARN AND ALLOW. The third argument is the consent the server asks
+// for; it is only ever supplied by the dialog below, never by the caller on the card.
+function setArchivePublic(id, makePublic, consent) {
+  var _body = { public: !!makePublic };
+  if (consent === true) _body.consent = true;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id + '/public', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ public: !!makePublic })
+    body: JSON.stringify(_body)
   }).then(function (r) { return r.json(); }).then(function (d) {
+    // ASK, THEN RETRY. Only on the WIDENING and only when the server asked -- removing an
+    // image never needs consent, and a campaign that is not sensitive never gets here.
+    // The message is the server's own; the dialog is the informed part of informed consent
+    // and NOT the enforcement, which stays where it was (routes/archives.js, TD-664).
+    if (d && d.needs_consent && makePublic && consent !== true && typeof uiConfirm === 'function') {
+      uiConfirm(d.error || 'This image may show a real person. Only add it to the public Library if you have permission to share their name and likeness publicly.',
+        { okText: 'Add it to the Library', cancelText: 'Keep it private' })
+        .then(function (okd) {
+          if (okd) setArchivePublic(id, true, true);
+          else renderArchives();   // put the tick back the way the user left it
+        });
+      return;
+    }
     if (d && d.error) { showError(d.error); renderArchives(); return; }
     var a = (state.archives || []).find(function (x) { return x.id === id; });
     if (a) a.public = !!makePublic;
