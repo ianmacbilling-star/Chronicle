@@ -37,6 +37,17 @@ router.get('/library', async function (req, res) {
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
     const all = req.query.window === 'all';
+    // v3.0.843 -- TD-671. Same rules as the Stories facet (v3.0.487), deliberately: the
+    // value is validated against the fixed list so an arbitrary string can never reach the
+    // SQL, and an UNKNOWN slug is IGNORED rather than returning nothing -- a bookmarked link
+    // carrying a retired genre should degrade to the whole gallery, not to an empty page.
+    // SENSITIVE GENRES ARE NOT EXCLUDED. Ian, 2026-09-09: "if someone publishes a family
+    // story picture or a skill story picture we show it if someone filters for it." An image
+    // its owner deliberately made public is public, and a facet that silently withheld it
+    // would be lying about what the Library contains. The consent gate is where that
+    // decision belongs (TD-664), not the search box.
+    const genreRaw = String(req.query.genre || '').trim().toLowerCase();
+    const genre = genresvc.isGenre(genreRaw) ? genreRaw : '';
     // v3.0.737 -- TD-536. img_w/img_h added so the page can reserve each image's exact space
     // before the bytes arrive. They are already stored on the row; only the SELECT was short.
     const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
@@ -45,6 +56,8 @@ router.get('/library', async function (req, res) {
       const beforeId = parseInt(req.query.beforeId, 10) || 0;
       let sql = SELECT;
       const params = [];
+      // ARRAY[?] && genres uses the GIN index; a join-and-match on a text column would not.
+      if (genre) { sql += ' AND a.genres && ARRAY[?]::text[]'; params.push(genre); }
       if (beforeId > 0) { sql += ' AND a.id < ?'; params.push(beforeId); }
       sql += ' ORDER BY a.id DESC LIMIT ?';
       params.push(limit + 1);
@@ -65,9 +78,16 @@ router.get('/library', async function (req, res) {
     let offset = parseInt(req.query.offset, 10) || 0;
     if (offset < 0) offset = 0;
     const order = "(EXTRACT(EPOCH FROM a.created_at) + " + JITTER_SECONDS + " * ((('x' || substr(md5(a.id::text || '_" + seed + "'), 1, 8))::bit(32)::int)::float8 / 2147483647.0))";
-    const sql = SELECT + " AND a.created_at >= NOW() - INTERVAL '6 months' ORDER BY " + order + ' DESC LIMIT ? OFFSET ?';
+    // The genre clause has to land BEFORE the LIMIT, so this branch builds its parameter
+    // list rather than passing a fixed pair -- the placeholders are positional once db.js
+    // rewrites ? into $n, and an out-of-order argument here is a wrong page, not an error.
+    let sql = SELECT + " AND a.created_at >= NOW() - INTERVAL '6 months'";
+    const params = [];
+    if (genre) { sql += ' AND a.genres && ARRAY[?]::text[]'; params.push(genre); }
+    sql += ' ORDER BY ' + order + ' DESC LIMIT ? OFFSET ?';
+    params.push(limit + 1, offset);
     const stmt = db.prepare(sql);
-    const rows = await stmt.all.apply(stmt, [limit + 1, offset]);
+    const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });

@@ -112,7 +112,7 @@
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
-    #stories-genre { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; margin-left:8px; }
+    #stories-genre, #images-genre { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; margin-left:8px; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -147,6 +147,9 @@
   <div class="lib-filter" id="images-filter">
     <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
     <button class="filter-btn" data-window="all" id="f-all">All Time</button>
+    <!-- v3.0.843 -- TD-671. The image gallery gains the facet the Stories directory has
+         had since v3.0.487, filled from the same /api/public/genres endpoint. -->
+    <select id="images-genre" aria-label="Filter images by genre"><option value="">All genres</option></select>
   </div>
 
   <div class="lib-search" id="stories-search" style="display:none;">
@@ -191,7 +194,7 @@
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
-    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', loading: false, done: false, any: false, tab: 'images' };
+    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', genre: '', loading: false, done: false, any: false, tab: 'images' };
     var sstate = { cursor: 0, q: '', genre: '', loading: false, done: false, any: false };
     var storiesEl = document.getElementById('stories');
     var authorSections = {};
@@ -273,10 +276,14 @@
       state.loading = true;
       spinner();
       var url;
+      // v3.0.843 -- TD-671. Appended to BOTH pagination modes. The server filters each one
+      // separately, so a facet wired to only one of them would work until you pressed the
+      // other tab -- which is the shape of most of the bugs in this file's history.
+      var gq = state.genre ? '&genre=' + encodeURIComponent(state.genre) : '';
       if (state.window === 'all') {
-        url = '/api/public/library?limit=48&window=all' + (state.cursor ? '&beforeId=' + state.cursor : '');
+        url = '/api/public/library?limit=48&window=all' + gq + (state.cursor ? '&beforeId=' + state.cursor : '');
       } else {
-        url = '/api/public/library?limit=48&window=recent&seed=' + state.seed + '&offset=' + state.offset;
+        url = '/api/public/library?limit=48&window=recent' + gq + '&seed=' + state.seed + '&offset=' + state.offset;
       }
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         state.loading = false;
@@ -286,7 +293,7 @@
         if (d && d.nextCursor) state.cursor = d.nextCursor;
         if (!d || !d.hasMore) {
           state.done = true;
-          setStatus(state.any ? '' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>');
+          setStatus(state.any ? '' : (state.genre ? 'No public images in that genre yet.' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
         } else {
           setStatus('');
         }
@@ -423,15 +430,20 @@
     // v3.0.487 -- the picker is built from /api/public/genres, the SAME list the
     // server validates against, so the two cannot drift. If the fetch fails the
     // control simply stays on All genres and the Library still works.
+    // v3.0.843 -- TD-671. ONE fetch fills BOTH pickers. Two fetches of the same fixed list
+    // are two chances for the tabs to disagree about what a genre is called, for no gain.
     var sg = document.getElementById('stories-genre');
-    if (sg) {
+    var ig = document.getElementById('images-genre');
+    if (sg || ig) {
       fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
         ((d && d.genres) || []).forEach(function (g) {
-          var o = document.createElement('option'); o.value = g.slug; o.textContent = g.label; sg.appendChild(o);
+          if (sg) { var o = document.createElement('option'); o.value = g.slug; o.textContent = g.label; sg.appendChild(o); }
+          if (ig) { var o2 = document.createElement('option'); o2.value = g.slug; o2.textContent = g.label; ig.appendChild(o2); }
         });
       }).catch(function () {});
-      sg.addEventListener('change', function () { sstate.genre = sg.value || ''; resetStories(); });
     }
+    if (sg) sg.addEventListener('change', function () { sstate.genre = sg.value || ''; resetStories(); });
+    if (ig) ig.addEventListener('change', function () { state.genre = ig.value || ''; reset(); });
 
     var sq = document.getElementById('stories-q'); var sqTimer = null;
     if (sq) {
