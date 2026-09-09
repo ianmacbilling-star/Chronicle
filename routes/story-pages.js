@@ -83,11 +83,26 @@ async function serveStoryPage(req, res) {
     }
 
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    // The Share button copies pageUrl, so for an unlisted story it MUST be the token
-    // URL -- the id URL 404s, and handing that out would copy a dead link.
-    const pageUrl = unlisted
-      ? (base + '/library/story/s/' + (row.share_token || token))
-      : (base + '/library/story/' + row.id + '/' + wantSlug);
+    // v3.0.829 -- TD-673. TWO URLS, BECAUSE ONE VALUE WAS DOING TWO JOBS AND THEY
+    // DISAGREE. v3.0.828 used a single pageUrl for the canonical tag, og:url AND the
+    // Share button, which was fine only while Share meant "the browsable url".
+    //
+    //   canonicalUrl  what this page IS to a search engine. For a public story that is
+    //                 the id/slug url the sitemap lists; pointing it at a token would
+    //                 split the indexing signal from the url that is actually indexed.
+    //                 For an unlisted story the token url is the only one that resolves,
+    //                 and the page carries noindex anyway.
+    //   shareUrl      what a human should be handed. ALWAYS the token url (Ian,
+    //                 2026-09-09), for every story and not only the link-only ones,
+    //                 because it SURVIVES a later visibility flip. An id url copied
+    //                 today and shared next month is dead the moment its owner makes
+    //                 the story link-only. That is the whole argument.
+    const shareToken = row.share_token || token;
+    const tokenUrl = shareToken ? (base + '/library/story/s/' + shareToken) : '';
+    const idUrl = base + '/library/story/' + row.id + '/' + wantSlug;
+    const canonicalUrl = unlisted ? (tokenUrl || idUrl) : idUrl;
+    const shareUrl = tokenUrl || idUrl;
+    const pageUrl = canonicalUrl;
     const title = row.title || 'Untitled';
     const author = row.author_name || '';
     const cover = row.cover_url || '';
@@ -151,7 +166,7 @@ async function serveStoryPage(req, res) {
               // logo to keep licensed, and they date badly. The page already emits og: and twitter:
               // tags, so a pasted link unfurls with the cover, the title and the blurb wherever it
               // lands. That is what makes a plain link as good as a network button.
-              '<button type="button" id="cmpShare" data-url="' + esc(pageUrl) + '" data-title="' + esc(title) + '" style="display:inline-flex;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;" aria-label="Share this story">' +
+              '<button type="button" id="cmpShare" data-url="' + esc(shareUrl) + '" data-title="' + esc(title) + '" style="display:inline-flex;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;" aria-label="Share this story">' +
                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
                   '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle>' +
                   '<circle cx="18" cy="19" r="3"></circle>' +

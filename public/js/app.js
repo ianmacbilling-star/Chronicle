@@ -1540,11 +1540,27 @@ function loadMyStories() {
     .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
 }
 
+// v3.0.829 -- TD-673. ONE URL BUILDER, USED BY EVERY SHARE AFFORDANCE ON THIS CARD.
+// Every published story has a share token (v3.0.828 mints one at publish and the
+// migration back-filled the rest), so the share link is the TOKEN link for ALL of
+// them, not only the link-only ones. Two reasons, and the second is the important one:
+// it is one url instead of two rules, and it KEEPS WORKING when the story is later
+// made link-only. The id url does not -- it 404s from that moment, and it would have
+// 404ed on this very card, which is how the author would have lost their own book.
+// The public Library grid deliberately still links id/slug: those are navigation
+// links inside an indexed page, and pointing them at tokens would fight the canonical.
+function storyShareUrl(it) {
+  if (it && it.share_token) return '/library/story/s/' + it.share_token;
+  // Fallback for a row that somehow has no token. Not expected after the v3.0.828
+  // backfill, and a dead link is still better than a broken card.
+  return '/library/story/' + (it && it.id) + '/' + ((it && it.slug) || 'story');
+}
+
 function myStoryCard(it) {
   var card = document.createElement('div');
   card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
   var a = document.createElement('a');
-  a.href = '/library/story/' + it.id + '/' + (it.slug || 'story'); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
+  a.href = storyShareUrl(it); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
   if (it.cover_url) {
     var img = document.createElement('img');
@@ -1595,6 +1611,70 @@ function myStoryCard(it) {
   };
   showView();
   card.appendChild(blWrap);
+
+  // v3.0.829 -- TD-673. WHO CAN SEE THIS, AND THE LINK TO HAND SOMEBODY.
+  // Rendered from `it` and re-rendered from the SERVER'S answer after a flip, never
+  // painted optimistically -- the v3.0.817/818 lesson, three times over: anything drawn
+  // onto a card to represent state the server does not know about is destroyed by the
+  // next re-render. renderVis() is the single place that decides what this row looks
+  // like, so approve, flip, failure and a full reload all go through it.
+  var visWrap = document.createElement('div');
+  visWrap.style.cssText = 'padding:0 8px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+  var visBadge = document.createElement('span');
+  var visBtn = document.createElement('button'); visBtn.className = 'btn btn-sm';
+  visBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
+  var copyBtn = document.createElement('button'); copyBtn.className = 'btn btn-sm';
+  copyBtn.textContent = 'Copy link';
+  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
+  var visMsg = document.createElement('span');
+  visMsg.style.cssText = 'font-size:10px;color:rgba(240,232,208,0.6);';
+  visMsg.setAttribute('role', 'status');
+  function renderVis() {
+    var unlisted = (it.visibility === 'unlisted');
+    visBadge.textContent = unlisted ? 'Link only' : 'Public';
+    visBadge.title = unlisted
+      ? 'Anyone with the link can read it. It is not in the Library and search engines are asked to skip it.'
+      : 'Listed in the public Library and open to search engines.';
+    visBadge.style.cssText = 'font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid ' +
+      (unlisted ? 'rgba(201,168,76,0.45);color:rgba(201,168,76,0.95);' : 'rgba(120,200,140,0.45);color:rgba(150,220,170,0.95);');
+    visBtn.textContent = unlisted ? 'Make public' : 'Make link only';
+    // The card link follows the same rule, so it can never point at a url that 404s.
+    a.href = storyShareUrl(it);
+  }
+  visBtn.onclick = function () {
+    var want = (it.visibility === 'unlisted') ? 'public' : 'unlisted';
+    visBtn.disabled = true; visMsg.textContent = 'Saving...';
+    fetch('/api/pdf/story/' + it.id + '/visibility', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: want }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        visBtn.disabled = false;
+        if (d && d.success) {
+          // Take the SERVER'S values, not the ones we asked for. A route that decided
+          // differently must win here, or the card starts lying about the database.
+          it.visibility = d.visibility || 'public';
+          if (d.share_token) it.share_token = d.share_token;
+          visMsg.textContent = '';
+          renderVis();
+          showAlert(it.visibility === 'unlisted' ? 'Only people with the link can see this story now.' : 'This story is listed in the Library again.');
+        } else {
+          visMsg.textContent = '';
+          billingToast((d && d.error) || 'Could not change who can see this story.', 'error');
+        }
+      })
+      .catch(function () { visBtn.disabled = false; visMsg.textContent = ''; billingToast('Could not change who can see this story.', 'error'); });
+  };
+  copyBtn.onclick = function () {
+    var url = window.location.origin + storyShareUrl(it);
+    var done = function () { visMsg.textContent = 'Link copied'; setTimeout(function () { visMsg.textContent = ''; }, 2500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(function () { visMsg.textContent = url; });
+    } else {
+      visMsg.textContent = url;
+    }
+  };
+  renderVis();
+  visWrap.appendChild(visBadge); visWrap.appendChild(visBtn); visWrap.appendChild(copyBtn); visWrap.appendChild(visMsg);
+  card.appendChild(visWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   var armed = false; var tmr = null;
