@@ -7370,6 +7370,22 @@ function switchNovelTab(tab) {
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
   }
+  // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
+  // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
+  // exactly whenever they come back". IT DID NOT. The call was inside `if (tab ===
+  // 'preview')`, so arriving at Order & Publish directly -- which is how anyone who has
+  // just optimized gets there -- never reset anything.
+  //
+  // Ian, 2026-09-09, having worked it out from the outside: "whatever was last published...
+  // that loads up in the Publish to the Library panel... even if it was for another
+  // campaign." He published The Anomalies, opened For All Ages, and its "See it in the
+  // Library" button carried The Anomalies' story url.
+  //
+  // The button lives on THIS tab, so this is where it has to be re-asked. refreshStoryStatus
+  // also re-queries story-status for the campaign actually on screen.
+  if (tab === 'order') {
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
+  }
 }
 
 function selNovelLayout(el, layout) {
@@ -10307,8 +10323,13 @@ function setStoryPublishedUI(published, url) {
   // "See it in the Library" (see novelPublishShowLibraryCta), which is what stops a second
   // click re-publishing the same book by accident. That state has to be undone the next
   // time the card is used, or the button is a dead link to an old story forever. This is
-  // the one place that restores it, and refreshStoryStatus calls it on every entry to the
-  // Order tab -- which is exactly "whenever they come back".
+  // the one place that restores it. refreshStoryStatus calls it on entry to the Order tab
+  // -- which is exactly "whenever they come back".
+  // v3.0.833 -- THAT SENTENCE WAS FALSE FROM THE DAY IT WAS WRITTEN until this build. The
+  // call sat inside `if (tab === 'preview')`, so entering Order & Publish directly reset
+  // nothing and the button kept the previous publish -- from another campaign if that is
+  // where it happened. A comment that asserts a guarantee is worth exactly as much as the
+  // test that proves it; there was none, so it went unnoticed. TD-678.
   btn.textContent = 'Publish to Library';
   btn.disabled = false;
   btn.onclick = publishStory;
@@ -15155,6 +15176,22 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+  }
+  // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
+  // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
+  // exactly whenever they come back". IT DID NOT. The call was inside `if (tab ===
+  // 'preview')`, so arriving at Order & Publish directly -- which is how anyone who has
+  // just optimized gets there -- never reset anything.
+  //
+  // Ian, 2026-09-09, having worked it out from the outside: "whatever was last published...
+  // that loads up in the Publish to the Library panel... even if it was for another
+  // campaign." He published The Anomalies, opened For All Ages, and its "See it in the
+  // Library" button carried The Anomalies' story url.
+  //
+  // The button lives on THIS tab, so this is where it has to be re-asked. refreshStoryStatus
+  // also re-queries story-status for the campaign actually on screen.
+  if (tab === 'order') {
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
   }
 }
 
@@ -25818,6 +25855,31 @@ function resetPublishForCampaignSwitch(force) {
   var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.innerHTML = '';
   var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
   if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
+  // v3.0.833 -- TD-678. PARITY WITH optimizeResetForVersion, WHICH LEARNED ALL OF THIS
+  // ALREADY -- in v3.0.392 and again in v3.0.473 -- AND THE CAMPAIGN PATH WAS NEVER TOLD.
+  // A rule learned on one path and not applied to its twin: TD-601 and TD-604 are the same
+  // shape, and this is the third instance found in a single day.
+  //
+  // The comment above this function says leaving the panes alone "is only safe because the
+  // publish lock stops the user reaching another campaign's Publish page", and warns that
+  // the two changes depend on each other. Ian reached it. The assumption is false, so the
+  // state has to be cleared here rather than relied upon not to be seen.
+  try { _publishSource = 'flow'; } catch (e) {}
+  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+  // The button itself: back to "Publish to Library", and the previous story url off it.
+  try { if (typeof setStoryPublishedUI === 'function') setStoryPublishedUI(false); } catch (e) {}
+  try { var _ps = document.getElementById('novel-publish-status'); if (_ps) { _ps.style.display = 'none'; _ps.textContent = ''; } } catch (e) {}
+  // AND THE CHOICES ON THE CARD, WHICH ARE ABOUT A BOOK THAT IS NO LONGER ON SCREEN.
+  // The attestation is the one that matters: "I own or have the rights to this content" is
+  // a statement about ONE book, and carrying a tick from another campaign means it was
+  // never made about this one. The link-only choice (v3.0.831) is the same argument -- a
+  // tick left armed from another campaign would quietly publish this book link-only.
+  ['prep-attest', 'prep-unlisted'].forEach(function (id) {
+    try { var el = document.getElementById(id); if (el) el.checked = false; } catch (e) {}
+  });
+  try { var _pb = document.getElementById('prep-blurb'); if (_pb) _pb.value = ''; } catch (e) {}
   // Re-pull book meta + title/thumbs for the new campaign.
   if (typeof prepPanelSync === 'function') prepPanelSync();
 }

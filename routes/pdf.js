@@ -7772,6 +7772,44 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // and since v3.0.492 it publishes the SAVED FILE ITSELF rather than a fresh render of the same
   // layout. 'flow' is the admin-only Before book and still takes the full render below.
   var _pubSrc = String((req.body && req.body.source) || req.query.source || 'flow');
+  // v3.0.833 -- TD-679. THE SERVER DECIDES WHICH PATH IT TAKES, NOT THE CLIENT.
+  //
+  // MEASURED, on Ian's 43-page book, 2026-09-09:
+  //   path=flow gather=57ms renderFlattenUpload=109215ms insertRow=80ms imageIndex=280ms
+  // 109 SECONDS re-rendering, re-flattening and re-uploading a book that save-optimized had
+  // already rendered with publicMode, already flattened and already put in the bucket. That
+  // is precisely what v3.0.492 was written to stop, and it happened anyway.
+  //
+  // The reason is that `source` is a CLIENT claim assembled from transient UI state, and
+  // app.js has at least four places that demote _publishSource back to 'flow' -- one sets
+  // it to an empty string outright. The comments beside two of them are about previous
+  // instances of this same demotion. The fallback is not "slightly slower"; it is two
+  // minutes, and it publishes a SECOND RENDER rather than the bytes the author approved.
+  //
+  // TD-610's rule: when a fix depends on being correct about someone else's timing, delete
+  // the dependency rather than model it. If a saved optimized book EXISTS for this campaign
+  // and layout, that is the thing to publish, whatever the client believes. `source` becomes
+  // a hint. The admin Before book stays reachable with ?force_flow=1, which is the only
+  // caller that ever legitimately wanted the full render.
+  //
+  // The composed branch below does its own lookup, so this probe costs one extra metadata
+  // read on the promoted path and nothing at all on the normal one. That is deliberate:
+  // a restructure of the branch itself is a bigger change to the publish path than this
+  // fault is worth, and this way both branches stay exactly as they were.
+  if (_pubSrc !== 'composed' && req.query.force_flow !== '1') {
+    try {
+      var _promoArr = (co && co.arrange) ? co.arrange : 'magazine';
+      var _promoE = await lastOptimizedEntry(req, req.params.campaignId, _promoArr);
+      if (_promoE && _promoE.pdfUrl) {
+        console.warn('[publish-story] client asked for path=' + _pubSrc + ' but a saved optimized book exists for campaign ' + req.params.campaignId + '; publishing THAT instead of re-rendering.');
+        _pubSrc = 'composed';
+      }
+    } catch (e) {
+      // A failed probe must not block a publish. Falling through means the old behaviour,
+      // which is slow but correct -- TD-587: unknown is not the same as no.
+      console.error('[publish-story] fast-path probe failed, falling through to path=' + _pubSrc + ':', e && e.message ? e.message : e);
+    }
+  }
   var html = null;
   let pdfUrl = null;
   var _titleWarning = null;
@@ -7898,6 +7936,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     let pdfBuffer;
     try {
       pdfBuffer = await renderHtmlToPdf(html, { timingLabel: 'publish-story' });
+      _ptLap('render');   // v3.0.833 -- see the split below
     } catch (e) {
       console.error('[publish-story] render failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
@@ -7918,10 +7957,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       // view: the 62 percent it sheds is egress as well as storage. It also means the book someone
       // reads in the Library and the book its author downloads to print are the same file, encoded
       // the same way, rather than two artifacts that merely came from the same source.
+      // v3.0.833 -- THREE LAPS, NOT ONE. `renderFlattenUpload=109215ms` named three
+      // operations and attributed the time to none of them, so the 109 seconds could not be
+      // pinned on Chromium, on Ghostscript (TD-487 says the flatten costs 20x what it needs
+      // to) or on R2. This path should now be unreachable for a real user, which is exactly
+      // why it must be legible if it is ever taken again.
       var _flatS = await flattenPdf(pdfBuffer, 'story');
       pdfBuffer = _flatS.buffer;
+      _ptLap('flatten');
       pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
-      _ptLap('renderFlattenUpload');
+      _ptLap('upload');
     } catch (e) {
       console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
