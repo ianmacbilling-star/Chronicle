@@ -369,7 +369,12 @@
     function renderStoryCard(item) {
       var row = storyAuthorRow(item.author);
       var a = document.createElement('a'); a.className = 'story-card';
-      a.href = '/library/story/' + item.id + '/' + (item.slug || 'story'); a.target = '_blank'; a.rel = 'noopener';
+      // v3.0.830 -- TD-675. Link the canonical token url. An internal link pointing at
+      // a url that only 301s wastes the hop and disagrees with the sitemap.
+      a.href = item.share_token
+        ? ('/library/story/s/' + item.share_token + '/' + (item.slug || 'story'))
+        : ('/library/story/' + item.id + '/' + (item.slug || 'story'));
+      a.target = '_blank'; a.rel = 'noopener';
       if (item.cover_url) {
         var img = document.createElement('img'); img.className = 'sc-cover';
         img.setAttribute('loading', 'lazy'); img.src = item.cover_url; img.alt = item.title || 'story cover';

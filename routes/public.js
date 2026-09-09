@@ -103,7 +103,11 @@ router.get('/stories', async function (req, res) {
     // should degrade to the full Library, not to an empty page.
     const genreRaw = String(req.query.genre || '').trim().toLowerCase();
     const genre = genresvc.isGenre(genreRaw) ? genreRaw : '';
-    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug, genres, created_at FROM public_stories WHERE public = TRUE';
+    // v3.0.828 -- TD-673. An unlisted story is published but not browsable, so it is
+    // absent from this directory and from the sitemap, and present everywhere a reader
+    // who already holds the link needs it -- including the report form below, which is
+    // deliberately still `public = TRUE` alone.
+    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
@@ -116,7 +120,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
@@ -141,10 +145,14 @@ router.post('/report', async function (req, res) {
     if (reporterEmail.length > 200) reporterEmail = reporterEmail.slice(0, 200);
     const db = await getDb();
     let story = null;
-    try { story = await db.prepare('SELECT id, title, slug FROM public_stories WHERE id = ? AND public = TRUE').get(storyId); } catch (e) {}
+    try { story = await db.prepare('SELECT id, title, slug, share_token FROM public_stories WHERE id = ? AND public = TRUE').get(storyId); } catch (e) {}   // share_token v3.0.832 -- the report email must link a url that resolves
     if (!story) return res.status(404).json({ error: 'Story not found.' });
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    const storyUrl = base + '/library/story/' + story.id + '/' + (story.slug || '');
+    // v3.0.832 -- whoever reads this email has to be able to OPEN it, and an unlisted
+    // story is exactly the kind that gets reported by someone holding its link.
+    const storyUrl = story.share_token
+      ? (base + '/library/story/s/' + story.share_token + '/' + (story.slug || 'story'))
+      : (base + '/library/story/' + story.id + '/' + (story.slug || ''));
     // Fire-and-forget; do not block the response on the mailer.
     sendReportEmail({ storyId: story.id, storyTitle: story.title, storyUrl: storyUrl, reason: reason, reporterEmail: reporterEmail })
       .catch(function (e) { console.error('[report] mail error:', e && e.message ? e.message : e); });

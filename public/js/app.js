@@ -1540,11 +1540,29 @@ function loadMyStories() {
     .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
 }
 
+// v3.0.829 -- TD-673. ONE URL BUILDER, USED BY EVERY SHARE AFFORDANCE ON THIS CARD.
+// Every published story has a share token (v3.0.828 mints one at publish and the
+// migration back-filled the rest), so the share link is the TOKEN link for ALL of
+// them, not only the link-only ones. Two reasons, and the second is the important one:
+// it is one url instead of two rules, and it KEEPS WORKING when the story is later
+// made link-only. The id url does not -- it 404s from that moment, and it would have
+// 404ed on this very card, which is how the author would have lost their own book.
+// The public Library grid deliberately still links id/slug: those are navigation
+// links inside an indexed page, and pointing them at tokens would fight the canonical.
+function storyShareUrl(it) {
+  // v3.0.830 -- TD-675. token + slug: the token is the identity, the slug keeps the
+  // words in the url for humans and crawlers.
+  if (it && it.share_token) return '/library/story/s/' + it.share_token + '/' + ((it && it.slug) || 'story');
+  // Fallback for a row that somehow has no token. Not expected after the v3.0.828
+  // backfill, and a dead link is still better than a broken card.
+  return '/library/story/' + (it && it.id) + '/' + ((it && it.slug) || 'story');
+}
+
 function myStoryCard(it) {
   var card = document.createElement('div');
   card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
   var a = document.createElement('a');
-  a.href = '/library/story/' + it.id + '/' + (it.slug || 'story'); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
+  a.href = storyShareUrl(it); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
   if (it.cover_url) {
     var img = document.createElement('img');
@@ -1595,6 +1613,80 @@ function myStoryCard(it) {
   };
   showView();
   card.appendChild(blWrap);
+
+  // v3.0.829 -- TD-673. WHO CAN SEE THIS, AND THE LINK TO HAND SOMEBODY.
+  // Rendered from `it` and re-rendered from the SERVER'S answer after a flip, never
+  // painted optimistically -- the v3.0.817/818 lesson, three times over: anything drawn
+  // onto a card to represent state the server does not know about is destroyed by the
+  // next re-render. renderVis() is the single place that decides what this row looks
+  // like, so approve, flip, failure and a full reload all go through it.
+  var visWrap = document.createElement('div');
+  visWrap.style.cssText = 'padding:0 8px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+  var visBadge = document.createElement('span');
+  var visBtn = document.createElement('button'); visBtn.className = 'btn btn-sm';
+  visBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
+  var copyBtn = document.createElement('button'); copyBtn.className = 'btn btn-sm';
+  copyBtn.textContent = 'Copy link';
+  copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
+  var visMsg = document.createElement('span');
+  visMsg.style.cssText = 'font-size:10px;color:rgba(240,232,208,0.6);';
+  visMsg.setAttribute('role', 'status');
+  function renderVis() {
+    var unlisted = (it.visibility === 'unlisted');
+    visBadge.textContent = unlisted ? 'Link only' : 'Public';
+    visBadge.title = unlisted
+      ? 'Anyone with the link can read it. It is not in the Library and search engines are asked to skip it.'
+      : 'Listed in the public Library and open to search engines.';
+    visBadge.style.cssText = 'font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid ' +
+      (unlisted ? 'rgba(201,168,76,0.45);color:rgba(201,168,76,0.95);' : 'rgba(120,200,140,0.45);color:rgba(150,220,170,0.95);');
+    visBtn.textContent = unlisted ? 'Make public' : 'Make link only';
+    // The card link follows the same rule, so it can never point at a url that 404s.
+    a.href = storyShareUrl(it);
+  }
+  visBtn.onclick = async function () {
+    var want = (it.visibility === 'unlisted') ? 'public' : 'unlisted';
+    // v3.0.832 -- TD-667. Ask ONLY on the widening, and only for a sensitive story. The
+    // server refuses this transition without consent whatever the client does, so this
+    // dialog is the informed part of informed consent and not the enforcement.
+    var _consent = false;
+    if (want === 'public' && it.safety_level === 'sensitive') {
+      _consent = await uiConfirm(
+        'This story may show a real person, possibly a child. Listing it in the public Library makes it browsable by anyone and offers it to search engines.\n\nOnly continue if you have permission to share their name and likeness publicly.',
+        { okText: 'List it publicly', cancelText: 'Keep it link only' });
+      if (!_consent) return;
+    }
+    visBtn.disabled = true; visMsg.textContent = 'Saving...';
+    fetch('/api/pdf/story/' + it.id + '/visibility', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_consent ? { visibility: want, consent: true } : { visibility: want }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        visBtn.disabled = false;
+        if (d && d.success) {
+          // Take the SERVER'S values, not the ones we asked for. A route that decided
+          // differently must win here, or the card starts lying about the database.
+          it.visibility = d.visibility || 'public';
+          if (d.share_token) it.share_token = d.share_token;
+          visMsg.textContent = '';
+          renderVis();
+          showAlert(it.visibility === 'unlisted' ? 'Only people with the link can see this story now.' : 'This story is listed in the Library again.');
+        } else {
+          visMsg.textContent = '';
+          billingToast((d && d.error) || 'Could not change who can see this story.', 'error');
+        }
+      })
+      .catch(function () { visBtn.disabled = false; visMsg.textContent = ''; billingToast('Could not change who can see this story.', 'error'); });
+  };
+  copyBtn.onclick = function () {
+    var url = window.location.origin + storyShareUrl(it);
+    var done = function () { visMsg.textContent = 'Link copied'; setTimeout(function () { visMsg.textContent = ''; }, 2500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(function () { visMsg.textContent = url; });
+    } else {
+      visMsg.textContent = url;
+    }
+  };
+  renderVis();
+  visWrap.appendChild(visBadge); visWrap.appendChild(visBtn); visWrap.appendChild(copyBtn); visWrap.appendChild(visMsg);
+  card.appendChild(visWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   var armed = false; var tmr = null;
@@ -2481,6 +2573,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      if (typeof applyGenreHints === 'function') applyGenreHints();   // v3.0.835 -- TD-680
       renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
@@ -4069,6 +4162,7 @@ function saveOutline() {
 // ============================================================
 var NARR_STYLE_META = [
   { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Campaignia voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
+  { id:'calm', name:'Calm & Literal', desc:'Short, plain sentences in the first person and present tense. Describes what will happen, one step at a time, honestly and without drama.', example:'Soon it will be time to go to the dentist. Mum drives me there in the car. Usually we park outside the front door. Sometimes I wait for a few minutes. That is okay.' },
   { id:'dialogue', name:'Comic Dialogue', desc:'Dialogue-driven comic-book script \u2014 each spoken line led by the speaker, like a graphic novel.', example:'GARRICK: "Hold the line." VENA: "You said that last time."' },
   { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' },
   { id:'epic', name:'Epic Saga', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
@@ -4662,6 +4756,7 @@ function selectStyleCard(kind, id) {
 // ---- Art Styles (shared picker; mirrors selStyle's session persistence) ----
 var ART_STYLE_META = [
   { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
+  { id:'Everyday life illustration', name:'Everyday life', desc:'The same rich, painterly illustration as High fantasy, set in the real world \u2014 ordinary places, clothes and objects, with no fantasy styling. The period comes from your story.' },
   { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
@@ -7277,6 +7372,22 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+  }
+  // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
+  // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
+  // exactly whenever they come back". IT DID NOT. The call was inside `if (tab ===
+  // 'preview')`, so arriving at Order & Publish directly -- which is how anyone who has
+  // just optimized gets there -- never reset anything.
+  //
+  // Ian, 2026-09-09, having worked it out from the outside: "whatever was last published...
+  // that loads up in the Publish to the Library panel... even if it was for another
+  // campaign." He published The Anomalies, opened For All Ages, and its "See it in the
+  // Library" button carried The Anomalies' story url.
+  //
+  // The button lives on THIS tab, so this is where it has to be re-asked. refreshStoryStatus
+  // also re-queries story-status for the campaign actually on screen.
+  if (tab === 'order') {
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
   }
 }
 
@@ -10114,6 +10225,13 @@ async function publishStory() {
   if (prepUseMember() && _title) { _prepMetaWrite({ book_title: _title }); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
+  // v3.0.831 -- TD-677. Unticked means SAY NOTHING, not "say public". The server already
+  // decides a default it knows more about than this page does -- a sensitive campaign
+  // publishes link-only on its own -- and a client that helpfully sent "public" would
+  // silently overrule it. Sending the field only when it NARROWS is what makes this box
+  // safe to add before the consent gate (TD-667) exists.
+  var _unlistedEl = document.getElementById('prep-unlisted');
+  var _wantUnlisted = _unlistedEl ? !!_unlistedEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
@@ -10136,7 +10254,9 @@ async function publishStory() {
   // This was the twelfth. Same shape as TD-284 and the six queries: a rule
   // consolidated in one place, with one caller never routed through it.
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: _publishSource, title: _title, blurb: _blurb, attested: _attested }) })
+  var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
+  if (_wantUnlisted) _pubBody.visibility = 'unlisted';
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;
@@ -10206,8 +10326,13 @@ function setStoryPublishedUI(published, url) {
   // "See it in the Library" (see novelPublishShowLibraryCta), which is what stops a second
   // click re-publishing the same book by accident. That state has to be undone the next
   // time the card is used, or the button is a dead link to an old story forever. This is
-  // the one place that restores it, and refreshStoryStatus calls it on every entry to the
-  // Order tab -- which is exactly "whenever they come back".
+  // the one place that restores it. refreshStoryStatus calls it on entry to the Order tab
+  // -- which is exactly "whenever they come back".
+  // v3.0.833 -- THAT SENTENCE WAS FALSE FROM THE DAY IT WAS WRITTEN until this build. The
+  // call sat inside `if (tab === 'preview')`, so entering Order & Publish directly reset
+  // nothing and the button kept the previous publish -- from another campaign if that is
+  // where it happened. A comment that asserts a guarantee is worth exactly as much as the
+  // test that proves it; there was none, so it went unnoticed. TD-678.
   btn.textContent = 'Publish to Library';
   btn.disabled = false;
   btn.onclick = publishStory;
@@ -14245,6 +14370,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      if (typeof applyGenreHints === 'function') applyGenreHints();   // v3.0.835 -- TD-680
       renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
@@ -15054,6 +15180,22 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+  }
+  // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
+  // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
+  // exactly whenever they come back". IT DID NOT. The call was inside `if (tab ===
+  // 'preview')`, so arriving at Order & Publish directly -- which is how anyone who has
+  // just optimized gets there -- never reset anything.
+  //
+  // Ian, 2026-09-09, having worked it out from the outside: "whatever was last published...
+  // that loads up in the Publish to the Library panel... even if it was for another
+  // campaign." He published The Anomalies, opened For All Ages, and its "See it in the
+  // Library" button carried The Anomalies' story url.
+  //
+  // The button lives on THIS tab, so this is where it has to be re-asked. refreshStoryStatus
+  // also re-queries story-status for the campaign actually on screen.
+  if (tab === 'order') {
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
   }
 }
 
@@ -18635,8 +18777,59 @@ var CS_GENRES = [
   ['historical', 'Historical Fiction'],
   ['literary', 'Literary Fiction'],
   ['nonfiction', 'Nonfiction'],
+  ['family', 'Family Story'],
+  ['skillstory', 'Skill Story'],
   ['other', 'Other (use Prompt)']
 ];
+// v3.0.835 -- TD-680. THE EXAMPLES IN THE SESSION BOXES WERE FANTASY ON EVERY GENRE.
+// Ian, 2026-09-09: "Weren't you going to change the example text written into the Story
+// Instructions when it's a Skill Story or Family Story? Instead of the Fantasy stuff."
+// He is right, and `campaignia_genre_flags_spec.md` 6 asked for it -- it was dropped from
+// the v3.0.834 build without being written down, which is the omission this project keeps
+// calling out in other people's code.
+//
+// A Skill Story has no transcript to paste and no betrayal to stage. Being told to paste a
+// session transcript, and shown an example about Zara betraying the party, is not a small
+// cosmetic mismatch: it is the product telling someone writing about their child's dentist
+// appointment that they are in the wrong place.
+//
+// DISPLAY TEXT, SO IT LIVES HERE. Same line the comment above CS_GENRES already draws.
+// The DEFAULT entry is not decoration: applyGenreHints ALWAYS writes both boxes, so
+// switching from a Skill Story campaign back to a Fantasy one restores the fantasy
+// examples. A hint that only ever gets set is a hint that leaks between campaigns --
+// which is TD-678, and it is not being repeated here.
+var CS_GENRE_HINTS = {
+  _default: {
+    transcript: 'Paste your session transcript here...',
+    notes: 'Give the AI specific instructions...\n\nMANDATORY SCENES:\n- I want a panel showing the moment Zara betrayed the party\n\nVISUAL STYLE:\n- Dark gothic tone, candlelit crypts\n\nCOMPOSITION:\n- Theron should always be shown with his wolf Shadow'
+  },
+  skillstory: {
+    transcript: 'Describe what will happen, one step per line. There is no transcript to paste -- just the steps, in the order they happen.\n\nJohnny is in the waiting room with Mum.\nThe assistant calls Johnny\u2019s name.\nJohnny sits in the big chair and it goes up.\nThe dentist counts Johnny\u2019s teeth.\nJohnny picks a sticker on the way out.',
+    notes: 'Anything specific about this person or this day...\n\nWHO IT IS FOR:\n- Johnny, 6, going for the first time\n\nWORTH EMPHASISING:\n- The chair goes up and down, and that part is fun\n\nBE HONEST ABOUT:\n- The cleaning feels scratchy for a moment. Do not say it will not.'
+  },
+  family: {
+    transcript: 'Tell the story in the order it happened. Paste letters, notes or a recorded conversation if you have them -- or just write it out.\n\nNana grew up on the farm outside Ennis.\nShe met Grandad at the dance hall in 1961.\nThey saved for two years to buy the blue car.',
+    notes: 'Anything specific about this family or this book...\n\nMUST INCLUDE:\n- The story about the blue car\n\nTONE:\n- Warm and gentle; this is for her 80th\n\nNAMES:\n- Always Nana, never Grandmother'
+  }
+};
+
+// Set the example text for whichever genre this campaign is. FIRST declaring genre wins,
+// matching genreDefaults() on the server: a campaign is primarily whatever it named first.
+function applyGenreHints() {
+  try {
+    var t = document.getElementById('transcript-input');
+    var n = document.getElementById('session-notes-input');
+    if (!t && !n) return;
+    var slugs = [];
+    try { slugs = csGenresFrom(state.currentCampaign && state.currentCampaign.genres); } catch (e) { slugs = []; }
+    var hint = null;
+    for (var i = 0; i < slugs.length; i++) { if (CS_GENRE_HINTS[slugs[i]]) { hint = CS_GENRE_HINTS[slugs[i]]; break; } }
+    if (!hint) hint = CS_GENRE_HINTS._default;
+    if (t) t.setAttribute('placeholder', hint.transcript);
+    if (n) n.setAttribute('placeholder', hint.notes);
+  } catch (e) {}
+}
+
 var CS_GENRE_MAX = 3;
 var CS_GENRE_EXCLUSIVE = 'other';
 var _csGenres = [];
@@ -25717,6 +25910,31 @@ function resetPublishForCampaignSwitch(force) {
   var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.innerHTML = '';
   var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
   if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
+  // v3.0.833 -- TD-678. PARITY WITH optimizeResetForVersion, WHICH LEARNED ALL OF THIS
+  // ALREADY -- in v3.0.392 and again in v3.0.473 -- AND THE CAMPAIGN PATH WAS NEVER TOLD.
+  // A rule learned on one path and not applied to its twin: TD-601 and TD-604 are the same
+  // shape, and this is the third instance found in a single day.
+  //
+  // The comment above this function says leaving the panes alone "is only safe because the
+  // publish lock stops the user reaching another campaign's Publish page", and warns that
+  // the two changes depend on each other. Ian reached it. The assumption is false, so the
+  // state has to be cleared here rather than relied upon not to be seen.
+  try { _publishSource = 'flow'; } catch (e) {}
+  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+  // The button itself: back to "Publish to Library", and the previous story url off it.
+  try { if (typeof setStoryPublishedUI === 'function') setStoryPublishedUI(false); } catch (e) {}
+  try { var _ps = document.getElementById('novel-publish-status'); if (_ps) { _ps.style.display = 'none'; _ps.textContent = ''; } } catch (e) {}
+  // AND THE CHOICES ON THE CARD, WHICH ARE ABOUT A BOOK THAT IS NO LONGER ON SCREEN.
+  // The attestation is the one that matters: "I own or have the rights to this content" is
+  // a statement about ONE book, and carrying a tick from another campaign means it was
+  // never made about this one. The link-only choice (v3.0.831) is the same argument -- a
+  // tick left armed from another campaign would quietly publish this book link-only.
+  ['prep-attest', 'prep-unlisted'].forEach(function (id) {
+    try { var el = document.getElementById(id); if (el) el.checked = false; } catch (e) {}
+  });
+  try { var _pb = document.getElementById('prep-blurb'); if (_pb) _pb.value = ''; } catch (e) {}
   // Re-pull book meta + title/thumbs for the new campaign.
   if (typeof prepPanelSync === 'function') prepPanelSync();
 }

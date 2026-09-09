@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
+const { getDb, makeShareToken, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -7772,6 +7772,44 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // and since v3.0.492 it publishes the SAVED FILE ITSELF rather than a fresh render of the same
   // layout. 'flow' is the admin-only Before book and still takes the full render below.
   var _pubSrc = String((req.body && req.body.source) || req.query.source || 'flow');
+  // v3.0.833 -- TD-679. THE SERVER DECIDES WHICH PATH IT TAKES, NOT THE CLIENT.
+  //
+  // MEASURED, on Ian's 43-page book, 2026-09-09:
+  //   path=flow gather=57ms renderFlattenUpload=109215ms insertRow=80ms imageIndex=280ms
+  // 109 SECONDS re-rendering, re-flattening and re-uploading a book that save-optimized had
+  // already rendered with publicMode, already flattened and already put in the bucket. That
+  // is precisely what v3.0.492 was written to stop, and it happened anyway.
+  //
+  // The reason is that `source` is a CLIENT claim assembled from transient UI state, and
+  // app.js has at least four places that demote _publishSource back to 'flow' -- one sets
+  // it to an empty string outright. The comments beside two of them are about previous
+  // instances of this same demotion. The fallback is not "slightly slower"; it is two
+  // minutes, and it publishes a SECOND RENDER rather than the bytes the author approved.
+  //
+  // TD-610's rule: when a fix depends on being correct about someone else's timing, delete
+  // the dependency rather than model it. If a saved optimized book EXISTS for this campaign
+  // and layout, that is the thing to publish, whatever the client believes. `source` becomes
+  // a hint. The admin Before book stays reachable with ?force_flow=1, which is the only
+  // caller that ever legitimately wanted the full render.
+  //
+  // The composed branch below does its own lookup, so this probe costs one extra metadata
+  // read on the promoted path and nothing at all on the normal one. That is deliberate:
+  // a restructure of the branch itself is a bigger change to the publish path than this
+  // fault is worth, and this way both branches stay exactly as they were.
+  if (_pubSrc !== 'composed' && req.query.force_flow !== '1') {
+    try {
+      var _promoArr = (co && co.arrange) ? co.arrange : 'magazine';
+      var _promoE = await lastOptimizedEntry(req, req.params.campaignId, _promoArr);
+      if (_promoE && _promoE.pdfUrl) {
+        console.warn('[publish-story] client asked for path=' + _pubSrc + ' but a saved optimized book exists for campaign ' + req.params.campaignId + '; publishing THAT instead of re-rendering.');
+        _pubSrc = 'composed';
+      }
+    } catch (e) {
+      // A failed probe must not block a publish. Falling through means the old behaviour,
+      // which is slow but correct -- TD-587: unknown is not the same as no.
+      console.error('[publish-story] fast-path probe failed, falling through to path=' + _pubSrc + ':', e && e.message ? e.message : e);
+    }
+  }
   var html = null;
   let pdfUrl = null;
   var _titleWarning = null;
@@ -7898,6 +7936,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     let pdfBuffer;
     try {
       pdfBuffer = await renderHtmlToPdf(html, { timingLabel: 'publish-story' });
+      _ptLap('render');   // v3.0.833 -- see the split below
     } catch (e) {
       console.error('[publish-story] render failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
@@ -7918,10 +7957,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       // view: the 62 percent it sheds is egress as well as storage. It also means the book someone
       // reads in the Library and the book its author downloads to print are the same file, encoded
       // the same way, rather than two artifacts that merely came from the same source.
+      // v3.0.833 -- THREE LAPS, NOT ONE. `renderFlattenUpload=109215ms` named three
+      // operations and attributed the time to none of them, so the 109 seconds could not be
+      // pinned on Chromium, on Ghostscript (TD-487 says the flatten costs 20x what it needs
+      // to) or on R2. This path should now be unreachable for a real user, which is exactly
+      // why it must be legible if it is ever taken again.
       var _flatS = await flattenPdf(pdfBuffer, 'story');
       pdfBuffer = _flatS.buffer;
+      _ptLap('flatten');
       pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
-      _ptLap('renderFlattenUpload');
+      _ptLap('upload');
     } catch (e) {
       console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
@@ -7964,10 +8009,31 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // TD-219 -- the published thing is the thing that was published. Resolved via
     // services/genres.js so NULL and junk still land as fantasy.
     var _pubGenres = '{' + genresvc.campaignGenres(campaign && campaign.genres).join(',') + '}';
+    // v3.0.828 -- TD-673. VISIBILITY IS DECIDED HERE AND FROZEN, exactly like the genre
+    // snapshot above it and for the same TD-219 reason: the published thing is the thing
+    // that was published, and a later edit to the campaign must not silently re-file it.
+    // A SENSITIVE story publishes UNLISTED (Ian, 2026-09-09) -- reachable by anyone with
+    // the link, absent from the directory and the sitemap -- and its owner can promote it
+    // afterwards. No genre is sensitive as of v3.0.828, so today this is always public.
+    // v3.0.831 -- TD-677. The publisher may ask for link-only ON the publish card. The ask
+    // can only NARROW: an explicit "unlisted" is honoured, and anything else falls through
+    // to the default this route computes from the campaign itself. There is deliberately no
+    // way for a request to widen a sensitive campaign to public from here -- that transition
+    // is what TD-667's consent gate is for, and until it exists the safe answer is that the
+    // client cannot make it at all. Unreachable today; no genre is sensitive until TD-668.
+    var _askUnlisted = !!(req.body && String(req.body.visibility || '').trim() === 'unlisted');
+    // v3.0.832 -- TD-666. RESOLVED ONCE. The verdict that gets stored and the verdict the
+    // visibility default is derived from are now provably the same value -- two calls to
+    // campaignSafety() could not disagree today, but they are exactly the kind of pair
+    // that drifts when someone edits one of them.
+    var _pubSafety = genresvc.campaignSafety(campaign && campaign.genres);
+    var _pubSensitive = (_pubSafety === genresvc.SAFETY_SENSITIVE);
+    var _pubVis = (_askUnlisted || _pubSensitive) ? 'unlisted' : 'public';
+    var _shareToken = makeShareToken();
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, safety_level, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?, ?, ?, TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
     _ptLap('insertRow');
   } catch (e) {
@@ -7980,6 +8046,28 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (_storyId) {
       var _imgSet = {};
       if (coverUrl) _imgSet[coverUrl] = true;
+      // v3.0.831 -- TD-676. CHARACTER PORTRAITS WERE NEVER IN THIS SET.
+      // public_story_images exists so releaseImage() cannot delete bytes a published story
+      // still points at, and it covered the cover and the panel images and nothing else --
+      // while the snapshot ALSO carries every character with its portrait already resolved.
+      // TD-646 says releaseImage already fires when a canonical reference is reverted, so a
+      // published book could lose its cast art with nothing to stop it.
+      // EVERY portrait field is protected, not just the one that renders. Working out which
+      // one castRefFor() would pick means re-deriving a chain that depends on a checkbox the
+      // reader can change; protecting a url that is never drawn costs one row, and guessing
+      // wrong costs a customer their book. Over-protect deliberately.
+      var _PORTRAIT_FIELDS = [
+        'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'canonical_reference_url',
+        'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'image'
+      ];
+      for (var _cx = 0; _cx < (characters || []).length; _cx++) {
+        var _ch = characters[_cx];
+        if (!_ch) continue;
+        for (var _fx = 0; _fx < _PORTRAIT_FIELDS.length; _fx++) {
+          var _u = _ch[_PORTRAIT_FIELDS[_fx]];
+          if (_u && typeof _u === 'string') _imgSet[_u] = true;
+        }
+      }
       for (var _sx = 0; _sx < sessionsWithData.length; _sx++) {
         var _mz = sessionsWithData[_sx].moments || [];
         for (var _mx = 0; _mx < _mz.length; _mx++) { if (_mz[_mx] && _mz[_mx].image) _imgSet[_mz[_mx].image] = true; }
@@ -8008,7 +8096,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
     mismatch: _mismatch,                                        // v3.0.798 -- TD-608
     storyId: _outId, slug: slug || null,
-    storyUrl: _outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null });
+    // v3.0.832 -- THE TOKEN URL, because this link is handed to a person and it must
+    // work for a story that was just published as link-only. The id url 404s for one.
+    // Falls back to the id url only if there is somehow no token, which then 301s.
+    storyUrl: _shareToken ? ('/library/story/s/' + _shareToken + (slug ? ('/' + slug) : ''))
+      : (_outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null) });
 });
 
 // Unpublish the caller's OWN story for a campaign (admin moderation is separate).
@@ -8041,8 +8133,12 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', created_at: r.created_at }; });
+    // v3.0.828 -- TD-673. DELIBERATELY STILL `public = TRUE` AND NOTHING MORE. An author
+    // must see their own unlisted stories or they lose sight of their own books, which is
+    // the failure nobody thinks to test. visibility and share_token ride along so the
+    // page can badge the state and offer the link that actually works for it.
+    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
@@ -8093,6 +8189,57 @@ router.post('/story/:id/blurb', requireAuth, async function(req, res) {
   } catch (e) {
     console.error('[story blurb] failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not save your blurb.' });
+  }
+});
+
+// v3.0.828 -- TD-673. Flip ONE published story between browsable and link-only.
+// Owner-only via user_id, like every other route in this group. The token is NOT
+// re-minted on either transition -- that is the whole point of minting it for every
+// story: a link somebody already has keeps working whichever way this is flipped.
+// Anything that is not exactly 'unlisted' is treated as 'public', so a malformed
+// body can only ever widen to the state the product had before this build, never
+// silently hide a story its author believes is listed.
+// v3.0.832 -- TD-667. THE CONSENT GATE, AND IT GUARDS EXACTLY ONE TRANSITION.
+//
+// The private-by-default floor was never built because it already existed: a story is
+// public only if a row exists here, and only publishing creates one. The warning is the
+// LAST gate, not the only one, and it belongs on the step where the answer is genuinely
+// in doubt -- making a story about a real, possibly small person BROWSABLE.
+//
+// Fired at every publish it would be noise, and a warning people learn to click through
+// protects nobody. With unlisted as the default for a sensitive story (v3.0.828), this
+// fires once, on the deliberate widening, which is the whole argument for that default.
+//
+// NARROWING IS NEVER GATED, for any reason. Returns null to allow, or { status, body }.
+function storyVisibilityRefusal(sensitive, wantPublic, consent) {
+  if (!wantPublic) return null;
+  if (!sensitive) return null;
+  if (consent !== true) {
+    return { status: 400, body: { error: 'This story may show a real person, possibly a child. Only list it in the public Library if you have permission to share their name and likeness publicly.', sensitive: true, needs_consent: true } };
+  }
+  return null;
+}
+
+router.post('/story/:id/visibility', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var want = (req.body && String(req.body.visibility || '').trim() === 'unlisted') ? 'unlisted' : 'public';
+    // v3.0.832 -- READ FIRST, THEN DECIDE, THEN WRITE. This route used to UPDATE and only
+    // afterwards look for the row, which was harmless while nothing could refuse and is
+    // not harmless now: a gate that runs after the write is not a gate.
+    var row = await db.prepare('SELECT visibility, share_token, safety_level FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'Story not found.' });
+    // The FROZEN verdict on the row, never re-derived from the campaign (TD-666).
+    var _sensitive = String(row.safety_level || 'standard') === 'sensitive';
+    var _refusal = storyVisibilityRefusal(_sensitive, want === 'public', !!(req.body && req.body.consent === true));
+    if (_refusal) return res.status(_refusal.status).json(_refusal.body);
+    await db.prepare('UPDATE public_stories SET visibility = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(want, new Date().toISOString(), req.params.id, req.session.userId);
+    row = await db.prepare('SELECT visibility, share_token FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'Story not found.' });
+    return res.json({ success: true, visibility: row.visibility || 'public', share_token: row.share_token || '' });
+  } catch (e) {
+    console.error('[story visibility] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not change who can see this story.' });
   }
 });
 
@@ -14386,6 +14533,8 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
 });
 
 module.exports = router;
+// Exported for the apply-script guard, which executes the gate rather than reading it.
+module.exports.storyVisibilityRefusal = storyVisibilityRefusal;
 module.exports.buildNovelHTML = buildNovelHTML;
 module.exports.assembleNovelHtml = assembleNovelHtml;
 // v3.0.539 -- exported for the frame fidelity probe (TD-351) so its control arm calls the SHIPPING

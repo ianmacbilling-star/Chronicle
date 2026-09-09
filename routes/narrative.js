@@ -147,15 +147,42 @@ function repairUnescapedQuotes(src) {
 }
 // ============================================================
 const NARRATIVE_STYLES = (function () {
-  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
+  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
   const DIALOGUE_IP_GUARD = ' COPYRIGHT \u2014 You MAY quote or lightly adapt what the players and characters actually say and do in THIS session\'s transcript; that is the user\'s own gameplay and is fair to use. But never reproduce verbatim or near-verbatim passages of PUBLISHED source text (published adventure modules, rulebooks, or novels); if such material is pasted into the transcript, retell it in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise.';
+  // v3.0.837 -- TD-682. THE SYSTEM PROMPT NO LONGER DECLARES A GENRE, AND NOTHING WAS
+  // MOVED TO COMPENSATE -- because the genre was already in the voice blocks all along.
+  //
+  // Ian asked whether the fantasy instruction was being MOVED into the narrative prompts.
+  // It is not: it is being REMOVED, and here is why nothing is lost. Every voice that is
+  // meant to be fantasy already says so itself -- noir opens "Fantasy-noir", grim opens
+  // "Dark fantasy", storybook says "like a children's fantasy story", classic says "like a
+  // fantasy novel", and epic, journal and lorekeeper carry it in their imagery (a legendary
+  // saga, an adventurer's journal, an in-world historian). The steering lives in the voice.
+  //
+  // THE ONE VOICE WITH NO GENRE IN IT IS CINEMATIC, deliberately -- it is pure technique
+  // ("storyboard description... SHORT, punchy sentences... avoid flowery language"). That is
+  // precisely the voice a Biography, a Nonfiction piece or a Family Story would reach for,
+  // and it is the one this system prompt was overriding.
+  //
+  // AND IT WAS DOING GENRE'S JOB. genreSteering() already tells the model what the story is
+  // about and how it should feel -- "Wonder and scale. Treat the impossible as real and
+  // unremarked" for Fantasy, and something entirely different for the other fourteen. A
+  // system prompt that declares fantasy outranks all of it. TD-507 recorded that exact
+  // failure once already, and v3.0.744 below fixed it for ONE style; this is the rest of
+  // the set, which is rule 5c.
+  //
+  // WHAT THIS DOES NOT FIX, said plainly: two voice blocks still name the genre themselves
+  // -- classic ("like a fantasy novel") and storybook ("a children's fantasy story"). That
+  // is arguably correct for classic, which is the fantasy default, but it means Storybook is
+  // still fantasy-flavoured for a Family Story. Changing a shipped voice changes the prose
+  // of every book already using it, so it is a separate decision and not a silent one.
   // v3.0.744 -- TD-543. "a real session": the word real is the load-bearing part, not the genre.
   const DIALOGUE_SYS = 'You are a comic-book script writer turning a real session into dialogue-driven graphic-novel script. You always return valid JSON.' + DIALOGUE_IP_GUARD;
   return {
     classic: {
       name: 'Classic',
       voice: `Vivid, dramatic, and engaging — like a fantasy novel or comic-book caption. Use PRESENT tense and THIRD-PERSON narrative voice. Capture mood, tension, and drama.\nExample: "Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat."`,
-      system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.' + IP_GUARD
+      system: 'You are a skilled author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for graphic novels. You always return valid JSON.' + IP_GUARD
     },
     epic: {
       name: 'Epic Saga',
@@ -186,6 +213,38 @@ const NARRATIVE_STYLES = (function () {
       name: 'Dark Fantasy / Grim',
       voice: `Dark fantasy: bleak, heavy, ominous, and visceral. Emphasize dread, decay, and the harshness of the world. Use vivid, unsettling imagery and weighty descriptions. Avoid humor. Highlight the danger and cost of every choice.\nExample: "Blood soaked into the stone, vanishing as if the earth itself were thirsty. In the silence that followed, even hope felt like a dying ember."`,
       system: SYS
+    },
+    // v3.0.836 -- TD-681. THE SKILL STORY VOICE, and it carries its OWN system prompt.
+    // That is the load-bearing decision, not the wording below. Classic already asks for
+    // PRESENT tense and did not get it -- Ian's dentist story came back "Earlier that same
+    // morning, Johnny sat buckled..." -- because classic's system prompt says "You are a
+    // skilled fantasy author writing graphic novel narrative prose". TD-507 is already on
+    // record for exactly this: THE SYSTEM PROMPT SAID FANTASY AND OUTRANKED EVERYTHING THAT
+    // SAID OTHERWISE. Putting better rules in a voice block under SYS would lose the same way.
+    //
+    // The rules below are the published Social Story method (Carol Gray), researched rather
+    // than remembered -- see claude/SKILL_STORY_METHOD_SPEC.md for sources. THE NAME IS
+    // TRADEMARKED AND THE METHOD IS NOT: follow the criteria, never use the name.
+    //
+    // The two rules most easily lost, and the reasons they matter:
+    //   * THE 2:1 RATIO. At least two describing sentences per coaching sentence. Without it
+    //     the story becomes a list of demands, which is the failure the ratio exists to stop.
+    //   * NO ABSOLUTES. "Usually" and "sometimes", never "always" or "I will be quiet".
+    //     A story that states an absolute the day then breaks has taught the child it lies.
+    // And feelings are normalised generally, NEVER asserted about the person as observed
+    // fact: "his expression hovering somewhere between curiosity and quiet uncertainty" tells
+    // a nervous child that they were uncertain.
+    calm: {
+      name: 'Calm & Literal',
+      voice: `Calm, literal and reassuring \u2014 a story that prepares a real person for something that is going to happen.
+FIRST person ("I"), PRESENT tense, with simple future for what happens next. NEVER second person \u2014 no "you", which reads as an instruction rather than a description. Short sentences, one idea each.
+Describe what will happen, in order, in concrete observable terms, and answer who, what, when, where and why. No metaphor, no simile, no figurative language of any kind. Precise verbs.
+AT LEAST TWO describing sentences for every one that suggests what the person can do, and suggest rather than instruct: "I can try to hold still", never "I will hold still".
+Use "usually", "sometimes" and "often". NEVER "always", "everyone" or any promise the day might not keep.
+Name feelings gently and in general \u2014 "Some children feel a little nervous, and that is okay" \u2014 and never state as fact how this person feels or looks.
+Be honest about the parts that are uncomfortable and NEVER promise that something will not hurt. No "should", no "bad", no judgement anywhere. End on a calm, positive, true note.
+Example: "Soon it will be time to go to the dentist. Mum drives me there in the car. Usually we park outside the front door. In the waiting room there are chairs and some books. Sometimes I wait for a few minutes. That is okay."`,
+      system: 'You write calm, literal, first-person stories that prepare a real person for something that is going to happen. You are not a novelist. You never write dramatically, never use metaphor or simile, and never invent how someone feels. You always return valid JSON.' + IP_GUARD
     },
     storybook: {
       name: "Children's Storybook",

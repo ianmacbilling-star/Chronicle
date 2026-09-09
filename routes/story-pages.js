@@ -47,26 +47,88 @@ const PWA_HEAD =
 // Public, server-rendered per-story page. Real HTML (title, author, blurb,
 // teaser, and the full reading view) so search engines can index it. Built from
 // the frozen snapshot taken at publish, never live campaign data.
-router.get('/library/story/:id/:slug?', async function (req, res) {
+async function serveStoryPage(req, res) {
   function notFound() {
     res.status(404).sendFile(path.join(__dirname, '..', 'public', '404.html'));
   }
   try {
     const db = await getDb();
-    const id = parseInt(req.params.id, 10);
-    if (!id) return notFound();
-    const row = await db.prepare(
-      'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at FROM public_stories WHERE id = ? AND public = TRUE'
-    ).get(id);
+    // v3.0.828 -- TD-673. TWO DOORS, AND THEY ARE NOT EQUIVALENT.
+    //   /library/story/s/<token>  serves ANY published story, whatever its visibility.
+    //   /library/story/:id/:slug  serves ONLY a browsable one.
+    // THE ID DOOR MUST NOT REDIRECT AN UNLISTED STORY TO ITS TOKEN URL. Ids are SERIAL
+    // and the slug is optional, so this route used to hand back the canonical URL for
+    // any id you asked about -- which would have handed out the secret to anyone walking
+    // ids and made "link only" meaningless. It 404s instead, and that 404 is
+    // indistinguishable from a story that was never published.
+    const token = String(req.params.token || '').trim();
+    let row = null;
+    if (token) {
+      row = await db.prepare(
+        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
+      ).get(token);
+    } else {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return notFound();
+      row = await db.prepare(
+        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
+      ).get(id);
+    }
     if (!row) return notFound();
+    const unlisted = String(row.visibility || 'public') !== 'public';
 
     const wantSlug = row.slug || slugify(row.title);
-    if (req.params.slug !== wantSlug) {
-      return res.redirect(301, '/library/story/' + row.id + '/' + wantSlug);
+    const shareToken = row.share_token || token;
+    // v3.0.830 -- TD-675. THE ID URL IS NOW A REDIRECT AND NOTHING ELSE.
+    // It exists to keep urls that are already indexed, and links already shared, from
+    // becoming dead ends -- a 301 hands the ranking to the token url instead of losing
+    // it. An UNLISTED story never reaches this line: the lookup above filters it out
+    // and we have already 404ed, which is the rule that must not be relaxed here.
+    // If a legacy row somehow has no token we render in place rather than redirect to
+    // a url that cannot resolve -- a missing token is not a reason to serve a 404.
+    // Belt and braces: the SQL above already excludes an unlisted story from the id
+    // door, and this line means the leak still cannot happen if someone later loosens
+    // that WHERE clause. One filter is a single point of failure for the one rule in
+    // this feature that must never relax.
+    if (!token && unlisted) return notFound();
+    if (!token && shareToken) {
+      return res.redirect(301, '/library/story/s/' + shareToken + '/' + wantSlug);
+    }
+    // Canonicalise the slug on the token url itself. Redirecting here is safe in a way
+    // it is NOT on the id url: whoever asked already holds the token, so nothing is
+    // being handed to anyone who did not have it.
+    if (token && req.params.slug !== wantSlug) {
+      return res.redirect(301, '/library/story/s/' + token + '/' + wantSlug);
     }
 
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    const pageUrl = base + '/library/story/' + row.id + '/' + wantSlug;
+    // v3.0.829 -- TD-673. TWO URLS, BECAUSE ONE VALUE WAS DOING TWO JOBS AND THEY
+    // DISAGREE. v3.0.828 used a single pageUrl for the canonical tag, og:url AND the
+    // Share button, which was fine only while Share meant "the browsable url".
+    //
+    //   canonicalUrl  what this page IS to a search engine. For a public story that is
+    //                 the id/slug url the sitemap lists; pointing it at a token would
+    //                 split the indexing signal from the url that is actually indexed.
+    //                 For an unlisted story the token url is the only one that resolves,
+    //                 and the page carries noindex anyway.
+    //   shareUrl      what a human should be handed. ALWAYS the token url (Ian,
+    //                 2026-09-09), for every story and not only the link-only ones,
+    //                 because it SURVIVES a later visibility flip. An id url copied
+    //                 today and shared next month is dead the moment its owner makes
+    //                 the story link-only. That is the whole argument.
+    // v3.0.830 -- TD-675. ONE URL SHAPE FOR EVERY STORY: /library/story/s/<token>/<slug>.
+    // The token is the identity and the slug is there for humans and for crawlers --
+    // these pages exist to be indexed (see the v3.0.435 note below), and an opaque
+    // token with no words in it throws away the one part of the url that carries
+    // meaning. Ian, 2026-09-09: "I kinda do not like using the IDs in there if we can
+    // help it" -- and keeping the SEO feature was the condition on doing it.
+    // canonical, og:url, Share and the sitemap now all agree on this one shape, which
+    // is what makes the id url safe to retire to a redirect.
+    const tokenUrl = shareToken ? (base + '/library/story/s/' + shareToken + '/' + wantSlug) : '';
+    const idUrl = base + '/library/story/' + row.id + '/' + wantSlug;
+    const canonicalUrl = tokenUrl || idUrl;
+    const shareUrl = canonicalUrl;
+    const pageUrl = canonicalUrl;
     const title = row.title || 'Untitled';
     const author = row.author_name || '';
     const cover = row.cover_url || '';
@@ -89,6 +151,10 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     const seo =
       '<title>' + esc(title) + (author ? ' &mdash; by ' + esc(author) : '') + ' | Campaignia</title>' +
       '<meta name="description" content="' + esc(metaDesc) + '" />' +
+      // Out of the sitemap is not enough on its own: a crawler that finds a forwarded
+      // link anywhere will index the page, and then "link only" means nothing. The og:
+      // and twitter: tags stay, so a link the owner deliberately shares still unfurls.
+      (unlisted ? '<meta name="robots" content="noindex,nofollow" />' : '') +
       '<link rel="canonical" href="' + esc(pageUrl) + '" />' +
       '<meta property="og:type" content="article" />' +
       '<meta property="og:site_name" content="Campaignia" />' +
@@ -126,7 +192,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
               // logo to keep licensed, and they date badly. The page already emits og: and twitter:
               // tags, so a pasted link unfurls with the cover, the title and the blurb wherever it
               // lands. That is what makes a plain link as good as a network button.
-              '<button type="button" id="cmpShare" data-url="' + esc(pageUrl) + '" data-title="' + esc(title) + '" style="display:inline-flex;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;" aria-label="Share this story">' +
+              '<button type="button" id="cmpShare" data-url="' + esc(shareUrl) + '" data-title="' + esc(title) + '" style="display:inline-flex;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;" aria-label="Share this story">' +
                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
                   '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle>' +
                   '<circle cx="18" cy="19" r="3"></circle>' +
@@ -219,7 +285,11 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     console.error('[story-page] failed:', e && e.message ? e.message : e);
     return notFound();
   }
-});
+}
+// v3.0.828 -- TD-673. The token door is registered FIRST so that a story whose slug
+// happens to be 's' can never shadow it.
+router.get('/library/story/s/:token/:slug?', serveStoryPage);
+router.get('/library/story/:id/:slug?', serveStoryPage);
 
 function xmlEsc(s) {
   return String(s == null ? '' : s)
@@ -237,7 +307,7 @@ router.get('/sitemap.xml', async function (req, res) {
   try {
     const db = await getDb();
     var base = baseUrl();
-    var cnt = await db.prepare('SELECT COUNT(*) AS n FROM public_stories WHERE public = TRUE').get();
+    var cnt = await db.prepare("SELECT COUNT(*) AS n FROM public_stories WHERE public = TRUE AND visibility = 'public'").get();   // v3.0.828 -- TD-673, unlisted stories are not enumerated
     var n = cnt ? Number(cnt.n) : 0;
     var chunks = Math.max(1, Math.ceil(n / SITEMAP_CHUNK));
     var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -273,12 +343,17 @@ router.get('/sitemap-stories.xml', async function (req, res) {
     var base = baseUrl();
     var page = parseInt(req.query.page, 10); if (!page || page < 1) page = 1;
     var offset = (page - 1) * SITEMAP_CHUNK;
-    var rows = await db.prepare('SELECT id, slug, title, created_at, updated_at FROM public_stories WHERE public = TRUE ORDER BY id ASC LIMIT ? OFFSET ?').all(SITEMAP_CHUNK, offset);
+    var rows = await db.prepare("SELECT id, slug, title, share_token, created_at, updated_at FROM public_stories WHERE public = TRUE AND visibility = 'public' ORDER BY id ASC LIMIT ? OFFSET ?").all(SITEMAP_CHUNK, offset);   // v3.0.828 -- TD-673; share_token added v3.0.830 -- TD-675
     var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
     (rows || []).forEach(function (r) {
       var slug = r.slug || slugify(r.title);
-      var loc = base + '/library/story/' + r.id + '/' + slug;
+      // v3.0.830 -- TD-675. The sitemap must list the CANONICAL url or the two disagree
+      // and the id url gets indexed only to redirect. Falls back to the id url for a
+      // legacy row with no token, which then 301s -- correct, just one hop slower.
+      var loc = r.share_token
+        ? (base + '/library/story/s/' + r.share_token + '/' + slug)
+        : (base + '/library/story/' + r.id + '/' + slug);
       var when = r.updated_at || r.created_at;
       var lm = '';
       if (when) { try { lm = new Date(when).toISOString(); } catch (e) { lm = ''; } }
