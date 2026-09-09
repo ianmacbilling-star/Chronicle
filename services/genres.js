@@ -16,6 +16,16 @@
 //   4. Style owns the VOICE; genre owns the SUBJECT and TONE. They compose and
 //      neither overrides - and the prompt SAYS SO, because Horror plus
 //      Children's Storybook will be attempted by a real user.
+//   5. SAFETY IS A PROPERTY OF THE CAMPAIGN, NOT OF A GENRE  (v3.0.827, TD-665).
+//      A campaign holds up to THREE genres, so a per-genre flag is not an answer
+//      until something reduces the list to ONE verdict. campaignSafety() is that
+//      reduction and it is the ONLY one: SENSITIVE IF ANY SELECTED GENRE IS
+//      SENSITIVE. The gate exists to protect a real person who may appear in the
+//      book, and adding a second genre cannot un-appear them. Nothing anywhere
+//      may re-derive this - the same rule this file already applies to genres
+//      themselves (TD-194), applied before the fact rather than after.
+//      NO GENRE CARRIES 'sensitive' YET. v3.0.827 ships the reduction and its
+//      consumers ONLY, so that every gate exists before anything can trip it.
 //
 // STORED as an ordered JSON array of SLUGS on campaigns.genres, so the display
 // label can be reworded without a migration. NULL and [] must both READ as
@@ -125,6 +135,28 @@ function genreSteering(list, which) {
     'the narrative voice, which is set separately and wins on any conflict of style.';
 }
 
+var SAFETY_STANDARD = 'standard';
+var SAFETY_SENSITIVE = 'sensitive';
+
+// Reduce a campaign's genre list to ONE safety verdict. See rule 5 in the header.
+// Accepts a campaign row or a raw genres value, exactly like campaignGenres(), and
+// resolves through it so NULL, '', '[]' and junk all behave identically here and
+// there. A genre marks itself sensitive with `safety: SAFETY_SENSITIVE` on its
+// record; anything else -- including a missing field -- is standard.
+function campaignSafety(rowOrValue) {
+  var slugs = campaignGenres(rowOrValue);
+  for (var i = 0; i < slugs.length; i++) {
+    var g = BY_SLUG[slugs[i]];
+    if (g && g.safety === SAFETY_SENSITIVE) return SAFETY_SENSITIVE;
+  }
+  return SAFETY_STANDARD;
+}
+
+// The predicate every caller should use. Kept separate from campaignSafety so a
+// future third level cannot silently turn every === comparison in the codebase
+// into a wrong answer.
+function isSensitive(rowOrValue) { return campaignSafety(rowOrValue) === SAFETY_SENSITIVE; }
+
 // True for a slug on the fixed list. Used by the Library facet so an arbitrary
 // query string can never reach the SQL.
 function isGenre(slug) { return !!BY_SLUG[String(slug || '').trim().toLowerCase()]; }
@@ -144,6 +176,10 @@ module.exports = {
   genresToJson: genresToJson,
   genreLabels: genreLabels,
   genreSteering: genreSteering,
+  SAFETY_STANDARD: SAFETY_STANDARD,
+  SAFETY_SENSITIVE: SAFETY_SENSITIVE,
+  campaignSafety: campaignSafety,
+  isSensitive: isSensitive,
   isGenre: isGenre,
   campaignPrompt: campaignPrompt
 };

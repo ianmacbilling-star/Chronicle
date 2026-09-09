@@ -6,6 +6,7 @@ const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
 const { demoteBuiltTitle } = require('../services/titleTarget');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
+const genresvc = require('../services/genres');   // v3.0.827 -- TD-664/TD-665, the sensitive-genre gate
 
 // POST /api/campaigns/:campaignId/archives
 // Save an image off to the campaign archive. Open to ANY member: you can
@@ -274,9 +275,39 @@ router.delete('/:archiveId', requireAuth, verifyCampaignMember, async function(r
   }
 });
 
+// v3.0.827 -- TD-664. THE PUBLIC-LIBRARY GATE, WRITTEN AS A PURE FUNCTION SO IT CAN BE
+// EXECUTED BY A GUARD RATHER THAN GREPPED FOR.
+//
+// There are TWO ways a picture becomes public: publishing a book, and this toggle.
+// The publish path is a deliberate multi-step flow with a mismatch check in front of
+// it. This one was a single UPDATE with no gate of any kind, which made it the more
+// dangerous of the two for a story that may show a real child.
+//
+// THE RULES, and each is here for a reason:
+//   * UNPUBLISHING IS NEVER GATED. Removing exposure must not be refusable, ever,
+//     for any reason, including the ones below.
+//   * A STANDARD CAMPAIGN BEHAVES EXACTLY AS IT DID IN v3.0.826. Owner or Story
+//     Master, no consent, no warning. That is the whole no-op proof of this build.
+//   * ON A SENSITIVE CAMPAIGN ONLY THE STORY MASTER MAY ADD (Ian, 2026-09-09), and
+//     only with explicit consent. The Story Master is the account holder and the one
+//     who answers for the campaign; that is the trade being made knowingly, because
+//     it also means one person consents on behalf of another family.
+// Returns null to allow, or { status, body } to refuse.
+function publicFlipRefusal(sensitive, wantPublic, isDm, consent) {
+  if (!wantPublic) return null;
+  if (!sensitive) return null;
+  if (!isDm) {
+    return { status: 403, body: { error: 'Only the Story Master can add images from this story to the public Library.', sensitive: true } };
+  }
+  if (consent !== true) {
+    return { status: 400, body: { error: 'This story may show a real person, possibly a child. Only add this image to the public Library if you have permission to share their name and likeness publicly.', sensitive: true, needs_consent: true } };
+  }
+  return null;
+}
+
 // PUT /api/campaigns/:campaignId/archives/:archiveId/public
 // Owner (archived_by) or Story Master flips an archived image into / out of
-// the anonymous Public Library. Body: { public: true|false }.
+// the anonymous Public Library. Body: { public: true|false, consent: true }.
 router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
@@ -287,6 +318,21 @@ router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async functi
     const isOwner = String(row.archived_by) === String(req.session.userId);
     const isDm = req.campaignRole === 'dm';
     if (!isOwner && !isDm) return res.status(403).json({ error: 'Only the person who archived this (or the Story Master) can change this.' });
+    // v3.0.827 -- TD-664/TD-665. Is this campaign sensitive? A FAILURE TO ASK IS NOT AN
+    // ANSWER (TD-587: refused, unknown and succeeded are three states, not two). If the
+    // lookup itself fails we do not know, so an ADD is refused rather than allowed to
+    // fail open into a public gallery -- the shape TD-659 warns about, where a broken
+    // gate looks identical to an open one. A REMOVAL still goes through.
+    var _sensitive = false;
+    try {
+      var _camp = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(row.campaign_id);
+      _sensitive = genresvc.isSensitive(_camp && _camp.genres);
+    } catch (e) {
+      console.error('archive public-toggle sensitivity lookup failed:', e.message);
+      if (wantPublic) return res.status(503).json({ error: 'Could not check this story\'s privacy setting. Please try again.' });
+    }
+    var _refusal = publicFlipRefusal(_sensitive, wantPublic, isDm, !!(req.body && req.body.consent === true));
+    if (_refusal) return res.status(_refusal.status).json(_refusal.body);
     await db.prepare('UPDATE campaign_archives SET public = ? WHERE id = ?').run(wantPublic, row.id);
     res.json({ success: true, public: wantPublic });
   } catch (e) {
@@ -450,3 +496,5 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
 });
 
 module.exports = router;
+// Exported for the apply-script guard, which EXECUTES the gate rather than reading it.
+module.exports.publicFlipRefusal = publicFlipRefusal;
