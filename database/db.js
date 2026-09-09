@@ -1586,6 +1586,36 @@ async function migrateArchives(pool) {
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS layout_meta TEXT');
   await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");
 
+  // v3.0.843 -- TD-671. GENRE ON A PUBLISHED IMAGE, so the image gallery can be filtered
+  // the way the Stories directory already is. Ian: "I think images should be tagged with
+  // all 3 possible genre selections on the campaign."
+  //
+  // ALL THREE COME FOR FREE. This is an ARRAY holding the whole ordered list and the
+  // filter is an overlap test, so an image tagged {fantasy,horror,romance} already answers
+  // to all three filters. There was nothing extra to design.
+  //
+  // FROZEN AT THE FLIP, exactly like public_stories.genres (TD-219): the genres are
+  // written when the image is made public and never re-read from the campaign afterwards,
+  // so editing a campaign cannot silently re-file a picture already in the gallery.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS genres text[]');
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_genres ON campaign_archives USING GIN (genres)'); } catch (e) { console.error('[db] campaign_archives genre index failed: ' + (e && e.message)); }
+  // ONE-OFF, IDEMPOTENT, AND ONLY THE ROWS THE FACET ACTUALLY QUERIES. A private archive
+  // row gets its genres when somebody flips it public, so back-filling every archived
+  // image in the database would be work nobody reads.
+  //
+  // THE HONEST CAVEAT, WRITTEN HERE RATHER THAN LEFT FOR A FUTURE READER TO ASSUME:
+  // this takes each campaign's genres AS THEY ARE TODAY, not as they were at the moment
+  // the image was flipped public -- that moment was never recorded. It is the only value
+  // available and it is right for very nearly every row, but it is NOT a true snapshot.
+  // Everything written from here on is.
+  try {
+    const _ab = await pool.query(
+      "UPDATE campaign_archives a SET genres = COALESCE((SELECT ARRAY(SELECT jsonb_array_elements_text(c.genres::jsonb)) FROM campaigns c WHERE c.id = a.campaign_id), ARRAY['fantasy']) " +
+      'WHERE a.public = TRUE AND a.genres IS NULL'
+    );
+    if (_ab && _ab.rowCount) console.log('[db] campaign_archives genre snapshot: ' + _ab.rowCount + ' image(s) back-filled');
+  } catch (e) { console.error('[db] campaign_archives genre backfill failed: ' + (e && e.message)); }
+
   // public_stories: a fork owner's graphic-novel PDF published to the Public
   // Library (Stories tab). One row per (campaign, publisher) -- re-publishing
   // upserts (refreshes the frozen PDF). author_name snapshots the pen name at

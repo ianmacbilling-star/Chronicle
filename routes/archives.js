@@ -324,8 +324,10 @@ router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async functi
     // fail open into a public gallery -- the shape TD-659 warns about, where a broken
     // gate looks identical to an open one. A REMOVAL still goes through.
     var _sensitive = false;
+    var _camp = null;   // v3.0.843 -- TD-671. Hoisted: the genres written below must be
+                        // the SAME row the sensitivity verdict came from, not a second read.
     try {
-      var _camp = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(row.campaign_id);
+      _camp = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(row.campaign_id);
       _sensitive = genresvc.isSensitive(_camp && _camp.genres);
     } catch (e) {
       console.error('archive public-toggle sensitivity lookup failed:', e.message);
@@ -333,7 +335,17 @@ router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async functi
     }
     var _refusal = publicFlipRefusal(_sensitive, wantPublic, isDm, !!(req.body && req.body.consent === true));
     if (_refusal) return res.status(_refusal.status).json(_refusal.body);
-    await db.prepare('UPDATE campaign_archives SET public = ? WHERE id = ?').run(wantPublic, row.id);
+    // v3.0.843 -- TD-671. FROZEN ON THE WAY IN, NOT CLEARED ON THE WAY OUT. Adding an image
+    // to the gallery stamps the campaign's genres onto the row; removing it leaves them, so
+    // re-adding it later cannot silently re-file it under a genre the campaign has since
+    // acquired. Resolved through campaignGenres(), which is the only place NULL, [] and junk
+    // are allowed to mean Fantasy (TD-194).
+    if (wantPublic) {
+      var _archGenres = '{' + genresvc.campaignGenres(_camp && _camp.genres).join(',') + '}';
+      await db.prepare('UPDATE campaign_archives SET public = ?, genres = ?::text[] WHERE id = ?').run(wantPublic, _archGenres, row.id);
+    } else {
+      await db.prepare('UPDATE campaign_archives SET public = ? WHERE id = ?').run(wantPublic, row.id);
+    }
     res.json({ success: true, public: wantPublic });
   } catch (e) {
     console.error('archive public-toggle error:', e.message);
