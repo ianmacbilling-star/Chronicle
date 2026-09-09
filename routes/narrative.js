@@ -187,6 +187,38 @@ const NARRATIVE_STYLES = (function () {
       voice: `Dark fantasy: bleak, heavy, ominous, and visceral. Emphasize dread, decay, and the harshness of the world. Use vivid, unsettling imagery and weighty descriptions. Avoid humor. Highlight the danger and cost of every choice.\nExample: "Blood soaked into the stone, vanishing as if the earth itself were thirsty. In the silence that followed, even hope felt like a dying ember."`,
       system: SYS
     },
+    // v3.0.836 -- TD-681. THE SKILL STORY VOICE, and it carries its OWN system prompt.
+    // That is the load-bearing decision, not the wording below. Classic already asks for
+    // PRESENT tense and did not get it -- Ian's dentist story came back "Earlier that same
+    // morning, Johnny sat buckled..." -- because classic's system prompt says "You are a
+    // skilled fantasy author writing graphic novel narrative prose". TD-507 is already on
+    // record for exactly this: THE SYSTEM PROMPT SAID FANTASY AND OUTRANKED EVERYTHING THAT
+    // SAID OTHERWISE. Putting better rules in a voice block under SYS would lose the same way.
+    //
+    // The rules below are the published Social Story method (Carol Gray), researched rather
+    // than remembered -- see claude/SKILL_STORY_METHOD_SPEC.md for sources. THE NAME IS
+    // TRADEMARKED AND THE METHOD IS NOT: follow the criteria, never use the name.
+    //
+    // The two rules most easily lost, and the reasons they matter:
+    //   * THE 2:1 RATIO. At least two describing sentences per coaching sentence. Without it
+    //     the story becomes a list of demands, which is the failure the ratio exists to stop.
+    //   * NO ABSOLUTES. "Usually" and "sometimes", never "always" or "I will be quiet".
+    //     A story that states an absolute the day then breaks has taught the child it lies.
+    // And feelings are normalised generally, NEVER asserted about the person as observed
+    // fact: "his expression hovering somewhere between curiosity and quiet uncertainty" tells
+    // a nervous child that they were uncertain.
+    calm: {
+      name: 'Calm & Literal',
+      voice: `Calm, literal and reassuring \u2014 a story that prepares a real person for something that is going to happen.
+FIRST person ("I"), PRESENT tense, with simple future for what happens next. NEVER second person \u2014 no "you", which reads as an instruction rather than a description. Short sentences, one idea each.
+Describe what will happen, in order, in concrete observable terms, and answer who, what, when, where and why. No metaphor, no simile, no figurative language of any kind. Precise verbs.
+AT LEAST TWO describing sentences for every one that suggests what the person can do, and suggest rather than instruct: "I can try to hold still", never "I will hold still".
+Use "usually", "sometimes" and "often". NEVER "always", "everyone" or any promise the day might not keep.
+Name feelings gently and in general \u2014 "Some children feel a little nervous, and that is okay" \u2014 and never state as fact how this person feels or looks.
+Be honest about the parts that are uncomfortable and NEVER promise that something will not hurt. No "should", no "bad", no judgement anywhere. End on a calm, positive, true note.
+Example: "Soon it will be time to go to the dentist. Mum drives me there in the car. Usually we park outside the front door. In the waiting room there are chairs and some books. Sometimes I wait for a few minutes. That is okay."`,
+      system: 'You write calm, literal, first-person stories that prepare a real person for something that is going to happen. You are not a novelist. You never write dramatically, never use metaphor or simile, and never invent how someone feels. You always return valid JSON.' + IP_GUARD
+    },
     storybook: {
       name: "Children's Storybook",
       voice: `Whimsical, gentle, and playful — like a children's fantasy story. Use warm, friendly language and a sense of wonder. Keep sentences simple, rhythmic, and imaginative. Avoid violence or describe it softly. Emphasize friendship, bravery, and curiosity.\nExample: "And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures waiting to say hello."`,

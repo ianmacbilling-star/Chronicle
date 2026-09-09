@@ -524,6 +524,11 @@ async function getEffectiveTierFeatures(userId, campaignId) {
 // ============================================================
 const ART_STYLE_MIN_RANK = {
   'High fantasy illustration': 1,   // base / floor
+  'Everyday life illustration': 2,  // Silver -- v3.0.836, TD-681. The non-fantasy counterpart
+                                    // to the floor style. Silver because that is the lowest
+                                    // SOLO tier: a Copper is always inside someone else's
+                                    // campaign and inherits the higher effective tier, so
+                                    // nobody who can OWN a Skill Story campaign is shut out.
   'Dark gritty comic book': 2,      // Silver   (was Gold)
   'Classic pen and ink': 2,         // Silver   (was Gold)
   'Charcoal drawing': 3,            // Gold
@@ -546,6 +551,7 @@ const ART_STYLE_MIN_RANK = {
 
 const NARRATIVE_STYLE_MIN_RANK = {
   classic: 1,      // base / floor
+  calm: 2,         // Silver -- v3.0.836, TD-681. Same reasoning as Everyday life above.
   epic: 3,         // Gold
   journal: 3,      // Gold
   cinematic: 3,    // Gold

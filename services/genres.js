@@ -78,12 +78,20 @@ var GENRES = [
     // and every one of these records would silently read as standard. The guard proves
     // these two reduce to sensitive precisely so that mistake cannot be made quietly.
     safety: 'sensitive',
-    defaultArt: 'Watercolor painterly', defaultVoice: 'storybook' },
+    // v3.0.836 -- TD-681/TD-669. REPOINTED, because the previous pair could not be reached.
+    // 'Watercolor painterly' is rank 3 (Gold) and 'storybook' is rank 4 (Platinum), so a
+    // Silver user choosing one of these genres could use NEITHER and would land on the
+    // floor -- High fantasy and Classic -- which is the exact failure these defaults exist
+    // to prevent. A default nobody can reach is not a default.
+    defaultArt: 'Everyday life illustration', defaultVoice: 'calm' },
   { slug: 'skillstory', label: 'Skill Story',
     prose:  'Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.',
-    panels: 'One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. Nothing frightening, nothing ambiguous, no dramatic angles.',
+    // v3.0.836 -- TD-681. THE SETTING CLAUSE THIS WAS MISSING. Family Story already ended
+    // "never costume, never fantasy"; this did not, so when the art style said "epic high
+    // fantasy" nothing here argued back and a real dentist surgery came out as a castle.
+    panels: 'One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. An ordinary real place with ordinary real objects, exactly as it would actually look; never fantasy, never costume, never invented ornament. Nothing frightening, nothing ambiguous, no dramatic angles.',
     safety: 'sensitive',
-    defaultArt: 'Watercolor painterly', defaultVoice: 'storybook' },
+    defaultArt: 'Everyday life illustration', defaultVoice: 'calm' },
   { slug: 'other',      label: 'Other (use Prompt)',
     prose:  '', panels: '' }
 ];

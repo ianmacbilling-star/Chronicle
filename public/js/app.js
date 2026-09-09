@@ -4162,6 +4162,7 @@ function saveOutline() {
 // ============================================================
 var NARR_STYLE_META = [
   { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Campaignia voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
+  { id:'calm', name:'Calm & Literal', desc:'Short, plain sentences in the first person and present tense. Describes what will happen, one step at a time, honestly and without drama.', example:'Soon it will be time to go to the dentist. Mum drives me there in the car. Usually we park outside the front door. Sometimes I wait for a few minutes. That is okay.' },
   { id:'dialogue', name:'Comic Dialogue', desc:'Dialogue-driven comic-book script \u2014 each spoken line led by the speaker, like a graphic novel.', example:'GARRICK: "Hold the line." VENA: "You said that last time."' },
   { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' },
   { id:'epic', name:'Epic Saga', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
@@ -4755,6 +4756,7 @@ function selectStyleCard(kind, id) {
 // ---- Art Styles (shared picker; mirrors selStyle's session persistence) ----
 var ART_STYLE_META = [
   { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
+  { id:'Everyday life illustration', name:'Everyday life', desc:'The same rich, painterly illustration as High fantasy, set in the real world \u2014 ordinary places, clothes and objects, with no fantasy styling. The period comes from your story.' },
   { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },

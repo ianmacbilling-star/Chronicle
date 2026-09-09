@@ -954,6 +954,32 @@ function getStylePrefix(style) {
   if (typeof style === 'string' && /^STYLE:/i.test(style)) return style;
   var prefixes = {
     'High fantasy illustration': 'STYLE: Epic high fantasy illustration. Painterly, highly detailed, dramatic cinematic lighting, rich colors, in the style of fantasy concept art and book covers. Detailed backgrounds, heroic compositions.',
+    // v3.0.836 -- TD-681. HIGH FANTASY WITHOUT THE FANTASY, and this is the whole reason
+    // it exists. Read the paragraph above: "Epic high fantasy", "fantasy concept art and
+    // book covers", "heroic compositions". None of those describe a TECHNIQUE -- they
+    // describe SUBJECT MATTER, and the model is relentlessly literal (the v3.0.815 lesson).
+    // Asked for a fantasy book cover it produced a real boy at a real dentist inside a
+    // stone castle, with Celtic knotwork on the walls, RUNES on the monitors and an
+    // apothecary shelf labelled NUMBING SALVES. Ian, 2026-09-09, on the Watercolor control:
+    // "I tried Water Color and didn't get all the Fantasy stylings. It looked great."
+    //
+    // So this keeps every technique word from High fantasy and drops every genre word.
+    // High fantasy itself is DELIBERATELY UNTOUCHED -- it is the look most of the product
+    // depends on and there is no reason to disturb it.
+    //
+    // NO PERIOD IS NAMED, deliberately. A Family Story is often historical -- Ian's own
+    // example was a farm in 1961 -- so "present-day" would be wrong on exactly the genre
+    // that needs this style. Name the CLASS (the real world, as it actually is) and let the
+    // scene supply the period, which is the same rule the Dark Fantasy atmosphere clause
+    // follows for airborne matter.
+    // AND IT IS WRITTEN ENTIRELY IN THE POSITIVE. The first draft ended "no fantasy
+    // architecture, no runes or heraldry, no heroic framing" and the guard rejected it --
+    // correctly. TD-552 rule 4: these models ADD reliably and SUBTRACT unreliably, and the
+    // v3.0.821 atmosphere clause is on record that naming snow puts snow in the tavern.
+    // Forbidding runes is a way to get runes. So every clause here names what to PAINT --
+    // printed signage, plain materials, an unposed moment -- and the fantasy simply has
+    // nowhere to attach.
+    'Everyday life illustration': 'STYLE: Richly painted illustration of the real world. Painterly, highly detailed, natural cinematic lighting, rich true-to-life colour, fully realised backgrounds. Every place, object, vehicle, garment and surface is an ordinary one that genuinely exists, drawn exactly as it really looks, with the period and setting taken from the scene itself. Plain everyday materials and finishes throughout \u2014 painted walls, plastic, glass, metal, fabric, printed signage and ordinary lettering. An unposed, ordinary moment, painted well.',
     'Dark gritty comic book': 'STYLE: Dark gritty comic book art. Heavy ink lines, deep shadows, high contrast black and white with selective color, noir atmosphere, Frank Miller and Mike Mignola inspired. Gritty textures, dramatic angles.',
     'Watercolor painterly': 'STYLE: Beautiful loose watercolor illustration. Soft wet-on-wet washes, organic flowing color, artistic brushwork, warm earthy tones, delicate linework. Painterly and expressive, like a fantasy storybook, in the watercolor tradition of John Singer Sargent, Winslow Homer, and Andrew Wyeth.',
     'Anime manga style': 'STYLE: High quality anime illustration. Clean bold linework, vibrant flat colors, dynamic composition, expressive characters, detailed backgrounds, studio Ghibli and JRPG inspired. Cinematic anime framing.',
