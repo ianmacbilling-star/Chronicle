@@ -236,12 +236,24 @@ async function serveStoryPage(req, res) {
       '<script>(function(){var t=document.getElementById("cmpReportToggle");var box=document.getElementById("cmpReport");if(t&&box){t.addEventListener("click",function(){box.style.display=(box.style.display==="block"?"none":"block");});}var b=document.getElementById("cmpReportBtn");if(!b)return;b.addEventListener("click",function(){var r=document.getElementById("cmpReportReason").value.trim();var e=document.getElementById("cmpReportEmail").value.trim();var m=document.getElementById("cmpReportMsg");if(!r){m.textContent="Please describe the problem.";return;}b.disabled=true;m.textContent="Sending...";fetch("/api/public/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({story_id:' + row.id + ',reason:r,email:e})}).then(function(x){return x.json();}).then(function(d){if(d&&d.ok){m.textContent="Thank you. Your report has been sent.";document.getElementById("cmpReportReason").value="";document.getElementById("cmpReportEmail").value="";}else{b.disabled=false;m.textContent=(d&&d.error)||"Could not send. Please try again.";}}).catch(function(){b.disabled=false;m.textContent="Could not send. Please try again.";});});})();</script>' +
       '</div>';
 
+    // v3.0.841 -- TD-688. THIS SENTENCE NO LONGER ASSUMES THE READER PLAYS GAMES.
+    // It is the most-read copy the product has -- under every public story, in front of
+    // people who did not come from the app -- and it said "your tabletop RPG sessions into a
+    // styled graphic novel". That is false of Family Story, Skill Story and Biography, and
+    // it tells someone reading about a grandparent that the tool is for something else.
+    // "graphic novel" went with it: a Skill Story is not one, and an illustrated book is
+    // what all fifteen genres actually produce.
+    //
+    // THE LEGAL BAR BELOW STILL SAYS "Game systems, settings, and characters are the
+    // property of their respective publishers." That is deliberately left alone: it is a
+    // disclaimer, over-disclaiming costs nothing, and narrowing legal wording is not a copy
+    // edit. Raised as TD-689 rather than changed here.
     const footerCta =
       '<div style="background:#0a0806;border-top:3px solid #c9a84c;">' +
       '<div style="max-width:880px;margin:0 auto;padding:34px 18px;text-align:center;font-family:Georgia,serif;">' +
         '<div style="color:rgba(201,168,76,0.85);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Made with Campaignia</div>' +
-        '<h2 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:24px;margin:0 0 10px;">Turn your campaign into a book</h2>' +
-        '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Campaignia turns your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.</p>' +
+        '<h2 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:24px;margin:0 0 10px;">Your story, as a book</h2>' +
+        '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Write it, and Campaignia illustrates and lays it out &mdash; a book you can read online, share by link, or hold in print.</p>' +
         '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:11px 26px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;">Make your own &rarr;</a>' +
       '</div>' +
       '</div>' + legalReportBar;
