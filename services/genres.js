@@ -70,6 +70,20 @@ var GENRES = [
   { slug: 'nonfiction', label: 'Nonfiction',
     prose:  'Report what happened. Clarity over ornament. No invented interiority.',
     panels: 'Favour the plain, legible depiction of events. Real period dress, tools and places; never fantasy or costume.' },
+  { slug: 'family',     label: 'Family Story',
+    prose:  'A real life, told warmly. Ordinary moments carry the weight; no fantasy idiom, no invented interiority.',
+    panels: 'Favour real places, clothes and objects as they actually are. Faces readable and moments candid; never costume, never fantasy.',
+    // v3.0.834 -- TD-668. THE LITERAL, NOT THE CONSTANT. SAFETY_SENSITIVE is declared
+    // BELOW this array, so at the moment this literal is evaluated it is still undefined
+    // and every one of these records would silently read as standard. The guard proves
+    // these two reduce to sensitive precisely so that mistake cannot be made quietly.
+    safety: 'sensitive',
+    defaultArt: 'Watercolor painterly', defaultVoice: 'storybook' },
+  { slug: 'skillstory', label: 'Skill Story',
+    prose:  'Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.',
+    panels: 'One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. Nothing frightening, nothing ambiguous, no dramatic angles.',
+    safety: 'sensitive',
+    defaultArt: 'Watercolor painterly', defaultVoice: 'storybook' },
   { slug: 'other',      label: 'Other (use Prompt)',
     prose:  '', panels: '' }
 ];
@@ -157,6 +171,30 @@ function campaignSafety(rowOrValue) {
 // into a wrong answer.
 function isSensitive(rowOrValue) { return campaignSafety(rowOrValue) === SAFETY_SENSITIVE; }
 
+// v3.0.834 -- TD-669. THE GENRE SUPPLIES A DEFAULT, NOT A LOCK (Ian, 2026-09-09).
+// Order is meaningful, so the FIRST genre that declares defaults wins; a campaign that
+// names Skill Story second is still primarily whatever it named first. Returns null when
+// nothing declares them, so a caller can tell "no opinion" from "an opinion that happens
+// to match the global default" -- those are different, and the difference is the whole
+// reason this returns an object rather than filling in blanks itself.
+//
+// NOTHING CONSUMES THIS YET, DELIBERATELY. Wiring it means deciding where a member pref
+// stops and a campaign default starts, and campaigns.art_style carries a DB default of
+// 'High fantasy illustration' -- so an untouched campaign and one deliberately set to
+// High fantasy are indistinguishable in the column. Guessing there would silently
+// overwrite a real choice. The resolver ships now so there is ONE definition of what a
+// genre prefers; the wiring point is chosen with that question answered. See TD-669.
+function genreDefaults(rowOrValue) {
+  var slugs = campaignGenres(rowOrValue);
+  for (var i = 0; i < slugs.length; i++) {
+    var gg = BY_SLUG[slugs[i]];
+    if (gg && (gg.defaultArt || gg.defaultVoice)) {
+      return { art: gg.defaultArt || null, narrative: gg.defaultVoice || null, from: gg.slug };
+    }
+  }
+  return null;
+}
+
 // True for a slug on the fixed list. Used by the Library facet so an arbitrary
 // query string can never reach the SQL.
 function isGenre(slug) { return !!BY_SLUG[String(slug || '').trim().toLowerCase()]; }
@@ -180,6 +218,7 @@ module.exports = {
   SAFETY_SENSITIVE: SAFETY_SENSITIVE,
   campaignSafety: campaignSafety,
   isSensitive: isSensitive,
+  genreDefaults: genreDefaults,
   isGenre: isGenre,
   campaignPrompt: campaignPrompt
 };

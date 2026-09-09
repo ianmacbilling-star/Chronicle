@@ -18773,6 +18773,8 @@ var CS_GENRES = [
   ['historical', 'Historical Fiction'],
   ['literary', 'Literary Fiction'],
   ['nonfiction', 'Nonfiction'],
+  ['family', 'Family Story'],
+  ['skillstory', 'Skill Story'],
   ['other', 'Other (use Prompt)']
 ];
 var CS_GENRE_MAX = 3;
