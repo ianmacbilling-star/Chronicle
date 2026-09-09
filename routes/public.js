@@ -103,7 +103,11 @@ router.get('/stories', async function (req, res) {
     // should degrade to the full Library, not to an empty page.
     const genreRaw = String(req.query.genre || '').trim().toLowerCase();
     const genre = genresvc.isGenre(genreRaw) ? genreRaw : '';
-    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug, genres, created_at FROM public_stories WHERE public = TRUE';
+    // v3.0.828 -- TD-673. An unlisted story is published but not browsable, so it is
+    // absent from this directory and from the sitemap, and present everywhere a reader
+    // who already holds the link needs it -- including the report form below, which is
+    // deliberately still `public = TRUE` alone.
+    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, created_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.

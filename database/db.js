@@ -1,6 +1,19 @@
 const path = require('path');
 const fs = require('fs');
 
+// v3.0.828 -- TD-673. The share token is the ONLY thing protecting an unlisted
+// story, so it comes from a CSPRNG and nothing else. 16 random bytes rendered as
+// 22 base62 characters: not derived from the id, not sequential, not a hash of
+// anything guessable. Minted for EVERY published story, not only unlisted ones,
+// so promoting or demoting a story never invalidates a link already shared.
+var SHARE_TOKEN_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+function makeShareToken() {
+  var bytes = require('crypto').randomBytes(22);
+  var out = '';
+  for (var i = 0; i < 22; i++) { out += SHARE_TOKEN_ALPHABET[bytes[i] % 62]; }
+  return out;
+}
+
 let db;
 let usePostgres = false;
 
@@ -420,6 +433,16 @@ async function initPostgres() {
     // tens of thousands. campaigns.genres stays a JSON string because it is only ever
     // read whole, one row at a time. SNAPSHOT at publish time, never a live join.
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS genres text[]',
+    // v3.0.828 -- TD-673. TWO ORTHOGONAL COLUMNS, EACH WITH ONE MEANING, which is
+    // what keeps this change small. `public` still means PUBLISHED AT ALL and every
+    // query that reads it stays correct untouched -- the story page, the abuse-report
+    // lookup and the author's own list are not edited by this build at all.
+    // `visibility` means BROWSABLE and only ever NARROWS: it is read by exactly three
+    // surfaces, the Stories directory and the two sitemap queries. Splitting `public`
+    // into three states instead would have touched all seven and is the TD-601 shape.
+    // See claude/UNLISTED_STORIES_SPEC.md 1.
+    "ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'",
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS share_token TEXT',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
@@ -583,6 +606,20 @@ async function initPostgres() {
     );
     if (_sb && _sb.rowCount) console.log('[db] public_stories genre snapshot: ' + _sb.rowCount + ' story(ies) back-filled');
   } catch(e) { console.error('[db] public_stories genre backfill failed: ' + (e && e.message)); }
+
+  // v3.0.828 -- TD-673. Mint a share token for every published story that predates
+  // the column. Done in JS rather than in SQL on purpose: md5(random()) in Postgres
+  // is not a CSPRNG, and this token is the whole of the protection on an unlisted
+  // story. Idempotent -- touches only rows that have never been set -- and the unique
+  // index is created AFTER the backfill so it cannot fail against half-filled rows.
+  try {
+    const _tk = await pool.query("SELECT id FROM public_stories WHERE share_token IS NULL OR share_token = ''");
+    for (const _row of (_tk.rows || [])) {
+      await pool.query('UPDATE public_stories SET share_token = $1 WHERE id = $2', [makeShareToken(), _row.id]);
+    }
+    if (_tk.rowCount) console.log('[db] share_token backfill: ' + _tk.rowCount + ' story(ies) tokenised');
+  } catch(e) { console.error('[db] share_token backfill failed: ' + (e && e.message)); }
+  try { await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_public_stories_share_token ON public_stories(share_token) WHERE share_token IS NOT NULL'); } catch(e) { console.error('[db] share_token index failed: ' + (e && e.message)); }
 
   // Pen name: case-insensitive unique across users, ignoring blanks/NULLs.
   // Public-facing author identity for the Public Library.
@@ -2387,4 +2424,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };
+module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
+const { getDb, makeShareToken, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -7964,10 +7964,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // TD-219 -- the published thing is the thing that was published. Resolved via
     // services/genres.js so NULL and junk still land as fantasy.
     var _pubGenres = '{' + genresvc.campaignGenres(campaign && campaign.genres).join(',') + '}';
+    // v3.0.828 -- TD-673. VISIBILITY IS DECIDED HERE AND FROZEN, exactly like the genre
+    // snapshot above it and for the same TD-219 reason: the published thing is the thing
+    // that was published, and a later edit to the campaign must not silently re-file it.
+    // A SENSITIVE story publishes UNLISTED (Ian, 2026-09-09) -- reachable by anyone with
+    // the link, absent from the directory and the sitemap -- and its owner can promote it
+    // afterwards. No genre is sensitive as of v3.0.828, so today this is always public.
+    var _pubVis = genresvc.isSensitive(campaign && campaign.genres) ? 'unlisted' : 'public';
+    var _shareToken = makeShareToken();
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?, ?, TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubVis, _shareToken, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
     _ptLap('insertRow');
   } catch (e) {
@@ -8041,8 +8049,12 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', created_at: r.created_at }; });
+    // v3.0.828 -- TD-673. DELIBERATELY STILL `public = TRUE` AND NOTHING MORE. An author
+    // must see their own unlisted stories or they lose sight of their own books, which is
+    // the failure nobody thinks to test. visibility and share_token ride along so the
+    // page can badge the state and offer the link that actually works for it.
+    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
@@ -8093,6 +8105,27 @@ router.post('/story/:id/blurb', requireAuth, async function(req, res) {
   } catch (e) {
     console.error('[story blurb] failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not save your blurb.' });
+  }
+});
+
+// v3.0.828 -- TD-673. Flip ONE published story between browsable and link-only.
+// Owner-only via user_id, like every other route in this group. The token is NOT
+// re-minted on either transition -- that is the whole point of minting it for every
+// story: a link somebody already has keeps working whichever way this is flipped.
+// Anything that is not exactly 'unlisted' is treated as 'public', so a malformed
+// body can only ever widen to the state the product had before this build, never
+// silently hide a story its author believes is listed.
+router.post('/story/:id/visibility', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var want = (req.body && String(req.body.visibility || '').trim() === 'unlisted') ? 'unlisted' : 'public';
+    await db.prepare('UPDATE public_stories SET visibility = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(want, new Date().toISOString(), req.params.id, req.session.userId);
+    var row = await db.prepare('SELECT visibility, share_token FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'Story not found.' });
+    return res.json({ success: true, visibility: row.visibility || 'public', share_token: row.share_token || '' });
+  } catch (e) {
+    console.error('[story visibility] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not change who can see this story.' });
   }
 });
 

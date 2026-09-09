@@ -47,26 +47,47 @@ const PWA_HEAD =
 // Public, server-rendered per-story page. Real HTML (title, author, blurb,
 // teaser, and the full reading view) so search engines can index it. Built from
 // the frozen snapshot taken at publish, never live campaign data.
-router.get('/library/story/:id/:slug?', async function (req, res) {
+async function serveStoryPage(req, res) {
   function notFound() {
     res.status(404).sendFile(path.join(__dirname, '..', 'public', '404.html'));
   }
   try {
     const db = await getDb();
-    const id = parseInt(req.params.id, 10);
-    if (!id) return notFound();
-    const row = await db.prepare(
-      'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at FROM public_stories WHERE id = ? AND public = TRUE'
-    ).get(id);
+    // v3.0.828 -- TD-673. TWO DOORS, AND THEY ARE NOT EQUIVALENT.
+    //   /library/story/s/<token>  serves ANY published story, whatever its visibility.
+    //   /library/story/:id/:slug  serves ONLY a browsable one.
+    // THE ID DOOR MUST NOT REDIRECT AN UNLISTED STORY TO ITS TOKEN URL. Ids are SERIAL
+    // and the slug is optional, so this route used to hand back the canonical URL for
+    // any id you asked about -- which would have handed out the secret to anyone walking
+    // ids and made "link only" meaningless. It 404s instead, and that 404 is
+    // indistinguishable from a story that was never published.
+    const token = String(req.params.token || '').trim();
+    let row = null;
+    if (token) {
+      row = await db.prepare(
+        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
+      ).get(token);
+    } else {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return notFound();
+      row = await db.prepare(
+        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
+      ).get(id);
+    }
     if (!row) return notFound();
+    const unlisted = String(row.visibility || 'public') !== 'public';
 
     const wantSlug = row.slug || slugify(row.title);
-    if (req.params.slug !== wantSlug) {
+    if (!token && req.params.slug !== wantSlug) {
       return res.redirect(301, '/library/story/' + row.id + '/' + wantSlug);
     }
 
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    const pageUrl = base + '/library/story/' + row.id + '/' + wantSlug;
+    // The Share button copies pageUrl, so for an unlisted story it MUST be the token
+    // URL -- the id URL 404s, and handing that out would copy a dead link.
+    const pageUrl = unlisted
+      ? (base + '/library/story/s/' + (row.share_token || token))
+      : (base + '/library/story/' + row.id + '/' + wantSlug);
     const title = row.title || 'Untitled';
     const author = row.author_name || '';
     const cover = row.cover_url || '';
@@ -89,6 +110,10 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     const seo =
       '<title>' + esc(title) + (author ? ' &mdash; by ' + esc(author) : '') + ' | Campaignia</title>' +
       '<meta name="description" content="' + esc(metaDesc) + '" />' +
+      // Out of the sitemap is not enough on its own: a crawler that finds a forwarded
+      // link anywhere will index the page, and then "link only" means nothing. The og:
+      // and twitter: tags stay, so a link the owner deliberately shares still unfurls.
+      (unlisted ? '<meta name="robots" content="noindex,nofollow" />' : '') +
       '<link rel="canonical" href="' + esc(pageUrl) + '" />' +
       '<meta property="og:type" content="article" />' +
       '<meta property="og:site_name" content="Campaignia" />' +
@@ -219,7 +244,11 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     console.error('[story-page] failed:', e && e.message ? e.message : e);
     return notFound();
   }
-});
+}
+// v3.0.828 -- TD-673. The token door is registered FIRST so that a story whose slug
+// happens to be 's' can never shadow it.
+router.get('/library/story/s/:token', serveStoryPage);
+router.get('/library/story/:id/:slug?', serveStoryPage);
 
 function xmlEsc(s) {
   return String(s == null ? '' : s)
@@ -237,7 +266,7 @@ router.get('/sitemap.xml', async function (req, res) {
   try {
     const db = await getDb();
     var base = baseUrl();
-    var cnt = await db.prepare('SELECT COUNT(*) AS n FROM public_stories WHERE public = TRUE').get();
+    var cnt = await db.prepare("SELECT COUNT(*) AS n FROM public_stories WHERE public = TRUE AND visibility = 'public'").get();   // v3.0.828 -- TD-673, unlisted stories are not enumerated
     var n = cnt ? Number(cnt.n) : 0;
     var chunks = Math.max(1, Math.ceil(n / SITEMAP_CHUNK));
     var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -273,7 +302,7 @@ router.get('/sitemap-stories.xml', async function (req, res) {
     var base = baseUrl();
     var page = parseInt(req.query.page, 10); if (!page || page < 1) page = 1;
     var offset = (page - 1) * SITEMAP_CHUNK;
-    var rows = await db.prepare('SELECT id, slug, title, created_at, updated_at FROM public_stories WHERE public = TRUE ORDER BY id ASC LIMIT ? OFFSET ?').all(SITEMAP_CHUNK, offset);
+    var rows = await db.prepare("SELECT id, slug, title, created_at, updated_at FROM public_stories WHERE public = TRUE AND visibility = 'public' ORDER BY id ASC LIMIT ? OFFSET ?").all(SITEMAP_CHUNK, offset);   // v3.0.828 -- TD-673
     var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
     (rows || []).forEach(function (r) {
