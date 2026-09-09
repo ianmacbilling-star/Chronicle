@@ -230,18 +230,39 @@ async function serveStoryPage(req, res) {
         '</div>' +
       '</div>' +
       '<div style="max-width:880px;margin:0 auto;padding:0 18px 24px;font-family:Georgia,serif;text-align:center;color:rgba(201,168,76,0.4);font-size:11px;line-height:1.6;">' +
-        '&copy; ' + (new Date().getFullYear()) + ' So It Begins, LLC &middot; Campaignia. Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher. ' +
+        '&copy; ' + (new Date().getFullYear()) + ' So It Begins, LLC &middot; Campaignia. Any game systems, settings or characters that appear remain the property of their respective publishers. Campaignia is not affiliated with any game publisher. ' +
         '<a href="/terms.html" style="color:rgba(201,168,76,0.6);">Terms</a> &middot; <a href="/privacy.html" style="color:rgba(201,168,76,0.6);">Privacy</a>' +
       '</div>' +
       '<script>(function(){var t=document.getElementById("cmpReportToggle");var box=document.getElementById("cmpReport");if(t&&box){t.addEventListener("click",function(){box.style.display=(box.style.display==="block"?"none":"block");});}var b=document.getElementById("cmpReportBtn");if(!b)return;b.addEventListener("click",function(){var r=document.getElementById("cmpReportReason").value.trim();var e=document.getElementById("cmpReportEmail").value.trim();var m=document.getElementById("cmpReportMsg");if(!r){m.textContent="Please describe the problem.";return;}b.disabled=true;m.textContent="Sending...";fetch("/api/public/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({story_id:' + row.id + ',reason:r,email:e})}).then(function(x){return x.json();}).then(function(d){if(d&&d.ok){m.textContent="Thank you. Your report has been sent.";document.getElementById("cmpReportReason").value="";document.getElementById("cmpReportEmail").value="";}else{b.disabled=false;m.textContent=(d&&d.error)||"Could not send. Please try again.";}}).catch(function(){b.disabled=false;m.textContent="Could not send. Please try again.";});});})();</script>' +
       '</div>';
 
+    // v3.0.841 -- TD-688. THIS SENTENCE NO LONGER ASSUMES THE READER PLAYS GAMES.
+    // It is the most-read copy the product has -- under every public story, in front of
+    // people who did not come from the app -- and it said "your tabletop RPG sessions into a
+    // styled graphic novel". That is false of Family Story, Skill Story and Biography, and
+    // it tells someone reading about a grandparent that the tool is for something else.
+    // "graphic novel" went with it: a Skill Story is not one, and an illustrated book is
+    // what all fifteen genres actually produce.
+    //
+    // THE LEGAL BAR ABOVE WAS REWORDED IN v3.0.842 (TD-689), not left alone as this comment
+    // originally said. It asserted "Game systems, settings, and characters are the property
+    // of their respective publishers" under every story, including ones with no game in them.
+    // It now says "Any game systems, settings or characters that appear remain..." -- the same
+    // claim about the same material, without asserting the material is there.
+    //
+    // IT IS DELIBERATELY NOT CONDITIONAL ON THE GENRES, though they are frozen on the row and
+    // the branch would be trivial. A disclaimer that can be absent is worse than one that is
+    // sometimes redundant, and the cases where it would go missing are exactly the ones that
+    // matter (a campaign filed as "other", genres edited before publish). TD-659 with a legal
+    // consequence. THE TERMS ARE THE LARGER PROBLEM AND ARE NOT THIS FILE'S TO FIX: they
+    // define the service as "turn your tabletop role-playing game sessions into illustrated
+    // graphic novels", which does not describe Family Story, Skill Story or Biography. TD-690.
     const footerCta =
       '<div style="background:#0a0806;border-top:3px solid #c9a84c;">' +
       '<div style="max-width:880px;margin:0 auto;padding:34px 18px;text-align:center;font-family:Georgia,serif;">' +
         '<div style="color:rgba(201,168,76,0.85);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Made with Campaignia</div>' +
-        '<h2 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:24px;margin:0 0 10px;">Turn your campaign into a book</h2>' +
-        '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Campaignia turns your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.</p>' +
+        '<h2 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:24px;margin:0 0 10px;">Your story, as a book</h2>' +
+        '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Write it, and Campaignia illustrates and lays it out &mdash; a book you can read online, share by link, or hold in print.</p>' +
         '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:11px 26px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;">Make your own &rarr;</a>' +
       '</div>' +
       '</div>' + legalReportBar;
