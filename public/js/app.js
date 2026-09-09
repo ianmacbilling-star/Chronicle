@@ -1643,10 +1643,20 @@ function myStoryCard(it) {
     // The card link follows the same rule, so it can never point at a url that 404s.
     a.href = storyShareUrl(it);
   }
-  visBtn.onclick = function () {
+  visBtn.onclick = async function () {
     var want = (it.visibility === 'unlisted') ? 'public' : 'unlisted';
+    // v3.0.832 -- TD-667. Ask ONLY on the widening, and only for a sensitive story. The
+    // server refuses this transition without consent whatever the client does, so this
+    // dialog is the informed part of informed consent and not the enforcement.
+    var _consent = false;
+    if (want === 'public' && it.safety_level === 'sensitive') {
+      _consent = await uiConfirm(
+        'This story may show a real person, possibly a child. Listing it in the public Library makes it browsable by anyone and offers it to search engines.\n\nOnly continue if you have permission to share their name and likeness publicly.',
+        { okText: 'List it publicly', cancelText: 'Keep it link only' });
+      if (!_consent) return;
+    }
     visBtn.disabled = true; visMsg.textContent = 'Saving...';
-    fetch('/api/pdf/story/' + it.id + '/visibility', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: want }) })
+    fetch('/api/pdf/story/' + it.id + '/visibility', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_consent ? { visibility: want, consent: true } : { visibility: want }) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         visBtn.disabled = false;

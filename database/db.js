@@ -443,6 +443,17 @@ async function initPostgres() {
     // See claude/UNLISTED_STORIES_SPEC.md 1.
     "ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'",
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS share_token TEXT',
+    // v3.0.832 -- TD-666. The campaign safety verdict, FROZEN on the row at publish
+    // exactly like the genre snapshot beside it, and for the same TD-219 reason: the
+    // published thing is the thing that was published. A campaign that changes genre
+    // later must not retroactively acquire -- or lose -- the consent gate its book was
+    // published under.
+    // NO BACKFILL, AND THAT IS DELIBERATE. No genre is sensitive as of this build, so
+    // every existing row is genuinely 'standard' and the DEFAULT already says so.
+    // When TD-668 lands sensitive genres, stories published BEFORE it stay standard --
+    // which is correct, because they were published under the old rules and their
+    // authors consented to nothing else.
+    "ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS safety_level TEXT NOT NULL DEFAULT 'standard'",
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the

@@ -7977,12 +7977,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // is what TD-667's consent gate is for, and until it exists the safe answer is that the
     // client cannot make it at all. Unreachable today; no genre is sensitive until TD-668.
     var _askUnlisted = !!(req.body && String(req.body.visibility || '').trim() === 'unlisted');
-    var _pubVis = (_askUnlisted || genresvc.isSensitive(campaign && campaign.genres)) ? 'unlisted' : 'public';
+    // v3.0.832 -- TD-666. RESOLVED ONCE. The verdict that gets stored and the verdict the
+    // visibility default is derived from are now provably the same value -- two calls to
+    // campaignSafety() could not disagree today, but they are exactly the kind of pair
+    // that drifts when someone edits one of them.
+    var _pubSafety = genresvc.campaignSafety(campaign && campaign.genres);
+    var _pubSensitive = (_pubSafety === genresvc.SAFETY_SENSITIVE);
+    var _pubVis = (_askUnlisted || _pubSensitive) ? 'unlisted' : 'public';
     var _shareToken = makeShareToken();
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?, ?, TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubVis, _shareToken, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, safety_level, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?, ?, ?, TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
     _ptLap('insertRow');
   } catch (e) {
@@ -8045,7 +8051,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
     mismatch: _mismatch,                                        // v3.0.798 -- TD-608
     storyId: _outId, slug: slug || null,
-    storyUrl: _outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null });
+    // v3.0.832 -- THE TOKEN URL, because this link is handed to a person and it must
+    // work for a story that was just published as link-only. The id url 404s for one.
+    // Falls back to the id url only if there is somehow no token, which then 301s.
+    storyUrl: _shareToken ? ('/library/story/s/' + _shareToken + (slug ? ('/' + slug) : ''))
+      : (_outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null) });
 });
 
 // Unpublish the caller's OWN story for a campaign (admin moderation is separate).
@@ -8082,8 +8092,8 @@ router.get('/my-stories', requireAuth, async function(req, res) {
     // must see their own unlisted stories or they lose sight of their own books, which is
     // the failure nobody thinks to test. visibility and share_token ride along so the
     // page can badge the state and offer the link that actually works for it.
-    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', created_at: r.created_at }; });
+    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
@@ -8144,12 +8154,42 @@ router.post('/story/:id/blurb', requireAuth, async function(req, res) {
 // Anything that is not exactly 'unlisted' is treated as 'public', so a malformed
 // body can only ever widen to the state the product had before this build, never
 // silently hide a story its author believes is listed.
+// v3.0.832 -- TD-667. THE CONSENT GATE, AND IT GUARDS EXACTLY ONE TRANSITION.
+//
+// The private-by-default floor was never built because it already existed: a story is
+// public only if a row exists here, and only publishing creates one. The warning is the
+// LAST gate, not the only one, and it belongs on the step where the answer is genuinely
+// in doubt -- making a story about a real, possibly small person BROWSABLE.
+//
+// Fired at every publish it would be noise, and a warning people learn to click through
+// protects nobody. With unlisted as the default for a sensitive story (v3.0.828), this
+// fires once, on the deliberate widening, which is the whole argument for that default.
+//
+// NARROWING IS NEVER GATED, for any reason. Returns null to allow, or { status, body }.
+function storyVisibilityRefusal(sensitive, wantPublic, consent) {
+  if (!wantPublic) return null;
+  if (!sensitive) return null;
+  if (consent !== true) {
+    return { status: 400, body: { error: 'This story may show a real person, possibly a child. Only list it in the public Library if you have permission to share their name and likeness publicly.', sensitive: true, needs_consent: true } };
+  }
+  return null;
+}
+
 router.post('/story/:id/visibility', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
     var want = (req.body && String(req.body.visibility || '').trim() === 'unlisted') ? 'unlisted' : 'public';
+    // v3.0.832 -- READ FIRST, THEN DECIDE, THEN WRITE. This route used to UPDATE and only
+    // afterwards look for the row, which was harmless while nothing could refuse and is
+    // not harmless now: a gate that runs after the write is not a gate.
+    var row = await db.prepare('SELECT visibility, share_token, safety_level FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'Story not found.' });
+    // The FROZEN verdict on the row, never re-derived from the campaign (TD-666).
+    var _sensitive = String(row.safety_level || 'standard') === 'sensitive';
+    var _refusal = storyVisibilityRefusal(_sensitive, want === 'public', !!(req.body && req.body.consent === true));
+    if (_refusal) return res.status(_refusal.status).json(_refusal.body);
     await db.prepare('UPDATE public_stories SET visibility = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(want, new Date().toISOString(), req.params.id, req.session.userId);
-    var row = await db.prepare('SELECT visibility, share_token FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    row = await db.prepare('SELECT visibility, share_token FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
     if (!row) return res.status(404).json({ error: 'Story not found.' });
     return res.json({ success: true, visibility: row.visibility || 'public', share_token: row.share_token || '' });
   } catch (e) {
@@ -14448,6 +14488,8 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
 });
 
 module.exports = router;
+// Exported for the apply-script guard, which executes the gate rather than reading it.
+module.exports.storyVisibilityRefusal = storyVisibilityRefusal;
 module.exports.buildNovelHTML = buildNovelHTML;
 module.exports.assembleNovelHtml = assembleNovelHtml;
 // v3.0.539 -- exported for the frame fidelity probe (TD-351) so its control arm calls the SHIPPING
