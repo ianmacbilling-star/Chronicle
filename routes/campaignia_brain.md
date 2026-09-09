@@ -223,6 +223,11 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 - **Feedback** (from the profile menu): send a typed message — pick a type, optional
   subject, and your message; it reaches support, who can reply directly.
 - **My Orders:** your past print orders, with details and tracking.
+- **My Stories:** every book you have published, across all your campaigns. Each one
+  shows whether it is **Public** or **Link only**, with a button to switch between them
+  and **Copy link** to get its address. You can edit its **title** and **blurb** here
+  without republishing, and remove it from the Library entirely. Switching a **Family
+  Story** or **Skill Story** from link only to public asks you to confirm first. See 15a.
 
 ---
 
@@ -296,8 +301,256 @@ name + description). A campaign is built from:
   Every session draws on this when its story and image prompts are generated, keeping
   the whole campaign consistent and connected across sessions. Also editable from the
   pencil edit on the campaign page.
+- **Genre** — up to **three**, and the order matters; what kind of story this is. It
+  steers the prose and the choice of pictures, and files the book in the Library. See
+  8a and 8b.
+- **Campaign Prompt** — up to 500 characters of your own standing direction, carried
+  into every {session} in the campaign. See 8a.
 - **Delete campaign** — only when the campaign is completely empty: no sessions,
   characters, assets, archived images, or other members.
+
+---
+
+## 8a. Genre and the Campaign Prompt
+
+Two settings on the campaign, both under **Details**, that steer everything Campaignia
+writes and draws for you.
+
+**Genre — what kind of story this is.**
+
+Pick up to **three**, and **the order matters**: the first is the primary genre and the
+rest are elements of it. Fantasy then Horror is a fantasy story with dread in it; Horror
+then Fantasy is a horror story that happens to have magic. Every campaign has a genre — a
+new one starts as **Fantasy** unless you choose otherwise.
+
+Genre steers **two** things: how the prose is written, and which moments get chosen and
+framed as pictures. It does **not** control the look of the artwork — that is the **art
+style** — and it does not control the narrative voice. Genre owns **what the story is
+about and how it feels**; style owns **how it reads and how it looks**. They compose, and
+neither overrules the other, so Horror with a Children's Storybook voice is a thing you
+are allowed to make, and it will do exactly what you would expect.
+
+**Other (use Prompt)** is exclusive — pick it and it clears the rest, and vice versa. It
+sends **no steering at all**, deliberately: it hands the whole job to your Campaign
+Prompt. Use it when none of the others fit and you would rather describe the tone
+yourself.
+
+**Genre is also how your book is filed in the public Library.** When you publish, the
+genres are **frozen onto the published book** — changing the campaign's genre afterwards
+does **not** re-file a book that is already out. The book stays as it was published.
+
+**Campaign Prompt — your own standing instruction.**
+
+Up to 500 characters of direction that rides along with every {session} in the campaign.
+Use it for things no genre can know: *"the party never splits up"*, *"keep the humour
+dry"*, *"the narrator is one of the players, looking back years later"*. It is not a
+replacement for **Lore / Background**, which describes the *world*; the Campaign Prompt
+describes *how to tell it*.
+
+---
+
+## 8b. What each genre actually tells the AI
+
+Genre is not just a label. Each one sends two short standing instructions with every
+{session}: one to the **writer**, which shapes the prose, and one to the **picture
+chooser**, which decides which moments become panels and how they are framed. Both are
+printed below in the words the AI actually receives, so you can predict what a choice
+will do before you make it.
+
+Every genre block is followed by the same reminder, automatically: *genre governs subject
+and tone; it does not govern the narrative voice, which is set separately and wins on any
+conflict of style.* That sentence is why you can safely combine a heavy genre with a
+light voice.
+
+**Fantasy** — the default, and the one to leave alone for most campaigns.
+- *Writing:* Wonder and scale. Treat the impossible as real and unremarked.
+- *Pictures:* Favour spectacle, landscape, and creature reveals.
+- The "unremarked" is the working part — it stops the prose pausing to explain that dragons exist.
+
+**Romance**
+- *Writing:* Interiority and wanting. Weight glances, proximity, and what is left unsaid.
+- *Pictures:* Favour two-person framing, faces, and held moments over action.
+- Expect fewer wide shots and more faces. It will pass over a fight to draw the look afterwards.
+
+**Thriller / Suspense**
+- *Writing:* Momentum and threat. Short sentences under pressure. Withhold.
+- *Pictures:* Favour pursuit, confrontation, and the beat just before danger lands.
+- The shortest prose of any genre. "Withhold" makes it hold information back rather than summarise.
+
+**Sci Fi**
+- *Writing:* Consequence and system. Treat technology as ordinary and load-bearing.
+- *Pictures:* Favour machinery, scale, and unfamiliar environments made concrete.
+- "Ordinary" is deliberate — it stops characters marvelling at their own equipment.
+
+**Horror**
+- *Writing:* Dread over shock. Let the reader see it before the characters do.
+- *Pictures:* Favour restraint, partial reveals, and a wrong detail in an ordinary frame.
+- Note what it does NOT say: nothing here asks for gore. It asks for restraint, and gets more out of a wrong detail than out of a monster.
+
+**Biography**
+- *Writing:* A real life recounted. Ground every event in one person’s arc.
+- *Pictures:* Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.
+- One of three genres that explicitly rules out fantasy imagery. Use it when the person is real.
+
+**Mystery / Crime**
+- *Writing:* Withheld information. Plant what pays off. Let the reader work.
+- *Pictures:* Favour evidence, reaction, and the moment of noticing.
+- "The moment of noticing" is why it draws a character's face on the clue rather than the clue alone.
+
+**Children's**
+- *Writing:* Warm, simple and concrete. Short sentences, plain words, one clear feeling at a time. Frightening things are faced and resolved, never dwelt on.
+- *Pictures:* Favour clear, uncluttered frames with one thing happening. Keep faces friendly and readable; no gore, no dread.
+- The most heavily specified genre after Skill Story, and the one that changes sentence length most.
+
+**Young Adult**
+- *Writing:* Immediate and emotionally direct. First-person energy, clear stakes.
+- *Pictures:* Favour character over setting; keep faces in frame.
+- "First-person energy" is a register, not a tense — it does not switch the story into *I*.
+
+**Historical Fiction**
+- *Writing:* Period texture, materially specific. No modern idiom.
+- *Pictures:* Favour period detail in dress, tools, and place.
+- It takes the period from your {sessions} and your Lore. It is not told which century you mean, so say so somewhere if it matters.
+
+**Literary Fiction**
+- *Writing:* Language carries the weight. Ambiguity is allowed to stand.
+- *Pictures:* Favour the quiet frame; resist the obvious dramatic beat.
+- The only genre that tells the picture chooser to skip the obvious dramatic beat on purpose.
+
+**Nonfiction**
+- *Writing:* Report what happened. Clarity over ornament. No invented interiority.
+- *Pictures:* Favour the plain, legible depiction of events. Real period dress, tools and places; never fantasy or costume.
+- **"No invented interiority" is the one to know.** It stops the AI telling you what someone was feeling when nobody recorded it — the most useful instruction in the list when the events are real.
+
+**Family Story**
+- *Writing:* A real life, told warmly. Ordinary moments carry the weight; no fantasy idiom, no invented interiority.
+- *Pictures:* Favour real places, clothes and objects as they actually are. Faces readable and moments candid; never costume, never fantasy.
+- See 8c: this genre also changes how the book is published.
+
+**Skill Story**
+- *Writing:* Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.
+- *Pictures:* One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. An ordinary real place with ordinary real objects, exactly as it would actually look; never fantasy, never costume, never invented ornament. Nothing frightening, nothing ambiguous, no dramatic angles.
+- The longest instruction of the fifteen, and the only one that specifies person and tense. See 8c.
+
+**Other (use Prompt)** — the exclusive one.
+- *Writing:* nothing. *Pictures:* nothing.
+- Selecting it clears the other two and sends no genre instruction at all, so the
+  tone comes entirely from your **Campaign Prompt**, your **Lore** and your narrative
+  voice. Pick it when you want the steering wheel yourself — and then write the
+  Campaign Prompt, or you will get a neutral book.
+
+**Combining them.** With two or three selected, all of their instructions are sent
+together under a heading that names the primary first: *"this is a Thriller / Suspense
+story, with elements of Sci Fi."* They stack rather than average, so pick a second genre
+for something the first does not do. Three that all want faces in frame will not give you
+three times the faces; a genre that wants machinery alongside one that wants held moments
+will give you both.
+
+---
+
+## 8c. Family Stories and Skill Stories
+
+Two genres that are not about imaginary people, and Campaignia treats them differently
+because of it.
+
+**Family Story** is for a real life told warmly — a grandparent's childhood, a wedding, a
+year the family will want to remember. The prose stays personal and grounded, with no
+fantasy idiom creeping in, and the pictures favour real places, real clothes and real
+objects rather than costume.
+
+**Skill Story** is for showing someone what is about to happen, one step at a time — a
+dentist appointment, a first day at a new school, a hospital visit. It is written in the
+**first person and the present tense**, calm and literal, one step per page. It tells the
+truth about the parts that are uncomfortable and **never promises that something will not
+hurt**, because a story that makes a promise the day cannot keep is worse than no story.
+It ends on a calm, positive beat. The pictures are uncluttered and evenly lit, one thing
+happening per frame, the same person shown throughout, with nothing frightening and no
+dramatic angles.
+
+**You write one into the {session} the same way you write anything else** — describe the
+situation as a list of steps, in order, and let the genre do the rest:
+
+> *Johnny waits in the waiting room with Mum. There are chairs and a box of books. The
+> assistant calls Johnny's name and walks him back. Johnny sits in the big chair and it
+> tips backwards. The dentist counts Johnny's teeth with a small mirror. Sometimes the
+> cleaner is buzzy and tickly. Afterwards Johnny chooses a sticker.*
+
+There is no special form to fill in. Plain steps in plain order is exactly the right
+input — and the mundane details are worth including, because they are what the pictures
+are drawn from. **A Family Story input looks much the same**, just less clinical:
+*"Grandad grew up on Bell Street. The house had a coal fire and a black-and-white
+television. He walked to school past the bakery."*
+
+**What actually behaves differently.** Because these stories can show a real person —
+often a child — Campaignia changes three things, and none of them depend on you
+remembering to be careful.
+
+- **Publishing to the Library goes out as LINK ONLY by default.** You do not have to ask
+  for it. The story gets a private link that works for anyone you send it to, and it does
+  **not** appear in the public Stories directory and is **not** offered to search engines.
+- **Making one public asks you first.** From your Account page you can list it publicly,
+  and when you do, Campaignia warns you plainly that the story may show a real person and
+  asks you to confirm. Decline and it stays link only.
+- **Putting a single image from one of these campaigns into the public image gallery is
+  restricted to the Story Master**, and asks for the same confirmation. On any other
+  campaign, anyone who archived an image can flip it public.
+
+**This applies if ANY of your three genres is Family Story or Skill Story** — pairing one
+with Fantasy does not switch the protections off.
+
+Two things it does **not** do, so you know where the edges are:
+
+- **It does not lock the art style or the narrative voice.** You can render either genre
+  in any style you like. **Everyday life illustration** and the **Calm & Literal** voice
+  are what these stories are built for — see 8d — but the choice stays yours.
+- **"Link only" protects a story going forward, not backward.** If a story was public and
+  you make it link only, its public listing stops straight away and search engines are
+  asked to drop it — but that takes time, and anyone who already saved the page has it.
+  Link only is not a recall.
+
+**On the name:** these are called **Skill Stories** here. If you know the method by
+another name, that is deliberate — the technique is the same, the name is ours.
+
+---
+
+## 8d. Choosing a style to match your genre
+
+Genre and style are separate on purpose, but some pairings are much better than others,
+and one mismatch is common enough to name.
+
+**The styles every account starts with are fantasy styles.** **High fantasy illustration**
+and the **Classic** voice are on every plan, and both are excellent — at fantasy. Point
+them at a dentist appointment or a grandparent's childhood and you will get a beautifully
+rendered fantasy dentist, because that is what they are for. **If your story is not a
+fantasy, change the art style.** It is the highest-value setting on the page.
+
+**For real-world stories — Family Story, Skill Story, Biography, Nonfiction, Historical
+Fiction:**
+
+- **Everyday life illustration** *(Silver)* — richly painted and highly detailed, the same
+  quality of rendering as the fantasy styles, but of the real world: ordinary places,
+  ordinary clothes, ordinary objects, drawn as they actually look, with the period taken
+  from your story rather than assumed. This is the one to pick.
+- **Classic pen and ink** *(Silver)* and **Watercolor painterly** *(Gold)* also work well
+  and carry no fantasy vocabulary of their own.
+
+**Narrative voices worth knowing for these stories:**
+
+- **Calm & Literal** *(Silver)* — built for Skill Stories. First person, present tense,
+  short sentences, one idea each. It suggests rather than instructs (*"I can try to hold
+  still"*, not *"I will hold still"*), keeps at least two describing sentences for every
+  suggestion, and uses *usually* and *sometimes* rather than *always*. It names feelings
+  gently and generally — *"some children feel a little nervous, and that is okay"* —
+  rather than telling the reader what they felt. It will not use metaphor or simile, and
+  it will not promise that something will not hurt.
+- **Cinematic Script** *(Gold)* — plain, punchy, technique only. A good neutral choice for
+  a Biography or a Nonfiction book.
+- **Children's Storybook** *(Platinum)* — warm and gentle, and lovely for a Family Story,
+  though its own voice leans storybook-fantasy; pair it with a real-world art style.
+
+**And the reverse pairing is fine too.** A fantasy campaign in **Everyday life
+illustration** is a legitimate look — grounded, unglamorous fantasy — not a mistake.
+Nothing here is a rule; it is a map of which combinations do what.
 
 ---
 
@@ -707,14 +960,72 @@ continuing. Then **Continue to secure payment** goes to Stripe. **All print orde
 final — no refunds, and an order cannot be pulled back once placed.** You get a tracking
 number, and past orders live under **My Orders**.
 
-*Publish to the Library* — makes your story a public web page anyone can read. Add a
-**blurb** here if you want a teaser on your Library page; leave it blank and your opening
-narrative is used. You must tick the **rights checkbox** confirming you own the content
-and it is general-audience.
+*Publish to the Library* — makes your story a readable web page in the Library, either
+listed publicly or as a private link. See **15a** for the choice.
+
+- **I own or have the rights to this content** — you have to tick this every time, and it
+  is asked again for each campaign. It is a statement about **this** book, and it also
+  confirms the content is general-audience.
+- **Blurb** — optional; the teaser on your Library page. Leave it blank and your opening
+  narrative is used.
+- **Publish as link only** — see 15a. **Family Stories and Skill Stories are published
+  this way automatically**, whether or not you tick the box.
+- **Each Publish creates a NEW entry.** Publishing again does not update the last one — it
+  makes a second book in the Library. Remove the old one from **My Stories** on your
+  Account page if you do not want both.
+- **What gets published is frozen.** The pages, the pictures, the prose and the cast are
+  captured at the moment you publish. Editing the campaign afterwards does not change a
+  book that is already out; publish again if you want the changes public. The **title**
+  and the **blurb** are the exceptions — those you can fix from your Account page without
+  republishing.
 
 **A page limit applies to both publishing and ordering.** It is an adjustable setting
 rather than a fixed number, so quote the current value from your context rather than a
 remembered one.
+
+---
+## 15a. Public, or link only
+
+Every book you publish to the Library is one of two things, and you choose which at the
+moment you publish.
+
+**Public** — listed in the Library. It appears in the Stories directory, it can be found
+by browsing and filtering, and it is offered to search engines. This is the normal choice
+for a campaign you want read.
+
+**Link only** — published, but unlisted. It is a real Library page with a real, permanent
+address, and anyone you send that address to can read it without an account. It is **not**
+in the Stories directory, **not** in the site's search-engine sitemap, and **cannot be
+found by browsing, filtering or searching the Library**. The only way in is the link.
+
+Tick **Publish as link only** on the Order & Publish tab to choose it. **Family Stories
+and Skill Stories are link only automatically** and the box is ticked for you.
+
+**What "link only" means, said plainly: it is unlisted, not secret.** The address is long
+and unguessable, and nothing on the site will lead a stranger to it — but it is not
+password-protected. Anyone holding the link can open it, and can pass it on. Treat the
+link the way you would treat the book itself. For a family book you are sending to
+relatives, that is exactly right; for something you would be upset to see forwarded, do
+not publish it at all.
+
+**Changing your mind.** Both directions work, from **My Stories** on your Account page:
+
+- **Link only → Public** lists it. If it is a **Family Story** or **Skill Story**,
+  Campaignia warns you that the book may show a real person and asks you to confirm first,
+  and only the **Story Master** can do it.
+- **Public → Link only** removes it from the directory immediately and asks search engines
+  to drop it. That request takes time to be honoured, and anyone who already has the page
+  keeps it — so going link only limits what happens next, it does not undo what already
+  happened.
+
+**The link never changes.** This is the part worth remembering: a story's address is the
+same whether it is public or link only, and switching between them does not break it. A
+link you sent someone last month still works after you change your mind, in either
+direction. Use **Copy link** on your Account page, or **Share** on the story's own page,
+to get it.
+
+**The only thing that breaks a link is removing the story from the Library**, which you
+can also do from My Stories. That stops it working for everyone, permanently.
 
 ---
 ## 16. The public Library
@@ -724,6 +1035,21 @@ sides: a gallery of **public images** (single images users flagged public, credi
 their pen names) and a **Stories** directory of **published graphic novels**. Search by
 **author / pen name**, then open a story to **read** it on its page or **download** it.
 It's also where your own published stories and public images appear to the world.
+
+**Story links.** Every published story has its own permanent address, and **it is the same
+link whether the story is public or link only** — so a link you send someone keeps working
+if you change your mind later. **Copy link** under My Stories on your Account page gives
+you that address, and so does the **Share** button on the story's own page.
+
+**What you will not find here.** The Stories directory lists only stories published
+publicly. A **link only** story is not in it, is not in the site's search-engine sitemap,
+and cannot be reached by browsing, filtering or searching — only by its link. That is the
+point of it: a family book you want to send to relatives, not to strangers. See 15a.
+
+**Filtering by genre.** The Library files each book under the genres its campaign had **at
+the moment it was published**. If a book looks filed under the wrong genre, that is the
+genre it went out with — change the campaign and publish again, and the new entry is filed
+the new way.
 
 ---
 
@@ -908,6 +1234,28 @@ Friction points and what's actually going on.
   version. Make your own version of those sessions to use yours.
 - **"My image failed to generate."** You weren't charged — just **Regenerate**. If it
   keeps failing, simplify the prompt or check your connection.
+- **"I published my Family Story but I can't find it in the Library."** That is working as
+  intended — Family Stories and Skill Stories publish as **link only**, so they are
+  deliberately not listed. It is on your **Account page** under My Stories, with a **Copy
+  link** button. If you do want it listed publicly, switch it there and confirm the
+  warning.
+- **"I sent someone a link to my story and it does not work."** Check whether the story is
+  still published — removing it from the Library makes its link stop working for everyone.
+  Switching between public and link only does **not** break a link, so that is not the
+  cause. If it is still published, use **Copy link** on the Account page to get the current
+  address rather than an older one you may have saved.
+- **"Why is my published book different from my campaign now?"** A published book is frozen
+  at the moment you published it. Edits made afterwards live in your campaign, not in the
+  book that is already out. Publish again to put the newer version in the Library.
+- **"My real-world story came out looking like a fantasy."** Change the **art style**. The
+  style every account starts with is **High fantasy illustration**, and it will render a
+  dentist surgery or a 1950s kitchen with fantasy architecture and ornament because that is
+  what it is for. Pick **Everyday life illustration** instead — the same painted quality,
+  of the real world. See 8d.
+- **"My Skill Story reads like a novel."** Change the **narrative voice** to **Calm &
+  Literal**. The starting voice, **Classic**, writes dramatic literary prose in the past
+  tense, which is the opposite of what a Skill Story needs. Calm & Literal is first person,
+  present tense and plain. See 8d.
 
 ---
 
@@ -934,9 +1282,29 @@ Friction points and what's actually going on.
 - **How do I see the real printed look?** Publish page → **Optimize** tab, then **Review in a
   New Tab**.
 - **Who can make an image public?** The person who archived it, or the campaign's Story
-  Master.
+  Master — **except on a Family Story or Skill Story campaign, where only the Story
+  Master can, and is asked to confirm first.**
 - **Can I build a series?** Yes — publish some sessions now and more later; each Publish
   creates a Library entry, and you can compile subsets into separate volumes.
+- **Does genre change the artwork?** Not how it *looks* — that is the **art style**. Genre
+  decides which moments become pictures and how they are framed. They work together.
+- **Can I pick more than one genre?** Up to three, and the order matters — the first is the
+  primary one and the rest are elements of it.
+- **What does a genre actually do?** It sends two standing instructions with every
+  {session}: one shaping the prose, one shaping which moments get drawn. Section 8b prints
+  both, for all fifteen.
+- **What is a Skill Story?** A calm, literal, step-by-step story for showing someone what
+  is about to happen — a dentist visit, a first day at school. First person, present tense,
+  one step a page. See 8c.
+- **Is a link-only story private?** It is unlisted, not secret. Nothing on the site leads
+  anyone to it, but anyone holding the link can read it — so treat the link the way you
+  would treat the book.
+- **If I make a story public, does its link change?** No. The link is the same either way
+  and keeps working when you switch. Only removing the story from the Library stops it.
+- **If I change my campaign's genre, does my published book change?** No. Genres are
+  frozen onto a book when it is published.
+- **Why does my non-fantasy story look like fantasy?** The style every account starts with
+  is a fantasy style. Change it to **Everyday life illustration**. See 8d.
 
 ---
 
