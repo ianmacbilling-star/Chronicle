@@ -6,7 +6,8 @@ const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../mi
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
-const genresvc = require('../services/genres');   // v3.0.487 -- Library genre snapshot
+const genresvc = require('../services/genres');
+const artstyles = require('../services/artStyleCatalog');   // v3.0.845 -- TD-694   // v3.0.487 -- Library genre snapshot
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile, fetchFile, copyObject } = require('../storage/storage');
@@ -8041,11 +8042,36 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // reason: the published thing is the thing that was published, and a later edit to the
     // campaign must not silently re-file it. RESOLVED ONCE (v3.0.832, TD-666) and now more
     // literally so -- there is exactly one campaignSafety() call in this route.
+    // v3.0.845 -- TD-694. ART STYLE SNAPSHOT, frozen here for the same TD-219 reason as the
+    // genres above: the published thing is the thing that was published.
+    //
+    // EVERY STYLE THE BOOK ACTUALLY CONTAINS, from the panels that actually carry a picture.
+    // Per panel the value is moments.style, falling back to the session's art style and then
+    // the campaign's -- and STOPPING THERE. There is deliberately no
+    // 'High fantasy illustration' tail: getStylePrefix has one because it must return a
+    // paragraph to generate with, and this must not, because a book whose style was never
+    // recorded should answer to NO style filter rather than to the wrong one. NULL has always
+    // meant never chosen (v3.0.839, TD-669) and this is the same rule one surface later.
+    //
+    // A custom style collapses to the single token 'custom' inside styleSlug(), so no
+    // account's custom-style id can be read off a public query string.
+    var _styleSet = {};
+    for (var _stx = 0; _stx < sessionsWithData.length; _stx++) {
+      var _stSess = sessionsWithData[_stx];
+      var _stMoments = (_stSess && _stSess.moments) || [];
+      for (var _sty = 0; _sty < _stMoments.length; _sty++) {
+        var _stM = _stMoments[_sty];
+        if (!_stM || !_stM.image) continue;
+        var _stSlug = artstyles.styleSlug(_stM.style || (_stSess && _stSess.art_style) || (campaign && campaign.art_style) || '');
+        if (_stSlug) _styleSet[_stSlug] = true;
+      }
+    }
+    var _pubStyles = '{' + Object.keys(_styleSet).join(',') + '}';
     var _shareToken = makeShareToken();
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, visibility, share_token, safety_level, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?, ?, ?, TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, art_styles, visibility, share_token, safety_level, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?::text[], ?, ?, ?, TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubStyles, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
     _ptLap('insertRow');
   } catch (e) {

@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const artstyles = require('../services/artStyleCatalog');   // v3.0.845 -- TD-694, the art-style facet vocabulary
 
 // v3.0.828 -- TD-673. The share token is the ONLY thing protecting an unlisted
 // story, so it comes from a CSPRNG and nothing else. 16 random bytes rendered as
@@ -454,6 +455,21 @@ async function initPostgres() {
     // which is correct, because they were published under the old rules and their
     // authors consented to nothing else.
     "ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS safety_level TEXT NOT NULL DEFAULT 'standard'",
+    // v3.0.845 -- TD-694. THE ART STYLES PRESENT IN THE PUBLISHED BOOK, as facet slugs.
+    //
+    // AN ARRAY, BECAUSE A BOOK DOES NOT HAVE ONE ART STYLE. moments.style is stamped per
+    // panel: a batch generate writes one style across its panels, but a single-panel
+    // regenerate writes that panel alone (routes/images.js, the UPDATE moments SET
+    // image = ?, style = ? path), so a mixed book is ordinary rather than exotic. The two
+    // alternatives were both worse. A dominant-style calculation throws away the minority
+    // panels. sessions.art_style || campaigns.art_style is the SETTING rather than what the
+    // panels look like, and its 'High fantasy illustration' tail would stamp High fantasy
+    // onto a book that never chose anything -- the exact fallback-read-as-a-default trap
+    // v3.0.839 found in TD-669.
+    //
+    // SAME SHAPE AS genres BESIDE IT, deliberately: text[] + GIN + overlap, frozen at the
+    // flip (TD-219). One pattern across both facets and both tabs instead of two.
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS art_styles text[]',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
@@ -617,6 +633,44 @@ async function initPostgres() {
     );
     if (_sb && _sb.rowCount) console.log('[db] public_stories genre snapshot: ' + _sb.rowCount + ' story(ies) back-filled');
   } catch(e) { console.error('[db] public_stories genre backfill failed: ' + (e && e.message)); }
+
+  // v3.0.845 -- TD-694. The art-style facet: one index per surface, and a ONE-OFF
+  // backfill for books published before the column existed.
+  //
+  // THE BACKFILL READS THE SNAPSHOT, NOT THE CAMPAIGN, and that is the whole reason it is
+  // honest. public_stories.snapshot already contains the sessions and their moments exactly
+  // as they were at publish -- the frozen thing itself -- so an old row can be filled from
+  // what the book ACTUALLY CONTAINED rather than from a campaign setting that may have been
+  // changed since. It is done in JS, like the share_token backfill below it, because the
+  // slug normalisation ('custom:17' -> 'custom') belongs in one place and that place is
+  // services/artStyleCatalog.js.
+  //
+  // A ROW WITH NO RECOVERABLE STYLE GETS AN EMPTY ARRAY, NEVER A GUESS. It then answers to
+  // no style filter, which is true, instead of answering to High fantasy, which would not
+  // be. Idempotent: only rows that have never been set.
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_art_styles ON public_stories USING GIN (art_styles)'); } catch(e) { console.error('[db] public_stories art_style index failed: ' + (e && e.message)); }
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_art_style ON campaign_archives(art_style) WHERE public = TRUE'); } catch(e) { console.error('[db] campaign_archives art_style index failed: ' + (e && e.message)); }
+  try {
+    const _as = await pool.query('SELECT id, snapshot FROM public_stories WHERE art_styles IS NULL');
+    let _asFilled = 0;
+    for (const _row of (_as.rows || [])) {
+      const _seen = {};
+      try {
+        const _snap = (typeof _row.snapshot === 'string') ? JSON.parse(_row.snapshot) : _row.snapshot;
+        const _sess = (_snap && _snap.sessions) || [];
+        for (const _s of _sess) {
+          for (const _m of ((_s && _s.moments) || [])) {
+            if (!_m || !_m.image) continue;
+            const _slug = artstyles.styleSlug(_m.style || (_s && _s.art_style) || '');
+            if (_slug) _seen[_slug] = true;
+          }
+        }
+      } catch (e) { /* an unreadable snapshot yields an empty array, which is the honest answer */ }
+      await pool.query('UPDATE public_stories SET art_styles = $1::text[] WHERE id = $2', ['{' + Object.keys(_seen).join(',') + '}', _row.id]);
+      if (Object.keys(_seen).length) _asFilled++;
+    }
+    if (_as.rowCount) console.log('[db] art_styles backfill: ' + _as.rowCount + ' story(ies) examined, ' + _asFilled + ' with a recoverable style');
+  } catch(e) { console.error('[db] art_styles backfill failed: ' + (e && e.message)); }
 
   // v3.0.828 -- TD-673. Mint a share token for every published story that predates
   // the column. Done in JS rather than in SQL on purpose: md5(random()) in Postgres

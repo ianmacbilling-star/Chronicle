@@ -112,7 +112,22 @@
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
-    #stories-genre, #images-genre { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; margin-left:8px; }
+    /* v3.0.845 -- TD-693/TD-694. The two single-choice <select>s are gone; one shared
+       multi-select row serves both tabs, because a genre means the same thing on each. */
+    .lib-facets { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; padding:0 14px 10px; }
+    .facet-det { position:relative; }
+    .facet-sum { list-style:none; cursor:pointer; font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 11px; user-select:none; }
+    .facet-sum::-webkit-details-marker { display:none; }
+    .facet-sum::after { content:' \25BE'; opacity:0.65; }
+    .facet-det[open] .facet-sum { border-color:var(--gold); color:var(--parchment); }
+    .facet-sum.on { border-color:var(--gold); color:var(--parchment); background:rgba(107,74,18,0.55); }
+    .facet-panel { position:absolute; z-index:60; top:calc(100% + 5px); left:0; min-width:210px; max-height:290px; overflow-y:auto; background:#0d0804; border:2px solid var(--ink); border-radius:4px; box-shadow:3px 3px 0 rgba(0,0,0,0.45); padding:6px; text-align:left; }
+    .facet-opt { display:flex; align-items:center; gap:7px; font-family:'Crimson Text',serif; font-size:13px; color:rgba(240,232,208,0.92); padding:4px 6px; border-radius:3px; cursor:pointer; }
+    .facet-opt:hover { background:rgba(201,168,76,0.12); }
+    .facet-opt input { accent-color:#6b4a12; }
+    .facet-clear { font-family:'Crimson Text',serif; font-size:13px; background:transparent; color:rgba(201,168,76,0.85); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 11px; cursor:pointer; }
+    .facet-clear:hover { color:var(--parchment); border-color:var(--gold); }
+    @media (max-width:520px) { .facet-panel { left:auto; right:0; } }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -144,17 +159,25 @@
     <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Stories</button>
   </div>
 
+  <!-- v3.0.845 -- TD-693/TD-694/TD-672. ONE filter row above BOTH tabs. The v3.0.843
+       arrangement gave each tab its own picker, which meant the same question was asked
+       twice and the two could answer differently; a visitor arriving pre-filtered from a
+       landing page would then have seen the filter apply to one tab and not the other.
+       Filled from /api/public/genres and /api/public/art-styles, the same two lists the
+       server validates against. -->
+  <div class="lib-facets" id="lib-facets">
+    <div class="facet" id="facet-genre"></div>
+    <div class="facet" id="facet-style"></div>
+    <button type="button" class="facet-clear" id="facet-clear" hidden>Show everything</button>
+  </div>
+
   <div class="lib-filter" id="images-filter">
     <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
     <button class="filter-btn" data-window="all" id="f-all">All Time</button>
-    <!-- v3.0.843 -- TD-671. The image gallery gains the facet the Stories directory has
-         had since v3.0.487, filled from the same /api/public/genres endpoint. -->
-    <select id="images-genre" aria-label="Filter images by genre"><option value="">All genres</option></select>
   </div>
 
   <div class="lib-search" id="stories-search" style="display:none;">
     <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" />
-    <select id="stories-genre" aria-label="Filter stories by genre"><option value="">All genres</option></select>
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -194,8 +217,17 @@
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
-    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', genre: '', loading: false, done: false, any: false, tab: 'images' };
-    var sstate = { cursor: 0, q: '', genre: '', loading: false, done: false, any: false };
+    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', loading: false, done: false, any: false, tab: 'images', dirty: false };
+    var sstate = { cursor: 0, q: '', loading: false, done: false, any: false, dirty: false };
+    // v3.0.845 -- ONE selection, shared by both tabs. Arrays, because every facet is any-of.
+    var filters = { genre: [], style: [] };
+    function anyFilter() { return filters.genre.length > 0 || filters.style.length > 0; }
+    function filterQS() {
+      var qs = '';
+      if (filters.genre.length) qs += '&genre=' + encodeURIComponent(filters.genre.join(','));
+      if (filters.style.length) qs += '&style=' + encodeURIComponent(filters.style.join(','));
+      return qs;
+    }
     var storiesEl = document.getElementById('stories');
     var authorSections = {};
 
@@ -279,7 +311,7 @@
       // v3.0.843 -- TD-671. Appended to BOTH pagination modes. The server filters each one
       // separately, so a facet wired to only one of them would work until you pressed the
       // other tab -- which is the shape of most of the bugs in this file's history.
-      var gq = state.genre ? '&genre=' + encodeURIComponent(state.genre) : '';
+      var gq = filterQS();
       if (state.window === 'all') {
         url = '/api/public/library?limit=48&window=all' + gq + (state.cursor ? '&beforeId=' + state.cursor : '');
       } else {
@@ -293,7 +325,7 @@
         if (d && d.nextCursor) state.cursor = d.nextCursor;
         if (!d || !d.hasMore) {
           state.done = true;
-          setStatus(state.any ? '' : (state.genre ? 'No public images in that genre yet.' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
+          setStatus(state.any ? '' : (anyFilter() ? 'No public images match those filters yet.' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
         } else {
           setStatus('');
         }
@@ -347,8 +379,16 @@
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
       setStatus('');
+      // v3.0.845 -- a filter changed while this tab was hidden leaves it STALE, and the
+      // old `!any` test cannot see that: a tab that legitimately found nothing also has
+      // any=false, so it would re-request forever, and a tab that found something under
+      // the OLD filter would keep showing it. dirty is set by applyFilters for whichever
+      // tab is not in front.
       if (onStories) {
-        if (!sstate.any && !sstate.loading) resetStories();
+        if (sstate.dirty) { sstate.dirty = false; resetStories(); }
+        else if (!sstate.any && !sstate.loading) resetStories();
+      } else if (state.dirty) {
+        state.dirty = false; reset();
       } else if (!state.any && !state.loading) {
         load();
       }
@@ -411,7 +451,7 @@
     function loadStories() {
       if (sstate.loading || sstate.done) return;
       sstate.loading = true; spinner();
-      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + (sstate.genre ? '&genre=' + encodeURIComponent(sstate.genre) : '') + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];
@@ -419,7 +459,7 @@
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
-          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (sstate.genre ? 'No stories in that genre yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
+          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (anyFilter() ? 'No stories match those filters yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
         } else { setStatus(''); }
       }).catch(function () {
         sstate.loading = false;
@@ -427,23 +467,98 @@
       });
     }
 
-    // v3.0.487 -- the picker is built from /api/public/genres, the SAME list the
-    // server validates against, so the two cannot drift. If the fetch fails the
-    // control simply stays on All genres and the Library still works.
-    // v3.0.843 -- TD-671. ONE fetch fills BOTH pickers. Two fetches of the same fixed list
-    // are two chances for the tabs to disagree about what a genre is called, for no gain.
-    var sg = document.getElementById('stories-genre');
-    var ig = document.getElementById('images-genre');
-    if (sg || ig) {
-      fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
-        ((d && d.genres) || []).forEach(function (g) {
-          if (sg) { var o = document.createElement('option'); o.value = g.slug; o.textContent = g.label; sg.appendChild(o); }
-          if (ig) { var o2 = document.createElement('option'); o2.value = g.slug; o2.textContent = g.label; ig.appendChild(o2); }
+    // v3.0.487 / v3.0.843 / v3.0.845 -- both controls are built from the SAME lists the
+    // server validates against (/api/public/genres, /api/public/art-styles), so the filter
+    // and the picker cannot drift. If either fetch fails that facet simply does not appear
+    // and the Library still works -- including any filter carried in on the url, which is
+    // applied from the query string BEFORE either list arrives.
+    //
+    // <details> carries the open/close and the keyboard behaviour, so there is no popover
+    // state of our own to get wrong.
+    function makeFacet(host, label, key, options) {
+      if (!host || !options.length) return null;
+      var det = document.createElement('details'); det.className = 'facet-det';
+      var sum = document.createElement('summary'); sum.className = 'facet-sum';
+      var panel = document.createElement('div'); panel.className = 'facet-panel';
+      det.appendChild(sum); det.appendChild(panel); host.appendChild(det);
+      var boxes = [];
+      function paint() {
+        var n = filters[key].length;
+        sum.textContent = n ? (label + ' (' + n + ')') : label;
+        sum.className = 'facet-sum' + (n ? ' on' : '');
+      }
+      options.forEach(function (o) {
+        var lab = document.createElement('label'); lab.className = 'facet-opt';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o.slug;
+        cb.checked = filters[key].indexOf(o.slug) > -1;
+        cb.addEventListener('change', function () {
+          var i = filters[key].indexOf(o.slug);
+          if (cb.checked && i < 0) filters[key].push(o.slug);
+          else if (!cb.checked && i > -1) filters[key].splice(i, 1);
+          paint(); applyFilters();
         });
-      }).catch(function () {});
+        var sp = document.createElement('span'); sp.textContent = o.label;
+        lab.appendChild(cb); lab.appendChild(sp); panel.appendChild(lab);
+        boxes.push(cb);
+      });
+      paint();
+      return { repaint: function () { for (var i = 0; i < boxes.length; i++) boxes[i].checked = filters[key].indexOf(boxes[i].value) > -1; paint(); } };
     }
-    if (sg) sg.addEventListener('change', function () { sstate.genre = sg.value || ''; resetStories(); });
-    if (ig) ig.addEventListener('change', function () { state.genre = ig.value || ''; reset(); });
+
+    var facets = [];
+    var clearBtn = document.getElementById('facet-clear');
+
+    // v3.0.845 -- TD-672. A PRE-SELECTION, NEVER A RESTRICTION. The landing page hands the
+    // Library a starting filter in the url; the visitor can uncheck any of it, and Show
+    // everything clears the lot. The url is kept in step with what is on screen so a link
+    // someone copies is honest about what it shows -- and replaceState, not pushState,
+    // because a filter change is not a page the Back button should have to walk through.
+    function readUrlFilters() {
+      try {
+        var p = new URLSearchParams(location.search);
+        ['genre', 'style'].forEach(function (k) {
+          var raw = p.get(k);
+          if (!raw) return;
+          raw.split(',').forEach(function (v) {
+            v = v.trim().toLowerCase();
+            if (v && filters[k].indexOf(v) < 0) filters[k].push(v);
+          });
+        });
+      } catch (e) {}
+    }
+    function syncUrl() {
+      try {
+        var p = new URLSearchParams(location.search);
+        ['genre', 'style'].forEach(function (k) {
+          if (filters[k].length) p.set(k, filters[k].join(',')); else p.delete(k);
+        });
+        var q = p.toString();
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+      } catch (e) {}
+    }
+    function applyFilters() {
+      syncUrl();
+      if (clearBtn) clearBtn.hidden = !anyFilter();
+      // Reset the tab in front now; mark the other stale so it reloads when it is shown.
+      if (state.tab === 'stories') { state.dirty = true; resetStories(); }
+      else { sstate.dirty = true; reset(); }
+    }
+
+    readUrlFilters();
+    if (clearBtn) {
+      clearBtn.hidden = !anyFilter();
+      clearBtn.addEventListener('click', function () {
+        filters.genre = []; filters.style = [];
+        facets.forEach(function (fx) { if (fx) fx.repaint(); });
+        applyFilters();
+      });
+    }
+    fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
+      facets.push(makeFacet(document.getElementById('facet-genre'), 'Genres', 'genre', (d && d.genres) || []));
+    }).catch(function () {});
+    fetch('/api/public/art-styles').then(function (r) { return r.json(); }).then(function (d) {
+      facets.push(makeFacet(document.getElementById('facet-style'), 'Art styles', 'style', (d && d.styles) || []));
+    }).catch(function () {});
 
     var sq = document.getElementById('stories-q'); var sqTimer = null;
     if (sq) {
