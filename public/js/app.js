@@ -3735,8 +3735,9 @@ function renderReview(data) {
       var rm = canEditNarr
         ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
         : '';
+      // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
       return '<span class="review-chip review-chip-asset">' +
-        escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + rm + '</span>';
+        escapeHtmlReview(a.name) + rm + '</span>';
     }).join('');
     if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
 
@@ -21505,7 +21506,8 @@ function renderMomentOptions(momentId) {
     if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
     var assetChips = (p.assets || []).map(function(a){
       var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
-      return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + rm + '</span>';
+      // v3.0.850 -- TD-706. Same change as renderReview; these two draw the same row.
+      return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
     }).join();
     if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
     var addChar = '', addAsset = '';
