@@ -112,22 +112,29 @@
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
-    /* v3.0.845 -- TD-693/TD-694. The two single-choice <select>s are gone; one shared
-       multi-select row serves both tabs, because a genre means the same thing on each. */
-    .lib-facets { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; padding:0 14px 10px; }
-    .facet-det { position:relative; }
-    .facet-sum { list-style:none; cursor:pointer; font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 11px; user-select:none; }
-    .facet-sum::-webkit-details-marker { display:none; }
-    .facet-sum::after { content:' \25BE'; opacity:0.65; }
-    .facet-det[open] .facet-sum { border-color:var(--gold); color:var(--parchment); }
-    .facet-sum.on { border-color:var(--gold); color:var(--parchment); background:rgba(107,74,18,0.55); }
-    .facet-panel { position:absolute; z-index:60; top:calc(100% + 5px); left:0; min-width:210px; max-height:290px; overflow-y:auto; background:#0d0804; border:2px solid var(--ink); border-radius:4px; box-shadow:3px 3px 0 rgba(0,0,0,0.45); padding:6px; text-align:left; }
-    .facet-opt { display:flex; align-items:center; gap:7px; font-family:'Crimson Text',serif; font-size:13px; color:rgba(240,232,208,0.92); padding:4px 6px; border-radius:3px; cursor:pointer; }
-    .facet-opt:hover { background:rgba(201,168,76,0.12); }
-    .facet-opt input { accent-color:#6b4a12; }
-    .facet-clear { font-family:'Crimson Text',serif; font-size:13px; background:transparent; color:rgba(201,168,76,0.85); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 11px; cursor:pointer; }
-    .facet-clear:hover { color:var(--parchment); border-color:var(--gold); }
-    @media (max-width:520px) { .facet-panel { left:auto; right:0; } }
+    /* v3.0.846 -- Ian, 2026-09-10: "I don't like that control at all. Can you do the control
+       that matches the Genre Control on the Campaign details Dialog box." So this IS that
+       control: a row of removable chips, and a select underneath that adds one.
+
+       THE CHIP FILL IS COPIED FROM csGenreRender IN app.js, NOT INVENTED. Those values were
+       chosen in v3.0.486 to read on the white settings surface AND on the dark panes, and
+       they are the same family as .sc-genre on the story cards two rules above -- so the
+       filter chips and the pills on the cards they select now look like one thing. */
+    .lib-facets { display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 14px 22px; }
+    .facet-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; }
+    .facet-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:12px; border:1px solid #4a3208; background:#8a6a2a; font-family:'Crimson Text',serif; font-size:12px; font-weight:600; color:#f7ecd2; }
+    .facet-chip button { background:none; border:none; color:rgba(247,236,210,0.8); cursor:pointer; padding:0; font-size:13px; line-height:1; }
+    .facet-chip button:hover { color:#fff; }
+    .facet-add { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; max-width:260px; }
+    .facet-add:disabled { opacity:0.55; cursor:default; }
+    /* Show everything shares a row with Last 6 Months and All Time, so it takes their
+       metrics exactly -- same face, size, letter-spacing, padding, border width and radius
+       -- or the three sit at different heights and the row reads as an accident. It keeps a
+       thinner, dimmer border because it is an ACTION beside two MODE buttons, and only the
+       modes should ever look selected. */
+    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.2); border-radius:3px; transition:all .15s; }
+    .facet-clear:hover { color:var(--gold); border-color:var(--gold); }
+    #lib-actions { gap:10px; margin-top:2px; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -166,14 +173,27 @@
        Filled from /api/public/genres and /api/public/art-styles, the same two lists the
        server validates against. -->
   <div class="lib-facets" id="lib-facets">
-    <div class="facet" id="facet-genre"></div>
-    <div class="facet" id="facet-style"></div>
-    <button type="button" class="facet-clear" id="facet-clear" hidden>Show everything</button>
-  </div>
-
-  <div class="lib-filter" id="images-filter">
-    <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
-    <button class="filter-btn" data-window="all" id="f-all">All Time</button>
+    <div class="facet-row" id="facet-genre">
+      <div class="facet-row" id="facet-genre-chips"></div>
+      <select class="facet-add" id="facet-genre-add" aria-label="Add a genre to the filter"></select>
+    </div>
+    <div class="facet-row" id="facet-style">
+      <div class="facet-row" id="facet-style-chips"></div>
+      <select class="facet-add" id="facet-style-add" aria-label="Add an art style to the filter"></select>
+    </div>
+    <!-- v3.0.846 -- Ian: "If you can put Show Everything, Last 6 months and All Time on the
+         same row." So the window buttons MOVE UP into the filter block rather than a copy
+         being made -- they keep their ids, their classes and their handlers, and
+         #images-filter is still the element switchTab hides on the Stories tab, where a
+         six-month window means nothing. Show everything sits OUTSIDE it, because clearing
+         the filter is meaningful on both tabs. -->
+    <div class="facet-row" id="lib-actions">
+      <button type="button" class="facet-clear" id="facet-clear" hidden>Show everything</button>
+      <span class="facet-row" id="images-filter">
+        <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
+        <button class="filter-btn" data-window="all" id="f-all">All Time</button>
+      </span>
+    </div>
   </div>
 
   <div class="lib-search" id="stories-search" style="display:none;">
@@ -374,7 +394,7 @@
       var onStories = tab === 'stories';
       document.getElementById('tab-images').classList.toggle('active', !onStories);
       document.getElementById('tab-stories').classList.toggle('active', onStories);
-      document.getElementById('images-filter').style.display = onStories ? 'none' : '';
+      document.getElementById('images-filter').style.display = onStories ? 'none' : 'inline-flex';   // v3.0.846 -- it lives inside the filter row now, so restore inline-flex rather than block
       document.getElementById('stories-search').style.display = onStories ? '' : 'none';
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
@@ -473,36 +493,77 @@
     // and the Library still works -- including any filter carried in on the url, which is
     // applied from the query string BEFORE either list arrives.
     //
-    // <details> carries the open/close and the keyboard behaviour, so there is no popover
-    // state of our own to get wrong.
-    function makeFacet(host, label, key, options) {
-      if (!host || !options.length) return null;
-      var det = document.createElement('details'); det.className = 'facet-det';
-      var sum = document.createElement('summary'); sum.className = 'facet-sum';
-      var panel = document.createElement('div'); panel.className = 'facet-panel';
-      det.appendChild(sum); det.appendChild(panel); host.appendChild(det);
-      var boxes = [];
+    // v3.0.846 -- THE SAME CONTROL AS THE CAMPAIGN DETAILS MODAL, and deliberately the same
+    // SHAPE as csGenreRender in public/js/app.js: chips carrying a remove button, and a
+    // select beneath that offers only what is not already chosen and resets itself after
+    // each pick. A visitor who has set a campaign's genre has used this control before.
+    //
+    // TWO THINGS FROM THAT CONTROL ARE DELIBERATELY NOT COPIED, because they are properties
+    // of AUTHORING a campaign rather than of filtering a library:
+    //   * the three-genre cap and its note. Three is the limit on a campaign because more
+    //     than three blend into no direction at all -- an any-of FILTER has no such problem,
+    //     it just casts a wider net, so the only ceiling is the server's parse cap.
+    //   * the "main" badge on the first chip. Order is meaningful on a campaign, where the
+    //     first genre leads the steering. In an any-of filter it means nothing, and a badge
+    //     claiming otherwise would be a lie the control tells every visitor.
+    //
+    // Everything BEHIND the control is unchanged from v3.0.845 -- one shared selection, the
+    // url kept in step, the stale-tab flag. This is a new face on the same machinery.
+    function makeFacet(key, label, noun, options) {
+      var chips = document.getElementById('facet-' + key + '-chips');
+      var add = document.getElementById('facet-' + key + '-add');
+      if (!chips || !add || !options.length) return null;
+      var labelFor = {};
+      options.forEach(function (o) { labelFor[o.slug] = o.label; });
+
       function paint() {
-        var n = filters[key].length;
-        sum.textContent = n ? (label + ' (' + n + ')') : label;
-        sum.className = 'facet-sum' + (n ? ' on' : '');
-      }
-      options.forEach(function (o) {
-        var lab = document.createElement('label'); lab.className = 'facet-opt';
-        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o.slug;
-        cb.checked = filters[key].indexOf(o.slug) > -1;
-        cb.addEventListener('change', function () {
-          var i = filters[key].indexOf(o.slug);
-          if (cb.checked && i < 0) filters[key].push(o.slug);
-          else if (!cb.checked && i > -1) filters[key].splice(i, 1);
-          paint(); applyFilters();
+        // Built with createElement and textContent rather than innerHTML: these labels come
+        // off the wire, and the story cards next to them already take that care.
+        chips.innerHTML = '';
+        filters[key].forEach(function (slug) {
+          var chip = document.createElement('span'); chip.className = 'facet-chip';
+          var txt = document.createElement('span'); txt.textContent = labelFor[slug] || slug;
+          var x = document.createElement('button');
+          x.type = 'button'; x.title = 'Remove'; x.innerHTML = '&times;';
+          x.setAttribute('aria-label', 'Remove ' + (labelFor[slug] || slug));
+          x.addEventListener('click', function () {
+            var i = filters[key].indexOf(slug);
+            if (i > -1) filters[key].splice(i, 1);
+            paint(); applyFilters();
+          });
+          chip.appendChild(txt); chip.appendChild(x); chips.appendChild(chip);
         });
-        var sp = document.createElement('span'); sp.textContent = o.label;
-        lab.appendChild(cb); lab.appendChild(sp); panel.appendChild(lab);
-        boxes.push(cb);
+
+        // The select offers what is left. When nothing is left it says so and disables
+        // itself, rather than letting a click do nothing -- the csGenreRender rule.
+        var left = options.filter(function (o) { return filters[key].indexOf(o.slug) < 0; });
+        add.innerHTML = '';
+        var head = document.createElement('option');
+        head.value = '';
+        head.textContent = left.length ? ('+ Add ' + noun) : ('All ' + label.toLowerCase() + ' added');
+        add.appendChild(head);
+        left.forEach(function (o) {
+          var op = document.createElement('option');
+          op.value = o.slug; op.textContent = o.label;
+          add.appendChild(op);
+        });
+        add.value = '';
+        add.disabled = !left.length;
+      }
+
+      add.addEventListener('change', function () {
+        var slug = add.value;
+        if (!slug) return;
+        if (filters[key].indexOf(slug) < 0) filters[key].push(slug);
+        paint(); applyFilters();
       });
+
+      // A url can carry a slug this list does not contain (a retired one). The server
+      // already drops it; drop it here too, or it would sit in the url as an invisible
+      // filter with no chip to remove it by.
+      filters[key] = filters[key].filter(function (s) { return !!labelFor[s]; });
       paint();
-      return { repaint: function () { for (var i = 0; i < boxes.length; i++) boxes[i].checked = filters[key].indexOf(boxes[i].value) > -1; paint(); } };
+      return { repaint: paint };
     }
 
     var facets = [];
@@ -549,15 +610,17 @@
       clearBtn.hidden = !anyFilter();
       clearBtn.addEventListener('click', function () {
         filters.genre = []; filters.style = [];
-        facets.forEach(function (fx) { if (fx) fx.repaint(); });
+        facets.forEach(function (fx) { if (fx) fx.repaint(); });   // v3.0.846 -- repaint now means rebuild the chips and refill the select
         applyFilters();
       });
     }
     fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
-      facets.push(makeFacet(document.getElementById('facet-genre'), 'Genres', 'genre', (d && d.genres) || []));
+      facets.push(makeFacet('genre', 'Genres', 'a genre', (d && d.genres) || []));
+      if (clearBtn) clearBtn.hidden = !anyFilter();
     }).catch(function () {});
     fetch('/api/public/art-styles').then(function (r) { return r.json(); }).then(function (d) {
-      facets.push(makeFacet(document.getElementById('facet-style'), 'Art styles', 'style', (d && d.styles) || []));
+      facets.push(makeFacet('style', 'Art styles', 'an art style', (d && d.styles) || []));
+      if (clearBtn) clearBtn.hidden = !anyFilter();
     }).catch(function () {});
 
     var sq = document.getElementById('stories-q'); var sqTimer = null;
