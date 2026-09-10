@@ -112,7 +112,29 @@
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
-    #stories-genre, #images-genre { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; margin-left:8px; }
+    /* v3.0.846 -- Ian, 2026-09-10: "I don't like that control at all. Can you do the control
+       that matches the Genre Control on the Campaign details Dialog box." So this IS that
+       control: a row of removable chips, and a select underneath that adds one.
+
+       THE CHIP FILL IS COPIED FROM csGenreRender IN app.js, NOT INVENTED. Those values were
+       chosen in v3.0.486 to read on the white settings surface AND on the dark panes, and
+       they are the same family as .sc-genre on the story cards two rules above -- so the
+       filter chips and the pills on the cards they select now look like one thing. */
+    .lib-facets { display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 14px 22px; }
+    .facet-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; }
+    .facet-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:12px; border:1px solid #4a3208; background:#8a6a2a; font-family:'Crimson Text',serif; font-size:12px; font-weight:600; color:#f7ecd2; }
+    .facet-chip button { background:none; border:none; color:rgba(247,236,210,0.8); cursor:pointer; padding:0; font-size:13px; line-height:1; }
+    .facet-chip button:hover { color:#fff; }
+    .facet-add { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; max-width:260px; }
+    .facet-add:disabled { opacity:0.55; cursor:default; }
+    /* Show everything shares a row with Last 6 Months and All Time, so it takes their
+       metrics exactly -- same face, size, letter-spacing, padding, border width and radius
+       -- or the three sit at different heights and the row reads as an accident. It keeps a
+       thinner, dimmer border because it is an ACTION beside two MODE buttons, and only the
+       modes should ever look selected. */
+    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.2); border-radius:3px; transition:all .15s; }
+    .facet-clear:hover { color:var(--gold); border-color:var(--gold); }
+    #lib-actions { gap:10px; margin-top:2px; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -144,17 +166,38 @@
     <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Stories</button>
   </div>
 
-  <div class="lib-filter" id="images-filter">
-    <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
-    <button class="filter-btn" data-window="all" id="f-all">All Time</button>
-    <!-- v3.0.843 -- TD-671. The image gallery gains the facet the Stories directory has
-         had since v3.0.487, filled from the same /api/public/genres endpoint. -->
-    <select id="images-genre" aria-label="Filter images by genre"><option value="">All genres</option></select>
+  <!-- v3.0.845 -- TD-693/TD-694/TD-672. ONE filter row above BOTH tabs. The v3.0.843
+       arrangement gave each tab its own picker, which meant the same question was asked
+       twice and the two could answer differently; a visitor arriving pre-filtered from a
+       landing page would then have seen the filter apply to one tab and not the other.
+       Filled from /api/public/genres and /api/public/art-styles, the same two lists the
+       server validates against. -->
+  <div class="lib-facets" id="lib-facets">
+    <div class="facet-row" id="facet-genre">
+      <div class="facet-row" id="facet-genre-chips"></div>
+      <select class="facet-add" id="facet-genre-add" aria-label="Add a genre to the filter"></select>
+    </div>
+    <div class="facet-row" id="facet-style">
+      <div class="facet-row" id="facet-style-chips"></div>
+      <select class="facet-add" id="facet-style-add" aria-label="Add an art style to the filter"></select>
+    </div>
+    <!-- v3.0.846 -- Ian: "If you can put Show Everything, Last 6 months and All Time on the
+         same row." So the window buttons MOVE UP into the filter block rather than a copy
+         being made -- they keep their ids, their classes and their handlers, and
+         #images-filter is still the element switchTab hides on the Stories tab, where a
+         six-month window means nothing. Show everything sits OUTSIDE it, because clearing
+         the filter is meaningful on both tabs. -->
+    <div class="facet-row" id="lib-actions">
+      <button type="button" class="facet-clear" id="facet-clear" hidden>Show everything</button>
+      <span class="facet-row" id="images-filter">
+        <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
+        <button class="filter-btn" data-window="all" id="f-all">All Time</button>
+      </span>
+    </div>
   </div>
 
   <div class="lib-search" id="stories-search" style="display:none;">
     <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" />
-    <select id="stories-genre" aria-label="Filter stories by genre"><option value="">All genres</option></select>
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -194,8 +237,17 @@
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
-    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', genre: '', loading: false, done: false, any: false, tab: 'images' };
-    var sstate = { cursor: 0, q: '', genre: '', loading: false, done: false, any: false };
+    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', loading: false, done: false, any: false, tab: 'images', dirty: false };
+    var sstate = { cursor: 0, q: '', loading: false, done: false, any: false, dirty: false };
+    // v3.0.845 -- ONE selection, shared by both tabs. Arrays, because every facet is any-of.
+    var filters = { genre: [], style: [] };
+    function anyFilter() { return filters.genre.length > 0 || filters.style.length > 0; }
+    function filterQS() {
+      var qs = '';
+      if (filters.genre.length) qs += '&genre=' + encodeURIComponent(filters.genre.join(','));
+      if (filters.style.length) qs += '&style=' + encodeURIComponent(filters.style.join(','));
+      return qs;
+    }
     var storiesEl = document.getElementById('stories');
     var authorSections = {};
 
@@ -279,7 +331,7 @@
       // v3.0.843 -- TD-671. Appended to BOTH pagination modes. The server filters each one
       // separately, so a facet wired to only one of them would work until you pressed the
       // other tab -- which is the shape of most of the bugs in this file's history.
-      var gq = state.genre ? '&genre=' + encodeURIComponent(state.genre) : '';
+      var gq = filterQS();
       if (state.window === 'all') {
         url = '/api/public/library?limit=48&window=all' + gq + (state.cursor ? '&beforeId=' + state.cursor : '');
       } else {
@@ -293,7 +345,7 @@
         if (d && d.nextCursor) state.cursor = d.nextCursor;
         if (!d || !d.hasMore) {
           state.done = true;
-          setStatus(state.any ? '' : (state.genre ? 'No public images in that genre yet.' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
+          setStatus(state.any ? '' : (anyFilter() ? 'No public images match those filters yet.' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
         } else {
           setStatus('');
         }
@@ -342,13 +394,21 @@
       var onStories = tab === 'stories';
       document.getElementById('tab-images').classList.toggle('active', !onStories);
       document.getElementById('tab-stories').classList.toggle('active', onStories);
-      document.getElementById('images-filter').style.display = onStories ? 'none' : '';
+      document.getElementById('images-filter').style.display = onStories ? 'none' : 'inline-flex';   // v3.0.846 -- it lives inside the filter row now, so restore inline-flex rather than block
       document.getElementById('stories-search').style.display = onStories ? '' : 'none';
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
       setStatus('');
+      // v3.0.845 -- a filter changed while this tab was hidden leaves it STALE, and the
+      // old `!any` test cannot see that: a tab that legitimately found nothing also has
+      // any=false, so it would re-request forever, and a tab that found something under
+      // the OLD filter would keep showing it. dirty is set by applyFilters for whichever
+      // tab is not in front.
       if (onStories) {
-        if (!sstate.any && !sstate.loading) resetStories();
+        if (sstate.dirty) { sstate.dirty = false; resetStories(); }
+        else if (!sstate.any && !sstate.loading) resetStories();
+      } else if (state.dirty) {
+        state.dirty = false; reset();
       } else if (!state.any && !state.loading) {
         load();
       }
@@ -411,7 +471,7 @@
     function loadStories() {
       if (sstate.loading || sstate.done) return;
       sstate.loading = true; spinner();
-      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + (sstate.genre ? '&genre=' + encodeURIComponent(sstate.genre) : '') + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];
@@ -419,7 +479,7 @@
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
-          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (sstate.genre ? 'No stories in that genre yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
+          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (anyFilter() ? 'No stories match those filters yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
         } else { setStatus(''); }
       }).catch(function () {
         sstate.loading = false;
@@ -427,23 +487,141 @@
       });
     }
 
-    // v3.0.487 -- the picker is built from /api/public/genres, the SAME list the
-    // server validates against, so the two cannot drift. If the fetch fails the
-    // control simply stays on All genres and the Library still works.
-    // v3.0.843 -- TD-671. ONE fetch fills BOTH pickers. Two fetches of the same fixed list
-    // are two chances for the tabs to disagree about what a genre is called, for no gain.
-    var sg = document.getElementById('stories-genre');
-    var ig = document.getElementById('images-genre');
-    if (sg || ig) {
-      fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
-        ((d && d.genres) || []).forEach(function (g) {
-          if (sg) { var o = document.createElement('option'); o.value = g.slug; o.textContent = g.label; sg.appendChild(o); }
-          if (ig) { var o2 = document.createElement('option'); o2.value = g.slug; o2.textContent = g.label; ig.appendChild(o2); }
+    // v3.0.487 / v3.0.843 / v3.0.845 -- both controls are built from the SAME lists the
+    // server validates against (/api/public/genres, /api/public/art-styles), so the filter
+    // and the picker cannot drift. If either fetch fails that facet simply does not appear
+    // and the Library still works -- including any filter carried in on the url, which is
+    // applied from the query string BEFORE either list arrives.
+    //
+    // v3.0.846 -- THE SAME CONTROL AS THE CAMPAIGN DETAILS MODAL, and deliberately the same
+    // SHAPE as csGenreRender in public/js/app.js: chips carrying a remove button, and a
+    // select beneath that offers only what is not already chosen and resets itself after
+    // each pick. A visitor who has set a campaign's genre has used this control before.
+    //
+    // TWO THINGS FROM THAT CONTROL ARE DELIBERATELY NOT COPIED, because they are properties
+    // of AUTHORING a campaign rather than of filtering a library:
+    //   * the three-genre cap and its note. Three is the limit on a campaign because more
+    //     than three blend into no direction at all -- an any-of FILTER has no such problem,
+    //     it just casts a wider net, so the only ceiling is the server's parse cap.
+    //   * the "main" badge on the first chip. Order is meaningful on a campaign, where the
+    //     first genre leads the steering. In an any-of filter it means nothing, and a badge
+    //     claiming otherwise would be a lie the control tells every visitor.
+    //
+    // Everything BEHIND the control is unchanged from v3.0.845 -- one shared selection, the
+    // url kept in step, the stale-tab flag. This is a new face on the same machinery.
+    function makeFacet(key, label, noun, options) {
+      var chips = document.getElementById('facet-' + key + '-chips');
+      var add = document.getElementById('facet-' + key + '-add');
+      if (!chips || !add || !options.length) return null;
+      var labelFor = {};
+      options.forEach(function (o) { labelFor[o.slug] = o.label; });
+
+      function paint() {
+        // Built with createElement and textContent rather than innerHTML: these labels come
+        // off the wire, and the story cards next to them already take that care.
+        chips.innerHTML = '';
+        filters[key].forEach(function (slug) {
+          var chip = document.createElement('span'); chip.className = 'facet-chip';
+          var txt = document.createElement('span'); txt.textContent = labelFor[slug] || slug;
+          var x = document.createElement('button');
+          x.type = 'button'; x.title = 'Remove'; x.innerHTML = '&times;';
+          x.setAttribute('aria-label', 'Remove ' + (labelFor[slug] || slug));
+          x.addEventListener('click', function () {
+            var i = filters[key].indexOf(slug);
+            if (i > -1) filters[key].splice(i, 1);
+            paint(); applyFilters();
+          });
+          chip.appendChild(txt); chip.appendChild(x); chips.appendChild(chip);
         });
-      }).catch(function () {});
+
+        // The select offers what is left. When nothing is left it says so and disables
+        // itself, rather than letting a click do nothing -- the csGenreRender rule.
+        var left = options.filter(function (o) { return filters[key].indexOf(o.slug) < 0; });
+        add.innerHTML = '';
+        var head = document.createElement('option');
+        head.value = '';
+        head.textContent = left.length ? ('+ Add ' + noun) : ('All ' + label.toLowerCase() + ' added');
+        add.appendChild(head);
+        left.forEach(function (o) {
+          var op = document.createElement('option');
+          op.value = o.slug; op.textContent = o.label;
+          add.appendChild(op);
+        });
+        add.value = '';
+        add.disabled = !left.length;
+      }
+
+      add.addEventListener('change', function () {
+        var slug = add.value;
+        if (!slug) return;
+        if (filters[key].indexOf(slug) < 0) filters[key].push(slug);
+        paint(); applyFilters();
+      });
+
+      // A url can carry a slug this list does not contain (a retired one). The server
+      // already drops it; drop it here too, or it would sit in the url as an invisible
+      // filter with no chip to remove it by.
+      filters[key] = filters[key].filter(function (s) { return !!labelFor[s]; });
+      paint();
+      return { repaint: paint };
     }
-    if (sg) sg.addEventListener('change', function () { sstate.genre = sg.value || ''; resetStories(); });
-    if (ig) ig.addEventListener('change', function () { state.genre = ig.value || ''; reset(); });
+
+    var facets = [];
+    var clearBtn = document.getElementById('facet-clear');
+
+    // v3.0.845 -- TD-672. A PRE-SELECTION, NEVER A RESTRICTION. The landing page hands the
+    // Library a starting filter in the url; the visitor can uncheck any of it, and Show
+    // everything clears the lot. The url is kept in step with what is on screen so a link
+    // someone copies is honest about what it shows -- and replaceState, not pushState,
+    // because a filter change is not a page the Back button should have to walk through.
+    function readUrlFilters() {
+      try {
+        var p = new URLSearchParams(location.search);
+        ['genre', 'style'].forEach(function (k) {
+          var raw = p.get(k);
+          if (!raw) return;
+          raw.split(',').forEach(function (v) {
+            v = v.trim().toLowerCase();
+            if (v && filters[k].indexOf(v) < 0) filters[k].push(v);
+          });
+        });
+      } catch (e) {}
+    }
+    function syncUrl() {
+      try {
+        var p = new URLSearchParams(location.search);
+        ['genre', 'style'].forEach(function (k) {
+          if (filters[k].length) p.set(k, filters[k].join(',')); else p.delete(k);
+        });
+        var q = p.toString();
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+      } catch (e) {}
+    }
+    function applyFilters() {
+      syncUrl();
+      if (clearBtn) clearBtn.hidden = !anyFilter();
+      // Reset the tab in front now; mark the other stale so it reloads when it is shown.
+      if (state.tab === 'stories') { state.dirty = true; resetStories(); }
+      else { sstate.dirty = true; reset(); }
+    }
+
+    readUrlFilters();
+    if (clearBtn) {
+      clearBtn.hidden = !anyFilter();
+      clearBtn.addEventListener('click', function () {
+        filters.genre = []; filters.style = [];
+        facets.forEach(function (fx) { if (fx) fx.repaint(); });   // v3.0.846 -- repaint now means rebuild the chips and refill the select
+        applyFilters();
+      });
+    }
+    fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
+      facets.push(makeFacet('genre', 'Genres', 'a genre', (d && d.genres) || []));
+      if (clearBtn) clearBtn.hidden = !anyFilter();
+    }).catch(function () {});
+    fetch('/api/public/art-styles').then(function (r) { return r.json(); }).then(function (d) {
+      facets.push(makeFacet('style', 'Art styles', 'an art style', (d && d.styles) || []));
+      if (clearBtn) clearBtn.hidden = !anyFilter();
+    }).catch(function () {});
 
     var sq = document.getElementById('stories-q'); var sqTimer = null;
     if (sq) {

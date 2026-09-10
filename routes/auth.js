@@ -754,7 +754,10 @@ router.patch('/tour-complete', async function(req, res) {
   }
 });
 
-// POST /api/auth/tour-reset -> clears the current user's tour history (testing).
+// PUT /api/auth/preferences -- the account's e-mail notification switches.
+// v3.0.847 -- this comment used to read "POST /api/auth/tour-reset ... (testing)", which
+// belongs to a route sixteen lines further down. A comment sitting above the wrong route
+// is worse than no comment: it is the first thing a reader trusts.
 router.put('/preferences', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
@@ -773,8 +776,32 @@ router.put('/preferences', async function(req, res) {
   }
 });
 
-// v3.0.672 -- TD-475. Self-only (writes req.session.userId), so admin OR tester.
-router.post('/tour-reset', requireAdminOrTester, async function(req, res) {
+// POST /api/auth/tour-reset -- clears the CURRENT USER'S tour history so the guided
+// tours play again. Reached from the Account page: "Show guided tours again".
+//
+// v3.0.847 -- TD-699. THE ADMIN GATE IS REMOVED, and the reason it was ever here is the
+// whole lesson. This route was born a developer testing helper, called only by
+// devClearTours() inside the admin-only debug panel, so requireAdminOrTester was correct
+// on the day it was written. v3.0.672 then reused the SAME route for a button on the
+// ordinary Account page and did not widen the gate to match its new audience -- so every
+// non-admin, non-tester account got "Admin access required" printed at it, verbatim from
+// the middleware, for pressing a button about its own preferences.
+//
+// A ROUTE THAT GAINS A NEW CALLER HAS GAINED A NEW AUDIENCE. That is the same shape as
+// the rule-applied-to-one-path-and-not-its-twin faults in §5c of the working rules, seen
+// from the other end: not a rule missing from a second site, but a site whose
+// requirements changed while its guard stayed still.
+//
+// SAFE TO OPEN, and this is the part that had to be checked rather than assumed: the
+// UPDATE below binds req.session.userId and nothing else. There is no id in the body, no
+// id in the query, and no way to name another account -- so an authenticated caller can
+// only ever clear their own tour_progress. It is now gated exactly like the two routes it
+// belongs with, PATCH /tour-complete and GET /tour-progress, which have always been open
+// to any signed-in user and write the same column.
+//
+// The tester gate STAYS on /set-tier and /trial-testing, which really are developer
+// endpoints and really do change what an account is entitled to.
+router.post('/tour-reset', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();

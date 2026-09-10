@@ -2848,6 +2848,14 @@ module.exports.logImageGeneration = logImageGeneration;
 // Matching logic — exported so the Review endpoint shows EXACTLY what the
 // storyboard will do (one source of truth, no drift).
 module.exports.buildCharacterBlock = buildCharacterBlock;
+// v3.0.849 -- TD-705. THE ALIAS CONVENTION NOW HAS ONE IMPLEMENTATION AND THREE CALLERS.
+// These three functions were correct and private, so extract.js and sessions.js each grew
+// their own alias handling and BOTH got it wrong -- see the note above characterInText in
+// extract.js. Exporting them is additive: nothing in this file changes.
+module.exports.characterTokens = characterTokens;
+module.exports.characterCanonicalName = characterCanonicalName;
+module.exports.characterNameMatches = characterNameMatches;
+module.exports.assetTokens = assetTokens;
 module.exports.buildAssetBlock = buildAssetBlock;
 module.exports.combineRefs = combineRefs;
 module.exports.attachPriorReferences = attachPriorReferences;

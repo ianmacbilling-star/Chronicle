@@ -160,13 +160,13 @@
         {
           "selector": "#asset-grid",
           "title": "Your asset library",
-          "text": "Just like characters, assets give Campaignia visual references — locations, NPCs (people), and items it can pull into your panels to keep your world consistent.",
+          "text": "Just like characters, assets give Campaignia visual references — locations, Supporting Characters / NPCs (people), and items it can pull into your panels to keep your world consistent.",
           "placement": "auto"
         },
         {
           "selector": "#asset-grid .add-char-card",
           "title": "Add an asset",
-          "text": "Add a location, NPC, or item here that you want to appear consistently across your story.",
+          "text": "Add a location, Supporting Character / NPC, or item here that you want to appear consistently across your story.",
           "placement": "auto"
         }
       ]
@@ -183,7 +183,7 @@
         {
           "selector": "#asset-category",
           "title": "Category",
-          "text": "Tag it as a Location, NPC, or Item. Locations double as references for your scene backgrounds.",
+          "text": "Tag it as a Location, Supporting Character / NPC, or Item. Locations double as references for your scene backgrounds.",
           "placement": "auto"
         },
         {

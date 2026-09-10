@@ -2,6 +2,9 @@ const express = require('express');
 // v3.0.586 -- TD-345(d). The height marker is DEFINED in images.js and read from there, so the
 // writer and the reader cannot drift apart. See the note above buildCharacterBlock.
 const charHeight = require('./images');
+// v3.0.849 -- the same module under an honest name. `charHeight` describes what it was
+// first imported for (TD-345d) and is left alone; require caches, so this is free.
+const imageHelpers = require('./images');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4 steering
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
@@ -101,9 +104,13 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   // Get characters for this campaign
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
+  // v3.0.849 -- TD-701a. OMITTED when empty, not defaulted, which is TD-545 applied to its
+  // third and last site. `Willard (): a stooped man in a cardigan` hands the model an empty
+  // bracket to fill, and TD-543 is on record about what it fills it with.
   const charList = characters.map(function(c) {
     var playerInfo = c.player_name ? ' (played by ' + c.player_name + ')' : '';
-    return c.name + playerInfo + ' (' + c.cls + '): ' + c.description;
+    var clsInfo = (c.cls && String(c.cls).trim()) ? (' (' + String(c.cls).trim() + ')') : '';
+    return c.name + playerInfo + clsInfo + ': ' + c.description;
   }).join('\n');
 
   const style = artStyle || session.campaign_style || 'High fantasy illustration';
@@ -441,12 +448,31 @@ router.get('/job/:jobId', requireAuth, async function (req, res) {
 // ============================================================
 
 // Detect whether a character is "present" in the session by name match.
+//
+// v3.0.849 -- TD-705. THIS FUNCTION SPLIT THE NAME ON WHITESPACE, SO A SLASH-ALIAS NAME
+// ONLY EVER MATCHED ITS FIRST ALIAS. Ian, 2026-09-10, on a Family Story character stored
+// as `Bill / Willard / Willard Lineweaver`: "It's suppose to get any of those names."
+// He is right, and the rest of the product already agrees with him -- the old code looked
+// for the whole string (never in a transcript) and then for `bill`, and the transcript
+// said Willard. Two Generate Story runs missed him while he existed the whole time, and
+// the third only found him because the character had been RENAMED so that the first alias
+// became `Willard`. Nothing about the genre was involved, which is where the symptom
+// pointed.
+//
+// THE FIX IS TO DELETE THIS IMPLEMENTATION, NOT TO WRITE A FOURTH. characterNameMatches
+// in images.js has been correct since aliases shipped -- its own comment says "ANY alias
+// found in the panel prose marks the character present" -- and narrative.js uses the same
+// rule. Extraction was the one path that never learned it, so the panels and the prose
+// would recognise a character that the snapshot deciding the Characters tab would not.
+// That is the §5c shape: a rule applied to two of three sites.
+//
+// BEHAVIOUR THAT IS DELIBERATELY UNCHANGED: the canonical (first) alias still matches on
+// its full form or its first word over 2 characters, so every existing single-name
+// character behaves exactly as before. Additional aliases need 3+ characters, which is
+// what stops a short alias like `Al` matching every `also` in a transcript.
 function characterInText(character, text) {
   if (!character.name) return false;
-  var lower = text.toLowerCase();
-  var full = character.name.toLowerCase();
-  var first = full.split(/\s+/)[0];
-  return lower.indexOf(full) !== -1 || (first.length > 2 && lower.indexOf(first) !== -1);
+  return imageHelpers.characterNameMatches(character.name, text.toLowerCase());
 }
 
 // Resolve a character's prompt + reference_url to copy into THIS session,
