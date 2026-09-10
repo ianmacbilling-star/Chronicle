@@ -2779,7 +2779,7 @@ function renderSessionCharacters(rows) {
         thumb +
         '<div class="sc-card-id">' +
           '<div class="sc-card-name">' + r.name +
-            (isNpc ? ' <span class="char-badge char-badge-npc">NPC</span>' : '') + '</div>' +
+            (isNpc ? ' <span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') + '</div>' +
           '<div class="sc-card-cls">' + (r.cls || '') + '</div>' +
         '</div>' +
         editBtn +
@@ -3655,7 +3655,7 @@ function escapeHtmlReview(s) {
 function renderReview(data) {
   var list = document.getElementById('review-list');
   if (!list) return;
-  var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var ASSET_CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
   state.reviewData = data || {};
   state.reviewDataKey = _reviewCtxKey();
@@ -5478,7 +5478,7 @@ function loadAssets() {
     });
 }
 
-var ASSET_CAT_LABEL = { location: 'Location', npc: 'NPC', item: 'Item' };
+var ASSET_CAT_LABEL = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
 
 function updateAssetCount() {
   var el = document.getElementById('asset-count');
@@ -6343,7 +6343,7 @@ function renderCharacters() {
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       charDescHtml(c.description) +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
-      (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
+      (isNpc ? '<span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');
@@ -14710,7 +14710,7 @@ function renderCharacters() {
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       charDescHtml(c.description) +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
-      (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
+      (isNpc ? '<span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');
@@ -21465,7 +21465,7 @@ function renderMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
   if (!box) return;
   var canEdit = canEditCurrentVersion();
-  var ACAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var ACAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
   var p = _reviewPanel(momentId);
   var castHtml;
   if (!p) {
@@ -21896,7 +21896,7 @@ function _buildCastPicker(kind, momentId) {
   closeCastPicker();
   var p = _reviewPanel(momentId); if (!p) return;
   var isChar = (kind === 'character');
-  var ACAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };   // v3.0.848 -- SHORT: this map feeds prep-img-cap, a caption under a 120px thumbnail, where the full term runs to three lines
   var have = {};
   (isChar ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
   var src = isChar ? ((state.reviewData && state.reviewData.all_characters) || []) : ((state.reviewData && state.reviewData.all_assets) || []);

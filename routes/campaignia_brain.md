@@ -565,8 +565,9 @@ including its reference images.
   a slash (e.g. "Theron Ashwood / Ash").
 - **Player name** — the real person playing/managing the character; helps map a
   transcript to the right character.
-- **NPC** *(Story Master only)* — flag a *recurring, important* non-player character (a
-  major villain, key ally). Minor or one-off NPCs go in the **Asset Library** instead.
+- **Supporting Character / NPC** *(Story Master only)* — flag a *recurring, important*
+  supporting character (a major villain, a key ally, a grandparent in a family story).
+  Minor or one-off ones go in the **Asset Library** instead.
 - **Race and class** — one optional field (e.g. "Half-elf Ranger").
 - **Visual & Personality Traits** — describe look *and* personality in detail.
   Appearance feeds the image; **personality strongly shapes the narrative**.
@@ -832,11 +833,11 @@ under the title; if you want the session dates there, type them.
 ## 12. Assets (the Asset Library)
 
 Assets keep your story consistent across sessions. An asset is a reference image — of a
-**location**, a **recurring minor character (NPC)**, or an **item** — that Campaignia
+**location**, a **recurring minor supporting character (NPC)**, or an **item** — that Campaignia
 pulls into panels when relevant (e.g. an item like a magic sword, a location like a
-specific tavern, or a minor recurring NPC like the tavern barkeep).
+specific tavern, or a minor recurring supporting character like the tavern barkeep).
 
-- **Three categories — Location, NPC, Item** — tag each asset.
+- **Three categories — Location, Supporting Character / NPC, Item** — tag each asset.
 - **Locations are special:** a Location asset becomes the **background** your characters
   are set against in the moment images.
 - **Matched by name:** give an asset multiple names/keywords separated by a slash, and
@@ -851,8 +852,9 @@ image exists you can **Regenerate** it (a fresh take from the description), **Re
 or upload, and edits save as you go.
 
 **Asset vs. character:** a *minor or one-off* recurring figure (the tavern barkeep)
-belongs here as an NPC asset; a *major, important* recurring character (a main villain,
-a key ally) belongs on the **Characters tab** with the NPC flag.
+belongs here as a Supporting Character / NPC asset; a *major, important* recurring
+character (a main villain, a key ally) belongs on the **Characters tab** with the
+Supporting Character / NPC flag.
 
 ---
 
@@ -1159,8 +1161,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"How do I add my players?"** **Members** screen → **Invite member**: enter their
   email, optionally assign a character, then **Send Invite** or **Copy link**. They join
   free as **Copper** members.
-- **"How do I keep a place, item, or minor NPC consistent?"** Add it to the **Asset
-  Library**: a **Location** asset becomes the panel background; **Item** and minor **NPC**
+- **"How do I keep a place, item, or minor supporting character consistent?"** Add it to
+  the **Asset Library**: a **Location** asset becomes the panel background; **Item** and
+  minor **Supporting Character / NPC**
   assets get pulled in by name (use slash-separated keywords to match variants). Major
   recurring characters go on the **Characters** tab instead.
 - **"Where do I start / what's the right order?"** Create a campaign → add **Characters**
@@ -1278,7 +1281,7 @@ Friction points and what's actually going on.
   campaign has exactly one.
 - **What's the difference between an asset and a character?** A **character** is a major
   recurring cast member (Characters tab); an **asset** is a **location** (which becomes
-  the background), an **item**, or a **minor NPC** (Asset Library).
+  the background), an **item**, or a **minor Supporting Character / NPC** (Asset Library).
 - **How do I see the real printed look?** Publish page → **Optimize** tab, then **Review in a
   New Tab**.
 - **Who can make an image public?** The person who archived it, or the campaign's Story

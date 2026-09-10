@@ -167,7 +167,7 @@
       <div class="page-header">
         <div>
           <div class="page-title">Asset Library</div>
-          <div class="page-subtitle">Locations, NPCs and items — referenced in your storyboard panels by name<span id="asset-count" style="color:var(--gold);font-weight:600;"></span></div>
+          <div class="page-subtitle">Locations, Supporting Characters / NPCs and items — referenced in your storyboard panels by name<span id="asset-count" style="color:var(--gold);font-weight:600;"></span></div>
         </div>
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
@@ -453,7 +453,7 @@
                      Company page." Off by default, so no book already in print changes. -->
                   <div class="pcl-toggle-pair">
                   <label class="cl-toggle" title="Include the character / cast page"><input type="checkbox" id="pcl-cast" onchange="prepSyncCastNpc()"><span>Include character page</span></label>
-                  <label class="cl-toggle" id="pcl-castnpc-label" title="Also show your NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="pcl-castnpc"><span>Include NPCs</span></label>
+                  <label class="cl-toggle" id="pcl-castnpc-label" title="Also show your Supporting Characters / NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="pcl-castnpc"><span>Include Sup. Characters / NPCs</span></label>
                   <label class="cl-toggle" id="pcl-castimg-label" title="Draw the character page from this version&#39;s NEWEST character art instead of its oldest. Off means oldest, which keeps each character as they first appeared. Only applies when Include character page is on." style="padding-left:26px;"><input type="checkbox" id="pcl-castimg"><span>Use newest character art</span></label>
                   </div>
                 </div>
@@ -1917,7 +1917,7 @@
       <label class="form-label">Category</label>
       <select class="form-input" id="ca-category">
         <option value="location">Location</option>
-        <option value="npc">NPC</option>
+        <option value="npc">Supporting Character / NPC</option>
         <option value="item">Item</option>
       </select>
     </div>
@@ -2056,13 +2056,13 @@
       <label class="form-label">Category</label>
       <select class="form-input" id="asset-category" onchange="scheduleAssetMetaSave()">
         <option value="location">Location</option>
-        <option value="npc">NPC</option>
+        <option value="npc">Supporting Character / NPC</option>
         <option value="item">Item</option>
       </select>
     </div>
     <div class="form-group">
       <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; what to generate from; editable anytime</span></label>
-      <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying" oninput="scheduleAssetMetaSave()"></textarea>
+      <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or Supporting Character / NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying" oninput="scheduleAssetMetaSave()"></textarea>
     </div>
     <div class="form-group">
       <label class="form-label">Image</label>
@@ -2097,7 +2097,7 @@
     <div class="form-group dm-only">
       <label class="form-checkbox-row">
         <input type="checkbox" id="char-is-npc" />
-        <span>This is an NPC <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— a recurring, important non-player character to track across the campaign. For minor or one-off NPCs, use the campaign Asset Library instead.</span></span>
+        <span>This is a Supporting Character / NPC <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— a recurring, important non-player character to track across the campaign. For minor or one-off supporting characters, use the campaign Asset Library instead.</span></span>
       </label>
     </div>
     <div class="form-group">
@@ -2745,7 +2745,7 @@
       <input type="checkbox" id="cs-allow-assets" onchange="csDirty(true)" />
       <span>Allow Members to add assets</span>
     </label>
-    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can add assets (locations, NPCs, items) to this campaign. Asset limits still apply. Off by default.</div>
+    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can add assets (locations, Supporting Characters / NPCs, items) to this campaign. Asset limits still apply. Off by default.</div>
     <div class="cs-section" id="cs-delete-zone" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:#e57373;margin-bottom:8px;">Delete campaign</div>
       <div class="settings-section-desc" style="margin:0 0 10px;">Permanently deletes this campaign. Only works when it has no sessions, characters, assets, archived images, or other members.</div>
@@ -2832,7 +2832,7 @@
                      claiming. The `hidelogo` key stays in CO_DEFAULTS so stored co strings still parse,
                      but nothing reads it any more. -->
       <label class="cl-toggle cl-novel-only" title="Include the character / cast page (graphic novel only)"><input type="checkbox" id="cl-cast" onchange="clSyncCastNpc()"><span>Include character page</span></label>
-      <label class="cl-toggle cl-novel-only" id="cl-castnpc-label" title="Also show your NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="cl-castnpc"><span>Include NPCs</span></label>
+      <label class="cl-toggle cl-novel-only" id="cl-castnpc-label" title="Also show your Supporting Characters / NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="cl-castnpc"><span>Include Sup. Characters / NPCs</span></label>
       <label class="cl-toggle cl-novel-only" id="cl-castimg-label" title="Draw the character page from this version&#39;s NEWEST character art instead of its oldest. Off means oldest, which keeps each character as they first appeared. Only applies when Include character page is on." style="padding-left:26px;"><input type="checkbox" id="cl-castimg"><span>Use newest character art</span></label>
       <label class="cl-toggle cl-novel-only" title="Include a table of contents listing the sessions (graphic novel only)"><input type="checkbox" id="cl-toc"><span>Include table of contents</span></label>
     </div>
