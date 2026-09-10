@@ -3825,6 +3825,31 @@ function _reviewPanel(momentId) {
   var panels = (state.reviewData && state.reviewData.panels) || [];
   return panels.find(function(p){ return String(p.moment_id) === String(momentId); });
 }
+// v3.0.849 -- TD-703b. state.moments IS A SECOND COPY OF THE CAST AND IT WAS NEVER UPDATED.
+//
+// _saveCast re-renders the Review tab from state.reviewData and touches nothing else, but
+// the Retouch picker reads state.moments[n].characters -- a DIFFERENT object, filled only
+// by loadSession. So a character added to a panel was absent from Retouch until the whole
+// session was reloaded, and after Generate Story state.moments is overwritten with the
+// parsed result, whose moments carry no characters field at all.
+//
+// THE SERVER SENDS THE ANSWER NOW, so this does not recompute it. Which cast members carry
+// a reference image is not knowable from anything the client holds -- all_characters has
+// no reference urls -- and a client-side guess would be a third implementation of a rule
+// that already has one too many (see TD-705).
+//
+// A MISSING referenceCast IS LEFT ALONE RATHER THAN CLEARED. The field is absent when the
+// server could not compute it; blanking the list on that would turn a stale picker into an
+// empty one, which is worse.
+function _patchMomentRefCast(momentId, refCast) {
+  if (!refCast || !Array.isArray(refCast)) return false;
+  var ms = (state && state.moments) || [];
+  for (var i = 0; i < ms.length; i++) {
+    var mid = (ms[i] && ms[i].id != null) ? ms[i].id : (ms[i] && ms[i].moment_id);
+    if (String(mid) === String(momentId)) { ms[i].characters = refCast; return true; }
+  }
+  return false;
+}
 function _saveCast(p) {
   var characterIds = (p.characters || []).map(function(c){ return c.id; }).filter(function(x){ return x != null; });
   var assetIds = (p.assets || []).map(function(a){ return a.id; }).filter(function(x){ return x != null; });
@@ -3836,6 +3861,7 @@ function _saveCast(p) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not save casting: ' + data.error); loadReview(); return; }
+    _patchMomentRefCast(p.moment_id, data.referenceCast);   // v3.0.849 -- TD-703b, before the re-render
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
   })
@@ -3880,6 +3906,7 @@ function castReset(momentId) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not reset casting: ' + data.error); return; }
+    _patchMomentRefCast(momentId, data.referenceCast);   // v3.0.849 -- TD-703b, the reset path needs it too
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);

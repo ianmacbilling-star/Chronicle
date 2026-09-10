@@ -1108,9 +1108,39 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
 
     // Map inferred names back to ids so every chip carries an id (the UI needs
     // it to edit/remove, which materializes the inferred set into explicit rows).
+    // v3.0.849 -- TD-702. KEYED ON EVERY ALIAS, NOT ON THE FULL STORED NAME.
+    //
+    // This map is looked up with the CANONICAL name -- the first alias, which is what
+    // buildCharacterBlock puts in refs -- and it was keyed on the whole stored string. For
+    // a character stored as `Willard / Willard Lineweaver` the lookup missed, the chip got
+    // `id: undefined`, and the cast picker then compared the STRING "undefined" in its
+    // already-cast filter (app.js) and offered the character a second time. That is the
+    // duplicate Ian could add twice; only one row ever saved, because _saveCast drops the
+    // null id, so the second chip was cosmetic and a reload cleared it.
+    //
+    // ASSETS CARRY THE IDENTICAL CONVENTION AND HAD THE IDENTICAL BUG. Fixing only the
+    // half that was reported is the §5c mistake, so both are done here.
+    //
+    // FIRST WRITER WINS, which also quietly improves the old behaviour: keying by full name
+    // was last-write-wins across two characters sharing a name, so which id a chip carried
+    // depended on row order. The earliest row now wins, deterministically.
     const charIdByName = {}, assetIdByName = {};
-    chars.forEach(function(c){ if (c.name) charIdByName[c.name.toLowerCase()] = c.character_id; });
-    assets.forEach(function(a){ if (a.name) assetIdByName[a.name.toLowerCase()] = a.id; });
+    chars.forEach(function(c){
+      if (!c.name) return;
+      var keys = imageHelpers.characterTokens(c.name).concat([c.name]);
+      keys.forEach(function(k){
+        var kk = String(k).trim().toLowerCase();
+        if (kk && charIdByName[kk] === undefined) charIdByName[kk] = c.character_id;
+      });
+    });
+    assets.forEach(function(a){
+      if (!a.name) return;
+      var akeys = imageHelpers.assetTokens(a.name).concat([a.name]);
+      akeys.forEach(function(k){
+        var kk = String(k).trim().toLowerCase();
+        if (kk && assetIdByName[kk] === undefined) assetIdByName[kk] = a.id;
+      });
+    });
 
     // Change markers (folded-in punch-list item): which panel each ACCEPTED
     // Stage-3 character look-change takes effect at. panel_index -> [names].
@@ -1278,6 +1308,44 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
 // Pass 2 — explicit per-panel casting (Review tab editing)
 // ============================================================
 
+// v3.0.849 -- TD-703b. THE REFERENCE-BEARING CAST FOR ONE PANEL, COMPUTED SERVER-SIDE.
+//
+// `state.moments[n].characters` on the client is not the panel's cast -- it is the subset
+// of the cast that actually carries a reference image (see the note above the SELECT in
+// GET /sessions/:id), and it is what the Retouch picker offers as "replace with their
+// reference image". Only the server can know which those are, so only the server should
+// say. Returning it from the cast routes is what stops the client guessing -- and stops it
+// going stale, which is the bug: _saveCast re-rendered from reviewData and never touched
+// state.moments, so a character just added to a panel was absent from the Retouch picker
+// until the whole session was reloaded.
+//
+// IT RUNS THE SAME buildCharacterBlock AS THE READ PATH, with the same arguments in the
+// same order, so the two answers cannot differ. explicitIds null means fall back to
+// name-matching, which is exactly what the auto-cast case needs.
+async function panelReferenceCast(db, moment, explicitIds) {
+  try {
+    const refChars = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.fork_id, moment.campaign_id);
+    const row = await db.prepare('SELECT prompt, description, title, panel_order FROM moments WHERE id = ?').get(moment.id);
+    if (!row) return [];
+    const text = (row.prompt || '') + ' ' + (row.description || '') + ' ' + (row.title || '');
+    const block = imageHelpers.buildCharacterBlock(refChars, text, row.panel_order, explicitIds);
+    return (block.refs || []).map(function (r) { return { name: r.name }; });
+  } catch (e) {
+    // Non-fatal: the cast edit itself already succeeded. The client simply does not get
+    // the patch and keeps its old list until the next session load -- the pre-v3.0.849
+    // behaviour, which is worse but not wrong.
+    console.error('panelReferenceCast error:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
 // Resolve a moment and confirm the caller OWNS its version (DM on canonical,
 // or the player who owns the fork). Returns { id, campaign_id } or null.
 async function ownedMoment(db, userId, momentId) {
@@ -1324,7 +1392,10 @@ router.put('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, asy
   }
   await db.prepare('UPDATE moments SET cast_explicit = true WHERE id = ?').run(m.id);
 
-  res.json({ success: true, cast_explicit: true, characterIds: validChar, assetIds: validAsset });
+  // v3.0.849 -- TD-703b. Hand back the reference-bearing cast so the client can patch
+  // state.moments instead of waiting for a session reload.
+  const _refCast = await panelReferenceCast(db, m, validChar);
+  res.json({ success: true, cast_explicit: true, characterIds: validChar, assetIds: validAsset, referenceCast: _refCast });
 });
 
 // DELETE the explicit cast for a panel — reset to auto (name-match inference).
@@ -1335,7 +1406,8 @@ router.delete('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, 
   await db.prepare('DELETE FROM moment_characters WHERE moment_id = ?').run(m.id);
   await db.prepare('DELETE FROM moment_assets WHERE moment_id = ?').run(m.id);
   await db.prepare('UPDATE moments SET cast_explicit = false WHERE id = ?').run(m.id);
-  res.json({ success: true, cast_explicit: false });
+  const _refCastAuto = await panelReferenceCast(db, m, null);   // v3.0.849 -- TD-703b, and null means name-match, which is the auto cast
+  res.json({ success: true, cast_explicit: false, referenceCast: _refCastAuto });
 });
 
 // ============================================================
