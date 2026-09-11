@@ -306,7 +306,7 @@
             <button class="prep-acc-head" type="button" onclick="togglePrepAcc('cover')" aria-expanded="true"><span>Title &amp; Cover</span><span class="prep-acc-chev">&#9662;</span></button>
             <div class="prep-acc-body">
               <div class="prep-field-label">Title</div>
-              <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
+              <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown, or Summer at the Lake" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
               <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
 
@@ -911,7 +911,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— director's instructions for the AI</span></label>
-            <textarea class="transcript-box" id="session-notes-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Give the AI specific instructions...&#10;&#10;MANDATORY SCENES:&#10;- I want a panel showing the moment Zara betrayed the party&#10;&#10;VISUAL STYLE:&#10;- Dark gothic tone, candlelit crypts&#10;&#10;COMPOSITION:&#10;- Theron should always be shown with his wolf Shadow"></textarea>
+            <textarea class="transcript-box" id="session-notes-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Tell Campaignia what to do. Write instructions, not notes...&#10;&#10;MANDATORY SCENES:&#10;- Make sure you have a moment showing Zara betraying the party at the bridge&#10;&#10;EVERY MOMENT:&#10;- Make sure each moment has Theron&#8217;s wolf Shadow somewhere in it&#10;&#10;VISUAL STYLE:&#10;- Keep it dark gothic throughout, candlelit crypts"></textarea>
             <div id="session-notes-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
           </div>
@@ -1136,7 +1136,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
-              <input class="form-input" id="settings-penname" maxlength="40" placeholder="e.g. The Bard of Baldur" />
+              <input class="form-input" id="settings-penname" maxlength="40" placeholder="The name you want on the cover" />
               <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">Shown publicly as your author name if you publish a story to our Library, and as the Chronicled-by credit inside the book. Must be unique.</div>
             </div>
             <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
@@ -1857,7 +1857,7 @@
     <input type="hidden" id="campaign-edit-id" />
     <div class="form-group">
       <label class="form-label">Campaign name</label>
-      <input class="form-input" id="campaign-name" placeholder="e.g. Curse of Strahd" />
+      <input class="form-input" id="campaign-name" placeholder="e.g. The Shattered Crown, or Summer at the Lake" />
     </div>
     <div class="form-group">
       <label class="form-label">Description</label>
@@ -1865,7 +1865,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Lore / Backstory <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-      <textarea class="form-textarea" id="campaign-lore" maxlength="6000" style="min-height:110px;" placeholder="Describe the world your campaign takes place in -- history, factions, tone..."></textarea>
+      <textarea class="form-textarea" id="campaign-lore" maxlength="6000" style="min-height:110px;" placeholder="Describe the world your story takes place in -- the people, the places, the history, the tone..."></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeCampaignModal()">Cancel</button>
@@ -1884,7 +1884,7 @@
     <div id="session-modal-error" class="alert alert-error hidden"></div>
     <div class="form-group">
       <label class="form-label">Session name</label>
-      <input class="form-input" id="session-name" placeholder="e.g. The Tomb of Valdris" />
+      <input class="form-input" id="session-name" placeholder="e.g. The Tomb of Valdris, or The Trip to the Dentist" />
     </div>
     <div class="form-group">
       <label class="form-label">Session date</label>
@@ -1911,7 +1911,7 @@
     <div id="ca-error" class="alert alert-error hidden"></div>
     <div class="form-group">
       <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
-      <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow / the keep" />
+      <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow / the keep, or Nana's kitchen" />
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -2050,7 +2050,7 @@
     <div id="asset-modal-error" class="alert alert-error hidden"></div>
     <div class="form-group">
       <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
-      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep" oninput="scheduleAssetMetaSave()" />
+      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep, or Nana's kitchen" oninput="scheduleAssetMetaSave()" />
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -2062,7 +2062,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; what to generate from; editable anytime</span></label>
-      <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or Supporting Character / NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying" oninput="scheduleAssetMetaSave()"></textarea>
+      <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or Supporting Character / NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying &#183; a farmhouse kitchen with a kettle on the stove" oninput="scheduleAssetMetaSave()"></textarea>
     </div>
     <div class="form-group">
       <label class="form-label">Image</label>
@@ -2088,7 +2088,7 @@
     <input type="hidden" id="char-edit-id" />
     <div class="form-group">
       <label class="form-label">Character name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
-      <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood / Ash" />
+      <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood / Ash, or Grandma Nora / Nana" />
     </div>
     <div class="form-group">
       <label class="form-label">Player name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— helps AI match transcript to character</span></label>
@@ -2101,7 +2101,7 @@
       </label>
     </div>
     <div class="form-group">
-      <label class="form-label">Race and class</label>
+      <label class="form-label">Role, Title, Species or Class</label>
       <input class="form-input" id="char-cls" placeholder="e.g. Half-elf Ranger" />
     </div>
     <div class="form-group">
@@ -2115,7 +2115,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Visual &amp; Personality Traits</label>
-      <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance and personality in detail — hair, skin, clothing, weapons, distinctive features, temperament, mannerisms, speech patterns..."></textarea>
+      <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance and personality in detail — hair, skin, clothing, what they carry, distinctive features, temperament, mannerisms, speech patterns..."></textarea>
     </div>
     <div class="form-group" id="char-ref-images">
       <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">The more you provide, the better the AI consistency</span></label>
@@ -2282,9 +2282,9 @@
       </div>
       <div class="form-group" id="invite-newchar-fields" style="display:none;">
         <label class="form-label">New character name</label>
-        <input class="form-input" id="invite-newchar-name" placeholder="e.g. Lyra Stormwind" />
-        <label class="form-label" style="margin-top:8px;">Class (optional)</label>
-        <input class="form-input" id="invite-newchar-class" placeholder="e.g. Wizard" />
+        <input class="form-input" id="invite-newchar-name" placeholder="e.g. Lyra Stormwind / Lyra, or Uncle Bob / Robert" />
+        <label class="form-label" style="margin-top:8px;">Role, Title, Species or Class (optional)</label>
+        <input class="form-input" id="invite-newchar-class" placeholder="e.g. Half-elf Ranger" />
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeInviteModal()">Cancel</button>
@@ -2433,7 +2433,7 @@
       <button class="modal-close" onclick="closeNarrDirection()">&times;</button>
     </div>
     <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Steer the prose for this gap — tone, focus, what to emphasize. It's optional, and it applies whenever this version's narrative is generated or regenerated. Leave it blank to use the default.</p>
-    <textarea class="form-textarea" id="narr-direction-text" placeholder="e.g. keep it grim and terse &middot; stay in Kira's point of view &middot; lean into the betrayal" style="min-height:90px;"></textarea>
+    <textarea class="form-textarea" id="narr-direction-text" placeholder="e.g. keep it grim and terse &middot; stay in Kira's point of view &middot; keep it warm, this is for her 80th" style="min-height:90px;"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeNarrDirection()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="saveNarrDirection()">Save direction</button>
@@ -2447,7 +2447,7 @@
       <button class="modal-close" onclick="closeOutlineModal()">&times;</button>
     </div>
     <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">The outline is the facts and sequence this part must cover &mdash; what happens, in order. The narration is written from it; Direction, separately, steers the flavor. Terse bullet points work best.</p>
-    <textarea class="form-textarea" id="outline-text" placeholder="e.g. - the party crosses the ravine at dusk &middot; - Kira spots the broken watchtower &middot; - they decide to camp" style="min-height:110px;"></textarea>
+    <textarea class="form-textarea" id="outline-text" placeholder="e.g. - the party crosses the ravine at dusk &middot; - Kira spots the broken watchtower &middot; or - Nana meets Grandad at the dance hall" style="min-height:110px;"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeOutlineModal()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="saveOutline()">Save outline</button>
@@ -2658,7 +2658,7 @@
       </select>
       <div id="retouch-slots" style="margin:9px 0 0;display:flex;flex-direction:column;gap:7px;"></div>
     </div>
-    <textarea class="form-textarea" id="retouch-instruction" placeholder="e.g. make it nighttime &middot; remove the sword &middot; give him a red cloak" style="min-height:90px;"></textarea>
+    <textarea class="form-textarea" id="retouch-instruction" placeholder="e.g. make it nighttime &middot; remove the sword &middot; give her a red coat" style="min-height:90px;"></textarea>
     <div id="retouch-final-row" class="hidden" style="margin:9px 0 0;">
       <button class="btn btn-sm" id="retouch-final-btn" onclick="rgToggleFinal()">See the final prompt</button>
       <span id="retouch-compose-note" style="margin-left:8px;font-size:11px;color:var(--gold-dim);"></span>
