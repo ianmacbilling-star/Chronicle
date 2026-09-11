@@ -1850,6 +1850,16 @@
 <div class="modal-overlay hidden" id="campaign-modal">
   <div class="modal">
     <div class="modal-header">
+      <!-- v3.0.854 -- TD-713. DEAD FROM HERE TO THE END OF THIS MODAL, AND SAID SO RATHER
+           THAN LEFT TO BE DISCOVERED. openCampaignModal() in app.js redirects to
+           openCampaignSettings() on its first line and returns, so nothing opens this and
+           campaign-name / campaign-desc / campaign-lore are never shown. The LIVE fields are
+           cs-name-input, cs-lore-input and cs-cprompt-input in the Campaign details dialog
+           further down this file.
+           v3.0.851 edited two placeholders in here believing they were on screen. Kept for a
+           rollback to land on, and labelled so the next reader does not repeat it -- the same
+           treatment routes/pdf.js gives its dead cast block, which is what stopped this
+           mistake being made THERE. -->
       <div class="modal-title" id="campaign-modal-title">New Campaign</div>
       <button class="modal-close" onclick="closeCampaignModal()">&times;</button>
     </div>
@@ -2696,7 +2706,7 @@
     <div class="cs-section" style="margin-bottom:16px;">
       <label class="form-label" for="cs-name-input">Campaign name</label>
       <input class="form-input" id="cs-name-input" type="text" maxlength="120" oninput="csDirty(true)"
-             placeholder="Name your campaign" />
+             placeholder="e.g. The Shattered Crown, or Summer at the Lake" />
       <div id="cs-name-warn" class="settings-section-desc" style="display:none;color:#e08a6a;margin-top:4px;">A campaign needs a name &mdash; this will not be saved empty.</div>
       <label class="form-label" for="cs-desc-input" style="margin-top:12px;">Description</label>
       <textarea class="form-textarea" id="cs-desc-input" rows="3" maxlength="2000" oninput="csDirty(true)"
@@ -2722,13 +2732,13 @@
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
-      <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your campaign takes place in..." oninput="loreCount(this, 'cs-lore-count');csDirty()" onblur="csFlush()"></textarea>
+      <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your story takes place in &#8212; the people, the places, the history, the tone... e.g. a kingdom at war, or a farm outside Ennis in the 1960s" oninput="loreCount(this, 'cs-lore-count');csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">General Campaign Prompt</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Applies to every session in this campaign &mdash; both the writing and the pictures. For example: &quot;Tell the story from Piper's point of view.&quot; or &quot;Put a bird somewhere in every image.&quot;</div>
-      <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best." oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
+      <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best. e.g. always refer to the war as the Long Winter" oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-cprompt-count"></div>
     </div>
         <!-- v3.0.743 -- TD-540. The two permission toggles moved here from directly under
