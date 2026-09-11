@@ -19005,19 +19005,19 @@ function csHint(map, genresValue) {
 var CS_GENRE_HINTS = {
   _default: {
     transcript: 'Paste your session transcript here...',
-    notes: 'Give the AI specific instructions...\n\nMANDATORY SCENES:\n- I want a panel showing the moment Zara betrayed the party\n\nVISUAL STYLE:\n- Dark gothic tone, candlelit crypts\n\nCOMPOSITION:\n- Theron should always be shown with his wolf Shadow'
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing Zara betraying the party at the bridge\n\nEVERY MOMENT:\n- Make sure each moment has Theron\u2019s wolf Shadow somewhere in it\n\nVISUAL STYLE:\n- Keep it dark gothic throughout, candlelit crypts'
   },
   skillstory: {
     transcript: 'Describe what will happen, one step per line. There is no transcript to paste -- just the steps, in the order they happen.\n\nJohnny is in the waiting room with Mom.\nThe assistant calls Johnny\u2019s name.\nJohnny sits in the big chair and it goes up.\nThe dentist counts Johnny\u2019s teeth.\nJohnny picks a sticker on the way out.',
-    notes: 'Anything specific about this person or this day...\n\nWHO IT IS FOR:\n- Johnny, 6, going for the first time\n\nWORTH EMPHASISING:\n- The chair goes up and down, and that part is fun\n\nBE HONEST ABOUT:\n- The cleaning feels scratchy for a moment. Do not say it will not.'
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the chair going up, because that part is fun\n\nEVERY MOMENT:\n- Make sure each moment has Johnny in the same blue dinosaur shirt\n\nWHO IT IS FOR:\n- Johnny, 6, going for the first time\n\nBE HONEST ABOUT:\n- The cleaning feels scratchy for a moment. Do not say it will not.'
   },
   '@nonfiction': {
     transcript: 'Tell it in the order it happened. Paste whatever you have -- notes, an article, a letter, a recorded conversation -- or just write it out.\n\nHe signed with the club in the spring of 1914.\nThe crowd had never seen anyone hit one that far.\nHe pitched the whole game and won it himself.',
-    notes: 'Anything specific about this person or this book...\n\nMUST INCLUDE:\n- The game in October, told properly\n\nTONE:\n- Plain and factual; let the events carry it\n\nSTAY ACCURATE:\n- Do not invent what he was thinking. If it is not known, leave it out.'
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the day he signed with the club\n\nEVERY MOMENT:\n- Make sure each moment has the clothes and the ballpark right for 1914\n\nTONE:\n- Keep it plain and factual; let the events carry it\n\nSTAY ACCURATE:\n- Do not invent what he was thinking. If it is not known, leave it out.'
   },
   family: {
     transcript: 'Tell the story in the order it happened. Paste letters, notes or a recorded conversation if you have them -- or just write it out.\n\nNana grew up on the farm outside Ennis.\nShe met Grandad at the dance hall in 1961.\nThey saved for two years to buy the blue car.',
-    notes: 'Anything specific about this family or this book...\n\nMUST INCLUDE:\n- The story about the blue car\n\nTONE:\n- Warm and gentle; this is for her 80th\n\nNAMES:\n- Always Nana, never Grandmother'
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the day they bought the blue car\n\nEVERY MOMENT:\n- Make sure each moment has the farmhouse kitchen the way it really was\n\nTONE:\n- Keep it warm and gentle; this is for her 80th\n\nNAMES:\n- Always call her Nana, never Grandmother'
   }
 };
 
