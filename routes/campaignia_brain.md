@@ -577,12 +577,48 @@ including its reference images.
   references = better consistency. Hero Forge shots, fan art, and miniature photos all
   work. Upload only images you own or have rights to.
 
-**Building it:** fill in the card and click **Create character**; Campaignia builds the
-Character Prompt and canonical reference image from your info and images. Edit the
-prompt, and regenerate / retouch / replace / archive the image as needed; click
-**Done** to save. The reference is kept **style-neutral on purpose** so the character
-looks right in any art style — art styles apply when generating story moments, not to
-the reference itself.
+**Building it:** fill in the card, then click **Build character prompt** — it saves the
+character (and any reference images you added) for you first, so there is no separate
+save step to remember. Campaignia then writes the Character Prompt from your info and
+images and draws the canonical reference picture from it.
+
+**The Character Prompt is a normal text box — click into it and type.** There is no Edit
+button; it saves when you click away. Changing it does NOT redraw the picture, so when
+you edit it the **Regenerate** button on the reference lights up to say the picture is
+still the one drawn from the previous wording. Closing without regenerating asks first.
+Use **Retouch** to change one thing, **Replace** to take an image from the Archive, and
+**Archive** to keep a copy — an archived copy is the only thing that survives a bad
+chain of edits. Click **Done** to close.
+
+### 9a. Why the reference picture does not match your art style
+
+**It is not supposed to, and this is the single most common thing to be surprised by.**
+The canonical reference is drawn in a deliberately **neutral, fully rendered style** —
+soft tonal shading, no ink outlines, no flat cel shading, every material given its real
+surface: the weave and folds of cloth, the grain and wear of leather, the pitting on
+metal, individual strands of hair. It comes out on a **transparent background**, full
+body, head to feet, with no floor, shadow or scenery.
+
+**So it will not look like your campaign's art style, and that is correct.** Art styles
+apply when story moments are generated. The reference is not a finished picture; it is
+the **identity source** every panel is drawn from.
+
+**Two reasons it has to stay neutral, and both are lessons the product learned the hard
+way:**
+
+- **A stylised reference drags the whole panel toward itself.** Panels are told to render
+  in one consistent style, so a reference with black outlines spreads those outlines onto
+  the rocks and the sky — not just onto the character.
+- **A flat, smooth reference caps the detail of every panel that character appears in.**
+  Panels are told to keep the character exactly as the reference shows them, and you
+  cannot render detail the reference does not have. That is why it is drawn at high
+  detail even though it is never printed.
+
+Keeping it neutral is what lets the same character be re-rendered into watercolour,
+charcoal or oil equally well. **If someone asks why their character sheet suddenly looks
+different from how it used to, this is why** — the reference wording was improved so the
+picture carries more real surface detail, which raises the ceiling on every panel that
+character appears in.
 
 ---
 
