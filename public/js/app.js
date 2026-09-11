@@ -2250,6 +2250,10 @@ function selectCampaignNovel(id) {
 // this only ever meant "new" -- but a function removed while something still calls it is a dead
 // button, and this file has produced two of those today. One line, and the old modal markup can
 // be retired separately once nothing has referenced it for a while.
+// v3.0.854 -- TD-713. THIS IS A SHIM, NOT A MODAL OPENER. The first line hands off to
+// openCampaignSettings and returns, so everything below it is unreachable and so is the
+// markup it fills (see the note on #campaign-modal-title in app.html). Anything that needs
+// to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
   if (!editId && blockCopperCreate('campaign')) return;
@@ -14293,6 +14297,10 @@ function selectCampaignNovel(id) {
 // this only ever meant "new" -- but a function removed while something still calls it is a dead
 // button, and this file has produced two of those today. One line, and the old modal markup can
 // be retired separately once nothing has referenced it for a while.
+// v3.0.854 -- TD-713. THIS IS A SHIM, NOT A MODAL OPENER. The first line hands off to
+// openCampaignSettings and returns, so everything below it is unreachable and so is the
+// markup it fills (see the note on #campaign-modal-title in app.html). Anything that needs
+// to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
   if (!editId && blockCopperCreate('campaign')) return;
@@ -19002,6 +19010,10 @@ function csHint(map, genresValue) {
   return map._default;
 }
 
+// v3.0.853 -- TD-712. The examples below are COMMANDS, not notes: each entry names one
+// beat that must exist ("make sure you have a moment showing...") and one running
+// constraint across all of them ("make sure each moment has..."). The second is the one a
+// reader is least likely to think of unprompted, and it is where consistency comes from.
 var CS_GENRE_HINTS = {
   _default: {
     transcript: 'Paste your session transcript here...',
