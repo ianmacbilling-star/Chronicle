@@ -14381,6 +14381,79 @@ function optimizeRunBeat(userId, step) {
   if (step) r.step = step;
 }
 function optimizeRunEnd(userId) { try { _optimizeRuns.delete(userId); } catch (e) {} }
+// =================================================================================================
+// v3.0.863 -- TD-598. IS ANYONE OPTIMIZING A BOOK RIGHT NOW?
+//
+// Ian, 2026-09-11: "Do what you think is best on the aborting a push if optimize is running. I think
+// it should wait for it to finish. but I should have the ability to override it in emergencies."
+//
+// WHY A DEPLOY IS THE PROBLEM AND NOT MERELY BAD LUCK. Every piece of state an Optimize run needs
+// lives in the memory of the process serving it: the composed pack, the move and grow stores, and
+// _optimizeRuns itself -- the comment thirty lines above says so in as many words ("IN MEMORY,
+// deliberately... If the process restarts the run is gone anyway"). A push to staging restarts that
+// process. So a push that lands mid-run does not slow the run down, it DESTROYS it, after the tokens
+// for it have already been charged at compose.
+//
+// THE APPLY SCRIPT IS THE THING THAT HAS TO KNOW, and it runs in Ian's shell with no session cookie,
+// so requireAuth and requireAdmin are both unavailable to it. Hence a shared secret in a header,
+// compared in constant time, read from the server's own environment.
+//
+// IT REPORTS NOTHING ABOUT ANYONE. No user id, no campaign id, no campaign name -- only how many runs
+// are alive, how long each has been going, and how long since it last beat. That is everything the
+// waiting script needs and nothing a leaked token could be used to harvest.
+//
+// STATUS CODES ARE PART OF THE CONTRACT, because the script has to tell three failures apart:
+//   404  the route is not deployed yet -- which is exactly what this batch's OWN apply script will
+//        see, since the endpoint ships in the push it is guarding. The script warns and proceeds.
+//   403  the token is wrong. The script stops.
+//   503  the server has no DEPLOY_CHECK_TOKEN set. The script stops and says which variable.
+// A 404 for a bad token would have been quieter, but it would have made the bootstrap case
+// indistinguishable from a typo in the secret, and that is the one case a person will actually hit.
+//
+// THE SERVER DOES NOT REFUSE THE DEPLOY. It cannot -- it has no idea a deploy is coming. All it does
+// is answer the question honestly; the waiting, and the override, belong to the script.
+// =================================================================================================
+var DEPLOY_CHECK_TOKEN = process.env.DEPLOY_CHECK_TOKEN || '';
+function deployTokenOk(given) {
+  if (!DEPLOY_CHECK_TOKEN) return false;
+  var a = Buffer.from(String(given == null ? '' : given), 'utf8');
+  var b = Buffer.from(DEPLOY_CHECK_TOKEN, 'utf8');
+  // Length is compared first because timingSafeEqual throws on a mismatch. It leaks the length of
+  // the secret and nothing else, which is the standard trade and the right one here.
+  if (a.length !== b.length) return false;
+  try { return require('crypto').timingSafeEqual(a, b); } catch (e) { return false; }
+}
+router.get('/deploy-inflight', function (req, res) {
+  if (!DEPLOY_CHECK_TOKEN) {
+    return res.status(503).json({ ok: false, configured: false,
+                                  error: 'DEPLOY_CHECK_TOKEN is not set on this server' });
+  }
+  if (!deployTokenOk(req.get('x-deploy-token'))) {
+    return res.status(403).json({ ok: false, error: 'bad token' });
+  }
+  try {
+    var now = Date.now();
+    var runs = [];
+    // SAME STALENESS RULE AS optimizeRunGet, and read the same way: an entry whose heartbeat has
+    // gone quiet past OPTIMIZE_LOCK_STALE_MS is not a live run and must not hold a deploy. Stale
+    // entries are SKIPPED rather than deleted -- this is a read-only question, and deleting during
+    // a forEach over the Map that other requests are writing to is not worth the risk.
+    _optimizeRuns.forEach(function (r) {
+      var beat = r.beat || r.startedAt;
+      if (now - beat > OPTIMIZE_LOCK_STALE_MS) return;
+      runs.push({ elapsedMs: now - r.startedAt, sinceBeatMs: now - beat, step: r.step || '' });
+    });
+    // KEY ORDER IS LOAD-BEARING ONLY IN THAT "ok":true AND "busy":<bool> MUST BOTH APPEAR AS
+    // written: the apply script greps for them rather than parsing JSON, because passing a code
+    // string to node -e from Git Bash is the hazard that killed v3.0.858.
+    return res.json({ ok: true, busy: runs.length > 0, count: runs.length, runs: runs });
+  } catch (e) {
+    // A THROW IS NOT "NOT BUSY". Answering false here would let a deploy through on the strength of
+    // a bug, so the failure is reported as a failure and the script stops.
+    return res.status(500).json({ ok: false, error: 'inflight check failed' });
+  }
+});
+
 // The client asks this on entering the Optimize tab, which is what turns "it is running but I do not
 // see it running" into a visible state after a refresh.
 router.get('/optimize-status', requireAuth, function (req, res) {
