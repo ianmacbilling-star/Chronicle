@@ -43,6 +43,14 @@ router.get('/', requireAuth, async function(req, res) {
   }));
 });
 
+// v3.0.862 -- TD-723. Can this account start a new campaign? Same middleware as the
+// POST below, so the answer here can never disagree with the answer there.
+// ADVISORY ONLY. The POST keeps its own guard; this exists to save the reader from
+// filling in a form they were never allowed to submit, and is not a control.
+router.get('/can-create', requireAuth, checkCampaignLimit, function (req, res) {
+  res.json({ allowed: true });
+});
+
 router.post('/', requireAuth, checkCampaignLimit, async function(req, res) {
   const { name, description, lore } = req.body;
   if (!name) return res.json({ error: 'Campaign name required' });

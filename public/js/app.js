@@ -2256,6 +2256,9 @@ function selectCampaignNovel(id) {
 // to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
+  // v3.0.862 -- DEAD: the line above returns whenever openCampaignSettings exists, which
+  // it always does. This gate has never run. The live one is in openCampaignSettings
+  // (TD-723). Kept rather than deleted so the shape stays visible, not because it works.
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -14504,6 +14507,9 @@ function selectCampaignNovel(id) {
 // to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
+  // v3.0.862 -- DEAD: the line above returns whenever openCampaignSettings exists, which
+  // it always does. This gate has never run. The live one is in openCampaignSettings
+  // (TD-723). Kept rather than deleted so the shape stays visible, not because it works.
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -19388,8 +19394,18 @@ function cpromptCount(el) {
   csGenreRender();   // the Other-with-no-prompt note depends on this field
 }
 
-function openCampaignSettings(id, ev) {
+function openCampaignSettings(id, ev, _tierChecked) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  // v3.0.862 -- TD-723. Ian: "Make it so if their tier doesn't allow them to create a
+  // campaign it stops them when they hit New Campaign, not after it's open and they
+  // have filled out most of it."
+  //
+  // THE GATE IS HERE AND NOWHERE ELSE, because this is the one place every New
+  // Campaign click arrives. openCampaignModal delegates straight here and is declared
+  // TWICE in this file; openCampaignSettings is declared ONCE. Gating the choke point
+  // beats gating two copies of a function whose bodies are dead anyway (5c: the best
+  // version of the twin rule is to make the twin impossible).
+  if (!id && !_tierChecked) { campaignCreatePreflight(); return; }
   // v3.0.492 -- DISARMED WHILE POPULATING. Every assignment below fires the same events a user
   // edit does; with autosave armed, opening the modal would immediately write the values it had
   // just read, and any field that failed to populate would be written back as empty. Nothing may
@@ -21711,6 +21727,31 @@ function sectionBack() {
 }
 
 // Copper (free) plan cannot create campaigns or sessions -- prompt to upgrade.
+// v3.0.862 -- TD-723. Ask BEFORE opening the form.
+//
+// TWO REFUSALS, AND ONLY ONE OF THEM IS KNOWABLE IN THE BROWSER. Copper is a tier
+// the client already holds, so blockCopperCreate answers instantly with no round
+// trip and its existing "See plans" button. The campaign LIMIT is a count the client
+// does not have and must not guess, so that one is asked of the server.
+//
+// IT FAILS OPEN, DELIBERATELY. If the request errors -- offline, a redeploy mid
+// click -- the form opens. This gate is a courtesy that saves wasted typing; the
+// POST's own checkCampaignLimit is the actual control, and it still refuses. A
+// courtesy that locks people out when it cannot reach the server is worse than no
+// courtesy at all.
+function campaignCreatePreflight() {
+  if (blockCopperCreate('campaign')) return;
+  fetch('/api/campaigns/can-create')
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (x) {
+      if (x.ok && x.d && x.d.allowed) { openCampaignSettings(null, null, true); return; }
+      var msg = (x.d && x.d.error) || 'Your plan does not allow another campaign right now.';
+      uiConfirm(msg, { okText: 'See plans', cancelText: 'Not now' })
+        .then(function (go) { if (go) goToPlans(); });
+    })
+    .catch(function () { openCampaignSettings(null, null, true); });
+}
+
 function blockCopperCreate(kind) {
   if (state.user && state.user.tier === 'copper') {
     var what = (kind === 'session') ? 'sessions' : 'campaigns';
