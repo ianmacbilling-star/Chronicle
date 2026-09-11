@@ -5862,9 +5862,22 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       var first = raw.split('/')[0].trim();
       return first || raw.trim();
     }
+    // v3.0.851 -- TD-709. NAMES ONLY. Ian, 2026-09-10: "We don't want or need... Nana -
+    // Grandmother. or Bob - Account or Drel - Genasi Wizard. Nana, Bob and Drel is fine by
+    // itself." For every genre, not just the non-fiction ones -- a reader looking at the
+    // picture can see who is who, and the class was answering a question nobody asked of a
+    // printed book.
+    //
+    // THE ROSTER'S SPACE IS A CEILING, NOT A BUDGET (CAST_ROSTER_RESERVE_IN = 0.95, "four
+    // lines... a CEILING"), so shorter text can only take less of it. Nothing about the
+    // formation geometry moves.
+    //
+    // NOT the castHTML block near line 5021, which also renders a class: that one is DEAD
+    // and the file says so at .cast-lineup -- "NOTHING EMITS THEM NOW". Editing it would
+    // have looked like this fix and changed nothing in the book.
     var _rosterRow = function (row) {
       return row.map(function (c) {
-        return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>' + (c.cls ? ', ' + _fmEsc(c.cls) : '');
+        return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>';
       }).join(' &middot; ');
     };
     if (_rowsN === 1) {

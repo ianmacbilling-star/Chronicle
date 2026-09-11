@@ -6492,6 +6492,7 @@ function openCharModal(editId) {
   document.getElementById('char-name').value = char ? char.name : '';
   document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
+  if (typeof applyClassHint === 'function') applyClassHint();   // v3.0.851 -- TD-708
   charHeightLoad(char ? char.height_ft : null);   // v3.0.558 -- TD-345
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
   var npcEl = document.getElementById('char-is-npc');
@@ -18955,20 +18956,104 @@ var CS_GENRES = [
 // switching from a Skill Story campaign back to a Fantasy one restores the fantasy
 // examples. A hint that only ever gets set is a hint that leaks between campaigns --
 // which is TD-678, and it is not being repeated here.
+// v3.0.851 -- TD-707. THE CLIENT'S COPY OF THE CATEGORY MAP.
+//
+// This page cannot import services/genres.js, so the mapping is repeated here and the
+// batch guard asserts the two stay identical -- the same arrangement SHAPE_RATIO already
+// has with shapeAspectRatio() in routes/images.js, and for the same reason: a second copy
+// is fine as long as something fails loudly when they diverge.
+var CS_CATEGORY = {
+  fantasy: 'fiction', romance: 'fiction', thriller: 'fiction', scifi: 'fiction',
+  horror: 'fiction', biography: 'nonfiction', mystery: 'fiction', childrens: 'fiction',
+  ya: 'fiction', historical: 'fiction', literary: 'fiction', nonfiction: 'nonfiction',
+  family: 'nonfiction', skillstory: 'skillstory'
+};
+var CS_CATEGORY_DEFAULT = 'fiction';
+
+// First declaring genre wins, exactly as campaignCategory() does on the server.
+function csCategoryOf(genresValue) {
+  var slugs = [];
+  try { slugs = csGenresFrom(genresValue); } catch (e) { slugs = []; }
+  for (var i = 0; i < slugs.length; i++) { if (CS_CATEGORY[slugs[i]]) return CS_CATEGORY[slugs[i]]; }
+  return CS_CATEGORY_DEFAULT;
+}
+
+// TWO LEVELS: the FIRST genre's own entry, then its category, then the default.
+//
+// Keying on category ALONE would have thrown away the family and skillstory text v3.0.835
+// wrote -- Nana on the farm outside Ennis is right for a Family Story and wrong for a
+// biography of a ballplayer, and both are non-fiction. So a genre may speak for itself,
+// and the category is what stops us writing fifteen of everything.
+//
+// THE FIRST GENRE ONLY, AND THIS CORRECTS v3.0.835. That version SCANNED the whole list
+// for any genre with an entry, so a campaign of Fantasy + Family got the Nana examples
+// even though it is a Fantasy campaign -- a sparse map let a later genre outrank the
+// primary one. It rarely showed, because only two genres had entries. Ian, 2026-09-10:
+// "Fantasy, Biography, child story. All can be on there but Fantasy would win." A scan
+// cannot honour that; reading slot zero can, and it now matches campaignCategory() on
+// the server exactly.
+function csHint(map, genresValue) {
+  var slugs = [];
+  try { slugs = csGenresFrom(genresValue); } catch (e) { slugs = []; }
+  var primary = slugs.length ? slugs[0] : '';
+  if (primary && map[primary]) return map[primary];
+  var cat = csCategoryOf(genresValue);
+  if (map['@' + cat]) return map['@' + cat];
+  return map._default;
+}
+
 var CS_GENRE_HINTS = {
   _default: {
     transcript: 'Paste your session transcript here...',
     notes: 'Give the AI specific instructions...\n\nMANDATORY SCENES:\n- I want a panel showing the moment Zara betrayed the party\n\nVISUAL STYLE:\n- Dark gothic tone, candlelit crypts\n\nCOMPOSITION:\n- Theron should always be shown with his wolf Shadow'
   },
   skillstory: {
-    transcript: 'Describe what will happen, one step per line. There is no transcript to paste -- just the steps, in the order they happen.\n\nJohnny is in the waiting room with Mum.\nThe assistant calls Johnny\u2019s name.\nJohnny sits in the big chair and it goes up.\nThe dentist counts Johnny\u2019s teeth.\nJohnny picks a sticker on the way out.',
+    transcript: 'Describe what will happen, one step per line. There is no transcript to paste -- just the steps, in the order they happen.\n\nJohnny is in the waiting room with Mom.\nThe assistant calls Johnny\u2019s name.\nJohnny sits in the big chair and it goes up.\nThe dentist counts Johnny\u2019s teeth.\nJohnny picks a sticker on the way out.',
     notes: 'Anything specific about this person or this day...\n\nWHO IT IS FOR:\n- Johnny, 6, going for the first time\n\nWORTH EMPHASISING:\n- The chair goes up and down, and that part is fun\n\nBE HONEST ABOUT:\n- The cleaning feels scratchy for a moment. Do not say it will not.'
+  },
+  '@nonfiction': {
+    transcript: 'Tell it in the order it happened. Paste whatever you have -- notes, an article, a letter, a recorded conversation -- or just write it out.\n\nHe signed with the club in the spring of 1914.\nThe crowd had never seen anyone hit one that far.\nHe pitched the whole game and won it himself.',
+    notes: 'Anything specific about this person or this book...\n\nMUST INCLUDE:\n- The game in October, told properly\n\nTONE:\n- Plain and factual; let the events carry it\n\nSTAY ACCURATE:\n- Do not invent what he was thinking. If it is not known, leave it out.'
   },
   family: {
     transcript: 'Tell the story in the order it happened. Paste letters, notes or a recorded conversation if you have them -- or just write it out.\n\nNana grew up on the farm outside Ennis.\nShe met Grandad at the dance hall in 1961.\nThey saved for two years to buy the blue car.',
     notes: 'Anything specific about this family or this book...\n\nMUST INCLUDE:\n- The story about the blue car\n\nTONE:\n- Warm and gentle; this is for her 80th\n\nNAMES:\n- Always Nana, never Grandmother'
   }
 };
+
+// v3.0.851 -- TD-708. THE EXAMPLE FOR THE ROLE/TITLE/SPECIES/CLASS FIELD.
+//
+// The LABEL is static and true everywhere (see app.html); only the example moves. Same
+// two-level lookup as the session boxes, so a genre may speak for itself and the category
+// catches the rest.
+var CS_CLS_HINTS = {
+  _default: 'e.g. Half-elf Ranger',
+  '@fiction': 'e.g. Detective, or ship\u2019s captain',
+  '@nonfiction': 'e.g. Grandmother, or a teacher',
+  '@skillstory': 'e.g. The dentist, or Mom',
+  fantasy: 'e.g. Half-elf Ranger',
+  scifi: 'e.g. Ship\u2019s engineer, or an android navigator',
+  horror: 'e.g. Sheriff, or the thing in the woods',
+  childrens: 'e.g. Big sister, or a talking badger',
+  biography: 'e.g. Pitcher, or Union officer',
+  family: 'e.g. Grandmother, or the neighbour with the blue car',
+  skillstory: 'e.g. The dentist, or Mom'
+};
+
+// THE WIRING POINT THAT IS EASY TO MISS. applyGenreHints runs on session load, and the
+// character modal is not a session -- it is opened from the Characters tab, which can be
+// reached without loading a session at all. So this is called from openCharModal AND from
+// the invite modal, and the guard requires both. A hint that is only ever set once is a
+// hint that leaks between campaigns, which is TD-678 and is not being repeated.
+function applyClassHint() {
+  try {
+    var ph = csHint(CS_CLS_HINTS, state.currentCampaign && state.currentCampaign.genres);
+    var a = document.getElementById('char-cls');
+    var b = document.getElementById('invite-newchar-class');
+    if (a) a.setAttribute('placeholder', ph);
+    if (b) b.setAttribute('placeholder', ph);
+  } catch (e) {}
+}
 
 // Set the example text for whichever genre this campaign is. FIRST declaring genre wins,
 // matching genreDefaults() on the server: a campaign is primarily whatever it named first.
@@ -18977,11 +19062,8 @@ function applyGenreHints() {
     var t = document.getElementById('transcript-input');
     var n = document.getElementById('session-notes-input');
     if (!t && !n) return;
-    var slugs = [];
-    try { slugs = csGenresFrom(state.currentCampaign && state.currentCampaign.genres); } catch (e) { slugs = []; }
-    var hint = null;
-    for (var i = 0; i < slugs.length; i++) { if (CS_GENRE_HINTS[slugs[i]]) { hint = CS_GENRE_HINTS[slugs[i]]; break; } }
-    if (!hint) hint = CS_GENRE_HINTS._default;
+    // v3.0.851 -- genre, then category, then the default.
+    var hint = csHint(CS_GENRE_HINTS, state.currentCampaign && state.currentCampaign.genres);
     if (t) t.setAttribute('placeholder', hint.transcript);
     if (n) n.setAttribute('placeholder', hint.notes);
   } catch (e) {}

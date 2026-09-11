@@ -568,7 +568,9 @@ including its reference images.
 - **Supporting Character / NPC** *(Story Master only)* — flag a *recurring, important*
   supporting character (a major villain, a key ally, a grandparent in a family story).
   Minor or one-off ones go in the **Asset Library** instead.
-- **Race and class** — one optional field (e.g. "Half-elf Ranger").
+- **Role, Title, Species or Class** — one optional field. It takes whatever describes
+  this character best: "Half-elf Ranger" in a fantasy story, "Grandmother" in a family
+  one, "Pitcher" in a biography. The example under the box follows your campaign's genre.
 - **Visual & Personality Traits** — describe look *and* personality in detail.
   Appearance feeds the image; **personality strongly shapes the narrative**.
 - **Reference images** — four slots (Portrait, Full Body, Action Shot, Other). More

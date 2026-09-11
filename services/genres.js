@@ -27,6 +27,27 @@
 //      NO GENRE CARRIES 'sensitive' YET. v3.0.827 ships the reduction and its
 //      consumers ONLY, so that every gate exists before anything can trip it.
 //
+//   6. CATEGORY IS A GENERALISATION OF THE GENRE LIST FOR PRESENTATION, AND IT IS NOT
+//      SAFETY  (v3.0.851, TD-707). Ian, 2026-09-10, settling what a campaign holding
+//      Fantasy, Biography and Children's should look like: "There can be only one that
+//      directs these behaviors. But we let them pick whatever they want... Fantasy would
+//      win." So campaignCategory() reduces by the FIRST DECLARING GENRE, matching
+//      genreDefaults() and the client's example hints -- a campaign is presented as
+//      whatever it named first.
+//
+//      AND THAT REDUCTION MUST NEVER REACH THE GATE. campaignSafety() reduces by ANY, and
+//      it has to: the gate protects a real person who may appear in the book, and a second
+//      genre cannot un-appear them. Fantasy + Biography is a FICTION campaign that is
+//      still SENSITIVE, and those two answers are both correct because they answer
+//      different questions -- how should this look, and who might this hurt. Deriving one
+//      from the other would have silently dropped the consent gate on exactly that
+//      campaign. Ian, asked directly: "any of those Non Fiction genres" for the wording,
+//      and "Any ... can win on safety."
+//
+//      So: ONE user choice, the ordered genre list, read TWO ways. Not two questions.
+//      Nothing may re-derive safety from category, which is rule 5 restated for the thing
+//      most likely to tempt a future reader into doing exactly that.
+//
 // STORED as an ordered JSON array of SLUGS on campaigns.genres, so the display
 // label can be reworded without a migration. NULL and [] must both READ as
 // Fantasy - resolve through campaignGenres() and never re-derive it, which is
@@ -34,22 +55,22 @@
 // ============================================================
 
 var GENRES = [
-  { slug: 'fantasy',    label: 'Fantasy',
+  { slug: 'fantasy',    label: 'Fantasy', category: 'fiction',
     prose:  'Wonder and scale. Treat the impossible as real and unremarked.',
     panels: 'Favour spectacle, landscape, and creature reveals.' },
-  { slug: 'romance',    label: 'Romance',
+  { slug: 'romance',    label: 'Romance', category: 'fiction',
     prose:  'Interiority and wanting. Weight glances, proximity, and what is left unsaid.',
     panels: 'Favour two-person framing, faces, and held moments over action.' },
-  { slug: 'thriller',   label: 'Thriller / Suspense',
+  { slug: 'thriller',   label: 'Thriller / Suspense', category: 'fiction',
     prose:  'Momentum and threat. Short sentences under pressure. Withhold.',
     panels: 'Favour pursuit, confrontation, and the beat just before danger lands.' },
-  { slug: 'scifi',      label: 'Sci Fi',
+  { slug: 'scifi',      label: 'Sci Fi', category: 'fiction',
     prose:  'Consequence and system. Treat technology as ordinary and load-bearing.',
     panels: 'Favour machinery, scale, and unfamiliar environments made concrete.' },
-  { slug: 'horror',     label: 'Horror',
+  { slug: 'horror',     label: 'Horror', category: 'fiction',
     prose:  'Dread over shock. Let the reader see it before the characters do.',
     panels: 'Favour restraint, partial reveals, and a wrong detail in an ordinary frame.' },
-  { slug: 'biography',  label: 'Biography',
+  { slug: 'biography',  label: 'Biography', category: 'nonfiction',
     prose:  'A real life recounted. Ground every event in one person\u2019s arc.',
     panels: 'Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.',
     // v3.0.840 -- TD-685. THE LITERAL, NOT THE CONSTANT (see family/skillstory below).
@@ -58,25 +79,25 @@ var GENRES = [
     // flag. No defaultArt/defaultVoice: Calm & Literal is a preparation voice and wrong
     // for a life story, and re-pointing an existing campaign's styles is a separate call.
     safety: 'sensitive' },
-  { slug: 'mystery',    label: 'Mystery / Crime',
+  { slug: 'mystery',    label: 'Mystery / Crime', category: 'fiction',
     prose:  'Withheld information. Plant what pays off. Let the reader work.',
     panels: 'Favour evidence, reaction, and the moment of noticing.' },
-  { slug: 'childrens',  label: "Children's",
+  { slug: 'childrens',  label: "Children's", category: 'fiction',
     prose:  'Warm, simple and concrete. Short sentences, plain words, one clear feeling at a time. Frightening things are faced and resolved, never dwelt on.',
     panels: 'Favour clear, uncluttered frames with one thing happening. Keep faces friendly and readable; no gore, no dread.' },
-  { slug: 'ya',         label: 'Young Adult',
+  { slug: 'ya',         label: 'Young Adult', category: 'fiction',
     prose:  'Immediate and emotionally direct. First-person energy, clear stakes.',
     panels: 'Favour character over setting; keep faces in frame.' },
-  { slug: 'historical', label: 'Historical Fiction',
+  { slug: 'historical', label: 'Historical Fiction', category: 'fiction',
     prose:  'Period texture, materially specific. No modern idiom.',
     panels: 'Favour period detail in dress, tools, and place.' },
-  { slug: 'literary',   label: 'Literary Fiction',
+  { slug: 'literary',   label: 'Literary Fiction', category: 'fiction',
     prose:  'Language carries the weight. Ambiguity is allowed to stand.',
     panels: 'Favour the quiet frame; resist the obvious dramatic beat.' },
-  { slug: 'nonfiction', label: 'Nonfiction',
+  { slug: 'nonfiction', label: 'Nonfiction', category: 'nonfiction',
     prose:  'Report what happened. Clarity over ornament. No invented interiority.',
     panels: 'Favour the plain, legible depiction of events. Real period dress, tools and places; never fantasy or costume.' },
-  { slug: 'family',     label: 'Family Story',
+  { slug: 'family',     label: 'Family Story', category: 'nonfiction',
     prose:  'A real life, told warmly. Ordinary moments carry the weight; no fantasy idiom, no invented interiority.',
     panels: 'Favour real places, clothes and objects as they actually are. Faces readable and moments candid; never costume, never fantasy.',
     // v3.0.834 -- TD-668. THE LITERAL, NOT THE CONSTANT. SAFETY_SENSITIVE is declared
@@ -90,7 +111,7 @@ var GENRES = [
     // floor -- High fantasy and Classic -- which is the exact failure these defaults exist
     // to prevent. A default nobody can reach is not a default.
     defaultArt: 'Everyday life illustration', defaultVoice: 'calm' },
-  { slug: 'skillstory', label: 'Skill Story',
+  { slug: 'skillstory', label: 'Skill Story', category: 'skillstory',
     prose:  'Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.',
     // v3.0.836 -- TD-681. THE SETTING CLAUSE THIS WAS MISSING. Family Story already ended
     // "never costume, never fantasy"; this did not, so when the art style said "epic high
@@ -209,6 +230,32 @@ function genreDefaults(rowOrValue) {
   return null;
 }
 
+// v3.0.851 -- TD-707. THE THREE CATEGORIES, and the reducer that picks one.
+//
+// FIRST DECLARING GENRE WINS. A campaign may hold Fantasy, Biography and Children's at
+// once and Fantasy decides how it is presented -- the same rule genreDefaults() uses and
+// the same one the control states on screen ("the first one is the main one").
+//
+// 'other' declares no category, so a campaign that is only 'other' falls through to
+// CATEGORY_DEFAULT rather than inventing an opinion it does not have.
+//
+// READ THE NOTE AT THE TOP OF THIS FILE BEFORE WIRING THIS TO ANYTHING THAT GATES.
+// It answers how a campaign should LOOK. campaignSafety() answers who it might hurt, it
+// reduces by ANY rather than by first, and the two disagree on purpose.
+var CATEGORY_FICTION = 'fiction';
+var CATEGORY_NONFICTION = 'nonfiction';
+var CATEGORY_SKILLSTORY = 'skillstory';
+var CATEGORY_DEFAULT = CATEGORY_FICTION;
+
+function campaignCategory(rowOrValue) {
+  var slugs = campaignGenres(rowOrValue);
+  for (var i = 0; i < slugs.length; i++) {
+    var g = BY_SLUG[slugs[i]];
+    if (g && g.category) return g.category;
+  }
+  return CATEGORY_DEFAULT;
+}
+
 // True for a slug on the fixed list. Used by the Library facet so an arbitrary
 // query string can never reach the SQL.
 function isGenre(slug) { return !!BY_SLUG[String(slug || '').trim().toLowerCase()]; }
@@ -234,5 +281,10 @@ module.exports = {
   isSensitive: isSensitive,
   genreDefaults: genreDefaults,
   isGenre: isGenre,
+  CATEGORY_FICTION: CATEGORY_FICTION,
+  CATEGORY_NONFICTION: CATEGORY_NONFICTION,
+  CATEGORY_SKILLSTORY: CATEGORY_SKILLSTORY,
+  CATEGORY_DEFAULT: CATEGORY_DEFAULT,
+  campaignCategory: campaignCategory,
   campaignPrompt: campaignPrompt
 };
