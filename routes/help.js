@@ -54,6 +54,40 @@ const PACK_REF = (function () {
   } catch (e) { return ''; }
 })();
 
+// ===========================================================================
+// v3.0.859 -- TD-684. THE CACHED PREFIX, AND THE ORDER IS THE ENTIRE FIX.
+//
+// Prompt caching matches on a PREFIX, byte for byte. Before this, the system
+// string was built as header + tierBlock + extras + BRAIN -- so the FIRST line
+// of every request was the reader's own name, and the largest, most stable
+// thing in the prompt (the Brain, 81KB / roughly 20k tokens, about 92% of the
+// whole prompt) sat at the very END, behind everything that changes. Nothing
+// was cacheable even in principle: not across users, and not even across one
+// user's own two turns, because isFirstTurn flips on the second question.
+//
+// THE RULE FOR ANYONE ADDING TO THIS PROMPT LATER, AND IT IS THE WHOLE THING:
+// FIXED AT STARTUP GOES IN HERE. READ FROM THE DATABASE STAYS OUT.
+// A live value dropped into this block does not error -- it silently drops the
+// cache hit rate to zero and costs MORE than no caching at all, because a write
+// carries a premium over ordinary input. There is nothing on screen to notice.
+// That is why this is assembled at module scope rather than per request: a
+// constant built once cannot accidentally capture a per-request value.
+//
+// The tier matrix is deliberately NOT in here. It is identical across users,
+// but getTier() merges live dashboard overrides, so including it would make
+// every tier edit invalidate the cache -- for about 2% more cached bytes.
+// Invalidation should mean "a deploy happened", nothing else.
+//
+// The role preamble leads, so its own two claims stay true: the Brain still
+// "follows" it, and the account details are still "below".
+// ===========================================================================
+const ROLE_PREAMBLE = 'You are the in-app help assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. You are in a short chat inside the app and can see the user account details below. Answer using the Campaignia Brain knowledge that follows. Keep every reply to 1-4 sentences, warm and practical; do not use a personal name for yourself; do not apologize or pad. If the Brain does not cover something, say you are not sure and point them to where to look in the app rather than inventing steps. You can only answer and guide -- you cannot change settings, spend tokens, or take actions.';
+
+const FALLBACK_BRAIN = 'CAMPAIGNIA BASICS: Campaignia turns tabletop-RPG sessions into AI-illustrated graphic novels. Users create a campaign, add characters, create sessions and paste a transcript, click Generate Story to extract panels, edit the storyboard, then publish to the public Library or order a printed book. Tokens pay for image generation. If unsure, suggest the user explore the relevant screen.';
+
+const SYSTEM_CACHED = [ROLE_PREAMBLE, (BRAIN || FALLBACK_BRAIN), STYLE_REF, PACK_REF]
+  .filter(function (b) { return b; }).join('\n\n');
+
 // In-memory per-user rate limit (sliding 60s window). Resets on restart, which
 // is fine -- abuse / runaway-cost protection, not billing. No schema.
 const RATE_MAX = 15;
@@ -221,9 +255,9 @@ router.post('/ask', requireAuth, async function(req, res) {
   const vocabSession  = (ctx.vocab === 'story') ? 'Chapters' : 'Sessions';
   const isFirstTurn = (msgs.length === 1);   // no prior assistant turn this session
 
+  // v3.0.859 -- the role preamble moved to SYSTEM_CACHED at module scope. Every
+  // line left in here is per-user or per-turn and must stay OUT of the cached block.
   const header = [
-    'You are the in-app help assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. You are in a short chat inside the app and can see the user account details below. Answer using the Campaignia Brain knowledge that follows. Keep every reply to 1-4 sentences, warm and practical; do not use a personal name for yourself; do not apologize or pad. If the Brain does not cover something, say you are not sure and point them to where to look in the app rather than inventing steps. You can only answer and guide -- you cannot change settings, spend tokens, or take actions.',
-    '',
     'WHO YOU ARE HELPING (these live values are authoritative -- use them for any tier/token/billing answer):',
     '- Name: ' + ctx.name,
     '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
@@ -233,8 +267,6 @@ router.post('/ask', requireAuth, async function(req, res) {
     (isFirstTurn ? '- This is the user\u2019s first message this session: open with a brief, warm thank-you for trying Campaignia, then answer.' : ''),
     ''
   ].filter(function (l) { return l !== ''; });
-
-  const fallback = 'CAMPAIGNIA BASICS: Campaignia turns tabletop-RPG sessions into AI-illustrated graphic novels. Users create a campaign, add characters, create sessions and paste a transcript, click Generate Story to extract panels, edit the storyboard, then publish to the public Library or order a printed book. Tokens pay for image generation. If unsure, suggest the user explore the relevant screen.';
 
   // Live tier matrix -- getTier() merges dashboard overrides, so these are the
   // current authoritative numbers for EVERY tier (not just the user's own).
@@ -249,8 +281,11 @@ router.post('/ask', requireAuth, async function(req, res) {
   }).join('\n');
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 
-  const extras = [accountFacts.join('\n'), lifecycleBlock, generationCostBlock, STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
-  let system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
+  // v3.0.859 -- STYLE_REF and PACK_REF moved into SYSTEM_CACHED: both are built
+  // once at startup, so they belong on the cached side of the line. What is left
+  // here is per-user (accountFacts, lifecycle) or read live from settings.
+  const extras = [accountFacts.join('\n'), lifecycleBlock, generationCostBlock].filter(function (b) { return b; }).join('\n\n');
+  let system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras;
   let _aiDoneOn = false;
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
@@ -262,9 +297,33 @@ router.post('/ask', requireAuth, async function(req, res) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: HELP_MODEL, max_tokens: 500, system: system, messages: msgs })
+      body: JSON.stringify({
+        model: HELP_MODEL,
+        max_tokens: 500,
+        // v3.0.859 -- TD-684. Two blocks: the startup-constant prefix, marked for
+        // caching, then everything live. The marker goes on EVERY request -- we
+        // never ask "is it cached?" and branch -- so a miss simply writes a fresh
+        // copy and the next request reads it. Re-caching after a deploy or the
+        // idle expiry is therefore automatic and cannot be forgotten.
+        system: [
+          { type: 'text', text: SYSTEM_CACHED, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: system }
+        ],
+        messages: msgs
+      })
     });
     const data = await response.json();
+    // v3.0.859 -- TD-684. THE INSTRUMENT, because the cache failing is SILENT.
+    // One number per thing, not a lump (5b): a write means the prefix was not
+    // matched, a read means it was. If write stays high and read stays near zero,
+    // something per-request has leaked into SYSTEM_CACHED -- that is the whole
+    // failure mode, and this line is how it gets noticed rather than assumed.
+    try {
+      const _u = data && data.usage;
+      if (_u) console.log('[help cache] write=' + (_u.cache_creation_input_tokens || 0) +
+        ' read=' + (_u.cache_read_input_tokens || 0) +
+        ' uncached_in=' + (_u.input_tokens || 0) + ' out=' + (_u.output_tokens || 0));
+    } catch (e) {}
     if (data.error) {
       console.error('help/ask API error:', response.status, JSON.stringify(data.error));
       return res.json({ ok: false, error: friendlyAnthropicError(data.error) });

@@ -577,12 +577,48 @@ including its reference images.
   references = better consistency. Hero Forge shots, fan art, and miniature photos all
   work. Upload only images you own or have rights to.
 
-**Building it:** fill in the card and click **Create character**; Campaignia builds the
-Character Prompt and canonical reference image from your info and images. Edit the
-prompt, and regenerate / retouch / replace / archive the image as needed; click
-**Done** to save. The reference is kept **style-neutral on purpose** so the character
-looks right in any art style — art styles apply when generating story moments, not to
-the reference itself.
+**Building it:** fill in the card, then click **Build character prompt** — it saves the
+character (and any reference images you added) for you first, so there is no separate
+save step to remember. Campaignia then writes the Character Prompt from your info and
+images and draws the canonical reference picture from it.
+
+**The Character Prompt is a normal text box — click into it and type.** There is no Edit
+button; it saves when you click away. Changing it does NOT redraw the picture, so when
+you edit it the **Regenerate** button on the reference lights up to say the picture is
+still the one drawn from the previous wording. Closing without regenerating asks first.
+Use **Retouch** to change one thing, **Replace** to take an image from the Archive, and
+**Archive** to keep a copy — an archived copy is the only thing that survives a bad
+chain of edits. Click **Done** to close.
+
+### 9a. Why the reference picture does not match your art style
+
+**It is not supposed to, and this is the single most common thing to be surprised by.**
+The canonical reference is drawn in a deliberately **neutral, fully rendered style** —
+soft tonal shading, no ink outlines, no flat cel shading, every material given its real
+surface: the weave and folds of cloth, the grain and wear of leather, the pitting on
+metal, individual strands of hair. It comes out on a **transparent background**, full
+body, head to feet, with no floor, shadow or scenery.
+
+**So it will not look like your campaign's art style, and that is correct.** Art styles
+apply when story moments are generated. The reference is not a finished picture; it is
+the **identity source** every panel is drawn from.
+
+**Two reasons it has to stay neutral, and both are lessons the product learned the hard
+way:**
+
+- **A stylised reference drags the whole panel toward itself.** Panels are told to render
+  in one consistent style, so a reference with black outlines spreads those outlines onto
+  the rocks and the sky — not just onto the character.
+- **A flat, smooth reference caps the detail of every panel that character appears in.**
+  Panels are told to keep the character exactly as the reference shows them, and you
+  cannot render detail the reference does not have. That is why it is drawn at high
+  detail even though it is never printed.
+
+Keeping it neutral is what lets the same character be re-rendered into watercolour,
+charcoal or oil equally well. **If someone asks why their character sheet suddenly looks
+different from how it used to, this is why** — the reference wording was improved so the
+picture carries more real surface detail, which raises the ceiling on every panel that
+character appears in.
 
 ---
 
@@ -626,6 +662,8 @@ Lists the characters detected in this session. It also:
 - **Amend the look** — edit the description and type what changed into the **Amended
   appearance** box, then **Retouch image**: it applies just that change to the current
   reference and shows the result. **Approve change** to keep it, or **Discard / Ignore**.
+  This is the plain box, not the Storyboard's guided panel — but every piece of advice in
+  10.7 about wording a retouch still applies here.
 - **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown sets when
   the new look kicks in (normal before, changed from it onward). Leave Empty to apply
   throughout.
@@ -664,7 +702,7 @@ Where the story comes together as alternating image panels and narrative.
 - **The title panel (first)** — a wide establishing shot of the setting, meant to draw
   you in like a film's opening shot, with its own opening narrative. Editable afterward.
 - **Each image panel** has: **Edit prompt** (then Regenerate), **Regenerate**,
-  **Retouch** (change one small detail), **Revert** (appears after a Retouch/Regenerate;
+  **Retouch** (change one small detail — this is the GUIDED panel, see 10.7), **Revert** (appears after a Retouch/Regenerate;
   undoes that last change — one step deep, hidden once locked), **Replace** (from the
   Archive), **Lock** (protects it from a global Generate Images), and **Archive** (saves
   a copy).
@@ -697,6 +735,67 @@ See how it looks on the printed page.
 - **Make my own version** — appears for a member once the Story Master marks the session
   Ready; clicking it drops you onto your own version with Generate Story and every control
   above.
+
+### 10.7 Retouch — changing one thing in a picture you already have
+
+**Retouching is one of the hardest things in the whole product to get right, and that is why
+the Storyboard has a guided panel for it.** Asking a model to change one detail and leave
+everything else alone is genuinely difficult — it will happily redraw a face you liked, or
+move the wrong person, if the request leaves it any room. On a story panel, rather than
+having to write the perfect sentence, you pick what kind of change it is, click on the
+picture to show which thing you mean, and let Campaignia phrase it.
+
+**The guided panel is on Storyboard image panels only, for now.** Retouch also appears on a
+character's reference (Characters tab), on an Asset image, and on a built title — and in
+those places it is the **generic box: describe the one change you want, in your own words**.
+Those images are usually a single subject on a plain background, so there is rarely any
+doubt about which thing you mean. If someone asks why they cannot see the circles on a
+character or an asset, that is the reason — it is not a fault and nothing is missing.
+
+**The guided panel, on a Storyboard panel, top to bottom:**
+
+- **The picture, with click-to-place markers.** Click once to drop a **red** circle, click
+  again for a **green** one. **Red says WHICH thing you mean. Green says WHERE it should go**,
+  or what it should aim at. Clicking is far more reliable than describing — "the figure on
+  the left" is ambiguous in a way a circle never is.
+- **Marker size** — **a point, small, medium or large**. Small means *this exact spot*; large
+  means *this whole figure or area*. The size changes how Campaignia words the request, so
+  match it to the thing you are pointing at.
+- **"What are you changing?"** — a list of the kinds of change the panel knows how to phrase:
+  Move a character, Add a character, Add a person or object, Remove something, Add an effect, Change where someone is looking, Turn a character's body, Change an expression, Fix a body part, Change a pose or gesture, Move a hand or foot, Turn an object the right way round, Change an object, Make someone or something match its reference, Change how someone looks, Change the background, Change time of day or weather, and Fix or reapply the art style. Pick the one that fits and the panel asks only for what that change
+  needs. Choose **I'll type it below** if none of them fit.
+- **The text box** is for the detail — the colour, the amount, the specific thing. You do not
+  have to describe the whole picture.
+- **See the final prompt** shows exactly what will be sent, and you can edit it before it
+  goes. Useful for understanding why something came out the way it did.
+- **The ? button** opens this assistant with the retouch tips already on screen.
+
+**What makes a retouch work — this applies everywhere Retouch appears, guided or not:**
+
+- **One change at a time.** Combining several in one request is the most common cause of a
+  surprising result. Do them as separate retouches.
+- **Name people rather than saying "he" or "she"** — there may be more than one figure in
+  frame, and the wrong one can end up changed.
+- **Say amounts as percentages.** "25 percent smaller" lands far better than "smaller".
+- **Small details in a large picture are the hardest thing to change.** Hands and faces that
+  take up very little of the frame often will not come out, however the request is worded.
+  That is a limit of the image model, not something the reader is doing wrong. (It is also
+  why character references are the easy case — a face fills most of that frame.)
+
+**Two things worth knowing before a long session on one picture:**
+
+- **Each retouch redraws the whole image.** It is not a patch applied to the old picture —
+  the model produces a new one that should match the old everywhere except the change. So
+  small differences can appear elsewhere.
+- **Because of that, retouching the same picture over and over gradually softens it.** Several
+  rounds in, if it is drifting, go back to an archived copy rather than pushing on.
+
+**When in doubt, archive.** An archived copy is the only thing that survives a bad chain of
+retouches. **Revert** undoes the last retouch or regenerate, but only one step, and it is
+hidden once the panel is locked.
+
+**What it costs.** A retouch spends tokens like any other image generation, and only on
+success — a failed retouch is never charged.
 
 ---
 
@@ -849,7 +948,8 @@ specific tavern, or a minor recurring supporting character like the tavern barke
 several, slash-separated) and a category, then either **write a description and generate**
 a reference image, or **upload** your own. The description stays editable, and once an
 image exists you can **Regenerate** it (a fresh take from the description), **Retouch** it
-(change one thing), **Revert** the last change, or **Replace** it with an image from your
+(change one thing — the plain box, not the Storyboard's guided panel; see 10.7 for how to
+word it), **Revert** the last change, or **Replace** it with an image from your
 **Archive**. There's no separate save step — the asset is created the moment you generate
 or upload, and edits save as you go.
 
@@ -1092,7 +1192,8 @@ image** whose writing style or drawing you want the lettering to mimic.
 **transparent background**, so it sits on the cover or that chapter heading in your book
 without covering it and without other decorations or borders.
 
-Once it's drawn you can **Retouch** it — describe one change, another token — or
+Once it's drawn you can **Retouch** it — describe one change, another token; the plain box
+rather than the Storyboard's guided panel, and 10.7's wording advice applies — or
 **Archive** it so you can put it back later with **Replace from Archive**, which costs
 nothing. **Done & Use** puts it on the cover; **Done & Stash** keeps the drawing but takes
 it off, and on a chapter puts the panel's picture back. Nothing reaches your book until

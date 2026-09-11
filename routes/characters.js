@@ -269,6 +269,20 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
 
     content.push({ type: 'text', text: textInfo });
 
+    // v3.0.860 -- TD-724. THE INSTRUMENT. Ian reported a single reference image
+    // looking ignored while two worked, and nothing in this route could say how many
+    // it had actually sent -- so the answer was a theory rather than a fact. One
+    // number per source (5b), because a total cannot say WHICH slot was empty.
+    try {
+      console.log('[char rebuild-prompt] char=' + char.id +
+        ' images_sent=' + imageUrls.length +
+        ' portrait=' + (char.image_portrait ? 1 : 0) +
+        ' fullbody=' + (char.image_fullbody ? 1 : 0) +
+        ' action=' + (char.image_action ? 1 : 0) +
+        ' other=' + (char.image_other ? 1 : 0) +
+        ' main=' + (char.image ? 1 : 0));
+    } catch (e) {}
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {

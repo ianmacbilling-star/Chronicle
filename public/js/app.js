@@ -2256,6 +2256,9 @@ function selectCampaignNovel(id) {
 // to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
+  // v3.0.862 -- DEAD: the line above returns whenever openCampaignSettings exists, which
+  // it always does. This gate has never run. The live one is in openCampaignSettings
+  // (TD-723). Kept rather than deleted so the shape stays visible, not because it works.
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -4366,7 +4369,12 @@ function pollRefJob(jobId, onDone, onFail) {
   setTimeout(tick, INTERVAL);
 }
 
+// v3.0.860 -- the picture now matches the prompt again, so the marker goes.
+// applyCanonicalRef is the ONE place every successful reference lands -- build,
+// regenerate, retouch and revert all end here -- so clearing it here covers them
+// all rather than four call sites that must each remember.
 function applyCanonicalRef(charId, url) {
+  try { clearCharRefStale(charId); } catch (e) {}
   clearCharGenBusy(charId);   // TF-09: generation finished
   var ch = (state.characters || []).find(function(c) { return c.id === charId; });
   if (ch) {
@@ -5930,12 +5938,29 @@ function loadCharacters() {
 // ---- Canonical character prompt (shown in the Edit Character modal) ----
 // Renders into the modal's prompt section. charId may be null for a new
 // (unsaved) character — in which case the prompt can't be built yet.
+// v3.0.860 -- TD-724. THE ORDER ON SCREEN WAS PART OF THE PROBLEM. Ian: "Bring the
+// Build Prompt button up above the prompt... not below it." A control that produces
+// the thing under it belongs above what it produces.
+//
+// AND THE 'Edit' BUTTON IS GONE. Ian: "It should just be editable to begin with."
+// The affordance is CONSISTENCY rather than decoration: this is the same plain
+// textarea as the Visual and Personality Traits box four inches up the same modal,
+// which the reader has already learned on this screen. Blur saves if it changed.
 function renderCharModalPrompt(char) {
   var body = document.getElementById('char-modal-prompt-body');
   if (!body) return;
 
+  // v3.0.860 -- NO MORE DEAD END. This used to render prose telling the reader to
+  // save first and NO BUTTON AT ALL -- the one control that would have moved them
+  // forward was the one thing missing. Now it is here from the start and does the
+  // saving itself.
   if (!char || !char.id) {
-    body.innerHTML = '<div class="char-prompt-empty">Save the character first, then you can build its prompt from the images.</div>';
+    body.innerHTML =
+      '<div class="char-prompt-actions" style="margin-bottom:8px;">' +
+        '<button class="btn btn-sm" id="char-prompt-rebuild-new" onclick="rebuildCharPrompt(null)">&#10227; Build character prompt</button>' +
+      '</div>' +
+      '<div class="char-prompt-empty">Give the character a name, add any reference images, then build the prompt \u2014 this saves the character for you first.</div>' +
+      '<div class="char-prompt-msg hidden" id="char-prompt-text-new"></div>';
     return;
   }
 
@@ -5943,16 +5968,31 @@ function renderCharModalPrompt(char) {
   var _crole = state.currentCampaign && state.currentCampaign.my_role;
   var canEdit = (_crole === 'dm') || (!!_meId && char.owner_user_id === _meId);
   var hasPrompt = char.canonical_prompt && char.canonical_prompt.trim();
-  var inner = hasPrompt
-    ? '<div class="char-prompt-text" id="char-prompt-text-' + char.id + '">' + char.canonical_prompt + '</div>'
-    : '<div class="char-prompt-empty" id="char-prompt-text-' + char.id + '">No character prompt yet \u2014 build one from the card info and images.</div>';
 
-  var buttons = '<button class="btn btn-sm" id="char-prompt-rebuild-' + char.id + '" ' +
+  // THE BUTTON COMES FIRST NOW. No Edit button -- the field is the field.
+  var buttons = '<div class="char-prompt-actions" style="margin-bottom:8px;">' +
+    '<button class="btn btn-sm" id="char-prompt-rebuild-' + char.id + '" ' +
     'onclick="rebuildCharPrompt(' + char.id + ')">&#10227; ' +
-    (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button>';
-  if (canEdit && hasPrompt) {
-    buttons += '<button class="btn btn-sm" onclick="startEditCharPrompt(' + char.id + ')">&#9998; Edit</button>';
+    (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button></div>';
+
+  // Editable for anyone who may edit; a read-only block for anyone who may not,
+  // rather than a textarea that silently refuses to save what they typed.
+  var inner;
+  if (canEdit) {
+    inner =
+      '<textarea class="char-prompt-editor" id="char-prompt-editor-' + char.id + '" ' +
+        'placeholder="No character prompt yet \u2014 build one from the card info and images, or write your own." ' +
+        'onblur="charPromptBlur(' + char.id + ')">' +
+        (char.canonical_prompt || '') + '</textarea>' +
+      '<div class="char-prompt-hint">Edit freely \u2014 saves when you click away.</div>';
+  } else {
+    inner = hasPrompt
+      ? '<div class="char-prompt-text">' + char.canonical_prompt + '</div>'
+      : '<div class="char-prompt-empty">No character prompt yet \u2014 build one from the card info and images.</div>';
   }
+  // The message line every other path already writes into. Empty and hidden until
+  // something has something to say.
+  inner += '<div class="char-prompt-msg hidden" id="char-prompt-text-' + char.id + '"></div>';
 
   // Reference image — the generated picture, shown full under the button.
   var _carched = isMomentArchived(char);
@@ -5963,7 +6003,7 @@ function renderCharModalPrompt(char) {
           '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
           'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
           '<div class="panel-img-actions">' +
-            '<button class="panel-pill" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
+            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
             '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
             (char.revert_reference_url ? '<button class="panel-pill" onclick="revertCharRef(' + char.id + ')" title="Undo the last retouch or regenerate - restore the previous reference">Revert</button>' : '') +
             '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
@@ -5973,10 +6013,119 @@ function renderCharModalPrompt(char) {
       '</div>'
     : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
 
-  body.innerHTML = inner + '<div class="char-prompt-actions">' + buttons + '</div>' + refImg;
+  body.innerHTML = buttons + inner + refImg;
+  // Repaint the marker if the prompt was edited earlier in this sitting.
+  if (charPromptIsStale(char.id)) markCharRefStale(char.id);
+}
+
+// ---------------------------------------------------------------------------
+// v3.0.860 -- TD-724. THE PROMPT AND THE PICTURE COULD DISAGREE AND NOTHING SAID
+// SO. Editing the prompt never touched canonical_reference_url, so the picture
+// quietly went on being the one drawn from the OLD wording -- TD-219's shape on a
+// smaller stage.
+//
+// DELIBERATELY SESSION-ONLY, and that is Ian's decision rather than a shortcut:
+// "Lit up is just when the prompt changes on that screen. If they close and come
+// back then that's on them... if they leave the form it's assumed that's how they
+// want the picture." So: no column, no timestamp, nothing to migrate, and no
+// existing character lights up on the day this ships.
+// ---------------------------------------------------------------------------
+function charPromptIsStale(charId) {
+  return !!(state._charPromptStale && state._charPromptStale[String(charId)]);
+}
+function setCharPromptStale(charId, on) {
+  if (!state._charPromptStale) state._charPromptStale = {};
+  if (on) state._charPromptStale[String(charId)] = true;
+  else delete state._charPromptStale[String(charId)];
+}
+
+function markCharRefStale(charId) {
+  setCharPromptStale(charId, true);
+  var wrap = document.getElementById('char-ref-image-' + charId);
+  if (!wrap) return;
+  var btn = wrap.querySelector('.panel-pill.char-regen-pill');
+  if (btn) {
+    btn.classList.add('is-stale');
+    btn.title = 'The prompt changed \u2014 regenerate to redraw this picture from the new wording';
+  }
+  if (!document.getElementById('char-ref-stale-' + charId)) {
+    var note = document.createElement('div');
+    note.id = 'char-ref-stale-' + charId;
+    note.className = 'char-ref-stale';
+    note.innerHTML = '&#9888; This picture was drawn from the previous prompt. Regenerate to redraw it.';
+    wrap.insertBefore(note, wrap.firstChild);
+  }
+}
+function clearCharRefStale(charId) {
+  setCharPromptStale(charId, false);
+  var wrap = document.getElementById('char-ref-image-' + charId);
+  if (!wrap) return;
+  var btn = wrap.querySelector('.panel-pill.char-regen-pill');
+  if (btn) { btn.classList.remove('is-stale'); btn.title = 'Re-roll the reference image from the current prompt'; }
+  var note = document.getElementById('char-ref-stale-' + charId);
+  if (note) note.remove();
+}
+
+// Blur saves -- but only when the text actually changed, so tabbing through the
+// field costs nothing and spends no request.
+function charPromptBlur(charId) {
+  var ta = document.getElementById('char-prompt-editor-' + charId);
+  if (!ta) return;
+  var ch = charById(charId);
+  var was = (ch && ch.canonical_prompt) || '';
+  var now = ta.value;
+  if (now === was) return;
+
+  charPromptMsgClear(charId);
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/canonical-prompt', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ canonical_prompt: now })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || data.error) {
+        charPromptMsg(charId, (data && data.error) || 'Could not save the prompt.');
+        return;
+      }
+      if (ch) ch.canonical_prompt = now;
+      // Only NOW is the picture stale. A FAILED save must never claim the prompt
+      // moved when it did not -- that would light a button for nothing.
+      if (ch && ch.canonical_reference_url) markCharRefStale(charId);
+    })
+    .catch(function (e) {
+      charPromptMsg(charId, 'Could not save the prompt: ' + ((e && e.message) || 'network error'));
+    });
+}
+
+// THE TYPING IS NEVER THROWN AWAY on a failed save: the textarea keeps what they
+// wrote and the message appears directly beneath it, in view.
+function charPromptMsg(charId, msg) {
+  var el = document.getElementById('char-prompt-text-' + charId);
+  if (!el) { if (typeof showError === 'function') showError(msg); else alert(msg); return; }
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+}
+function charPromptMsgClear(charId) {
+  var el = document.getElementById('char-prompt-text-' + charId);
+  if (el) { el.textContent = ''; el.classList.add('hidden'); }
+}
+
+// BOTH modal exits ask this. 5c: closeCharModal (the X) and charModalPrimary (Done)
+// are twins, and a warning on only one of them is a warning missed half the time.
+async function charPromptStaleOk() {
+  var editId = (document.getElementById('char-edit-id') || {}).value || '';
+  if (!editId || !charPromptIsStale(editId)) return true;
+  var ch = charById(parseInt(editId, 10));
+  if (!ch || !ch.canonical_reference_url) return true;
+  return await uiConfirm('You changed the character prompt but have not regenerated the picture, so it still shows the old look. Close anyway?');
 }
 
 function rebuildCharPrompt(charId) {
+  // v3.0.860 -- TD-724. NO CHARACTER YET? MAKE ONE. Ian: "If no character exists
+  // already it should save... then if images are there it should save them too."
+  if (!charId) { createCharThenBuild(); return; }
   if (isCharGenBusy(charId)) return;   // TF-09: don't re-enter while generating
   // Save-first guard. The character form in the modal may have pending
   // changes (uploaded reference images, edited description, etc.) that
@@ -5995,6 +6144,56 @@ function rebuildCharPrompt(charId) {
     // (loadCharacters fires inside the save), then run the actual build.
     rebuildCharPromptCore(charId);
   });
+}
+
+// v3.0.860 -- TD-724. Create-then-build for a character that has never been saved.
+// It appends the same four slots saveChar does, because 5c: a second create path
+// that forgets the image slots is precisely the fault charModalPrimary's own comment
+// records having already happened once on the edit path.
+function createCharThenBuild() {
+  var nameEl = document.getElementById('char-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) {
+    charPromptMsg('new', 'Give the character a name first, then build the prompt.');
+    if (nameEl) { try { nameEl.focus(); } catch (e) {} }
+    return;
+  }
+  var btn = document.getElementById('char-prompt-rebuild-new');
+  if (btn) { btn.disabled = true; btn.textContent = '\u27f3 Saving character\u2026'; }
+  charPromptMsgClear('new');
+
+  var formData = new FormData();
+  formData.append('name', name);
+  formData.append('player_name', document.getElementById('char-player').value.trim());
+  formData.append('cls', document.getElementById('char-cls').value.trim());
+  formData.append('height_ft', charHeightValue());
+  formData.append('description', document.getElementById('char-desc').value.trim());
+  var npcEl = document.getElementById('char-is-npc');
+  formData.append('is_npc', (npcEl && npcEl.checked) ? 'true' : 'false');
+  ['image_portrait', 'image_fullbody', 'image_action', 'image_other'].forEach(function (slot) {
+    if (slotFiles[slot]) formData.append(slot, slotFiles[slot]);
+  });
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters', { method: 'POST', body: formData })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || data.error || !data.id) {
+        if (btn) { btn.disabled = false; btn.textContent = '\u27f3 Build character prompt'; }
+        charPromptMsg('new', (data && (data.message || data.error)) || 'Could not save the character.');
+        return;
+      }
+      document.getElementById('char-edit-id').value = data.id;
+      (function () { var _sb = document.getElementById('char-save-btn'); if (_sb) _sb.textContent = 'Done'; })();
+      if (!Array.isArray(state.characters)) state.characters = [];
+      state.characters.push(data);
+      renderCharModalPrompt(data);
+      loadCharacters();
+      rebuildCharPrompt(data.id);
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = '\u27f3 Build character prompt'; }
+      charPromptMsg('new', 'Could not save the character: ' + ((e && e.message) || 'network error'));
+    });
 }
 
 // Internal: silently save the open character form, then call cb(err).
@@ -6520,7 +6719,10 @@ function openCharModal(editId) {
   else { try { maybeStartTour('characters'); } catch (e) {} }
 }
 
-function closeCharModal() {
+async function closeCharModal() {
+  // v3.0.860 -- TD-724. Ian: "Maybe we add a Dirty flag when they try to close the
+  // dialog without regenerating the image? Warn them."
+  if (!(await charPromptStaleOk())) return;
   try {
     var editId = (document.getElementById('char-edit-id') || {}).value || '';
     var nameEl = document.getElementById('char-name');
@@ -6583,7 +6785,9 @@ function showCharSaveError(msg, withPlans) {
   }
   el.classList.remove('hidden');
 }
-function charModalPrimary() {
+async function charModalPrimary() {
+  // The same warning on the Done path -- see charPromptStaleOk.
+  if (!(await charPromptStaleOk())) return;
   // saveChar() handles BOTH new and edit: it builds the PUT with editId and
   // appends every selected slot file (and clear_ flags), then closes + reloads.
   // The old edit path (closeCharModal) sent only metadata, silently dropping
@@ -6678,7 +6882,7 @@ function showCharPromptNudge() {
   nudge.id = 'char-prompt-nudge';
   nudge.style.cssText = 'margin:8px 0;padding:8px 12px;border-radius:6px;font-size:13px;' +
     'background:rgba(15,110,86,0.15);border:1px solid rgba(15,110,86,0.4);color:#0a4a38;font-weight:500;';
-  nudge.innerHTML = '&#10003; Character saved. Now build its character prompt below \u2014 ' +
+  nudge.innerHTML = '&#10003; Character saved. Now build its character prompt \u2014 ' +
     'this is what keeps the character looking consistent across your panels. ' +
     'You can close this window when you\u2019re done.';
   body.parentNode.insertBefore(nudge, body);
@@ -14303,6 +14507,9 @@ function selectCampaignNovel(id) {
 // to change on the New Campaign screen belongs in openCampaignSettings.
 function openCampaignModal(editId) {
   if (typeof openCampaignSettings === 'function') { openCampaignSettings(editId || null); return; }
+  // v3.0.862 -- DEAD: the line above returns whenever openCampaignSettings exists, which
+  // it always does. This gate has never run. The live one is in openCampaignSettings
+  // (TD-723). Kept rather than deleted so the shape stays visible, not because it works.
   if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
@@ -19187,8 +19394,18 @@ function cpromptCount(el) {
   csGenreRender();   // the Other-with-no-prompt note depends on this field
 }
 
-function openCampaignSettings(id, ev) {
+function openCampaignSettings(id, ev, _tierChecked) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  // v3.0.862 -- TD-723. Ian: "Make it so if their tier doesn't allow them to create a
+  // campaign it stops them when they hit New Campaign, not after it's open and they
+  // have filled out most of it."
+  //
+  // THE GATE IS HERE AND NOWHERE ELSE, because this is the one place every New
+  // Campaign click arrives. openCampaignModal delegates straight here and is declared
+  // TWICE in this file; openCampaignSettings is declared ONCE. Gating the choke point
+  // beats gating two copies of a function whose bodies are dead anyway (5c: the best
+  // version of the twin rule is to make the twin impossible).
+  if (!id && !_tierChecked) { campaignCreatePreflight(); return; }
   // v3.0.492 -- DISARMED WHILE POPULATING. Every assignment below fires the same events a user
   // edit does; with autosave armed, opening the modal would immediately write the values it had
   // just read, and any field that failed to populate would be written back as empty. Nothing may
@@ -21510,6 +21727,31 @@ function sectionBack() {
 }
 
 // Copper (free) plan cannot create campaigns or sessions -- prompt to upgrade.
+// v3.0.862 -- TD-723. Ask BEFORE opening the form.
+//
+// TWO REFUSALS, AND ONLY ONE OF THEM IS KNOWABLE IN THE BROWSER. Copper is a tier
+// the client already holds, so blockCopperCreate answers instantly with no round
+// trip and its existing "See plans" button. The campaign LIMIT is a count the client
+// does not have and must not guess, so that one is asked of the server.
+//
+// IT FAILS OPEN, DELIBERATELY. If the request errors -- offline, a redeploy mid
+// click -- the form opens. This gate is a courtesy that saves wasted typing; the
+// POST's own checkCampaignLimit is the actual control, and it still refuses. A
+// courtesy that locks people out when it cannot reach the server is worse than no
+// courtesy at all.
+function campaignCreatePreflight() {
+  if (blockCopperCreate('campaign')) return;
+  fetch('/api/campaigns/can-create')
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (x) {
+      if (x.ok && x.d && x.d.allowed) { openCampaignSettings(null, null, true); return; }
+      var msg = (x.d && x.d.error) || 'Your plan does not allow another campaign right now.';
+      uiConfirm(msg, { okText: 'See plans', cancelText: 'Not now' })
+        .then(function (go) { if (go) goToPlans(); });
+    })
+    .catch(function () { openCampaignSettings(null, null, true); });
+}
+
 function blockCopperCreate(kind) {
   if (state.user && state.user.tier === 'copper') {
     var what = (kind === 'session') ? 'sessions' : 'campaigns';
