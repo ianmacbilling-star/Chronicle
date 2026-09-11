@@ -247,6 +247,9 @@
     var sstate = { cursor: 0, q: '', loading: false, done: false, any: false, dirty: false };
     // v3.0.845 -- ONE selection, shared by both tabs. Arrays, because every facet is any-of.
     var filters = { genre: [], style: [] };
+    // v3.0.858 -- filled from /api/public/art-styles. Empty until it arrives and empty
+    // forever if it fails, in which case no kind is offered and nothing is ever hidden.
+    var KIND_SLUGS = {};
     function anyFilter() { return filters.genre.length > 0 || filters.style.length > 0; }
     function filterQS() {
       var qs = '';
@@ -394,10 +397,28 @@
 
     function onSentinel() { if (state.tab === 'stories') loadStories(); else load(); }
 
+    // v3.0.858 -- Characters and Titles select on campaign_archives.image_type, which only
+    // the gallery has. On the Stories tab they are not offered, and a selected one is
+    // DROPPED rather than left sitting on screen filtering nothing -- an inert control that
+    // looks live is the shape TD-577 was about. The cost, accepted deliberately: the
+    // selection does not survive a trip to Stories and back. That is the honest trade for
+    // keeping ONE shared control, which is what Ian asked for.
+    function styleOptHidden(slug) { return state.tab === 'stories' && !!KIND_SLUGS[slug]; }
+
     function switchTab(tab) {
       if (state.tab === tab) return;
       state.tab = tab;
       var onStories = tab === 'stories';
+      if (onStories) {
+        var kept = filters.style.filter(function (s) { return !KIND_SLUGS[s]; });
+        if (kept.length !== filters.style.length) {
+          filters.style = kept;
+          state.dirty = true;          // the gallery must re-query without it on the way back
+          syncUrl();
+          if (clearBtn) clearBtn.hidden = !anyFilter();
+        }
+      }
+      facets.forEach(function (fx) { if (fx) fx.repaint(); });
       document.getElementById('tab-images').classList.toggle('active', !onStories);
       document.getElementById('tab-stories').classList.toggle('active', onStories);
       document.getElementById('images-filter').style.display = onStories ? 'none' : 'inline-flex';   // v3.0.846 -- it lives inside the filter row now, so restore inline-flex rather than block
@@ -515,18 +536,21 @@
     //
     // Everything BEHIND the control is unchanged from v3.0.845 -- one shared selection, the
     // url kept in step, the stale-tab flag. This is a new face on the same machinery.
-    function makeFacet(key, label, noun, options) {
+    function makeFacet(key, label, noun, options, hidden) {
       var chips = document.getElementById('facet-' + key + '-chips');
       var add = document.getElementById('facet-' + key + '-add');
       if (!chips || !add || !options.length) return null;
       var labelFor = {};
       options.forEach(function (o) { labelFor[o.slug] = o.label; });
+      // v3.0.858 -- an option this tab does not offer. Genre passes nothing and behaves
+      // exactly as before; the style facet passes styleOptHidden.
+      function isHidden(s) { return !!(hidden && hidden(s)); }
 
       function paint() {
         // Built with createElement and textContent rather than innerHTML: these labels come
         // off the wire, and the story cards next to them already take that care.
         chips.innerHTML = '';
-        filters[key].forEach(function (slug) {
+        filters[key].filter(function (s) { return !isHidden(s); }).forEach(function (slug) {
           var chip = document.createElement('span'); chip.className = 'facet-chip';
           var txt = document.createElement('span'); txt.textContent = labelFor[slug] || slug;
           var x = document.createElement('button');
@@ -542,7 +566,7 @@
 
         // The select offers what is left. When nothing is left it says so and disables
         // itself, rather than letting a click do nothing -- the csGenreRender rule.
-        var left = options.filter(function (o) { return filters[key].indexOf(o.slug) < 0; });
+        var left = options.filter(function (o) { return !isHidden(o.slug) && filters[key].indexOf(o.slug) < 0; });
         add.innerHTML = '';
         var head = document.createElement('option');
         head.value = '';
@@ -625,7 +649,15 @@
       if (clearBtn) clearBtn.hidden = !anyFilter();
     }).catch(function () {});
     fetch('/api/public/art-styles').then(function (r) { return r.json(); }).then(function (d) {
-      facets.push(makeFacet('style', 'Art styles', 'an art style', (d && d.styles) || []));
+      // v3.0.858 -- Characters and Titles ride in the SAME dropdown, appended after the
+      // real styles. Ian asked for no second control, and the any-of behaviour that comes
+      // with sharing one is the honest reading of it: Watercolor + Characters is a UNION,
+      // not "watercolor characters". Two facets could have expressed the intersection;
+      // one cannot, and one is what was asked for.
+      var kinds = (d && d.kinds) || [];
+      kinds.forEach(function (k) { KIND_SLUGS[k.slug] = true; });
+      var opts = ((d && d.styles) || []).concat(kinds);
+      facets.push(makeFacet('style', 'Art styles', 'an art style', opts, styleOptHidden));
       if (clearBtn) clearBtn.hidden = !anyFilter();
     }).catch(function () {});
 
