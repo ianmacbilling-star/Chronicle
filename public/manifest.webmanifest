@@ -1,10 +1,11 @@
 {
   "name": "Campaignia",
   "short_name": "Campaignia",
-  "description": "Turn your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.",
+  "description": "Turn your transcripts and notes into a styled graphic novel you can read online or hold in print.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "launch_handler": { "client_mode": "navigate-existing" },
   "orientation": "any",
   "background_color": "#0a0806",
   "theme_color": "#0a0806",
