@@ -53,6 +53,55 @@ var PRESET_NAMES = [
 var CUSTOM_SLUG = 'custom';
 var CUSTOM_LABEL = 'Custom';
 
+// v3.0.858 -- TD-718. TWO OPTIONS IN THE ART-STYLE DROPDOWN THAT ARE NOT ART STYLES.
+//
+// Ian, 2026-09-11: "Can you add 'Titles' and 'Characters' to the art style drop down...
+// Just on the library" -- and, on the earlier idea of stamping them as a pseudo-style,
+// "it should get ALL Characters even ones in a certain style."
+//
+// THAT LAST SENTENCE IS WHY THESE ARE NOT STYLES. campaign_archives.art_style holds ONE
+// value, so a watercolor character sheet could answer to 'Watercolor' or to 'Characters'
+// and never to both. These two select on campaign_archives.image_type instead -- a column
+// every row already carries (572 of 572 populated; character 27, moment 538, title 7,
+// measured against production 2026-09-11) -- so a character sheet drawn in a real style is
+// found by either. Nothing is stamped, nothing is backfilled, nothing is invented.
+//
+// THEY ARE DELIBERATELY ABSENT FROM isStyleSlug(), AND THAT IS THE LOAD-BEARING PART.
+// The Stories facet validates with isStyleSlug and matches public_stories.art_styles, a
+// text[] of STYLE slugs. Teaching it 'characters' would make every stories query carrying
+// that facet match nothing and return an empty directory -- a filter that silently empties
+// a tab, which is the exact failure mode TD-696 spent a morning on. Left unknown, the slug
+// is dropped by parseFacet and the directory degrades to everything, which is the rule
+// that file already documents for a retired slug. The gallery opts in via isFacetSlug().
+var KINDS = [
+  { slug: 'characters', label: 'Characters', type: 'character' },
+  { slug: 'titles', label: 'Titles', type: 'title' }
+];
+
+var BY_KIND = {};
+KINDS.forEach(function (k) { BY_KIND[k.slug] = k.type; });
+
+function isKindSlug(slug) {
+  return !!BY_KIND[String(slug || '').trim().toLowerCase()];
+}
+
+// slug -> the campaign_archives.image_type value it selects; null for anything else.
+function typeForKindSlug(slug) {
+  return BY_KIND[String(slug || '').trim().toLowerCase()] || null;
+}
+
+// The two extra options the GALLERY control appends. Served under their own key rather
+// than folded into facetOptions(), so the stories control and the publish snapshot -- both
+// of which read this module -- keep exactly the style list they had.
+function kindOptions() {
+  return KINDS.map(function (k) { return { slug: k.slug, label: k.label }; });
+}
+
+// The gallery's validator: a real art style OR one of the two kinds.
+function isFacetSlug(slug) {
+  return isStyleSlug(slug) || isKindSlug(slug);
+}
+
 function slugify(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
@@ -104,6 +153,11 @@ module.exports = {
   CUSTOM_LABEL: CUSTOM_LABEL,
   facetOptions: facetOptions,
   isStyleSlug: isStyleSlug,
+  KINDS: KINDS,
+  kindOptions: kindOptions,
+  isKindSlug: isKindSlug,
+  typeForKindSlug: typeForKindSlug,
+  isFacetSlug: isFacetSlug,
   nameForSlug: nameForSlug,
   styleSlug: styleSlug,
   slugify: slugify

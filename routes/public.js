@@ -56,11 +56,20 @@ function arrayOverlap(column, values, params) {
 // moments.style at archive time and frozen there ever since), while a book can contain
 // several. So equality for the presets, and a prefix test for the one Custom bucket -- every
 // 'custom:<id>' answers to Custom and the id itself never appears in a public query string.
+//
+// v3.0.858 -- AND TWO OF THE OPTIONS ARE NOT STYLES AT ALL. Characters and Titles select
+// on a.image_type, so a character sheet that DOES carry a real art style answers to both
+// its style and to Characters -- which a single-valued art_style column could never do.
+// See services/artStyleCatalog.js for why they are not in the style vocabulary.
 function archiveStyleClause(slugs, params) {
   var names = [];
+  var kinds = [];
   var wantCustom = false;
   slugs.forEach(function (s) {
     if (s === artstyles.CUSTOM_SLUG) { wantCustom = true; return; }
+    // Checked BEFORE nameForSlug, which does not know these and would return null.
+    var k = artstyles.typeForKindSlug(s);
+    if (k) { if (kinds.indexOf(k) < 0) kinds.push(k); return; }
     var n = artstyles.nameForSlug(s);
     if (n) names.push(n);
   });
@@ -70,6 +79,13 @@ function archiveStyleClause(slugs, params) {
     names.forEach(function (n) { params.push(n); });
   }
   if (wantCustom) ors.push("a.art_style LIKE 'custom:%'");
+  // PUSHED LAST, AND THE ORDER IS THE POINT: db.js rewrites ? into numbered parameters
+  // positionally, so a value pushed out of step with its placeholder is a WRONG PAGE
+  // rather than an error. names above, kinds here, matching the join below.
+  if (kinds.length) {
+    ors.push('a.image_type IN (' + kinds.map(function () { return '?'; }).join(',') + ')');
+    kinds.forEach(function (k) { params.push(k); });
+  }
   if (!ors.length) return '';
   return ' AND (' + ors.join(' OR ') + ')';
 }
@@ -114,7 +130,10 @@ router.get('/library', async function (req, res) {
     // v3.0.845 -- TD-693 / TD-694. Both facets, both any-of, both applied to BOTH
     // pagination modes below.
     const genres = parseFacet(req.query.genre, genresvc.isGenre);
-    const styles = parseFacet(req.query.style, artstyles.isStyleSlug);
+    // v3.0.858 -- THE GALLERY, AND ONLY THE GALLERY, also accepts the two kind slugs.
+    // /stories below deliberately keeps isStyleSlug: a kind arriving there is dropped and
+    // the directory degrades to everything, rather than matching nothing and going blank.
+    const styles = parseFacet(req.query.style, artstyles.isFacetSlug);
     const filtered = genres.length > 0 || styles.length > 0;
     // v3.0.737 -- TD-536. img_w/img_h added so the page can reserve each image's exact space
     // before the bytes arrive. They are already stored on the row; only the SELECT was short.
@@ -184,7 +203,9 @@ router.get('/genres', function (req, res) {
 // exactly the reason /genres exists -- a control built from a second list is a control that
 // will eventually disagree with the filter. Every custom style is one option called Custom.
 router.get('/art-styles', function (req, res) {
-  res.json({ styles: artstyles.facetOptions() });
+  // v3.0.858 -- kinds ride under their OWN key rather than appended to styles. The gallery
+  // control concatenates them; anything else reading this endpoint sees the list it had.
+  res.json({ styles: artstyles.facetOptions(), kinds: artstyles.kindOptions() });
 });
 
 router.get('/stories', async function (req, res) {
