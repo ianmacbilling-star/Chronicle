@@ -923,7 +923,7 @@ function uiPublishPrompt(message, opts) {
     tlabel.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
     var ti = document.createElement('input');
     ti.type = 'text'; ti.maxLength = 200; ti.value = opts.defaultTitle || '';
-    ti.placeholder = 'e.g. The Shattered Crown';
+    ti.placeholder = 'e.g. The Shattered Crown, or Summer at the Lake';   // v3.0.852 -- TD-711, and this is the twin of the one in app.html
     ti.style.cssText = 'width:100%;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
     var label = document.createElement('div');
     label.textContent = 'Add a short blurb for your Library page (optional)';
