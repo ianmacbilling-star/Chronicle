@@ -1,7 +1,7 @@
 {
   "name": "Campaignia",
   "short_name": "Campaignia",
-  "description": "Turn your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.",
+  "description": "Turn your transcripts and notes into a styled graphic novel you can read online or hold in print.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
