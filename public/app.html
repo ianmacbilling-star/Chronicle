@@ -2127,15 +2127,20 @@
 </div>
 
 <div class="modal-overlay hidden" id="char-modal">
-  <div class="modal">
+  <!-- v3.0.868 -- TD-735(a). position:relative so the reading spinner can sit over the whole
+       dialog, and an id so the importer can find it. -->
+  <div class="modal" id="char-modal-box" style="position:relative;">
     <div class="modal-header">
       <div class="modal-title" id="char-modal-title">Add Character</div>
-      <button class="modal-close" onclick="closeCharModal()">&times;</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-sm" type="button" id="char-import-btn" onclick="charImportFromFile()" title="Read a character sheet -- PDF, Word or text -- fill these fields from it, and build the character. Reading the sheet costs one token.">&#11014; Import a sheet</button>
+        <button class="modal-close" onclick="closeCharModal()">&times;</button>
+      </div>
     </div>
     <div id="char-modal-error" class="alert alert-error hidden"></div>
     <input type="hidden" id="char-edit-id" />
     <div class="form-group">
-      <label class="form-label">Character name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
+      <label class="form-label">Character name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; Separate aliases with /</span></label>
       <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood / Ash, or Grandma Nora / Nana" />
     </div>
     <div class="form-group">

@@ -918,6 +918,55 @@ function uiConfirm(message, opts) {
   });
 }
 
+// v3.0.868 -- A CHOICE AMONG N, which uiConfirm cannot express. Same overlay, same palette, same
+// Escape-cancels behaviour; it resolves the INDEX chosen, or null. Written as its own function
+// rather than as a fifth option on uiConfirm, because a two-button dialog that grows a list is how
+// a helper becomes unreadable, and every existing uiConfirm caller stays untouched.
+function uiChoose(title, message, items) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
+    var head = document.createElement('div');
+    head.textContent = String(title || 'Choose one');
+    head.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    box.appendChild(head);
+    if (message) {
+      var msg = document.createElement('div');
+      msg.textContent = String(message);
+      msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:16px;';
+      box.appendChild(msg);
+    }
+    (items || []).forEach(function (label, i) {
+      var b = document.createElement('button');
+      b.className = 'btn btn-sm';
+      b.textContent = String(label);
+      b.style.cssText = 'display:block;width:100%;text-align:left;margin-bottom:8px;white-space:normal;';
+      b.onclick = function () { done(i); };
+      box.appendChild(b);
+    });
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;margin-top:6px;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-sm';
+    cancel.textContent = 'Cancel';
+    cancel.onclick = function () { done(null); };
+    row.appendChild(cancel);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function done(val) {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    }
+    function onKey(e) { if (e.key === 'Escape') done(null); }
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 function uiPublishPrompt(message, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
@@ -19280,7 +19329,13 @@ async function fiTake(file) {
                     { title: 'Nothing to read in that file', hideCancel: true, okText: 'OK', preserveLines: true });
     return;
   }
-  try { target.onText(text.trim(), name); } catch (e) { console.error('file import handler failed:', e && e.message); }
+  // v3.0.868 -- the FILE goes to the caller too, so the character-sheet importer can pull the
+  // pictures out of it. Additive: the Story and Lore callers take two arguments and ignore it.
+  // AND IT IS AWAITED. It was not, and the try/catch around it was therefore decorative: every
+  // caller here is async, so a failure inside one rejected a promise nobody was holding and the
+  // catch could never fire. Awaiting it makes the catch mean what it says -- and makes fiTake
+  // finish when the import has actually finished rather than when it has merely started.
+  try { await target.onText(text.trim(), name, file); } catch (e) { console.error('file import handler failed:', e && e.message); }
 }
 
 async function fiReadFile(file, lower) {
@@ -19474,6 +19529,252 @@ function loreImportFromFile() {
       });
     }
   });
+}
+
+// =================================================================================================
+// v3.0.868 -- TD-735(a). CALLER 3: THE CHARACTER SHEET, IN ONE SHOT.
+//
+// Ian: "It needs to be smart, read the file and place the appropriate info into the correct boxes.
+// If it can extract an image it should put it in the image fields as well. Then it should go ahead
+// and generate the character reference image... All in one shot."
+//
+// The chain, and note how little of it is new: the browser reads the file (v3.0.865), the server
+// turns the text into fields (/parse-sheet, new), those fields are painted into the open form, an
+// unambiguous picture goes into the portrait slot through setSlotFile -- the SAME function the drop
+// zones use, so the preview and the pending-file bookkeeping happen the way they always do -- and
+// then rebuildCharPrompt(null) runs, which has created the character, saved its images, built the
+// canonical prompt and generated the reference since v3.0.860.
+//
+// THE FIELDS ARE PAINTED BEFORE THE PICTURE IS GENERATED, deliberately. Ian chose this: the reader
+// watches what was read while the expensive part runs, so a bad extraction is visible immediately
+// rather than at the end. Being wrong costs one image charge and a Regenerate.
+// =================================================================================================
+
+// A picture in a file is not necessarily THE CHARACTER -- it can be a party photo, a map, a logo or
+// a page scan, and a wrong reference image steers every panel that character ever appears in. So the
+// rule is deliberately timid: adopt one only when exactly one candidate looks like a portrait.
+// A scanned page cannot reach this at all, because a scan yields no text and the import stops
+// earlier with "nothing to read".
+var FI_IMG_MIN_SIDE = 120;      // below this it is an icon, a bullet or a logo
+var FI_IMG_MIN_RATIO = 0.4;     // taller than 1:2.5 is a banner on its side
+var FI_IMG_MAX_RATIO = 1.4;     // wider than this is a landscape plate, not a portrait
+
+// The pictures inside a .docx, via the same central-directory walk the text reader uses.
+async function fiDocxImages(bytes) {
+  if (typeof DecompressionStream === 'undefined') return [];
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  function u32(o) { return dv.getUint32(o, true); }
+  function u16(o) { return dv.getUint16(o, true); }
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i--) {
+    if (u32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return [];
+  var count = u16(eocd + 10);
+  var p = u32(eocd + 16);
+  var dec = new TextDecoder();
+  var entries = [];
+  for (var n = 0; n < count; n++) {
+    if (u32(p) !== 0x02014b50) break;
+    var method = u16(p + 10), csize = u32(p + 20);
+    var nameLen = u16(p + 28), extraLen = u16(p + 30), cmtLen = u16(p + 32), lho = u32(p + 42);
+    var entry = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (/^word\/media\/.+\.(jpe?g|png|gif|webp)$/i.test(entry)) entries.push({ name: entry, method: method, csize: csize, lho: lho });
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  var out = [];
+  for (var k = 0; k < entries.length && out.length < 8; k++) {
+    var e = entries[k];
+    var lNameLen = u16(e.lho + 26), lExtraLen = u16(e.lho + 28);
+    var start = e.lho + 30 + lNameLen + lExtraLen;
+    var rawBytes = bytes.subarray(start, start + e.csize);
+    var data;
+    if (e.method === 0) data = rawBytes;
+    else if (e.method === 8) {
+      try {
+        data = new Uint8Array(await new Response(new Blob([rawBytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      } catch (err) { continue; }
+    } else continue;
+    var ext = (e.name.split('.').pop() || 'jpg').toLowerCase();
+    var mime = ext === 'png' ? 'image/png' : (ext === 'gif' ? 'image/gif' : (ext === 'webp' ? 'image/webp' : 'image/jpeg'));
+    out.push(new File([data], 'sheet-image-' + (out.length + 1) + '.' + ext, { type: mime }));
+  }
+  return out;
+}
+
+// The pictures inside a PDF. pdf.js hands back DECODED pixels rather than the original file, so a
+// canvas is what turns them back into something uploadable.
+async function fiPdfImages(file) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  var out = [];
+  var pages = Math.min(pdf.numPages, 5);   // a character sheet puts its portrait near the front
+  for (var n = 1; n <= pages && out.length < 8; n++) {
+    var page = await pdf.getPage(n);
+    var ops = await page.getOperatorList();
+    for (var i = 0; i < ops.fnArray.length && out.length < 8; i++) {
+      var fn = ops.fnArray[i];
+      if (fn !== lib.OPS.paintImageXObject && fn !== lib.OPS.paintJpegXObject) continue;
+      var ref = ops.argsArray[i][0];
+      if (typeof ref !== 'string') continue;
+      var obj = null;
+      try { obj = await new Promise(function (resolve) { page.objs.get(ref, resolve); }); } catch (e) { obj = null; }
+      if (!obj || !obj.width || !obj.height || !obj.data) continue;
+      var f = await fiPixelsToFile(obj, out.length + 1);
+      if (f) out.push(f);
+    }
+  }
+  return out;
+}
+
+// kind 1 = greyscale, 2 = RGB 24bpp, 3 = RGBA 32bpp. Anything else is left alone rather than
+// guessed at -- a wrong stride produces a plausible-looking picture of noise.
+async function fiPixelsToFile(obj, idx) {
+  try {
+    var w = obj.width, h = obj.height, src = obj.data;
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    var img = ctx.createImageData(w, h);
+    var d = img.data, px = w * h, s = 0, t = 0, i;
+    if (obj.kind === 3 || src.length === px * 4) {
+      d.set(src.subarray(0, px * 4));
+    } else if (obj.kind === 2 || src.length === px * 3) {
+      for (i = 0; i < px; i++) { d[t++] = src[s++]; d[t++] = src[s++]; d[t++] = src[s++]; d[t++] = 255; }
+    } else if (obj.kind === 1 || src.length === px) {
+      for (i = 0; i < px; i++) { var g = src[s++]; d[t++] = g; d[t++] = g; d[t++] = g; d[t++] = 255; }
+    } else return null;
+    ctx.putImageData(img, 0, 0);
+    var blob = await new Promise(function (resolve) { cv.toBlob(resolve, 'image/jpeg', 0.92); });
+    if (!blob) return null;
+    return new File([blob], 'sheet-image-' + idx + '.jpg', { type: 'image/jpeg' });
+  } catch (e) { return null; }
+}
+
+async function fiImagesFromFile(file, lower) {
+  try {
+    if (/\.docx$/.test(lower)) return await fiDocxImages(new Uint8Array(await file.arrayBuffer()));
+    if (/\.pdf$/.test(lower)) return await fiPdfImages(file);
+  } catch (e) { console.error('image extraction failed:', e && e.message); }
+  return [];
+}
+
+// Measure each candidate and keep the portrait-shaped ones. Returns the single winner, or null when
+// there is no candidate or more than one -- ambiguity is answered by doing nothing.
+async function fiPickPortrait(files) {
+  var kept = [];
+  for (var i = 0; i < files.length; i++) {
+    var dims = await fiImageSize(files[i]);
+    if (!dims) continue;
+    if (dims.w < FI_IMG_MIN_SIDE || dims.h < FI_IMG_MIN_SIDE) continue;
+    var ratio = dims.w / dims.h;
+    if (ratio < FI_IMG_MIN_RATIO || ratio > FI_IMG_MAX_RATIO) continue;
+    kept.push(files[i]);
+  }
+  return kept.length === 1 ? kept[0] : null;
+}
+// A TIMEOUT, because an image that never loads must not be able to hang the import. onerror covers
+// a file the decoder rejects outright, but a stalled decode fires neither handler and this promise
+// would never settle -- and now that fiTake awaits the caller, that would leave the reader looking
+// at a spinner forever. Found by running it: the suite hung here.
+function fiImageSize(file) {
+  return new Promise(function (resolve) {
+    var url = URL.createObjectURL(file);
+    var done = false;
+    function finish(val) {
+      if (done) return;
+      done = true;
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      resolve(val);
+    }
+    var im = new Image();
+    im.onload = function () { finish({ w: im.naturalWidth, h: im.naturalHeight }); };
+    im.onerror = function () { finish(null); };
+    setTimeout(function () { finish(null); }, 4000);
+    im.src = url;
+  });
+}
+
+// ---- CALLER 3: the character sheet -----------------------------------------------------------
+function charImportFromFile() {
+  fiOpen({
+    title: 'Import a character sheet',
+    busyEl: fiEl('char-modal-box'),
+    onText: async function (text, fileName, file) {
+      var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading ' + (fileName || 'your file'));
+      var data = null;
+      try {
+        var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/parse-sheet', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+        data = await r.json();
+      } catch (e) {
+        data = { error: 'Could not reach the server to read that sheet.' };
+      }
+      fiBusyOff(busy);
+
+      if (!data || data.error) {
+        var msg = (data && (data.message || data.error)) || 'That sheet could not be read.';
+        showModalError('char-modal-error', msg);
+        return;
+      }
+      var list = Array.isArray(data.characters) ? data.characters : [];
+      if (!list.length) {
+        showModalError('char-modal-error', data.message || 'No character could be found in that file.');
+        return;
+      }
+
+      // MORE THAN ONE, SO ASK. A party roster is a common thing to have lying around, and picking
+      // silently would build the wrong person and charge for their picture.
+      var pick = list[0];
+      if (list.length > 1) {
+        var idx = await uiChoose('Which character?',
+          'That file has ' + list.length + ' characters in it. Which one should I build?',
+          list.map(function (c) { return c.name + (c.cls ? ' — ' + c.cls : ''); }));
+        if (idx === null) return;
+        pick = list[idx];
+      }
+
+      charFillFromSheet(pick);
+      if (data.truncated) {
+        showModalError('char-modal-error', 'That file was long, so only the first part was read. Check the fields before the picture finishes.');
+      }
+
+      // The picture, if the file had an unambiguous one. Through setSlotFile, so the preview and the
+      // pending-upload bookkeeping are the same ones the drop zones use.
+      try {
+        var imgs = await fiImagesFromFile(file, (fileName || '').toLowerCase());
+        var portrait = await fiPickPortrait(imgs);
+        if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
+            typeof setSlotFile === 'function') {
+          setSlotFile('image_portrait', portrait);
+        }
+      } catch (e) { console.error('portrait adoption failed:', e && e.message); }
+
+      // AND THE ONE SHOT. Everything from here has been shipping since v3.0.860: save or create,
+      // upload the slots, build the prompt, generate the reference -- including the affordability
+      // check and the free-trial character reserve, which stay exactly where they are.
+      var existing = fiEl('char-edit-id');
+      var id = existing && existing.value ? existing.value : null;
+      if (typeof rebuildCharPrompt === 'function') rebuildCharPrompt(id);
+    }
+  });
+}
+
+// Paint the parsed fields into the open form. charHeightLoad is the height control's own loader, so
+// the slider, its label and its dataset.set flag all end up in the state the form expects.
+function charFillFromSheet(c) {
+  if (!c) return;
+  function put(id, v) { var el = fiEl(id); if (el && v) el.value = v; }
+  put('char-name', c.name);
+  put('char-player', c.player_name);
+  put('char-cls', c.cls);
+  put('char-desc', c.description);
+  var npc = fiEl('char-is-npc');
+  if (npc && c.is_npc === true) npc.checked = true;
+  if (c.height_ft && typeof charHeightLoad === 'function') { try { charHeightLoad(c.height_ft); } catch (e) {} }
 }
 
 function updateWordCounts() {
