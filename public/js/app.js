@@ -19548,18 +19548,135 @@ async function fiApplyToField(box, text, opts) {
   return true;
 }
 
+// v3.0.875 -- TD-752. THE STORY AND LORE BOXES CAN READ A PICTURE-ONLY PDF NOW.
+//
+// This reverses a decision from v3.0.869, deliberately and on Ian's say-so. Back then the picture
+// path was made opt-in and these two callers deliberately did NOT take it, on the reasoning that
+// there is nothing useful to be done with a picture of a transcript. Ian, 2026-09-12: "On story pdf
+// that is uploaded. I might need to do the same picture read that it does on the characters... to
+// get the text from the story. If the pdf is just a picture it just needs to do the best it can to
+// get the text off of it." He is right and the old reasoning was wrong: a scanned story is still the
+// story, and the alternative on offer was nothing at all.
+//
+// THE LIMITS ARE HIS, AND THEY REFUSE RATHER THAN COPE. "I would limit it to 50 pages for now..
+// Period... If it needs to batch I would just refuse for now. So cap it at the 8mb.. just tell them
+// so." Reading half a document and not saying which half is worse than declining, because the reader
+// would paste the rest in on top of a silent gap.
+var FI_OCR_MAX_PAGES = 50;
+var FI_OCR_MAX_BYTES = 8 * 1024 * 1024;
+
+// Render, count the cost honestly, ASK, then read. Shared by both callers, so the question and the
+// limits cannot drift apart between the Story box and the Lore box.
+async function fiOcrPictureOffer(file, fileName, opts) {
+  opts = opts || {};
+  var busyEl = opts.busyEl || null;
+  var busy = fiBusyOn(busyEl, 'Looking at the pages of ' + (fileName || 'your file'));
+  var rendered = null;
+  try {
+    rendered = await fiPdfPageImages(file, { maxPages: FI_OCR_MAX_PAGES, refuseOver: true });
+  } catch (e) { console.error('page render failed:', e && e.message); }
+  fiBusyOff(busy);
+
+  if (!rendered) {
+    await uiConfirm('That PDF could not be read, even as pictures.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  // TOO LONG. Refused before a single page is rendered, so a 300-page book costs nothing but a
+  // sentence -- and the sentence says the number, because "too long" without it is a shrug.
+  if (rendered.tooMany) {
+    await uiConfirm('That file is ' + rendered.total + ' pages, and the most that can be read as pictures is ' +
+                    FI_OCR_MAX_PAGES + '.' + String.fromCharCode(10) + String.fromCharCode(10) +
+                    'Split it into smaller files, or paste the text in yourself -- pasting is free.',
+                    { title: 'That file is too long to read', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  if (!rendered.pages.length) {
+    await uiConfirm('There was nothing readable on those pages.',
+                    { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  var n = rendered.pages.length;
+  var bytes = 0;
+  rendered.pages.forEach(function (p) { bytes += p.length; });
+  // TOO BIG. Ian chose refusing over batching, so this says the size and stops rather than quietly
+  // sending the first few pages.
+  if (bytes > FI_OCR_MAX_BYTES) {
+    await uiConfirm('Those ' + n + ' pages come to about ' + Math.round(bytes / 1048576) +
+                    'MB, and the most that can be sent at once is 8MB.' +
+                    String.fromCharCode(10) + String.fromCharCode(10) +
+                    'Split the file into smaller parts, or paste the text in yourself -- pasting is free.',
+                    { title: 'Those pages are too large', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+
+  // THE QUESTION, IN IAN'S OWN SHAPE: how long it is, what it costs, and that there is a free way to
+  // do the same thing. A reader who would rather type than pay should be told so before they pay.
+  var NL = String.fromCharCode(10);
+  var msg = 'This file is ' + n + ' page' + (n === 1 ? '' : 's') + '. It costs a token a page to read the ' +
+            'text off them, so ' + n + ' token' + (n === 1 ? '' : 's') + '.' + NL + NL +
+            'You could paste the text in yourself instead, and that is free.' + NL + NL;
+  if (opts.limitNote) msg += opts.limitNote + NL + NL;
+  msg += 'Do you want to continue?';
+  var go = await uiConfirm(msg, { title: 'Read the text off ' + n + ' page' + (n === 1 ? '' : 's') + '?',
+                                  preserveLines: true, okText: 'Read the pages' });
+  if (!go) return;
+
+  var busy2 = fiBusyOn(busyEl, 'Reading ' + n + ' page' + (n === 1 ? '' : 's'));
+  var data = null;
+  try {
+    var r = await fetch('/api/extract/ocr-pages/' + state.currentCampaign.id, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages: rendered.pages })
+    });
+    data = await r.json();
+  } catch (e) {
+    data = { error: 'Could not reach the server to read those pages.' };
+  }
+  fiBusyOff(busy2);
+
+  if (!data || data.error) {
+    await uiConfirm((data && (data.message || data.error)) || 'Those pages could not be read.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  if (!data.text || !data.text.trim()) {
+    await uiConfirm(data.message || 'No text could be read from those pages.',
+                    { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  // Straight into the SAME applier the typed-text path uses, so Replace / Append, the field's own
+  // maxlength, the word count and the save all behave exactly as they do for a Word file.
+  if (typeof opts.onText === 'function') await opts.onText(data.text);
+}
+
 // ---- CALLER 1: the Story tab ---------------------------------------------------------------
 function storyImportFromFile() {
+  function applyStory(text) {
+    // The Story box carries no maxlength, so the length check inside the applier is inert here
+    // and this behaves exactly as it did in v3.0.865.
+    return fiApplyToField(fiEl('transcript-input'), text, {
+      existsMessage: 'There is already text in the Story box.',
+      after: function () { updateWordCounts(); }
+    });
+  }
   fiOpen({
     title: 'Import your story or transcript',
     busyEl: fiEl('transcript-wrap'),
-    onText: async function (text) {
-      // The Story box carries no maxlength, so the length check below is inert here and this
-      // behaves exactly as it did in v3.0.865.
-      await fiApplyToField(fiEl('transcript-input'), text, {
-        existsMessage: 'There is already text in the Story box.',
-        after: function () { updateWordCounts(); }
+    // v3.0.875 -- TD-752. A scanned story is still the story.
+    onEmptyText: async function (file, fileName) {
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      await fiOcrPictureOffer(file, fileName, {
+        busyEl: fiEl('transcript-wrap'),
+        onText: applyStory
       });
+    },
+    onText: async function (text) {
+      await applyStory(text);
     }
   });
 }
@@ -19574,17 +19691,38 @@ function storyImportFromFile() {
 // marked DEAD FROM HERE TO THE END; the live field is cs-lore-input in the Campaign details
 // dialog. Wiring the dead one would look perfectly correct and do nothing at all.
 function loreImportFromFile() {
+  function applyLore(text) {
+    return fiApplyToField(fiEl('cs-lore-input'), text, {
+      existsMessage: 'There is already text in Lore / Background.',
+      after: function (box) {
+        if (typeof loreCount === 'function') loreCount(box, 'cs-lore-count');
+        if (typeof csDirty === 'function') csDirty(true);
+      }
+    });
+  }
   fiOpen({
     title: 'Import your lore or background',
     busyEl: fiEl('cs-lore-wrap'),
-    onText: async function (text) {
-      await fiApplyToField(fiEl('cs-lore-input'), text, {
-        existsMessage: 'There is already text in Lore / Background.',
-        after: function (box) {
-          if (typeof loreCount === 'function') loreCount(box, 'cs-lore-count');
-          if (typeof csDirty === 'function') csDirty(true);
-        }
+    // v3.0.875 -- TD-752. Same offer as the Story box, with one extra line in the question: this
+    // field holds 6,000 characters, and being told that AFTER paying to read forty pages is the
+    // sort of thing a reader would rightly be annoyed about. The applier still enforces it.
+    onEmptyText: async function (file, fileName) {
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      var _box = fiEl('cs-lore-input');
+      var _lim = (_box && _box.maxLength > 0) ? _box.maxLength : 0;
+      await fiOcrPictureOffer(file, fileName, {
+        busyEl: fiEl('cs-lore-wrap'),
+        limitNote: _lim ? ('Lore / Background holds ' + _lim.toLocaleString() + ' characters, so a long ' +
+                           'document will be trimmed to fit.') : '',
+        onText: applyLore
       });
+    },
+    onText: async function (text) {
+      await applyLore(text);
     }
   });
 }
@@ -19892,11 +20030,18 @@ var FI_PDF_INK_MIN = 0.07;
 
 // Render up to FI_PDF_MAX_PAGES pages to JPEG, skipping the ones that are effectively empty.
 // Returns base64 strings with no data: prefix, which is what the API wants.
-async function fiPdfPageImages(file) {
+async function fiPdfPageImages(file, opts) {
   var lib = await ensurePdfJs();
   var bytes = new Uint8Array(await file.arrayBuffer());
   var pdf = await lib.getDocument({ data: bytes }).promise;
-  var count = Math.min(pdf.numPages, FI_PDF_MAX_PAGES);
+  // v3.0.875 -- the cap is the caller's now. A character sheet passes nothing and keeps ten,
+  // because a sheet longer than that is a rulebook; a story asks for fifty, which is Ian's limit.
+  opts = opts || {};
+  var cap = (opts.maxPages > 0) ? opts.maxPages : FI_PDF_MAX_PAGES;
+  // REFUSE BEFORE RENDERING, not after. A three-hundred-page book should cost one sentence, not
+  // fifty page renders and then one sentence.
+  if (opts.refuseOver && pdf.numPages > cap) return { pages: [], total: pdf.numPages, tooMany: true };
+  var count = Math.min(pdf.numPages, cap);
   var out = [];
   var skipped = 0;
   for (var n = 1; n <= count; n++) {
