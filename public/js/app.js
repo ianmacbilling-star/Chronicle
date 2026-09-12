@@ -19422,6 +19422,10 @@ async function fiPdfToText(file) {
   var bytes = new Uint8Array(await file.arrayBuffer());
   var pdf = await lib.getDocument({ data: bytes }).promise;
   var out = '';
+  // v3.0.871 -- a value that appears on every page (the character's name in the header of a
+  // fillable sheet) is worth sending once. Keyed on the whole name-and-value pair, so two fields
+  // that merely share a value are both kept.
+  var seenFields = {};
   for (var n = 1; n <= pdf.numPages; n++) {
     var page = await pdf.getPage(n);
     var content = await page.getTextContent();
@@ -19434,8 +19438,37 @@ async function fiPdfToText(file) {
       lastY = y;
     });
     out += line.replace(/\s+$/, '') + '\n';
+    out += await fiPdfFormText(page, seenFields);
   }
   return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// v3.0.871 -- TD-745. THE FORM LAYER. On a fillable sheet the printed template is page content and
+// the reader's own answers are widget annotations sitting on top of it, so getTextContent() -- which
+// reads the page and never the annotations -- returns the questions and none of the answers.
+// Measured on Ian's Gubuk export: 2,514 characters of template in the page against 12,730 characters
+// of real content in 399 filled fields.
+//
+// The field NAME is kept alongside the value. 'HEIGHT' next to a number is what tells the model it
+// is a height rather than a weight, and these names are the sheet author's own words, so they cost
+// almost nothing and carry most of the meaning.
+async function fiPdfFormText(page, seen) {
+  var anns;
+  try { anns = await page.getAnnotations(); } catch (e) { return ''; }
+  if (!anns || !anns.length) return '';
+  var lines = [];
+  anns.forEach(function (a) {
+    if (!a || a.subtype !== 'Widget') return;
+    var v = (a.fieldValue === null || a.fieldValue === undefined) ? '' : String(a.fieldValue);
+    v = v.replace(/\s+/g, ' ').trim();
+    if (!v) return;
+    var name = String(a.fieldName === null || a.fieldName === undefined ? '' : a.fieldName).replace(/\s+/g, ' ').trim();
+    var row = name ? (name + ': ' + v) : v;
+    if (seen[row]) return;
+    seen[row] = 1;
+    lines.push(row);
+  });
+  return lines.length ? lines.join('\n') + '\n' : '';
 }
 
 // PUTTING THE TEXT IN A FIELD, which is the half every caller shares: the add-or-replace
@@ -19618,6 +19651,74 @@ async function fiDocxImages(bytes) {
 
 // The pictures inside a PDF. pdf.js hands back DECODED pixels rather than the original file, so a
 // canvas is what turns them back into something uploadable.
+// The rectangle each painted image occupies on the page, in PDF units, by tracking the transform
+// the way a renderer does. paintImageXObject's own arguments give the pixel size; the matrix gives
+// where it lands and how big it is drawn.
+async function fiPdfPlacedImages(page, lib) {
+  var ops = await page.getOperatorList();
+  var ctm = [1, 0, 0, 1, 0, 0];
+  var stack = [];
+  function mul(a, b) {
+    return [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
+            a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+            a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+  }
+  var placed = [];
+  for (var i = 0; i < ops.fnArray.length; i++) {
+    var fn = ops.fnArray[i], a = ops.argsArray[i];
+    if (fn === lib.OPS.save) { stack.push(ctm.slice()); continue; }
+    if (fn === lib.OPS.restore) { ctm = stack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+    if (fn === lib.OPS.transform) { ctm = mul(ctm, a); continue; }
+    if (fn !== lib.OPS.paintImageXObject) continue;
+    var pw = a && a[1], ph = a && a[2];
+    var w = Math.abs(ctm[0]), h = Math.abs(ctm[3]);
+    if (!(w > 0) || !(h > 0) || !(pw > 0) || !(ph > 0)) continue;
+    placed.push({ x: ctm[4], y: ctm[5], w: w, h: h, pw: pw, ph: ph });
+  }
+  return placed;
+}
+
+// Stack the tiles a sliced picture was cut into. Two images join only when they share a left edge
+// AND a width AND meet edge to edge -- no gap and no overlap. Anything looser would happily weld
+// two unrelated pictures into one nonsense rectangle.
+var FI_TILE_EPS = 1.0;   // PDF points. The measured slices line up to within a twentieth of this.
+function fiGroupTiles(placed) {
+  var rest = placed.slice();
+  var groups = [];
+  while (rest.length) {
+    var g = [rest.shift()];
+    var joined = true;
+    while (joined) {
+      joined = false;
+      for (var i = 0; i < rest.length; i++) {
+        var c = rest[i];
+        var fits = g.some(function (m) {
+          if (Math.abs(c.x - m.x) > FI_TILE_EPS) return false;
+          if (Math.abs(c.w - m.w) > FI_TILE_EPS) return false;
+          return Math.abs(c.y - (m.y + m.h)) <= FI_TILE_EPS || Math.abs(m.y - (c.y + c.h)) <= FI_TILE_EPS;
+        });
+        if (fits) { g.push(c); rest.splice(i, 1); joined = true; break; }
+      }
+    }
+    groups.push(g);
+  }
+  return groups.map(function (g) {
+    var x0 = Math.min.apply(null, g.map(function (m) { return m.x; }));
+    var y0 = Math.min.apply(null, g.map(function (m) { return m.y; }));
+    var x1 = Math.max.apply(null, g.map(function (m) { return m.x + m.w; }));
+    var y1 = Math.max.apply(null, g.map(function (m) { return m.y + m.h; }));
+    var pw = Math.max.apply(null, g.map(function (m) { return m.pw; }));
+    var ph = g.reduce(function (s, m) { return s + m.ph; }, 0);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, pw: pw, ph: g.length > 1 ? ph : g[0].ph, tiles: g.length };
+  });
+}
+
+// A whole page rasterised as one picture is roughly 0.77 -- portrait-shaped -- so shape alone would
+// adopt a scan of the sheet as the character's face. A portrait sits IN a page; it is not the page.
+var FI_PORTRAIT_MAX_PAGE_FRACTION = 0.5;
+var FI_PORTRAIT_MIN_PT = 40;      // smaller than this on the page is a stamp or an icon
+var FI_CROP_MAX_PX = 1600;        // no need to hand the uploader a bigger picture than this
+
 async function fiPdfImages(file) {
   var lib = await ensurePdfJs();
   var bytes = new Uint8Array(await file.arrayBuffer());
@@ -19626,26 +19727,51 @@ async function fiPdfImages(file) {
   var pages = Math.min(pdf.numPages, 5);   // a character sheet puts its portrait near the front
   for (var n = 1; n <= pages && out.length < 8; n++) {
     var page = await pdf.getPage(n);
-    var ops = await page.getOperatorList();
-    for (var i = 0; i < ops.fnArray.length && out.length < 8; i++) {
-      if (ops.fnArray[i] !== lib.OPS.paintImageXObject) continue;
-      var args = ops.argsArray[i] || [];
-      var ref = args[0];
-      if (typeof ref !== 'string') continue;
-      // v3.0.870 -- THE SHAPE TEST GOES HERE, BEFORE THE OBJECT IS ASKED FOR. The operator's
-      // arguments are [id, width, height], so a banner, a rule or a strip of rasterised text is
-      // rejected without pdf.js ever being asked to decode it -- which is what stops the hang
-      // below from being reachable at all on a sheet made of text strips, and saves a canvas
-      // decode per image on every other sheet.
-      if (!fiPortraitShape(args[1], args[2])) continue;
-      var obj = await fiPdfObj(page, ref);
-      if (!obj || !obj.width || !obj.height || !obj.data) continue;
-      var f = await fiPixelsToFile(obj, out.length + 1);
+    var base = page.getViewport({ scale: 1 });
+    var pageArea = base.width * base.height;
+    var placed;
+    try { placed = await fiPdfPlacedImages(page, lib); } catch (e) { continue; }
+    var wanted = fiGroupTiles(placed).filter(function (g) {
+      if (g.w < FI_PORTRAIT_MIN_PT || g.h < FI_PORTRAIT_MIN_PT) return false;
+      if (pageArea > 0 && (g.w * g.h) / pageArea > FI_PORTRAIT_MAX_PAGE_FRACTION) return false;
+      // BOTH have to agree: the shape it is DRAWN at and the shape of the pixels behind it. A
+      // wide strip squashed into a square hole is not a portrait, and neither is the reverse.
+      return fiPortraitShape(g.pw, g.ph) && fiPortraitShape(g.w * 100, g.h * 100);
+    });
+    if (!wanted.length) continue;
+    for (var k = 0; k < wanted.length && out.length < 8; k++) {
+      var f = await fiCropFromPage(page, base, wanted[k], out.length + 1);
       if (f) out.push(f);
     }
   }
   return out;
 }
+
+// Render the page big enough that the crop comes out at roughly the resolution of the pixels behind
+// it, then cut the rectangle out. PDF y counts up from the bottom of the page and canvas y counts
+// down from the top, which is the one thing in here that is easy to get backwards.
+async function fiCropFromPage(page, base, g, idx) {
+  try {
+    var scale = g.w > 0 ? (g.pw / g.w) : 2;
+    if (!(scale > 0.2)) scale = 2;
+    if (g.w * scale > FI_CROP_MAX_PX) scale = FI_CROP_MAX_PX / g.w;
+    if (g.h * scale > FI_CROP_MAX_PX) scale = FI_CROP_MAX_PX / g.h;
+    var vp = page.getViewport({ scale: scale });
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(vp.width);
+    cv.height = Math.round(vp.height);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    var cut = document.createElement('canvas');
+    cut.width = Math.max(1, Math.round(g.w * scale));
+    cut.height = Math.max(1, Math.round(g.h * scale));
+    var srcY = (base.height - (g.y + g.h)) * scale;
+    cut.getContext('2d').drawImage(cv, g.x * scale, srcY, cut.width, cut.height, 0, 0, cut.width, cut.height);
+    var blob = await new Promise(function (resolve) { cut.toBlob(resolve, 'image/jpeg', 0.92); });
+    if (!blob) return null;
+    return new File([blob], 'sheet-image-' + idx + '.jpg', { type: 'image/jpeg' });
+  } catch (e) { console.error('crop failed:', e && e.message); return null; }
+}
+
 
 // ONE RULE FOR WHAT A PORTRAIT LOOKS LIKE, asked twice: once of the dimensions the PDF declares,
 // and again of the pixels that actually decoded. Two copies of these three numbers is how the two
@@ -19657,18 +19783,11 @@ function fiPortraitShape(w, h) {
   return ratio >= FI_IMG_MIN_RATIO && ratio <= FI_IMG_MAX_RATIO;
 }
 
-// page.objs.get WAITS FOR THE RENDERER, and this code never renders the page, so on a document
-// whose images pdf.js has not decoded the callback never comes. Measured on Ian's Emanon export:
-// still waiting at 45 seconds, which is why the import filled the fields and then did nothing at
-// all. Same fault as fiImageSize in v3.0.868, one function away from it.
-function fiPdfObj(page, ref) {
-  return new Promise(function (resolve) {
-    var done = false;
-    function finish(v) { if (done) return; done = true; resolve(v); }
-    setTimeout(function () { finish(null); }, 5000);
-    try { page.objs.get(ref, finish); } catch (e) { finish(null); }
-  });
-}
+// v3.0.871 -- fiPdfObj is GONE, and with it the last call to page.objs.get anywhere in the app.
+// It waited on the renderer to resolve an image that this code never rendered, which is why the
+// v3.0.869 import filled the fields and then sat there (TD-742). v3.0.870 bounded it with a
+// timeout; v3.0.871 removes the need for it, because a crop of a rendered page asks pdf.js for
+// nothing it has not already drawn. A guard asserts objs.get does not come back.
 
 // NOTHING IN THE IMPORT MAY HANG. A belt over the braces above: whatever is added to the portrait
 // step later, it settles or it is abandoned, and the reader is never left watching a spinner.
@@ -19679,29 +19798,10 @@ function fiWithTimeout(promise, ms, fallback) {
   ]);
 }
 
-// kind 1 = greyscale, 2 = RGB 24bpp, 3 = RGBA 32bpp. Anything else is left alone rather than
-// guessed at -- a wrong stride produces a plausible-looking picture of noise.
-async function fiPixelsToFile(obj, idx) {
-  try {
-    var w = obj.width, h = obj.height, src = obj.data;
-    var cv = document.createElement('canvas');
-    cv.width = w; cv.height = h;
-    var ctx = cv.getContext('2d');
-    var img = ctx.createImageData(w, h);
-    var d = img.data, px = w * h, s = 0, t = 0, i;
-    if (obj.kind === 3 || src.length === px * 4) {
-      d.set(src.subarray(0, px * 4));
-    } else if (obj.kind === 2 || src.length === px * 3) {
-      for (i = 0; i < px; i++) { d[t++] = src[s++]; d[t++] = src[s++]; d[t++] = src[s++]; d[t++] = 255; }
-    } else if (obj.kind === 1 || src.length === px) {
-      for (i = 0; i < px; i++) { var g = src[s++]; d[t++] = g; d[t++] = g; d[t++] = g; d[t++] = 255; }
-    } else return null;
-    ctx.putImageData(img, 0, 0);
-    var blob = await new Promise(function (resolve) { cv.toBlob(resolve, 'image/jpeg', 0.92); });
-    if (!blob) return null;
-    return new File([blob], 'sheet-image-' + idx + '.jpg', { type: 'image/jpeg' });
-  } catch (e) { return null; }
-}
+// v3.0.871 -- fiPixelsToFile is GONE too. It rebuilt a picture from raw pdf.js pixels by guessing
+// the stride from obj.kind, and a wrong guess produced a convincing picture of noise rather than
+// an error. Cropping a rendered page needs none of it: the compositing, the masks and the colour
+// are already correct because the browser did them.
 
 async function fiImagesFromFile(file, lower) {
   try {
