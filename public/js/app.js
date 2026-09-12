@@ -19952,6 +19952,7 @@ function fiInkFraction(canvas) {
 
 // ---- CALLER 3: the character sheet -----------------------------------------------------------
 function charImportFromFile() {
+  charSheetNoticeClear();   // v3.0.872 -- pressing the button is trying again, so the old notice goes
   fiOpen({
     title: 'Import a character sheet',
     busyEl: fiEl('char-modal-box'),
@@ -19960,26 +19961,35 @@ function charImportFromFile() {
     // the pictures. Opt-in, so the Story and Lore imports still say "nothing to read" -- which is
     // right for them, since a picture of a transcript is of no use to anybody.
     onEmptyText: async function (file, fileName) {
+      charSheetNoticeClear();
       if (!/\.pdf$/i.test(fileName || '')) {
         await uiConfirm('There is no text in that file to read.',
                         { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
         return;
       }
-      var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading the pages of ' + (fileName || 'your sheet'));
-      var rendered = null;
-      try { rendered = await fiPdfPageImages(file); } catch (e) { console.error('page render failed:', e && e.message); }
-      if (!rendered || !rendered.pages.length) {
-        fiBusyOff(busy);
-        showModalError('char-modal-error', 'That PDF could not be read, even as pictures.');
-        return;
-      }
-      await charSheetSubmit({ pages: rendered.pages }, fileName, file, busy);
+      // v3.0.872 -- TD-748. THIS PATH USED TO RENDER AND SPEND WITHOUT ASKING. It is the path a
+      // D&D Beyond export takes -- no text layer at all -- so it is the one that most needed the
+      // question, and it was the one that did not have it.
+      await charSheetPictureOffer(fileName, file,
+        'There is no text in that file at all -- it is a character sheet saved as pictures.');
     },
     onText: async function (text, fileName, file) {
+      charSheetNoticeClear();
       var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading ' + (fileName || 'your file'));
       await charSheetSubmit({ text: text }, fileName, file, busy);
     }
   });
+}
+
+// v3.0.871 -- TD-747. Ian: "If you reload a new file and try again... that should go away until
+// there is a new error." Both import paths call this before they read anything, so whatever is on
+// screen afterwards was written about THIS file. The text is emptied as well as hidden, so nothing
+// can flash the previous message while the next one is being set.
+function charSheetNoticeClear() {
+  var el = fiEl('char-modal-error');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
 }
 
 // ONE SUBMIT FOR BOTH SHAPES. The text path and the picture path differ only in what they send, so
@@ -20009,7 +20019,8 @@ async function charSheetSubmit(payload, fileName, file, busy) {
     // form is text and whose entries are pictures, so offer to look at the pages. Only the TEXT
     // payload can get here, so the picture read cannot ask again.
     if (payload && payload.text !== undefined && /\.pdf$/i.test(fileName || '')) {
-      await charSheetPictureOffer(fileName, file);
+      await charSheetPictureOffer(fileName, file,
+        'I could not find a character in the text of that file. It looks like a sheet whose printed form is text but whose entries are pictures.');
       return;
     }
     showModalError('char-modal-error', data.message || 'No character could be found in that file.');
@@ -20068,21 +20079,29 @@ async function charSheetSubmit(payload, fileName, file, busy) {
 
 // Render the pages, then ASK, then read them. The render happens first so the question can quote
 // the real number of pages and the real price -- rendering is local and costs nothing.
-async function charSheetPictureOffer(fileName, file) {
+// THE ONLY WAY INTO A PAID PICTURE READ. Both callers come through here -- the sheet with no text
+// at all and the sheet whose text held nobody -- so the question cannot be skipped by arriving from
+// the other direction, which is exactly what happened in v3.0.870. `lead` is the one sentence that
+// differs: why we are looking at pictures.
+async function charSheetPictureOffer(fileName, file, lead) {
   var busy = fiBusyOn(fiEl('char-modal-box'), 'Looking at the pages of ' + (fileName || 'your sheet'));
   var rendered = null;
   try { rendered = await fiPdfPageImages(file); } catch (e) { console.error('page render failed:', e && e.message); }
   fiBusyOff(busy);
   if (!rendered || !rendered.pages.length) {
-    showModalError('char-modal-error', 'No character could be found in that file.');
+    showModalError('char-modal-error', 'That PDF could not be read, even as pictures.');
     return;
   }
   var n = rendered.pages.length;
+  var NL = String.fromCharCode(10);
+  // THE PRICE IS THE WHOLE PRICE. Ian was quoted nothing and charged seven: six pages, then one
+  // more for the reference image on a different route. A quote that covers part of the bill is the
+  // same surprise in a smaller size, so the second paragraph names the rest of it.
   var go = await uiConfirm(
-    'I could not find a character in the text of that file. It looks like a sheet whose printed form is text but whose entries are pictures.' +
-    String.fromCharCode(10) + String.fromCharCode(10) +
-    'Read its ' + n + ' page' + (n === 1 ? '' : 's') + ' as pictures instead? That costs ' + n + ' token' + (n === 1 ? '' : 's') + '.',
-    { title: 'Read the pages instead?', preserveLines: true, okText: 'Read the pages' });
+    lead + NL + NL +
+    'Reading its ' + n + ' page' + (n === 1 ? '' : 's') + ' as pictures costs ' + n + ' token' + (n === 1 ? '' : 's') + '.' + NL + NL +
+    'If the sheet has a picture of the character in it, the reference image is charged separately after that, the same as building one by hand.',
+    { title: 'Read the pages as pictures?', preserveLines: true, okText: 'Read the pages' });
   if (!go) return;
   var busy2 = fiBusyOn(fiEl('char-modal-box'), 'Reading the pages of ' + (fileName || 'your sheet'));
   await charSheetSubmit({ pages: rendered.pages }, fileName, file, busy2);
