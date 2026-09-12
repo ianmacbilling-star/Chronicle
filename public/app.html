@@ -2104,7 +2104,11 @@
 <!-- v3.0.865 -- TD-733. ONE import window for every caller. The character sheet and the campaign
      Background & Lore field will open this same modal with a different title and callback; a
      second copy of this markup is how two surfaces start disagreeing. -->
-<div class="modal-overlay hidden" id="fileimport-modal" onclick="if(event.target===this)fiClose()">
+<!-- v3.0.867 -- TD-737. z-index, because this window is opened FROM other modals (Campaign
+     Details today, the character sheet next) and .modal-overlay gives every modal the same
+     z-index:100, which leaves DOM order to decide what covers what. 100000 matches the band
+     uiConfirm uses, so its dialogs -- appended later -- still land on top of this. -->
+<div class="modal-overlay hidden" id="fileimport-modal" style="z-index:100000;" onclick="if(event.target===this)fiClose()">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header">
       <div class="modal-title" id="fileimport-title">Import from a file</div>
