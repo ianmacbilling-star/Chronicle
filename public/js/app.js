@@ -4435,7 +4435,18 @@ function pollRefJob(jobId, onDone, onFail) {
 function applyCanonicalRef(charId, url) {
   try { clearCharRefStale(charId); } catch (e) {}
   clearCharGenBusy(charId);   // TF-09: generation finished
-  var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+  // v3.0.874 -- TD-751. THE OVERLAY COMES DOWN BEFORE ANYTHING ELSE IS ATTEMPTED. Taking it down
+  // used to be a side effect of finding the character and re-rendering, so a lookup that missed
+  // left it turning over a picture that had already arrived -- the work done, the screen saying
+  // otherwise, and no way for the reader to tell. A re-render removes it anyway; this is what
+  // happens when there is no re-render, and it is a promise the caller can rely on.
+  try { hideBusyOverlay('char-ref-image-' + charId); } catch (e) {}
+  // AND THE LOOKUP TOLERATES EITHER TYPE. This is the ONE place every successful reference lands
+  // -- build, regenerate, retouch and revert all end here -- so it is the wrong place to be fussy
+  // about whether an id arrived from a numeric literal or out of an input. Normalising the caller
+  // above fixes the path that was actually broken; comparing as text is what stops the next
+  // DOM-sourced caller quietly reproducing it.
+  var ch = (state.characters || []).find(function(c) { return String(c.id) === String(charId); });
   if (ch) {
     if (ch.canonical_reference_url && ch.canonical_reference_url !== url) ch.revert_reference_url = ch.canonical_reference_url;
     ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch);
@@ -20058,8 +20069,14 @@ async function charSheetSubmit(payload, fileName, file, busy) {
     portrait = null;
   }
 
+  // v3.0.874 -- TD-751. A NUMBER, NOT THE STRING THE DOM HANDS BACK. The lookups downstream
+  // compare with ===, and state.characters holds numeric ids, so a string id matches nothing:
+  // the image generates, the poll returns it, and no character is found to re-render. This input
+  // only ever holds an id that came from a numeric char.id, so Number() is exact; anything
+  // unparseable is treated as no id at all rather than passed on as NaN.
   var existing = fiEl('char-edit-id');
-  var id = existing && existing.value ? existing.value : null;
+  var raw = existing && existing.value ? String(existing.value).trim() : '';
+  var id = (raw !== '' && isFinite(Number(raw))) ? Number(raw) : null;
 
   // v3.0.870 -- NO PICTURE, NO GENERATION. Ian: only render the reference image if there is at
   // least one image found in the document to use. Drawing a face out of adjectives alone costs a
