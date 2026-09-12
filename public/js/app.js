@@ -6209,7 +6209,9 @@ function rebuildCharPrompt(charId) {
 // It appends the same four slots saveChar does, because 5c: a second create path
 // that forgets the image slots is precisely the fault charModalPrimary's own comment
 // records having already happened once on the edit path.
-function createCharThenBuild() {
+// v3.0.870 -- opts.createOnly stops after the character exists, for the sheet import that found
+// no picture to work from. One create path, optioned; not a second one that would forget a slot.
+function createCharThenBuild(opts) {
   var nameEl = document.getElementById('char-name');
   var name = nameEl ? nameEl.value.trim() : '';
   if (!name) {
@@ -6247,6 +6249,10 @@ function createCharThenBuild() {
       state.characters.push(data);
       renderCharModalPrompt(data);
       loadCharacters();
+      if (opts && opts.createOnly) {
+        if (typeof opts.done === 'function') { try { opts.done(data); } catch (e) {} }
+        return;
+      }
       rebuildCharPrompt(data.id);
     })
     .catch(function (e) {
@@ -19622,18 +19628,55 @@ async function fiPdfImages(file) {
     var page = await pdf.getPage(n);
     var ops = await page.getOperatorList();
     for (var i = 0; i < ops.fnArray.length && out.length < 8; i++) {
-      var fn = ops.fnArray[i];
-      if (fn !== lib.OPS.paintImageXObject && fn !== lib.OPS.paintJpegXObject) continue;
-      var ref = ops.argsArray[i][0];
+      if (ops.fnArray[i] !== lib.OPS.paintImageXObject) continue;
+      var args = ops.argsArray[i] || [];
+      var ref = args[0];
       if (typeof ref !== 'string') continue;
-      var obj = null;
-      try { obj = await new Promise(function (resolve) { page.objs.get(ref, resolve); }); } catch (e) { obj = null; }
+      // v3.0.870 -- THE SHAPE TEST GOES HERE, BEFORE THE OBJECT IS ASKED FOR. The operator's
+      // arguments are [id, width, height], so a banner, a rule or a strip of rasterised text is
+      // rejected without pdf.js ever being asked to decode it -- which is what stops the hang
+      // below from being reachable at all on a sheet made of text strips, and saves a canvas
+      // decode per image on every other sheet.
+      if (!fiPortraitShape(args[1], args[2])) continue;
+      var obj = await fiPdfObj(page, ref);
       if (!obj || !obj.width || !obj.height || !obj.data) continue;
       var f = await fiPixelsToFile(obj, out.length + 1);
       if (f) out.push(f);
     }
   }
   return out;
+}
+
+// ONE RULE FOR WHAT A PORTRAIT LOOKS LIKE, asked twice: once of the dimensions the PDF declares,
+// and again of the pixels that actually decoded. Two copies of these three numbers is how the two
+// answers would start disagreeing.
+function fiPortraitShape(w, h) {
+  if (!(w > 0) || !(h > 0)) return false;
+  if (w < FI_IMG_MIN_SIDE || h < FI_IMG_MIN_SIDE) return false;
+  var ratio = w / h;
+  return ratio >= FI_IMG_MIN_RATIO && ratio <= FI_IMG_MAX_RATIO;
+}
+
+// page.objs.get WAITS FOR THE RENDERER, and this code never renders the page, so on a document
+// whose images pdf.js has not decoded the callback never comes. Measured on Ian's Emanon export:
+// still waiting at 45 seconds, which is why the import filled the fields and then did nothing at
+// all. Same fault as fiImageSize in v3.0.868, one function away from it.
+function fiPdfObj(page, ref) {
+  return new Promise(function (resolve) {
+    var done = false;
+    function finish(v) { if (done) return; done = true; resolve(v); }
+    setTimeout(function () { finish(null); }, 5000);
+    try { page.objs.get(ref, finish); } catch (e) { finish(null); }
+  });
+}
+
+// NOTHING IN THE IMPORT MAY HANG. A belt over the braces above: whatever is added to the portrait
+// step later, it settles or it is abandoned, and the reader is never left watching a spinner.
+function fiWithTimeout(promise, ms, fallback) {
+  return Promise.race([
+    Promise.resolve(promise).catch(function () { return fallback; }),
+    new Promise(function (resolve) { setTimeout(function () { resolve(fallback); }, ms); })
+  ]);
 }
 
 // kind 1 = greyscale, 2 = RGB 24bpp, 3 = RGBA 32bpp. Anything else is left alone rather than
@@ -19675,9 +19718,7 @@ async function fiPickPortrait(files) {
   for (var i = 0; i < files.length; i++) {
     var dims = await fiImageSize(files[i]);
     if (!dims) continue;
-    if (dims.w < FI_IMG_MIN_SIDE || dims.h < FI_IMG_MIN_SIDE) continue;
-    var ratio = dims.w / dims.h;
-    if (ratio < FI_IMG_MIN_RATIO || ratio > FI_IMG_MAX_RATIO) continue;
+    if (!fiPortraitShape(dims.w, dims.h)) continue;   // v3.0.870 -- the same rule, on real pixels
     kept.push(files[i]);
   }
   return kept.length === 1 ? kept[0] : null;
@@ -19864,6 +19905,13 @@ async function charSheetSubmit(payload, fileName, file, busy) {
   }
   var list = Array.isArray(data.characters) ? data.characters : [];
   if (!list.length) {
+    // v3.0.870 -- the text was readable and held nobody. On a PDF that usually means a sheet whose
+    // form is text and whose entries are pictures, so offer to look at the pages. Only the TEXT
+    // payload can get here, so the picture read cannot ask again.
+    if (payload && payload.text !== undefined && /\.pdf$/i.test(fileName || '')) {
+      await charSheetPictureOffer(fileName, file);
+      return;
+    }
     showModalError('char-modal-error', data.message || 'No character could be found in that file.');
     return;
   }
@@ -19885,24 +19933,74 @@ async function charSheetSubmit(payload, fileName, file, busy) {
   }
 
   // The picture, if the file had an unambiguous one. Through setSlotFile, so the preview and the
-  // pending-upload bookkeeping are the same ones the drop zones use. A rasterised sheet has no
-  // picture of the character in it -- its image objects are strips of text -- so this quietly finds
-  // nothing there, which is the correct answer rather than a lucky one.
+  // pending-upload bookkeeping are the same ones the drop zones use. Both steps are BOUNDED --
+  // v3.0.869 shipped an unbounded one and it hung on the first real sheet it met.
+  var portrait = null;
   try {
-    var imgs = await fiImagesFromFile(file, (fileName || '').toLowerCase());
-    var portrait = await fiPickPortrait(imgs);
-    if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
-        typeof setSlotFile === 'function') {
-      setSlotFile('image_portrait', portrait);
-    }
+    var imgs = await fiWithTimeout(fiImagesFromFile(file, (fileName || '').toLowerCase()), 20000, []);
+    portrait = await fiWithTimeout(fiPickPortrait(imgs), 10000, null);
   } catch (e) { console.error('portrait adoption failed:', e && e.message); }
+  if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
+      typeof setSlotFile === 'function') {
+    setSlotFile('image_portrait', portrait);
+  } else {
+    portrait = null;
+  }
+
+  var existing = fiEl('char-edit-id');
+  var id = existing && existing.value ? existing.value : null;
+
+  // v3.0.870 -- NO PICTURE, NO GENERATION. Ian: only render the reference image if there is at
+  // least one image found in the document to use. Drawing a face out of adjectives alone costs a
+  // charge and produces a reference that steers every panel that character ever appears in, so
+  // when the file supplied nothing to work from the character is saved and the build is left to
+  // the reader -- and it says so, because silence here looks exactly like a bug.
+  if (!portrait) {
+    charSheetSaveOnly(id, 'The fields were filled in and the character has been saved. No picture of the character was found in that file, so no reference image was generated -- add a picture and press Build character prompt.');
+    return;
+  }
 
   // AND THE ONE SHOT. Everything from here has been shipping since v3.0.860: save or create,
   // upload the slots, build the prompt, generate the reference -- including the affordability
   // check and the free-trial character reserve, which stay exactly where they are.
-  var existing = fiEl('char-edit-id');
-  var id = existing && existing.value ? existing.value : null;
   if (typeof rebuildCharPrompt === 'function') rebuildCharPrompt(id);
+}
+
+// Render the pages, then ASK, then read them. The render happens first so the question can quote
+// the real number of pages and the real price -- rendering is local and costs nothing.
+async function charSheetPictureOffer(fileName, file) {
+  var busy = fiBusyOn(fiEl('char-modal-box'), 'Looking at the pages of ' + (fileName || 'your sheet'));
+  var rendered = null;
+  try { rendered = await fiPdfPageImages(file); } catch (e) { console.error('page render failed:', e && e.message); }
+  fiBusyOff(busy);
+  if (!rendered || !rendered.pages.length) {
+    showModalError('char-modal-error', 'No character could be found in that file.');
+    return;
+  }
+  var n = rendered.pages.length;
+  var go = await uiConfirm(
+    'I could not find a character in the text of that file. It looks like a sheet whose printed form is text but whose entries are pictures.' +
+    String.fromCharCode(10) + String.fromCharCode(10) +
+    'Read its ' + n + ' page' + (n === 1 ? '' : 's') + ' as pictures instead? That costs ' + n + ' token' + (n === 1 ? '' : 's') + '.',
+    { title: 'Read the pages instead?', preserveLines: true, okText: 'Read the pages' });
+  if (!go) return;
+  var busy2 = fiBusyOn(fiEl('char-modal-box'), 'Reading the pages of ' + (fileName || 'your sheet'));
+  await charSheetSubmit({ pages: rendered.pages }, fileName, file, busy2);
+}
+
+// v3.0.870 -- THE ENDING WHEN THE FILE HAD NO PICTURE IN IT. Save the character so the extraction
+// is not lost, and stop: no prompt, no reference image. Ian: only render the reference image if
+// there is at least one image found in the document to use.
+function charSheetSaveOnly(id, note) {
+  if (id) {
+    saveCharFormSilently(id, function (err) {
+      showModalError('char-modal-error', err ? err : note);
+    });
+    return;
+  }
+  createCharThenBuild({ createOnly: true, done: function () {
+    showModalError('char-modal-error', note);
+  } });
 }
 
 // Paint the parsed fields into the open form. charHeightLoad is the height control's own loader, so
