@@ -18396,9 +18396,29 @@ function refreshLayoutStyleButtons() {
 }
 
 // ===== Custom (a-la-carte) layout =====
+// v3.0.864 -- TD-731. THE DEFAULT WAS A LAYOUT NOBODY COULD HAVE.
+//
+// Ian, 2026-09-12: "I want to make sure when someone goes to publish for the first time on a
+// version that the layout defaults to Picture book. And that Drop Cap is checked by default too."
+//
+// arrange was 'comicpage', which sits in the server's CO_LAYOUTS_WITHHELD list. Two things
+// followed from that, both MEASURED before this was changed rather than reasoned about:
+//
+//   1. parseCustomOpts('arrange:comicpage') returns arrange=magazine. The server rewrites a
+//      withheld layout to CO_LAYOUT_FALLBACK, so the moment a reader touched any layout control
+//      the book they got was Magazine -- a layout they never chose and the panel never named.
+//   2. The picker went BLANK. _coPruneArrangeSelects deletes the withheld options, then
+//      prepLayoutLoad assigns el.value = 'comicpage', which matches nothing and leaves
+//      selectedIndex at -1. Driven in real Chromium against the shipped markup: both
+//      pcl-arrange and cl-arrange render empty on a first visit.
+//
+// 'paired' is never withheld, so the panel and the book now say the same word. dropcap:1 is the
+// other half of what Ian asked for. Both surfaces read THIS object -- the Publish panel through
+// prepLayoutLoad and the Layout modal through openCustomLayout -- so one change covers both and
+// there is no twin to sweep (rules 5c).
 var CUSTOM_LAYOUT_DEFAULTS = {
-  arrange:'comicpage', border:'keyline', caption:'bar',
-  narr:'plain', font:'classic', dropcap:0, paper:'white',
+  arrange:'paired', border:'keyline', caption:'bar',
+  narr:'plain', font:'classic', dropcap:1, paper:'white',
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, markerbreak:0, watermark:1,
   hidelogo:0,
@@ -23082,8 +23102,28 @@ function resetOptimizeLogForSwitch(force) {
 // holds, so the worst case is a visible option that silently falls back, never a broken book.
 var _coLayoutsEnabled = null;   // null = not fetched yet
 var _coLayoutsPending = false;
+var _coLayoutFallback = null;   // v3.0.864 -- what the SERVER rewrites a withheld layout to
 function _coPruneArrangeSelects() {
   if (!_coLayoutsEnabled || !_coLayoutsEnabled.length) return;
+  // v3.0.864 -- TD-731. HIDING THE OPTION IS NOT THE SAME AS CHANGING THE VALUE.
+  // Pruning removes the dead option from the picker and leaves customOpts.arrange holding it,
+  // so the select goes blank and the co string still carries a layout the server will rewrite.
+  // The screen then shows nothing while the book renders something nobody named -- the picker is
+  // honest and the product is silent, which is the worse half of that pair.
+  //
+  // The replacement is the SERVER'S OWN fallback, carried on the same response rather than
+  // hardcoded here, so this cannot drift from CO_LAYOUT_FALLBACK. Without it (an older server,
+  // or a response that omits the field) the first enabled layout is the honest second choice.
+  // Deliberately NOT 'paired': a reader whose saved layout is withheld is being served the
+  // fallback today, and quietly moving them to Picture Book would repaginate a book they have
+  // already looked at. This makes the panel tell the truth; it does not change anyone's book.
+  try {
+    if (typeof customOpts !== 'undefined' && customOpts &&
+        _coLayoutsEnabled.indexOf(customOpts.arrange) < 0) {
+      customOpts.arrange = (_coLayoutFallback && _coLayoutsEnabled.indexOf(_coLayoutFallback) >= 0)
+        ? _coLayoutFallback : _coLayoutsEnabled[0];
+    }
+  } catch (e) {}
   ['pcl-arrange', 'cl-arrange'].forEach(function (id) {
     var sel = document.getElementById(id);
     if (!sel) return;
@@ -23102,6 +23142,7 @@ function applyLayoutAvailability() {
     .then(function (j) {
       if (!j || !j.enabled || !j.enabled.length) return;
       _coLayoutsEnabled = j.enabled;
+      _coLayoutFallback = j.fallback || null;   // v3.0.864 -- the server's own CO_LAYOUT_FALLBACK
       _coPruneArrangeSelects();
       try { _syncLayoutPanels(); } catch (e) {}   // re-apply the saved values against the pruned list
     })

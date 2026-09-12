@@ -792,7 +792,19 @@ function layoutsEnabledList() {
   return ['paired', 'comicpage', 'magazine', 'gazette'].filter(layoutIsEnabled);
 }
 var CO_DEFAULTS = {
-  arrange: 'grid',       // grid | stack | splash | paired
+  // v3.0.864 -- TD-731. 'grid' was a default nobody could choose: it is not in the picker, not in
+  // layoutsEnabledList, and renderLayout reaches it only through its own default arm. It is also
+  // nearly unreachable -- buildLayout takes the LEGACY PRESET path when no co is sent at all, so
+  // this value governs only a co string that arrives with the key missing. Aligned with the
+  // client default so the two cannot disagree if such a string ever shows up.
+  //
+  // dropcap BELOW IS DELIBERATELY LEFT AT 0, and that asymmetry is the point. Every key in this
+  // object is filled into EVERY parsed co string, including the ones stored against books that
+  // were approved months ago. A co string written before dropcap existed would silently gain a
+  // drop cap, which reflows body text and repaginates a book somebody may already have bought.
+  // The client sends dropcap explicitly on every render, so the new default reaches every reader
+  // through the client without touching a single stored string.
+  arrange: 'paired',     // paired | magazine | gazette | comicpage | grid | stack | splash
   border: 'none',        // none | keyline | frame | comic | vignette | gallery
   caption: 'bar',        // plate | bar | engraved | gradient | none
   gutter: 'normal',      // tight | normal | airy
@@ -11574,7 +11586,10 @@ function magazinePlanText(packed) {
 // Which layouts may be offered. The picker reads this so the server stays the single source of truth
 // -- no hard-coded list in the HTML to drift out of step with the gate above.
 router.get('/layouts', requireAuth, function (req, res) {
-  res.json({ enabled: layoutsEnabledList(), withheld: CO_LAYOUTS_WITHHELD.filter(function (a) { return !layoutIsEnabled(a); }) });
+  // v3.0.864 -- fallback rides along so the client can REPLACE a withheld layout with the same
+  // value the server would rewrite it to, instead of hardcoding a copy of CO_LAYOUT_FALLBACK.
+  // One constant, one answer -- the twin cannot drift because there is only one of it.
+  res.json({ enabled: layoutsEnabledList(), fallback: CO_LAYOUT_FALLBACK, withheld: CO_LAYOUTS_WITHHELD.filter(function (a) { return !layoutIsEnabled(a); }) });
 });
 // v3.0.394 -- WHAT COULD A PERSON DO TO THIS PAGE? The data behind the Fix dialog (TD-184).
 // The same pairedFixOptions the dump prints, as JSON, keyed by VIEWER page -- so the client never
