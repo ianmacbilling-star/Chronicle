@@ -19369,27 +19369,109 @@ async function fiPdfToText(file) {
   return out.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// PUTTING THE TEXT IN A FIELD, which is the half every caller shares: the add-or-replace
+// question, the length check, and the after-hook that repaints whatever counter the field has.
+//
+// v3.0.866 -- THE LENGTH CHECK EXISTS BECAUSE OF A MEASUREMENT, and the measurement is worse
+// than it looks. Ian asked for the Lore field to say when a file is too long for it. Two facts:
+//   1. maxlength DOES NOT CONSTRAIN A PROGRAMMATIC SET. Assigning 9,000 characters to a textarea
+//      with maxlength="6000" leaves all 9,000 in it, and validity.tooLong stays FALSE, because
+//      that flag only reflects what a person typed. Measured, not assumed.
+//   2. csCommitCampaignSettings already does value.slice(0, 6000) when it saves. So without this
+//      check the reader sees 9,000 characters on screen, the counter says 9000 / 6000, and the
+//      save quietly keeps the first 6,000. Nothing errors. They find out later, if ever.
+//
+// THE LIMIT IS READ FROM THE FIELD ITSELF -- box.maxLength -- rather than repeated here. One
+// source, so it cannot drift from the markup, and a field with no maxlength (the Story box) is
+// simply unlimited and behaves exactly as it did in v3.0.865.
+function fiTrimToLimit(text, limit) {
+  if (!limit || text.length <= limit) return text;
+  var cut = text.slice(0, limit);
+  // Back off to the last whitespace so the text does not end mid-word, but only if that is
+  // nearby -- on a file with no spaces at all, a hard cut is better than throwing most of it away.
+  var sp = cut.search(/\s\S*$/);
+  if (sp > limit - 200 && sp > 0) cut = cut.slice(0, sp);
+  return cut.replace(/\s+$/, '');
+}
+async function fiApplyToField(box, text, opts) {
+  opts = opts || {};
+  if (!box) return false;
+  var next = text;
+  if ((box.value || '').trim()) {
+    // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the key
+    // that destroys what somebody already typed.
+    var choice = await uiConfirm(opts.existsMessage || 'There is already text in this box.',
+      { title: 'Add to it, or replace it?', okText: 'Append', middleText: 'Replace', cancelText: 'Cancel' });
+    if (choice === false) return false;
+    next = (choice === 'middle') ? text : (box.value.replace(/\s*$/, '') + '\n\n' + text);
+  }
+  var limit = (box.maxLength && box.maxLength > 0) ? box.maxLength : 0;
+  if (limit && next.length > limit) {
+    var keep = fiTrimToLimit(next, limit);
+    var go = await uiConfirm(
+      'That would put ' + next.length.toLocaleString() + ' characters in a box that holds ' +
+      limit.toLocaleString() + '. Anything past the limit is dropped when it saves, so it is better to cut it here.',
+      { title: 'Too long for this box', okText: 'Use the first ' + keep.length.toLocaleString(), cancelText: 'Cancel' });
+    if (go === false) return false;
+    next = keep;
+  }
+  box.value = next;
+  // A programmatic set fires NEITHER oninput NOR onblur, so anything those handlers would have
+  // done -- the counter, the dirty flag, the save -- has to be done here by hand. Miss this and
+  // the text sits on screen and is never stored.
+  if (typeof opts.after === 'function') { try { opts.after(box); } catch (e) { console.error('file import after-hook failed:', e && e.message); } }
+  // AND THE SAVE. Ian, 2026-09-12: "When text is imported into the Story field or the Lore field
+  // it saves. So if they navigate away somehow it's there. Because originally you had to click off
+  // the field."  He is describing the exact hazard: the transcript is persisted by an onblur
+  // handler -- saveSessionField('transcript', ...) -- and a programmatic set fires no blur, so an
+  // imported transcript would sit on screen and never reach the server.
+  //
+  // CALLING THE FIELD'S OWN onblur RATHER THAN REPEATING WHAT IT DOES. That handler already knows
+  // the rules this code should not have to learn twice: whether the reader is the Story Master,
+  // whether the fork on screen is theirs, and whether it is a fork note or a session field. A copy
+  // of that logic here would be a twin, and this project loses more time to twins than to bugs.
+  if (typeof box.onblur === 'function') { try { box.onblur(); } catch (e) { console.error('file import save failed:', e && e.message); } }
+  try { box.focus(); } catch (e) {}
+  return true;
+}
+
 // ---- CALLER 1: the Story tab ---------------------------------------------------------------
 function storyImportFromFile() {
   fiOpen({
     title: 'Import your story or transcript',
     busyEl: fiEl('transcript-wrap'),
     onText: async function (text) {
-      var box = fiEl('transcript-input');
-      if (!box) return;
-      if ((box.value || '').trim()) {
-        // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the
-        // key that destroys what somebody already typed.
-        var choice = await uiConfirm('There is already text in the Story box.',
-          { title: 'Add to it, or replace it?', okText: 'Append', middleText: 'Replace', cancelText: 'Cancel' });
-        if (choice === false) return;
-        if (choice === 'middle') box.value = text;
-        else box.value = box.value.replace(/\s*$/, '') + '\n\n' + text;
-      } else {
-        box.value = text;
-      }
-      updateWordCounts();
-      try { box.focus(); } catch (e) {}
+      // The Story box carries no maxlength, so the length check below is inert here and this
+      // behaves exactly as it did in v3.0.865.
+      await fiApplyToField(fiEl('transcript-input'), text, {
+        existsMessage: 'There is already text in the Story box.',
+        after: function () { updateWordCounts(); }
+      });
+    }
+  });
+}
+
+// ---- CALLER 2: Campaign Details -> Lore / Background ---------------------------------------
+// v3.0.866. The one thing that is NOT like the Story tab: this field autosaves through csDirty,
+// and a programmatic set fires no oninput, so the save has to be asked for explicitly. csDirty(true)
+// writes immediately rather than waiting out the debounce, because the reader may well close the
+// dialog straight after importing -- and a blur that never happens cannot flush it.
+//
+// NOTE THE FIELD ID. app.html carries a dead campaign-lore textarea in a modal that v3.0.854
+// marked DEAD FROM HERE TO THE END; the live field is cs-lore-input in the Campaign details
+// dialog. Wiring the dead one would look perfectly correct and do nothing at all.
+function loreImportFromFile() {
+  fiOpen({
+    title: 'Import your lore or background',
+    busyEl: fiEl('cs-lore-wrap'),
+    onText: async function (text) {
+      await fiApplyToField(fiEl('cs-lore-input'), text, {
+        existsMessage: 'There is already text in Lore / Background.',
+        after: function (box) {
+          if (typeof loreCount === 'function') loreCount(box, 'cs-lore-count');
+          if (typeof csDirty === 'function') csDirty(true);
+        }
+      });
     }
   });
 }

@@ -2116,6 +2116,7 @@
       <div style="font-size:14px;color:var(--text);">Drag a file here, or click to choose</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">PDF, Word (.docx) or text &mdash; read on your device, never uploaded</div>
     </div>
+    <div class="form-hint" id="fileimport-rights" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only import content you own or have the rights to use.</div>
     <input type="file" id="fileimport-input" style="display:none;" onchange="fiChosen(event)" accept=".pdf,.docx,.txt,.text,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" />
     <div class="modal-footer"><button class="btn btn-sm" onclick="fiClose()">Cancel</button></div>
   </div>
@@ -2763,9 +2764,16 @@
       <div class="settings-section-desc" id="cs-genre-note" style="margin:6px 0 0;"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
-      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
+      <!-- v3.0.866 -- TD-735. Same control, same row shape as the Story tab: the heading and the
+           Import button share one flex line, so this costs no vertical space either. -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+        <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);">Lore / Background</div>
+        <button class="btn btn-sm" type="button" id="lore-import-btn" onclick="loreImportFromFile()" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+      </div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
+      <div id="cs-lore-wrap" style="position:relative;">
       <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your story takes place in &#8212; the people, the places, the history, the tone... e.g. a kingdom at war, or a farm outside Ennis in the 1960s" oninput="loreCount(this, 'cs-lore-count');csDirty()" onblur="csFlush()"></textarea>
+      </div>
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
