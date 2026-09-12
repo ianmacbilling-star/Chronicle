@@ -139,10 +139,16 @@ When you spend, your **use-it-or-lose-it tokens go first**, which protects your 
 and purchased ones. **Purchased tokens are carry-over** — they never expire, so you can
 stockpile for something big like a large end-of-campaign print run.
 
-**What spends tokens:** generating, regenerating, or retouching an image, plus
-analyzing or previewing a custom art style. **Free actions:** replacing a panel image
-from the Archive, locking an image, and archiving an image. Generation is
-**spend-on-success** — if an image fails, you are **not** charged.
+**What spends tokens:** generating, regenerating, or retouching an image, plus analyzing or
+previewing a custom art style, **reading a character sheet from a file**, and **reading any file that
+is only pictures** — a scan or a photographed page — where the cost is a token a page.
+**Free actions:** replacing a panel image from the Archive, locking an image, archiving an image, and
+**importing text from a file into the Story or Lore boxes**, which happens in your browser with no AI
+involved at all. Generation is **spend-on-success** — if an image fails, you are **not** charged,
+and a file the AI reads but finds nothing in is not charged either.
+
+**Anything that reads pictures asks first.** It tells you how many pages and what the total will be
+before a token is spent, and typing or pasting the same text in yourself is always free.
 
 **Generating a story or a narrative may also cost tokens**, depending on current
 settings. When it does, the cost of *Generate Story* scales with how much text you
@@ -301,6 +307,12 @@ name + description). A campaign is built from:
   Every session draws on this when its story and image prompts are generated, keeping
   the whole campaign consistent and connected across sessions. Also editable from the
   pencil edit on the campaign page.
+
+  **Import from a file** on that heading row reads lore you already have out of a PDF, a Word
+  `.docx`, or a text file — free, read in your browser, nothing uploaded. If the file has more
+  than the 6,000 characters this field holds, it says so and offers to keep the first 6,000, trimmed
+  on a word boundary. Lore saved as pictures can be read too, at a token a page, and it says the
+  price and mentions the 6,000-character limit before you agree.
 - **Genre** — up to **three**, and the order matters; what kind of story this is. It
   steers the prose and the choice of pictures, and files the book in the Library. See
   8a and 8b.
@@ -577,6 +589,32 @@ including its reference images.
   references = better consistency. Hero Forge shots, fan art, and miniature photos all
   work. Upload only images you own or have rights to.
 
+**Already have a character sheet? Import it.** The **Import a sheet** button at the top of the
+character window reads a file you already have and fills the card in for you — a PDF, a Word
+`.docx`, or a plain text file. Drop it on the little window that opens, or click to browse.
+- **It fills what it can find** — name (with any alias after a slash), player, role or class,
+  height, and the visual and personality description. Anything it cannot find is left blank rather
+  than invented, and **everything lands in the boxes for you to read and correct before it is saved**.
+- **A fillable PDF is read properly.** On a sheet where you typed into form fields — the common
+  kind exported from a character-builder site — the answers live in the form layer rather than
+  the page, and Campaignia reads both.
+- **A sheet that is only pictures** — a scan, a photograph, or an export with no text layer at
+  all — is read by looking at the pages. That costs tokens, so **it tells you the price and asks
+  first**.
+- **If the file contains a picture of the character**, it goes into the Portrait slot and the
+  reference image is built from it. It is deliberately cautious: it takes a picture only when there
+  is exactly one that looks like a portrait, so a logo, a banner, or two possible pictures means it
+  takes none.
+- **If there is no picture in the file, no reference image is drawn.** The character is saved with
+  its fields filled and it tells you so — a face invented from adjectives alone would steer every
+  panel that character ever appears in. Add a picture, then press **Build character prompt**.
+- **If the file has several characters in it**, it asks which one to build.
+
+**What it costs:** reading a sheet costs **one token**. Reading one that is only pictures costs **a
+token a page**, quoted before you agree. The reference image is charged separately, exactly as it is
+when you press Build character prompt yourself. **Import only sheets you own or have the rights to
+use.**
+
 **Building it:** fill in the card, then click **Build character prompt** — it saves the
 character (and any reference images you added) for you first, so there is no separate
 save step to remember. Campaignia then writes the Character Prompt from your info and
@@ -639,6 +677,21 @@ Two big text areas side by side:
 
 **Find / Replace** sits above the transcript (Find next / Replace / Replace all) — handy
 for fixing a wrong name everywhere at once.
+
+**Already have the story in a file? Import it.** **Import from a file** sits on the
+**Story / Session Transcript** label row and reads a PDF, a Word `.docx`, or a plain text file
+straight into the box. The old `.doc` format is not supported — save it as PDF or `.docx` first.
+
+**Nothing is uploaded and it costs nothing.** The file is read **in your browser** and never leaves
+it; it is used once to get the words out and is not stored. If there is already text in the box it
+asks whether to **add to it** or **replace it**, and the imported text is saved straight away, so
+navigating away will not lose it.
+
+**A {session} saved as pictures — a scan, a photograph, a PDF with no text layer — can still
+be read**, by looking at the pages. That costs **a token a page**, so it tells you how many pages and
+what the total is, and asks before spending anything. Up to **50 pages**, and the pages together must
+come to under 8MB; beyond either it says so and stops rather than reading part of it. **Pasting the
+text in yourself is always free**, and the offer says so.
 
 **Generate Story** reads the transcript *and* the notes, picks the key moments worth
 illustrating, and produces a **story outline** (reviewed on the Review tab before any
@@ -1362,11 +1415,30 @@ Friction points and what's actually going on.
   Literal**. The starting voice, **Classic**, writes dramatic literary prose in the past
   tense, which is the opposite of what a Skill Story needs. Calm & Literal is first person,
   present tense and plain. See 8d.
+- **"It says there is no text in my PDF."** The words are part of a picture rather than text
+  — a scan, a photograph of a page, or an export saved that way. On the character sheet, and on
+  the Story and Lore boxes, Campaignia offers to read the pages as pictures instead; that costs a
+  token a page and it asks first. Or paste the text in yourself, which is free.
+- **"It read my character sheet but did not draw the reference picture."** That file had no picture
+  of the character in it. Campaignia will not invent a face from the description alone, because the
+  reference steers every panel that character appears in — so it saves the character, tells you,
+  and leaves the drawing to you. Add a picture to one of the reference slots and press **Build
+  character prompt**.
 
 ---
 
 ## 21. Quick FAQ
 
+- **Can I import a character sheet instead of typing it in?** Yes — **Import a sheet** in
+  the character window reads a PDF, Word or text file and fills the card in. It costs one token, or a
+  token a page if the sheet is only pictures.
+- **Does importing my story cost anything?** Not if the file has text in it — that is read in
+  your browser and is free. Only a file that is *only pictures* costs anything, at a token a page,
+  and it asks first.
+- **Is my file uploaded anywhere?** A story or lore file with text in it never leaves your browser.
+  A file that has to be read as pictures has those pages sent to be read, and nothing is kept.
+- **Why did it not use the picture in my sheet?** It takes a picture only when exactly one in the
+  file looks like a portrait, so a logo, a banner, or two possible pictures means it takes none.
 - **Do tokens expire?** Your monthly use-it-or-lose-it tokens do (each cycle); purchased
   and carry-over tokens don't.
 - **Can I cancel anytime?** Yes — you drop to Copper and keep your data (held ~6 months if
