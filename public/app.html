@@ -908,8 +908,17 @@
         <!-- Transcript (left) and Notes (right), side by side -->
         <div class="notes-grid">
           <div class="form-group">
-            <label class="form-label">Story / Session Transcript</label>
+            <!-- v3.0.865 -- TD-733. The Import button rides the LABEL ROW: no new vertical space,
+                 always visible, and it can never sit on top of the text. -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <label class="form-label" style="margin-bottom:6px;">Story / Session Transcript</label>
+              <button class="btn btn-sm" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:6px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+            </div>
+            <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
+                 rather than a new class, so this batch touches no stylesheet. -->
+            <div id="transcript-wrap" style="position:relative;">
             <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Paste your session transcript here..."></textarea>
+            </div>
             <div id="transcript-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
@@ -2092,6 +2101,26 @@
 </div>
 
 <!-- CHARACTER MODAL -->
+<!-- v3.0.865 -- TD-733. ONE import window for every caller. The character sheet and the campaign
+     Background & Lore field will open this same modal with a different title and callback; a
+     second copy of this markup is how two surfaces start disagreeing. -->
+<div class="modal-overlay hidden" id="fileimport-modal" onclick="if(event.target===this)fiClose()">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title" id="fileimport-title">Import from a file</div>
+      <button class="modal-close" onclick="fiClose()">&times;</button>
+    </div>
+    <div id="fileimport-error" class="alert alert-error hidden" style="margin-bottom:12px;"></div>
+    <div class="image-upload-area" id="fileimport-zone" style="padding:30px 16px;" onclick="fiPick()" ondragover="fiDragOver(event)" ondragleave="fiDragLeave()" ondrop="fiDrop(event)">
+      <div style="font-size:26px;line-height:1;margin-bottom:8px;">&#11014;</div>
+      <div style="font-size:14px;color:var(--text);">Drag a file here, or click to choose</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">PDF, Word (.docx) or text &mdash; read on your device, never uploaded</div>
+    </div>
+    <input type="file" id="fileimport-input" style="display:none;" onchange="fiChosen(event)" accept=".pdf,.docx,.txt,.text,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" />
+    <div class="modal-footer"><button class="btn btn-sm" onclick="fiClose()">Cancel</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="char-modal">
   <div class="modal">
     <div class="modal-header">

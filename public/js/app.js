@@ -889,7 +889,16 @@ function uiConfirm(message, opts) {
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
     var ok = document.createElement('button'); ok.className = 'btn btn-sm ' + (opts.danger ? 'btn-danger' : 'btn-primary'); ok.textContent = opts.okText || 'OK';
+    // v3.0.865 -- opts.middleText: a THIRD button, resolving to the string 'middle'. Opt-in like
+    // every other option here, so a caller that does not ask for it gets the same two buttons and
+    // the same true/false it has always got. Written for Replace / Append, where the question has
+    // three honest answers and forcing it into two would mean asking twice.
+    var middle = null;
+    if (opts.middleText) {
+      middle = document.createElement('button'); middle.className = 'btn btn-sm'; middle.textContent = opts.middleText;
+    }
     if (!opts.hideCancel) row.appendChild(cancel);
+    if (middle) row.appendChild(middle);
     row.appendChild(ok);
     if (head) box.appendChild(head);
     box.appendChild(msg); box.appendChild(row); overlay.appendChild(box);
@@ -901,6 +910,7 @@ function uiConfirm(message, opts) {
     }
     function onKey(e) { if (e.key === 'Escape') done(false); else if (e.key === 'Enter') done(true); }
     cancel.onclick = function () { done(false); };
+    if (middle) middle.onclick = function () { done('middle'); };
     ok.onclick = function () { done(true); };
     overlay.onclick = function (e) { if (e.target === overlay) done(false); };
     document.addEventListener('keydown', onKey);
@@ -19129,6 +19139,259 @@ function _openCampaignImagePickerLegacy(campaignId) {
 function closeCampaignImagePicker() {
   var m = document.getElementById('cs-img-modal');
   if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+// =================================================================================================
+// v3.0.865 -- TD-733. IMPORT FROM A FILE.
+//
+// Ian, 2026-09-12: "A little spot that says 'Already have a File, Drop it here'... We don't need to
+// Save the file. It's just used once to get the info from."
+//
+// ONE CONTROL, THREE CALLERS. The Story transcript is the first; the character sheet and the
+// campaign Background & Lore field are next. Everything below is caller-agnostic except
+// storyImportFromFile at the bottom, so the other two are a button and a callback, not a copy.
+// A fourth hand-rolled drop zone was the alternative -- there are already three in this file --
+// and drift between copies is the most repeated fault in this project's history.
+//
+// THE FILE NEVER LEAVES THE MACHINE. Every format is read in the browser, so there is no upload,
+// nothing stored, no multer, and no server route. That is not only a privacy nicety: it is what
+// makes 'we don't need to save the file' literally true.
+//
+// FORMATS, EACH MEASURED BEFORE IT WAS WRITTEN:
+//   .txt / .md   File.text(), nothing to it.
+//   .docx        a zip, unpacked with DecompressionStream('deflate-raw') -- no library. Measured
+//                against two producers, and the second one mattered: LibreOffice writes entries
+//                with a DATA DESCRIPTOR (bit 3), so the local header's sizes are zero. Reading
+//                sizes from the central directory is what makes that work; a reader that trusts
+//                the local header returns garbage on half the Word files in the world.
+//   .pdf         pdf.js, the copy ensurePdfJs already loads for the finalize page measure.
+//   .doc         REFUSED by name. The old binary format is not a zip and not XML, and a reader
+//                that tries produces nonsense rather than an error.
+// =================================================================================================
+var FI_MAX_BYTES = 25 * 1024 * 1024;
+var _fiTarget = null;   // { title, busyEl, onText } -- set on open, captured before the window closes
+
+function fiEl(id) { return document.getElementById(id); }
+
+function fiOpen(target) {
+  _fiTarget = target || null;
+  var m = fiEl('fileimport-modal');
+  if (!m) return;
+  var t = fiEl('fileimport-title');
+  if (t) t.textContent = (target && target.title) || 'Import from a file';
+  fiClearError();
+  // Reset the input or choosing the SAME file twice in a row fires no change event, and the
+  // second attempt looks like the button is broken.
+  var inp = fiEl('fileimport-input');
+  if (inp) inp.value = '';
+  m.classList.remove('hidden');
+}
+function fiClose() {
+  var m = fiEl('fileimport-modal');
+  if (m) m.classList.add('hidden');
+  _fiTarget = null;
+}
+function fiClearError() {
+  var e = fiEl('fileimport-error');
+  if (e) { e.textContent = ''; e.classList.add('hidden'); }
+}
+function fiError(msg) {
+  var e = fiEl('fileimport-error');
+  if (!e) return;
+  e.textContent = msg;
+  e.classList.remove('hidden');
+}
+function fiPick() { var i = fiEl('fileimport-input'); if (i) i.click(); }
+// The zone highlights with inline style rather than a class: .drag-over is defined per wrapper
+// elsewhere in the stylesheet, and borrowing one of those would be a fifth copy of a rule.
+function fiDragOver(ev) {
+  ev.preventDefault();
+  var z = fiEl('fileimport-zone');
+  if (z) { z.style.borderColor = 'var(--gold)'; z.style.background = 'rgba(201,168,76,0.10)'; }
+}
+function fiDragLeave() {
+  var z = fiEl('fileimport-zone');
+  if (z) { z.style.borderColor = ''; z.style.background = ''; }
+}
+function fiDrop(ev) {
+  ev.preventDefault();
+  fiDragLeave();
+  var f = ev.dataTransfer && ev.dataTransfer.files;
+  fiTake(f && f[0]);
+}
+function fiChosen(ev) {
+  var f = ev.target && ev.target.files;
+  fiTake(f && f[0]);
+}
+
+// The busy overlay is the one image regeneration already uses -- same classes, same spinner, same
+// animation. Its host needs position:relative, which the wrapper in app.html sets inline.
+function fiBusyOn(el, name) {
+  if (!el) return null;
+  var ov = document.createElement('div');
+  ov.className = 'moment-img-busy-overlay';
+  ov.style.borderRadius = 'var(--radius)';
+  var sp = document.createElement('div'); sp.className = 'moment-img-busy-spinner';
+  var lb = document.createElement('div'); lb.className = 'moment-img-busy-label'; lb.textContent = 'Reading your file';
+  var sb = document.createElement('div'); sb.className = 'moment-img-busy-sublabel'; sb.textContent = name || '';
+  ov.appendChild(sp); ov.appendChild(lb); ov.appendChild(sb);
+  el.appendChild(ov);
+  return ov;
+}
+function fiBusyOff(ov) { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }
+
+async function fiTake(file) {
+  if (!file) return;
+  var target = _fiTarget;   // captured BEFORE the window closes, which clears it
+  if (!target) return;
+  var name = file.name || 'file';
+  var lower = name.toLowerCase();
+  if (/\.doc$/.test(lower)) {
+    fiError('That is an older .doc file, which cannot be read here. Open it in Word and use Save As to make a .docx or a PDF.');
+    return;
+  }
+  if (!/\.(pdf|docx|txt|text|md)$/.test(lower)) {
+    fiError('That file type cannot be read. Use a PDF, a Word .docx, or a plain text file.');
+    return;
+  }
+  if (file.size > FI_MAX_BYTES) {
+    fiError('That file is ' + Math.max(1, Math.round(file.size / 1048576)) + 'MB, and the limit is 25MB.');
+    return;
+  }
+  // The window closes FIRST and the progress shows over the field being filled -- Ian: the reader
+  // should be looking at the box that is about to change, not at a window with nothing in it.
+  fiClose();
+  var busy = fiBusyOn(target.busyEl, name);
+  var text = '';
+  try {
+    text = await fiReadFile(file, lower);
+  } catch (e) {
+    fiBusyOff(busy);
+    await uiConfirm((e && e.message) ? e.message : 'That file could not be read.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  fiBusyOff(busy);
+  // A SCANNED PDF EXTRACTS NOTHING, and it is a common thing to hand over. Measured: an image-only
+  // PDF yields exactly zero characters. Saying so is the difference between an honest answer and a
+  // shrug -- and later, on the character sheet, between charging a token and not.
+  if (!text || !text.trim()) {
+    await uiConfirm('There is no text in that file. If it is a scan or a photograph, the words are part of the picture, so there is nothing to read -- retype it, or use a version saved from a word processor.',
+                    { title: 'Nothing to read in that file', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  try { target.onText(text.trim(), name); } catch (e) { console.error('file import handler failed:', e && e.message); }
+}
+
+async function fiReadFile(file, lower) {
+  if (/\.pdf$/.test(lower))  return await fiPdfToText(file);
+  if (/\.docx$/.test(lower)) return await fiDocxToText(new Uint8Array(await file.arrayBuffer()));
+  return await file.text();
+}
+
+// A .docx is a zip. Walk the CENTRAL DIRECTORY (never the local headers -- see the note above),
+// inflate word/document.xml, and turn the markup into lines.
+async function fiDocxToText(bytes) {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('This browser cannot open Word files. Save the document as a PDF and try again.');
+  }
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  function u32(o) { return dv.getUint32(o, true); }
+  function u16(o) { return dv.getUint16(o, true); }
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i--) {
+    if (u32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('That does not look like a Word document.');
+  var count = u16(eocd + 10);
+  var p = u32(eocd + 16);
+  var dec = new TextDecoder();
+  var found = null;
+  for (var n = 0; n < count; n++) {
+    if (u32(p) !== 0x02014b50) throw new Error('That Word file appears to be damaged.');
+    var method = u16(p + 10);
+    var csize = u32(p + 20);
+    var nameLen = u16(p + 28), extraLen = u16(p + 30), cmtLen = u16(p + 32);
+    var lho = u32(p + 42);
+    var entry = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (entry === 'word/document.xml') found = { method: method, csize: csize, lho: lho };
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  if (!found) throw new Error('That does not look like a Word document.');
+  // The local header repeats the name and extra fields and its extra length can DIFFER from the
+  // central directory's, so the data offset must be computed from the local header.
+  var lNameLen = u16(found.lho + 26), lExtraLen = u16(found.lho + 28);
+  var dataStart = found.lho + 30 + lNameLen + lExtraLen;
+  var raw = bytes.subarray(dataStart, dataStart + found.csize);
+  var xmlBytes;
+  if (found.method === 0) {
+    xmlBytes = raw;
+  } else if (found.method === 8) {
+    var stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    xmlBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  } else {
+    throw new Error('That Word file uses a compression this browser cannot open.');
+  }
+  var xml = dec.decode(xmlBytes);
+  return xml
+    .replace(/<w:tab[^>]*\/?>/g, ' ')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<\/w:tc>/g, '\t')
+    .replace(/<\/w:tr>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// pdf.js, via the loader the finalize measure already uses. Lines are rebuilt from the y position
+// of each text item, because getTextContent returns fragments with no line structure of its own.
+async function fiPdfToText(file) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  var out = '';
+  for (var n = 1; n <= pdf.numPages; n++) {
+    var page = await pdf.getPage(n);
+    var content = await page.getTextContent();
+    var line = '', lastY = null;
+    content.items.forEach(function (it) {
+      if (!it || typeof it.str !== 'string') return;
+      var y = it.transform ? it.transform[5] : null;
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) { out += line.replace(/\s+$/, '') + '\n'; line = ''; }
+      line += it.str;
+      lastY = y;
+    });
+    out += line.replace(/\s+$/, '') + '\n';
+  }
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ---- CALLER 1: the Story tab ---------------------------------------------------------------
+function storyImportFromFile() {
+  fiOpen({
+    title: 'Import your story or transcript',
+    busyEl: fiEl('transcript-wrap'),
+    onText: async function (text) {
+      var box = fiEl('transcript-input');
+      if (!box) return;
+      if ((box.value || '').trim()) {
+        // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the
+        // key that destroys what somebody already typed.
+        var choice = await uiConfirm('There is already text in the Story box.',
+          { title: 'Add to it, or replace it?', okText: 'Append', middleText: 'Replace', cancelText: 'Cancel' });
+        if (choice === false) return;
+        if (choice === 'middle') box.value = text;
+        else box.value = box.value.replace(/\s*$/, '') + '\n\n' + text;
+      } else {
+        box.value = text;
+      }
+      updateWordCounts();
+      try { box.focus(); } catch (e) {}
+    }
+  });
 }
 
 function updateWordCounts() {
