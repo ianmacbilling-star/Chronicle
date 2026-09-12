@@ -908,8 +908,17 @@
         <!-- Transcript (left) and Notes (right), side by side -->
         <div class="notes-grid">
           <div class="form-group">
-            <label class="form-label">Story / Session Transcript</label>
+            <!-- v3.0.865 -- TD-733. The Import button rides the LABEL ROW: no new vertical space,
+                 always visible, and it can never sit on top of the text. -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <label class="form-label" style="margin-bottom:6px;">Story / Session Transcript</label>
+              <button class="btn btn-sm" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:6px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+            </div>
+            <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
+                 rather than a new class, so this batch touches no stylesheet. -->
+            <div id="transcript-wrap" style="position:relative;">
             <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Paste your session transcript here..."></textarea>
+            </div>
             <div id="transcript-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
@@ -2092,16 +2101,46 @@
 </div>
 
 <!-- CHARACTER MODAL -->
+<!-- v3.0.865 -- TD-733. ONE import window for every caller. The character sheet and the campaign
+     Background & Lore field will open this same modal with a different title and callback; a
+     second copy of this markup is how two surfaces start disagreeing. -->
+<!-- v3.0.867 -- TD-737. z-index, because this window is opened FROM other modals (Campaign
+     Details today, the character sheet next) and .modal-overlay gives every modal the same
+     z-index:100, which leaves DOM order to decide what covers what. 100000 matches the band
+     uiConfirm uses, so its dialogs -- appended later -- still land on top of this. -->
+<div class="modal-overlay hidden" id="fileimport-modal" style="z-index:100000;" onclick="if(event.target===this)fiClose()">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title" id="fileimport-title">Import from a file</div>
+      <button class="modal-close" onclick="fiClose()">&times;</button>
+    </div>
+    <div id="fileimport-error" class="alert alert-error hidden" style="margin-bottom:12px;"></div>
+    <div class="image-upload-area" id="fileimport-zone" style="padding:30px 16px;" onclick="fiPick()" ondragover="fiDragOver(event)" ondragleave="fiDragLeave()" ondrop="fiDrop(event)">
+      <div style="font-size:26px;line-height:1;margin-bottom:8px;">&#11014;</div>
+      <div style="font-size:14px;color:var(--text);">Drag a file here, or click to choose</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">PDF, Word (.docx) or text &mdash; read on your device, never uploaded</div>
+    </div>
+    <div class="form-hint" id="fileimport-rights" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only import content you own or have the rights to use.</div>
+    <input type="file" id="fileimport-input" style="display:none;" onchange="fiChosen(event)" accept=".pdf,.docx,.txt,.text,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" />
+    <div class="modal-footer"><button class="btn btn-sm" onclick="fiClose()">Cancel</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="char-modal">
-  <div class="modal">
+  <!-- v3.0.868 -- TD-735(a). position:relative so the reading spinner can sit over the whole
+       dialog, and an id so the importer can find it. -->
+  <div class="modal" id="char-modal-box" style="position:relative;">
     <div class="modal-header">
       <div class="modal-title" id="char-modal-title">Add Character</div>
-      <button class="modal-close" onclick="closeCharModal()">&times;</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-sm" type="button" id="char-import-btn" onclick="charImportFromFile()" title="Read a character sheet -- PDF, Word or text -- fill these fields from it, and build the character. Reading the sheet costs one token.">&#11014; Import a sheet</button>
+        <button class="modal-close" onclick="closeCharModal()">&times;</button>
+      </div>
     </div>
     <div id="char-modal-error" class="alert alert-error hidden"></div>
     <input type="hidden" id="char-edit-id" />
     <div class="form-group">
-      <label class="form-label">Character name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
+      <label class="form-label">Character name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; Separate aliases with /</span></label>
       <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood / Ash, or Grandma Nora / Nana" />
     </div>
     <div class="form-group">
@@ -2217,7 +2256,7 @@
       <!-- Canonical Character Prompt -->
       <div id="char-modal-prompt-section" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(201,168,76,0.15);">
         <div style="font-size:11px;color:rgba(201,168,76,0.6);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Character Prompt</div>
-        <div class="form-hint" style="margin-bottom:8px;">The look used to keep this character consistent across comic panels. Built by analyzing the card info and uploaded images.</div>
+        <div class="form-hint" style="margin-bottom:8px;">The look used to keep this character consistent across Story Panels. Built by analyzing the card info and uploaded images.</div>
         <div id="char-modal-prompt-body"></div>
       </div>
     </div>
@@ -2734,9 +2773,16 @@
       <div class="settings-section-desc" id="cs-genre-note" style="margin:6px 0 0;"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
-      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
+      <!-- v3.0.866 -- TD-735. Same control, same row shape as the Story tab: the heading and the
+           Import button share one flex line, so this costs no vertical space either. -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+        <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);">Lore / Background</div>
+        <button class="btn btn-sm" type="button" id="lore-import-btn" onclick="loreImportFromFile()" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+      </div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
+      <div id="cs-lore-wrap" style="position:relative;">
       <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your story takes place in &#8212; the people, the places, the history, the tone... e.g. a kingdom at war, or a farm outside Ennis in the 1960s" oninput="loreCount(this, 'cs-lore-count');csDirty()" onblur="csFlush()"></textarea>
+      </div>
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">

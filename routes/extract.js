@@ -38,6 +38,140 @@ function capTitleForShape(title, shape) {
   return cut.replace(/[\s,;:.\-]+$/, '');
 }
 
+// =====================================================================================================
+// v3.0.875 -- TD-752. READ THE TEXT OFF A STORY THAT IS ONLY A PICTURE.
+//
+// Ian, 2026-09-12: "On story pdf that is uploaded. I might need to do the same picture read that it
+// does on the characters... to get the text from the story. If the pdf is just a picture it just
+// needs to do the best it can to get the text off of it."
+//
+// The character sheet route (/characters/parse-sheet) reads pictures too, but it answers with FIELDS
+// -- a name, a class, a height. A story wants the words back, so this is a different route rather
+// than a flag on that one: the same input shape, an entirely different contract.
+//
+// WHAT IT REFUSES, AND WHY IT REFUSES RATHER THAN COPES. Ian, same day: "I would limit it to 50 pages
+// for now.. Period... If it needs to batch I would just refuse for now. So cap it at the 8mb.. just
+// tell them so." Both limits are enforced HERE as well as in the browser, because the browser check
+// is a courtesy and this is the one that holds.
+//
+// CHARGING follows the rule Ian set for the sheet import: one token per page, floor one, and charged
+// only when there is something to show for it. A page read that comes back empty is free.
+// =====================================================================================================
+var OCR_MAX_PAGES = 50;
+var OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+router.post('/ocr-pages/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var pages = (req.body && Array.isArray(req.body.pages)) ? req.body.pages : null;
+    if (!pages || !pages.length) {
+      return res.json({ error: 'EMPTY', message: 'There were no pages to read.' });
+    }
+
+    var db = await getDb();
+    var member = await db.prepare(
+      'SELECT 1 AS ok FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+    ).get(req.params.campaignId, req.session.userId);
+    if (!member) return res.status(403).json({ error: 'Access denied' });
+
+    pages = pages.filter(function (p) { return typeof p === 'string' && p.length > 500; });
+    if (!pages.length) {
+      return res.json({ error: 'EMPTY', message: 'There were no readable pages in that file.' });
+    }
+    // THE CAPS ARE REFUSALS, NOT TRUNCATIONS. Reading half a story and saying nothing about the other
+    // half is worse than declining: the reader would paste the rest in on top of a silent gap.
+    if (pages.length > OCR_MAX_PAGES) {
+      return res.json({ error: 'TOO_MANY_PAGES',
+        message: 'That file is ' + pages.length + ' pages and the most that can be read as pictures is ' +
+                 OCR_MAX_PAGES + '. Split the file, or paste the story in yourself.' });
+    }
+    var bytes = 0;
+    pages.forEach(function (p) { bytes += p.length; });
+    if (bytes > OCR_MAX_IMAGE_BYTES) {
+      return res.json({ error: 'TOO_BIG',
+        message: 'Those pages come to ' + Math.round(bytes / 1048576) + 'MB and the limit is 8MB. ' +
+                 'Split the file, or paste the story in yourself.' });
+    }
+
+    var key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.json({ error: 'AI service is not configured.' });
+
+    var charge = 0;
+    try { charge = await computeGenCharge(pages.length, 'ocr_pages_per_token', 'ocr_floor'); } catch (e) { charge = 0; }
+    if (!(charge >= 1)) charge = Math.max(1, pages.length);
+    // getBalance rather than canAfford, because getBalance is what this file already imports and
+    // already uses for exactly this check a few hundred lines below. A second affordability helper
+    // pulled in for one route is a twin waiting to disagree with the first.
+    var bal = await getBalance(req.session.userId);
+    if (!bal || bal.total < charge) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS',
+        message: 'Reading ' + pages.length + ' page' + (pages.length === 1 ? '' : 's') + ' costs ' + charge +
+                 ' token' + (charge === 1 ? '' : 's') + ', but you have ' + ((bal && bal.total) || 0) +
+                 '. Add tokens, or paste the story in yourself.' });
+    }
+
+    // TRANSCRIBE, DO NOT EDIT. This is the one instruction that matters: a model asked to read a
+    // story will happily improve it, and an improved transcript is a corrupted source that everything
+    // downstream -- the storyboard, the narrative, the panels -- is then built from.
+    var system = [
+      'You are transcribing the text from page images of a document. Return the text and nothing',
+      'else -- no preamble, no commentary, no headings of your own, no code fence.',
+      '',
+      'RULES:',
+      '- Copy the words as they are written. Do not correct, rewrite, summarise, shorten or improve',
+      '  anything, and do not fill in a word you cannot read: write [illegible] instead.',
+      '- Keep the paragraph breaks. Join a word split across a line break, and join a sentence split',
+      '  across two lines into one paragraph.',
+      '- Read the pages in the order given and run them together as continuous text. A sentence that',
+      '  carries from the bottom of one page to the top of the next is ONE sentence.',
+      '- Leave out page numbers, running headers and footers that repeat on every page.',
+      '- If a page has no readable text on it, skip it silently rather than saying so.',
+      '- Keep dialogue attributions and speaker names exactly as written; this is often a transcript',
+      '  of people talking, and who said what is the part that matters most.'
+    ].join('\n');
+
+    var content = pages.map(function (p) {
+      return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p } };
+    });
+    content.push({ type: 'text', text: 'These are the pages of one document, in order. Transcribe the text.' });
+
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: TEXT_MODEL,
+        max_tokens: 16000,
+        system: system,
+        messages: [{ role: 'user', content: content }]
+      })
+    });
+    var data = await response.json();
+    if (data.error) return res.json({ error: (data.error.message || 'The AI service refused that request.') });
+
+    var text = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
+    // NOTHING CAME BACK IS FREE. A blank scan, a page of photographs, a form with no prose on it:
+    // all of them cost the reader nothing, exactly as a sheet parse that finds no character does.
+    if (!text) {
+      return res.json({ ok: true, text: '', charged: 0,
+                        message: 'No text could be read from those pages.' });
+    }
+
+    try {
+      await spendTokens(req.session.userId, charge, { source: 'story_page_ocr', event_type: 'generation_spend',
+                                                      related_campaign_id: req.params.campaignId });
+    } catch (e) { console.error('story_page_ocr spend failed:', e.message); }
+    try {
+      await recordGeneration(req.session.userId, { event_type: 'story_page_ocr', tokens_redeemed: charge,
+                                                   quantity: pages.length, unit: 'pages', model: TEXT_MODEL,
+                                                   related_campaign_id: req.params.campaignId });
+    } catch (e) {}
+
+    return res.json({ ok: true, text: text, pages: pages.length, charged: charge });
+  } catch (e) {
+    console.error('ocr-pages error:', e && e.message);
+    return res.json({ error: 'Those pages could not be read just now. Try again in a moment.' });
+  }
+});
+
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
   const key = process.env.ANTHROPIC_API_KEY || req.body.key;

@@ -22,7 +22,8 @@ const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrC
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const { TEXT_MODEL } = require('../config/models');
 const imageHelpers = require('./images');
-const { getTokenCost, canAfford, spendTokens, getBalance, characterReserveStatus } = require('./tokens');
+const { getTokenCost, canAfford, spendTokens, getBalance, characterReserveStatus,
+        computeGenCharge, recordGeneration } = require('./tokens');   // v3.0.868 -- TD-735(a)
 const { checkCharacterLimit } = require('../middleware/tiers');
 const multer = require('multer');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
@@ -208,6 +209,207 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 });
 
 // POST rebuild canonical character prompt — uses vision on uploaded images
+// =====================================================================================================
+// v3.0.868 -- TD-735(a). READ A CHARACTER SHEET AND FILL THE FORM.
+//
+// Ian, 2026-09-12: "It needs to be smart, read the file and place the appropriate info into the
+// correct boxes... Then it should go ahead and generate the character reference image... All in one
+// shot."
+//
+// THIS ROUTE IS THE ONLY NEW PIECE OF THAT SENTENCE. Everything after it already exists:
+// rebuildCharPrompt(null) on the client creates the character from the form, saves the image slots,
+// and calls /rebuild-prompt, which builds the canonical prompt AND generates the reference, with the
+// affordability check and the free-trial character reserve already done up front. So the one shot is
+// this parse, the form fill, and a call that has been shipping since v3.0.860.
+//
+// IT TAKES TEXT, NOT A FILE. The browser has already read the PDF, the .docx or the .txt (v3.0.865),
+// so nothing is uploaded, there is no multer here, and a 40MB PDF never crosses the wire -- only the
+// words that came out of it.
+//
+// IT DOES NOT WRITE TO THE DATABASE. It answers with fields; the client puts them in the form, where
+// they are visible and editable before anything is saved. A wrong extraction costs a glance, and the
+// tier and character-limit checks stay where they already are, on the create route.
+//
+// CHARGING, IAN'S RULE, 2026-09-12: "If the reading of the file costs me AI tokens we should pass a
+// charge along to the user, 1 token floor. If it doesn't cost me then keep it free." So the Story and
+// Lore imports stay free -- they make no model call at all -- and this one charges, with the rate and
+// the floor in app_settings so the price can be retuned without a deploy. The floor is enforced at 1
+// even when the settings are missing, because a model call that costs nothing is not a thing.
+//
+// AND IT CHARGES ONLY ON A PARSE THAT FOUND SOMEBODY. A rules PDF with no character in it, an empty
+// answer, a model error: all free. A token burned on a shrug is the complaint you actually get.
+// =====================================================================================================
+var CHAR_SHEET_MAX_CHARS = 60000;
+// v3.0.869 -- a picture-only sheet is read as pages. Ten covers a D&D Beyond export (Ian's is
+// seven) and stops a rulebook from becoming an expensive accident. The byte ceiling sits under
+// the 10mb express.json limit with room to spare.
+var CHAR_SHEET_MAX_PAGES = 10;
+var CHAR_SHEET_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function _csClampStr(v, max) {
+  if (v === undefined || v === null) return '';
+  return String(v).replace(/\s+/g, ' ').trim().slice(0, max);
+}
+// The model is asked for decimal feet; anything else it invents is dropped rather than argued with.
+// parseHeightFt above is the authority on range, exactly as it is for the form and the API.
+function _csHeight(v) {
+  if (v === undefined || v === null || v === '') return null;
+  var n = parseFloat(v);
+  if (!isFinite(n) || n <= 0) return null;
+  return parseHeightFt(n);
+}
+
+// The pages, as image blocks, with the instruction last so it is the most recent thing read.
+function _csImageContent(pages) {
+  var content = pages.map(function (p) {
+    return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p } };
+  });
+  content.push({ type: 'text', text: 'These are the pages of one character sheet, in order. Read them and answer with the JSON described above.' });
+  return content;
+}
+router.post('/parse-sheet', requireAuth, verifyCampaignDM, async function (req, res) {
+  try {
+    // v3.0.869 -- TD-740. TWO INPUT SHAPES, ONE ROUTE. A D&D Beyond export has NO TEXT AT ALL --
+    // measured on Ian's own sheet, seven pages, zero characters, because the whole thing is
+    // rasterised -- so the client renders the pages and sends pictures instead. Everything after
+    // this point is shared: the same instructions, the same clamping, the same charging rules.
+    var pages = (req.body && Array.isArray(req.body.pages)) ? req.body.pages : null;
+    var raw = (req.body && typeof req.body.text === 'string') ? req.body.text : '';
+    var text = raw.replace(/\u0000/g, '').trim();
+    var truncated = false;
+
+    if (pages) {
+      var sent = pages.length;
+      pages = pages.filter(function (p) { return typeof p === 'string' && p.length > 500; }).slice(0, CHAR_SHEET_MAX_PAGES);
+      if (!pages.length) return res.json({ error: 'EMPTY', message: 'There were no readable pages in that file.' });
+      if (sent > CHAR_SHEET_MAX_PAGES) truncated = true;
+      var _b = 0;
+      pages.forEach(function (p) { _b += p.length; });
+      if (_b > CHAR_SHEET_MAX_IMAGE_BYTES) {
+        return res.json({ error: 'TOO_BIG', message: 'Those pages are too large to read. Try a smaller PDF.' });
+      }
+    } else {
+      if (!text) return res.json({ error: 'EMPTY', message: 'There was no text in that file to read.' });
+      if (text.length > CHAR_SHEET_MAX_CHARS) { text = text.slice(0, CHAR_SHEET_MAX_CHARS); truncated = true; }
+    }
+
+    var key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.json({ error: 'AI service is not configured.' });
+
+    // WHAT IT COSTS IS SETTLED BEFORE THE MODEL IS CALLED, so a shortage cannot leave someone having
+    // spent nothing and received nothing, or vice versa.
+    // Ian, 2026-09-12, on the picture path: one token per page, floor one. Reading pictures is more
+    // model work than reading text, and a seven-page sheet costing seven tokens is a sentence a
+    // reader can follow. Both rates live in app_settings, so the price moves without a deploy; the
+    // fallbacks below are what happens when nothing is set.
+    var charge = 0;
+    try {
+      charge = pages
+        ? await computeGenCharge(pages.length, 'char_sheet_pages_per_token', 'char_sheet_floor')
+        : await computeGenCharge(Math.ceil(text.length / 5), 'char_sheet_words_per_token', 'char_sheet_floor');
+    } catch (e) { charge = 0; }
+    if (!(charge >= 1)) charge = pages ? Math.max(1, pages.length) : 1;
+    if (!(await canAfford(req.session.userId, charge))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS',
+        message: 'Reading a character sheet costs ' + charge + ' token' + (charge === 1 ? '' : 's') + '. Add more tokens to continue.' });
+    }
+
+    var system = [
+      'You read a tabletop RPG character sheet, a character write-up, or a piece of prose about a',
+      'character, and return the fields a Campaignia character record needs. You return JSON and',
+      'nothing else -- no preamble, no code fence, no commentary.',
+      '',
+      'Answer with an ARRAY of objects, one per character the document is actually about:',
+      '[{"name":"","player_name":"","cls":"","height_ft":null,"description":"","is_npc":false}]',
+      '',
+      'name          The character\'s own name. If they have a nickname or alias, write it as',
+      '              "Theron Ashwood / Ash" -- one field, the full name, then a slash, then the alias.',
+      'player_name   The real person who plays them, if the document says. Otherwise "".',
+      'cls           Role, title, species or class, as the document puts it. "Half-elf Ranger".',
+      'height_ft     Height in DECIMAL FEET as a number: 6 ft 1 in is 6.1, 5\'6" is 5.5, 180cm is 5.9.',
+      '              null if the document does not say. Never guess a height from a species.',
+      'description   Appearance AND personality in one piece of prose, in the document\'s own detail:',
+      '              hair, skin, build, clothing, what they carry, distinctive marks, then temperament,',
+      '              manner and how they speak. This is what an illustrator will draw from, so keep',
+      '              concrete visual detail and drop dice, stat blocks, spell lists and equipment',
+      '              weights. Do not invent detail that is not in the document.',
+      'is_npc        true only if the document clearly presents them as an NPC or supporting character.',
+      '',
+      'RULES THAT MATTER:',
+      '- Copy, do not embellish. Every fact must be traceable to the document.',
+      '- Unknown fields are "" or null. An empty field is a correct answer; an invented one is not.',
+      '- A party roster or a group write-up returns several objects, most prominent first.',
+      '- If the document is not about a character at all -- a rulebook, an invoice, a blank form --',
+      '  return []. An empty array is the right answer and is expected.',
+      '- You may be given PAGE IMAGES of a printed sheet rather than text. Read them the same way:',
+      '  a printed character sheet keeps the name and class at the top of page one, and the',
+      '  appearance, personality and backstory on a later page. Gather the description from every',
+      '  page it appears on, and read only what is printed -- an empty box is an empty field.'
+    ].join('\n');
+
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: TEXT_MODEL,
+        max_tokens: 3000,
+        system: system,
+        messages: [{ role: 'user', content: pages ? _csImageContent(pages) : text }]
+      })
+    });
+    var data = await response.json();
+    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
+
+    var out = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
+    var clean = out.replace(/```json|```/g, '').trim();
+    var parsed = null;
+    try { parsed = JSON.parse(clean); } catch (e) {
+      // One salvage attempt: the first bracketed array in the answer. Beyond that it is a failure,
+      // and a failure is free.
+      var m = clean.match(/\[[\s\S]*\]/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (e2) { parsed = null; } }
+    }
+    if (!Array.isArray(parsed)) {
+      return res.json({ error: 'UNREADABLE', message: 'That file could not be read as a character sheet.' });
+    }
+
+    var chars = [];
+    parsed.forEach(function (c) {
+      if (!c || typeof c !== 'object') return;
+      var name = _csClampStr(c.name, 120);
+      if (!name) return;   // a character with no name is not a character we can create
+      chars.push({
+        name: name,
+        player_name: _csClampStr(c.player_name, 120),
+        cls: _csClampStr(c.cls, 120),
+        height_ft: _csHeight(c.height_ft),
+        description: String(c.description === undefined || c.description === null ? '' : c.description).trim().slice(0, 4000),
+        is_npc: (c.is_npc === true || c.is_npc === 'true')
+      });
+    });
+
+    if (!chars.length) {
+      return res.json({ ok: true, characters: [], truncated: truncated, charged: 0,
+                        message: 'No character could be found in that file.' });
+    }
+
+    try {
+      await spendTokens(req.session.userId, charge, { source: 'character_sheet_import', event_type: 'generation_spend',
+                                                     related_campaign_id: req.params.campaignId });
+    } catch (e) { console.error('character_sheet_import spend failed:', e.message); }
+    try {
+      await recordGeneration(req.session.userId, { event_type: 'character_sheet_import', tokens_redeemed: charge,
+                                                   quantity: text.length, unit: 'characters', model: TEXT_MODEL,
+                                                   related_campaign_id: req.params.campaignId });
+    } catch (e) {}
+
+    return res.json({ ok: true, characters: chars, truncated: truncated, charged: charge });
+  } catch (e) {
+    console.error('parse-sheet error:', e && e.message);
+    return res.json({ error: friendlyAnthropicError(e) });
+  }
+});
+
 router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
   try {
     const db = await getDb();

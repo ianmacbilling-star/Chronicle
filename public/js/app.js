@@ -889,7 +889,16 @@ function uiConfirm(message, opts) {
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
     var ok = document.createElement('button'); ok.className = 'btn btn-sm ' + (opts.danger ? 'btn-danger' : 'btn-primary'); ok.textContent = opts.okText || 'OK';
+    // v3.0.865 -- opts.middleText: a THIRD button, resolving to the string 'middle'. Opt-in like
+    // every other option here, so a caller that does not ask for it gets the same two buttons and
+    // the same true/false it has always got. Written for Replace / Append, where the question has
+    // three honest answers and forcing it into two would mean asking twice.
+    var middle = null;
+    if (opts.middleText) {
+      middle = document.createElement('button'); middle.className = 'btn btn-sm'; middle.textContent = opts.middleText;
+    }
     if (!opts.hideCancel) row.appendChild(cancel);
+    if (middle) row.appendChild(middle);
     row.appendChild(ok);
     if (head) box.appendChild(head);
     box.appendChild(msg); box.appendChild(row); overlay.appendChild(box);
@@ -901,10 +910,60 @@ function uiConfirm(message, opts) {
     }
     function onKey(e) { if (e.key === 'Escape') done(false); else if (e.key === 'Enter') done(true); }
     cancel.onclick = function () { done(false); };
+    if (middle) middle.onclick = function () { done('middle'); };
     ok.onclick = function () { done(true); };
     overlay.onclick = function (e) { if (e.target === overlay) done(false); };
     document.addEventListener('keydown', onKey);
     setTimeout(function () { try { ok.focus(); } catch (e) {} }, 0);
+  });
+}
+
+// v3.0.868 -- A CHOICE AMONG N, which uiConfirm cannot express. Same overlay, same palette, same
+// Escape-cancels behaviour; it resolves the INDEX chosen, or null. Written as its own function
+// rather than as a fifth option on uiConfirm, because a two-button dialog that grows a list is how
+// a helper becomes unreadable, and every existing uiConfirm caller stays untouched.
+function uiChoose(title, message, items) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
+    var head = document.createElement('div');
+    head.textContent = String(title || 'Choose one');
+    head.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    box.appendChild(head);
+    if (message) {
+      var msg = document.createElement('div');
+      msg.textContent = String(message);
+      msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:16px;';
+      box.appendChild(msg);
+    }
+    (items || []).forEach(function (label, i) {
+      var b = document.createElement('button');
+      b.className = 'btn btn-sm';
+      b.textContent = String(label);
+      b.style.cssText = 'display:block;width:100%;text-align:left;margin-bottom:8px;white-space:normal;';
+      b.onclick = function () { done(i); };
+      box.appendChild(b);
+    });
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;margin-top:6px;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-sm';
+    cancel.textContent = 'Cancel';
+    cancel.onclick = function () { done(null); };
+    row.appendChild(cancel);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function done(val) {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    }
+    function onKey(e) { if (e.key === 'Escape') done(null); }
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    document.addEventListener('keydown', onKey);
   });
 }
 
@@ -4376,7 +4435,18 @@ function pollRefJob(jobId, onDone, onFail) {
 function applyCanonicalRef(charId, url) {
   try { clearCharRefStale(charId); } catch (e) {}
   clearCharGenBusy(charId);   // TF-09: generation finished
-  var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+  // v3.0.874 -- TD-751. THE OVERLAY COMES DOWN BEFORE ANYTHING ELSE IS ATTEMPTED. Taking it down
+  // used to be a side effect of finding the character and re-rendering, so a lookup that missed
+  // left it turning over a picture that had already arrived -- the work done, the screen saying
+  // otherwise, and no way for the reader to tell. A re-render removes it anyway; this is what
+  // happens when there is no re-render, and it is a promise the caller can rely on.
+  try { hideBusyOverlay('char-ref-image-' + charId); } catch (e) {}
+  // AND THE LOOKUP TOLERATES EITHER TYPE. This is the ONE place every successful reference lands
+  // -- build, regenerate, retouch and revert all end here -- so it is the wrong place to be fussy
+  // about whether an id arrived from a numeric literal or out of an input. Normalising the caller
+  // above fixes the path that was actually broken; comparing as text is what stops the next
+  // DOM-sourced caller quietly reproducing it.
+  var ch = (state.characters || []).find(function(c) { return String(c.id) === String(charId); });
   if (ch) {
     if (ch.canonical_reference_url && ch.canonical_reference_url !== url) ch.revert_reference_url = ch.canonical_reference_url;
     ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch);
@@ -6150,7 +6220,9 @@ function rebuildCharPrompt(charId) {
 // It appends the same four slots saveChar does, because 5c: a second create path
 // that forgets the image slots is precisely the fault charModalPrimary's own comment
 // records having already happened once on the edit path.
-function createCharThenBuild() {
+// v3.0.870 -- opts.createOnly stops after the character exists, for the sheet import that found
+// no picture to work from. One create path, optioned; not a second one that would forget a slot.
+function createCharThenBuild(opts) {
   var nameEl = document.getElementById('char-name');
   var name = nameEl ? nameEl.value.trim() : '';
   if (!name) {
@@ -6188,6 +6260,10 @@ function createCharThenBuild() {
       state.characters.push(data);
       renderCharModalPrompt(data);
       loadCharacters();
+      if (opts && opts.createOnly) {
+        if (typeof opts.done === 'function') { try { opts.done(data); } catch (e) {} }
+        return;
+      }
       rebuildCharPrompt(data.id);
     })
     .catch(function (e) {
@@ -19129,6 +19205,1097 @@ function _openCampaignImagePickerLegacy(campaignId) {
 function closeCampaignImagePicker() {
   var m = document.getElementById('cs-img-modal');
   if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+// =================================================================================================
+// v3.0.865 -- TD-733. IMPORT FROM A FILE.
+//
+// Ian, 2026-09-12: "A little spot that says 'Already have a File, Drop it here'... We don't need to
+// Save the file. It's just used once to get the info from."
+//
+// ONE CONTROL, THREE CALLERS. The Story transcript is the first; the character sheet and the
+// campaign Background & Lore field are next. Everything below is caller-agnostic except
+// storyImportFromFile at the bottom, so the other two are a button and a callback, not a copy.
+// A fourth hand-rolled drop zone was the alternative -- there are already three in this file --
+// and drift between copies is the most repeated fault in this project's history.
+//
+// THE FILE NEVER LEAVES THE MACHINE. Every format is read in the browser, so there is no upload,
+// nothing stored, no multer, and no server route. That is not only a privacy nicety: it is what
+// makes 'we don't need to save the file' literally true.
+//
+// FORMATS, EACH MEASURED BEFORE IT WAS WRITTEN:
+//   .txt / .md   File.text(), nothing to it.
+//   .docx        a zip, unpacked with DecompressionStream('deflate-raw') -- no library. Measured
+//                against two producers, and the second one mattered: LibreOffice writes entries
+//                with a DATA DESCRIPTOR (bit 3), so the local header's sizes are zero. Reading
+//                sizes from the central directory is what makes that work; a reader that trusts
+//                the local header returns garbage on half the Word files in the world.
+//   .pdf         pdf.js, the copy ensurePdfJs already loads for the finalize page measure.
+//   .doc         REFUSED by name. The old binary format is not a zip and not XML, and a reader
+//                that tries produces nonsense rather than an error.
+// =================================================================================================
+var FI_MAX_BYTES = 25 * 1024 * 1024;
+var _fiTarget = null;   // { title, busyEl, onText } -- set on open, captured before the window closes
+
+function fiEl(id) { return document.getElementById(id); }
+
+function fiOpen(target) {
+  _fiTarget = target || null;
+  var m = fiEl('fileimport-modal');
+  if (!m) return;
+  var t = fiEl('fileimport-title');
+  if (t) t.textContent = (target && target.title) || 'Import from a file';
+  fiClearError();
+  // Reset the input or choosing the SAME file twice in a row fires no change event, and the
+  // second attempt looks like the button is broken.
+  var inp = fiEl('fileimport-input');
+  if (inp) inp.value = '';
+  m.classList.remove('hidden');
+}
+function fiClose() {
+  var m = fiEl('fileimport-modal');
+  if (m) m.classList.add('hidden');
+  _fiTarget = null;
+}
+function fiClearError() {
+  var e = fiEl('fileimport-error');
+  if (e) { e.textContent = ''; e.classList.add('hidden'); }
+}
+function fiError(msg) {
+  var e = fiEl('fileimport-error');
+  if (!e) return;
+  e.textContent = msg;
+  e.classList.remove('hidden');
+}
+function fiPick() { var i = fiEl('fileimport-input'); if (i) i.click(); }
+// The zone highlights with inline style rather than a class: .drag-over is defined per wrapper
+// elsewhere in the stylesheet, and borrowing one of those would be a fifth copy of a rule.
+function fiDragOver(ev) {
+  ev.preventDefault();
+  var z = fiEl('fileimport-zone');
+  if (z) { z.style.borderColor = 'var(--gold)'; z.style.background = 'rgba(201,168,76,0.10)'; }
+}
+function fiDragLeave() {
+  var z = fiEl('fileimport-zone');
+  if (z) { z.style.borderColor = ''; z.style.background = ''; }
+}
+function fiDrop(ev) {
+  ev.preventDefault();
+  fiDragLeave();
+  var f = ev.dataTransfer && ev.dataTransfer.files;
+  fiTake(f && f[0]);
+}
+function fiChosen(ev) {
+  var f = ev.target && ev.target.files;
+  fiTake(f && f[0]);
+}
+
+// The busy overlay is the one image regeneration already uses -- same classes, same spinner, same
+// animation. Its host needs position:relative, which the wrapper in app.html sets inline.
+function fiBusyOn(el, name) {
+  if (!el) return null;
+  var ov = document.createElement('div');
+  ov.className = 'moment-img-busy-overlay';
+  ov.style.borderRadius = 'var(--radius)';
+  var sp = document.createElement('div'); sp.className = 'moment-img-busy-spinner';
+  var lb = document.createElement('div'); lb.className = 'moment-img-busy-label'; lb.textContent = 'Reading your file';
+  var sb = document.createElement('div'); sb.className = 'moment-img-busy-sublabel'; sb.textContent = name || '';
+  ov.appendChild(sp); ov.appendChild(lb); ov.appendChild(sb);
+  el.appendChild(ov);
+  return ov;
+}
+function fiBusyOff(ov) { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }
+
+async function fiTake(file) {
+  if (!file) return;
+  var target = _fiTarget;   // captured BEFORE the window closes, which clears it
+  if (!target) return;
+  var name = file.name || 'file';
+  var lower = name.toLowerCase();
+  if (/\.doc$/.test(lower)) {
+    fiError('That is an older .doc file, which cannot be read here. Open it in Word and use Save As to make a .docx or a PDF.');
+    return;
+  }
+  if (!/\.(pdf|docx|txt|text|md)$/.test(lower)) {
+    fiError('That file type cannot be read. Use a PDF, a Word .docx, or a plain text file.');
+    return;
+  }
+  if (file.size > FI_MAX_BYTES) {
+    fiError('That file is ' + Math.max(1, Math.round(file.size / 1048576)) + 'MB, and the limit is 25MB.');
+    return;
+  }
+  // The window closes FIRST and the progress shows over the field being filled -- Ian: the reader
+  // should be looking at the box that is about to change, not at a window with nothing in it.
+  fiClose();
+  var busy = fiBusyOn(target.busyEl, name);
+  var text = '';
+  try {
+    text = await fiReadFile(file, lower);
+  } catch (e) {
+    fiBusyOff(busy);
+    await uiConfirm((e && e.message) ? e.message : 'That file could not be read.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  fiBusyOff(busy);
+  // A SCANNED PDF EXTRACTS NOTHING, and it is a common thing to hand over. Measured: an image-only
+  // PDF yields exactly zero characters. Saying so is the difference between an honest answer and a
+  // shrug -- and later, on the character sheet, between charging a token and not.
+  if (!text || !text.trim()) {
+    // v3.0.869 -- A CALLER CAN OFFER TO READ THE PICTURES INSTEAD. Opt-in, so the Story and Lore
+    // imports still say "nothing to read" -- which is the right answer for them, because there is
+    // nothing useful to be done with a picture of a transcript. The character sheet is different:
+    // a D&D Beyond export has no text at all and is the commonest sheet there is.
+    if (typeof target.onEmptyText === 'function') {
+      try { await target.onEmptyText(file, name); } catch (e) { console.error('empty-text handler failed:', e && e.message); }
+      return;
+    }
+    await uiConfirm('There is no text in that file. If it is a scan or a photograph, the words are part of the picture, so there is nothing to read -- retype it, or use a version saved from a word processor.',
+                    { title: 'Nothing to read in that file', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  // v3.0.868 -- the FILE goes to the caller too, so the character-sheet importer can pull the
+  // pictures out of it. Additive: the Story and Lore callers take two arguments and ignore it.
+  // AND IT IS AWAITED. It was not, and the try/catch around it was therefore decorative: every
+  // caller here is async, so a failure inside one rejected a promise nobody was holding and the
+  // catch could never fire. Awaiting it makes the catch mean what it says -- and makes fiTake
+  // finish when the import has actually finished rather than when it has merely started.
+  try { await target.onText(text.trim(), name, file); } catch (e) { console.error('file import handler failed:', e && e.message); }
+}
+
+async function fiReadFile(file, lower) {
+  if (/\.pdf$/.test(lower))  return await fiPdfToText(file);
+  if (/\.docx$/.test(lower)) return await fiDocxToText(new Uint8Array(await file.arrayBuffer()));
+  return await file.text();
+}
+
+// A .docx is a zip. Walk the CENTRAL DIRECTORY (never the local headers -- see the note above),
+// inflate word/document.xml, and turn the markup into lines.
+async function fiDocxToText(bytes) {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('This browser cannot open Word files. Save the document as a PDF and try again.');
+  }
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  function u32(o) { return dv.getUint32(o, true); }
+  function u16(o) { return dv.getUint16(o, true); }
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i--) {
+    if (u32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('That does not look like a Word document.');
+  var count = u16(eocd + 10);
+  var p = u32(eocd + 16);
+  var dec = new TextDecoder();
+  var found = null;
+  for (var n = 0; n < count; n++) {
+    if (u32(p) !== 0x02014b50) throw new Error('That Word file appears to be damaged.');
+    var method = u16(p + 10);
+    var csize = u32(p + 20);
+    var nameLen = u16(p + 28), extraLen = u16(p + 30), cmtLen = u16(p + 32);
+    var lho = u32(p + 42);
+    var entry = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (entry === 'word/document.xml') found = { method: method, csize: csize, lho: lho };
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  if (!found) throw new Error('That does not look like a Word document.');
+  // The local header repeats the name and extra fields and its extra length can DIFFER from the
+  // central directory's, so the data offset must be computed from the local header.
+  var lNameLen = u16(found.lho + 26), lExtraLen = u16(found.lho + 28);
+  var dataStart = found.lho + 30 + lNameLen + lExtraLen;
+  var raw = bytes.subarray(dataStart, dataStart + found.csize);
+  var xmlBytes;
+  if (found.method === 0) {
+    xmlBytes = raw;
+  } else if (found.method === 8) {
+    var stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    xmlBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  } else {
+    throw new Error('That Word file uses a compression this browser cannot open.');
+  }
+  var xml = dec.decode(xmlBytes);
+  return xml
+    .replace(/<w:tab[^>]*\/?>/g, ' ')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<\/w:tc>/g, '\t')
+    .replace(/<\/w:tr>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// pdf.js, via the loader the finalize measure already uses. Lines are rebuilt from the y position
+// of each text item, because getTextContent returns fragments with no line structure of its own.
+async function fiPdfToText(file) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  var out = '';
+  // v3.0.871 -- a value that appears on every page (the character's name in the header of a
+  // fillable sheet) is worth sending once. Keyed on the whole name-and-value pair, so two fields
+  // that merely share a value are both kept.
+  var seenFields = {};
+  for (var n = 1; n <= pdf.numPages; n++) {
+    var page = await pdf.getPage(n);
+    var content = await page.getTextContent();
+    var line = '', lastY = null;
+    content.items.forEach(function (it) {
+      if (!it || typeof it.str !== 'string') return;
+      var y = it.transform ? it.transform[5] : null;
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) { out += line.replace(/\s+$/, '') + '\n'; line = ''; }
+      line += it.str;
+      lastY = y;
+    });
+    out += line.replace(/\s+$/, '') + '\n';
+    out += await fiPdfFormText(page, seenFields);
+  }
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// v3.0.871 -- TD-745. THE FORM LAYER. On a fillable sheet the printed template is page content and
+// the reader's own answers are widget annotations sitting on top of it, so getTextContent() -- which
+// reads the page and never the annotations -- returns the questions and none of the answers.
+// Measured on Ian's Gubuk export: 2,514 characters of template in the page against 12,730 characters
+// of real content in 399 filled fields.
+//
+// The field NAME is kept alongside the value. 'HEIGHT' next to a number is what tells the model it
+// is a height rather than a weight, and these names are the sheet author's own words, so they cost
+// almost nothing and carry most of the meaning.
+async function fiPdfFormText(page, seen) {
+  var anns;
+  try { anns = await page.getAnnotations(); } catch (e) { return ''; }
+  if (!anns || !anns.length) return '';
+  var lines = [];
+  anns.forEach(function (a) {
+    if (!a || a.subtype !== 'Widget') return;
+    var v = (a.fieldValue === null || a.fieldValue === undefined) ? '' : String(a.fieldValue);
+    v = v.replace(/\s+/g, ' ').trim();
+    if (!v) return;
+    var name = String(a.fieldName === null || a.fieldName === undefined ? '' : a.fieldName).replace(/\s+/g, ' ').trim();
+    var row = name ? (name + ': ' + v) : v;
+    if (seen[row]) return;
+    seen[row] = 1;
+    lines.push(row);
+  });
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+// PUTTING THE TEXT IN A FIELD, which is the half every caller shares: the add-or-replace
+// question, the length check, and the after-hook that repaints whatever counter the field has.
+//
+// v3.0.866 -- THE LENGTH CHECK EXISTS BECAUSE OF A MEASUREMENT, and the measurement is worse
+// than it looks. Ian asked for the Lore field to say when a file is too long for it. Two facts:
+//   1. maxlength DOES NOT CONSTRAIN A PROGRAMMATIC SET. Assigning 9,000 characters to a textarea
+//      with maxlength="6000" leaves all 9,000 in it, and validity.tooLong stays FALSE, because
+//      that flag only reflects what a person typed. Measured, not assumed.
+//   2. csCommitCampaignSettings already does value.slice(0, 6000) when it saves. So without this
+//      check the reader sees 9,000 characters on screen, the counter says 9000 / 6000, and the
+//      save quietly keeps the first 6,000. Nothing errors. They find out later, if ever.
+//
+// THE LIMIT IS READ FROM THE FIELD ITSELF -- box.maxLength -- rather than repeated here. One
+// source, so it cannot drift from the markup, and a field with no maxlength (the Story box) is
+// simply unlimited and behaves exactly as it did in v3.0.865.
+function fiTrimToLimit(text, limit) {
+  if (!limit || text.length <= limit) return text;
+  var cut = text.slice(0, limit);
+  // Back off to the last whitespace so the text does not end mid-word, but only if that is
+  // nearby -- on a file with no spaces at all, a hard cut is better than throwing most of it away.
+  var sp = cut.search(/\s\S*$/);
+  if (sp > limit - 200 && sp > 0) cut = cut.slice(0, sp);
+  return cut.replace(/\s+$/, '');
+}
+async function fiApplyToField(box, text, opts) {
+  opts = opts || {};
+  if (!box) return false;
+  var next = text;
+  if ((box.value || '').trim()) {
+    // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the key
+    // that destroys what somebody already typed.
+    var choice = await uiConfirm(opts.existsMessage || 'There is already text in this box.',
+      { title: 'Add to it, or replace it?', okText: 'Append', middleText: 'Replace', cancelText: 'Cancel' });
+    if (choice === false) return false;
+    next = (choice === 'middle') ? text : (box.value.replace(/\s*$/, '') + '\n\n' + text);
+  }
+  var limit = (box.maxLength && box.maxLength > 0) ? box.maxLength : 0;
+  if (limit && next.length > limit) {
+    var keep = fiTrimToLimit(next, limit);
+    var go = await uiConfirm(
+      'That would put ' + next.length.toLocaleString() + ' characters in a box that holds ' +
+      limit.toLocaleString() + '. Anything past the limit is dropped when it saves, so it is better to cut it here.',
+      { title: 'Too long for this box', okText: 'Use the first ' + keep.length.toLocaleString(), cancelText: 'Cancel' });
+    if (go === false) return false;
+    next = keep;
+  }
+  box.value = next;
+  // A programmatic set fires NEITHER oninput NOR onblur, so anything those handlers would have
+  // done -- the counter, the dirty flag, the save -- has to be done here by hand. Miss this and
+  // the text sits on screen and is never stored.
+  if (typeof opts.after === 'function') { try { opts.after(box); } catch (e) { console.error('file import after-hook failed:', e && e.message); } }
+  // AND THE SAVE. Ian, 2026-09-12: "When text is imported into the Story field or the Lore field
+  // it saves. So if they navigate away somehow it's there. Because originally you had to click off
+  // the field."  He is describing the exact hazard: the transcript is persisted by an onblur
+  // handler -- saveSessionField('transcript', ...) -- and a programmatic set fires no blur, so an
+  // imported transcript would sit on screen and never reach the server.
+  //
+  // CALLING THE FIELD'S OWN onblur RATHER THAN REPEATING WHAT IT DOES. That handler already knows
+  // the rules this code should not have to learn twice: whether the reader is the Story Master,
+  // whether the fork on screen is theirs, and whether it is a fork note or a session field. A copy
+  // of that logic here would be a twin, and this project loses more time to twins than to bugs.
+  if (typeof box.onblur === 'function') { try { box.onblur(); } catch (e) { console.error('file import save failed:', e && e.message); } }
+  try { box.focus(); } catch (e) {}
+  return true;
+}
+
+// v3.0.875 -- TD-752. THE STORY AND LORE BOXES CAN READ A PICTURE-ONLY PDF NOW.
+//
+// This reverses a decision from v3.0.869, deliberately and on Ian's say-so. Back then the picture
+// path was made opt-in and these two callers deliberately did NOT take it, on the reasoning that
+// there is nothing useful to be done with a picture of a transcript. Ian, 2026-09-12: "On story pdf
+// that is uploaded. I might need to do the same picture read that it does on the characters... to
+// get the text from the story. If the pdf is just a picture it just needs to do the best it can to
+// get the text off of it." He is right and the old reasoning was wrong: a scanned story is still the
+// story, and the alternative on offer was nothing at all.
+//
+// THE LIMITS ARE HIS, AND THEY REFUSE RATHER THAN COPE. "I would limit it to 50 pages for now..
+// Period... If it needs to batch I would just refuse for now. So cap it at the 8mb.. just tell them
+// so." Reading half a document and not saying which half is worse than declining, because the reader
+// would paste the rest in on top of a silent gap.
+var FI_OCR_MAX_PAGES = 50;
+var FI_OCR_MAX_BYTES = 8 * 1024 * 1024;
+
+// Render, count the cost honestly, ASK, then read. Shared by both callers, so the question and the
+// limits cannot drift apart between the Story box and the Lore box.
+async function fiOcrPictureOffer(file, fileName, opts) {
+  opts = opts || {};
+  var busyEl = opts.busyEl || null;
+  var busy = fiBusyOn(busyEl, 'Looking at the pages of ' + (fileName || 'your file'));
+  var rendered = null;
+  try {
+    rendered = await fiPdfPageImages(file, { maxPages: FI_OCR_MAX_PAGES, refuseOver: true });
+  } catch (e) { console.error('page render failed:', e && e.message); }
+  fiBusyOff(busy);
+
+  if (!rendered) {
+    await uiConfirm('That PDF could not be read, even as pictures.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  // TOO LONG. Refused before a single page is rendered, so a 300-page book costs nothing but a
+  // sentence -- and the sentence says the number, because "too long" without it is a shrug.
+  if (rendered.tooMany) {
+    await uiConfirm('That file is ' + rendered.total + ' pages, and the most that can be read as pictures is ' +
+                    FI_OCR_MAX_PAGES + '.' + String.fromCharCode(10) + String.fromCharCode(10) +
+                    'Split it into smaller files, or paste the text in yourself -- pasting is free.',
+                    { title: 'That file is too long to read', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  if (!rendered.pages.length) {
+    await uiConfirm('There was nothing readable on those pages.',
+                    { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  var n = rendered.pages.length;
+  var bytes = 0;
+  rendered.pages.forEach(function (p) { bytes += p.length; });
+  // TOO BIG. Ian chose refusing over batching, so this says the size and stops rather than quietly
+  // sending the first few pages.
+  if (bytes > FI_OCR_MAX_BYTES) {
+    await uiConfirm('Those ' + n + ' pages come to about ' + Math.round(bytes / 1048576) +
+                    'MB, and the most that can be sent at once is 8MB.' +
+                    String.fromCharCode(10) + String.fromCharCode(10) +
+                    'Split the file into smaller parts, or paste the text in yourself -- pasting is free.',
+                    { title: 'Those pages are too large', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+
+  // THE QUESTION, IN IAN'S OWN SHAPE: how long it is, what it costs, and that there is a free way to
+  // do the same thing. A reader who would rather type than pay should be told so before they pay.
+  var NL = String.fromCharCode(10);
+  var msg = 'This file is ' + n + ' page' + (n === 1 ? '' : 's') + '. It costs a token a page to read the ' +
+            'text off them, so ' + n + ' token' + (n === 1 ? '' : 's') + '.' + NL + NL +
+            'You could paste the text in yourself instead, and that is free.' + NL + NL;
+  if (opts.limitNote) msg += opts.limitNote + NL + NL;
+  msg += 'Do you want to continue?';
+  var go = await uiConfirm(msg, { title: 'Read the text off ' + n + ' page' + (n === 1 ? '' : 's') + '?',
+                                  preserveLines: true, okText: 'Read the pages' });
+  if (!go) return;
+
+  var busy2 = fiBusyOn(busyEl, 'Reading ' + n + ' page' + (n === 1 ? '' : 's'));
+  var data = null;
+  try {
+    var r = await fetch('/api/extract/ocr-pages/' + state.currentCampaign.id, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages: rendered.pages })
+    });
+    data = await r.json();
+  } catch (e) {
+    data = { error: 'Could not reach the server to read those pages.' };
+  }
+  fiBusyOff(busy2);
+
+  if (!data || data.error) {
+    await uiConfirm((data && (data.message || data.error)) || 'Those pages could not be read.',
+                    { title: 'Could not read that file', hideCancel: true, okText: 'OK', preserveLines: true });
+    return;
+  }
+  if (!data.text || !data.text.trim()) {
+    await uiConfirm(data.message || 'No text could be read from those pages.',
+                    { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+    return;
+  }
+  // Straight into the SAME applier the typed-text path uses, so Replace / Append, the field's own
+  // maxlength, the word count and the save all behave exactly as they do for a Word file.
+  if (typeof opts.onText === 'function') await opts.onText(data.text);
+}
+
+// ---- CALLER 1: the Story tab ---------------------------------------------------------------
+function storyImportFromFile() {
+  function applyStory(text) {
+    // The Story box carries no maxlength, so the length check inside the applier is inert here
+    // and this behaves exactly as it did in v3.0.865.
+    return fiApplyToField(fiEl('transcript-input'), text, {
+      existsMessage: 'There is already text in the Story box.',
+      after: function () { updateWordCounts(); }
+    });
+  }
+  fiOpen({
+    title: 'Import your story or transcript',
+    busyEl: fiEl('transcript-wrap'),
+    // v3.0.875 -- TD-752. A scanned story is still the story.
+    onEmptyText: async function (file, fileName) {
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      await fiOcrPictureOffer(file, fileName, {
+        busyEl: fiEl('transcript-wrap'),
+        onText: applyStory
+      });
+    },
+    onText: async function (text) {
+      await applyStory(text);
+    }
+  });
+}
+
+// ---- CALLER 2: Campaign Details -> Lore / Background ---------------------------------------
+// v3.0.866. The one thing that is NOT like the Story tab: this field autosaves through csDirty,
+// and a programmatic set fires no oninput, so the save has to be asked for explicitly. csDirty(true)
+// writes immediately rather than waiting out the debounce, because the reader may well close the
+// dialog straight after importing -- and a blur that never happens cannot flush it.
+//
+// NOTE THE FIELD ID. app.html carries a dead campaign-lore textarea in a modal that v3.0.854
+// marked DEAD FROM HERE TO THE END; the live field is cs-lore-input in the Campaign details
+// dialog. Wiring the dead one would look perfectly correct and do nothing at all.
+function loreImportFromFile() {
+  function applyLore(text) {
+    return fiApplyToField(fiEl('cs-lore-input'), text, {
+      existsMessage: 'There is already text in Lore / Background.',
+      after: function (box) {
+        if (typeof loreCount === 'function') loreCount(box, 'cs-lore-count');
+        if (typeof csDirty === 'function') csDirty(true);
+      }
+    });
+  }
+  fiOpen({
+    title: 'Import your lore or background',
+    busyEl: fiEl('cs-lore-wrap'),
+    // v3.0.875 -- TD-752. Same offer as the Story box, with one extra line in the question: this
+    // field holds 6,000 characters, and being told that AFTER paying to read forty pages is the
+    // sort of thing a reader would rightly be annoyed about. The applier still enforces it.
+    onEmptyText: async function (file, fileName) {
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      var _box = fiEl('cs-lore-input');
+      var _lim = (_box && _box.maxLength > 0) ? _box.maxLength : 0;
+      await fiOcrPictureOffer(file, fileName, {
+        busyEl: fiEl('cs-lore-wrap'),
+        limitNote: _lim ? ('Lore / Background holds ' + _lim.toLocaleString() + ' characters, so a long ' +
+                           'document will be trimmed to fit.') : '',
+        onText: applyLore
+      });
+    },
+    onText: async function (text) {
+      await applyLore(text);
+    }
+  });
+}
+
+// =================================================================================================
+// v3.0.868 -- TD-735(a). CALLER 3: THE CHARACTER SHEET, IN ONE SHOT.
+//
+// Ian: "It needs to be smart, read the file and place the appropriate info into the correct boxes.
+// If it can extract an image it should put it in the image fields as well. Then it should go ahead
+// and generate the character reference image... All in one shot."
+//
+// The chain, and note how little of it is new: the browser reads the file (v3.0.865), the server
+// turns the text into fields (/parse-sheet, new), those fields are painted into the open form, an
+// unambiguous picture goes into the portrait slot through setSlotFile -- the SAME function the drop
+// zones use, so the preview and the pending-file bookkeeping happen the way they always do -- and
+// then rebuildCharPrompt(null) runs, which has created the character, saved its images, built the
+// canonical prompt and generated the reference since v3.0.860.
+//
+// THE FIELDS ARE PAINTED BEFORE THE PICTURE IS GENERATED, deliberately. Ian chose this: the reader
+// watches what was read while the expensive part runs, so a bad extraction is visible immediately
+// rather than at the end. Being wrong costs one image charge and a Regenerate.
+// =================================================================================================
+
+// A picture in a file is not necessarily THE CHARACTER -- it can be a party photo, a map, a logo or
+// a page scan, and a wrong reference image steers every panel that character ever appears in. So the
+// rule is deliberately timid: adopt one only when exactly one candidate looks like a portrait.
+// A scanned page cannot reach this at all, because a scan yields no text and the import stops
+// earlier with "nothing to read".
+var FI_IMG_MIN_SIDE = 120;      // below this it is an icon, a bullet or a logo
+var FI_IMG_MIN_RATIO = 0.4;     // taller than 1:2.5 is a banner on its side
+var FI_IMG_MAX_RATIO = 1.4;     // wider than this is a landscape plate, not a portrait
+
+// The pictures inside a .docx, via the same central-directory walk the text reader uses.
+async function fiDocxImages(bytes) {
+  if (typeof DecompressionStream === 'undefined') return [];
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  function u32(o) { return dv.getUint32(o, true); }
+  function u16(o) { return dv.getUint16(o, true); }
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i--) {
+    if (u32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return [];
+  var count = u16(eocd + 10);
+  var p = u32(eocd + 16);
+  var dec = new TextDecoder();
+  var entries = [];
+  for (var n = 0; n < count; n++) {
+    if (u32(p) !== 0x02014b50) break;
+    var method = u16(p + 10), csize = u32(p + 20);
+    var nameLen = u16(p + 28), extraLen = u16(p + 30), cmtLen = u16(p + 32), lho = u32(p + 42);
+    var entry = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (/^word\/media\/.+\.(jpe?g|png|gif|webp)$/i.test(entry)) entries.push({ name: entry, method: method, csize: csize, lho: lho });
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  var out = [];
+  for (var k = 0; k < entries.length && out.length < 8; k++) {
+    var e = entries[k];
+    var lNameLen = u16(e.lho + 26), lExtraLen = u16(e.lho + 28);
+    var start = e.lho + 30 + lNameLen + lExtraLen;
+    var rawBytes = bytes.subarray(start, start + e.csize);
+    var data;
+    if (e.method === 0) data = rawBytes;
+    else if (e.method === 8) {
+      try {
+        data = new Uint8Array(await new Response(new Blob([rawBytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      } catch (err) { continue; }
+    } else continue;
+    var ext = (e.name.split('.').pop() || 'jpg').toLowerCase();
+    var mime = ext === 'png' ? 'image/png' : (ext === 'gif' ? 'image/gif' : (ext === 'webp' ? 'image/webp' : 'image/jpeg'));
+    out.push(new File([data], 'sheet-image-' + (out.length + 1) + '.' + ext, { type: mime }));
+  }
+  return out;
+}
+
+// The pictures inside a PDF. pdf.js hands back DECODED pixels rather than the original file, so a
+// canvas is what turns them back into something uploadable.
+// The rectangle each painted image occupies on the page, in PDF units, by tracking the transform
+// the way a renderer does. paintImageXObject's own arguments give the pixel size; the matrix gives
+// where it lands and how big it is drawn.
+async function fiPdfPlacedImages(page, lib) {
+  var ops = await page.getOperatorList();
+  var ctm = [1, 0, 0, 1, 0, 0];
+  var stack = [];
+  function mul(a, b) {
+    return [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
+            a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+            a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+  }
+  var placed = [];
+  for (var i = 0; i < ops.fnArray.length; i++) {
+    var fn = ops.fnArray[i], a = ops.argsArray[i];
+    if (fn === lib.OPS.save) { stack.push(ctm.slice()); continue; }
+    if (fn === lib.OPS.restore) { ctm = stack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+    if (fn === lib.OPS.transform) { ctm = mul(ctm, a); continue; }
+    if (fn !== lib.OPS.paintImageXObject) continue;
+    var pw = a && a[1], ph = a && a[2];
+    var w = Math.abs(ctm[0]), h = Math.abs(ctm[3]);
+    if (!(w > 0) || !(h > 0) || !(pw > 0) || !(ph > 0)) continue;
+    placed.push({ x: ctm[4], y: ctm[5], w: w, h: h, pw: pw, ph: ph });
+  }
+  return placed;
+}
+
+// Stack the tiles a sliced picture was cut into. Two images join only when they share a left edge
+// AND a width AND meet edge to edge -- no gap and no overlap. Anything looser would happily weld
+// two unrelated pictures into one nonsense rectangle.
+var FI_TILE_EPS = 1.0;   // PDF points. The measured slices line up to within a twentieth of this.
+function fiGroupTiles(placed) {
+  var rest = placed.slice();
+  var groups = [];
+  while (rest.length) {
+    var g = [rest.shift()];
+    var joined = true;
+    while (joined) {
+      joined = false;
+      for (var i = 0; i < rest.length; i++) {
+        var c = rest[i];
+        var fits = g.some(function (m) {
+          if (Math.abs(c.x - m.x) > FI_TILE_EPS) return false;
+          if (Math.abs(c.w - m.w) > FI_TILE_EPS) return false;
+          return Math.abs(c.y - (m.y + m.h)) <= FI_TILE_EPS || Math.abs(m.y - (c.y + c.h)) <= FI_TILE_EPS;
+        });
+        if (fits) { g.push(c); rest.splice(i, 1); joined = true; break; }
+      }
+    }
+    groups.push(g);
+  }
+  return groups.map(function (g) {
+    var x0 = Math.min.apply(null, g.map(function (m) { return m.x; }));
+    var y0 = Math.min.apply(null, g.map(function (m) { return m.y; }));
+    var x1 = Math.max.apply(null, g.map(function (m) { return m.x + m.w; }));
+    var y1 = Math.max.apply(null, g.map(function (m) { return m.y + m.h; }));
+    var pw = Math.max.apply(null, g.map(function (m) { return m.pw; }));
+    var ph = g.reduce(function (s, m) { return s + m.ph; }, 0);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, pw: pw, ph: g.length > 1 ? ph : g[0].ph, tiles: g.length };
+  });
+}
+
+// A whole page rasterised as one picture is roughly 0.77 -- portrait-shaped -- so shape alone would
+// adopt a scan of the sheet as the character's face. A portrait sits IN a page; it is not the page.
+var FI_PORTRAIT_MAX_PAGE_FRACTION = 0.5;
+var FI_PORTRAIT_MIN_PT = 40;      // smaller than this on the page is a stamp or an icon
+var FI_CROP_MAX_PX = 1600;        // no need to hand the uploader a bigger picture than this
+
+async function fiPdfImages(file) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  var out = [];
+  var pages = Math.min(pdf.numPages, 5);   // a character sheet puts its portrait near the front
+  for (var n = 1; n <= pages && out.length < 8; n++) {
+    var page = await pdf.getPage(n);
+    var base = page.getViewport({ scale: 1 });
+    var pageArea = base.width * base.height;
+    var placed;
+    try { placed = await fiPdfPlacedImages(page, lib); } catch (e) { continue; }
+    var wanted = fiGroupTiles(placed).filter(function (g) {
+      if (g.w < FI_PORTRAIT_MIN_PT || g.h < FI_PORTRAIT_MIN_PT) return false;
+      if (pageArea > 0 && (g.w * g.h) / pageArea > FI_PORTRAIT_MAX_PAGE_FRACTION) return false;
+      // BOTH have to agree: the shape it is DRAWN at and the shape of the pixels behind it. A
+      // wide strip squashed into a square hole is not a portrait, and neither is the reverse.
+      return fiPortraitShape(g.pw, g.ph) && fiPortraitShape(g.w * 100, g.h * 100);
+    });
+    if (!wanted.length) continue;
+    for (var k = 0; k < wanted.length && out.length < 8; k++) {
+      var f = await fiCropFromPage(page, base, wanted[k], out.length + 1);
+      if (f) out.push(f);
+    }
+  }
+  return out;
+}
+
+// Render the page big enough that the crop comes out at roughly the resolution of the pixels behind
+// it, then cut the rectangle out. PDF y counts up from the bottom of the page and canvas y counts
+// down from the top, which is the one thing in here that is easy to get backwards.
+async function fiCropFromPage(page, base, g, idx) {
+  try {
+    var scale = g.w > 0 ? (g.pw / g.w) : 2;
+    if (!(scale > 0.2)) scale = 2;
+    if (g.w * scale > FI_CROP_MAX_PX) scale = FI_CROP_MAX_PX / g.w;
+    if (g.h * scale > FI_CROP_MAX_PX) scale = FI_CROP_MAX_PX / g.h;
+    var vp = page.getViewport({ scale: scale });
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(vp.width);
+    cv.height = Math.round(vp.height);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    var cut = document.createElement('canvas');
+    cut.width = Math.max(1, Math.round(g.w * scale));
+    cut.height = Math.max(1, Math.round(g.h * scale));
+    var srcY = (base.height - (g.y + g.h)) * scale;
+    cut.getContext('2d').drawImage(cv, g.x * scale, srcY, cut.width, cut.height, 0, 0, cut.width, cut.height);
+    var blob = await new Promise(function (resolve) { cut.toBlob(resolve, 'image/jpeg', 0.92); });
+    if (!blob) return null;
+    return new File([blob], 'sheet-image-' + idx + '.jpg', { type: 'image/jpeg' });
+  } catch (e) { console.error('crop failed:', e && e.message); return null; }
+}
+
+
+// ONE RULE FOR WHAT A PORTRAIT LOOKS LIKE, asked twice: once of the dimensions the PDF declares,
+// and again of the pixels that actually decoded. Two copies of these three numbers is how the two
+// answers would start disagreeing.
+function fiPortraitShape(w, h) {
+  if (!(w > 0) || !(h > 0)) return false;
+  if (w < FI_IMG_MIN_SIDE || h < FI_IMG_MIN_SIDE) return false;
+  var ratio = w / h;
+  return ratio >= FI_IMG_MIN_RATIO && ratio <= FI_IMG_MAX_RATIO;
+}
+
+// v3.0.871 -- fiPdfObj is GONE, and with it the last call to page.objs.get anywhere in the app.
+// It waited on the renderer to resolve an image that this code never rendered, which is why the
+// v3.0.869 import filled the fields and then sat there (TD-742). v3.0.870 bounded it with a
+// timeout; v3.0.871 removes the need for it, because a crop of a rendered page asks pdf.js for
+// nothing it has not already drawn. A guard asserts objs.get does not come back.
+
+// NOTHING IN THE IMPORT MAY HANG. A belt over the braces above: whatever is added to the portrait
+// step later, it settles or it is abandoned, and the reader is never left watching a spinner.
+function fiWithTimeout(promise, ms, fallback) {
+  return Promise.race([
+    Promise.resolve(promise).catch(function () { return fallback; }),
+    new Promise(function (resolve) { setTimeout(function () { resolve(fallback); }, ms); })
+  ]);
+}
+
+// v3.0.871 -- fiPixelsToFile is GONE too. It rebuilt a picture from raw pdf.js pixels by guessing
+// the stride from obj.kind, and a wrong guess produced a convincing picture of noise rather than
+// an error. Cropping a rendered page needs none of it: the compositing, the masks and the colour
+// are already correct because the browser did them.
+
+async function fiImagesFromFile(file, lower) {
+  try {
+    if (/\.docx$/.test(lower)) return await fiDocxImages(new Uint8Array(await file.arrayBuffer()));
+    if (/\.pdf$/.test(lower)) return await fiPdfImages(file);
+  } catch (e) { console.error('image extraction failed:', e && e.message); }
+  return [];
+}
+
+// Measure each candidate and keep the portrait-shaped ones. Returns the single winner, or null when
+// there is no candidate or more than one -- ambiguity is answered by doing nothing.
+async function fiPickPortrait(files) {
+  var kept = [];
+  for (var i = 0; i < files.length; i++) {
+    var dims = await fiImageSize(files[i]);
+    if (!dims) continue;
+    if (!fiPortraitShape(dims.w, dims.h)) continue;   // v3.0.870 -- the same rule, on real pixels
+    kept.push(files[i]);
+  }
+  return kept.length === 1 ? kept[0] : null;
+}
+// A TIMEOUT, because an image that never loads must not be able to hang the import. onerror covers
+// a file the decoder rejects outright, but a stalled decode fires neither handler and this promise
+// would never settle -- and now that fiTake awaits the caller, that would leave the reader looking
+// at a spinner forever. Found by running it: the suite hung here.
+function fiImageSize(file) {
+  return new Promise(function (resolve) {
+    var url = URL.createObjectURL(file);
+    var done = false;
+    function finish(val) {
+      if (done) return;
+      done = true;
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      resolve(val);
+    }
+    var im = new Image();
+    im.onload = function () { finish({ w: im.naturalWidth, h: im.naturalHeight }); };
+    im.onerror = function () { finish(null); };
+    setTimeout(function () { finish(null); }, 4000);
+    im.src = url;
+  });
+}
+
+// =================================================================================================
+// v3.0.869 -- TD-740. A CHARACTER SHEET WITH NO TEXT IN IT.
+//
+// Ian dropped a D&D Beyond export and it said it could not read the file. It was right, and that is
+// the problem: MEASURED on the real file, all seven pages return exactly ZERO characters. The PDF
+// carries no /FontFile, no /ToUnicode, no AcroForm and no annotations -- D&D Beyond rasterises the
+// sheet and wraps the pictures in a PDF. There is no text to extract, and no amount of better
+// parsing will find any.
+//
+// So when a PDF yields nothing, the pages are RENDERED and the pictures are read instead. Same
+// route, same fields out, same one-shot chain after it. The rendering happens here, on the reader's
+// machine, with the pdf.js that is already loaded -- so what crosses the wire is JPEGs of the pages
+// rather than the file.
+//
+// WHAT THIS BUYS, read off the real sheet: page 1 gives the name, "Sorcerer 12 / Cleric 1", the
+// player and the species; page 5 gives height 5'9", the personality traits, the backstory, and a
+// Character Appearance paragraph -- "skin currently blood red and increasingly scabby... bright
+// yellow eyes... battered gold breast plate, a staff like dark red glass" -- which is exactly what
+// the reference image is drawn from.
+//
+// WHAT IT DOES NOT BUY: the portrait. The image objects inside that PDF are strips of rasterised
+// TEXT (653x62, 705x123), not pictures of the character, so there is nothing to adopt. The existing
+// filter takes none of them, which is the right answer rather than a lucky one.
+// =================================================================================================
+var FI_PDF_MAX_PAGES = 10;      // a rulebook must not become an expensive accident
+var FI_PDF_RENDER_W = 1200;     // the appearance box on a D&D Beyond sheet is legible at this width
+// MEASURED IN THE BROWSER, with this very function, on Ian's export -- because the first version of
+// this number came from measuring the same pages with a different tool and was WRONG for the tool
+// that actually runs: it dropped page 7, which has content on it. The real figures here are blank
+// template page 0.058, sparsest real page 0.093, densest 0.299. The threshold sits between the
+// first two, biased low, because keeping a nearly-empty page costs a token and dropping a real one
+// loses the character's backstory.
+var FI_PDF_INK_MIN = 0.07;
+
+// Render up to FI_PDF_MAX_PAGES pages to JPEG, skipping the ones that are effectively empty.
+// Returns base64 strings with no data: prefix, which is what the API wants.
+async function fiPdfPageImages(file, opts) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  // v3.0.875 -- the cap is the caller's now. A character sheet passes nothing and keeps ten,
+  // because a sheet longer than that is a rulebook; a story asks for fifty, which is Ian's limit.
+  opts = opts || {};
+  var cap = (opts.maxPages > 0) ? opts.maxPages : FI_PDF_MAX_PAGES;
+  // REFUSE BEFORE RENDERING, not after. A three-hundred-page book should cost one sentence, not
+  // fifty page renders and then one sentence.
+  if (opts.refuseOver && pdf.numPages > cap) return { pages: [], total: pdf.numPages, tooMany: true };
+  var count = Math.min(pdf.numPages, cap);
+  var out = [];
+  var skipped = 0;
+  for (var n = 1; n <= count; n++) {
+    var page = await pdf.getPage(n);
+    var vp = page.getViewport({ scale: 1 });
+    var scale = FI_PDF_RENDER_W / vp.width;
+    var v2 = page.getViewport({ scale: scale });
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(v2.width);
+    cv.height = Math.round(v2.height);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: v2 }).promise;
+    if (n > 1 && fiInkFraction(cv) < FI_PDF_INK_MIN) { skipped++; continue; }   // an untouched template page
+    var url = cv.toDataURL('image/jpeg', 0.72);
+    out.push(url.slice(url.indexOf(',') + 1));
+  }
+  // AND A CEILING ON THE SKIPPING. If the ink test wanted to drop more than half the document, the
+  // threshold is wrong for this document rather than the document being mostly blank -- so nothing
+  // is dropped and every page goes. The cost of being wrong that way is a few tokens; the cost the
+  // other way is the page with the backstory on it.
+  if (skipped > count / 2) {
+    out = [];
+    for (var m = 1; m <= count; m++) {
+      var pg = await pdf.getPage(m);
+      var pvp = pg.getViewport({ scale: FI_PDF_RENDER_W / pg.getViewport({ scale: 1 }).width });
+      var pcv = document.createElement('canvas');
+      pcv.width = Math.round(pvp.width); pcv.height = Math.round(pvp.height);
+      await pg.render({ canvasContext: pcv.getContext('2d'), viewport: pvp }).promise;
+      var purl = pcv.toDataURL('image/jpeg', 0.72);
+      out.push(purl.slice(purl.indexOf(',') + 1));
+    }
+    return { pages: out, total: pdf.numPages };
+  }
+
+  // If the ink test threw everything away, the test is wrong for this document -- send the first
+  // pages rather than telling the reader their sheet is empty.
+  if (!out.length && count > 0) {
+    var first = await pdf.getPage(1);
+    var fvp = first.getViewport({ scale: FI_PDF_RENDER_W / first.getViewport({ scale: 1 }).width });
+    var fcv = document.createElement('canvas');
+    fcv.width = Math.round(fvp.width); fcv.height = Math.round(fvp.height);
+    await first.render({ canvasContext: fcv.getContext('2d'), viewport: fvp }).promise;
+    var furl = fcv.toDataURL('image/jpeg', 0.72);
+    out.push(furl.slice(furl.indexOf(',') + 1));
+  }
+  return { pages: out, total: pdf.numPages };
+}
+
+// How much of the page is not paper. Measured on a small copy, because this is a rough question and
+// a 1200px canvas is a slow way to ask it.
+function fiInkFraction(canvas) {
+  try {
+    var s = document.createElement('canvas');
+    s.width = 160; s.height = 200;
+    s.getContext('2d').drawImage(canvas, 0, 0, 160, 200);
+    var d = s.getContext('2d').getImageData(0, 0, 160, 200).data;
+    var ink = 0, total = 160 * 200;
+    for (var i = 0; i < d.length; i += 4) {
+      var lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+      if (lum < 235) ink++;
+    }
+    return ink / total;
+  } catch (e) { return 1; }   // cannot tell -> keep the page
+}
+
+// ---- CALLER 3: the character sheet -----------------------------------------------------------
+function charImportFromFile() {
+  charSheetNoticeClear();   // v3.0.872 -- pressing the button is trying again, so the old notice goes
+  fiOpen({
+    title: 'Import a character sheet',
+    busyEl: fiEl('char-modal-box'),
+    // v3.0.869 -- A PDF WITH NO TEXT IS NOT A FAILURE HERE. It is a D&D Beyond export, which is the
+    // commonest character sheet there is and carries no text layer at all. Render its pages and read
+    // the pictures. Opt-in, so the Story and Lore imports still say "nothing to read" -- which is
+    // right for them, since a picture of a transcript is of no use to anybody.
+    onEmptyText: async function (file, fileName) {
+      charSheetNoticeClear();
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      // v3.0.872 -- TD-748. THIS PATH USED TO RENDER AND SPEND WITHOUT ASKING. It is the path a
+      // D&D Beyond export takes -- no text layer at all -- so it is the one that most needed the
+      // question, and it was the one that did not have it.
+      await charSheetPictureOffer(fileName, file,
+        'There is no text in that file at all -- it is a character sheet saved as pictures.');
+    },
+    onText: async function (text, fileName, file) {
+      charSheetNoticeClear();
+      var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading ' + (fileName || 'your file'));
+      await charSheetSubmit({ text: text }, fileName, file, busy);
+    }
+  });
+}
+
+// v3.0.871 -- TD-747. Ian: "If you reload a new file and try again... that should go away until
+// there is a new error." Both import paths call this before they read anything, so whatever is on
+// screen afterwards was written about THIS file. The text is emptied as well as hidden, so nothing
+// can flash the previous message while the next one is being set.
+function charSheetNoticeClear() {
+  var el = fiEl('char-modal-error');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+// ONE SUBMIT FOR BOTH SHAPES. The text path and the picture path differ only in what they send, so
+// everything after the request -- the error, the empty answer, the choice among several, the field
+// fill, the portrait, the one shot -- lives here once. Two copies of this is how the two paths would
+// start disagreeing about what happens when a sheet has three characters in it.
+async function charSheetSubmit(payload, fileName, file, busy) {
+  var data = null;
+  try {
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/parse-sheet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    data = await r.json();
+  } catch (e) {
+    data = { error: 'Could not reach the server to read that sheet.' };
+  }
+  fiBusyOff(busy);
+
+  if (!data || data.error) {
+    showModalError('char-modal-error', (data && (data.message || data.error)) || 'That sheet could not be read.');
+    return;
+  }
+  var list = Array.isArray(data.characters) ? data.characters : [];
+  if (!list.length) {
+    // v3.0.870 -- the text was readable and held nobody. On a PDF that usually means a sheet whose
+    // form is text and whose entries are pictures, so offer to look at the pages. Only the TEXT
+    // payload can get here, so the picture read cannot ask again.
+    if (payload && payload.text !== undefined && /\.pdf$/i.test(fileName || '')) {
+      await charSheetPictureOffer(fileName, file,
+        'I could not find a character in the text of that file. It looks like a sheet whose printed form is text but whose entries are pictures.');
+      return;
+    }
+    showModalError('char-modal-error', data.message || 'No character could be found in that file.');
+    return;
+  }
+
+  // MORE THAN ONE, SO ASK. A party roster is a common thing to have lying around, and picking
+  // silently would build the wrong person and charge for their picture.
+  var pick = list[0];
+  if (list.length > 1) {
+    var idx = await uiChoose('Which character?',
+      'That file has ' + list.length + ' characters in it. Which one should I build?',
+      list.map(function (c) { return c.name + (c.cls ? ' — ' + c.cls : ''); }));
+    if (idx === null) return;
+    pick = list[idx];
+  }
+
+  charFillFromSheet(pick);
+  if (data.truncated) {
+    showModalError('char-modal-error', 'That file was long, so only the first part was read. Check the fields before the picture finishes.');
+  }
+
+  // The picture, if the file had an unambiguous one. Through setSlotFile, so the preview and the
+  // pending-upload bookkeeping are the same ones the drop zones use. Both steps are BOUNDED --
+  // v3.0.869 shipped an unbounded one and it hung on the first real sheet it met.
+  var portrait = null;
+  try {
+    var imgs = await fiWithTimeout(fiImagesFromFile(file, (fileName || '').toLowerCase()), 20000, []);
+    portrait = await fiWithTimeout(fiPickPortrait(imgs), 10000, null);
+  } catch (e) { console.error('portrait adoption failed:', e && e.message); }
+  if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
+      typeof setSlotFile === 'function') {
+    setSlotFile('image_portrait', portrait);
+  } else {
+    portrait = null;
+  }
+
+  // v3.0.874 -- TD-751. A NUMBER, NOT THE STRING THE DOM HANDS BACK. The lookups downstream
+  // compare with ===, and state.characters holds numeric ids, so a string id matches nothing:
+  // the image generates, the poll returns it, and no character is found to re-render. This input
+  // only ever holds an id that came from a numeric char.id, so Number() is exact; anything
+  // unparseable is treated as no id at all rather than passed on as NaN.
+  var existing = fiEl('char-edit-id');
+  var raw = existing && existing.value ? String(existing.value).trim() : '';
+  var id = (raw !== '' && isFinite(Number(raw))) ? Number(raw) : null;
+
+  // v3.0.870 -- NO PICTURE, NO GENERATION. Ian: only render the reference image if there is at
+  // least one image found in the document to use. Drawing a face out of adjectives alone costs a
+  // charge and produces a reference that steers every panel that character ever appears in, so
+  // when the file supplied nothing to work from the character is saved and the build is left to
+  // the reader -- and it says so, because silence here looks exactly like a bug.
+  if (!portrait) {
+    charSheetSaveOnly(id, 'The fields were filled in and the character has been saved. No picture of the character was found in that file, so no reference image was generated -- add a picture and press Build character prompt.');
+    return;
+  }
+
+  // AND THE ONE SHOT. Everything from here has been shipping since v3.0.860: save or create,
+  // upload the slots, build the prompt, generate the reference -- including the affordability
+  // check and the free-trial character reserve, which stay exactly where they are.
+  if (typeof rebuildCharPrompt === 'function') rebuildCharPrompt(id);
+}
+
+// Render the pages, then ASK, then read them. The render happens first so the question can quote
+// the real number of pages and the real price -- rendering is local and costs nothing.
+// THE ONLY WAY INTO A PAID PICTURE READ. Both callers come through here -- the sheet with no text
+// at all and the sheet whose text held nobody -- so the question cannot be skipped by arriving from
+// the other direction, which is exactly what happened in v3.0.870. `lead` is the one sentence that
+// differs: why we are looking at pictures.
+async function charSheetPictureOffer(fileName, file, lead) {
+  var busy = fiBusyOn(fiEl('char-modal-box'), 'Looking at the pages of ' + (fileName || 'your sheet'));
+  var rendered = null;
+  try { rendered = await fiPdfPageImages(file); } catch (e) { console.error('page render failed:', e && e.message); }
+  fiBusyOff(busy);
+  if (!rendered || !rendered.pages.length) {
+    showModalError('char-modal-error', 'That PDF could not be read, even as pictures.');
+    return;
+  }
+  var n = rendered.pages.length;
+  var NL = String.fromCharCode(10);
+  // THE PRICE IS THE WHOLE PRICE. Ian was quoted nothing and charged seven: six pages, then one
+  // more for the reference image on a different route. A quote that covers part of the bill is the
+  // same surprise in a smaller size, so the second paragraph names the rest of it.
+  var go = await uiConfirm(
+    lead + NL + NL +
+    'Reading its ' + n + ' page' + (n === 1 ? '' : 's') + ' as pictures costs ' + n + ' token' + (n === 1 ? '' : 's') + '.' + NL + NL +
+    'If the sheet has a picture of the character in it, the reference image is charged separately after that, the same as building one by hand.',
+    { title: 'Read the pages as pictures?', preserveLines: true, okText: 'Read the pages' });
+  if (!go) return;
+  var busy2 = fiBusyOn(fiEl('char-modal-box'), 'Reading the pages of ' + (fileName || 'your sheet'));
+  await charSheetSubmit({ pages: rendered.pages }, fileName, file, busy2);
+}
+
+// v3.0.870 -- THE ENDING WHEN THE FILE HAD NO PICTURE IN IT. Save the character so the extraction
+// is not lost, and stop: no prompt, no reference image. Ian: only render the reference image if
+// there is at least one image found in the document to use.
+function charSheetSaveOnly(id, note) {
+  if (id) {
+    saveCharFormSilently(id, function (err) {
+      showModalError('char-modal-error', err ? err : note);
+    });
+    return;
+  }
+  createCharThenBuild({ createOnly: true, done: function () {
+    showModalError('char-modal-error', note);
+  } });
+}
+
+// Paint the parsed fields into the open form. charHeightLoad is the height control's own loader, so
+// the slider, its label and its dataset.set flag all end up in the state the form expects.
+function charFillFromSheet(c) {
+  if (!c) return;
+  function put(id, v) { var el = fiEl(id); if (el && v) el.value = v; }
+  put('char-name', c.name);
+  put('char-player', c.player_name);
+  put('char-cls', c.cls);
+  put('char-desc', c.description);
+  var npc = fiEl('char-is-npc');
+  if (npc && c.is_npc === true) npc.checked = true;
+  if (c.height_ft && typeof charHeightLoad === 'function') { try { charHeightLoad(c.height_ft); } catch (e) {} }
 }
 
 function updateWordCounts() {
