@@ -240,6 +240,11 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 // answer, a model error: all free. A token burned on a shrug is the complaint you actually get.
 // =====================================================================================================
 var CHAR_SHEET_MAX_CHARS = 60000;
+// v3.0.869 -- a picture-only sheet is read as pages. Ten covers a D&D Beyond export (Ian's is
+// seven) and stops a rulebook from becoming an expensive accident. The byte ceiling sits under
+// the 10mb express.json limit with room to spare.
+var CHAR_SHEET_MAX_PAGES = 10;
+var CHAR_SHEET_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function _csClampStr(v, max) {
   if (v === undefined || v === null) return '';
@@ -254,23 +259,56 @@ function _csHeight(v) {
   return parseHeightFt(n);
 }
 
+// The pages, as image blocks, with the instruction last so it is the most recent thing read.
+function _csImageContent(pages) {
+  var content = pages.map(function (p) {
+    return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p } };
+  });
+  content.push({ type: 'text', text: 'These are the pages of one character sheet, in order. Read them and answer with the JSON described above.' });
+  return content;
+}
 router.post('/parse-sheet', requireAuth, verifyCampaignDM, async function (req, res) {
   try {
+    // v3.0.869 -- TD-740. TWO INPUT SHAPES, ONE ROUTE. A D&D Beyond export has NO TEXT AT ALL --
+    // measured on Ian's own sheet, seven pages, zero characters, because the whole thing is
+    // rasterised -- so the client renders the pages and sends pictures instead. Everything after
+    // this point is shared: the same instructions, the same clamping, the same charging rules.
+    var pages = (req.body && Array.isArray(req.body.pages)) ? req.body.pages : null;
     var raw = (req.body && typeof req.body.text === 'string') ? req.body.text : '';
-    var text = raw.replace(/ /g, '').trim();
-    if (!text) return res.json({ error: 'EMPTY', message: 'There was no text in that file to read.' });
-
+    var text = raw.replace(/\u0000/g, '').trim();
     var truncated = false;
-    if (text.length > CHAR_SHEET_MAX_CHARS) { text = text.slice(0, CHAR_SHEET_MAX_CHARS); truncated = true; }
+
+    if (pages) {
+      var sent = pages.length;
+      pages = pages.filter(function (p) { return typeof p === 'string' && p.length > 500; }).slice(0, CHAR_SHEET_MAX_PAGES);
+      if (!pages.length) return res.json({ error: 'EMPTY', message: 'There were no readable pages in that file.' });
+      if (sent > CHAR_SHEET_MAX_PAGES) truncated = true;
+      var _b = 0;
+      pages.forEach(function (p) { _b += p.length; });
+      if (_b > CHAR_SHEET_MAX_IMAGE_BYTES) {
+        return res.json({ error: 'TOO_BIG', message: 'Those pages are too large to read. Try a smaller PDF.' });
+      }
+    } else {
+      if (!text) return res.json({ error: 'EMPTY', message: 'There was no text in that file to read.' });
+      if (text.length > CHAR_SHEET_MAX_CHARS) { text = text.slice(0, CHAR_SHEET_MAX_CHARS); truncated = true; }
+    }
 
     var key = process.env.ANTHROPIC_API_KEY;
     if (!key) return res.json({ error: 'AI service is not configured.' });
 
     // WHAT IT COSTS IS SETTLED BEFORE THE MODEL IS CALLED, so a shortage cannot leave someone having
     // spent nothing and received nothing, or vice versa.
+    // Ian, 2026-09-12, on the picture path: one token per page, floor one. Reading pictures is more
+    // model work than reading text, and a seven-page sheet costing seven tokens is a sentence a
+    // reader can follow. Both rates live in app_settings, so the price moves without a deploy; the
+    // fallbacks below are what happens when nothing is set.
     var charge = 0;
-    try { charge = await computeGenCharge(Math.ceil(text.length / 5), 'char_sheet_words_per_token', 'char_sheet_floor'); } catch (e) { charge = 0; }
-    if (!(charge >= 1)) charge = 1;
+    try {
+      charge = pages
+        ? await computeGenCharge(pages.length, 'char_sheet_pages_per_token', 'char_sheet_floor')
+        : await computeGenCharge(Math.ceil(text.length / 5), 'char_sheet_words_per_token', 'char_sheet_floor');
+    } catch (e) { charge = 0; }
+    if (!(charge >= 1)) charge = pages ? Math.max(1, pages.length) : 1;
     if (!(await canAfford(req.session.userId, charge))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS',
         message: 'Reading a character sheet costs ' + charge + ' token' + (charge === 1 ? '' : 's') + '. Add more tokens to continue.' });
@@ -302,7 +340,11 @@ router.post('/parse-sheet', requireAuth, verifyCampaignDM, async function (req, 
       '- Unknown fields are "" or null. An empty field is a correct answer; an invented one is not.',
       '- A party roster or a group write-up returns several objects, most prominent first.',
       '- If the document is not about a character at all -- a rulebook, an invoice, a blank form --',
-      '  return []. An empty array is the right answer and is expected.'
+      '  return []. An empty array is the right answer and is expected.',
+      '- You may be given PAGE IMAGES of a printed sheet rather than text. Read them the same way:',
+      '  a printed character sheet keeps the name and class at the top of page one, and the',
+      '  appearance, personality and backstory on a later page. Gather the description from every',
+      '  page it appears on, and read only what is printed -- an empty box is an empty field.'
     ].join('\n');
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -312,7 +354,7 @@ router.post('/parse-sheet', requireAuth, verifyCampaignDM, async function (req, 
         model: TEXT_MODEL,
         max_tokens: 3000,
         system: system,
-        messages: [{ role: 'user', content: text }]
+        messages: [{ role: 'user', content: pages ? _csImageContent(pages) : text }]
       })
     });
     var data = await response.json();

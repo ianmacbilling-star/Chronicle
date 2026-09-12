@@ -19325,6 +19325,14 @@ async function fiTake(file) {
   // PDF yields exactly zero characters. Saying so is the difference between an honest answer and a
   // shrug -- and later, on the character sheet, between charging a token and not.
   if (!text || !text.trim()) {
+    // v3.0.869 -- A CALLER CAN OFFER TO READ THE PICTURES INSTEAD. Opt-in, so the Story and Lore
+    // imports still say "nothing to read" -- which is the right answer for them, because there is
+    // nothing useful to be done with a picture of a transcript. The character sheet is different:
+    // a D&D Beyond export has no text at all and is the commonest sheet there is.
+    if (typeof target.onEmptyText === 'function') {
+      try { await target.onEmptyText(file, name); } catch (e) { console.error('empty-text handler failed:', e && e.message); }
+      return;
+    }
     await uiConfirm('There is no text in that file. If it is a scan or a photograph, the words are part of the picture, so there is nothing to read -- retype it, or use a version saved from a word processor.',
                     { title: 'Nothing to read in that file', hideCancel: true, okText: 'OK', preserveLines: true });
     return;
@@ -19696,71 +19704,205 @@ function fiImageSize(file) {
   });
 }
 
+// =================================================================================================
+// v3.0.869 -- TD-740. A CHARACTER SHEET WITH NO TEXT IN IT.
+//
+// Ian dropped a D&D Beyond export and it said it could not read the file. It was right, and that is
+// the problem: MEASURED on the real file, all seven pages return exactly ZERO characters. The PDF
+// carries no /FontFile, no /ToUnicode, no AcroForm and no annotations -- D&D Beyond rasterises the
+// sheet and wraps the pictures in a PDF. There is no text to extract, and no amount of better
+// parsing will find any.
+//
+// So when a PDF yields nothing, the pages are RENDERED and the pictures are read instead. Same
+// route, same fields out, same one-shot chain after it. The rendering happens here, on the reader's
+// machine, with the pdf.js that is already loaded -- so what crosses the wire is JPEGs of the pages
+// rather than the file.
+//
+// WHAT THIS BUYS, read off the real sheet: page 1 gives the name, "Sorcerer 12 / Cleric 1", the
+// player and the species; page 5 gives height 5'9", the personality traits, the backstory, and a
+// Character Appearance paragraph -- "skin currently blood red and increasingly scabby... bright
+// yellow eyes... battered gold breast plate, a staff like dark red glass" -- which is exactly what
+// the reference image is drawn from.
+//
+// WHAT IT DOES NOT BUY: the portrait. The image objects inside that PDF are strips of rasterised
+// TEXT (653x62, 705x123), not pictures of the character, so there is nothing to adopt. The existing
+// filter takes none of them, which is the right answer rather than a lucky one.
+// =================================================================================================
+var FI_PDF_MAX_PAGES = 10;      // a rulebook must not become an expensive accident
+var FI_PDF_RENDER_W = 1200;     // the appearance box on a D&D Beyond sheet is legible at this width
+// MEASURED IN THE BROWSER, with this very function, on Ian's export -- because the first version of
+// this number came from measuring the same pages with a different tool and was WRONG for the tool
+// that actually runs: it dropped page 7, which has content on it. The real figures here are blank
+// template page 0.058, sparsest real page 0.093, densest 0.299. The threshold sits between the
+// first two, biased low, because keeping a nearly-empty page costs a token and dropping a real one
+// loses the character's backstory.
+var FI_PDF_INK_MIN = 0.07;
+
+// Render up to FI_PDF_MAX_PAGES pages to JPEG, skipping the ones that are effectively empty.
+// Returns base64 strings with no data: prefix, which is what the API wants.
+async function fiPdfPageImages(file) {
+  var lib = await ensurePdfJs();
+  var bytes = new Uint8Array(await file.arrayBuffer());
+  var pdf = await lib.getDocument({ data: bytes }).promise;
+  var count = Math.min(pdf.numPages, FI_PDF_MAX_PAGES);
+  var out = [];
+  var skipped = 0;
+  for (var n = 1; n <= count; n++) {
+    var page = await pdf.getPage(n);
+    var vp = page.getViewport({ scale: 1 });
+    var scale = FI_PDF_RENDER_W / vp.width;
+    var v2 = page.getViewport({ scale: scale });
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(v2.width);
+    cv.height = Math.round(v2.height);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: v2 }).promise;
+    if (n > 1 && fiInkFraction(cv) < FI_PDF_INK_MIN) { skipped++; continue; }   // an untouched template page
+    var url = cv.toDataURL('image/jpeg', 0.72);
+    out.push(url.slice(url.indexOf(',') + 1));
+  }
+  // AND A CEILING ON THE SKIPPING. If the ink test wanted to drop more than half the document, the
+  // threshold is wrong for this document rather than the document being mostly blank -- so nothing
+  // is dropped and every page goes. The cost of being wrong that way is a few tokens; the cost the
+  // other way is the page with the backstory on it.
+  if (skipped > count / 2) {
+    out = [];
+    for (var m = 1; m <= count; m++) {
+      var pg = await pdf.getPage(m);
+      var pvp = pg.getViewport({ scale: FI_PDF_RENDER_W / pg.getViewport({ scale: 1 }).width });
+      var pcv = document.createElement('canvas');
+      pcv.width = Math.round(pvp.width); pcv.height = Math.round(pvp.height);
+      await pg.render({ canvasContext: pcv.getContext('2d'), viewport: pvp }).promise;
+      var purl = pcv.toDataURL('image/jpeg', 0.72);
+      out.push(purl.slice(purl.indexOf(',') + 1));
+    }
+    return { pages: out, total: pdf.numPages };
+  }
+
+  // If the ink test threw everything away, the test is wrong for this document -- send the first
+  // pages rather than telling the reader their sheet is empty.
+  if (!out.length && count > 0) {
+    var first = await pdf.getPage(1);
+    var fvp = first.getViewport({ scale: FI_PDF_RENDER_W / first.getViewport({ scale: 1 }).width });
+    var fcv = document.createElement('canvas');
+    fcv.width = Math.round(fvp.width); fcv.height = Math.round(fvp.height);
+    await first.render({ canvasContext: fcv.getContext('2d'), viewport: fvp }).promise;
+    var furl = fcv.toDataURL('image/jpeg', 0.72);
+    out.push(furl.slice(furl.indexOf(',') + 1));
+  }
+  return { pages: out, total: pdf.numPages };
+}
+
+// How much of the page is not paper. Measured on a small copy, because this is a rough question and
+// a 1200px canvas is a slow way to ask it.
+function fiInkFraction(canvas) {
+  try {
+    var s = document.createElement('canvas');
+    s.width = 160; s.height = 200;
+    s.getContext('2d').drawImage(canvas, 0, 0, 160, 200);
+    var d = s.getContext('2d').getImageData(0, 0, 160, 200).data;
+    var ink = 0, total = 160 * 200;
+    for (var i = 0; i < d.length; i += 4) {
+      var lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+      if (lum < 235) ink++;
+    }
+    return ink / total;
+  } catch (e) { return 1; }   // cannot tell -> keep the page
+}
+
 // ---- CALLER 3: the character sheet -----------------------------------------------------------
 function charImportFromFile() {
   fiOpen({
     title: 'Import a character sheet',
     busyEl: fiEl('char-modal-box'),
+    // v3.0.869 -- A PDF WITH NO TEXT IS NOT A FAILURE HERE. It is a D&D Beyond export, which is the
+    // commonest character sheet there is and carries no text layer at all. Render its pages and read
+    // the pictures. Opt-in, so the Story and Lore imports still say "nothing to read" -- which is
+    // right for them, since a picture of a transcript is of no use to anybody.
+    onEmptyText: async function (file, fileName) {
+      if (!/\.pdf$/i.test(fileName || '')) {
+        await uiConfirm('There is no text in that file to read.',
+                        { title: 'Nothing to read', hideCancel: true, okText: 'OK' });
+        return;
+      }
+      var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading the pages of ' + (fileName || 'your sheet'));
+      var rendered = null;
+      try { rendered = await fiPdfPageImages(file); } catch (e) { console.error('page render failed:', e && e.message); }
+      if (!rendered || !rendered.pages.length) {
+        fiBusyOff(busy);
+        showModalError('char-modal-error', 'That PDF could not be read, even as pictures.');
+        return;
+      }
+      await charSheetSubmit({ pages: rendered.pages }, fileName, file, busy);
+    },
     onText: async function (text, fileName, file) {
       var busy = fiBusyOn(fiEl('char-modal-box'), 'Reading ' + (fileName || 'your file'));
-      var data = null;
-      try {
-        var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/parse-sheet', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text })
-        });
-        data = await r.json();
-      } catch (e) {
-        data = { error: 'Could not reach the server to read that sheet.' };
-      }
-      fiBusyOff(busy);
-
-      if (!data || data.error) {
-        var msg = (data && (data.message || data.error)) || 'That sheet could not be read.';
-        showModalError('char-modal-error', msg);
-        return;
-      }
-      var list = Array.isArray(data.characters) ? data.characters : [];
-      if (!list.length) {
-        showModalError('char-modal-error', data.message || 'No character could be found in that file.');
-        return;
-      }
-
-      // MORE THAN ONE, SO ASK. A party roster is a common thing to have lying around, and picking
-      // silently would build the wrong person and charge for their picture.
-      var pick = list[0];
-      if (list.length > 1) {
-        var idx = await uiChoose('Which character?',
-          'That file has ' + list.length + ' characters in it. Which one should I build?',
-          list.map(function (c) { return c.name + (c.cls ? ' — ' + c.cls : ''); }));
-        if (idx === null) return;
-        pick = list[idx];
-      }
-
-      charFillFromSheet(pick);
-      if (data.truncated) {
-        showModalError('char-modal-error', 'That file was long, so only the first part was read. Check the fields before the picture finishes.');
-      }
-
-      // The picture, if the file had an unambiguous one. Through setSlotFile, so the preview and the
-      // pending-upload bookkeeping are the same ones the drop zones use.
-      try {
-        var imgs = await fiImagesFromFile(file, (fileName || '').toLowerCase());
-        var portrait = await fiPickPortrait(imgs);
-        if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
-            typeof setSlotFile === 'function') {
-          setSlotFile('image_portrait', portrait);
-        }
-      } catch (e) { console.error('portrait adoption failed:', e && e.message); }
-
-      // AND THE ONE SHOT. Everything from here has been shipping since v3.0.860: save or create,
-      // upload the slots, build the prompt, generate the reference -- including the affordability
-      // check and the free-trial character reserve, which stay exactly where they are.
-      var existing = fiEl('char-edit-id');
-      var id = existing && existing.value ? existing.value : null;
-      if (typeof rebuildCharPrompt === 'function') rebuildCharPrompt(id);
+      await charSheetSubmit({ text: text }, fileName, file, busy);
     }
   });
+}
+
+// ONE SUBMIT FOR BOTH SHAPES. The text path and the picture path differ only in what they send, so
+// everything after the request -- the error, the empty answer, the choice among several, the field
+// fill, the portrait, the one shot -- lives here once. Two copies of this is how the two paths would
+// start disagreeing about what happens when a sheet has three characters in it.
+async function charSheetSubmit(payload, fileName, file, busy) {
+  var data = null;
+  try {
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/parse-sheet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    data = await r.json();
+  } catch (e) {
+    data = { error: 'Could not reach the server to read that sheet.' };
+  }
+  fiBusyOff(busy);
+
+  if (!data || data.error) {
+    showModalError('char-modal-error', (data && (data.message || data.error)) || 'That sheet could not be read.');
+    return;
+  }
+  var list = Array.isArray(data.characters) ? data.characters : [];
+  if (!list.length) {
+    showModalError('char-modal-error', data.message || 'No character could be found in that file.');
+    return;
+  }
+
+  // MORE THAN ONE, SO ASK. A party roster is a common thing to have lying around, and picking
+  // silently would build the wrong person and charge for their picture.
+  var pick = list[0];
+  if (list.length > 1) {
+    var idx = await uiChoose('Which character?',
+      'That file has ' + list.length + ' characters in it. Which one should I build?',
+      list.map(function (c) { return c.name + (c.cls ? ' — ' + c.cls : ''); }));
+    if (idx === null) return;
+    pick = list[idx];
+  }
+
+  charFillFromSheet(pick);
+  if (data.truncated) {
+    showModalError('char-modal-error', 'That file was long, so only the first part was read. Check the fields before the picture finishes.');
+  }
+
+  // The picture, if the file had an unambiguous one. Through setSlotFile, so the preview and the
+  // pending-upload bookkeeping are the same ones the drop zones use. A rasterised sheet has no
+  // picture of the character in it -- its image objects are strips of text -- so this quietly finds
+  // nothing there, which is the correct answer rather than a lucky one.
+  try {
+    var imgs = await fiImagesFromFile(file, (fileName || '').toLowerCase());
+    var portrait = await fiPickPortrait(imgs);
+    if (portrait && typeof isSupportedUploadImage === 'function' && isSupportedUploadImage(portrait) &&
+        typeof setSlotFile === 'function') {
+      setSlotFile('image_portrait', portrait);
+    }
+  } catch (e) { console.error('portrait adoption failed:', e && e.message); }
+
+  // AND THE ONE SHOT. Everything from here has been shipping since v3.0.860: save or create,
+  // upload the slots, build the prompt, generate the reference -- including the affordability
+  // check and the free-trial character reserve, which stay exactly where they are.
+  var existing = fiEl('char-edit-id');
+  var id = existing && existing.value ? existing.value : null;
+  if (typeof rebuildCharPrompt === 'function') rebuildCharPrompt(id);
 }
 
 // Paint the parsed fields into the open form. charHeightLoad is the height control's own loader, so
