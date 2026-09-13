@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891 - v3.0.895).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891 - v3.0.896).
 
    Ian, 2026-09-13: "Can you create a web page or Modal that lists in grid style
    all the different features each tier has. 4 columns Copper, Silver, Gold,
@@ -105,10 +105,10 @@
     { label: 'Archived Images per Campaign', cell: function (t) {
         return val(esc(cap(t.max_archives_per_campaign)));
       } },
-    { label: 'Characters', cell: function (t) {
+    { label: 'Characters per Campaign', cell: function (t) {
         return val(esc(cap(t.max_characters)));
       } },
-    { label: 'Assets', cell: function (t) {
+    { label: 'Assets per Campaign', cell: function (t) {
         return val(esc(cap(t.max_assets)));
       } },
     // v3.0.893 -- N/A FOR A TIER THAT CREATES NOTHING OF ITS OWN, exactly like the two style
