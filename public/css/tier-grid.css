@@ -1,0 +1,255 @@
+/* ============================================================================
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891).
+
+   THIS FILE IS THE SWAP POINT. Ian, 2026-09-13: "Soon we are going to build
+   another Landing page and I want to be able to switch out CSSs for each landing
+   page. So this page should match the existing landing page right now, but later
+   it might not."
+
+   So it is DELIBERATELY SELF-CONTAINED: every colour, font and border is a
+   literal here, or a --tg- token defined here. It reads nothing from the
+   landing page's own :root, which means a second landing page can ship its own
+   copy of this file and restyle the whole grid without touching the markup or
+   the script. The values below are today's landing page (index.html) on purpose
+   -- --ink #0a0806, --gold #c9a84c, --parchment #f0e8d0, 5px ink borders, offset
+   hard shadows, Bangers for display and Cinzel for labels -- so nothing about
+   the grid looks bolted on until someone decides it should.
+
+   Class names are all tg- prefixed. index.html already owns .tier-row,
+   .tier-info, .tier-name-row and .tier-perks, and a grid that reused those would
+   inherit the pricing panel's list layout the moment either file changed.
+   ============================================================================ */
+
+.tg-root {
+  --tg-ink: #0a0806;
+  --tg-ink-mid: #160e06;
+  --tg-ink-deep: #120b05;
+  --tg-gold: #c9a84c;
+  --tg-gold-light: #e8d5a3;
+  --tg-parchment: #f0e8d0;
+  --tg-crimson: #c0392b;
+  --tg-line: rgba(201,168,76,0.22);
+  --tg-line-strong: rgba(201,168,76,0.4);
+  --tg-dim: rgba(240,232,208,0.55);
+  --tg-yes: #7fae5f;
+  --tg-no: rgba(240,232,208,0.28);
+  --tg-copper: #b87333;
+  --tg-silver: #c0c0c0;
+  --tg-platinum: #e5e4e2;
+  --tg-display: 'Bangers', cursive;
+  --tg-label: 'Cinzel', serif;
+  --tg-body: 'Crimson Text', Georgia, serif;
+}
+
+/* ---- the button that opens it, under the tier rows ---- */
+.tg-open-wrap {
+  padding: 14px 20px 18px;
+  border-top: 3px solid rgba(201,168,76,0.25);
+  text-align: center;
+}
+.tg-open {
+  font-family: var(--tg-display);
+  font-size: 20px;
+  letter-spacing: 2px;
+  padding: 10px 28px;
+  background: var(--tg-gold);
+  color: var(--tg-ink);
+  border: 4px solid var(--tg-ink);
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--tg-ink);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.tg-open:hover { transform: translate(-1px,-1px); box-shadow: 5px 5px 0 var(--tg-ink); }
+.tg-open:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--tg-ink); }
+
+/* ---- overlay ---- */
+/* index.html's halftone sits at z-index 1000 and the nav at 500, so the grid
+   goes above both. The halftone is pointer-events:none and harmless either way;
+   above is simply what a modal should be. */
+.tg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(6,4,2,0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  font-family: var(--tg-body);
+  color: var(--tg-parchment);
+}
+.tg-overlay[hidden] { display: none; }
+
+.tg-panel {
+  width: 100%;
+  max-width: 1080px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--tg-ink-mid);
+  border: 5px solid var(--tg-ink);
+  box-shadow: 10px 10px 0 rgba(0,0,0,0.55);
+}
+
+/* ---- header bar ---- */
+.tg-head {
+  background: var(--tg-gold);
+  border-bottom: 5px solid var(--tg-ink);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.tg-title {
+  font-family: var(--tg-display);
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: 2px;
+  color: var(--tg-ink);
+  flex: 1;
+}
+.tg-close {
+  font-family: var(--tg-display);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 14px;
+  background: var(--tg-ink);
+  color: var(--tg-gold-light);
+  border: 3px solid var(--tg-ink);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tg-close:hover { background: var(--tg-crimson); color: #fff; }
+
+/* ---- scroll region ---- */
+.tg-scroll {
+  overflow: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+.tg-loading, .tg-error {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 16px;
+  color: var(--tg-dim);
+}
+.tg-error { color: var(--tg-gold-light); }
+
+/* ---- the grid ---- */
+.tg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  min-width: 620px;           /* below this the cells stop being readable; the region scrolls */
+}
+.tg-table th, .tg-table td {
+  border-bottom: 1px solid var(--tg-line);
+  padding: 10px 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+.tg-table tr:last-child th, .tg-table tr:last-child td { border-bottom: none; }
+.tg-table tbody tr:hover { background: rgba(201,168,76,0.05); }
+
+/* feature column: sticky so a phone can scroll the tiers without losing the row name */
+.tg-table th.tg-feat, .tg-table td.tg-feat {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--tg-ink-deep);
+  border-right: 1px solid var(--tg-line-strong);
+  font-family: var(--tg-label);
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--tg-gold-light);
+  width: 34%;
+  min-width: 200px;
+}
+.tg-feat-sub {
+  display: block;
+  font-family: var(--tg-body);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tg-dim);
+  margin-top: 2px;
+}
+
+/* tier heading row */
+.tg-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--tg-ink-deep);
+  border-bottom: 3px solid var(--tg-line-strong);
+  padding: 12px 10px 10px;
+}
+.tg-table thead th.tg-feat { z-index: 3; }
+.tg-coin {
+  display: block;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  margin: 0 auto 4px;
+}
+.tg-tier-name {
+  font-family: var(--tg-display);
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+.tg-t-copper .tg-tier-name   { color: var(--tg-copper); }
+.tg-t-silver .tg-tier-name   { color: var(--tg-silver); }
+.tg-t-gold .tg-tier-name     { color: var(--tg-gold); }
+.tg-t-platinum .tg-tier-name { color: var(--tg-platinum); }
+
+/* cells */
+.tg-val {
+  font-family: var(--tg-label);
+  font-size: 17px;
+  color: var(--tg-parchment);
+}
+.tg-sub {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--tg-dim);
+  margin-top: 3px;
+}
+.tg-yes { color: var(--tg-yes); font-size: 20px; line-height: 1; }
+.tg-no  { color: var(--tg-no);  font-size: 20px; line-height: 1; }
+.tg-na  { font-family: var(--tg-label); font-size: 13px; color: var(--tg-no); letter-spacing: 1px; }
+
+/* ---- footnotes ---- */
+.tg-foot {
+  flex-shrink: 0;
+  border-top: 3px solid var(--tg-line-strong);
+  background: var(--tg-ink-deep);
+  padding: 12px 18px 14px;
+}
+.tg-note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--tg-dim);
+  margin-bottom: 5px;
+}
+.tg-note:last-child { margin-bottom: 0; }
+.tg-note b { color: var(--tg-gold-light); font-weight: normal; }
+
+@media (max-width: 760px) {
+  .tg-overlay { padding: 10px; }
+  .tg-panel { max-height: calc(100vh - 20px); }
+  .tg-title { font-size: 22px; letter-spacing: 1px; }
+  .tg-table { font-size: 14px; }
+  .tg-table th, .tg-table td { padding: 8px 8px; }
+  .tg-table th.tg-feat, .tg-table td.tg-feat { min-width: 150px; width: auto; font-size: 11px; }
+  .tg-coin { width: 40px; height: 40px; }
+  .tg-tier-name { font-size: 16px; letter-spacing: 1px; }
+  .tg-val { font-size: 15px; }
+  .tg-open { font-size: 17px; padding: 9px 20px; }
+}
