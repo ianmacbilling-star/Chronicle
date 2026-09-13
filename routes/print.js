@@ -393,13 +393,29 @@ const US_STATE_CODES = ('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA M
   'MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC ' +
   'PR VI GU AS MP AA AE AP').split(' ');
 
+// v3.0.879 -- TD-756 stage 2. MEASURED AGAINST LULU'S OWN COST ENDPOINT, not assumed.
+// Fourteen countries answered "Field state is required"; seventy-eight refused an
+// address with no postcode. Everything else priced without either.
+//
+// THIS DOES NOT DECIDE WHICH COUNTRIES WE SHIP TO, and must never start to. The
+// picker decides what is offered, this checks SHAPE and REQUIRED-NESS, and Lulu
+// decides serviceability. A serviceability list here would go stale silently and
+// start refusing countries Lulu had since opened -- which is the failure this whole
+// item is about, pointed the other way.
+const STATE_REQUIRED_COUNTRIES = 'AE CR ES HK HN ID IQ IT JM KN KR MX TW US'.split(' ');
+const POSTCODE_REQUIRED_COUNTRIES = ('AF AR AS AT AU AX BE BH BL BR CA CH CL CN CO CZ DE DK EE FI FM FR GB GF GG ' +
+  'GL GP GR GU HT HU IE IM IN JE JP KY LB LI LT LU LV MF MH MP MQ MY NC NL NO ' +
+  'NZ PF PG PL PN PR PT PW RE RO SE SG SJ SK SM SV TC TR US VE VI WF YT ZA').split(' ');
+
 function shipToErrors(body) {
   const s = (body && body.shipTo) || {};
   const errs = [];
   const cc = String(s.countryCode || '').trim().toUpperCase();
   const st = String(s.stateCode || '').trim().toUpperCase();
+  const pc = String(s.postcode || '').trim();
   if (!/^[A-Z]{2}$/.test(cc)) {
     errs.push('The country must be a two-letter code such as US, not a country name.');
+    return errs;   // nothing below can mean anything without a country
   }
   if (cc === 'US') {
     if (!st) {
@@ -409,6 +425,23 @@ function shipToErrors(body) {
       // looking at the word they just typed.
       errs.push('The state must be its two-letter code -- VA for Virginia, for example -- not the full name. ' +
         'We were given "' + String(s.stateCode).slice(0, 40) + '".');
+    }
+  } else if (STATE_REQUIRED_COUNTRIES.indexOf(cc) !== -1 && !st) {
+    errs.push('The printer requires a state or province code for ' + cc + '.');
+  }
+  if (!pc) {
+    if (POSTCODE_REQUIRED_COUNTRIES.indexOf(cc) !== -1) {
+      errs.push('A postal code is required for ' + cc + '.');
+    }
+  } else {
+    // Only what is CERTAINLY wrong. Lulu validates the per-country format itself
+    // and now says so readably, so a stricter guess here would block a real order.
+    if (!/^[A-Za-z0-9][A-Za-z0-9 -]{0,11}$/.test(pc)) {
+      errs.push('That postal code contains characters no country uses.');
+    } else if (cc === 'US' && !/^[0-9]{5}(-[0-9]{4})?$/.test(pc)) {
+      errs.push('A US ZIP code is five digits, or five plus four such as 24450-1234.');
+    } else if (cc === 'CA' && !/^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$/.test(pc)) {
+      errs.push('A Canadian postal code looks like K1A 0B1.');
     }
   }
   return errs;

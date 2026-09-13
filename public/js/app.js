@@ -21626,9 +21626,19 @@ function reorderApplySelections() {
   // The normalise step is what heals an order stored before this batch: a row
   // holding "Virginia" becomes VA and repeats cleanly rather than aborting.
   cgFillShipSelects();
-  if (!pick('print-ship-state', cgNormalizeStateCode(R.shipTo.state), 'that state')) return;
-  set('print-ship-postcode', R.shipTo.postcode);
+  // COUNTRY FIRST, because it decides which state control the next line should
+  // write to. Doing it the other way round put the state into a box that was
+  // about to be hidden and cleared.
   if (!pick('print-ship-country', cgNormalizeCountryCode(R.shipTo.country), 'that country')) return;
+  cgApplyCountryRules();
+  set('print-ship-postcode', R.shipTo.postcode);
+  var _rState = cgNormalizeStateCode(R.shipTo.state) || String(R.shipTo.state || '').trim().toUpperCase();
+  if ((document.getElementById('print-ship-country') || {}).value === 'US') {
+    if (!pick('print-ship-state', _rState, 'that state')) return;
+  } else {
+    var _t = cgStateTextEl();
+    if (_t) _t.value = _rState;
+  }
   set('print-ship-phone', R.shipTo.phone);
   pick('print-ship-level', R.shippingLevel, 'that shipping speed');
   R.applied = true;
@@ -22001,11 +22011,262 @@ var CG_US_STATES = [
   ['AA', 'Armed Forces Americas'], ['AE', 'Armed Forces Europe'], ['AP', 'Armed Forces Pacific']
 ];
 
-// Stage 1 is United States only. Not because Lulu refuses the rest -- they ship
-// wherever FedEx goes -- but because no non-US quote has ever been confirmed and
-// the price on this screen is real money. Stage 2 replaces this with the list
-// Lulu itself answers with.
-var CG_COUNTRIES = [['US', 'United States']];
+// ============================================================
+// v3.0.879 -- TD-756 STAGE 2. EVERY ROW BELOW WAS MEASURED, NOT TYPED.
+//
+// 280 ICU region codes were put to Lulu's own cost endpoint -- the same call the
+// Order tab makes -- and these 218 are the ones that priced, or that failed only
+// for a reason we can fix in this form. The columns are:
+//
+//     [ code, name, needsState, needsPostcode ]
+//
+// WHAT THE MEASUREMENT SETTLED, none of which was guessable:
+//   * "UK" IS REFUSED AND "GB" IS ACCEPTED. Lulu answers "Must be a valid
+//     ISO 3166-1 alpha-2 country code" to UK. A hand-typed list offering UK would
+//     have failed every British order, quietly, forever.
+//   * 116 of the served countries priced with NO POSTCODE AT ALL. The old form
+//     demanded one from everybody, which was wrong for most of the world.
+//   * FOURTEEN require a state or province and the rest do not.
+//   * Eleven countries -- Israel, Jordan, Kuwait, Qatar among them -- are here
+//     only because a second probe found they ship by EXPEDITED or EXPRESS when
+//     MAIL is refused. The default is still MAIL, so those eleven will refuse at
+//     the quote until TD-758 builds the fallback. They are INCLUDED deliberately:
+//     a country we can ship to belongs in the list, and TD-758 is the fix.
+//
+// AND SEVEN EXCLUDED BY JUDGEMENT RATHER THAN BY MEASUREMENT, LABELLED AS SUCH:
+// Antarctica, Bouvet Island, Heard & McDonald, French Southern Territories,
+// South Georgia, U.S. Outlying Islands and British Indian Ocean Territory. Lulu
+// WILL quote them -- Antarctica came back at 40.98 with 17.19 of shipping -- but
+// the probe measured whether a PRICE is returned, not whether a book arrives.
+// None of them has a resident civilian population or a civilian postal service.
+// Taking money for a book that cannot be delivered is the one failure worse than
+// refusing the order, so they are out. This is the only line in this table that
+// is not a measurement, and it is reversible in one commit.
+//
+// DELIBERATELY ABSENT: 58 that Lulu refused outright, South Sudan and Syria
+// (no shipping level at all), Peru (needs recipient_tax_id, a legal customs
+// identifier this product does not collect and must not fake), Western Sahara
+// (Lulu answered with a 500 HTML page, so we do not know), and every code that
+// is not valid ISO 3166-1 -- UK among them.
+//
+// THIS LIST IS NOT THE ONLY GUARD AND MUST NOT BECOME ONE. It decides what is
+// OFFERED. The server checks shape and required-ness. Lulu decides serviceability.
+// If Lulu opens a country tomorrow, the worst this costs is that we do not offer
+// it yet -- never that we quote something we cannot ship.
+// ============================================================
+var CG_COUNTRIES = [
+  ['AF', 'Afghanistan', 0, 1],
+  ['AL', 'Albania', 0, 0],
+  ['DZ', 'Algeria', 0, 0],
+  ['AS', 'American Samoa', 0, 1],
+  ['AD', 'Andorra', 0, 0],
+  ['AO', 'Angola', 0, 0],
+  ['AI', 'Anguilla', 0, 0],
+  ['AG', 'Antigua & Barbuda', 0, 0],
+  ['AR', 'Argentina', 0, 1],
+  ['AM', 'Armenia', 0, 0],
+  ['AW', 'Aruba', 0, 0],
+  ['AU', 'Australia', 0, 1],
+  ['AT', 'Austria', 0, 1],
+  ['AZ', 'Azerbaijan', 0, 0],
+  ['BS', 'Bahamas', 0, 0],
+  ['BH', 'Bahrain', 0, 1],
+  ['BD', 'Bangladesh', 0, 0],
+  ['BB', 'Barbados', 0, 0],
+  ['BE', 'Belgium', 0, 1],
+  ['BZ', 'Belize', 0, 0],
+  ['BJ', 'Benin', 0, 0],
+  ['BM', 'Bermuda', 0, 0],
+  ['BT', 'Bhutan', 0, 0],
+  ['BO', 'Bolivia', 0, 0],
+  ['BA', 'Bosnia & Herzegovina', 0, 0],
+  ['BW', 'Botswana', 0, 0],
+  ['BR', 'Brazil', 0, 1],
+  ['VG', 'British Virgin Islands', 0, 0],
+  ['BN', 'Brunei', 0, 0],
+  ['BG', 'Bulgaria', 0, 0],
+  ['BF', 'Burkina Faso', 0, 0],
+  ['BI', 'Burundi', 0, 0],
+  ['KH', 'Cambodia', 0, 0],
+  ['CM', 'Cameroon', 0, 0],
+  ['CA', 'Canada', 0, 1],
+  ['CV', 'Cape Verde', 0, 0],
+  ['BQ', 'Caribbean Netherlands', 0, 0],
+  ['KY', 'Cayman Islands', 0, 1],
+  ['TD', 'Chad', 0, 0],
+  ['CL', 'Chile', 0, 1],
+  ['CN', 'China', 0, 1],
+  ['CX', 'Christmas Island', 0, 0],
+  ['CC', 'Cocos (Keeling) Islands', 0, 0],
+  ['CO', 'Colombia', 0, 1],
+  ['CG', 'Congo - Brazzaville', 0, 0],
+  ['CD', 'Congo - Kinshasa', 0, 0],
+  ['CK', 'Cook Islands', 0, 0],
+  ['CR', 'Costa Rica', 1, 0],
+  ['HR', 'Croatia', 0, 0],
+  ['CW', 'Curaçao', 0, 0],
+  ['CY', 'Cyprus', 0, 0],
+  ['CZ', 'Czechia', 0, 1],
+  ['CI', 'Côte d’Ivoire', 0, 0],
+  ['DK', 'Denmark', 0, 1],
+  ['DJ', 'Djibouti', 0, 0],
+  ['DM', 'Dominica', 0, 0],
+  ['DO', 'Dominican Republic', 0, 0],
+  ['EC', 'Ecuador', 0, 0],
+  ['EG', 'Egypt', 0, 0],
+  ['SV', 'El Salvador', 0, 1],
+  ['ER', 'Eritrea', 0, 0],
+  ['EE', 'Estonia', 0, 1],
+  ['SZ', 'Eswatini', 0, 0],
+  ['ET', 'Ethiopia', 0, 0],
+  ['FO', 'Faroe Islands', 0, 0],
+  ['FJ', 'Fiji', 0, 0],
+  ['FI', 'Finland', 0, 1],
+  ['FR', 'France', 0, 1],
+  ['GF', 'French Guiana', 0, 1],
+  ['PF', 'French Polynesia', 0, 1],
+  ['GA', 'Gabon', 0, 0],
+  ['GM', 'Gambia', 0, 0],
+  ['GE', 'Georgia', 0, 0],
+  ['DE', 'Germany', 0, 1],
+  ['GH', 'Ghana', 0, 0],
+  ['GI', 'Gibraltar', 0, 0],
+  ['GR', 'Greece', 0, 1],
+  ['GL', 'Greenland', 0, 1],
+  ['GD', 'Grenada', 0, 0],
+  ['GP', 'Guadeloupe', 0, 1],
+  ['GU', 'Guam', 0, 1],
+  ['GT', 'Guatemala', 0, 0],
+  ['GG', 'Guernsey', 0, 1],
+  ['GN', 'Guinea', 0, 0],
+  ['GY', 'Guyana', 0, 0],
+  ['HT', 'Haiti', 0, 1],
+  ['HN', 'Honduras', 1, 0],
+  ['HK', 'Hong Kong SAR China', 1, 0],
+  ['HU', 'Hungary', 0, 1],
+  ['IS', 'Iceland', 0, 0],
+  ['IN', 'India', 0, 1],
+  ['ID', 'Indonesia', 1, 0],
+  ['IQ', 'Iraq', 1, 0],
+  ['IE', 'Ireland', 0, 1],
+  ['IM', 'Isle of Man', 0, 1],
+  ['IL', 'Israel', 0, 0],
+  ['IT', 'Italy', 1, 0],
+  ['JM', 'Jamaica', 1, 0],
+  ['JP', 'Japan', 0, 1],
+  ['JE', 'Jersey', 0, 1],
+  ['JO', 'Jordan', 0, 0],
+  ['KZ', 'Kazakhstan', 0, 0],
+  ['KE', 'Kenya', 0, 0],
+  ['KW', 'Kuwait', 0, 0],
+  ['KG', 'Kyrgyzstan', 0, 0],
+  ['LA', 'Laos', 0, 0],
+  ['LV', 'Latvia', 0, 1],
+  ['LB', 'Lebanon', 0, 1],
+  ['LS', 'Lesotho', 0, 0],
+  ['LR', 'Liberia', 0, 0],
+  ['LY', 'Libya', 0, 0],
+  ['LI', 'Liechtenstein', 0, 1],
+  ['LT', 'Lithuania', 0, 1],
+  ['LU', 'Luxembourg', 0, 1],
+  ['MO', 'Macao SAR China', 0, 0],
+  ['MG', 'Madagascar', 0, 0],
+  ['MW', 'Malawi', 0, 0],
+  ['MY', 'Malaysia', 0, 1],
+  ['MV', 'Maldives', 0, 0],
+  ['ML', 'Mali', 0, 0],
+  ['MT', 'Malta', 0, 0],
+  ['MH', 'Marshall Islands', 0, 1],
+  ['MQ', 'Martinique', 0, 1],
+  ['MR', 'Mauritania', 0, 0],
+  ['MU', 'Mauritius', 0, 0],
+  ['YT', 'Mayotte', 0, 1],
+  ['MX', 'Mexico', 1, 0],
+  ['FM', 'Micronesia', 0, 1],
+  ['MD', 'Moldova', 0, 0],
+  ['MC', 'Monaco', 0, 0],
+  ['MN', 'Mongolia', 0, 0],
+  ['ME', 'Montenegro', 0, 0],
+  ['MS', 'Montserrat', 0, 0],
+  ['MA', 'Morocco', 0, 0],
+  ['MZ', 'Mozambique', 0, 0],
+  ['NA', 'Namibia', 0, 0],
+  ['NP', 'Nepal', 0, 0],
+  ['NL', 'Netherlands', 0, 1],
+  ['NC', 'New Caledonia', 0, 1],
+  ['NZ', 'New Zealand', 0, 1],
+  ['NI', 'Nicaragua', 0, 0],
+  ['NE', 'Niger', 0, 0],
+  ['NG', 'Nigeria', 0, 0],
+  ['NF', 'Norfolk Island', 0, 0],
+  ['MK', 'North Macedonia', 0, 0],
+  ['MP', 'Northern Mariana Islands', 0, 1],
+  ['NO', 'Norway', 0, 1],
+  ['OM', 'Oman', 0, 0],
+  ['PK', 'Pakistan', 0, 0],
+  ['PW', 'Palau', 0, 1],
+  ['PS', 'Palestinian Territories', 0, 0],
+  ['PA', 'Panama', 0, 0],
+  ['PG', 'Papua New Guinea', 0, 1],
+  ['PY', 'Paraguay', 0, 0],
+  ['PH', 'Philippines', 0, 0],
+  ['PN', 'Pitcairn Islands', 0, 1],
+  ['PL', 'Poland', 0, 1],
+  ['PT', 'Portugal', 0, 1],
+  ['PR', 'Puerto Rico', 0, 1],
+  ['QA', 'Qatar', 0, 0],
+  ['RO', 'Romania', 0, 1],
+  ['RW', 'Rwanda', 0, 0],
+  ['RE', 'Réunion', 0, 1],
+  ['WS', 'Samoa', 0, 0],
+  ['SM', 'San Marino', 0, 1],
+  ['SA', 'Saudi Arabia', 0, 0],
+  ['SN', 'Senegal', 0, 0],
+  ['RS', 'Serbia', 0, 0],
+  ['SC', 'Seychelles', 0, 0],
+  ['SG', 'Singapore', 0, 1],
+  ['SX', 'Sint Maarten', 0, 0],
+  ['SK', 'Slovakia', 0, 1],
+  ['SI', 'Slovenia', 0, 0],
+  ['ZA', 'South Africa', 0, 1],
+  ['KR', 'South Korea', 1, 0],
+  ['ES', 'Spain', 1, 0],
+  ['LK', 'Sri Lanka', 0, 0],
+  ['BL', 'St. Barthélemy', 0, 1],
+  ['KN', 'St. Kitts & Nevis', 1, 0],
+  ['LC', 'St. Lucia', 0, 0],
+  ['MF', 'St. Martin', 0, 1],
+  ['VC', 'St. Vincent & Grenadines', 0, 0],
+  ['SR', 'Suriname', 0, 0],
+  ['SJ', 'Svalbard & Jan Mayen', 0, 1],
+  ['SE', 'Sweden', 0, 1],
+  ['CH', 'Switzerland', 0, 1],
+  ['TW', 'Taiwan', 1, 0],
+  ['TZ', 'Tanzania', 0, 0],
+  ['TH', 'Thailand', 0, 0],
+  ['TL', 'Timor-Leste', 0, 0],
+  ['TG', 'Togo', 0, 0],
+  ['TO', 'Tonga', 0, 0],
+  ['TT', 'Trinidad & Tobago', 0, 0],
+  ['TN', 'Tunisia', 0, 0],
+  ['TC', 'Turks & Caicos Islands', 0, 1],
+  ['TR', 'Türkiye', 0, 1],
+  ['VI', 'U.S. Virgin Islands', 0, 1],
+  ['UG', 'Uganda', 0, 0],
+  ['AE', 'United Arab Emirates', 1, 0],
+  ['GB', 'United Kingdom', 0, 1],
+  ['US', 'United States', 1, 1],
+  ['UY', 'Uruguay', 0, 0],
+  ['UZ', 'Uzbekistan', 0, 0],
+  ['VU', 'Vanuatu', 0, 0],
+  ['VA', 'Vatican City', 0, 0],
+  ['VE', 'Venezuela', 0, 1],
+  ['VN', 'Vietnam', 0, 0],
+  ['WF', 'Wallis & Futuna', 0, 1],
+  ['ZM', 'Zambia', 0, 0],
+  ['ZW', 'Zimbabwe', 0, 0],
+  ['AX', 'Åland Islands', 0, 1]
+];
 
 function cgKeyify(s) {
   return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z]/g, '');
@@ -22027,13 +22288,115 @@ var CG_STATE_BY_NAME = (function () {
 })();
 
 var CG_COUNTRY_BY_NAME = (function () {
-  var m = { US: 'US' };
-  m[cgKeyify('United States')] = 'US';
+  var m = {};
+  for (var i = 0; i < CG_COUNTRIES.length; i++) {
+    m[cgKeyify(CG_COUNTRIES[i][1])] = CG_COUNTRIES[i][0];
+    m[CG_COUNTRIES[i][0]] = CG_COUNTRIES[i][0];
+  }
+  // The spellings people actually type. "UK" is deliberately NOT among them:
+  // Lulu refuses it, so mapping it to GB would be us inventing an answer rather
+  // than the reader choosing one -- and the picker means nobody has to type it.
   m[cgKeyify('United States of America')] = 'US';
   m[cgKeyify('USA')] = 'US';
   m[cgKeyify('America')] = 'US';
+  m[cgKeyify('Great Britain')] = 'GB';
+  m[cgKeyify('England')] = 'GB';
+  m[cgKeyify('Holland')] = 'NL';
   return m;
 })();
+
+// The row for a code, or null. One lookup so nothing reads the columns by index
+// in three different places.
+function cgCountryMeta(code) {
+  var c = String(code || '').toUpperCase();
+  for (var i = 0; i < CG_COUNTRIES.length; i++) {
+    if (CG_COUNTRIES[i][0] === c) {
+      return { code: c, name: CG_COUNTRIES[i][1],
+               needsState: !!CG_COUNTRIES[i][2], needsPostcode: !!CG_COUNTRIES[i][3] };
+    }
+  }
+  return null;
+}
+
+// The state control the reader should be using for this country. The US has a
+// real picker because its 59 codes are known and verified; the other thirteen
+// that require a state get a text box, because we do NOT have their subdivision
+// codes and inventing them is exactly the fault that started this. Lulu validates
+// what is typed, and since v3.0.877 says so in a sentence a reader can act on.
+function cgStateTextEl() {
+  var el = document.getElementById('print-ship-state-text');
+  if (el) return el;
+  var sel = document.getElementById('print-ship-state');
+  if (!sel || !sel.parentNode) return null;
+  el = document.createElement('input');
+  el.id = 'print-ship-state-text';
+  el.type = 'text';
+  el.className = sel.className;
+  el.placeholder = 'State / province code';
+  el.style.display = 'none';
+  sel.parentNode.insertBefore(el, sel.nextSibling);
+  try {
+    el.addEventListener('change', invalidatePreparedOrder);
+    el.addEventListener('input', invalidatePreparedOrder);
+  } catch (e) {}
+  return el;
+}
+
+// Whichever control is live. Every caller goes through this so the two can never
+// disagree about what was entered.
+function cgShipStateValue() {
+  var c = (document.getElementById('print-ship-country') || {}).value || '';
+  if (c === 'US') {
+    var sel = document.getElementById('print-ship-state');
+    return sel ? String(sel.value || '') : '';
+  }
+  var t = document.getElementById('print-ship-state-text');
+  return t && t.style.display !== 'none' ? String(t.value || '').trim().toUpperCase() : '';
+}
+
+// Show the right controls for the chosen country, and say what is required.
+// Called on every country change and whenever the Order tab is opened.
+function cgApplyCountryRules() {
+  try {
+    var cSel = document.getElementById('print-ship-country');
+    if (!cSel) return;
+    var meta = cgCountryMeta(cSel.value) || { needsState: false, needsPostcode: false };
+    var sel = document.getElementById('print-ship-state');
+    var txt = cgStateTextEl();
+    var isUS = cSel.value === 'US';
+    if (sel) sel.style.display = isUS ? '' : 'none';
+    if (txt) txt.style.display = (!isUS && meta.needsState) ? '' : 'none';
+    // A hidden control must not keep a stale value that could still be submitted.
+    if (!isUS && sel) sel.value = '';
+    if ((isUS || !meta.needsState) && txt) txt.value = '';
+    var pc = document.getElementById('print-ship-postcode');
+    if (pc) pc.placeholder = meta.needsPostcode ? 'Postal code' : 'Postal code (optional here)';
+  } catch (e) {}
+}
+
+// MINIMAL BY DESIGN, AND THE MEASUREMENT IS WHY. Lulu validates postcode format
+// per country itself -- that is precisely why a generic "10000" was refused by
+// GB, Canada, Japan and Poland in the probe -- and since v3.0.877 its refusal
+// arrives as a sentence the reader can act on. So this rejects only what is
+// CERTAINLY wrong. A stricter guess would block a real customer, which is worse
+// than the state we are fixing.
+function cgPostcodeError(country, pc) {
+  var v = String(pc == null ? '' : pc).trim();
+  var meta = cgCountryMeta(country);
+  if (!v) {
+    return (meta && meta.needsPostcode) ? 'A postal code is required for ' + meta.name + '.' : '';
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9 -]{0,11}$/.test(v)) {
+    return 'That postal code contains characters no country uses. Letters, numbers, spaces and hyphens only.';
+  }
+  if (country === 'US' && !/^[0-9]{5}(-[0-9]{4})?$/.test(v)) {
+    return 'A US ZIP code is five digits, or five plus four such as 24450-1234.';
+  }
+  if (country === 'CA' && !/^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$/.test(v)) {
+    return 'A Canadian postal code looks like K1A 0B1.';
+  }
+  return '';
+}
 
 // Turn whatever is stored or typed into the code Lulu wants. Returns '' when it
 // cannot tell, and NEVER guesses -- a wrong two-letter code is the failure mode
@@ -22058,6 +22421,14 @@ function cgFillShipSelects() {
         c.appendChild(new Option(CG_COUNTRIES[i][1], CG_COUNTRIES[i][0]));
       }
       c.value = 'US';
+      // v3.0.879 -- the state and postcode rules depend on this, so the handler is
+      // attached where the options are, not somewhere that might not run.
+      try {
+        c.addEventListener('change', function () {
+          cgApplyCountryRules();
+          try { quotePrintOrder(); } catch (e) {}
+        });
+      } catch (e) {}
     }
     var s = document.getElementById('print-ship-state');
     if (s && !s.options.length) {
@@ -22066,6 +22437,7 @@ function cgFillShipSelects() {
         s.appendChild(new Option(CG_US_STATES[j][1] + ' (' + CG_US_STATES[j][0] + ')', CG_US_STATES[j][0]));
       }
     }
+    cgApplyCountryRules();
   } catch (e) {}
 }
 
@@ -22094,7 +22466,12 @@ function printSelectionBody() {
       street1: val('print-ship-street1'),
       street2: val('print-ship-street2'),
       city: val('print-ship-city'),
-      stateCode: (cgNormalizeStateCode(val('print-ship-state')) || val('print-ship-state')),
+      // v3.0.879 -- through the one helper, so the picker and the text box cannot
+      // disagree about what the reader entered.
+      stateCode: (function () {
+        var raw = cgShipStateValue();
+        return cgNormalizeStateCode(raw) || raw;
+      })(),
       postcode: val('print-ship-postcode'),
       // v3.0.878 -- TD-756. The picker already yields a code; this normalises anyway,
       // because the picker must not be the only guard (the cream pattern) and because
@@ -22110,10 +22487,22 @@ function quotePrintOrder() {
   var body = printSelectionBody();
   var out = document.getElementById('print-quote');
   if (!body || !body.selection.binding) { if (out) out.textContent = ''; return; }
-  if (!body.shipTo.postcode || !body.shipTo.countryCode) {
-    if (out) out.textContent = 'Enter a postal code and country to price shipping.';
+  // v3.0.879 -- TD-756. The old test demanded a postcode from everyone, and the
+  // probe measured that 116 of the served countries price without one. Ask for
+  // what each country actually needs, and say which country we are asking for.
+  if (!body.shipTo.countryCode) {
+    if (out) out.textContent = 'Choose a country to price shipping.';
     return;
   }
+  var _cMeta = cgCountryMeta(body.shipTo.countryCode);
+  if (_cMeta && _cMeta.needsState && !body.shipTo.stateCode) {
+    if (out) out.textContent = _cMeta.code === 'US'
+      ? 'Choose a state to price shipping.'
+      : ('A state or province code is required for ' + _cMeta.name + '.');
+    return;
+  }
+  var _pcErr = cgPostcodeError(body.shipTo.countryCode, body.shipTo.postcode);
+  if (_pcErr) { if (out) out.textContent = _pcErr; return; }
   if (out) out.textContent = 'Pricing...';
   fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
