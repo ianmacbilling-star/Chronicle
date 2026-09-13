@@ -59,7 +59,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
     const _vinfo = await db.prepare(
-      'SELECT cv.id, cv.name, cv.is_canonical FROM session_forks sf ' +
+      'SELECT cv.id, cv.name, cv.is_canonical, cv.user_id FROM session_forks sf ' +
       'LEFT JOIN campaign_versions cv ON cv.id = sf.version_id WHERE sf.id = ?'
     ).get(forkId);
     // Card thumbnail: the fork's establishing (title) image, else first panel,
@@ -98,6 +98,28 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
       // does not -- which is exactly the case a reader must be able to see before pressing Order.
       version_id: _vinfo ? _vinfo.id : null,
       version_name: _vinfo ? _vinfo.name : null,
+      // v3.0.890 -- TD-765. WHO OWNS THE VERSION THIS TILE IS READING, DECIDED HERE.
+      //
+      // *(Ian, 2026-09-13: "I'm looking at my own version up above, but the pills say those
+      // sessions are not mine... But you can see the Charcoal - EON James right above the
+      // warning pill on the cards.")*
+      //
+      // v3.0.888 answered this in the CLIENT from fork_owner_name, on the written claim that that
+      // field is "set only when the fork belongs to somebody else". IT IS NOT. Read the two lines
+      // above: it is set whenever the tile is not reading the DM fork, and it names the person the
+      // book is being read AS -- which on your own version is YOU. is_canonical is wrong in the
+      // same way: here it means "this tile fell through to the canonical", not "this is the
+      // campaign's canonical version". Both branches of that test were wrong and Ian saw the
+      // warning pill on his own book.
+      //
+      // THE ROUTE RESOLVED THE VERSION, SO THE ROUTE SAYS WHOSE IT IS. Deriving it again at the
+      // renderer needs three fields that mean something else and a version list that has not
+      // loaded when the cards first paint; one field decided where the fork was resolved needs
+      // neither. The canonical belongs to whoever holds the dm flag TODAY -- a handover moves it
+      // without rewriting the row, which is why the role is asked and cv.user_id is not.
+      version_is_mine: (_vinfo && _vinfo.id != null)
+        ? (_vinfo.is_canonical ? (req.campaignRole === 'dm') : String(_vinfo.user_id) === String(req.session.userId))
+        : null,
       novel_include: !!incMap[s.id]
     });
   }));
@@ -1346,6 +1368,39 @@ async function panelReferenceCast(db, moment, explicitIds) {
   }
 }
 
+// v3.0.883 -- TD-760. THE ASSET HALF OF THE ANSWER ABOVE, WHICH HAS NEVER EXISTED.
+//
+// panelReferenceCast is handed only the CHARACTER ids and builds only the character
+// block, so the cast routes have never told the client which ASSETS a panel ends up
+// carrying a reference for. The client could therefore not patch its asset list, and
+// the retouch reference picker kept reading a copy written when the session loaded --
+// which is what Ian reported: an asset added to a panel is still missing from the
+// picker. *(Ian, 2026-09-13: "If I add the asset to the panel... I still don't see it
+// in the drop down on the Retouch for that desired action.")*
+//
+// Deliberately its OWN function rather than a parameter on the character one: assets
+// need no fork join and no panel_order, so sharing would mean a wider signature and
+// two branches inside, which is more to get wrong than one small query.
+//
+// buildAssetBlock already refuses an asset with no image_url, so a name with no
+// reference picture behind it cannot reach the picker -- offering one would be a lie,
+// and the picker's own empty-state sentence already says as much.
+async function panelReferenceAssets(db, moment, explicitAssetIds) {
+  try {
+    const rows = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(moment.campaign_id);
+    const row = await db.prepare('SELECT prompt, description, title FROM moments WHERE id = ?').get(moment.id);
+    if (!row) return [];
+    const text = (row.prompt || '') + ' ' + (row.description || '') + ' ' + (row.title || '');
+    const block = imageHelpers.buildAssetBlock(rows, text, explicitAssetIds);
+    return (block.refs || []).map(function (r) { return { name: r.name, category: r.category }; });
+  } catch (e) {
+    // Same contract as panelReferenceCast: non-fatal, and null means the client keeps
+    // the list it already has rather than being handed an empty one.
+    console.error('panelReferenceAssets error:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
 // Resolve a moment and confirm the caller OWNS its version (DM on canonical,
 // or the player who owns the fork). Returns { id, campaign_id } or null.
 async function ownedMoment(db, userId, momentId) {
@@ -1395,7 +1450,8 @@ router.put('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, asy
   // v3.0.849 -- TD-703b. Hand back the reference-bearing cast so the client can patch
   // state.moments instead of waiting for a session reload.
   const _refCast = await panelReferenceCast(db, m, validChar);
-  res.json({ success: true, cast_explicit: true, characterIds: validChar, assetIds: validAsset, referenceCast: _refCast });
+  const _refAssets = await panelReferenceAssets(db, m, validAsset);   // v3.0.883 -- TD-760
+  res.json({ success: true, cast_explicit: true, characterIds: validChar, assetIds: validAsset, referenceCast: _refCast, referenceAssets: _refAssets });
 });
 
 // DELETE the explicit cast for a panel — reset to auto (name-match inference).
@@ -1407,7 +1463,8 @@ router.delete('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, 
   await db.prepare('DELETE FROM moment_assets WHERE moment_id = ?').run(m.id);
   await db.prepare('UPDATE moments SET cast_explicit = false WHERE id = ?').run(m.id);
   const _refCastAuto = await panelReferenceCast(db, m, null);   // v3.0.849 -- TD-703b, and null means name-match, which is the auto cast
-  res.json({ success: true, cast_explicit: false, referenceCast: _refCastAuto });
+  const _refAssetsAuto = await panelReferenceAssets(db, m, null);   // v3.0.883 -- TD-760, same null, same meaning
+  res.json({ success: true, cast_explicit: false, referenceCast: _refCastAuto, referenceAssets: _refAssetsAuto });
 });
 
 // ============================================================

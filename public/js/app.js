@@ -3967,12 +3967,8 @@ function renderReview(data) {
     var addChar = '', addAsset = '';
     if (canEditNarr) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      var optsC = (state.reviewData.all_characters || []).filter(function(c){ return !haveC[String(c.id)]; })
-        .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
       addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + mid + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
-      var optsA = (state.reviewData.all_assets || []).filter(function(a){ return !haveA[String(a.id)]; })
-        .map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + '</option>'; }).join('');
       addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + mid + ')">+ Add asset</button>';
     }
 
@@ -4064,15 +4060,36 @@ function _reviewPanel(momentId) {
 // A MISSING referenceCast IS LEFT ALONE RATHER THAN CLEARED. The field is absent when the
 // server could not compute it; blanking the list on that would turn a stale picker into an
 // empty one, which is worse.
-function _patchMomentRefCast(momentId, refCast) {
-  if (!refCast || !Array.isArray(refCast)) return false;
+// v3.0.883 -- TD-760. THE ASSET LIST IS PATCHED TOO, AND THIS IS THE THIRD TIME THIS
+// PAIR HAS DIVERGED.
+//
+// v3.0.849 (TD-703b) taught this function to patch the CHARACTER list so the retouch
+// picker did not have to wait for a session reload. The asset list beside it was left
+// reading whatever the session load wrote, so an asset added to a panel was invisible
+// to `rgPanelRefs` until the whole session was fetched again. TD-755 was the same shape
+// one layer out, in the cast picker's own source list.
+//
+// EACH LIST IS PATCHED ONLY WHEN ITS OWN ARRAY ARRIVES. Both server helpers return null
+// when they fail, and null must leave the existing list alone -- replacing a good list
+// with an empty one would read to the reader as everything having been removed from the
+// panel, which is worse than a stale list and much harder to disbelieve.
+function _patchMomentRefCast(momentId, refCast, refAssets) {
+  var haveC = Array.isArray(refCast), haveA = Array.isArray(refAssets);
+  if (!haveC && !haveA) return false;
   var ms = (state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
     var mid = (ms[i] && ms[i].id != null) ? ms[i].id : (ms[i] && ms[i].moment_id);
-    if (String(mid) === String(momentId)) { ms[i].characters = refCast; return true; }
+    if (String(mid) === String(momentId)) {
+      if (haveC) ms[i].characters = refCast;
+      if (haveA) ms[i].assets = refAssets;
+      return true;
+    }
   }
   return false;
 }
+// v3.0.884 -- TD-761. An optional `done`, so the retouch tray can react to a save
+// without a second copy of this function. It fires only on the success path, AFTER the
+// patch, so a caller reading state.moments in it sees the new cast.
 function _saveCast(p) {
   var characterIds = (p.characters || []).map(function(c){ return c.id; }).filter(function(x){ return x != null; });
   var assetIds = (p.assets || []).map(function(a){ return a.id; }).filter(function(x){ return x != null; });
@@ -4084,9 +4101,10 @@ function _saveCast(p) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not save casting: ' + data.error); loadReview(); return; }
-    _patchMomentRefCast(p.moment_id, data.referenceCast);   // v3.0.849 -- TD-703b, before the re-render
+    _patchMomentRefCast(p.moment_id, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, before the re-render; v3.0.883 -- TD-760, the asset half
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
+    if (typeof _refreshOpenRetouchCast === 'function') _refreshOpenRetouchCast(p.moment_id);   // v3.0.885 -- TD-761
   })
   .catch(function(e){ showError('Could not save casting: ' + e.message); loadReview(); });
 }
@@ -4129,7 +4147,8 @@ function castReset(momentId) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not reset casting: ' + data.error); return; }
-    _patchMomentRefCast(momentId, data.referenceCast);   // v3.0.849 -- TD-703b, the reset path needs it too
+    _patchMomentRefCast(momentId, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, the reset path needs it too; v3.0.883 -- TD-760, so does the asset half
+    if (typeof _refreshOpenRetouchCast === 'function') _refreshOpenRetouchCast(momentId);   // v3.0.885 -- TD-761
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
@@ -6142,11 +6161,52 @@ async function warnIfNoCharacters() {
     var arr = Array.isArray(data) ? data : [];
     if (arr.length > 0) return true;
     sessionStorage.setItem(_flagKey, '1');
-    return await uiConfirm(
-      'This campaign does not have any characters yet. Stories turn out better ' +
+    // v3.0.889 -- A THIRD BUTTON THAT ACTUALLY GOES SOMEWHERE.
+    //
+    // *(Ian, 2026-09-13: "I want you to put a button on the Modal message box that will take
+    // them to the Campaign Characters Page where they can make new characters.")*
+    //
+    // The old dialog told the reader they could "add characters first" and then gave them no way
+    // to do it -- Cancel dropped them back on the Story tab to go and find the page themselves.
+    // Same dead-end shape as v3.0.860's missing Build Prompt button: the one control that would
+    // have moved them forward was the one thing not there.
+    //
+    // uiConfirm's opts.middleText already exists for precisely this (v3.0.865 -- a question with
+    // three honest answers, rather than asking twice), so this needs no new dialog machinery.
+    //
+    // DM-ONLY, AND THAT IS NOT A DETAIL. POST /campaigns/:id/characters sits behind
+    // verifyCampaignDM, so a player CANNOT create a character -- offering them this button would
+    // relocate the dead end rather than remove it. A player gets today's two buttons and today's
+    // question, unchanged.
+    //
+    // AND preserveLines IS NOW PASSED, which is a fix rather than a flourish: this message has
+    // always contained a blank line and never asked for it to be honoured, so it rendered as one
+    // wall of text -- what uiConfirm's own comment calls "the surest way to have it not read".
+    var _canAddChars = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+    var _noCharMsg = 'This campaign does not have any characters yet. Stories turn out better ' +
       'when your characters are built first -- they appear more consistently in ' +
-      'the narrative and images. You can add characters first, or generate the ' +
-      'story now and add them later.\n\nGenerate the story now?');
+      'the narrative and images.\n\n' +
+      (_canAddChars
+        ? 'Add the characters first, or generate the story now and add them later?'
+        : 'You can generate the story now and add them later.\n\nGenerate the story now?');
+    var _noCharAns = await uiConfirm(_noCharMsg, {
+      title: 'No characters yet',
+      preserveLines: true,
+      okText: _canAddChars ? 'Generate Now' : 'OK',
+      middleText: _canAddChars ? 'Add Characters' : null
+    });
+    // GATED ON THE CAPABILITY, NOT ON THE BUTTON. A player never sees the third button, but
+    // the absence of a control is not what should be stopping the navigation -- the same
+    // reasoning as the version menu in TD-762, where the server is the boundary and the hidden
+    // button is only courtesy. Found by the guard, which drove a player through a forced
+    // 'middle' answer that the UI cannot produce.
+    if (_noCharAns === 'middle' && _canAddChars) {
+      // Straight to the Characters page, and FALSE so the generate does not also run -- the
+      // reader picked the other branch of the question.
+      try { if (typeof showCampaignSection === 'function') showCampaignSection('characters'); } catch (e) {}
+      return false;
+    }
+    return _noCharAns === true;
   } catch (e) {
     return true;
   }
@@ -8176,6 +8236,27 @@ function applyNovelVersion(versionId) {
   state.novelVersionId = versionId ? String(versionId) : null;
   var v = novelVersionOnScreen();
   state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
+  // v3.0.888 -- TD-765. THE CHIP BELONGS HERE, AND v3.0.887 PUT IT IN THE WRONG PLACE.
+  //
+  // *(Ian, 2026-09-13: "im' not getting the pill on the publish page. i see it on the session page.")*
+  //
+  // 887 painted it from paintVersionLock on the claim that that function 'already runs on the
+  // heartbeat as well as on every publish paint'. THAT CLAIM WAS FALSE and was never checked:
+  // paintAllVersionLocks is called only from setGenLock and clearGenLock, so there is no
+  // heartbeat at all -- and paintPublishLock runs on the FIRST LINE of showCampaignSection,
+  // before showView and long before the version list is fetched. So novelVersionOnScreen()
+  // returned null, novelVersionIsMine() answered true to avoid crying wolf, and the chip was
+  // removed once and never painted again.
+  //
+  // WHICH IS THE SAME FAULT AS TD-762, ONE BATCH LATER: painted before the state it reads has
+  // settled, and never repainted. The lesson did not transfer because the hook was assumed
+  // rather than read -- the second assumed instrument in one day.
+  //
+  // This function is the right hook and says so itself: 'set the two state fields the rest of
+  // the page reads, from ONE place'. Both callers -- the default pick after the versions load,
+  // and an explicit switch -- are exactly the moments the answer changes, and v is already
+  // resolved two lines up, so the data cannot be missing.
+  try { paintForeignVersionChip('novel-version-select', novelVersionIsMine()); } catch (e) {}
 }
 
 async function onNovelVersionChange(val) {
@@ -11013,6 +11094,7 @@ function renderNovelSummary(sessions) {
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
         '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
         '<div class="session-card-fork">' + forkLabel + '</div>' +
+        cardForeignChipHtml(s) +   // v3.0.888 -- TD-765
         '<div class="session-card-pills">' +
           '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
@@ -12022,7 +12104,12 @@ var RG_CROP_ON = false;
 //
 // from/to are null or { x, y, r } with every value a FRACTION of the image:
 // x and y of the width and height, r of the shorter side.
-var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0 };
+// v3.0.884 -- TD-761. castLabel is remembered so the reference block can be rebuilt on
+// its own, without rgActionChange, which resets both markers.
+// v3.0.885 -- noPicMsg is GONE: the rare case is now derived in rgCastBlockInner by
+// comparing the cast against the reference list, which is right for every such item and
+// right again after a remove, rather than only for the last one added.
+var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0, castLabel: null };
 
 // Small means "this point". Large means "this whole thing". The size changes
 // the WORDING as well as the ring, and in the crop stage it will set the tile.
@@ -12122,7 +12209,11 @@ var RG_ACTIONS = {
     ph: 'What should change about it? e.g. make it a darker red'
   },
   reface: {
-    cells: ['from'], cast: 'Who it should be',
+    // v3.0.883 -- TD-760. "Which reference", not "Who it should be": this picker offers
+    // locations and items as well as people, and a question starting with Who tells the
+    // reader that half the list is not for them. *(Ian, 2026-09-13.)* `add` keeps its own
+    // wording, where "Who to add" is still exactly right.
+    cells: ['from'], cast: 'Which reference',
     from: 'Which figure is wrong? Click them in the picture.',
     ph: 'Anything else? Optional.'
   },
@@ -12292,13 +12383,18 @@ function rgArticle(s) {
 // reface action exists to repair.
 // Characters AND assets: both are sent to the image model as references, so
 // both must be selectable. An asset drawn wrong was previously untargetable.
+// v3.0.883 -- TD-760. Each entry is TAGGED with what it is, because the picker shows
+// characters and assets in one list and a bare name cannot say which. Names are all the
+// server matches on, so the tag is for the label only and never for the value.
 function rgPanelRefs() {
-  var out = rgPanelCast();
+  var out = rgPanelCast().map(function (c) { return { name: c.name, kind: 'character' }; });
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
     if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
       var as = ms[i].assets || [];
-      for (var j = 0; j < as.length; j++) if (as[j] && as[j].name) out.push(as[j]);
+      for (var j = 0; j < as.length; j++) {
+        if (as[j] && as[j].name) out.push({ name: as[j].name, kind: 'asset', category: as[j].category || '' });
+      }
       break;
     }
   }
@@ -12318,25 +12414,97 @@ function rgPanelCast() {
   return out;
 }
 
+// v3.0.883 -- TD-760. SHORT forms, as v3.0.848 settled for the cast picker: this sits
+// inside a <select> option beside a name, where the full term runs the line too long.
+var RG_REF_CAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
+
 function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
-function rgCastSelect(label) {
+// v3.0.884 -- TD-761. SPLIT IN TWO, AND THAT IS THE WHOLE TRICK.
+// rgCastBlockInner produces the reference control on its own, so adding to the cast can
+// rebuild JUST that control. The obvious alternative -- calling rgActionChange -- sets
+// rgState.from and rgState.to to null, so it would silently throw away both markers the
+// reader had already placed. The tray is a SIBLING of the block, not inside it, so a
+// rebuild of the block cannot destroy the tray the reader is clicking in.
+// The reference control, then the SAME cast rows the moment-options tray draws. The rows
+// come out of the review payload; when that is not loaded yet the shared renderer says so
+// and rgCastSelect's fetch repaints this block when it lands.
+function rgCastBlockInner(label) {
   var cs = rgPanelRefs();
+  var mid = rgState.momentId;
+  var p = (typeof _reviewPanel === 'function') ? _reviewPanel(mid) : null;
+  var canEdit = (typeof canEditCurrentVersion === 'function') ? canEditCurrentVersion() : true;
+  var rows = castRowsHtml(p, mid, canEdit, { head: false });
+  // v3.0.885 -- TD-761. COMPUTED, NOT REMEMBERED. Anything cast on this panel that did not
+  // reach the reference list has no reference picture, so it cannot be used to correct a
+  // figure. v3.0.884 recorded only the last one added; deriving it covers every one, and is
+  // right again after a remove. Both name forms are compared because the reference list
+  // carries the raw name and a chip carries the display name.
+  var have = {};
+  for (var h = 0; h < cs.length; h++) if (cs[h] && cs[h].name) have[cs[h].name] = true;
+  var missing = [];
+  ((p && p.characters) || []).forEach(function (c) {
+    if (!c || !c.name) return;
+    if (!have[c.name] && !have[charDisplayName(c.name)]) missing.push(charDisplayName(c.name));
+  });
+  ((p && p.assets) || []).forEach(function (a) { if (a && a.name && !have[a.name]) missing.push(a.name); });
+  var note = missing.length
+    ? ('<div style="font-size:11px;color:var(--gold-light);margin-top:2px;">' + rgEsc(missing.join(', ')) + ' \u00b7 No Picture Exists</div>')
+    : '';
   if (!cs.length) {
-    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
-      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div></div>';
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.</div>' +
+      rows + note;
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
-  for (var i = 0; i < cs.length; i++) s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(cs[i].name) + '</option>';
-  return s + '</select></label>' +
-    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div>';
+  // v3.0.883 -- TD-760. THE LABEL GAINS THE CATEGORY, THE VALUE DOES NOT.
+  // Characters and assets share this list and both rendered as a bare name, so a
+  // location called the same thing as a character was indistinguishable -- and on a
+  // real collision the server takes the first match, which is always the character.
+  // The option VALUE stays the plain name because that is what retouch-moment matches.
+  for (var i = 0; i < cs.length; i++) {
+    var _rl = cs[i].name + ((cs[i].kind === 'asset')
+      ? (' \u00b7 ' + (RG_REF_CAT[cs[i].category] || cs[i].category || 'Asset'))
+      : '');
+    s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(_rl) + '</option>';
+  }
+  return s + '</select></label>' + rows + note;
 }
 
-function rgOpenCast() {
-  var mid = rgState.momentId;
-  closeRetouch();
-  if (typeof openCastPicker === 'function' && mid) openCastPicker('character', mid);
+// The block and the tray beside it. The label is remembered because a later rebuild has
+// only the DOM to go on.
+function rgCastSelect(label) {
+  rgState.castLabel = label;
+  // The rows are drawn from the review payload, which a reader may never have loaded on this
+  // session. Kicked on a timeout so the html below is in the DOM before the repaint looks for
+  // it, and ensureReviewData is a no-op when the payload is already there for this fork.
+  setTimeout(function () {
+    try { ensureReviewData(function () { rgRefreshCastBlock(null); }); } catch (e) {}
+  }, 0);
+  return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>';
+}
+
+// Rebuild the reference control alone, and move the selection onto a name ONLY if that
+// option is really there -- v3.0.878's lesson: setting a picker to a value it does not
+// have leaves it on the first entry, which is a silent wrong answer rather than a visible
+// failure.
+function rgRefreshCastBlock(pickName) {
+  var b = document.getElementById('rg-cast-block');
+  if (!b) return;
+  // v3.0.885 -- KEEP THE READER'S CHOICE. Adds and removes now repaint this block, and a
+  // repaint that silently reset the chosen reference would be a worse fault than the one
+  // being fixed. No name given means keep what is selected.
+  var keep = pickName;
+  if (!keep) { var s0 = document.getElementById('rg-who'); keep = s0 ? s0.value : null; }
+  b.innerHTML = rgCastBlockInner(rgState.castLabel || 'Which reference');
+  if (!keep) return;
+  var s = document.getElementById('rg-who');
+  if (!s) return;
+  // Moved ONLY if the option is really there -- v3.0.878's lesson: setting a picker to a
+  // value it does not have leaves it on the first entry, a silent wrong answer.
+  for (var i = 0; i < s.options.length; i++) {
+    if (s.options[i].value === keep) { s.selectedIndex = i; return; }
+  }
 }
 
 function rgSelect(id, label, opts) {
@@ -12817,7 +12985,11 @@ function rgBuildFinal(done) {
     template: tpl,
     cell: rgState.from || rgState.to || null,
     place: rgPlace(rgState.to || rgState.from),
-    cast: rgPanelCast().map(function (c) { return c.name; })
+    // v3.0.883 -- TD-760. THE COMBINED LIST, NOT THE CHARACTERS ONLY. Assets are sent to
+    // the image model as identity references exactly as characters are, so a rewrite that
+    // was only told the characters could not resolve a pronoun onto an asset subject --
+    // which is rule 10, the one that has already put a change onto the wrong figure once.
+    cast: rgPanelRefs().map(function (c) { return c.name; })
   };
   fetch('/api/images/retouch-prompt', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -16096,6 +16268,7 @@ function renderNovelSummary(sessions) {
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
         '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
         '<div class="session-card-fork">' + forkLabel + '</div>' +
+        cardForeignChipHtml(s) +   // v3.0.888 -- TD-765
         '<div class="session-card-pills">' +
           '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
@@ -17563,6 +17736,143 @@ function forkOnScreenIsMine() {
 function forkOwnNonCanonical() {
   return forkOnScreenIsMine() && !forkOnScreenIsCanonical();
 }
+// v3.0.886 -- TD-762. ONE PLACE DECIDES WHETHER THE VERSION MENU IS SHOWN, AND IT RUNS ON
+// EVERY VERSION CHANGE.
+//
+// *(Ian, 2026-09-13: "That button should only show if I'm looking at MY OWN version... I don't
+// want anybody else deleteing or renaming someone elses version." And the reproduction that
+// settled it: "I can be on a session where the button doesn't show... then use the nave arrow
+// to a new session and the button shows... then nave back to the original session and the
+// button shows.")*
+//
+// WHAT WAS WRONG, AND IT WAS A PLACEMENT FAULT RATHER THAN A LOGIC ONE. The decision below is
+// the same one v3.0.442/446/475 arrived at and it was correct; it simply lived INSIDE
+// loadSessionForks, which the dropdown path never reaches -- onForkChange calls
+// updateForkEditability and reloadSessionForFork, and neither touches the menu. So the
+// ellipsis kept whatever state the session load painted it with.
+//
+// AND IT SAT ABOVE THE PHASE 4 DEFAULT, WHICH IS WHY IAN'S ARROW SEQUENCE LOOKED RANDOM. On a
+// first load currentForkId is null, so the menu was resolved against the CANONICAL and hidden
+// -- and then Phase 4 selected the reader's own version with nothing repainting. Arriving by
+// ARROW works because the travelling version is applied near the top of loadSessionForks,
+// before the selector is filled and before this ran. Same session, same version, two answers.
+//
+// So it moved rather than changed: called from updateForkEditability, which onForkChange AND
+// loadSessionForks already call, and which runs AFTER the Phase 4 default. Three cases covered
+// with no new call site to remember -- rules 5c's preferred shape, collapse the twin rather
+// than sweep for it.
+//
+// THE TEST IS is_mine AND DELIBERATELY NOT forkOnScreenIsMine(), which also answers yes for a
+// Story Master on the canonical by role. Ian asked for ownership of the row.
+//
+// And the reader is not the security boundary: the rename and delete routes each answer 403 to
+// a non-owner, and both client handlers refuse before calling anything. This controls whether
+// the reader is OFFERED something that would be refused, which is a different job.
+// v3.0.887 -- TD-765. ONE CHIP PAINTER FOR BOTH VERSION DROPDOWNS.
+//
+// *(Ian, 2026-09-13: "If you are looking at your own version (one you own) we need to make it
+// obvious... It is very easy to miss that you are not on your own version." Then, choosing the
+// shape: "option 1... Loud on foreign.")*
+//
+// WHY A CHIP BESIDE THE SELECT AND NOT THE SELECT ITSELF. Browsers style <select> inconsistently
+// and the option list cannot be reliably coloured at all, so a tinted picker would look different
+// on every machine and say nothing once opened. A chip is ours to draw and reads the same
+// everywhere.
+//
+// IT IS CREATED ON DEMAND rather than living in app.html, so this needs no markup change and
+// cannot end up on a page that has no such picker. Found-or-created by id, so repainting is
+// idempotent -- this runs on a heartbeat on the publish page.
+function paintForeignVersionChip(selectId, mine) {
+  var sel = document.getElementById(selectId);
+  if (!sel || !sel.parentNode) return;
+  var id = selectId + '-foreign-chip';
+  var chip = document.getElementById(id);
+  if (mine) { if (chip && chip.parentNode) chip.parentNode.removeChild(chip); return; }
+  if (!chip) {
+    chip = document.createElement('span');
+    chip.id = id;
+    chip.className = 'ver-foreign-chip';
+    chip.title = 'You are viewing a version you do not own. You can read it, but you cannot change it.';
+    sel.parentNode.insertBefore(chip, sel.nextSibling);
+  }
+  // The WORD is the signal; the colour amplifies it. One phrase for every foreign case, because
+  // two phrasings are two things to recognise and this has to register at a glance.
+  chip.textContent = 'Not your version';
+}
+
+// Ownership of the version on the PUBLISH page. Deliberately NOT novelOwnView(), which answers a
+// different question -- it returns true for a member on the canonical who holds no version of
+// their own, because such a member MAY publish it. That is a capability, not ownership, and this
+// chip is about ownership.
+function novelVersionIsMine() {
+  var v = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+  if (!v) return true;   // nothing resolved yet: say nothing rather than cry wolf
+  if (v.is_canonical) return !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  return !!v.is_mine;
+}
+
+// v3.0.890 -- TD-765. WHETHER A PARTICULAR SESSION CARD'S VERSION IS YOURS.
+//
+// ONE FIELD, SET BY THE ROUTE THAT RESOLVED THE VERSION -- see the note beside version_is_mine in
+// /novel/all. v3.0.888 derived the answer here from is_canonical and fork_owner_name and got BOTH
+// branches wrong, so a card reading Ian's own version wore the warning pill.
+//
+// The version LABEL a few lines above these cards reads those same two fields, and that is what
+// made the wrong rule look anchored rather than invented. It is not an ownership rule: it
+// DESCRIBES the tile, and its "Your Version" branch is a display fallback for a tile that has
+// neither a version name nor an owner name. Borrowing a description as a judgement is the fault.
+//
+// AND THE CASE THE CARDS EXIST FOR IS UNCHANGED. The comment over that label says the tiles on
+// one page can come from DIFFERENT versions, so a page titled with one version can be showing
+// canonical content in most of its tiles -- and that "has to be visible before someone orders
+// it". It was visible in 10px text at 55% opacity. Now it is a pill.
+//
+// UNDECIDED DRAWS NOTHING. null (no version row on the fork) and undefined (a cached app.js
+// against a newer route, or the reverse) both mean the route did not answer, and a missing answer
+// must not become a warning -- the same rule novelVersionIsMine follows for a version list that
+// has not arrived.
+function cardForkIsMine(s) {
+  if (!s) return true;
+  return s.version_is_mine !== false;
+}
+
+// Drawn from BOTH copies of renderNovelSummary through this ONE helper. app.js holds two
+// declarations of that function and the later one wins, so a second copy of this markup would be
+// a second copy to get wrong -- and the apply script states the count of 2 so the edit lands on
+// both by construction rather than by a sweep (rules 5c).
+//
+// Wrapped in a plain div because .session-card-body is a flex COLUMN: an inline-flex pill placed
+// as a direct child would stretch to the full card width and stop looking like a pill.
+function cardForeignChipHtml(s) {
+  if (cardForkIsMine(s)) return '';
+  return '<div><span class="ver-foreign-chip">Not your version</span></div>';
+}
+
+function paintVersionMenu() {
+  var verMenu = document.getElementById('session-version-menu');
+  var delItem = document.getElementById('delete-version-item');
+  if (!verMenu && !delItem) return;
+  var forks = (state && state.sessionForks) || [];
+  var sel = document.getElementById('session-fork-select');
+  var mineFork = forks.filter(function (f) { return f.is_mine; })[0];
+  var dmFork = forks.filter(function (f) { return f.role === 'dm'; })[0];
+  // v3.0.475's chain, unchanged: THE DROPDOWN IS THE TRUTH about what is on screen, so it is
+  // asked first. Only with no value at all does this fall back, and it falls back to MY fork
+  // rather than the canonical -- a fallback to the canonical is what made the ellipsis vanish
+  // while the reader's own version was selected (TD-278).
+  var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
+  var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
+  // ONE boolean drives both, so the menu and the item it contains cannot disagree about
+  // ownership -- v3.0.446 took Delete away in the one place it was being looked for by
+  // deciding them separately.
+  var mine = !!(shownFork && shownFork.is_mine);
+  if (verMenu) verMenu.style.display = mine ? '' : 'none';
+  if (delItem) delItem.style.display = mine ? '' : 'none';
+  // v3.0.887 -- TD-765. The same answer drives the chip, from the same place, so the menu and the
+  // chip can never disagree about whose version this is.
+  paintForeignVersionChip('session-fork-select', mine);
+}
+
 function updateForkEditability() {
 
   var role = state.currentCampaign && state.currentCampaign.my_role;
@@ -17575,6 +17885,7 @@ function updateForkEditability() {
     !!(state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId) && x.role === 'dm'; })[0];
   document.body.classList.toggle('can-edit-fork', !!(editable && !onCanonical));
   document.body.classList.toggle('viewing-foreign-fork', !editable);
+  paintVersionMenu();   // v3.0.886 -- TD-762. Both version-change paths already come through here.
 }
 
 function forkQ() {
@@ -17745,35 +18056,6 @@ function loadSessionForks(sessionId) {
           || state.currentCampaign.my_role === 'dm'));
         nvBtn.style.display = (mineFork && canFork) ? '' : 'none';
       }
-      var verMenu = document.getElementById('session-version-menu');
-      // v3.0.442 -- Rename and Delete act on the version you are LOOKING AT, so the menu follows the
-      // selection rather than merely whether you own something on this session. Viewing the canonical
-      // or someone else's version, it is hidden -- neither action would be yours to take.
-      // v3.0.446 -- resolve against what the DROPDOWN is actually showing. state.currentForkId is
-      // null while the canonical is selected and is not yet set on a first paint, so keying the menu
-      // solely on it made the ellipsis vanish -- taking Delete with it.
-      // v3.0.475 -- THE FALLBACK IS WHY IT "DOESN'T ALWAYS SHOW" (TD-278). state.currentForkId is
-      // null on a first paint and after several of the version-switch resets, so shownId fell
-      // through to the CANONICAL -- whose is_mine is false for a member -- and the ellipsis
-      // vanished while that member's own version was the one selected in the dropdown.
-      //
-      // The dropdown is the truth about what is on screen, so it is asked FIRST. Only if it has no
-      // value at all does this fall back, and it falls back to MY fork rather than the canonical:
-      // selId three lines up already prefers currentForkId, so the two agree by construction
-      // instead of by coincidence.
-      //
-      // Third time today a "which version am I acting on" fallback resolved to the wrong fork
-      // (TD-194 was twelve of them; the delete in v3.0.462 was the tenth).
-      var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
-      var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
-      if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
-      // v3.0.448 -- DELETE IS ALWAYS OFFERED ON A VERSION YOU OWN. Ian: it needs to still be there
-      // and delete the version we are on.
-      // v3.0.446 hid it on the canonical because the server refuses to delete that one -- my own
-      // addition, unasked, and it took the button away in the one place it was being looked for. The
-      // canonical case is now EXPLAINED at the point of use instead of the control disappearing.
-      var delItem = document.getElementById('delete-version-item');
-      if (delItem) delItem.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
       // when they have one. The Story Master (and players with no version)
       // stay on the canonical. Only applies on a fresh load (currentForkId
@@ -21544,7 +21826,12 @@ function reorderFromOrder(id) {
       city: o.ship_city || '', state: o.ship_state || '', postcode: o.ship_postcode || '',
       country: o.ship_country || '', phone: o.ship_phone || ''
     },
-    shippingLevel: _sel.shippingLevel || o.shipping_level || 'cheapest',
+    // v3.0.882 -- TD-757. THE OLD ORDER'S SHIPPING LEVEL IS DELIBERATELY NOT CARRIED
+    // OVER. (Ian, 2026-09-13: "when someone does a reorder I don't think we need to
+    // reload the shipping from the last order. They will pick that fresh on a new
+    // order.") It also retires the stored-`standard`-to-dead-GROUND trap by deleting
+    // the reader rather than by repointing the map.
+    shippingLevel: _sel.shippingLevel || 'cheapest',
     oldCharge: (o.customer_charge != null) ? Number(o.customer_charge) : null,
     oldCurrency: o.currency || 'USD',
     when: o.created_at || null,
@@ -21640,7 +21927,7 @@ function reorderApplySelections() {
     if (_t) _t.value = _rState;
   }
   set('print-ship-phone', R.shipTo.phone);
-  pick('print-ship-level', R.shippingLevel, 'that shipping speed');
+  // v3.0.882 -- TD-757. Deliberately NOT applied: delivery is picked fresh on a reorder.
   R.applied = true;
   var b = document.getElementById('print-place-btn');
   if (b) b.textContent = 'Reorder \u2014 review & price';
@@ -21705,6 +21992,22 @@ function reorderReviewAndPrice() {
 // v3.0.880 -- TD-758. The same sentence on the review panel, which is the last
 // screen before the card. Appended the way the reorder note is, so the two behave
 // alike and neither has to know about the other.
+// v3.0.882 -- TD-757, STAGE 1. READ-ONLY ON PURPOSE.
+// These are the delivery options Lulu actually honours for the address as typed,
+// priced with our markup -- derived from what the printer answered rather than from a
+// fixed list of level names. Shown and NOT yet selectable, because the picker becoming
+// the control is a change to the money path and belongs in its own version, after
+// these numbers have been looked at against a real address.
+function shippingOptionsLine(j) {
+  var opts = (j && j.shippingOptions) || [];
+  if (!opts.length) return '';
+  var parts = opts.map(function (o) {
+    return escapeHtmlPrint(o.tier) + ' $' + Number(o.customerCharge || 0).toFixed(2);
+  }).join(' \u00b7 ');
+  return '<div style="margin-top:4px;font-size:11px;color:rgba(245,232,200,0.55);">' +
+    'Total by delivery option: ' + parts + '</div>';
+}
+
 function shippingNoteInReview(quote) {
   var sum = document.getElementById('print-review-summary');
   if (!sum || !quote || !quote.shippingNote) return;
@@ -22550,7 +22853,9 @@ function quotePrintOrder() {
           // and the review panel cannot drift.
           (j.shippingNote
             ? ('<div style="margin-top:4px;font-size:11px;color:#c9a84c;">' + escapeHtmlPrint(j.shippingNote) + '</div>')
-            : '');
+            : '') +
+          // v3.0.882 -- TD-757 stage 1.
+          shippingOptionsLine(j);
       }
     })
     // v3.0.877 -- TD-754. THE ARGUMENT-LESS CATCH WAS THE WHOLE COMPLAINT. It threw
@@ -23735,6 +24040,69 @@ function _refreshOpenMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
   if (box && box.style.display === 'block') renderMomentOptions(momentId);
 }
+// v3.0.885 -- TD-761. ONE CAST BLOCK, DRAWN IN TWO PLACES.
+//
+// *(Ian, 2026-09-13, on the v3.0.884 tray: "Not really how I wanted that done. It would
+// be unusable if there were 50 assets. And you can't add a character that way either."
+// Then, with a screenshot: "they can use the pill button to add a character or an asset
+// to the picture.")*
+//
+// THE v3.0.884 TRAY WAS THE WRONG CONTROL AND THE CRITICISM WAS STRUCTURAL. Listing every
+// uncast character and asset is fine with six and unusable with fifty, inside a panel that
+// also holds the picture, the action, two markers and a text box. The CAST PICKER MODAL was
+// already the right control for choosing one of many -- it is a scrolling image grid the
+// reader already knows -- and `.prep-img-modal` is z-index 100001 against the retouch
+// panel's `.modal-overlay` at 100, so it layers ON TOP and nothing has to close.
+//
+// SHARED RATHER THAN COPIED, because Ian asked the retouch rows to LOOK LIKE the ones under
+// the moment panel, and a second copy of a thing whose whole requirement is to match is a
+// thing that will stop matching. The guard holds this to HTML the pre-v3.0.885 renderer
+// produced, byte for byte, over a table of panels.
+//
+// opts.head adds the Auto-Matched / Custom cast line and Reset to auto, which belong to the
+// moment-options tray and not inside a retouch panel that is already about one change.
+function castRowsHtml(p, momentId, canEdit, opts) {
+  if (!p) return '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
+  var charChips = (p.characters || []).map(function(c){
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
+    return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
+  }).join();
+  if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
+  var assetChips = (p.assets || []).map(function(a){
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
+    // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
+    return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
+  }).join();
+  if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
+  var addChar = '', addAsset = '';
+  if (canEdit) {
+    addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
+    addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
+  }
+  var head = '';
+  if (opts && opts.head) {
+    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
+    var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
+    head = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>';
+  }
+  return head +
+    '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
+    '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>';
+}
+
+// v3.0.885 -- TD-761. ONE HOOK, so every cast change reaches an open retouch panel: the
+// picker's add, a chip's remove and Reset to auto all end in _saveCast. Threading a callback
+// through each of them, as v3.0.884 did, was three places to remember one thing.
+function _refreshOpenRetouchCast(momentId) {
+  try {
+    if (!rgState || rgState.momentId == null) return;
+    if (String(rgState.momentId) !== String(momentId)) return;
+    var m = document.getElementById('retouch-modal');
+    if (!m || m.classList.contains('hidden')) return;
+    rgRefreshCastBlock(null);
+  } catch (e) { /* a failed repaint must never break a cast save */ }
+}
+
 function renderMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
   if (!box) return;
@@ -23745,31 +24113,7 @@ function renderMomentOptions(momentId) {
   if (!p) {
     castHtml = '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
   } else {
-    var charChips = (p.characters || []).map(function(c){
-      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
-      return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
-    }).join();
-    if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
-    var assetChips = (p.assets || []).map(function(a){
-      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
-      // v3.0.850 -- TD-706. Same change as renderReview; these two draw the same row.
-      return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
-    }).join();
-    if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
-    var addChar = '', addAsset = '';
-    if (canEdit) {
-      var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
-      addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
-      var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
-      var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
-      addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
-    }
-    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
-    var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
-    castHtml = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>' +
-      '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
-      '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>';
+    castHtml = castRowsHtml(p, momentId, canEdit, { head: true });   // v3.0.885 -- TD-761
   }
   var m = (state.moments || []).find(function(x){ return x.id === momentId; });
   var prom = m ? momProminence(m) : 3;
@@ -24150,15 +24494,29 @@ function replayTours() {
 // ===== Cast picker modal: image grid (replaces the +Add character/asset dropdowns) =====
 var _castCharImg = {};
 var _castAssetImg = {};
+// v3.0.881 -- TD-755. The picker builds its ITEM LIST from these rows, which this
+// modal refetches every time it opens, instead of from state.reviewData.all_* --
+// master lists cached for the whole session/fork, which therefore cannot contain
+// anything created since the session was opened. The fresh rows were ALREADY being
+// fetched here; only their image urls were kept and the rest was thrown away.
+// null means the fetch did not return a usable array, and the cached list is used
+// instead so a network blip degrades to the old behaviour rather than to an empty
+// picker. An EMPTY ARRAY is a successful "this campaign has none", which is why
+// every read below tests for null and NOT for falsiness -- [] is truthy, and that
+// distinction is the whole difference between "none" and "could not ask".
+var _castCharRows = null;
+var _castAssetRows = null;
 
 function _loadCastImages(cb) {
   var cid = state.currentCampaign && state.currentCampaign.id;
   _castCharImg = {}; _castAssetImg = {};
+  _castCharRows = null; _castAssetRows = null;
   if (!cid) { cb(); return; }
   var done = 0;
   function step(){ if (++done >= 2) cb(); }
-  fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(c){ if (c && c.id != null) _castCharImg[String(c.id)] = c.canonical_reference_url || ''; }); step(); }).catch(step);
-  fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(a){ if (a && a.id != null) _castAssetImg[String(a.id)] = a.image_url || ''; }); step(); }).catch(step);
+  function _byName(a, b){ return (a.name || '').localeCompare(b.name || ''); }   // v3.0.881 -- the /review payload sorts its master lists by name; match it so an unchanged campaign renders in the identical order
+  fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(c){ if (c && c.id != null) { _castCharImg[String(c.id)] = c.canonical_reference_url || ''; out.push({ id: c.id, name: c.name, cls: c.cls }); } }); out.sort(_byName); _castCharRows = out; } step(); }).catch(step);
+  fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(a){ if (a && a.id != null) { _castAssetImg[String(a.id)] = a.image_url || ''; out.push({ id: a.id, name: a.name, category: a.category }); } }); out.sort(_byName); _castAssetRows = out; } step(); }).catch(step);
 }
 
 function openCastPicker(kind, momentId) {
@@ -24174,7 +24532,11 @@ function _buildCastPicker(kind, momentId) {
   var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };   // v3.0.848 -- SHORT: this map feeds prep-img-cap, a caption under a 120px thumbnail, where the full term runs to three lines
   var have = {};
   (isChar ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
-  var src = isChar ? ((state.reviewData && state.reviewData.all_characters) || []) : ((state.reviewData && state.reviewData.all_assets) || []);
+  // v3.0.881 -- TD-755. Fresh rows win; the cached master list is the fallback for
+  // a failed fetch only. Tested against null, never falsiness: see _castCharRows.
+  var src = isChar
+    ? (_castCharRows !== null ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []))
+    : (_castAssetRows !== null ? _castAssetRows : ((state.reviewData && state.reviewData.all_assets) || []));
   var items = src.filter(function(x){ return !have[String(x.id)]; });
   var overlay = document.createElement('div');
   overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
@@ -24213,6 +24575,8 @@ function closeCastPicker() {
   if (m && m.parentNode) m.parentNode.removeChild(m);
 }
 
+// v3.0.884 -- TD-761. `done` is threaded through rather than the retouch tray
+// reimplementing these lines and the save beside them.
 function castPickCharacter(momentId, id) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
@@ -24721,6 +25085,9 @@ function paintVersionLock() {
   sel.disabled = !!by;
   sel.style.opacity = by ? '0.5' : '';
   sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
+  // v3.0.888 -- TD-765. The version chip is NOT painted here. This function runs on the first
+  // line of showCampaignSection, before the version list exists, so it could only ever remove a
+  // chip it had no way to decide on. It lives in applyNovelVersion now.
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}

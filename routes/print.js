@@ -457,6 +457,37 @@ function shippingSwapNote(quote) {
          ' to this address, so this price is for ' + (quote.shippingLevelUsedLabel || 'another option') + '.';
 }
 
+// v3.0.882 -- TD-757. THREE TIERS, DERIVED, NEVER MAPPED.
+// The provider hands back every level Lulu will honour for THIS address, already in
+// measured cost order, so the tiers are picked out of what exists: cheapest, a
+// middle, and dearest. FEWER THAN THREE IS A REAL ANSWER for some addresses -- two
+// honest options beat a third that will be refused at checkout -- and the names
+// describe what they are rather than naming a vendor level, because a vendor level
+// name is precisely the thing that cannot be promised everywhere.
+const TIER_NAMES = { 3: ['Economy', 'Standard', 'Express'], 2: ['Economy', 'Express'], 1: ['Standard'] };
+function deriveShippingTiers(options, pct) {
+  const list = Array.isArray(options) ? options : [];
+  if (!list.length) return [];
+  const last = list.length - 1;
+  let idx = (list.length === 1) ? [0]
+    : (list.length === 2) ? [0, last]
+    : [0, Math.floor(last / 2), last];
+  idx = idx.filter(function (v, i) { return idx.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+  const names = TIER_NAMES[idx.length] || TIER_NAMES[1];
+  return idx.map(function (at, i) {
+    const o = list[at];
+    const m = markedCharge(o.quote, pct);
+    return {
+      tier: names[i],
+      level: o.level,
+      label: o.label,
+      providerCost: o.totalCost,
+      customerCharge: m.customerCharge,
+      currency: o.currency,
+    };
+  });
+}
+
 // Map the public request body to a neutral OrderRequest the provider takes.
 function buildOrderRequest(body, spec, externalId, contactEmail) {
   const s = body.shipTo || {};
@@ -581,6 +612,17 @@ router.post('/quote', requireSession, async function (req, res) {
 
     const provider = getPrintProvider();
     const orderReq = buildOrderRequest(req.body, built.spec, 'quote', null);
+    // v3.0.882 -- TD-757, STAGE 1. ADDITIVE, CONCURRENT AND NON-FATAL.
+    // The six level probes run BESIDE the quote, not instead of it and not after it:
+    // a fan-out that fails or is slow cannot stop a reader being priced, and the worst
+    // case is an empty options list and today's behaviour exactly. The catch is
+    // attached at creation so the rejection can never be unhandled.
+    const _optsP = (typeof provider.quoteAllLevels === 'function')
+      ? provider.quoteAllLevels(orderReq).catch(function (e) {
+          console.error('[quote] shipping options probe failed:', (e && e.message) || e);
+          return null;
+        })
+      : Promise.resolve(null);
     const quote = await provider.getQuote(orderReq);
     const db = await getDb();
     const pct = await getPrintMarkupPct(db);
@@ -601,6 +643,9 @@ router.post('/quote', requireSession, async function (req, res) {
       shippingLevelUsed: quote.shippingLevelUsed || '',
       shippingLevelUsedLabel: quote.shippingLevelUsedLabel || '',
       shippingNote: shippingSwapNote(quote),
+      // v3.0.882 -- TD-757, STAGE 1. Shown read-only for now; stage 2 makes these the
+      // control the reader picks from. An empty array is the correct degraded answer.
+      shippingOptions: deriveShippingTiers(((await _optsP) || {}).options, pct),
     });
   } catch (e) {
     logPrintFailure(req, 'quote', e);
