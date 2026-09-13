@@ -17672,6 +17672,60 @@ function forkOnScreenIsMine() {
 function forkOwnNonCanonical() {
   return forkOnScreenIsMine() && !forkOnScreenIsCanonical();
 }
+// v3.0.886 -- TD-762. ONE PLACE DECIDES WHETHER THE VERSION MENU IS SHOWN, AND IT RUNS ON
+// EVERY VERSION CHANGE.
+//
+// *(Ian, 2026-09-13: "That button should only show if I'm looking at MY OWN version... I don't
+// want anybody else deleteing or renaming someone elses version." And the reproduction that
+// settled it: "I can be on a session where the button doesn't show... then use the nave arrow
+// to a new session and the button shows... then nave back to the original session and the
+// button shows.")*
+//
+// WHAT WAS WRONG, AND IT WAS A PLACEMENT FAULT RATHER THAN A LOGIC ONE. The decision below is
+// the same one v3.0.442/446/475 arrived at and it was correct; it simply lived INSIDE
+// loadSessionForks, which the dropdown path never reaches -- onForkChange calls
+// updateForkEditability and reloadSessionForFork, and neither touches the menu. So the
+// ellipsis kept whatever state the session load painted it with.
+//
+// AND IT SAT ABOVE THE PHASE 4 DEFAULT, WHICH IS WHY IAN'S ARROW SEQUENCE LOOKED RANDOM. On a
+// first load currentForkId is null, so the menu was resolved against the CANONICAL and hidden
+// -- and then Phase 4 selected the reader's own version with nothing repainting. Arriving by
+// ARROW works because the travelling version is applied near the top of loadSessionForks,
+// before the selector is filled and before this ran. Same session, same version, two answers.
+//
+// So it moved rather than changed: called from updateForkEditability, which onForkChange AND
+// loadSessionForks already call, and which runs AFTER the Phase 4 default. Three cases covered
+// with no new call site to remember -- rules 5c's preferred shape, collapse the twin rather
+// than sweep for it.
+//
+// THE TEST IS is_mine AND DELIBERATELY NOT forkOnScreenIsMine(), which also answers yes for a
+// Story Master on the canonical by role. Ian asked for ownership of the row.
+//
+// And the reader is not the security boundary: the rename and delete routes each answer 403 to
+// a non-owner, and both client handlers refuse before calling anything. This controls whether
+// the reader is OFFERED something that would be refused, which is a different job.
+function paintVersionMenu() {
+  var verMenu = document.getElementById('session-version-menu');
+  var delItem = document.getElementById('delete-version-item');
+  if (!verMenu && !delItem) return;
+  var forks = (state && state.sessionForks) || [];
+  var sel = document.getElementById('session-fork-select');
+  var mineFork = forks.filter(function (f) { return f.is_mine; })[0];
+  var dmFork = forks.filter(function (f) { return f.role === 'dm'; })[0];
+  // v3.0.475's chain, unchanged: THE DROPDOWN IS THE TRUTH about what is on screen, so it is
+  // asked first. Only with no value at all does this fall back, and it falls back to MY fork
+  // rather than the canonical -- a fallback to the canonical is what made the ellipsis vanish
+  // while the reader's own version was selected (TD-278).
+  var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
+  var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
+  // ONE boolean drives both, so the menu and the item it contains cannot disagree about
+  // ownership -- v3.0.446 took Delete away in the one place it was being looked for by
+  // deciding them separately.
+  var mine = !!(shownFork && shownFork.is_mine);
+  if (verMenu) verMenu.style.display = mine ? '' : 'none';
+  if (delItem) delItem.style.display = mine ? '' : 'none';
+}
+
 function updateForkEditability() {
 
   var role = state.currentCampaign && state.currentCampaign.my_role;
@@ -17684,6 +17738,7 @@ function updateForkEditability() {
     !!(state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId) && x.role === 'dm'; })[0];
   document.body.classList.toggle('can-edit-fork', !!(editable && !onCanonical));
   document.body.classList.toggle('viewing-foreign-fork', !editable);
+  paintVersionMenu();   // v3.0.886 -- TD-762. Both version-change paths already come through here.
 }
 
 function forkQ() {
@@ -17854,35 +17909,6 @@ function loadSessionForks(sessionId) {
           || state.currentCampaign.my_role === 'dm'));
         nvBtn.style.display = (mineFork && canFork) ? '' : 'none';
       }
-      var verMenu = document.getElementById('session-version-menu');
-      // v3.0.442 -- Rename and Delete act on the version you are LOOKING AT, so the menu follows the
-      // selection rather than merely whether you own something on this session. Viewing the canonical
-      // or someone else's version, it is hidden -- neither action would be yours to take.
-      // v3.0.446 -- resolve against what the DROPDOWN is actually showing. state.currentForkId is
-      // null while the canonical is selected and is not yet set on a first paint, so keying the menu
-      // solely on it made the ellipsis vanish -- taking Delete with it.
-      // v3.0.475 -- THE FALLBACK IS WHY IT "DOESN'T ALWAYS SHOW" (TD-278). state.currentForkId is
-      // null on a first paint and after several of the version-switch resets, so shownId fell
-      // through to the CANONICAL -- whose is_mine is false for a member -- and the ellipsis
-      // vanished while that member's own version was the one selected in the dropdown.
-      //
-      // The dropdown is the truth about what is on screen, so it is asked FIRST. Only if it has no
-      // value at all does this fall back, and it falls back to MY fork rather than the canonical:
-      // selId three lines up already prefers currentForkId, so the two agree by construction
-      // instead of by coincidence.
-      //
-      // Third time today a "which version am I acting on" fallback resolved to the wrong fork
-      // (TD-194 was twelve of them; the delete in v3.0.462 was the tenth).
-      var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
-      var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
-      if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
-      // v3.0.448 -- DELETE IS ALWAYS OFFERED ON A VERSION YOU OWN. Ian: it needs to still be there
-      // and delete the version we are on.
-      // v3.0.446 hid it on the canonical because the server refuses to delete that one -- my own
-      // addition, unasked, and it took the button away in the one place it was being looked for. The
-      // canonical case is now EXPLAINED at the point of use instead of the control disappearing.
-      var delItem = document.getElementById('delete-version-item');
-      if (delItem) delItem.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
       // when they have one. The Story Master (and players with no version)
       // stay on the canonical. Only applies on a fresh load (currentForkId
