@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892, v3.0.893).
 
    Ian, 2026-09-13: "Can you create a web page or Modal that lists in grid style
    all the different features each tier has. 4 columns Copper, Silver, Gold,
@@ -91,7 +91,17 @@
     { label: 'Assets', cell: function (t) {
         return val(esc(cap(t.max_assets)));
       } },
-    { label: 'Export to PDF', cell: function (t) { return mark(t.can_export); } },
+    // v3.0.893 -- N/A FOR A TIER THAT CREATES NOTHING OF ITS OWN, exactly like the two style
+    // rows above. *(Ian, 2026-09-13: "it's not really true that copper can't download a pdf.
+    // They can if the DM allows them to publish.")* He is right, and the cross was describing
+    // the wrong thing: can_export gates ONE client-side button (a single session's PDF), while
+    // publishing -- and with it the book PDF -- is gated on the EFFECTIVE tier, which flows the
+    // Story Master's plan down to a Copper in their campaign. A boolean cannot say that, so this
+    // says nothing and the Copper footnote carries the inheritance.
+    { label: 'Export to PDF', cell: function (t) {
+        if (!t.can_create) return na();
+        return mark(t.can_export);
+      } },
     { label: 'More than One Version', cell: function (t) { return mark(t.multi_version); } },
     { label: 'Custom Art Styles', cell: function (t) { return mark(t.custom_art_styles); } },
     { label: 'Title Builder', cell: function (t) { return mark(t.title_builder); } }

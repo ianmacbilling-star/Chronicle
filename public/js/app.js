@@ -8339,10 +8339,10 @@ function optimizeResetForVersion() {
   try { if (typeof finalizeSetPriorLoaded === 'function') finalizeSetPriorLoaded(false); } catch (e) {}
   // GO TO PUBLISH IS ABOUT A BOOK THAT NO LONGER EXISTS on screen. Offering it after a switch would
   // hand someone the previous version's book from the Publish page.
-  try { var gp = document.getElementById('layoutai-publish-btn'); if (gp) gp.style.display = 'none'; } catch (e) {}
-  // "Save this Version" shares that slot after a per-page Fix, and the fix it refers to belonged to
-  // the book that just left the screen.
-  try { var sf = document.getElementById('layoutai-save-fixed-btn'); if (sf) sf.style.display = 'none'; } catch (e) {}
+  // v3.0.893 -- hidden BY STATE, not by id. finalizeForgetLoadedBook below clears the flag and
+  // lets finalizeSyncPublishBtn hide every button in that slot -- Go to Publish, Save this
+  // Version and now Download PDF. Hiding them here by hand is how the third one would have been
+  // forgotten.
   // AND PUBLISH TO LIBRARY FALLS BACK TO "Run Optimize First". _finalizeSavedReady is what arms it
   // -- v3.0.392 moved that off _publishSource precisely because the other reading was a different
   // question -- and updateNovelPublishGuard, which the tail calls immediately after, repaints from
@@ -8355,8 +8355,7 @@ function optimizeResetForVersion() {
   // records it as TRANSIENT, and finalizeUpdatePublishPick demotes the publish source whenever it
   // is momentarily false -- which is what made the button appear at the end of a run and then be
   // taken away again. The two renders that own it already reset it.
-  try { _publishSource = 'flow'; } catch (e) {}
-  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+  finalizeForgetLoadedBook();   // v3.0.893 -- the shared tail; see its note
   // FORCED: same campaign, possibly the same fork, but the book underneath changed -- and a log
   // with no PDF behind it describes nothing. resetOptimizeLogForSwitch short-circuits on an
   // unchanged campaign|fork key, which a version switch does not always move.
@@ -24950,6 +24949,25 @@ function finalizeUpdatePublishLink() {
   a.style.display = '';
   if (none) none.style.display = 'none';
 }
+// v3.0.893 -- TD-768. HAND THE READER THE FILE.
+//
+// *(Ian, 2026-09-13: "Right now the only way to do it is from the Public Library.")*
+//
+// THE SAME FILE THE PUBLISH CALL USES -- /last-optimized-file is what the Optimize pane renders
+// and what the Publishing: line on the Order card already links to. The only difference is
+// download=1, which makes the server send it as an attachment with the book's name on it instead
+// of streaming it inline for the viewer.
+//
+// A LINK, NOT window.open: a popup blocker treats a scripted window.open as a popup, and an
+// <a download> click is what browsers expect for a file.
+function finalizeDownloadPdf() {
+  if (!state || !state.currentCampaign) return;
+  var a = document.createElement('a');
+  a.href = '/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery() + '&download=1';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  try { a.click(); } finally { document.body.removeChild(a); }
+}
 function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');   // covers now render in the panes (viewer upgraded to pdf.js 6.x, which handles the cover/caption gradients)
 }
@@ -26405,8 +26423,11 @@ function finalizeClearPriorLoaded() {
     if (scroll) scroll.style.display = 'none';
     var note = document.getElementById('finalize-optimized-note');
     if (note) { note.textContent = ''; note.style.display = 'none'; }
-    _publishSource = '';
   } catch (e) {}
+  // v3.0.893 -- TD-768. THE HALF THIS FUNCTION NEVER DID. It emptied the pane and left
+  // _finalizeSavedReady true, so Go to Publish stayed offered for a book that was no longer
+  // loaded. The line it replaces set _publishSource to '' and nothing else.
+  finalizeForgetLoadedBook();
   resetOptimizeLogForSwitch(true);   // v3.0.328: FORCED -- same campaign and fork, but the pane is now
                                      // empty, and a log with no PDF behind it describes nothing.
   finalizeSetPriorLoaded(false);
@@ -26903,6 +26924,36 @@ function finalizeUpdateEstimateBadge() {
 // Tying it to the event rather than the condition is how the two drift apart later, so
 // there is now one function and every site calls it.
 // Hidden while a run is in flight: mid-run the pane holds a half-optimized book.
+// v3.0.893 -- TD-768. THE BOOK ON SCREEN IS GONE. ONE FUNCTION, THREE CALLERS.
+//
+// *(Ian, 2026-09-13: "If I hit Clear Loaded Version button... then both the Goto Publish and the
+// Download PDF buttons should hide.")*
+//
+// He is describing a bug that predates the Download button. THREE paths empty the After pane --
+// a version switch (optimizeResetForVersion), a campaign switch, and Clear Loaded Version -- and
+// each one grew its own tail:
+//
+//   * the version switch cleared the flags and hid two buttons BY HAND,
+//   * the campaign switch cleared the flags and repainted from them (the correct shape), and its
+//     own comment says it was written because 'a rule learned on one path was not applied to its
+//     twin' -- the THIRD instance of that in one day,
+//   * Clear Loaded Version did NEITHER. It emptied the pane and flipped the button label, and
+//     left _finalizeSavedReady true -- which is the only thing that decides whether Go to Publish
+//     shows. So Go to Publish stayed, pointing at a book that was no longer loaded, and the
+//     Publishing: line on the Order card kept naming it.
+//
+// Adding a Download PDF button on top of that state would have inherited the fault one button
+// wider. So the tail is a function now, and the three callers call it rather than each keeping a
+// copy to get wrong. Nothing here hides a control by id: finalizeSyncPublishBtn owns every button
+// in that slot and derives all of them from the same flag.
+function finalizeForgetLoadedBook() {
+  // 'flow' rather than '': the publish route reads String(source || 'flow'), so the two are the
+  // same answer, and one of them is the answer the rest of this file already writes.
+  try { _publishSource = 'flow'; } catch (e) {}
+  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+}
 function finalizeSyncPublishBtn() {
   var b = document.getElementById('layoutai-publish-btn');
   if (!b) return;
@@ -26912,6 +26963,16 @@ function finalizeSyncPublishBtn() {
   var show = _finalizeSavedReady && !window._aiLoopRunning;
   b.style.display = show ? '' : 'none';
   if (show) b.disabled = false;
+  // v3.0.893 -- TD-768. DOWNLOAD PDF RIDES THE SAME VARIABLE.
+  //
+  // *(Ian, 2026-09-13: "It should be the same logic as the Goto Publish button.. If that button
+  // is there then the Download PDF button should be there.")*
+  //
+  // Not a second copy of the condition -- the same `show`, three lines down. Two copies of a
+  // visibility rule is how Go to Publish and Save this Version were ever shown together, which is
+  // the fault the comment below this one records.
+  var dl = document.getElementById('layoutai-download-btn');
+  if (dl) { dl.style.display = show ? '' : 'none'; if (show) dl.disabled = false; }
   // v3.0.397 -- the two buttons share a slot and are mutually exclusive by construction:
   // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
   // is not. Driving both from one function is what stops them ever being shown together, or a fix
@@ -28711,10 +28772,7 @@ function resetPublishForCampaignSwitch(force) {
   // publish lock stops the user reaching another campaign's Publish page", and warns that
   // the two changes depend on each other. Ian reached it. The assumption is false, so the
   // state has to be cleared here rather than relied upon not to be seen.
-  try { _publishSource = 'flow'; } catch (e) {}
-  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
-  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
-  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+  finalizeForgetLoadedBook();   // v3.0.893 -- this path already had the right shape; it is the shared one now
   // The button itself: back to "Publish to Library", and the previous story url off it.
   try { if (typeof setStoryPublishedUI === 'function') setStoryPublishedUI(false); } catch (e) {}
   try { var _ps = document.getElementById('novel-publish-status'); if (_ps) { _ps.style.display = 'none'; _ps.textContent = ''; } } catch (e) {}
