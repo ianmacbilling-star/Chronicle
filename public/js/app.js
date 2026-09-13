@@ -3967,12 +3967,8 @@ function renderReview(data) {
     var addChar = '', addAsset = '';
     if (canEditNarr) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      var optsC = (state.reviewData.all_characters || []).filter(function(c){ return !haveC[String(c.id)]; })
-        .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
       addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + mid + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
-      var optsA = (state.reviewData.all_assets || []).filter(function(a){ return !haveA[String(a.id)]; })
-        .map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + '</option>'; }).join('');
       addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + mid + ')">+ Add asset</button>';
     }
 
@@ -23759,10 +23755,8 @@ function renderMomentOptions(momentId) {
     var addChar = '', addAsset = '';
     if (canEdit) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
       addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
-      var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
       addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
     }
     var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
@@ -24150,15 +24144,29 @@ function replayTours() {
 // ===== Cast picker modal: image grid (replaces the +Add character/asset dropdowns) =====
 var _castCharImg = {};
 var _castAssetImg = {};
+// v3.0.881 -- TD-755. The picker builds its ITEM LIST from these rows, which this
+// modal refetches every time it opens, instead of from state.reviewData.all_* --
+// master lists cached for the whole session/fork, which therefore cannot contain
+// anything created since the session was opened. The fresh rows were ALREADY being
+// fetched here; only their image urls were kept and the rest was thrown away.
+// null means the fetch did not return a usable array, and the cached list is used
+// instead so a network blip degrades to the old behaviour rather than to an empty
+// picker. An EMPTY ARRAY is a successful "this campaign has none", which is why
+// every read below tests for null and NOT for falsiness -- [] is truthy, and that
+// distinction is the whole difference between "none" and "could not ask".
+var _castCharRows = null;
+var _castAssetRows = null;
 
 function _loadCastImages(cb) {
   var cid = state.currentCampaign && state.currentCampaign.id;
   _castCharImg = {}; _castAssetImg = {};
+  _castCharRows = null; _castAssetRows = null;
   if (!cid) { cb(); return; }
   var done = 0;
   function step(){ if (++done >= 2) cb(); }
-  fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(c){ if (c && c.id != null) _castCharImg[String(c.id)] = c.canonical_reference_url || ''; }); step(); }).catch(step);
-  fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(a){ if (a && a.id != null) _castAssetImg[String(a.id)] = a.image_url || ''; }); step(); }).catch(step);
+  function _byName(a, b){ return (a.name || '').localeCompare(b.name || ''); }   // v3.0.881 -- the /review payload sorts its master lists by name; match it so an unchanged campaign renders in the identical order
+  fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(c){ if (c && c.id != null) { _castCharImg[String(c.id)] = c.canonical_reference_url || ''; out.push({ id: c.id, name: c.name, cls: c.cls }); } }); out.sort(_byName); _castCharRows = out; } step(); }).catch(step);
+  fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(a){ if (a && a.id != null) { _castAssetImg[String(a.id)] = a.image_url || ''; out.push({ id: a.id, name: a.name, category: a.category }); } }); out.sort(_byName); _castAssetRows = out; } step(); }).catch(step);
 }
 
 function openCastPicker(kind, momentId) {
@@ -24174,7 +24182,11 @@ function _buildCastPicker(kind, momentId) {
   var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };   // v3.0.848 -- SHORT: this map feeds prep-img-cap, a caption under a 120px thumbnail, where the full term runs to three lines
   var have = {};
   (isChar ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
-  var src = isChar ? ((state.reviewData && state.reviewData.all_characters) || []) : ((state.reviewData && state.reviewData.all_assets) || []);
+  // v3.0.881 -- TD-755. Fresh rows win; the cached master list is the fallback for
+  // a failed fetch only. Tested against null, never falsiness: see _castCharRows.
+  var src = isChar
+    ? (_castCharRows !== null ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []))
+    : (_castAssetRows !== null ? _castAssetRows : ((state.reviewData && state.reviewData.all_assets) || []));
   var items = src.filter(function(x){ return !have[String(x.id)]; });
   var overlay = document.createElement('div');
   overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
