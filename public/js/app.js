@@ -6161,11 +6161,52 @@ async function warnIfNoCharacters() {
     var arr = Array.isArray(data) ? data : [];
     if (arr.length > 0) return true;
     sessionStorage.setItem(_flagKey, '1');
-    return await uiConfirm(
-      'This campaign does not have any characters yet. Stories turn out better ' +
+    // v3.0.889 -- A THIRD BUTTON THAT ACTUALLY GOES SOMEWHERE.
+    //
+    // *(Ian, 2026-09-13: "I want you to put a button on the Modal message box that will take
+    // them to the Campaign Characters Page where they can make new characters.")*
+    //
+    // The old dialog told the reader they could "add characters first" and then gave them no way
+    // to do it -- Cancel dropped them back on the Story tab to go and find the page themselves.
+    // Same dead-end shape as v3.0.860's missing Build Prompt button: the one control that would
+    // have moved them forward was the one thing not there.
+    //
+    // uiConfirm's opts.middleText already exists for precisely this (v3.0.865 -- a question with
+    // three honest answers, rather than asking twice), so this needs no new dialog machinery.
+    //
+    // DM-ONLY, AND THAT IS NOT A DETAIL. POST /campaigns/:id/characters sits behind
+    // verifyCampaignDM, so a player CANNOT create a character -- offering them this button would
+    // relocate the dead end rather than remove it. A player gets today's two buttons and today's
+    // question, unchanged.
+    //
+    // AND preserveLines IS NOW PASSED, which is a fix rather than a flourish: this message has
+    // always contained a blank line and never asked for it to be honoured, so it rendered as one
+    // wall of text -- what uiConfirm's own comment calls "the surest way to have it not read".
+    var _canAddChars = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+    var _noCharMsg = 'This campaign does not have any characters yet. Stories turn out better ' +
       'when your characters are built first -- they appear more consistently in ' +
-      'the narrative and images. You can add characters first, or generate the ' +
-      'story now and add them later.\n\nGenerate the story now?');
+      'the narrative and images.\n\n' +
+      (_canAddChars
+        ? 'Add the characters first, or generate the story now and add them later?'
+        : 'You can generate the story now and add them later.\n\nGenerate the story now?');
+    var _noCharAns = await uiConfirm(_noCharMsg, {
+      title: 'No characters yet',
+      preserveLines: true,
+      okText: _canAddChars ? 'Generate Now' : 'OK',
+      middleText: _canAddChars ? 'Add Characters' : null
+    });
+    // GATED ON THE CAPABILITY, NOT ON THE BUTTON. A player never sees the third button, but
+    // the absence of a control is not what should be stopping the navigation -- the same
+    // reasoning as the version menu in TD-762, where the server is the boundary and the hidden
+    // button is only courtesy. Found by the guard, which drove a player through a forced
+    // 'middle' answer that the UI cannot produce.
+    if (_noCharAns === 'middle' && _canAddChars) {
+      // Straight to the Characters page, and FALSE so the generate does not also run -- the
+      // reader picked the other branch of the question.
+      try { if (typeof showCampaignSection === 'function') showCampaignSection('characters'); } catch (e) {}
+      return false;
+    }
+    return _noCharAns === true;
   } catch (e) {
     return true;
   }
