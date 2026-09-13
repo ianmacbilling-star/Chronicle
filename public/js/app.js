@@ -17811,24 +17811,29 @@ function novelVersionIsMine() {
   return !!v.is_mine;
 }
 
-// v3.0.888 -- TD-765. WHETHER A PARTICULAR SESSION CARD'S VERSION IS YOURS.
+// v3.0.890 -- TD-765. WHETHER A PARTICULAR SESSION CARD'S VERSION IS YOURS.
 //
-// *(Ian, 2026-09-13: "Same is true on the publish page session tab / session panels. If its not
-// your version can you put the warning pill on there.")*
+// ONE FIELD, SET BY THE ROUTE THAT RESOLVED THE VERSION -- see the note beside version_is_mine in
+// /novel/all. v3.0.888 derived the answer here from is_canonical and fork_owner_name and got BOTH
+// branches wrong, so a card reading Ian's own version wore the warning pill.
 //
-// The renderer already had everything this needs: is_canonical, and fork_owner_name, which is
-// set only when the fork belongs to somebody else -- which is exactly how the label a few lines
-// above already decides to say "Your Version". So this asks the same question that text has been
-// answering all along instead of inventing a second rule that can disagree with it.
+// The version LABEL a few lines above these cards reads those same two fields, and that is what
+// made the wrong rule look anchored rather than invented. It is not an ownership rule: it
+// DESCRIBES the tile, and its "Your Version" branch is a display fallback for a tile that has
+// neither a version name nor an owner name. Borrowing a description as a judgement is the fault.
 //
-// AND THIS IS THE CASE THE CARDS EXIST FOR. The comment over that label says the tiles on one
-// page can come from DIFFERENT versions, so a page titled with one version can be showing
+// AND THE CASE THE CARDS EXIST FOR IS UNCHANGED. The comment over that label says the tiles on
+// one page can come from DIFFERENT versions, so a page titled with one version can be showing
 // canonical content in most of its tiles -- and that "has to be visible before someone orders
 // it". It was visible in 10px text at 55% opacity. Now it is a pill.
+//
+// UNDECIDED DRAWS NOTHING. null (no version row on the fork) and undefined (a cached app.js
+// against a newer route, or the reverse) both mean the route did not answer, and a missing answer
+// must not become a warning -- the same rule novelVersionIsMine follows for a version list that
+// has not arrived.
 function cardForkIsMine(s) {
-  if (!s) return true;   // nothing to judge: say nothing rather than cry wolf
-  if (s.is_canonical) return !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
-  return !s.fork_owner_name;
+  if (!s) return true;
+  return s.version_is_mine !== false;
 }
 
 // Drawn from BOTH copies of renderNovelSummary through this ONE helper. app.js holds two
