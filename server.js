@@ -369,6 +369,39 @@ app.get('/invite/:token', function(req, res) {
 // catch-all so /library/story/:id/:slug renders real HTML, not the app shell.
 app.use('/', require('./routes/story-pages'));
 
+// ------------------------------------------------------------
+// v3.0.877 -- TD-754. /api MUST NEVER ANSWER WITH HTML.
+//
+// There was no error-handling middleware in this file at all, so anything that threw
+// outside a route's own try/catch fell through to EXPRESS'S DEFAULT HANDLER, which
+// answers with an HTML page carrying a stack trace. The browser then does r.json() on
+// it and the reader is shown "Unexpected token '<', ... is not valid JSON" -- a real
+// message about a real failure that tells them nothing and tells us nothing either.
+//
+// The commonest way in is not an exotic bug: express.json() rejects a malformed body
+// with a SyntaxError carrying status 400, and that answered in HTML too.
+//
+// Four arguments, and the fourth is load-bearing -- Express identifies an error handler
+// by arity, so dropping `next` silently turns this back into ordinary middleware that
+// never runs. Mounted after every /api route and before the SPA catch-all.
+app.use('/api', function(err, req, res, next) {
+  if (res.headersSent) return next(err);
+  var status = Number(err && (err.status || err.statusCode)) || 500;
+  if (!(status >= 400 && status <= 599)) status = 500;
+  var isBadJson = !!(err && err.type === 'entity.parse.failed');
+  var isTooBig = !!(err && err.type === 'entity.too.large');
+  try {
+    console.error('[api-error] ' + req.method + ' ' + (req.originalUrl || req.url) + ' -> ' + status + ': ' + ((err && err.message) || err));
+  } catch (e) {}
+  // The reason stays in the log; the reader gets a line that ends in an action.
+  var detail = isBadJson
+    ? 'That request was not formed correctly. Please reload the page and try again.'
+    : (isTooBig
+      ? 'That was too large to send. Please try a smaller file.'
+      : 'Something went wrong on our end. Please try again in a moment -- if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.');
+  res.status(status).json({ error: 'Server error', detail: detail });
+});
+
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

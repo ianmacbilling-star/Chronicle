@@ -265,7 +265,11 @@ class LuluProvider extends PrintProvider {
       return this._token;
     }
     if (!this.clientKey || !this.clientSecret) {
-      throw new Error('lulu: LULU_CLIENT_KEY / LULU_CLIENT_SECRET not set');
+      // v3.0.877 -- TD-754. FLAGGED, NOT SNIFFED. friendlyPrintError classifies on this
+      // flag rather than on the wording, so the reader is told it is on our end.
+      const eNoKey = new Error('lulu: LULU_CLIENT_KEY / LULU_CLIENT_SECRET not set');
+      eNoKey.authFailure = true;
+      throw eNoKey;
     }
     const basic = Buffer.from(`${this.clientKey}:${this.clientSecret}`).toString('base64');
     const res = await fetch(this.tokenUrl, {
@@ -277,9 +281,26 @@ class LuluProvider extends PrintProvider {
       body: 'grant_type=client_credentials',
     });
     if (!res.ok) {
-      throw new Error(`lulu: token request failed (${res.status}): ${await safeText(res)}`);
+      const eTok = new Error(`lulu: token request failed (${res.status}): ${await safeText(res)}`);
+      eTok.authFailure = true;
+      eTok.status = res.status;
+      throw eTok;
     }
-    const json = await res.json();
+    // v3.0.877 -- TD-754. THE SAME UNGUARDED PARSE, ON THE SERVER SIDE OF THE SAME CALL.
+    // res.json() on an HTML page throws a SyntaxError whose message names no status and
+    // nothing about Lulu, so it arrived at friendlyError as an unclassifiable generic --
+    // the identical fault the client half of this batch fixes. An auth endpoint behind a
+    // proxy is exactly where an error PAGE is served in place of an error OBJECT.
+    const rawTok = await safeText(res);
+    let json;
+    try {
+      json = JSON.parse(rawTok);
+    } catch (parseErr) {
+      const eParse = new Error('lulu: token response was not JSON (' + res.status + '): ' + String(rawTok).slice(0, 200));
+      eParse.authFailure = true;
+      eParse.inconclusive = true;
+      throw eParse;
+    }
     this._token = json.access_token;
     this._tokenExpiresAt = now + (Number(json.expires_in || 3600) * 1000);
     return this._token;
@@ -340,7 +361,20 @@ class LuluProvider extends PrintProvider {
       else err.inconclusive = true;
       throw err;
     }
-    return res.json();
+    // v3.0.877 -- TD-754. Same parse, same reason: a 200 carrying an HTML page from a
+    // proxy must not reach the caller as "Unexpected token '<'". Marked INCONCLUSIVE,
+    // because a reply we could not read says nothing whatever about whether Lulu acted
+    // on the request -- which is TD-587's whole rule, and the difference between a
+    // retry and a second printed book.
+    const rawBody = await safeText(res);
+    try {
+      return JSON.parse(rawBody);
+    } catch (parseErr) {
+      const eBody = new Error('lulu: ' + method + ' ' + path + ' returned a non-JSON body (' + res.status + '): ' + String(rawBody).slice(0, 200));
+      eBody.status = res.status;
+      eBody.inconclusive = true;
+      throw eBody;
+    }
   }
 
   // v3.0.786 -- TD-587. FIND A JOB WE MAY HAVE ALREADY CREATED.

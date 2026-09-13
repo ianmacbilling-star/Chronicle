@@ -25,7 +25,11 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { friendlyError } = require('../middleware/friendlyErrors');
+const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErrors');
+// v3.0.877 -- TD-754. The debug log is written from here now, so a reader who reports a
+// failed price leaves a record naming the cause. routes/debug requires only the database
+// and the auth middleware, so there is no cycle.
+const { logDebug } = require('./debug');
 const { getTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
@@ -347,6 +351,34 @@ function requireSession(req, res, next) {
   next();
 }
 
+// v3.0.877 -- TD-754. THE CAUSE WAS THROWN AWAY AT THE LAST MOMENT, EVERY TIME.
+// Both money-path catches ended in res.json(...friendlyError(e, '')) with NO logging of
+// any kind -- no console.error, no logDebug -- while e.message held exactly what support
+// needed: Lulu's status, Lulu's own response body, and the product code when one was
+// refused. captureMiddleware recorded that the route returned 502 and nothing about why.
+// One helper so the two callers cannot drift, which is rules 5c's preferred shape.
+function logPrintFailure(req, where, e) {
+  var why = (e && e.message) ? String(e.message) : String(e);
+  try { console.error('[print-' + where + '] failed: ' + why); } catch (_e) {}
+  try {
+    logDebug(req && req.session ? req.session.userId : 0, {
+      level: 'error',
+      source: 'print',
+      page: '/api/print/' + where,
+      fn: 'POST',
+      message: where + ' failed: ' + why.slice(0, 300),
+      detail: {
+        status: (e && e.status) ? e.status : 0,
+        authFailure: !!(e && e.authFailure),
+        refused: !!(e && e.refused),
+        inconclusive: !!(e && e.inconclusive),
+        podPackageId: (e && e.podPackageId) ? String(e.podPackageId) : '',
+        reason: why.slice(0, 1000)
+      }
+    });
+  } catch (_e) {}
+}
+
 // Map the public request body to a neutral OrderRequest the provider takes.
 function buildOrderRequest(body, spec, externalId, contactEmail) {
   const s = body.shipTo || {};
@@ -485,7 +517,8 @@ router.post('/quote', requireSession, async function (req, res) {
       providerTax: quote.taxCost,
     });
   } catch (e) {
-    res.status(502).json({ error: 'Quote failed', detail: friendlyError(e, '') });
+    logPrintFailure(req, 'quote', e);
+    res.status(502).json({ error: 'Quote failed', detail: friendlyPrintError(e, 'quote') });
   }
 });
 
@@ -688,7 +721,8 @@ router.post('/order', requireSession, async function (req, res) {
     return res.json({ url: session.url, orderId: orderId, externalId: externalId, customerCharge: customerCharge, currency: quote.currency });
   } catch (e) {
     if (e && e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    return res.status(502).json({ error: 'Order failed', detail: friendlyError(e, '') });
+    logPrintFailure(req, 'order', e);
+    return res.status(502).json({ error: 'Order failed', detail: friendlyPrintError(e, 'order') });
   }
 });
 

@@ -1,4 +1,160 @@
 // ============================================================
+// v3.0.877 -- TD-754. A REPLY THAT IS NOT JSON MUST NOT REACH THE READER AS A
+// BROWSER STRING, AND MUST NOT VANISH FROM THE DEBUG LOG.
+//
+// A reader could only recall "something about a token and JSON" after a price
+// failed. That is Chrome's wording for a failed parse --
+//     Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+// -- where the token is the '<' that opens an HTML page and NOT an auth token.
+// The server had answered with an error PAGE and every one of this file's 276
+// `return r.json()` sites turns that into a SyntaxError. Two paths print
+// e.message straight onto the screen; the rest swallow it and show a bare line
+// with nothing to act on.
+//
+// THE FIX IS AT THE PARSE, NOT AT 276 CALL SITES. Sweeping twins is the fault
+// this project records most often (rules 5c), and the better version is to make
+// the class impossible. On success this is byte-for-byte the old behaviour: the
+// same bytes through the same JSON.parse. It differs ONLY on the failure path,
+// which today is a crash carrying a message no reader can use -- same control
+// flow (still a throw, so every existing catch runs exactly as before), a
+// message that ends in an instruction, and a log entry.
+//
+// AND IT IS THE ONLY WAY THIS FAILURE CAN EVER BE LOGGED. The debug log is fed
+// by captureMiddleware, which records what the SERVER saw. When the HTML came
+// from the edge the app never saw the request at all, so no server-side logging
+// could ever record it. Only the browser can report this one.
+//
+// WHAT IT DELIBERATELY DOES NOT SAY: there is no "nothing has been charged" in
+// the generic message. This sits under every route in the product, including
+// ones that spend tokens before they answer, and a reply we could not read says
+// nothing about what happened before it (TD-587). The charge wording belongs
+// only where the caller knows -- see submitPrintOrder.
+// ============================================================
+var _cgClientLogBusy = false;
+
+// Best-effort client-side diagnostic. Never throws, never blocks, and cannot
+// recurse: /api/debug is excluded and the in-flight flag stops a failing log
+// from logging its own failure. The server writes it only when that user has
+// Debug Mode on -- logDebug enforces that, not this.
+function cgLogClient(entry) {
+  try {
+    if (_cgClientLogBusy) return;
+    var url = String((entry && entry.url) || '');
+    if (url.indexOf('/api/debug') === 0) return;
+    _cgClientLogBusy = true;
+    var done = function () { _cgClientLogBusy = false; };
+    fetch('/api/debug/client', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page: url,
+        fn: String((entry && entry.fn) || 'fetch'),
+        kind: String((entry && entry.kind) || ''),
+        status: (entry && entry.status) || 0,
+        message: String((entry && entry.message) || '').slice(0, 500),
+        bodySnippet: String((entry && entry.bodySnippet) || '').slice(0, 500),
+        href: (function () { try { return String(location.pathname + location.search).slice(0, 300); } catch (e) { return ''; } })(),
+        ua: (function () { try { return String(navigator.userAgent).slice(0, 200); } catch (e) { return ''; } })()
+      })
+    }).then(done, done);
+  } catch (e) { _cgClientLogBusy = false; }
+}
+
+// Strip the origin so a logged path reads like the ones captureMiddleware writes.
+function cgShortUrl(u) {
+  try { return String(u || '').replace(/^https?:\/\/[^\/]+/, ''); } catch (e) { return ''; }
+}
+
+// What the reader is told when the server did not answer with JSON. EVERY branch
+// ends in an action, because "Could not price this order." with nothing after it
+// is precisely the message that started this.
+function cgNotJsonMessage(status) {
+  if (status === 401 || status === 403) {
+    return 'You have been signed out. Please sign in again \u2014 your work is still here.';
+  }
+  if (status === 429) {
+    return 'Campaignia is busy right now. Please wait a moment and try again.';
+  }
+  if (!status || status === 502 || status === 503 || status === 504) {
+    return 'Campaignia was updating or briefly unreachable, so the server did not answer properly. Please wait about a minute and try again \u2014 if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.';
+  }
+  return 'The server sent an unexpected reply (HTTP ' + status + '). Please wait a moment and try again \u2014 if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.';
+}
+
+// The wrapper, installed once and defensively: a browser that refuses either
+// assignment leaves the app exactly as it was rather than failing to start.
+(function () {
+  try {
+    if (typeof Response === 'undefined' || !Response.prototype) return;
+    if (Response.prototype._cgJsonWrapped) return;
+    var _nativeText = Response.prototype.text;
+    Response.prototype.json = function () {
+      var r = this;
+      return _nativeText.call(r).then(function (body) {
+        var parsed;
+        try {
+          // Native json() throws on an empty body too, and so does this: the control
+          // flow every existing caller was written against is preserved exactly.
+          parsed = JSON.parse(body);
+        } catch (parseErr) {
+          var snippet = String(body == null ? '' : body).slice(0, 300);
+          var err = new Error(cgNotJsonMessage(r.status));
+          err.cgKind = 'not-json';
+          err.cgStatus = r.status;
+          err.cgBody = snippet;
+          try {
+            cgLogClient({
+              url: cgShortUrl(r.url), fn: 'Response.json', kind: 'not-json', status: r.status,
+              message: 'Reply was not JSON: ' + ((parseErr && parseErr.message) ? String(parseErr.message).slice(0, 200) : 'parse failed'),
+              bodySnippet: snippet
+            });
+          } catch (e) {}
+          throw err;
+        }
+        // A well-formed error body is still a failure worth recording, and the SERVER
+        // log does not carry response bodies. This is where the reason usually is.
+        if (!r.ok) {
+          try {
+            cgLogClient({
+              url: cgShortUrl(r.url), fn: 'Response.json', kind: 'http', status: r.status,
+              message: 'HTTP ' + r.status,
+              bodySnippet: String(body == null ? '' : body).slice(0, 300)
+            });
+          } catch (e) {}
+        }
+        return parsed;
+      });
+    };
+    try {
+      Object.defineProperty(Response.prototype, '_cgJsonWrapped', { value: true, enumerable: false });
+    } catch (e) { Response.prototype._cgJsonWrapped = true; }
+
+    // A request that never produced a response at all -- dropped connection, DNS,
+    // a blocked request -- rejects before any of the above runs, and today that is
+    // invisible everywhere. PURE PASS-THROUGH: the original error is rethrown
+    // untouched, so no caller's behaviour changes; the only effect is the log line.
+    if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !window._cgFetchWrapped) {
+      var _nativeFetch = window.fetch;
+      window.fetch = function (input, init) {
+        var _u = '';
+        try { _u = cgShortUrl((input && input.url) ? input.url : input); } catch (e) {}
+        return _nativeFetch.apply(this, arguments).catch(function (netErr) {
+          try {
+            cgLogClient({
+              url: _u, fn: 'fetch', kind: 'network', status: 0,
+              message: 'Request did not complete: ' + ((netErr && netErr.message) ? String(netErr.message).slice(0, 200) : 'network error')
+            });
+          } catch (e) {}
+          throw netErr;
+        });
+      };
+      window._cgFetchWrapped = true;
+    }
+  } catch (e) {}
+})();
+
+// ============================================================
 // STATE
 // ============================================================
 var state = {
@@ -21071,6 +21227,21 @@ function runRenderJob(url, kind, onTick) {
         if (!st) throw new Error('Lost contact with the print builder.');
         if (st.state === 'done') return { ok: true, j: st.body };
         if (st.state === 'error') return { ok: false, j: st.body || { error: 'render_failed' } };
+        // v3.0.877 -- TD-754. A REPLY WITH NO `state` IS NOT "STILL RUNNING".
+        // An error body that happens to be valid JSON -- a proxy's own {"error":...},
+        // or any shape a future edge invents -- passed every test here and went
+        // straight back into the poll, which then ran forever. A spinner that never
+        // stops is the one failure a reader cannot tell from a hang, so an answer we
+        // do not recognise ends the wait instead of extending it. It names all four
+        // known states rather than testing for the absence of one, so adding a state
+        // above without adding it here fails loudly instead of looping.
+        // THE OTHER TWO POLLERS IN THIS FILE DO NOT NEED THIS and were checked before
+        // this was written: the save-optimized poll is bounded by LIMIT_MS and a miss
+        // counter, and the layout-apply poll resolves on its own fall-through. This is
+        // the only one where an unrecognised answer means a spinner that never stops.
+        if (st.state !== 'running' && st.state !== 'done' && st.state !== 'error' && st.state !== 'unknown') {
+          throw new Error('The print builder sent an answer we did not recognise. Please wait a moment and try again.');
+        }
         if (st.state === 'unknown') {
           // The process that held the ticket is gone. Start over ONCE; twice means something is
           // wrong that retrying will not fix, and a silent retry loop is worse than an error.
@@ -21849,7 +22020,13 @@ function quotePrintOrder() {
           (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>';
       }
     })
-    .catch(function () { if (out) out.textContent = 'Could not price this order.'; });
+    // v3.0.877 -- TD-754. THE ARGUMENT-LESS CATCH WAS THE WHOLE COMPLAINT. It threw
+    // the reason away and printed a line with nothing to act on, which is exactly what
+    // a reader reported. cgNotJsonMessage now supplies a sentence that ends in an
+    // instruction, so the error is worth showing rather than worth hiding.
+    .catch(function (e) {
+      if (out) out.textContent = (e && e.message) ? e.message : 'Could not price this order. Please wait a moment and try again.';
+    });
 }
 
 // --- Print order: final review + confirm gate ------------------------------
@@ -22185,7 +22362,16 @@ function submitPrintOrder() {
       if (res.status === 503) { showPrintBtnMsg('Payments are being set up and will be available shortly.', null); return; }
       showPrintBtnMsg((res.j && (res.j.message || res.j.error)) ? (res.j.message || res.j.error) : 'Could not start payment.', null);
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintBtnMsg('Could not reach the payment service. Please try again.', null); });
+    // v3.0.877 -- TD-754. SAY WHAT HAPPENED TO THE MONEY, BECAUSE HERE WE KNOW.
+    // This request creates an UNPAID order row and a Stripe Checkout session; the card
+    // is charged on the NEXT screen. So a lost reply here can be stated as fact rather
+    // than left to the reader's imagination -- which on a billing path is the whole
+    // difference between waiting a minute and ordering the book twice.
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; }
+      var _m = (e && e.message) ? e.message : 'Could not reach the payment service.';
+      showPrintBtnMsg(_m + ' You have not been charged \u2014 payment happens on the next screen. Check My Orders in a minute before trying again.', null);
+    });
 }
 
 // Final point-of-no-return gate. The first confirm button reveals this; only

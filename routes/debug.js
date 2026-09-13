@@ -149,6 +149,42 @@ router.post('/send', async function(req, res) {
   }
 });
 
+// POST /client -- ONE CLIENT-SIDE DIAGNOSTIC.
+//
+// v3.0.877 -- TD-754. THE DEBUG LOG COULD NOT SEE THE FAILURE IT WAS BUILT FOR.
+// captureMiddleware below records what the SERVER saw. When a reply is an error PAGE
+// from the edge -- a restarting app, a 502/504 -- the app never saw the request at all,
+// so no server-side logging we could add would ever record it. This is the only route by
+// which that failure reaches the log, and it is why the batch has a client half.
+//
+// Bounded, redacted and best-effort. It ALWAYS answers ok, so a logging failure can never
+// surface as an error in front of the reader, and logDebug itself is what enforces that
+// nothing is written unless that user has Debug Mode on. Excluded from capture by the
+// /api/debug test in captureMiddleware, so it cannot log itself.
+router.post('/client', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var status = parseInt(b.status, 10);
+    await logDebug(req.session.userId, {
+      level: 'error',
+      source: 'client',
+      page: String(b.page || '').slice(0, 200),
+      fn: String(b.fn || 'fetch').slice(0, 60),
+      message: String(b.message || 'client error').slice(0, 500),
+      detail: sanitizeObj({
+        status: Number.isFinite(status) ? status : 0,
+        kind: String(b.kind || '').slice(0, 40),
+        onPage: String(b.href || '').slice(0, 300),
+        bodySnippet: String(b.bodySnippet || '').slice(0, 500),
+        ua: String(b.ua || '').slice(0, 200)
+      })
+    });
+  } catch (e) {
+    try { console.warn('[debug/client] non-fatal: ' + (e && e.message)); } catch (_e) {}
+  }
+  res.json({ ok: true });
+});
+
 // ---- Layer 1: automatic capture of every state-changing API request ----
 // Mounted on /api in server.js. For a user with Debug Mode on (session-cached
 // flag, synced from the DB on /status + /toggle), it records every mutating
