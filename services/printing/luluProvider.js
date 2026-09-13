@@ -32,9 +32,16 @@ const SANDBOX = {
 };
 
 // Neutral shipping level -> Lulu shipping_level enum.
+// v3.0.882 -- TD-757. `standard` IS GONE, NOT REPOINTED.
+// It mapped to GROUND, which Lulu answers "No shipping option found for GROUND to
+// US" for -- a name pointing at something dead. It was unreachable from the Order
+// tab and reachable only from a stored order row, and the reorder path no longer
+// reads that column at all (Ian, 2026-09-13), so the reader disappeared before the
+// map did. Correcting a dead pointer by DELETING it beats repointing it at a level
+// that happens to work today. An unrecognised name now falls to the cheapest rung
+// -- see _shippingLevel, where the direction of that fallback is the whole point.
 const SHIPPING = {
   cheapest: 'MAIL',
-  standard: 'GROUND',
   expedited: 'EXPEDITED',
   express: 'EXPRESS',
 };
@@ -296,8 +303,15 @@ class LuluProvider extends PrintProvider {
     };
   }
 
+  // v3.0.882 -- TD-757. Three cases, in this order, and the LAST one is the one that
+  // matters on a billing path. A neutral name from an older stored row still maps. A
+  // REAL Lulu level passes straight through, which is what the derived tiers send.
+  // Anything unrecognised -- including the retired `standard` -- lands on the CHEAPEST
+  // rung, because a fallback that guesses upward would charge more than was asked for.
   _shippingLevel(neutral) {
-    return SHIPPING[neutral || 'standard'] || 'GROUND';
+    if (neutral && SHIPPING[neutral]) return SHIPPING[neutral];
+    if (neutral && LEVEL_LADDER.indexOf(neutral) !== -1) return neutral;
+    return LEVEL_LADDER[0];
   }
 
   // --- auth -------------------------------------------------------------
@@ -455,8 +469,14 @@ class LuluProvider extends PrintProvider {
     const _wanted = this._shippingLevel(req.shippingLevel);
     let _at = LEVEL_LADDER.indexOf(_wanted);
     if (_at === -1) _at = 0;
+    // v3.0.882 -- TD-757. quoteAllLevels asks for every level at once and needs each
+    // answer attributed to the level it asked for, so it sets noLadder and gets ONE
+    // attempt. Without the flag nothing changes: the ladder climbs exactly as in 880.
+    // It also bounds the request count -- six probes that could each climb six rungs
+    // would be up to twenty-one requests for one price.
+    const _stop = req.noLadder ? _at + 1 : LEVEL_LADDER.length;
     let raw = null, _used = null, _lastErr = null;
-    for (let _i = _at; _i < LEVEL_LADDER.length; _i++) {
+    for (let _i = _at; _i < _stop; _i++) {
       try {
         raw = await this._fetch('/print-job-cost-calculations/', {
           method: 'POST',
@@ -524,6 +544,61 @@ class LuluProvider extends PrintProvider {
     };
   }
 
+  // v3.0.882 -- TD-757. EVERY LEVEL LULU WILL ACTUALLY HONOUR FOR THIS ADDRESS,
+  // ASKED ALL AT ONCE.
+  //
+  // Ian, 2026-09-13: "I think we only need 3 shipping options... Slow / Cheap thru
+  // Fast Expensive. So can you just work it so 3 options are there and work for all
+  // addresses?" Three FIXED level names cannot do that -- that is exactly what
+  // `standard` -> GROUND was, and what MAIL still is for the eleven countries of
+  // TD-758. So the choices are DERIVED from what the printer answers.
+  //
+  // IT REUSES getQuote RATHER THAN REBUILDING THE MONEY MATH. The tax handling in
+  // getQuote (v3.0.425) is the difference between a margin and a loss on every book,
+  // and a second copy of it would be a second copy to get wrong. Derive, don't pair.
+  //
+  // PARALLEL, AND EXACTLY ONE REQUEST PER LEVEL. Six requests, one round trip of wall
+  // clock. noLadder is what makes the count fixed rather than multiplicative.
+  //
+  // A REFUSAL THAT IS NOT "THIS LEVEL DOES NOT EXIST HERE" IS A REAL PROBLEM AND IS
+  // REPORTED AS ITSELF. Asked in parallel, a bad address refuses all six for the same
+  // reason, so the rule is: if nothing priced and any refusal was something other than
+  // an unavailable level, throw THAT one -- never a softer summary of it.
+  //
+  // AND A PRICE IS NEVER ATTRIBUTED TO A LEVEL IT WAS NOT QUOTED FOR. With noLadder a
+  // climb is impossible, so a mismatch means the flag stopped working; such an answer
+  // is DROPPED rather than relabelled, because a price under the wrong label is the
+  // one outcome here that could overcharge somebody.
+  async quoteAllLevels(req) {
+    const _self = this;
+    const settled = await Promise.allSettled(LEVEL_LADDER.map(function (level) {
+      return _self.getQuote(Object.assign({}, req, { shippingLevel: level, noLadder: true }));
+    }));
+    const options = [];
+    let otherErr = null;
+    for (let i = 0; i < LEVEL_LADDER.length; i++) {
+      const s = settled[i];
+      if (s.status === 'fulfilled') {
+        const q = s.value;
+        if (q && q.shippingLevelUsed === LEVEL_LADDER[i]) {
+          options.push({
+            level: LEVEL_LADDER[i],
+            label: LEVEL_LABEL[LEVEL_LADDER[i]] || LEVEL_LADDER[i],
+            totalCost: q.totalCost,
+            currency: q.currency,
+            quote: q,
+          });
+        }
+        continue;
+      }
+      if (!isLevelUnavailable(s.reason)) otherErr = otherErr || s.reason;
+    }
+    if (!options.length) {
+      throw this._skuError(otherErr || new Error('lulu: no shipping level is available to this address'), req.spec);
+    }
+    return { options: options };
+  }
+
   // Full-wrap cover dimensions (back + spine + front, including bleed) for a
   // spec + interior page count. Lulu derives the spine width from page count +
   // paper, and the casewrap allowance for hardcover. Normalized to inches.
@@ -553,7 +628,21 @@ class LuluProvider extends PrintProvider {
   // the SKU was even involved took the rest of the session. Wrapping the two calls that carry a
   // pod_package_id means a bad code identifies itself in the first line of the error, and the fix
   // is one confirmed string in SKU_OVERRIDES rather than an investigation.
+  // v3.0.882 -- TD-757. A SHIPPING REFUSAL IS NOT A PRODUCT-CODE REFUSAL, AND IT WAS
+  // BEING REPORTED AS ONE.
+  //
+  // Lulu answers "No shipping option found for X to Y" with a 400, _fetch puts that
+  // status in the message text, and the /400/ test below matched it -- so an address
+  // Lulu simply will not ship to came back as "the product code was not accepted",
+  // naming the wrong cause AND setting podPackageId, which is the flag
+  // friendlyPrintError classifies on. A reader would be told their book format was
+  // wrong when their country was the problem.
+  //
+  // Passed through untouched now, so status and wording both survive for the caller
+  // -- which is also what lets quoteAllLevels tell "this level does not exist here"
+  // apart from "this address is wrong" without reading anybody's prose.
   _skuError(err, spec) {
+    if (isLevelUnavailable(err)) return err;
     var sku = '(unknown)';
     try { sku = this._packageId(spec); } catch (e) { sku = '(could not be built: ' + ((e && e.message) || e) + ')'; }
     var msg = (err && err.message) || String(err);

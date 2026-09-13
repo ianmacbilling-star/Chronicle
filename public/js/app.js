@@ -21540,7 +21540,12 @@ function reorderFromOrder(id) {
       city: o.ship_city || '', state: o.ship_state || '', postcode: o.ship_postcode || '',
       country: o.ship_country || '', phone: o.ship_phone || ''
     },
-    shippingLevel: _sel.shippingLevel || o.shipping_level || 'cheapest',
+    // v3.0.882 -- TD-757. THE OLD ORDER'S SHIPPING LEVEL IS DELIBERATELY NOT CARRIED
+    // OVER. (Ian, 2026-09-13: "when someone does a reorder I don't think we need to
+    // reload the shipping from the last order. They will pick that fresh on a new
+    // order.") It also retires the stored-`standard`-to-dead-GROUND trap by deleting
+    // the reader rather than by repointing the map.
+    shippingLevel: _sel.shippingLevel || 'cheapest',
     oldCharge: (o.customer_charge != null) ? Number(o.customer_charge) : null,
     oldCurrency: o.currency || 'USD',
     when: o.created_at || null,
@@ -21636,7 +21641,7 @@ function reorderApplySelections() {
     if (_t) _t.value = _rState;
   }
   set('print-ship-phone', R.shipTo.phone);
-  pick('print-ship-level', R.shippingLevel, 'that shipping speed');
+  // v3.0.882 -- TD-757. Deliberately NOT applied: delivery is picked fresh on a reorder.
   R.applied = true;
   var b = document.getElementById('print-place-btn');
   if (b) b.textContent = 'Reorder \u2014 review & price';
@@ -21701,6 +21706,22 @@ function reorderReviewAndPrice() {
 // v3.0.880 -- TD-758. The same sentence on the review panel, which is the last
 // screen before the card. Appended the way the reorder note is, so the two behave
 // alike and neither has to know about the other.
+// v3.0.882 -- TD-757, STAGE 1. READ-ONLY ON PURPOSE.
+// These are the delivery options Lulu actually honours for the address as typed,
+// priced with our markup -- derived from what the printer answered rather than from a
+// fixed list of level names. Shown and NOT yet selectable, because the picker becoming
+// the control is a change to the money path and belongs in its own version, after
+// these numbers have been looked at against a real address.
+function shippingOptionsLine(j) {
+  var opts = (j && j.shippingOptions) || [];
+  if (!opts.length) return '';
+  var parts = opts.map(function (o) {
+    return escapeHtmlPrint(o.tier) + ' $' + Number(o.customerCharge || 0).toFixed(2);
+  }).join(' \u00b7 ');
+  return '<div style="margin-top:4px;font-size:11px;color:rgba(245,232,200,0.55);">' +
+    'Total by delivery option: ' + parts + '</div>';
+}
+
 function shippingNoteInReview(quote) {
   var sum = document.getElementById('print-review-summary');
   if (!sum || !quote || !quote.shippingNote) return;
@@ -22546,7 +22567,9 @@ function quotePrintOrder() {
           // and the review panel cannot drift.
           (j.shippingNote
             ? ('<div style="margin-top:4px;font-size:11px;color:#c9a84c;">' + escapeHtmlPrint(j.shippingNote) + '</div>')
-            : '');
+            : '') +
+          // v3.0.882 -- TD-757 stage 1.
+          shippingOptionsLine(j);
       }
     })
     // v3.0.877 -- TD-754. THE ARGUMENT-LESS CATCH WAS THE WHOLE COMPLAINT. It threw
