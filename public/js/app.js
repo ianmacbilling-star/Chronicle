@@ -21688,6 +21688,7 @@ function reorderReviewAndPrice() {
       printProgress(100);
       showPrintBtnMsg('', null);
       renderPrintReview(body, res.j);
+      shippingNoteInReview(res.j);
       reorderNoteInReview(R, res.j);
       setTimeout(printProgressDone, 450);
     })
@@ -21701,6 +21702,17 @@ function reorderReviewAndPrice() {
 // Appended AFTER renderPrintReview writes the summary, so the reader sees what they paid last time
 // beside what this one costs. Printing costs and shipping both move; a reorder that quietly charged
 // a different number than the card they clicked from would be the complaint this prevents.
+// v3.0.880 -- TD-758. The same sentence on the review panel, which is the last
+// screen before the card. Appended the way the reorder note is, so the two behave
+// alike and neither has to know about the other.
+function shippingNoteInReview(quote) {
+  var sum = document.getElementById('print-review-summary');
+  if (!sum || !quote || !quote.shippingNote) return;
+  sum.insertAdjacentHTML('beforeend',
+    '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;' +
+    'font-size:12px;color:#c9a84c;">' + escapeHtmlPrint(quote.shippingNote) + '</div>');
+}
+
 function reorderNoteInReview(R, quote) {
   var sum = document.getElementById('print-review-summary');
   if (!sum) return;
@@ -22366,6 +22378,14 @@ function cgApplyCountryRules() {
     var isUS = cSel.value === 'US';
     if (sel) sel.style.display = isUS ? '' : 'none';
     if (txt) txt.style.display = (!isUS && meta.needsState) ? '' : 'none';
+    // v3.0.880 -- HIDE THE LABEL WITH THE FIELD. *(Ian, 2026-09-13: "If you hide
+    // state or postal code... hide the labels of them too.")* v3.0.879 hid both
+    // controls and left the word "State" sitting above nothing at all. The whole
+    // field wrapper goes, so the label travels with the control it names and the
+    // row closes up instead of holding a gap.
+    if (sel && sel.parentNode && sel.parentNode.style) {
+      sel.parentNode.style.display = (isUS || meta.needsState) ? '' : 'none';
+    }
     // A hidden control must not keep a stale value that could still be submitted.
     if (!isUS && sel) sel.value = '';
     if ((isUS || !meta.needsState) && txt) txt.value = '';
@@ -22523,7 +22543,14 @@ function quotePrintOrder() {
         out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
           '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
           ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) +
-          (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>';
+          (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>' +
+          // v3.0.880 -- TD-758. SAY IT WHERE THE PRICE IS. A reader who picked the
+          // cheapest option and is being quoted a dearer one must be told here, not
+          // discover it on a receipt. The server composes the sentence so this panel
+          // and the review panel cannot drift.
+          (j.shippingNote
+            ? ('<div style="margin-top:4px;font-size:11px;color:#c9a84c;">' + escapeHtmlPrint(j.shippingNote) + '</div>')
+            : '');
       }
     })
     // v3.0.877 -- TD-754. THE ARGUMENT-LESS CATCH WAS THE WHOLE COMPLAINT. It threw
@@ -22743,6 +22770,7 @@ function reviewPrintOrder() {
       printProgress(100);
       showPrintBtnMsg('', null);
       renderPrintReview(body, res.j);
+      shippingNoteInReview(res.j);
       setTimeout(printProgressDone, 450);
     })
     .catch(function (e) {

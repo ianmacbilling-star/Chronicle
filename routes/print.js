@@ -447,6 +447,16 @@ function shipToErrors(body) {
   return errs;
 }
 
+// v3.0.880 -- TD-758. ONE PLACE OWNS THE SENTENCE, so the quote panel and the
+// review panel cannot end up saying different things about the same substitution.
+// Empty when nothing was substituted, which is the ordinary case.
+function shippingSwapNote(quote) {
+  if (!quote || !quote.shippingLevelUsed) return '';
+  if (quote.shippingLevelUsed === quote.shippingLevelRequested) return '';
+  return 'The printer does not offer ' + (quote.shippingLevelRequestedLabel || 'that option') +
+         ' to this address, so this price is for ' + (quote.shippingLevelUsedLabel || 'another option') + '.';
+}
+
 // Map the public request body to a neutral OrderRequest the provider takes.
 function buildOrderRequest(body, spec, externalId, contactEmail) {
   const s = body.shipTo || {};
@@ -586,6 +596,11 @@ router.post('/quote', requireSession, async function (req, res) {
       markupPct: pct,
       breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping, tax: _m.tax },
       providerTax: quote.taxCost,
+      // v3.0.880 -- TD-758. The reader sees which delivery this price is for, before
+      // the review panel and long before the card.
+      shippingLevelUsed: quote.shippingLevelUsed || '',
+      shippingLevelUsedLabel: quote.shippingLevelUsedLabel || '',
+      shippingNote: shippingSwapNote(quote),
     });
   } catch (e) {
     logPrintFailure(req, 'quote', e);
