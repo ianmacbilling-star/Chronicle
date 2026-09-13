@@ -1,4 +1,160 @@
 // ============================================================
+// v3.0.877 -- TD-754. A REPLY THAT IS NOT JSON MUST NOT REACH THE READER AS A
+// BROWSER STRING, AND MUST NOT VANISH FROM THE DEBUG LOG.
+//
+// A reader could only recall "something about a token and JSON" after a price
+// failed. That is Chrome's wording for a failed parse --
+//     Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+// -- where the token is the '<' that opens an HTML page and NOT an auth token.
+// The server had answered with an error PAGE and every one of this file's 276
+// `return r.json()` sites turns that into a SyntaxError. Two paths print
+// e.message straight onto the screen; the rest swallow it and show a bare line
+// with nothing to act on.
+//
+// THE FIX IS AT THE PARSE, NOT AT 276 CALL SITES. Sweeping twins is the fault
+// this project records most often (rules 5c), and the better version is to make
+// the class impossible. On success this is byte-for-byte the old behaviour: the
+// same bytes through the same JSON.parse. It differs ONLY on the failure path,
+// which today is a crash carrying a message no reader can use -- same control
+// flow (still a throw, so every existing catch runs exactly as before), a
+// message that ends in an instruction, and a log entry.
+//
+// AND IT IS THE ONLY WAY THIS FAILURE CAN EVER BE LOGGED. The debug log is fed
+// by captureMiddleware, which records what the SERVER saw. When the HTML came
+// from the edge the app never saw the request at all, so no server-side logging
+// could ever record it. Only the browser can report this one.
+//
+// WHAT IT DELIBERATELY DOES NOT SAY: there is no "nothing has been charged" in
+// the generic message. This sits under every route in the product, including
+// ones that spend tokens before they answer, and a reply we could not read says
+// nothing about what happened before it (TD-587). The charge wording belongs
+// only where the caller knows -- see submitPrintOrder.
+// ============================================================
+var _cgClientLogBusy = false;
+
+// Best-effort client-side diagnostic. Never throws, never blocks, and cannot
+// recurse: /api/debug is excluded and the in-flight flag stops a failing log
+// from logging its own failure. The server writes it only when that user has
+// Debug Mode on -- logDebug enforces that, not this.
+function cgLogClient(entry) {
+  try {
+    if (_cgClientLogBusy) return;
+    var url = String((entry && entry.url) || '');
+    if (url.indexOf('/api/debug') === 0) return;
+    _cgClientLogBusy = true;
+    var done = function () { _cgClientLogBusy = false; };
+    fetch('/api/debug/client', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page: url,
+        fn: String((entry && entry.fn) || 'fetch'),
+        kind: String((entry && entry.kind) || ''),
+        status: (entry && entry.status) || 0,
+        message: String((entry && entry.message) || '').slice(0, 500),
+        bodySnippet: String((entry && entry.bodySnippet) || '').slice(0, 500),
+        href: (function () { try { return String(location.pathname + location.search).slice(0, 300); } catch (e) { return ''; } })(),
+        ua: (function () { try { return String(navigator.userAgent).slice(0, 200); } catch (e) { return ''; } })()
+      })
+    }).then(done, done);
+  } catch (e) { _cgClientLogBusy = false; }
+}
+
+// Strip the origin so a logged path reads like the ones captureMiddleware writes.
+function cgShortUrl(u) {
+  try { return String(u || '').replace(/^https?:\/\/[^\/]+/, ''); } catch (e) { return ''; }
+}
+
+// What the reader is told when the server did not answer with JSON. EVERY branch
+// ends in an action, because "Could not price this order." with nothing after it
+// is precisely the message that started this.
+function cgNotJsonMessage(status) {
+  if (status === 401 || status === 403) {
+    return 'You have been signed out. Please sign in again \u2014 your work is still here.';
+  }
+  if (status === 429) {
+    return 'Campaignia is busy right now. Please wait a moment and try again.';
+  }
+  if (!status || status === 502 || status === 503 || status === 504) {
+    return 'Campaignia was updating or briefly unreachable, so the server did not answer properly. Please wait about a minute and try again \u2014 if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.';
+  }
+  return 'The server sent an unexpected reply (HTTP ' + status + '). Please wait a moment and try again \u2014 if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.';
+}
+
+// The wrapper, installed once and defensively: a browser that refuses either
+// assignment leaves the app exactly as it was rather than failing to start.
+(function () {
+  try {
+    if (typeof Response === 'undefined' || !Response.prototype) return;
+    if (Response.prototype._cgJsonWrapped) return;
+    var _nativeText = Response.prototype.text;
+    Response.prototype.json = function () {
+      var r = this;
+      return _nativeText.call(r).then(function (body) {
+        var parsed;
+        try {
+          // Native json() throws on an empty body too, and so does this: the control
+          // flow every existing caller was written against is preserved exactly.
+          parsed = JSON.parse(body);
+        } catch (parseErr) {
+          var snippet = String(body == null ? '' : body).slice(0, 300);
+          var err = new Error(cgNotJsonMessage(r.status));
+          err.cgKind = 'not-json';
+          err.cgStatus = r.status;
+          err.cgBody = snippet;
+          try {
+            cgLogClient({
+              url: cgShortUrl(r.url), fn: 'Response.json', kind: 'not-json', status: r.status,
+              message: 'Reply was not JSON: ' + ((parseErr && parseErr.message) ? String(parseErr.message).slice(0, 200) : 'parse failed'),
+              bodySnippet: snippet
+            });
+          } catch (e) {}
+          throw err;
+        }
+        // A well-formed error body is still a failure worth recording, and the SERVER
+        // log does not carry response bodies. This is where the reason usually is.
+        if (!r.ok) {
+          try {
+            cgLogClient({
+              url: cgShortUrl(r.url), fn: 'Response.json', kind: 'http', status: r.status,
+              message: 'HTTP ' + r.status,
+              bodySnippet: String(body == null ? '' : body).slice(0, 300)
+            });
+          } catch (e) {}
+        }
+        return parsed;
+      });
+    };
+    try {
+      Object.defineProperty(Response.prototype, '_cgJsonWrapped', { value: true, enumerable: false });
+    } catch (e) { Response.prototype._cgJsonWrapped = true; }
+
+    // A request that never produced a response at all -- dropped connection, DNS,
+    // a blocked request -- rejects before any of the above runs, and today that is
+    // invisible everywhere. PURE PASS-THROUGH: the original error is rethrown
+    // untouched, so no caller's behaviour changes; the only effect is the log line.
+    if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !window._cgFetchWrapped) {
+      var _nativeFetch = window.fetch;
+      window.fetch = function (input, init) {
+        var _u = '';
+        try { _u = cgShortUrl((input && input.url) ? input.url : input); } catch (e) {}
+        return _nativeFetch.apply(this, arguments).catch(function (netErr) {
+          try {
+            cgLogClient({
+              url: _u, fn: 'fetch', kind: 'network', status: 0,
+              message: 'Request did not complete: ' + ((netErr && netErr.message) ? String(netErr.message).slice(0, 200) : 'network error')
+            });
+          } catch (e) {}
+          throw netErr;
+        });
+      };
+      window._cgFetchWrapped = true;
+    }
+  } catch (e) {}
+})();
+
+// ============================================================
 // STATE
 // ============================================================
 var state = {
@@ -21071,6 +21227,21 @@ function runRenderJob(url, kind, onTick) {
         if (!st) throw new Error('Lost contact with the print builder.');
         if (st.state === 'done') return { ok: true, j: st.body };
         if (st.state === 'error') return { ok: false, j: st.body || { error: 'render_failed' } };
+        // v3.0.877 -- TD-754. A REPLY WITH NO `state` IS NOT "STILL RUNNING".
+        // An error body that happens to be valid JSON -- a proxy's own {"error":...},
+        // or any shape a future edge invents -- passed every test here and went
+        // straight back into the poll, which then ran forever. A spinner that never
+        // stops is the one failure a reader cannot tell from a hang, so an answer we
+        // do not recognise ends the wait instead of extending it. It names all four
+        // known states rather than testing for the absence of one, so adding a state
+        // above without adding it here fails loudly instead of looping.
+        // THE OTHER TWO POLLERS IN THIS FILE DO NOT NEED THIS and were checked before
+        // this was written: the save-optimized poll is bounded by LIMIT_MS and a miss
+        // counter, and the layout-apply poll resolves on its own fall-through. This is
+        // the only one where an unrecognised answer means a spinner that never stops.
+        if (st.state !== 'running' && st.state !== 'done' && st.state !== 'error' && st.state !== 'unknown') {
+          throw new Error('The print builder sent an answer we did not recognise. Please wait a moment and try again.');
+        }
         if (st.state === 'unknown') {
           // The process that held the ticket is gone. Start over ONCE; twice means something is
           // wrong that retrying will not fix, and a silent retry loop is worse than an error.
@@ -21448,9 +21619,26 @@ function reorderApplySelections() {
   set('print-ship-street1', R.shipTo.street1);
   set('print-ship-street2', R.shipTo.street2);
   set('print-ship-city', R.shipTo.city);
-  set('print-ship-state', R.shipTo.state);
+  // v3.0.878 -- TD-756. NORMALISE, THEN PICK -- AND LET IT FAIL LOUDLY.
+  // These two are now pickers, and set() on a picker whose option is missing leaves
+  // it silently on the first entry, which on an address means quietly shipping the
+  // book somewhere nobody chose. pick() aborts the reorder with a sentence instead.
+  // The normalise step is what heals an order stored before this batch: a row
+  // holding "Virginia" becomes VA and repeats cleanly rather than aborting.
+  cgFillShipSelects();
+  // COUNTRY FIRST, because it decides which state control the next line should
+  // write to. Doing it the other way round put the state into a box that was
+  // about to be hidden and cleared.
+  if (!pick('print-ship-country', cgNormalizeCountryCode(R.shipTo.country), 'that country')) return;
+  cgApplyCountryRules();
   set('print-ship-postcode', R.shipTo.postcode);
-  set('print-ship-country', R.shipTo.country);
+  var _rState = cgNormalizeStateCode(R.shipTo.state) || String(R.shipTo.state || '').trim().toUpperCase();
+  if ((document.getElementById('print-ship-country') || {}).value === 'US') {
+    if (!pick('print-ship-state', _rState, 'that state')) return;
+  } else {
+    var _t = cgStateTextEl();
+    if (_t) _t.value = _rState;
+  }
   set('print-ship-phone', R.shipTo.phone);
   pick('print-ship-level', R.shippingLevel, 'that shipping speed');
   R.applied = true;
@@ -21500,6 +21688,7 @@ function reorderReviewAndPrice() {
       printProgress(100);
       showPrintBtnMsg('', null);
       renderPrintReview(body, res.j);
+      shippingNoteInReview(res.j);
       reorderNoteInReview(R, res.j);
       setTimeout(printProgressDone, 450);
     })
@@ -21513,6 +21702,17 @@ function reorderReviewAndPrice() {
 // Appended AFTER renderPrintReview writes the summary, so the reader sees what they paid last time
 // beside what this one costs. Printing costs and shipping both move; a reorder that quietly charged
 // a different number than the card they clicked from would be the complaint this prevents.
+// v3.0.880 -- TD-758. The same sentence on the review panel, which is the last
+// screen before the card. Appended the way the reorder note is, so the two behave
+// alike and neither has to know about the other.
+function shippingNoteInReview(quote) {
+  var sum = document.getElementById('print-review-summary');
+  if (!sum || !quote || !quote.shippingNote) return;
+  sum.insertAdjacentHTML('beforeend',
+    '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;' +
+    'font-size:12px;color:#c9a84c;">' + escapeHtmlPrint(quote.shippingNote) + '</div>');
+}
+
 function reorderNoteInReview(R, quote) {
   var sum = document.getElementById('print-review-summary');
   if (!sum) return;
@@ -21785,6 +21985,482 @@ function refreshPrintOptions(pageCount) {
     .catch(function () {});
 }
 
+// ============================================================
+// v3.0.878 -- TD-756. TWO-LETTER CODES, CHOSEN RATHER THAN TYPED.
+//
+// A reader's price failed four times in a row and the request carried
+// stateCode: "Virginia". Lulu's own documentation is explicit -- "All States and
+// Countries should not be fully spelled out, and should be entered as
+// 2-characters", validated against ISO 3166-1 alpha-2 -- so every one of those
+// quotes was refused before it started. Ian reproduced it in one try by typing
+// the word instead of the code.
+//
+// The list lives HERE and not in app.html on purpose: the picker and the
+// name-to-code normaliser are the same data, so they cannot drift apart. That is
+// the shape the cream paper already uses, where the picker, buildSpec and the SKU
+// builder all say the same thing and no one of them is the only guard.
+// ============================================================
+var CG_US_STATES = [
+  ['AL', 'Alabama'], ['AK', 'Alaska'], ['AZ', 'Arizona'], ['AR', 'Arkansas'],
+  ['CA', 'California'], ['CO', 'Colorado'], ['CT', 'Connecticut'], ['DE', 'Delaware'],
+  ['FL', 'Florida'], ['GA', 'Georgia'], ['HI', 'Hawaii'], ['ID', 'Idaho'],
+  ['IL', 'Illinois'], ['IN', 'Indiana'], ['IA', 'Iowa'], ['KS', 'Kansas'],
+  ['KY', 'Kentucky'], ['LA', 'Louisiana'], ['ME', 'Maine'], ['MD', 'Maryland'],
+  ['MA', 'Massachusetts'], ['MI', 'Michigan'], ['MN', 'Minnesota'], ['MS', 'Mississippi'],
+  ['MO', 'Missouri'], ['MT', 'Montana'], ['NE', 'Nebraska'], ['NV', 'Nevada'],
+  ['NH', 'New Hampshire'], ['NJ', 'New Jersey'], ['NM', 'New Mexico'], ['NY', 'New York'],
+  ['NC', 'North Carolina'], ['ND', 'North Dakota'], ['OH', 'Ohio'], ['OK', 'Oklahoma'],
+  ['OR', 'Oregon'], ['PA', 'Pennsylvania'], ['RI', 'Rhode Island'], ['SC', 'South Carolina'],
+  ['SD', 'South Dakota'], ['TN', 'Tennessee'], ['TX', 'Texas'], ['UT', 'Utah'],
+  ['VT', 'Vermont'], ['VA', 'Virginia'], ['WA', 'Washington'], ['WV', 'West Virginia'],
+  ['WI', 'Wisconsin'], ['WY', 'Wyoming'],
+  ['DC', 'District of Columbia'],
+  // Territories and the forces addresses Lulu's own shipping notes call out
+  // ("Hawaii, Alaska, and Puerto Rico", "Armed Forces Europe, Armed Forces Pacific,
+  // and Armed Forces America"), so a reader at one of them is not locked out.
+  ['PR', 'Puerto Rico'], ['VI', 'U.S. Virgin Islands'], ['GU', 'Guam'],
+  ['AS', 'American Samoa'], ['MP', 'Northern Mariana Islands'],
+  ['AA', 'Armed Forces Americas'], ['AE', 'Armed Forces Europe'], ['AP', 'Armed Forces Pacific']
+];
+
+// ============================================================
+// v3.0.879 -- TD-756 STAGE 2. EVERY ROW BELOW WAS MEASURED, NOT TYPED.
+//
+// 280 ICU region codes were put to Lulu's own cost endpoint -- the same call the
+// Order tab makes -- and these 218 are the ones that priced, or that failed only
+// for a reason we can fix in this form. The columns are:
+//
+//     [ code, name, needsState, needsPostcode ]
+//
+// WHAT THE MEASUREMENT SETTLED, none of which was guessable:
+//   * "UK" IS REFUSED AND "GB" IS ACCEPTED. Lulu answers "Must be a valid
+//     ISO 3166-1 alpha-2 country code" to UK. A hand-typed list offering UK would
+//     have failed every British order, quietly, forever.
+//   * 116 of the served countries priced with NO POSTCODE AT ALL. The old form
+//     demanded one from everybody, which was wrong for most of the world.
+//   * FOURTEEN require a state or province and the rest do not.
+//   * Eleven countries -- Israel, Jordan, Kuwait, Qatar among them -- are here
+//     only because a second probe found they ship by EXPEDITED or EXPRESS when
+//     MAIL is refused. The default is still MAIL, so those eleven will refuse at
+//     the quote until TD-758 builds the fallback. They are INCLUDED deliberately:
+//     a country we can ship to belongs in the list, and TD-758 is the fix.
+//
+// AND SEVEN EXCLUDED BY JUDGEMENT RATHER THAN BY MEASUREMENT, LABELLED AS SUCH:
+// Antarctica, Bouvet Island, Heard & McDonald, French Southern Territories,
+// South Georgia, U.S. Outlying Islands and British Indian Ocean Territory. Lulu
+// WILL quote them -- Antarctica came back at 40.98 with 17.19 of shipping -- but
+// the probe measured whether a PRICE is returned, not whether a book arrives.
+// None of them has a resident civilian population or a civilian postal service.
+// Taking money for a book that cannot be delivered is the one failure worse than
+// refusing the order, so they are out. This is the only line in this table that
+// is not a measurement, and it is reversible in one commit.
+//
+// DELIBERATELY ABSENT: 58 that Lulu refused outright, South Sudan and Syria
+// (no shipping level at all), Peru (needs recipient_tax_id, a legal customs
+// identifier this product does not collect and must not fake), Western Sahara
+// (Lulu answered with a 500 HTML page, so we do not know), and every code that
+// is not valid ISO 3166-1 -- UK among them.
+//
+// THIS LIST IS NOT THE ONLY GUARD AND MUST NOT BECOME ONE. It decides what is
+// OFFERED. The server checks shape and required-ness. Lulu decides serviceability.
+// If Lulu opens a country tomorrow, the worst this costs is that we do not offer
+// it yet -- never that we quote something we cannot ship.
+// ============================================================
+var CG_COUNTRIES = [
+  ['AF', 'Afghanistan', 0, 1],
+  ['AL', 'Albania', 0, 0],
+  ['DZ', 'Algeria', 0, 0],
+  ['AS', 'American Samoa', 0, 1],
+  ['AD', 'Andorra', 0, 0],
+  ['AO', 'Angola', 0, 0],
+  ['AI', 'Anguilla', 0, 0],
+  ['AG', 'Antigua & Barbuda', 0, 0],
+  ['AR', 'Argentina', 0, 1],
+  ['AM', 'Armenia', 0, 0],
+  ['AW', 'Aruba', 0, 0],
+  ['AU', 'Australia', 0, 1],
+  ['AT', 'Austria', 0, 1],
+  ['AZ', 'Azerbaijan', 0, 0],
+  ['BS', 'Bahamas', 0, 0],
+  ['BH', 'Bahrain', 0, 1],
+  ['BD', 'Bangladesh', 0, 0],
+  ['BB', 'Barbados', 0, 0],
+  ['BE', 'Belgium', 0, 1],
+  ['BZ', 'Belize', 0, 0],
+  ['BJ', 'Benin', 0, 0],
+  ['BM', 'Bermuda', 0, 0],
+  ['BT', 'Bhutan', 0, 0],
+  ['BO', 'Bolivia', 0, 0],
+  ['BA', 'Bosnia & Herzegovina', 0, 0],
+  ['BW', 'Botswana', 0, 0],
+  ['BR', 'Brazil', 0, 1],
+  ['VG', 'British Virgin Islands', 0, 0],
+  ['BN', 'Brunei', 0, 0],
+  ['BG', 'Bulgaria', 0, 0],
+  ['BF', 'Burkina Faso', 0, 0],
+  ['BI', 'Burundi', 0, 0],
+  ['KH', 'Cambodia', 0, 0],
+  ['CM', 'Cameroon', 0, 0],
+  ['CA', 'Canada', 0, 1],
+  ['CV', 'Cape Verde', 0, 0],
+  ['BQ', 'Caribbean Netherlands', 0, 0],
+  ['KY', 'Cayman Islands', 0, 1],
+  ['TD', 'Chad', 0, 0],
+  ['CL', 'Chile', 0, 1],
+  ['CN', 'China', 0, 1],
+  ['CX', 'Christmas Island', 0, 0],
+  ['CC', 'Cocos (Keeling) Islands', 0, 0],
+  ['CO', 'Colombia', 0, 1],
+  ['CG', 'Congo - Brazzaville', 0, 0],
+  ['CD', 'Congo - Kinshasa', 0, 0],
+  ['CK', 'Cook Islands', 0, 0],
+  ['CR', 'Costa Rica', 1, 0],
+  ['HR', 'Croatia', 0, 0],
+  ['CW', 'Curaçao', 0, 0],
+  ['CY', 'Cyprus', 0, 0],
+  ['CZ', 'Czechia', 0, 1],
+  ['CI', 'Côte d’Ivoire', 0, 0],
+  ['DK', 'Denmark', 0, 1],
+  ['DJ', 'Djibouti', 0, 0],
+  ['DM', 'Dominica', 0, 0],
+  ['DO', 'Dominican Republic', 0, 0],
+  ['EC', 'Ecuador', 0, 0],
+  ['EG', 'Egypt', 0, 0],
+  ['SV', 'El Salvador', 0, 1],
+  ['ER', 'Eritrea', 0, 0],
+  ['EE', 'Estonia', 0, 1],
+  ['SZ', 'Eswatini', 0, 0],
+  ['ET', 'Ethiopia', 0, 0],
+  ['FO', 'Faroe Islands', 0, 0],
+  ['FJ', 'Fiji', 0, 0],
+  ['FI', 'Finland', 0, 1],
+  ['FR', 'France', 0, 1],
+  ['GF', 'French Guiana', 0, 1],
+  ['PF', 'French Polynesia', 0, 1],
+  ['GA', 'Gabon', 0, 0],
+  ['GM', 'Gambia', 0, 0],
+  ['GE', 'Georgia', 0, 0],
+  ['DE', 'Germany', 0, 1],
+  ['GH', 'Ghana', 0, 0],
+  ['GI', 'Gibraltar', 0, 0],
+  ['GR', 'Greece', 0, 1],
+  ['GL', 'Greenland', 0, 1],
+  ['GD', 'Grenada', 0, 0],
+  ['GP', 'Guadeloupe', 0, 1],
+  ['GU', 'Guam', 0, 1],
+  ['GT', 'Guatemala', 0, 0],
+  ['GG', 'Guernsey', 0, 1],
+  ['GN', 'Guinea', 0, 0],
+  ['GY', 'Guyana', 0, 0],
+  ['HT', 'Haiti', 0, 1],
+  ['HN', 'Honduras', 1, 0],
+  ['HK', 'Hong Kong SAR China', 1, 0],
+  ['HU', 'Hungary', 0, 1],
+  ['IS', 'Iceland', 0, 0],
+  ['IN', 'India', 0, 1],
+  ['ID', 'Indonesia', 1, 0],
+  ['IQ', 'Iraq', 1, 0],
+  ['IE', 'Ireland', 0, 1],
+  ['IM', 'Isle of Man', 0, 1],
+  ['IL', 'Israel', 0, 0],
+  ['IT', 'Italy', 1, 0],
+  ['JM', 'Jamaica', 1, 0],
+  ['JP', 'Japan', 0, 1],
+  ['JE', 'Jersey', 0, 1],
+  ['JO', 'Jordan', 0, 0],
+  ['KZ', 'Kazakhstan', 0, 0],
+  ['KE', 'Kenya', 0, 0],
+  ['KW', 'Kuwait', 0, 0],
+  ['KG', 'Kyrgyzstan', 0, 0],
+  ['LA', 'Laos', 0, 0],
+  ['LV', 'Latvia', 0, 1],
+  ['LB', 'Lebanon', 0, 1],
+  ['LS', 'Lesotho', 0, 0],
+  ['LR', 'Liberia', 0, 0],
+  ['LY', 'Libya', 0, 0],
+  ['LI', 'Liechtenstein', 0, 1],
+  ['LT', 'Lithuania', 0, 1],
+  ['LU', 'Luxembourg', 0, 1],
+  ['MO', 'Macao SAR China', 0, 0],
+  ['MG', 'Madagascar', 0, 0],
+  ['MW', 'Malawi', 0, 0],
+  ['MY', 'Malaysia', 0, 1],
+  ['MV', 'Maldives', 0, 0],
+  ['ML', 'Mali', 0, 0],
+  ['MT', 'Malta', 0, 0],
+  ['MH', 'Marshall Islands', 0, 1],
+  ['MQ', 'Martinique', 0, 1],
+  ['MR', 'Mauritania', 0, 0],
+  ['MU', 'Mauritius', 0, 0],
+  ['YT', 'Mayotte', 0, 1],
+  ['MX', 'Mexico', 1, 0],
+  ['FM', 'Micronesia', 0, 1],
+  ['MD', 'Moldova', 0, 0],
+  ['MC', 'Monaco', 0, 0],
+  ['MN', 'Mongolia', 0, 0],
+  ['ME', 'Montenegro', 0, 0],
+  ['MS', 'Montserrat', 0, 0],
+  ['MA', 'Morocco', 0, 0],
+  ['MZ', 'Mozambique', 0, 0],
+  ['NA', 'Namibia', 0, 0],
+  ['NP', 'Nepal', 0, 0],
+  ['NL', 'Netherlands', 0, 1],
+  ['NC', 'New Caledonia', 0, 1],
+  ['NZ', 'New Zealand', 0, 1],
+  ['NI', 'Nicaragua', 0, 0],
+  ['NE', 'Niger', 0, 0],
+  ['NG', 'Nigeria', 0, 0],
+  ['NF', 'Norfolk Island', 0, 0],
+  ['MK', 'North Macedonia', 0, 0],
+  ['MP', 'Northern Mariana Islands', 0, 1],
+  ['NO', 'Norway', 0, 1],
+  ['OM', 'Oman', 0, 0],
+  ['PK', 'Pakistan', 0, 0],
+  ['PW', 'Palau', 0, 1],
+  ['PS', 'Palestinian Territories', 0, 0],
+  ['PA', 'Panama', 0, 0],
+  ['PG', 'Papua New Guinea', 0, 1],
+  ['PY', 'Paraguay', 0, 0],
+  ['PH', 'Philippines', 0, 0],
+  ['PN', 'Pitcairn Islands', 0, 1],
+  ['PL', 'Poland', 0, 1],
+  ['PT', 'Portugal', 0, 1],
+  ['PR', 'Puerto Rico', 0, 1],
+  ['QA', 'Qatar', 0, 0],
+  ['RO', 'Romania', 0, 1],
+  ['RW', 'Rwanda', 0, 0],
+  ['RE', 'Réunion', 0, 1],
+  ['WS', 'Samoa', 0, 0],
+  ['SM', 'San Marino', 0, 1],
+  ['SA', 'Saudi Arabia', 0, 0],
+  ['SN', 'Senegal', 0, 0],
+  ['RS', 'Serbia', 0, 0],
+  ['SC', 'Seychelles', 0, 0],
+  ['SG', 'Singapore', 0, 1],
+  ['SX', 'Sint Maarten', 0, 0],
+  ['SK', 'Slovakia', 0, 1],
+  ['SI', 'Slovenia', 0, 0],
+  ['ZA', 'South Africa', 0, 1],
+  ['KR', 'South Korea', 1, 0],
+  ['ES', 'Spain', 1, 0],
+  ['LK', 'Sri Lanka', 0, 0],
+  ['BL', 'St. Barthélemy', 0, 1],
+  ['KN', 'St. Kitts & Nevis', 1, 0],
+  ['LC', 'St. Lucia', 0, 0],
+  ['MF', 'St. Martin', 0, 1],
+  ['VC', 'St. Vincent & Grenadines', 0, 0],
+  ['SR', 'Suriname', 0, 0],
+  ['SJ', 'Svalbard & Jan Mayen', 0, 1],
+  ['SE', 'Sweden', 0, 1],
+  ['CH', 'Switzerland', 0, 1],
+  ['TW', 'Taiwan', 1, 0],
+  ['TZ', 'Tanzania', 0, 0],
+  ['TH', 'Thailand', 0, 0],
+  ['TL', 'Timor-Leste', 0, 0],
+  ['TG', 'Togo', 0, 0],
+  ['TO', 'Tonga', 0, 0],
+  ['TT', 'Trinidad & Tobago', 0, 0],
+  ['TN', 'Tunisia', 0, 0],
+  ['TC', 'Turks & Caicos Islands', 0, 1],
+  ['TR', 'Türkiye', 0, 1],
+  ['VI', 'U.S. Virgin Islands', 0, 1],
+  ['UG', 'Uganda', 0, 0],
+  ['AE', 'United Arab Emirates', 1, 0],
+  ['GB', 'United Kingdom', 0, 1],
+  ['US', 'United States', 1, 1],
+  ['UY', 'Uruguay', 0, 0],
+  ['UZ', 'Uzbekistan', 0, 0],
+  ['VU', 'Vanuatu', 0, 0],
+  ['VA', 'Vatican City', 0, 0],
+  ['VE', 'Venezuela', 0, 1],
+  ['VN', 'Vietnam', 0, 0],
+  ['WF', 'Wallis & Futuna', 0, 1],
+  ['ZM', 'Zambia', 0, 0],
+  ['ZW', 'Zimbabwe', 0, 0],
+  ['AX', 'Åland Islands', 0, 1]
+];
+
+function cgKeyify(s) {
+  return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+// Full name -> code, built FROM the list above so a new entry cannot be missed.
+// The extra keys are the spellings people actually type.
+var CG_STATE_BY_NAME = (function () {
+  var m = {};
+  for (var i = 0; i < CG_US_STATES.length; i++) {
+    m[cgKeyify(CG_US_STATES[i][1])] = CG_US_STATES[i][0];
+    m[CG_US_STATES[i][0]] = CG_US_STATES[i][0];
+  }
+  m[cgKeyify('Washington DC')] = 'DC';
+  m[cgKeyify('Washington D.C.')] = 'DC';
+  m[cgKeyify('Virgin Islands')] = 'VI';
+  m[cgKeyify('US Virgin Islands')] = 'VI';
+  return m;
+})();
+
+var CG_COUNTRY_BY_NAME = (function () {
+  var m = {};
+  for (var i = 0; i < CG_COUNTRIES.length; i++) {
+    m[cgKeyify(CG_COUNTRIES[i][1])] = CG_COUNTRIES[i][0];
+    m[CG_COUNTRIES[i][0]] = CG_COUNTRIES[i][0];
+  }
+  // The spellings people actually type. "UK" is deliberately NOT among them:
+  // Lulu refuses it, so mapping it to GB would be us inventing an answer rather
+  // than the reader choosing one -- and the picker means nobody has to type it.
+  m[cgKeyify('United States of America')] = 'US';
+  m[cgKeyify('USA')] = 'US';
+  m[cgKeyify('America')] = 'US';
+  m[cgKeyify('Great Britain')] = 'GB';
+  m[cgKeyify('England')] = 'GB';
+  m[cgKeyify('Holland')] = 'NL';
+  return m;
+})();
+
+// The row for a code, or null. One lookup so nothing reads the columns by index
+// in three different places.
+function cgCountryMeta(code) {
+  var c = String(code || '').toUpperCase();
+  for (var i = 0; i < CG_COUNTRIES.length; i++) {
+    if (CG_COUNTRIES[i][0] === c) {
+      return { code: c, name: CG_COUNTRIES[i][1],
+               needsState: !!CG_COUNTRIES[i][2], needsPostcode: !!CG_COUNTRIES[i][3] };
+    }
+  }
+  return null;
+}
+
+// The state control the reader should be using for this country. The US has a
+// real picker because its 59 codes are known and verified; the other thirteen
+// that require a state get a text box, because we do NOT have their subdivision
+// codes and inventing them is exactly the fault that started this. Lulu validates
+// what is typed, and since v3.0.877 says so in a sentence a reader can act on.
+function cgStateTextEl() {
+  var el = document.getElementById('print-ship-state-text');
+  if (el) return el;
+  var sel = document.getElementById('print-ship-state');
+  if (!sel || !sel.parentNode) return null;
+  el = document.createElement('input');
+  el.id = 'print-ship-state-text';
+  el.type = 'text';
+  el.className = sel.className;
+  el.placeholder = 'State / province code';
+  el.style.display = 'none';
+  sel.parentNode.insertBefore(el, sel.nextSibling);
+  try {
+    el.addEventListener('change', invalidatePreparedOrder);
+    el.addEventListener('input', invalidatePreparedOrder);
+  } catch (e) {}
+  return el;
+}
+
+// Whichever control is live. Every caller goes through this so the two can never
+// disagree about what was entered.
+function cgShipStateValue() {
+  var c = (document.getElementById('print-ship-country') || {}).value || '';
+  if (c === 'US') {
+    var sel = document.getElementById('print-ship-state');
+    return sel ? String(sel.value || '') : '';
+  }
+  var t = document.getElementById('print-ship-state-text');
+  return t && t.style.display !== 'none' ? String(t.value || '').trim().toUpperCase() : '';
+}
+
+// Show the right controls for the chosen country, and say what is required.
+// Called on every country change and whenever the Order tab is opened.
+function cgApplyCountryRules() {
+  try {
+    var cSel = document.getElementById('print-ship-country');
+    if (!cSel) return;
+    var meta = cgCountryMeta(cSel.value) || { needsState: false, needsPostcode: false };
+    var sel = document.getElementById('print-ship-state');
+    var txt = cgStateTextEl();
+    var isUS = cSel.value === 'US';
+    if (sel) sel.style.display = isUS ? '' : 'none';
+    if (txt) txt.style.display = (!isUS && meta.needsState) ? '' : 'none';
+    // v3.0.880 -- HIDE THE LABEL WITH THE FIELD. *(Ian, 2026-09-13: "If you hide
+    // state or postal code... hide the labels of them too.")* v3.0.879 hid both
+    // controls and left the word "State" sitting above nothing at all. The whole
+    // field wrapper goes, so the label travels with the control it names and the
+    // row closes up instead of holding a gap.
+    if (sel && sel.parentNode && sel.parentNode.style) {
+      sel.parentNode.style.display = (isUS || meta.needsState) ? '' : 'none';
+    }
+    // A hidden control must not keep a stale value that could still be submitted.
+    if (!isUS && sel) sel.value = '';
+    if ((isUS || !meta.needsState) && txt) txt.value = '';
+    var pc = document.getElementById('print-ship-postcode');
+    if (pc) pc.placeholder = meta.needsPostcode ? 'Postal code' : 'Postal code (optional here)';
+  } catch (e) {}
+}
+
+// MINIMAL BY DESIGN, AND THE MEASUREMENT IS WHY. Lulu validates postcode format
+// per country itself -- that is precisely why a generic "10000" was refused by
+// GB, Canada, Japan and Poland in the probe -- and since v3.0.877 its refusal
+// arrives as a sentence the reader can act on. So this rejects only what is
+// CERTAINLY wrong. A stricter guess would block a real customer, which is worse
+// than the state we are fixing.
+function cgPostcodeError(country, pc) {
+  var v = String(pc == null ? '' : pc).trim();
+  var meta = cgCountryMeta(country);
+  if (!v) {
+    return (meta && meta.needsPostcode) ? 'A postal code is required for ' + meta.name + '.' : '';
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9 -]{0,11}$/.test(v)) {
+    return 'That postal code contains characters no country uses. Letters, numbers, spaces and hyphens only.';
+  }
+  if (country === 'US' && !/^[0-9]{5}(-[0-9]{4})?$/.test(v)) {
+    return 'A US ZIP code is five digits, or five plus four such as 24450-1234.';
+  }
+  if (country === 'CA' && !/^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$/.test(v)) {
+    return 'A Canadian postal code looks like K1A 0B1.';
+  }
+  return '';
+}
+
+// Turn whatever is stored or typed into the code Lulu wants. Returns '' when it
+// cannot tell, and NEVER guesses -- a wrong two-letter code is the failure mode
+// this whole change exists to remove, and "ME" for Mexico really is Montenegro.
+function cgNormalizeStateCode(v) {
+  var k = cgKeyify(v);
+  if (!k) return '';
+  return CG_STATE_BY_NAME[k] || '';
+}
+function cgNormalizeCountryCode(v) {
+  var k = cgKeyify(v);
+  if (!k) return '';
+  return CG_COUNTRY_BY_NAME[k] || '';
+}
+
+// Idempotent: safe to call on every visit to the Order tab.
+function cgFillShipSelects() {
+  try {
+    var c = document.getElementById('print-ship-country');
+    if (c && !c.options.length) {
+      for (var i = 0; i < CG_COUNTRIES.length; i++) {
+        c.appendChild(new Option(CG_COUNTRIES[i][1], CG_COUNTRIES[i][0]));
+      }
+      c.value = 'US';
+      // v3.0.879 -- the state and postcode rules depend on this, so the handler is
+      // attached where the options are, not somewhere that might not run.
+      try {
+        c.addEventListener('change', function () {
+          cgApplyCountryRules();
+          try { quotePrintOrder(); } catch (e) {}
+        });
+      } catch (e) {}
+    }
+    var s = document.getElementById('print-ship-state');
+    if (s && !s.options.length) {
+      s.appendChild(new Option('Select a state\u2026', ''));
+      for (var j = 0; j < CG_US_STATES.length; j++) {
+        s.appendChild(new Option(CG_US_STATES[j][1] + ' (' + CG_US_STATES[j][0] + ')', CG_US_STATES[j][0]));
+      }
+    }
+    cgApplyCountryRules();
+  } catch (e) {}
+}
+
 function printSelectionBody() {
   if (!printNovelInfo || !state.currentCampaign) return null;
   function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
@@ -21810,9 +22486,18 @@ function printSelectionBody() {
       street1: val('print-ship-street1'),
       street2: val('print-ship-street2'),
       city: val('print-ship-city'),
-      stateCode: val('print-ship-state'),
+      // v3.0.879 -- through the one helper, so the picker and the text box cannot
+      // disagree about what the reader entered.
+      stateCode: (function () {
+        var raw = cgShipStateValue();
+        return cgNormalizeStateCode(raw) || raw;
+      })(),
       postcode: val('print-ship-postcode'),
-      countryCode: (val('print-ship-country') || 'US').toUpperCase(),
+      // v3.0.878 -- TD-756. The picker already yields a code; this normalises anyway,
+      // because the picker must not be the only guard (the cream pattern) and because
+      // a browser that failed to populate the select would otherwise send an empty
+      // country and get an opaque refusal from the printer.
+      countryCode: (cgNormalizeCountryCode(val('print-ship-country')) || 'US'),
       phone: val('print-ship-phone')
     }
   };
@@ -21822,10 +22507,22 @@ function quotePrintOrder() {
   var body = printSelectionBody();
   var out = document.getElementById('print-quote');
   if (!body || !body.selection.binding) { if (out) out.textContent = ''; return; }
-  if (!body.shipTo.postcode || !body.shipTo.countryCode) {
-    if (out) out.textContent = 'Enter a postal code and country to price shipping.';
+  // v3.0.879 -- TD-756. The old test demanded a postcode from everyone, and the
+  // probe measured that 116 of the served countries price without one. Ask for
+  // what each country actually needs, and say which country we are asking for.
+  if (!body.shipTo.countryCode) {
+    if (out) out.textContent = 'Choose a country to price shipping.';
     return;
   }
+  var _cMeta = cgCountryMeta(body.shipTo.countryCode);
+  if (_cMeta && _cMeta.needsState && !body.shipTo.stateCode) {
+    if (out) out.textContent = _cMeta.code === 'US'
+      ? 'Choose a state to price shipping.'
+      : ('A state or province code is required for ' + _cMeta.name + '.');
+    return;
+  }
+  var _pcErr = cgPostcodeError(body.shipTo.countryCode, body.shipTo.postcode);
+  if (_pcErr) { if (out) out.textContent = _pcErr; return; }
   if (out) out.textContent = 'Pricing...';
   fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -21846,10 +22543,23 @@ function quotePrintOrder() {
         out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
           '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
           ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) +
-          (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>';
+          (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>' +
+          // v3.0.880 -- TD-758. SAY IT WHERE THE PRICE IS. A reader who picked the
+          // cheapest option and is being quoted a dearer one must be told here, not
+          // discover it on a receipt. The server composes the sentence so this panel
+          // and the review panel cannot drift.
+          (j.shippingNote
+            ? ('<div style="margin-top:4px;font-size:11px;color:#c9a84c;">' + escapeHtmlPrint(j.shippingNote) + '</div>')
+            : '');
       }
     })
-    .catch(function () { if (out) out.textContent = 'Could not price this order.'; });
+    // v3.0.877 -- TD-754. THE ARGUMENT-LESS CATCH WAS THE WHOLE COMPLAINT. It threw
+    // the reason away and printed a line with nothing to act on, which is exactly what
+    // a reader reported. cgNotJsonMessage now supplies a sentence that ends in an
+    // instruction, so the error is worth showing rather than worth hiding.
+    .catch(function (e) {
+      if (out) out.textContent = (e && e.message) ? e.message : 'Could not price this order. Please wait a moment and try again.';
+    });
 }
 
 // --- Print order: final review + confirm gate ------------------------------
@@ -21898,6 +22608,9 @@ function invalidatePreparedOrder() {
 // Attach change/input listeners to every order-affecting control once, so any
 // edit invalidates a prepared order. Safe to call repeatedly (guarded).
 function wirePrintOrderLock() {
+  // BEFORE the guard, and idempotent, so the pickers are populated every time the
+  // Order tab is opened rather than only on the first visit of a session.
+  cgFillShipSelects();
   if (printLockWired) return;
   printLockWired = true;
   var ids = ['print-binding','print-color','print-finish','print-qty','print-book-title',
@@ -22057,6 +22770,7 @@ function reviewPrintOrder() {
       printProgress(100);
       showPrintBtnMsg('', null);
       renderPrintReview(body, res.j);
+      shippingNoteInReview(res.j);
       setTimeout(printProgressDone, 450);
     })
     .catch(function (e) {
@@ -22185,7 +22899,16 @@ function submitPrintOrder() {
       if (res.status === 503) { showPrintBtnMsg('Payments are being set up and will be available shortly.', null); return; }
       showPrintBtnMsg((res.j && (res.j.message || res.j.error)) ? (res.j.message || res.j.error) : 'Could not start payment.', null);
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintBtnMsg('Could not reach the payment service. Please try again.', null); });
+    // v3.0.877 -- TD-754. SAY WHAT HAPPENED TO THE MONEY, BECAUSE HERE WE KNOW.
+    // This request creates an UNPAID order row and a Stripe Checkout session; the card
+    // is charged on the NEXT screen. So a lost reply here can be stated as fact rather
+    // than left to the reader's imagination -- which on a billing path is the whole
+    // difference between waiting a minute and ordering the book twice.
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; }
+      var _m = (e && e.message) ? e.message : 'Could not reach the payment service.';
+      showPrintBtnMsg(_m + ' You have not been charged \u2014 payment happens on the next screen. Check My Orders in a minute before trying again.', null);
+    });
 }
 
 // Final point-of-no-return gate. The first confirm button reveals this; only

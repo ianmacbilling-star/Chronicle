@@ -39,6 +39,49 @@ const SHIPPING = {
   express: 'EXPRESS',
 };
 
+// v3.0.880 -- TD-758. THE CHEAPEST OPTION IS ALSO THE DEFAULT, AND IT DOES NOT
+// EXIST IN ELEVEN COUNTRIES WE CAN OTHERWISE SHIP TO.
+//
+// Measured against Lulu's live cost endpoint on 2026-09-13: Bhutan, the Cook
+// Islands, Eritrea, Fiji, Israel, Jordan, Kuwait, Mauritius, the Palestinian
+// Territories, Qatar and Suriname all price perfectly well -- and Lulu refuses
+// MAIL to every one of them. MAIL is what `cheapest` maps to, so the default
+// selection failed there and nothing in the product could say why.
+//
+// THE ORDER IS MEASURED, NOT ASSUMED. For a US paperback on the confirmed SKU:
+//   MAIL 6.27, GROUND_HD 15.14, GROUND_BUS 15.14, PRIORITY_MAIL 16.25,
+//   EXPEDITED 22.87, EXPRESS 39.40.
+// GROUND IS DELIBERATELY ABSENT: Lulu answered "No shipping option found for
+// GROUND to US", so it is dead on this product. That also disarms the trap in
+// SHIPPING above, where `standard` still points at it -- an unknown level starts
+// the ladder at the cheapest rung rather than failing.
+//
+// THE LADDER ONLY EVER CLIMBS, AND ONLY ON ONE ERROR. Any other refusal -- a bad
+// address, a rejected product code -- must not be retried at a higher price.
+const LEVEL_LADDER = ['MAIL', 'GROUND_HD', 'GROUND_BUS', 'PRIORITY_MAIL', 'EXPEDITED', 'EXPRESS'];
+
+// Plain English for a reader who is about to be told their choice was changed.
+const LEVEL_LABEL = {
+  MAIL: 'standard post',
+  GROUND_HD: 'ground delivery',
+  GROUND_BUS: 'business ground delivery',
+  PRIORITY_MAIL: 'priority post',
+  EXPEDITED: 'expedited delivery',
+  EXPRESS: 'express delivery',
+  GROUND: 'ground delivery',
+};
+
+// NARROW ON PURPOSE. This is the one place the code reads Lulu's wording, which
+// TD-512 rightly warns against -- so it is fenced by an explicit 400 as well, and
+// the worst a false positive can do is spend one more round trip and be told no
+// again. A false NEGATIVE just leaves today's behaviour. Neither can overcharge:
+// the level actually used is returned and shown before any money moves.
+function isLevelUnavailable(err) {
+  if (!err) return false;
+  if (Number(err.status) !== 400) return false;
+  return /No shipping option found/i.test(String(err.message || ''));
+}
+
 // Neutral Lulu status -> our lifecycle. Lulu job states include CREATED,
 // UNPAID, PAYMENT_IN_PROGRESS, PRODUCTION_DELAYED, PRODUCTION_READY,
 // IN_PRODUCTION, SHIPPED, REJECTED, CANCELED.
@@ -265,7 +308,11 @@ class LuluProvider extends PrintProvider {
       return this._token;
     }
     if (!this.clientKey || !this.clientSecret) {
-      throw new Error('lulu: LULU_CLIENT_KEY / LULU_CLIENT_SECRET not set');
+      // v3.0.877 -- TD-754. FLAGGED, NOT SNIFFED. friendlyPrintError classifies on this
+      // flag rather than on the wording, so the reader is told it is on our end.
+      const eNoKey = new Error('lulu: LULU_CLIENT_KEY / LULU_CLIENT_SECRET not set');
+      eNoKey.authFailure = true;
+      throw eNoKey;
     }
     const basic = Buffer.from(`${this.clientKey}:${this.clientSecret}`).toString('base64');
     const res = await fetch(this.tokenUrl, {
@@ -277,9 +324,26 @@ class LuluProvider extends PrintProvider {
       body: 'grant_type=client_credentials',
     });
     if (!res.ok) {
-      throw new Error(`lulu: token request failed (${res.status}): ${await safeText(res)}`);
+      const eTok = new Error(`lulu: token request failed (${res.status}): ${await safeText(res)}`);
+      eTok.authFailure = true;
+      eTok.status = res.status;
+      throw eTok;
     }
-    const json = await res.json();
+    // v3.0.877 -- TD-754. THE SAME UNGUARDED PARSE, ON THE SERVER SIDE OF THE SAME CALL.
+    // res.json() on an HTML page throws a SyntaxError whose message names no status and
+    // nothing about Lulu, so it arrived at friendlyError as an unclassifiable generic --
+    // the identical fault the client half of this batch fixes. An auth endpoint behind a
+    // proxy is exactly where an error PAGE is served in place of an error OBJECT.
+    const rawTok = await safeText(res);
+    let json;
+    try {
+      json = JSON.parse(rawTok);
+    } catch (parseErr) {
+      const eParse = new Error('lulu: token response was not JSON (' + res.status + '): ' + String(rawTok).slice(0, 200));
+      eParse.authFailure = true;
+      eParse.inconclusive = true;
+      throw eParse;
+    }
     this._token = json.access_token;
     this._tokenExpiresAt = now + (Number(json.expires_in || 3600) * 1000);
     return this._token;
@@ -340,7 +404,20 @@ class LuluProvider extends PrintProvider {
       else err.inconclusive = true;
       throw err;
     }
-    return res.json();
+    // v3.0.877 -- TD-754. Same parse, same reason: a 200 carrying an HTML page from a
+    // proxy must not reach the caller as "Unexpected token '<'". Marked INCONCLUSIVE,
+    // because a reply we could not read says nothing whatever about whether Lulu acted
+    // on the request -- which is TD-587's whole rule, and the difference between a
+    // retry and a second printed book.
+    const rawBody = await safeText(res);
+    try {
+      return JSON.parse(rawBody);
+    } catch (parseErr) {
+      const eBody = new Error('lulu: ' + method + ' ' + path + ' returned a non-JSON body (' + res.status + '): ' + String(rawBody).slice(0, 200));
+      eBody.status = res.status;
+      eBody.inconclusive = true;
+      throw eBody;
+    }
   }
 
   // v3.0.786 -- TD-587. FIND A JOB WE MAY HAVE ALREADY CREATED.
@@ -372,22 +449,40 @@ class LuluProvider extends PrintProvider {
     // v3.0.784 -- TD-585. A quote is where a wrong product code shows up first, and it is the
     // cheapest place to learn it: no money has moved and no job exists. _skuError names the SKU
     // that was refused, which on 2026-08-24 was the single missing fact.
-    let raw;
-    try {
-      raw = await this._fetch('/print-job-cost-calculations/', {
-        method: 'POST',
-        body: {
-          line_items: [{
-            pod_package_id: this._packageId(req.spec),
-            page_count: req.spec.pageCount,
-            quantity: req.quantity,
-          }],
-          shipping_address: this._address(req.shipTo),
-          shipping_level: this._shippingLevel(req.shippingLevel),
-        },
-      });
-    } catch (err) {
-      throw this._skuError(err, req.spec);
+    // v3.0.880 -- TD-758. Start at what was asked for and climb only while Lulu says
+    // that particular level does not exist for this address. A level we do not know
+    // -- GROUND, which is dead -- starts at the cheapest rung instead of failing.
+    const _wanted = this._shippingLevel(req.shippingLevel);
+    let _at = LEVEL_LADDER.indexOf(_wanted);
+    if (_at === -1) _at = 0;
+    let raw = null, _used = null, _lastErr = null;
+    for (let _i = _at; _i < LEVEL_LADDER.length; _i++) {
+      try {
+        raw = await this._fetch('/print-job-cost-calculations/', {
+          method: 'POST',
+          body: {
+            line_items: [{
+              pod_package_id: this._packageId(req.spec),
+              page_count: req.spec.pageCount,
+              quantity: req.quantity,
+            }],
+            shipping_address: this._address(req.shipTo),
+            shipping_level: LEVEL_LADDER[_i],
+          },
+        });
+        _used = LEVEL_LADDER[_i];
+        break;
+      } catch (err) {
+        // Anything that is not "this level does not exist here" is a real refusal
+        // and is thrown at once, unretried, at the price the reader asked for.
+        if (!isLevelUnavailable(err)) throw this._skuError(err, req.spec);
+        _lastErr = err;
+      }
+    }
+    if (!_used) {
+      // Every rung refused. That is a genuine "we cannot ship there", and it must
+      // not be reported as anything softer.
+      throw this._skuError(_lastErr || new Error('lulu: no shipping level is available to this address'), req.spec);
     }
     // v3.0.425 -- CARRY THE TAX, DO NOT JUST SWALLOW IT.
     // These were the incl-tax figures only, so tax sat inside the price and was invisible: nothing
@@ -417,6 +512,14 @@ class LuluProvider extends PrintProvider {
       totalCost: Number(totalIncl || printIncl + shipIncl),
       totalCostExclTax: totalExcl,
       currency: raw.currency || 'USD',
+      // v3.0.880 -- TD-758. WHICH LEVEL THIS PRICE IS FOR. Falling back silently
+      // from a 6.27 option to a 55.69 one on a live billing path is precisely the
+      // surprise this work exists to remove, so the caller is handed what it needs
+      // to say so out loud before anyone is charged.
+      shippingLevelRequested: _wanted,
+      shippingLevelUsed: _used,
+      shippingLevelRequestedLabel: LEVEL_LABEL[_wanted] || _wanted,
+      shippingLevelUsedLabel: LEVEL_LABEL[_used] || _used,
       raw,
     };
   }

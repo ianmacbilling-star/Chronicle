@@ -96,4 +96,42 @@ function friendlyAnthropicError(e) {
   return AI_GENERIC;
 }
 
-module.exports = { friendlyImageError, friendlyAnthropicError, friendlyError, statusOf, isSafetyBlock, msgOf };
+// v3.0.877 -- TD-754. A PRINT FAILURE THAT SAYS WHICH FAILURE IT WAS.
+//
+// Every print route called friendlyError(e, '') -- and an EMPTY fallback is falsy, so it
+// fell to the generic line. A rejected product code, a credential failure and a refused
+// address all reached the reader as the same eleven words, which is why a real support
+// report arrived as "it just said it couldn't get the price".
+//
+// IT CLASSIFIES ON EXPLICIT FLAGS, NEVER ON MESSAGE TEXT. That is TD-512's rule: a
+// runtime classifier built on wording breaks the moment the wording changes or arrives
+// in another language. statusOf() above regex-matches any three-digit number in the
+// message, which is fine as a last resort and wrong as a first one -- a vendor body
+// quoting "400 pages" would classify itself. So e.status is read directly here, and the
+// provider now sets authFailure / refused / inconclusive / podPackageId explicitly.
+//
+// EVERY BRANCH CAN SAY "nothing has been charged" HONESTLY: both callers (/quote and
+// /order) sit entirely before the Stripe Checkout redirect, so no card has been touched
+// on any path that reaches this function. Do not copy that sentence to a route where it
+// is not true.
+var PR_AUTH = 'We could not sign in to the print service. That is on our end, not yours -- nothing has been charged, and we would like to know if it keeps happening.';
+var PR_SKU = 'The print service did not accept this combination of binding, paper and colour for a book this long. Nothing has been charged. Please try a different format -- and tell us which one you picked, because that is the part we need.';
+var PR_NOANSWER = 'The print service did not answer in time. Nothing has been charged. Please wait a minute and try again.';
+var PR_BUSY = 'The print service is busy right now. Nothing has been charged. Please wait a moment and try again.';
+var PR_REFUSED = 'The print service refused this request. Nothing has been charged. Please check the shipping address and the format, then try again.';
+
+function friendlyPrintError(e, what) {
+  var noun = (what === 'order') ? 'start your order' : 'get a price from the print service';
+  var generic = 'We could not ' + noun + ' just now. Nothing has been charged. Please try again in a moment -- if it keeps happening, turn on Debug Mode in Settings, do it once more, and send us the log.';
+  if (!e) return generic;
+  if (e.authFailure) return PR_AUTH;
+  if (e.podPackageId) return PR_SKU;
+  var s = Number(e.status) || 0;
+  if (s === 429) return PR_BUSY;
+  if (e.inconclusive) return PR_NOANSWER;
+  if (e.refused || (s >= 400 && s < 500)) return PR_REFUSED;
+  if (s >= 500) return PR_NOANSWER;
+  return generic;
+}
+
+module.exports = { friendlyImageError, friendlyAnthropicError, friendlyError, friendlyPrintError, statusOf, isSafetyBlock, msgOf };

@@ -25,7 +25,11 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { friendlyError } = require('../middleware/friendlyErrors');
+const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErrors');
+// v3.0.877 -- TD-754. The debug log is written from here now, so a reader who reports a
+// failed price leaves a record naming the cause. routes/debug requires only the database
+// and the auth middleware, so there is no cycle.
+const { logDebug } = require('./debug');
 const { getTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
@@ -347,6 +351,112 @@ function requireSession(req, res, next) {
   next();
 }
 
+// v3.0.877 -- TD-754. THE CAUSE WAS THROWN AWAY AT THE LAST MOMENT, EVERY TIME.
+// Both money-path catches ended in res.json(...friendlyError(e, '')) with NO logging of
+// any kind -- no console.error, no logDebug -- while e.message held exactly what support
+// needed: Lulu's status, Lulu's own response body, and the product code when one was
+// refused. captureMiddleware recorded that the route returned 502 and nothing about why.
+// One helper so the two callers cannot drift, which is rules 5c's preferred shape.
+function logPrintFailure(req, where, e) {
+  var why = (e && e.message) ? String(e.message) : String(e);
+  try { console.error('[print-' + where + '] failed: ' + why); } catch (_e) {}
+  try {
+    logDebug(req && req.session ? req.session.userId : 0, {
+      level: 'error',
+      source: 'print',
+      page: '/api/print/' + where,
+      fn: 'POST',
+      message: where + ' failed: ' + why.slice(0, 300),
+      detail: {
+        status: (e && e.status) ? e.status : 0,
+        authFailure: !!(e && e.authFailure),
+        refused: !!(e && e.refused),
+        inconclusive: !!(e && e.inconclusive),
+        podPackageId: (e && e.podPackageId) ? String(e.podPackageId) : '',
+        reason: why.slice(0, 1000)
+      }
+    });
+  } catch (_e) {}
+}
+
+// v3.0.878 -- TD-756. THE PICKER MUST NOT BE THE ONLY GUARD.
+//
+// A reader typed "Virginia" into a free-text box and four quotes were refused by Lulu,
+// each arriving back as the same undifferentiated sentence. The form is a picker now, but
+// a form is client-side and this route is the one that spends money, so the same rule is
+// asserted here -- exactly as cream paper is refused by the picker, by buildSpec AND by
+// the SKU builder, so that no single one of them is load-bearing.
+//
+// It answers 400 with `details`, which the Order tab already renders in full, so a bad
+// address now names itself instead of becoming a 502 from the printer.
+const US_STATE_CODES = ('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS ' +
+  'MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC ' +
+  'PR VI GU AS MP AA AE AP').split(' ');
+
+// v3.0.879 -- TD-756 stage 2. MEASURED AGAINST LULU'S OWN COST ENDPOINT, not assumed.
+// Fourteen countries answered "Field state is required"; seventy-eight refused an
+// address with no postcode. Everything else priced without either.
+//
+// THIS DOES NOT DECIDE WHICH COUNTRIES WE SHIP TO, and must never start to. The
+// picker decides what is offered, this checks SHAPE and REQUIRED-NESS, and Lulu
+// decides serviceability. A serviceability list here would go stale silently and
+// start refusing countries Lulu had since opened -- which is the failure this whole
+// item is about, pointed the other way.
+const STATE_REQUIRED_COUNTRIES = 'AE CR ES HK HN ID IQ IT JM KN KR MX TW US'.split(' ');
+const POSTCODE_REQUIRED_COUNTRIES = ('AF AR AS AT AU AX BE BH BL BR CA CH CL CN CO CZ DE DK EE FI FM FR GB GF GG ' +
+  'GL GP GR GU HT HU IE IM IN JE JP KY LB LI LT LU LV MF MH MP MQ MY NC NL NO ' +
+  'NZ PF PG PL PN PR PT PW RE RO SE SG SJ SK SM SV TC TR US VE VI WF YT ZA').split(' ');
+
+function shipToErrors(body) {
+  const s = (body && body.shipTo) || {};
+  const errs = [];
+  const cc = String(s.countryCode || '').trim().toUpperCase();
+  const st = String(s.stateCode || '').trim().toUpperCase();
+  const pc = String(s.postcode || '').trim();
+  if (!/^[A-Z]{2}$/.test(cc)) {
+    errs.push('The country must be a two-letter code such as US, not a country name.');
+    return errs;   // nothing below can mean anything without a country
+  }
+  if (cc === 'US') {
+    if (!st) {
+      errs.push('Please choose a state.');
+    } else if (US_STATE_CODES.indexOf(st) === -1) {
+      // Named, because "it must be two letters" is not much help to someone
+      // looking at the word they just typed.
+      errs.push('The state must be its two-letter code -- VA for Virginia, for example -- not the full name. ' +
+        'We were given "' + String(s.stateCode).slice(0, 40) + '".');
+    }
+  } else if (STATE_REQUIRED_COUNTRIES.indexOf(cc) !== -1 && !st) {
+    errs.push('The printer requires a state or province code for ' + cc + '.');
+  }
+  if (!pc) {
+    if (POSTCODE_REQUIRED_COUNTRIES.indexOf(cc) !== -1) {
+      errs.push('A postal code is required for ' + cc + '.');
+    }
+  } else {
+    // Only what is CERTAINLY wrong. Lulu validates the per-country format itself
+    // and now says so readably, so a stricter guess here would block a real order.
+    if (!/^[A-Za-z0-9][A-Za-z0-9 -]{0,11}$/.test(pc)) {
+      errs.push('That postal code contains characters no country uses.');
+    } else if (cc === 'US' && !/^[0-9]{5}(-[0-9]{4})?$/.test(pc)) {
+      errs.push('A US ZIP code is five digits, or five plus four such as 24450-1234.');
+    } else if (cc === 'CA' && !/^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$/.test(pc)) {
+      errs.push('A Canadian postal code looks like K1A 0B1.');
+    }
+  }
+  return errs;
+}
+
+// v3.0.880 -- TD-758. ONE PLACE OWNS THE SENTENCE, so the quote panel and the
+// review panel cannot end up saying different things about the same substitution.
+// Empty when nothing was substituted, which is the ordinary case.
+function shippingSwapNote(quote) {
+  if (!quote || !quote.shippingLevelUsed) return '';
+  if (quote.shippingLevelUsed === quote.shippingLevelRequested) return '';
+  return 'The printer does not offer ' + (quote.shippingLevelRequestedLabel || 'that option') +
+         ' to this address, so this price is for ' + (quote.shippingLevelUsedLabel || 'another option') + '.';
+}
+
 // Map the public request body to a neutral OrderRequest the provider takes.
 function buildOrderRequest(body, spec, externalId, contactEmail) {
   const s = body.shipTo || {};
@@ -465,6 +575,9 @@ router.post('/quote', requireSession, async function (req, res) {
     const { selection, pageCount } = req.body || {};
     const built = catalog.buildSpec(selection, parseInt(pageCount, 10));
     if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
+    // v3.0.878 -- TD-756. Before the printer is asked, and before any money path.
+    const _shipErrs = shipToErrors(req.body);
+    if (_shipErrs.length) return res.status(400).json({ error: 'Check the shipping address', details: _shipErrs });
 
     const provider = getPrintProvider();
     const orderReq = buildOrderRequest(req.body, built.spec, 'quote', null);
@@ -483,9 +596,15 @@ router.post('/quote', requireSession, async function (req, res) {
       markupPct: pct,
       breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping, tax: _m.tax },
       providerTax: quote.taxCost,
+      // v3.0.880 -- TD-758. The reader sees which delivery this price is for, before
+      // the review panel and long before the card.
+      shippingLevelUsed: quote.shippingLevelUsed || '',
+      shippingLevelUsedLabel: quote.shippingLevelUsedLabel || '',
+      shippingNote: shippingSwapNote(quote),
     });
   } catch (e) {
-    res.status(502).json({ error: 'Quote failed', detail: friendlyError(e, '') });
+    logPrintFailure(req, 'quote', e);
+    res.status(502).json({ error: 'Quote failed', detail: friendlyPrintError(e, 'quote') });
   }
 });
 
@@ -529,6 +648,12 @@ router.post('/order', requireSession, async function (req, res) {
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
   }
+  // v3.0.878 -- TD-756. THE SAME CHECK ON BOTH DOORS. /quote and /order take the same
+  // shipTo and a rule applied to one path and not its twin is the fault this project
+  // records most often (rules 5c). Placed before the vendor probe and before the row,
+  // so a bad address costs nothing at all.
+  const _ordShipErrs = shipToErrors(body);
+  if (_ordShipErrs.length) return res.status(400).json({ error: 'Check the shipping address', details: _ordShipErrs });
   // v3.0.782 -- TD-576. Before the quote, before the row, before the Checkout session: no
   // money may move for a book whose files the printer demonstrably cannot collect. Placed
   // here so a definite negative costs nothing at all -- no vendor call, no database row.
@@ -688,7 +813,8 @@ router.post('/order', requireSession, async function (req, res) {
     return res.json({ url: session.url, orderId: orderId, externalId: externalId, customerCharge: customerCharge, currency: quote.currency });
   } catch (e) {
     if (e && e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    return res.status(502).json({ error: 'Order failed', detail: friendlyError(e, '') });
+    logPrintFailure(req, 'order', e);
+    return res.status(502).json({ error: 'Order failed', detail: friendlyPrintError(e, 'order') });
   }
 });
 
