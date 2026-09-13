@@ -14226,6 +14226,31 @@ router.get('/last-optimized-file/:campaignId', requireAuth, async function (req,
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Length', String(buf.length));
     res.set('Cache-Control', 'private, max-age=60');
+    // v3.0.893 -- TD-768. ?download=1 MAKES IT A DOWNLOAD, and nothing else changes.
+    //
+    // This route is ALSO what the Optimize pane's viewer loads, so an unconditional
+    // Content-Disposition: attachment would stop the book rendering in the pane at all. The flag
+    // is the whole difference; without it the response is byte-for-byte what it was.
+    //
+    // THE NAME IS SANITISED RATHER THAN QUOTED. A title reaches this header from a user-editable
+    // field, so anything that is not a plain filename character is dropped -- which also means a
+    // CR or LF can never reach a response header.
+    if (req.query.download) {
+      var _nm = (lastOpt && lastOpt.bookTitle) ? String(lastOpt.bookTitle) : '';
+      if (!_nm) {
+        try {
+          var _cRow = await db.prepare('SELECT name FROM campaigns WHERE id = ?').get(campaignId);
+          _nm = (_cRow && _cRow.name) ? String(_cRow.name) : '';
+        } catch (e) { _nm = ''; }
+      }
+      // A run of dots collapses to one as well. Nothing here can escape a download folder --
+      // a browser sanitises the suggested name itself -- but a filename that reads as a path
+      // traversal is a question somebody has to answer later, and it costs one replace to
+      // never raise it.
+      _nm = _nm.replace(/[^A-Za-z0-9 ._-]+/g, ' ').replace(/\.{2,}/g, '.').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (!_nm) _nm = 'campaignia-book';
+      res.set('Content-Disposition', 'attachment; filename="' + _nm + '.pdf"');
+    }
     return res.send(buf);
   } catch (e) {
     log500('last-optimized-file', req, e);
