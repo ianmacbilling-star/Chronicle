@@ -8210,6 +8210,7 @@ async function onNovelVersionChange(val) {
   if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
+    try { paintVersionLock(); } catch (e) {}   // v3.0.887 -- a refused switch snaps the picker back; the chip follows it
     showError(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
@@ -17704,6 +17705,49 @@ function forkOwnNonCanonical() {
 // And the reader is not the security boundary: the rename and delete routes each answer 403 to
 // a non-owner, and both client handlers refuse before calling anything. This controls whether
 // the reader is OFFERED something that would be refused, which is a different job.
+// v3.0.887 -- TD-765. ONE CHIP PAINTER FOR BOTH VERSION DROPDOWNS.
+//
+// *(Ian, 2026-09-13: "If you are looking at your own version (one you own) we need to make it
+// obvious... It is very easy to miss that you are not on your own version." Then, choosing the
+// shape: "option 1... Loud on foreign.")*
+//
+// WHY A CHIP BESIDE THE SELECT AND NOT THE SELECT ITSELF. Browsers style <select> inconsistently
+// and the option list cannot be reliably coloured at all, so a tinted picker would look different
+// on every machine and say nothing once opened. A chip is ours to draw and reads the same
+// everywhere.
+//
+// IT IS CREATED ON DEMAND rather than living in app.html, so this needs no markup change and
+// cannot end up on a page that has no such picker. Found-or-created by id, so repainting is
+// idempotent -- this runs on a heartbeat on the publish page.
+function paintForeignVersionChip(selectId, mine) {
+  var sel = document.getElementById(selectId);
+  if (!sel || !sel.parentNode) return;
+  var id = selectId + '-foreign-chip';
+  var chip = document.getElementById(id);
+  if (mine) { if (chip && chip.parentNode) chip.parentNode.removeChild(chip); return; }
+  if (!chip) {
+    chip = document.createElement('span');
+    chip.id = id;
+    chip.className = 'ver-foreign-chip';
+    chip.title = 'You are viewing a version you do not own. You can read it, but you cannot change it.';
+    sel.parentNode.insertBefore(chip, sel.nextSibling);
+  }
+  // The WORD is the signal; the colour amplifies it. One phrase for every foreign case, because
+  // two phrasings are two things to recognise and this has to register at a glance.
+  chip.textContent = 'Not your version';
+}
+
+// Ownership of the version on the PUBLISH page. Deliberately NOT novelOwnView(), which answers a
+// different question -- it returns true for a member on the canonical who holds no version of
+// their own, because such a member MAY publish it. That is a capability, not ownership, and this
+// chip is about ownership.
+function novelVersionIsMine() {
+  var v = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+  if (!v) return true;   // nothing resolved yet: say nothing rather than cry wolf
+  if (v.is_canonical) return !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  return !!v.is_mine;
+}
+
 function paintVersionMenu() {
   var verMenu = document.getElementById('session-version-menu');
   var delItem = document.getElementById('delete-version-item');
@@ -17724,6 +17768,9 @@ function paintVersionMenu() {
   var mine = !!(shownFork && shownFork.is_mine);
   if (verMenu) verMenu.style.display = mine ? '' : 'none';
   if (delItem) delItem.style.display = mine ? '' : 'none';
+  // v3.0.887 -- TD-765. The same answer drives the chip, from the same place, so the menu and the
+  // chip can never disagree about whose version this is.
+  paintForeignVersionChip('session-fork-select', mine);
 }
 
 function updateForkEditability() {
@@ -24938,6 +24985,10 @@ function paintVersionLock() {
   sel.disabled = !!by;
   sel.style.opacity = by ? '0.5' : '';
   sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
+  // v3.0.887 -- TD-765. Painted here because this is the publish page's one 'reflect the version
+  // state' function and it already runs on the heartbeat as well as on every publish paint, so
+  // the chip cannot be left behind by a path nobody thought of.
+  try { paintForeignVersionChip('novel-version-select', novelVersionIsMine()); } catch (e) {}
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}

@@ -76,6 +76,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* v3.0.628 -- the warning text colour as a token, so the Optimize busy line and the alert it
    belongs with cannot drift to two different oranges. Same value as the rule above. */
 :root{--warn-text:#e6be78;}
+/* v3.0.887 -- TD-765. THE WARNING ORANGE, AS A TOKEN, FOR THE SAME REASON --warn-text became one.
+   Two oranges were already in the system and they are not interchangeable:
+     --warn-text #e6be78  -- the .panel-dark .alert-warning text. A pale AMBER, and it sits inside
+                             the gold family (--gold #d8b85c, --gold-light #e8d5a3). Correct for a
+                             warning inside a panel; useless as a LOUD signal, because loud means
+                             'different from everything else on this screen' and this is not.
+     #fb923c              -- .tier-badge-tester. A real orange, added deliberately for a badge that
+                             'reads as a state, not a button'. That is exactly this job.
+   So the second one is the answer, and it is tokenised here and read from BOTH places rather than
+   written twice -- v3.0.628's lesson, which existed because two oranges had already drifted. */
+:root{--warn-orange:#fb923c;--warn-orange-bg:rgba(194,65,12,0.12);--warn-orange-line:rgba(251,146,60,0.55);}
+
+/* v3.0.887 -- TD-765. WHICH VERSION YOU ARE LOOKING AT, WHEN IT IS NOT YOURS.
+   Ian: "It is very easy to miss that you are not on your own version." Shown ONLY on the foreign
+   case, deliberately: an always-on 'this is yours' badge is read for a week and then never again,
+   and the mistake being prevented is not noticing the exception. The absence of this chip is the
+   signal that you are where you belong.
+   The word carries the meaning and the colour only amplifies it -- orange against this gold UI is
+   a hard pair for red-green colour blindness, so the colour must not be the whole message. */
+.ver-foreign-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:0.03em;white-space:nowrap;
+  color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);}
+.ver-foreign-chip::before{content:'\26A0';font-weight:400;}
 .panel-dark .alert-info{background:rgba(40,60,80,0.4);border-color:rgba(150,180,200,0.4);color:#a8c4d6;}
 /* v3.0.493 -- A WARNING IN THE OPTIMIZE PROGRESS LIST SHOULD LOOK LIKE ONE.
    The stale-layout notice was written into #optimize-progress as an ordinary bullet,
@@ -1358,7 +1381,7 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
    still reads as a warning rather than as an ordinary plan label. */
 .tier-badge-lone{border-color:rgba(184,115,51,0.7)!important;color:#fff!important;
   background:#b87333!important;font-weight:700!important;}
-.tier-badge-tester{border-color:rgba(251,146,60,0.55)!important;color:#fb923c!important;
+.tier-badge-tester{border-color:var(--warn-orange-line)!important;color:var(--warn-orange)!important;   /* v3.0.887 -- same value, now read from the token */
   background:rgba(194,65,12,0.12)!important;}
 .archive-pick-item img{max-width:100%;max-height:178px;width:auto;height:auto;display:block;
   cursor:pointer;border-radius:4px;}
