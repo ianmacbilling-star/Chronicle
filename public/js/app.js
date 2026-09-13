@@ -4090,7 +4090,7 @@ function _patchMomentRefCast(momentId, refCast, refAssets) {
 // v3.0.884 -- TD-761. An optional `done`, so the retouch tray can react to a save
 // without a second copy of this function. It fires only on the success path, AFTER the
 // patch, so a caller reading state.moments in it sees the new cast.
-function _saveCast(p, done) {
+function _saveCast(p) {
   var characterIds = (p.characters || []).map(function(c){ return c.id; }).filter(function(x){ return x != null; });
   var assetIds = (p.assets || []).map(function(a){ return a.id; }).filter(function(x){ return x != null; });
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + p.moment_id + '/cast', {
@@ -4104,7 +4104,7 @@ function _saveCast(p, done) {
     _patchMomentRefCast(p.moment_id, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, before the re-render; v3.0.883 -- TD-760, the asset half
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
-    if (typeof done === 'function') done(data);   // v3.0.884 -- TD-761
+    if (typeof _refreshOpenRetouchCast === 'function') _refreshOpenRetouchCast(p.moment_id);   // v3.0.885 -- TD-761
   })
   .catch(function(e){ showError('Could not save casting: ' + e.message); loadReview(); });
 }
@@ -4148,6 +4148,7 @@ function castReset(momentId) {
   .then(function(data){
     if (data.error) { showError('Could not reset casting: ' + data.error); return; }
     _patchMomentRefCast(momentId, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, the reset path needs it too; v3.0.883 -- TD-760, so does the asset half
+    if (typeof _refreshOpenRetouchCast === 'function') _refreshOpenRetouchCast(momentId);   // v3.0.885 -- TD-761
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
@@ -12041,10 +12042,11 @@ var RG_CROP_ON = false;
 // from/to are null or { x, y, r } with every value a FRACTION of the image:
 // x and y of the width and height, r of the shorter side.
 // v3.0.884 -- TD-761. castLabel is remembered so the reference block can be rebuilt on
-// its own, without rgActionChange, which resets both markers. noPicMsg carries the one
-// rare case worth naming out loud: something added that turns out to have no reference
-// picture, and so cannot be used to correct a figure.
-var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0, castLabel: null, noPicMsg: '' };
+// its own, without rgActionChange, which resets both markers.
+// v3.0.885 -- noPicMsg is GONE: the rare case is now derived in rgCastBlockInner by
+// comparing the cast against the reference list, which is right for every such item and
+// right again after a remove, rather than only for the last one added.
+var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0, castLabel: null };
 
 // Small means "this point". Large means "this whole thing". The size changes
 // the WORDING as well as the ring, and in the crop stage it will set the tile.
@@ -12361,11 +12363,34 @@ function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'
 // rgState.from and rgState.to to null, so it would silently throw away both markers the
 // reader had already placed. The tray is a SIBLING of the block, not inside it, so a
 // rebuild of the block cannot destroy the tray the reader is clicking in.
+// The reference control, then the SAME cast rows the moment-options tray draws. The rows
+// come out of the review payload; when that is not loaded yet the shared renderer says so
+// and rgCastSelect's fetch repaints this block when it lands.
 function rgCastBlockInner(label) {
   var cs = rgPanelRefs();
+  var mid = rgState.momentId;
+  var p = (typeof _reviewPanel === 'function') ? _reviewPanel(mid) : null;
+  var canEdit = (typeof canEditCurrentVersion === 'function') ? canEditCurrentVersion() : true;
+  var rows = castRowsHtml(p, mid, canEdit, { head: false });
+  // v3.0.885 -- TD-761. COMPUTED, NOT REMEMBERED. Anything cast on this panel that did not
+  // reach the reference list has no reference picture, so it cannot be used to correct a
+  // figure. v3.0.884 recorded only the last one added; deriving it covers every one, and is
+  // right again after a remove. Both name forms are compared because the reference list
+  // carries the raw name and a chip carries the display name.
+  var have = {};
+  for (var h = 0; h < cs.length; h++) if (cs[h] && cs[h].name) have[cs[h].name] = true;
+  var missing = [];
+  ((p && p.characters) || []).forEach(function (c) {
+    if (!c || !c.name) return;
+    if (!have[c.name] && !have[charDisplayName(c.name)]) missing.push(charDisplayName(c.name));
+  });
+  ((p && p.assets) || []).forEach(function (a) { if (a && a.name && !have[a.name]) missing.push(a.name); });
+  var note = missing.length
+    ? ('<div style="font-size:11px;color:var(--gold-light);margin-top:2px;">' + rgEsc(missing.join(', ')) + ' \u00b7 No Picture Exists</div>')
+    : '';
   if (!cs.length) {
-    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.' +
-      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgToggleCastTray()">Add a character or asset</button></div></div>';
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.</div>' +
+      rows + note;
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
@@ -12380,17 +12405,20 @@ function rgCastBlockInner(label) {
       : '');
     s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(_rl) + '</option>';
   }
-  return s + '</select></label>' +
-    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgToggleCastTray()">Add to this panel</button></div>';
+  return s + '</select></label>' + rows + note;
 }
 
 // The block and the tray beside it. The label is remembered because a later rebuild has
 // only the DOM to go on.
 function rgCastSelect(label) {
   rgState.castLabel = label;
-  rgState.noPicMsg = '';
-  return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>' +
-    '<div id="rg-cast-tray" style="display:none;"></div>';
+  // The rows are drawn from the review payload, which a reader may never have loaded on this
+  // session. Kicked on a timeout so the html below is in the DOM before the repaint looks for
+  // it, and ensureReviewData is a no-op when the payload is already there for this fork.
+  setTimeout(function () {
+    try { ensureReviewData(function () { rgRefreshCastBlock(null); }); } catch (e) {}
+  }, 0);
+  return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>';
 }
 
 // Rebuild the reference control alone, and move the selection onto a name ONLY if that
@@ -12400,104 +12428,20 @@ function rgCastSelect(label) {
 function rgRefreshCastBlock(pickName) {
   var b = document.getElementById('rg-cast-block');
   if (!b) return;
+  // v3.0.885 -- KEEP THE READER'S CHOICE. Adds and removes now repaint this block, and a
+  // repaint that silently reset the chosen reference would be a worse fault than the one
+  // being fixed. No name given means keep what is selected.
+  var keep = pickName;
+  if (!keep) { var s0 = document.getElementById('rg-who'); keep = s0 ? s0.value : null; }
   b.innerHTML = rgCastBlockInner(rgState.castLabel || 'Which reference');
-  if (!pickName) return;
+  if (!keep) return;
   var s = document.getElementById('rg-who');
   if (!s) return;
+  // Moved ONLY if the option is really there -- v3.0.878's lesson: setting a picker to a
+  // value it does not have leaves it on the first entry, a silent wrong answer.
   for (var i = 0; i < s.options.length; i++) {
-    if (s.options[i].value === pickName) { s.selectedIndex = i; return; }
+    if (s.options[i].value === keep) { s.selectedIndex = i; return; }
   }
-}
-
-// v3.0.884 -- TD-761. THE CAST TRAY, INSIDE THE RETOUCH PANEL.
-//
-// *(Ian, 2026-09-13: "It's very awkward hitting that button, adding a character then
-// having to go back to the retouch and select the action etc etc. If we can do it all
-// from right there it would be better.")*
-//
-// What it replaces: rgOpenCast called closeRetouch() and then opened the cast modal
-// hardcoded to 'character' -- so it destroyed the action, the typed words and both
-// markers, and could not reach an asset at all. Nothing here closes anything.
-//
-// It reuses castPickCharacter / castPickAsset / _saveCast rather than posting the cast
-// itself, so there is one save path and the v3.0.883 patch comes along for free.
-// ensureReviewData runs first because those handlers resolve the panel out of the review
-// payload, which the reader may never have loaded in this session.
-function rgToggleCastTray() {
-  var t = document.getElementById('rg-cast-tray');
-  if (!t) return;
-  if (t.style.display === 'block') { t.style.display = 'none'; t.innerHTML = ''; return; }
-  t.style.display = 'block';
-  t.innerHTML = '<div class="moment-opts-inner"><div class="review-row"><span class="review-label">Loading...</span></div></div>';
-  ensureReviewData(function () {
-    // _loadCastImages fetches BOTH campaign lists fresh on every call (v3.0.881), so the
-    // tray cannot show a stale roster -- which is the fault this whole thread began with.
-    _loadCastImages(function () { rgRenderCastTray(); });
-  });
-}
-
-function rgTrayTile(kind, id, name, cat, img) {
-  var cap = name + (cat ? ' \u00b7 ' + cat : '');
-  return '<button type="button" class="prep-img-pick-named" onclick="rgTrayAdd(\'' + kind + '\', ' + id + ')">' +
-    '<span class="prep-img-pick-img"' +
-    (img ? (' style="background-image:url(\'' + rgEsc(encodeURI(img)) + '\')"') : '') + '>' +
-    (img ? '' : (kind === 'c' ? '&#128100;' : '&#127991;')) + '</span>' +
-    '<span class="prep-img-cap">' + rgEsc(cap) + '</span></button>';
-}
-
-// Everything in the campaign that is not already on this panel, characters first, each
-// tile tagged by what it is. Same grid classes as the tray under the moment panel, so it
-// reads as the same control in a different place.
-function rgRenderCastTray() {
-  var t = document.getElementById('rg-cast-tray');
-  if (!t) return;
-  var p = (typeof _reviewPanel === 'function') ? _reviewPanel(rgState.momentId) : null;
-  var haveC = {}, haveA = {};
-  ((p && p.characters) || []).forEach(function (c) { if (c && c.id != null) haveC[String(c.id)] = true; });
-  ((p && p.assets) || []).forEach(function (a) { if (a && a.id != null) haveA[String(a.id)] = true; });
-  var tiles = '';
-  (_castCharRows || []).forEach(function (c) {
-    if (!c || c.id == null || haveC[String(c.id)]) return;
-    tiles += rgTrayTile('c', c.id, c.name, '', _castCharImg[String(c.id)] || '');
-  });
-  (_castAssetRows || []).forEach(function (a) {
-    if (!a || a.id == null || haveA[String(a.id)]) return;
-    tiles += rgTrayTile('a', a.id, a.name, (RG_REF_CAT[a.category] || a.category || 'Asset'), _castAssetImg[String(a.id)] || '');
-  });
-  var body = tiles
-    ? ('<div class="prep-img-grid" style="max-height:210px;">' + tiles + '</div>')
-    : '<div class="prep-img-empty">Everything in this campaign is already on this panel.</div>';
-  var note = rgState.noPicMsg
-    ? ('<div class="review-row" style="color:var(--gold-light);">' + rgEsc(rgState.noPicMsg) + ' \u00b7 No Picture Exists</div>')
-    : '';
-  t.innerHTML = '<div class="moment-opts-inner">' +
-    '<div class="review-row"><span class="review-label">Add to this panel:</span></div>' +
-    body + note + '</div>';
-}
-
-// Add one, then put the reader back exactly where they were with the new reference
-// selected. The AUTHORITATIVE answer about whether it can be used is the reference list
-// after the patch, not a guess from the thumbnail: a character can carry a per-session
-// reference with no canonical one, so a picture-less tile is not something the client can
-// tell in advance. If the name did not arrive, say so and leave the selection alone.
-function rgTrayAdd(kind, id) {
-  var mid = rgState.momentId;
-  if (!mid) return;
-  var isChar = (kind === 'c');
-  var rows = (isChar ? _castCharRows : _castAssetRows) || [];
-  var nm = '';
-  for (var i = 0; i < rows.length; i++) {
-    if (rows[i] && String(rows[i].id) === String(id)) { nm = rows[i].name || ''; break; }
-  }
-  function done() {
-    var seen = false;
-    var refs = (typeof rgPanelRefs === 'function') ? rgPanelRefs() : [];
-    for (var k = 0; k < refs.length; k++) { if (refs[k] && refs[k].name === nm) { seen = true; break; } }
-    rgState.noPicMsg = seen ? '' : nm;
-    rgRefreshCastBlock(seen ? nm : null);
-    rgRenderCastTray();
-  }
-  if (isChar) castPickCharacter(mid, id, done); else castPickAsset(mid, id, done);
 }
 
 function rgSelect(id, label, opts) {
@@ -23923,6 +23867,69 @@ function _refreshOpenMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
   if (box && box.style.display === 'block') renderMomentOptions(momentId);
 }
+// v3.0.885 -- TD-761. ONE CAST BLOCK, DRAWN IN TWO PLACES.
+//
+// *(Ian, 2026-09-13, on the v3.0.884 tray: "Not really how I wanted that done. It would
+// be unusable if there were 50 assets. And you can't add a character that way either."
+// Then, with a screenshot: "they can use the pill button to add a character or an asset
+// to the picture.")*
+//
+// THE v3.0.884 TRAY WAS THE WRONG CONTROL AND THE CRITICISM WAS STRUCTURAL. Listing every
+// uncast character and asset is fine with six and unusable with fifty, inside a panel that
+// also holds the picture, the action, two markers and a text box. The CAST PICKER MODAL was
+// already the right control for choosing one of many -- it is a scrolling image grid the
+// reader already knows -- and `.prep-img-modal` is z-index 100001 against the retouch
+// panel's `.modal-overlay` at 100, so it layers ON TOP and nothing has to close.
+//
+// SHARED RATHER THAN COPIED, because Ian asked the retouch rows to LOOK LIKE the ones under
+// the moment panel, and a second copy of a thing whose whole requirement is to match is a
+// thing that will stop matching. The guard holds this to HTML the pre-v3.0.885 renderer
+// produced, byte for byte, over a table of panels.
+//
+// opts.head adds the Auto-Matched / Custom cast line and Reset to auto, which belong to the
+// moment-options tray and not inside a retouch panel that is already about one change.
+function castRowsHtml(p, momentId, canEdit, opts) {
+  if (!p) return '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
+  var charChips = (p.characters || []).map(function(c){
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
+    return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
+  }).join();
+  if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
+  var assetChips = (p.assets || []).map(function(a){
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
+    // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
+    return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
+  }).join();
+  if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
+  var addChar = '', addAsset = '';
+  if (canEdit) {
+    addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
+    addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
+  }
+  var head = '';
+  if (opts && opts.head) {
+    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
+    var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
+    head = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>';
+  }
+  return head +
+    '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
+    '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>';
+}
+
+// v3.0.885 -- TD-761. ONE HOOK, so every cast change reaches an open retouch panel: the
+// picker's add, a chip's remove and Reset to auto all end in _saveCast. Threading a callback
+// through each of them, as v3.0.884 did, was three places to remember one thing.
+function _refreshOpenRetouchCast(momentId) {
+  try {
+    if (!rgState || rgState.momentId == null) return;
+    if (String(rgState.momentId) !== String(momentId)) return;
+    var m = document.getElementById('retouch-modal');
+    if (!m || m.classList.contains('hidden')) return;
+    rgRefreshCastBlock(null);
+  } catch (e) { /* a failed repaint must never break a cast save */ }
+}
+
 function renderMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
   if (!box) return;
@@ -23933,29 +23940,7 @@ function renderMomentOptions(momentId) {
   if (!p) {
     castHtml = '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
   } else {
-    var charChips = (p.characters || []).map(function(c){
-      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
-      return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
-    }).join();
-    if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
-    var assetChips = (p.assets || []).map(function(a){
-      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
-      // v3.0.850 -- TD-706. Same change as renderReview; these two draw the same row.
-      return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
-    }).join();
-    if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
-    var addChar = '', addAsset = '';
-    if (canEdit) {
-      var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
-      var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
-      addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
-    }
-    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
-    var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
-    castHtml = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>' +
-      '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
-      '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>';
+    castHtml = castRowsHtml(p, momentId, canEdit, { head: true });   // v3.0.885 -- TD-761
   }
   var m = (state.moments || []).find(function(x){ return x.id === momentId; });
   var prom = m ? momProminence(m) : 3;
@@ -24419,7 +24404,7 @@ function closeCastPicker() {
 
 // v3.0.884 -- TD-761. `done` is threaded through rather than the retouch tray
 // reimplementing these lines and the save beside them.
-function castPickCharacter(momentId, id, done) {
+function castPickCharacter(momentId, id) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var name = '';
@@ -24427,10 +24412,10 @@ function castPickCharacter(momentId, id, done) {
   p.characters = p.characters || [];
   if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
   p.cast_explicit = true;
-  _saveCast(p, done);
+  _saveCast(p);
 }
 
-function castPickAsset(momentId, id, done) {
+function castPickAsset(momentId, id) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var meta = null;
@@ -24438,7 +24423,7 @@ function castPickAsset(momentId, id, done) {
   p.assets = p.assets || [];
   if (!p.assets.some(function(a){ return String(a.id) === String(id); })) p.assets.push({ id: id, name: meta ? meta.name : '', category: meta ? meta.category : '' });
   p.cast_explicit = true;
-  _saveCast(p, done);
+  _saveCast(p);
 }
 
 // ===== Mobile corner menu: collapses Tour / Ask into a kebab on small screens =====
