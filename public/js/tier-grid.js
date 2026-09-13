@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892, v3.0.893).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891 - v3.0.896).
 
    Ian, 2026-09-13: "Can you create a web page or Modal that lists in grid style
    all the different features each tier has. 4 columns Copper, Silver, Gold,
@@ -53,6 +53,26 @@
   function na() { return '<span class="tg-na">N/A</span>'; }
   function dash(sub) { return val('\u2014', sub); }
 
+  // v3.0.895 -- WHAT YOUR STORY MASTER'S PLAN CANNOT GIVE YOU. Three rows, and this is the
+  // whole list -- read off the gates rather than guessed:
+  //
+  //   * MULTIPLE VERSIONS -- routes/sessions.js asks tierRank(getEffectiveTier(uid, NULL)) and
+  //     wants Gold; the null is what makes it your own plan.
+  //   * TITLE BUILDER -- isTruePlatinum(), which is defined as getEffectiveTier(uid, null)
+  //     === 'platinum'.
+  //   * CUSTOM ART STYLES -- BUILDING one asks the same true-Platinum question. (USING your
+  //     SM's is inherited: /available hands a member the SM's styles while the SM is true
+  //     Platinum, and resolveGenStyle lets them generate with one. Ian chose the same two
+  //     words on all three rather than a longer sentence on this one.)
+  //
+  // EVERYTHING ELSE IN THE GRID INHERITS, because every other gate passes a campaignId and
+  // getEffectiveTier returns the higher of the two tiers: the preset art and narrative styles,
+  // panels per session, archives per campaign, and publishing -- which is how a Copper ends up
+  // with a book PDF at all.
+  //
+  // ONE STRING, THREE ROWS. Two copies of a label is two labels to reword.
+  var NOT_INHERITED = 'not inheritable';
+
   // ---- the rows, top to bottom --------------------------------------------
   var ROWS = [
     { label: 'Monthly Price', cell: function (t) {
@@ -85,10 +105,10 @@
     { label: 'Archived Images per Campaign', cell: function (t) {
         return val(esc(cap(t.max_archives_per_campaign)));
       } },
-    { label: 'Characters', cell: function (t) {
+    { label: 'Characters per Campaign', cell: function (t) {
         return val(esc(cap(t.max_characters)));
       } },
-    { label: 'Assets', cell: function (t) {
+    { label: 'Assets per Campaign', cell: function (t) {
         return val(esc(cap(t.max_assets)));
       } },
     // v3.0.893 -- N/A FOR A TIER THAT CREATES NOTHING OF ITS OWN, exactly like the two style
@@ -102,9 +122,9 @@
         if (!t.can_create) return na();
         return mark(t.can_export);
       } },
-    { label: 'More than One Version', cell: function (t) { return mark(t.multi_version); } },
-    { label: 'Custom Art Styles', cell: function (t) { return mark(t.custom_art_styles); } },
-    { label: 'Title Builder', cell: function (t) { return mark(t.title_builder); } }
+    { label: 'Multiple Versions', sub: NOT_INHERITED, cell: function (t) { return mark(t.multi_version); } },
+    { label: 'Custom Art Styles', sub: NOT_INHERITED, cell: function (t) { return mark(t.custom_art_styles); } },
+    { label: 'Title Builder', sub: NOT_INHERITED, cell: function (t) { return mark(t.title_builder); } }
   ];
 
   var COINS = {
@@ -149,11 +169,11 @@
       '</div>' +
       '<div class="tg-scroll" id="tg-scroll"><div class="tg-loading">Reading the current plans\u2026</div></div>' +
       '<div class="tg-foot">' +
-        '<div class="tg-note"><b>Copper is invite only.</b> No monthly subscription is needed to play ' +
-          'under a subscription holder: Copper inherits its Story Master\u2019s features, and you make ' +
-          'your own version of each session \u2014 nothing else.</div>' +
-        '<div class="tg-note">More than one version needs <b>Gold or higher on your own plan</b>. ' +
-          'Unlike the creative options, it is not inherited from your Story Master.</div>' +
+        '<div class="tg-note tg-note-coin">' +
+          '<img src="' + COINS.copper + '" alt="" />' +
+          '<span><b>Copper is invite only.</b> No monthly subscription \u2014 token purchases only, to ' +
+          'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +
+          '</span></div>' +
       '</div>' +
     '</div>';
   }

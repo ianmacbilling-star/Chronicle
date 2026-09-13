@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891 - v3.0.896).
 
    THIS FILE IS THE SWAP POINT. Ian, 2026-09-13: "Soon we are going to build
    another Landing page and I want to be able to switch out CSSs for each landing
@@ -226,16 +226,22 @@
 .tg-na  { font-family: var(--tg-label); font-size: 13px; color: var(--tg-no); letter-spacing: 1px; }
 
 /* ---- more below ---- */
-/* v3.0.892. Drawn on the panel rather than the scroll region, because the region is the
-   thing that scrolls and a fixed overlay inside it would scroll away with the rows. The
-   class is added by the script only while there is something below. */
+/* v3.0.892. Drawn outside the scrolling region, which would otherwise carry the cue away
+   with the rows. The class is added by the script only while there is something below.
+
+   v3.0.894 -- ANCHORED TO THE FOOTNOTE BLOCK RATHER THAN 74px ABOVE THE PANEL FLOOR. That
+   number was the height of the two-line footer on the day it was written, and this batch
+   makes the footer taller by adding a coin to it -- so the cue would have printed across the
+   first footnote. bottom:100% of .tg-foot is the same place expressed as a relationship,
+   and it stays right whatever the footnotes say. */
 .tg-panel { position: relative; }
-.tg-more::after {
+.tg-foot { position: relative; }
+.tg-more .tg-foot::before {
   content: 'more below';
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 74px;
+  bottom: 100%;
   pointer-events: none;
   text-align: center;
   font-family: var(--tg-label);
@@ -248,17 +254,33 @@
 }
 
 /* ---- footnotes ---- */
+/* v3.0.894. Copper stopped being a column and became this, so the block carries more weight
+   than it did and is set larger to match. */
 .tg-foot {
   flex-shrink: 0;
   border-top: 3px solid var(--tg-line-strong);
   background: var(--tg-ink-deep);
-  padding: 12px 18px 14px;
+  padding: 14px 18px 16px;
 }
 .tg-note {
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--tg-dim);
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+}
+/* The Copper note leads with the coin, the same art the column header used to carry. */
+.tg-note-coin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: rgba(240,232,208,0.78);
+}
+.tg-note-coin img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .tg-note:last-child { margin-bottom: 0; }
 .tg-note b { color: var(--tg-gold-light); font-weight: normal; }

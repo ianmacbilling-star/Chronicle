@@ -124,10 +124,22 @@ router.get('/pricing', function (req, res) {
 // narrativeStyleAllowed against accessRank -- not with a second reading of the rank
 // maps. Move a style from Gold to Silver and this number moves with it.
 //
-// The FREE TRIAL is deliberately absent: Ian asked for four columns, and the trial is
-// its own row on the landing page with its own explanation.
+// THE FREE TRIAL AND COPPER ARE BOTH DELIBERATELY ABSENT, for different reasons. The trial
+// has its own row on the landing page with its own explanation. Copper was a column until
+// v3.0.894 and almost every cell in it read N/A, a dash or a zero --
+//
+// *(Ian, 2026-09-13: "Lets get rid of the Copper column. Almost everything in it is N/A or
+// 0.")*
+//
+// -- which is what a tier that creates nothing of its own looks like in a grid of creation
+// limits. It is a footnote now, where a sentence can say the true thing a column of N/A
+// cannot: Copper is invited, and it inherits.
+//
+// THE CLIENT'S can_create BRANCHES STAY. They render a tier that cannot create, and they are
+// tested; removing them would mean deriving that rule again the day a column like Copper
+// comes back. This list is the only place that decides which columns exist.
 // ============================================================================
-const GRID_TIERS = ['copper', 'silver', 'gold', 'platinum'];
+const GRID_TIERS = ['silver', 'gold', 'platinum'];
 
 // null/undefined means NO CAP throughout the tier config (see NULLABLE_TIER_FIELDS),
 // so it travels as null and the client renders it as Unlimited. Never coerced to 0.
