@@ -8195,6 +8195,27 @@ function applyNovelVersion(versionId) {
   state.novelVersionId = versionId ? String(versionId) : null;
   var v = novelVersionOnScreen();
   state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
+  // v3.0.888 -- TD-765. THE CHIP BELONGS HERE, AND v3.0.887 PUT IT IN THE WRONG PLACE.
+  //
+  // *(Ian, 2026-09-13: "im' not getting the pill on the publish page. i see it on the session page.")*
+  //
+  // 887 painted it from paintVersionLock on the claim that that function 'already runs on the
+  // heartbeat as well as on every publish paint'. THAT CLAIM WAS FALSE and was never checked:
+  // paintAllVersionLocks is called only from setGenLock and clearGenLock, so there is no
+  // heartbeat at all -- and paintPublishLock runs on the FIRST LINE of showCampaignSection,
+  // before showView and long before the version list is fetched. So novelVersionOnScreen()
+  // returned null, novelVersionIsMine() answered true to avoid crying wolf, and the chip was
+  // removed once and never painted again.
+  //
+  // WHICH IS THE SAME FAULT AS TD-762, ONE BATCH LATER: painted before the state it reads has
+  // settled, and never repainted. The lesson did not transfer because the hook was assumed
+  // rather than read -- the second assumed instrument in one day.
+  //
+  // This function is the right hook and says so itself: 'set the two state fields the rest of
+  // the page reads, from ONE place'. Both callers -- the default pick after the versions load,
+  // and an explicit switch -- are exactly the moments the answer changes, and v is already
+  // resolved two lines up, so the data cannot be missing.
+  try { paintForeignVersionChip('novel-version-select', novelVersionIsMine()); } catch (e) {}
 }
 
 async function onNovelVersionChange(val) {
@@ -8210,7 +8231,6 @@ async function onNovelVersionChange(val) {
   if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
-    try { paintVersionLock(); } catch (e) {}   // v3.0.887 -- a refused switch snaps the picker back; the chip follows it
     showError(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
@@ -11033,6 +11053,7 @@ function renderNovelSummary(sessions) {
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
         '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
         '<div class="session-card-fork">' + forkLabel + '</div>' +
+        cardForeignChipHtml(s) +   // v3.0.888 -- TD-765
         '<div class="session-card-pills">' +
           '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
@@ -16206,6 +16227,7 @@ function renderNovelSummary(sessions) {
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
         '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
         '<div class="session-card-fork">' + forkLabel + '</div>' +
+        cardForeignChipHtml(s) +   // v3.0.888 -- TD-765
         '<div class="session-card-pills">' +
           '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
@@ -17746,6 +17768,38 @@ function novelVersionIsMine() {
   if (!v) return true;   // nothing resolved yet: say nothing rather than cry wolf
   if (v.is_canonical) return !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   return !!v.is_mine;
+}
+
+// v3.0.888 -- TD-765. WHETHER A PARTICULAR SESSION CARD'S VERSION IS YOURS.
+//
+// *(Ian, 2026-09-13: "Same is true on the publish page session tab / session panels. If its not
+// your version can you put the warning pill on there.")*
+//
+// The renderer already had everything this needs: is_canonical, and fork_owner_name, which is
+// set only when the fork belongs to somebody else -- which is exactly how the label a few lines
+// above already decides to say "Your Version". So this asks the same question that text has been
+// answering all along instead of inventing a second rule that can disagree with it.
+//
+// AND THIS IS THE CASE THE CARDS EXIST FOR. The comment over that label says the tiles on one
+// page can come from DIFFERENT versions, so a page titled with one version can be showing
+// canonical content in most of its tiles -- and that "has to be visible before someone orders
+// it". It was visible in 10px text at 55% opacity. Now it is a pill.
+function cardForkIsMine(s) {
+  if (!s) return true;   // nothing to judge: say nothing rather than cry wolf
+  if (s.is_canonical) return !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  return !s.fork_owner_name;
+}
+
+// Drawn from BOTH copies of renderNovelSummary through this ONE helper. app.js holds two
+// declarations of that function and the later one wins, so a second copy of this markup would be
+// a second copy to get wrong -- and the apply script states the count of 2 so the edit lands on
+// both by construction rather than by a sweep (rules 5c).
+//
+// Wrapped in a plain div because .session-card-body is a flex COLUMN: an inline-flex pill placed
+// as a direct child would stretch to the full card width and stop looking like a pill.
+function cardForeignChipHtml(s) {
+  if (cardForkIsMine(s)) return '';
+  return '<div><span class="ver-foreign-chip">Not your version</span></div>';
 }
 
 function paintVersionMenu() {
@@ -24985,10 +25039,9 @@ function paintVersionLock() {
   sel.disabled = !!by;
   sel.style.opacity = by ? '0.5' : '';
   sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
-  // v3.0.887 -- TD-765. Painted here because this is the publish page's one 'reflect the version
-  // state' function and it already runs on the heartbeat as well as on every publish paint, so
-  // the chip cannot be left behind by a path nobody thought of.
-  try { paintForeignVersionChip('novel-version-select', novelVersionIsMine()); } catch (e) {}
+  // v3.0.888 -- TD-765. The version chip is NOT painted here. This function runs on the first
+  // line of showCampaignSection, before the version list exists, so it could only ever remove a
+  // chip it had no way to decide on. It lives in applyNovelVersion now.
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}
