@@ -4087,7 +4087,10 @@ function _patchMomentRefCast(momentId, refCast, refAssets) {
   }
   return false;
 }
-function _saveCast(p) {
+// v3.0.884 -- TD-761. An optional `done`, so the retouch tray can react to a save
+// without a second copy of this function. It fires only on the success path, AFTER the
+// patch, so a caller reading state.moments in it sees the new cast.
+function _saveCast(p, done) {
   var characterIds = (p.characters || []).map(function(c){ return c.id; }).filter(function(x){ return x != null; });
   var assetIds = (p.assets || []).map(function(a){ return a.id; }).filter(function(x){ return x != null; });
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + p.moment_id + '/cast', {
@@ -4101,6 +4104,7 @@ function _saveCast(p) {
     _patchMomentRefCast(p.moment_id, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, before the re-render; v3.0.883 -- TD-760, the asset half
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
+    if (typeof done === 'function') done(data);   // v3.0.884 -- TD-761
   })
   .catch(function(e){ showError('Could not save casting: ' + e.message); loadReview(); });
 }
@@ -12036,7 +12040,11 @@ var RG_CROP_ON = false;
 //
 // from/to are null or { x, y, r } with every value a FRACTION of the image:
 // x and y of the width and height, r of the shorter side.
-var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0 };
+// v3.0.884 -- TD-761. castLabel is remembered so the reference block can be rebuilt on
+// its own, without rgActionChange, which resets both markers. noPicMsg carries the one
+// rare case worth naming out loud: something added that turns out to have no reference
+// picture, and so cannot be used to correct a figure.
+var rgState = { momentId: null, from: null, to: null, active: 'from', size: 1, cols: 0, rows: 0, castLabel: null, noPicMsg: '' };
 
 // Small means "this point". Large means "this whole thing". The size changes
 // the WORDING as well as the ring, and in the crop stage it will set the tile.
@@ -12347,11 +12355,17 @@ var RG_REF_CAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Ite
 
 function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
-function rgCastSelect(label) {
+// v3.0.884 -- TD-761. SPLIT IN TWO, AND THAT IS THE WHOLE TRICK.
+// rgCastBlockInner produces the reference control on its own, so adding to the cast can
+// rebuild JUST that control. The obvious alternative -- calling rgActionChange -- sets
+// rgState.from and rgState.to to null, so it would silently throw away both markers the
+// reader had already placed. The tray is a SIBLING of the block, not inside it, so a
+// rebuild of the block cannot destroy the tray the reader is clicking in.
+function rgCastBlockInner(label) {
   var cs = rgPanelRefs();
   if (!cs.length) {
-    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add them to the cast and regenerate -- a retouch would send the same empty cast again.' +
-      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div></div>';
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.' +
+      '<div style="margin-top:6px;"><button class="btn btn-sm" onclick="rgToggleCastTray()">Add a character or asset</button></div></div>';
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
@@ -12367,13 +12381,123 @@ function rgCastSelect(label) {
     s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(_rl) + '</option>';
   }
   return s + '</select></label>' +
-    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div>';
+    '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgToggleCastTray()">Add to this panel</button></div>';
 }
 
-function rgOpenCast() {
+// The block and the tray beside it. The label is remembered because a later rebuild has
+// only the DOM to go on.
+function rgCastSelect(label) {
+  rgState.castLabel = label;
+  rgState.noPicMsg = '';
+  return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>' +
+    '<div id="rg-cast-tray" style="display:none;"></div>';
+}
+
+// Rebuild the reference control alone, and move the selection onto a name ONLY if that
+// option is really there -- v3.0.878's lesson: setting a picker to a value it does not
+// have leaves it on the first entry, which is a silent wrong answer rather than a visible
+// failure.
+function rgRefreshCastBlock(pickName) {
+  var b = document.getElementById('rg-cast-block');
+  if (!b) return;
+  b.innerHTML = rgCastBlockInner(rgState.castLabel || 'Which reference');
+  if (!pickName) return;
+  var s = document.getElementById('rg-who');
+  if (!s) return;
+  for (var i = 0; i < s.options.length; i++) {
+    if (s.options[i].value === pickName) { s.selectedIndex = i; return; }
+  }
+}
+
+// v3.0.884 -- TD-761. THE CAST TRAY, INSIDE THE RETOUCH PANEL.
+//
+// *(Ian, 2026-09-13: "It's very awkward hitting that button, adding a character then
+// having to go back to the retouch and select the action etc etc. If we can do it all
+// from right there it would be better.")*
+//
+// What it replaces: rgOpenCast called closeRetouch() and then opened the cast modal
+// hardcoded to 'character' -- so it destroyed the action, the typed words and both
+// markers, and could not reach an asset at all. Nothing here closes anything.
+//
+// It reuses castPickCharacter / castPickAsset / _saveCast rather than posting the cast
+// itself, so there is one save path and the v3.0.883 patch comes along for free.
+// ensureReviewData runs first because those handlers resolve the panel out of the review
+// payload, which the reader may never have loaded in this session.
+function rgToggleCastTray() {
+  var t = document.getElementById('rg-cast-tray');
+  if (!t) return;
+  if (t.style.display === 'block') { t.style.display = 'none'; t.innerHTML = ''; return; }
+  t.style.display = 'block';
+  t.innerHTML = '<div class="moment-opts-inner"><div class="review-row"><span class="review-label">Loading...</span></div></div>';
+  ensureReviewData(function () {
+    // _loadCastImages fetches BOTH campaign lists fresh on every call (v3.0.881), so the
+    // tray cannot show a stale roster -- which is the fault this whole thread began with.
+    _loadCastImages(function () { rgRenderCastTray(); });
+  });
+}
+
+function rgTrayTile(kind, id, name, cat, img) {
+  var cap = name + (cat ? ' \u00b7 ' + cat : '');
+  return '<button type="button" class="prep-img-pick-named" onclick="rgTrayAdd(\'' + kind + '\', ' + id + ')">' +
+    '<span class="prep-img-pick-img"' +
+    (img ? (' style="background-image:url(\'' + rgEsc(encodeURI(img)) + '\')"') : '') + '>' +
+    (img ? '' : (kind === 'c' ? '&#128100;' : '&#127991;')) + '</span>' +
+    '<span class="prep-img-cap">' + rgEsc(cap) + '</span></button>';
+}
+
+// Everything in the campaign that is not already on this panel, characters first, each
+// tile tagged by what it is. Same grid classes as the tray under the moment panel, so it
+// reads as the same control in a different place.
+function rgRenderCastTray() {
+  var t = document.getElementById('rg-cast-tray');
+  if (!t) return;
+  var p = (typeof _reviewPanel === 'function') ? _reviewPanel(rgState.momentId) : null;
+  var haveC = {}, haveA = {};
+  ((p && p.characters) || []).forEach(function (c) { if (c && c.id != null) haveC[String(c.id)] = true; });
+  ((p && p.assets) || []).forEach(function (a) { if (a && a.id != null) haveA[String(a.id)] = true; });
+  var tiles = '';
+  (_castCharRows || []).forEach(function (c) {
+    if (!c || c.id == null || haveC[String(c.id)]) return;
+    tiles += rgTrayTile('c', c.id, c.name, '', _castCharImg[String(c.id)] || '');
+  });
+  (_castAssetRows || []).forEach(function (a) {
+    if (!a || a.id == null || haveA[String(a.id)]) return;
+    tiles += rgTrayTile('a', a.id, a.name, (RG_REF_CAT[a.category] || a.category || 'Asset'), _castAssetImg[String(a.id)] || '');
+  });
+  var body = tiles
+    ? ('<div class="prep-img-grid" style="max-height:210px;">' + tiles + '</div>')
+    : '<div class="prep-img-empty">Everything in this campaign is already on this panel.</div>';
+  var note = rgState.noPicMsg
+    ? ('<div class="review-row" style="color:var(--gold-light);">' + rgEsc(rgState.noPicMsg) + ' \u00b7 No Picture Exists</div>')
+    : '';
+  t.innerHTML = '<div class="moment-opts-inner">' +
+    '<div class="review-row"><span class="review-label">Add to this panel:</span></div>' +
+    body + note + '</div>';
+}
+
+// Add one, then put the reader back exactly where they were with the new reference
+// selected. The AUTHORITATIVE answer about whether it can be used is the reference list
+// after the patch, not a guess from the thumbnail: a character can carry a per-session
+// reference with no canonical one, so a picture-less tile is not something the client can
+// tell in advance. If the name did not arrive, say so and leave the selection alone.
+function rgTrayAdd(kind, id) {
   var mid = rgState.momentId;
-  closeRetouch();
-  if (typeof openCastPicker === 'function' && mid) openCastPicker('character', mid);
+  if (!mid) return;
+  var isChar = (kind === 'c');
+  var rows = (isChar ? _castCharRows : _castAssetRows) || [];
+  var nm = '';
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i] && String(rows[i].id) === String(id)) { nm = rows[i].name || ''; break; }
+  }
+  function done() {
+    var seen = false;
+    var refs = (typeof rgPanelRefs === 'function') ? rgPanelRefs() : [];
+    for (var k = 0; k < refs.length; k++) { if (refs[k] && refs[k].name === nm) { seen = true; break; } }
+    rgState.noPicMsg = seen ? '' : nm;
+    rgRefreshCastBlock(seen ? nm : null);
+    rgRenderCastTray();
+  }
+  if (isChar) castPickCharacter(mid, id, done); else castPickAsset(mid, id, done);
 }
 
 function rgSelect(id, label, opts) {
@@ -24293,7 +24417,9 @@ function closeCastPicker() {
   if (m && m.parentNode) m.parentNode.removeChild(m);
 }
 
-function castPickCharacter(momentId, id) {
+// v3.0.884 -- TD-761. `done` is threaded through rather than the retouch tray
+// reimplementing these lines and the save beside them.
+function castPickCharacter(momentId, id, done) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var name = '';
@@ -24301,10 +24427,10 @@ function castPickCharacter(momentId, id) {
   p.characters = p.characters || [];
   if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
   p.cast_explicit = true;
-  _saveCast(p);
+  _saveCast(p, done);
 }
 
-function castPickAsset(momentId, id) {
+function castPickAsset(momentId, id, done) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var meta = null;
@@ -24312,7 +24438,7 @@ function castPickAsset(momentId, id) {
   p.assets = p.assets || [];
   if (!p.assets.some(function(a){ return String(a.id) === String(id); })) p.assets.push({ id: id, name: meta ? meta.name : '', category: meta ? meta.category : '' });
   p.cast_explicit = true;
-  _saveCast(p);
+  _saveCast(p, done);
 }
 
 // ===== Mobile corner menu: collapses Tour / Ask into a kebab on small screens =====
