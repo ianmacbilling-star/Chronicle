@@ -20,6 +20,11 @@
   <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
+  <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
+       second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
+       extension and index.html cannot stamp itself the way app.html does. -->
+  <link rel="stylesheet" href="/css/tier-grid.css?v=3.0.892">
+  <script src="/js/tier-grid.js?v=3.0.892" defer></script>
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1138,6 +1143,12 @@
           <a href="/login?signup&amp;plan=platinum" class="btn-tier">GO PLATINUM</a>
         </div>
 
+      </div>
+
+      <!-- v3.0.891 -- TD-767. The grid itself is built by /js/tier-grid.js; this is the only
+           markup it needs, so another landing page can carry the feature with one button. -->
+      <div class="tg-root tg-open-wrap">
+        <button type="button" id="tg-open-btn" class="tg-open">COMPARE THE TIERS</button>
       </div>
     </div>
 

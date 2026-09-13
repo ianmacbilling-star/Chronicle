@@ -28,6 +28,15 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
+    // Copper cannot: it is invite-only and makes its own version of somebody else's
+    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
+    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
+    // landing page's tier grid -- would have had to hard-code the same name a third
+    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
+    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
+    // shape rather than a dial.
+    can_create: true,
     description: 'Generous free trial (watermarked); lapses to Copper'
   },
   copper: {
@@ -51,6 +60,15 @@ const TIERS = {
     can_export: false,
     can_print: false,
     can_edit_prompts: true,
+    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
+    // Copper cannot: it is invite-only and makes its own version of somebody else's
+    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
+    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
+    // landing page's tier grid -- would have had to hard-code the same name a third
+    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
+    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
+    // shape rather than a dial.
+    can_create: false,
     max_characters: null,
     session_reserve: 0,
     description: 'Get your own version of the story · no monthly subscription · token purchases only'
@@ -75,6 +93,15 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
+    // Copper cannot: it is invite-only and makes its own version of somebody else's
+    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
+    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
+    // landing page's tier grid -- would have had to hard-code the same name a third
+    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
+    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
+    // shape rather than a dial.
+    can_create: true,
     max_characters: null,
     session_reserve: 0,
     description: '1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options'
@@ -99,6 +126,15 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
+    // Copper cannot: it is invite-only and makes its own version of somebody else's
+    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
+    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
+    // landing page's tier grid -- would have had to hard-code the same name a third
+    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
+    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
+    // shape rather than a dial.
+    can_create: true,
     max_characters: null,
     session_reserve: 0,
     description: '3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options'
@@ -123,6 +159,15 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
+    // Copper cannot: it is invite-only and makes its own version of somebody else's
+    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
+    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
+    // landing page's tier grid -- would have had to hard-code the same name a third
+    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
+    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
+    // shape rather than a dial.
+    can_create: true,
     max_characters: null,
     session_reserve: 0,
     description: 'unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles'
@@ -228,6 +273,14 @@ function getTier(tierName) {
   return ov ? Object.assign({}, base, ov) : base;
 }
 
+// v3.0.891 -- TD-767. ONE ANSWER TO "may this tier make a campaign or a session".
+// Reads the merged tier so an override could in principle carry it, and defaults to
+// TRUE for any tier that does not mention it -- a missing flag must never take a
+// capability away from a paying account.
+function canCreate(tierName) {
+  return getTier(tierName).can_create !== false;
+}
+
 function getMomentRange(tier, wordCount) {
   const t = getTier(tier);
   // Returns an UPPER-BOUND cap (a ceiling, not a target). Word count selects
@@ -274,8 +327,9 @@ async function checkCampaignLimit(req, res, next) {
     await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
 
-    if (user.tier === 'copper') {
-      return res.status(403).json({ error: 'Creating campaigns is not available on the Copper plan. Upgrade to a paid plan to start a new campaign.', code: 'CAMPAIGN_LIMIT' });
+    // v3.0.891 -- the flag, not the name. Same sentence for Copper as before.
+    if (!canCreate(user.tier)) {
+      return res.status(403).json({ error: 'Creating campaigns is not available on the ' + tier.name + ' plan. Upgrade to a paid plan to start a new campaign.', code: 'CAMPAIGN_LIMIT' });
     }
 
     // Check campaign limit
@@ -310,8 +364,9 @@ async function checkSessionLimit(req, res, next) {
     await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
 
-    if (user.tier === 'copper') {
-      return res.status(403).json({ error: 'Creating sessions is not available on the Copper plan. Upgrade to a paid plan to add sessions.', code: 'SESSION_LIMIT' });
+    // v3.0.891 -- the flag, not the name. Same sentence for Copper as before.
+    if (!canCreate(user.tier)) {
+      return res.status(403).json({ error: 'Creating sessions is not available on the ' + tier.name + ' plan. Upgrade to a paid plan to add sessions.', code: 'SESSION_LIMIT' });
     }
 
     if (tier.max_sessions !== null) {
@@ -570,4 +625,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, isTruePlatinum, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, canCreate, isTruePlatinum, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

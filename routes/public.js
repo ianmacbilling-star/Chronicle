@@ -6,7 +6,7 @@ const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.487 -- Library genre facet
 const artstyles = require('../services/artStyleCatalog');   // v3.0.845 -- TD-694, the art-style facet
 const router = express.Router();
-const { TIERS, getTier } = require('../middleware/tiers');
+const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrativeStyleAllowed, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 const { sendReportEmail } = require('./email');
 
@@ -103,6 +103,94 @@ router.get('/pricing', function (req, res) {
   } catch (e) {
     console.error('GET public pricing error:', e.message);
     res.status(500).json({ error: 'pricing unavailable' });
+  }
+});
+
+// ============================================================================
+// GET /api/public/tier-grid -- v3.0.891, TD-767. Everything the landing page's
+// "Compare the Tiers" grid draws, per tier, from the LIVE config.
+//
+// *(Ian, 2026-09-13: "It should use real / live data were possible from the dashboard
+// settings.")*
+//
+// SAME REASON /genres AND /art-styles EXIST. A control built from a second list is a
+// control that will eventually disagree with the thing it describes -- and here the
+// thing it describes is what the server ENFORCES, so a hand-written grid is how a
+// landing page ends up promising five sessions that checkSessionLimit refuses.
+// Every value below comes from getTier() (code defaults merged with the admin
+// overrides in app_settings.tier_config) or from the very functions the gates call.
+//
+// THE STYLE COUNTS ARE COUNTED WITH THE GATE ITSELF -- artStyleAllowed /
+// narrativeStyleAllowed against accessRank -- not with a second reading of the rank
+// maps. Move a style from Gold to Silver and this number moves with it.
+//
+// The FREE TRIAL is deliberately absent: Ian asked for four columns, and the trial is
+// its own row on the landing page with its own explanation.
+// ============================================================================
+const GRID_TIERS = ['copper', 'silver', 'gold', 'platinum'];
+
+// null/undefined means NO CAP throughout the tier config (see NULLABLE_TIER_FIELDS),
+// so it travels as null and the client renders it as Unlimited. Never coerced to 0.
+function gridCap(v) {
+  return (v === null || v === undefined || v === '') ? null : Number(v);
+}
+function gridNum(v) {
+  return (typeof v === 'number' && isFinite(v)) ? v : 0;
+}
+function gridStyleCount(map, allowed, rank) {
+  return Object.keys(map).filter(function (id) { return allowed(rank, id); }).length;
+}
+// Ian, 2026-09-13: "Put the Highest number there from the settings (i'm really not
+// using story length any more... i set all the settings per tier to the same number)".
+// Taken as a MAX rather than as any one band, so it stays correct whether or not the
+// four are equal, and needs no second decision if he ever separates them again.
+function gridMaxPanels(t) {
+  var caps = [t.max_moments_short, t.max_moments_medium, t.max_moments_long, t.max_moments_epic];
+  var best = null;
+  caps.forEach(function (n) {
+    if (typeof n === 'number' && isFinite(n) && (best === null || n > best)) best = n;
+  });
+  return best;
+}
+router.get('/tier-grid', function (req, res) {
+  try {
+    const tiers = {};
+    const order = GRID_TIERS.filter(function (n) { return !!TIERS[n]; });
+    order.forEach(function (name) {
+      const t = getTier(name);
+      const rank = accessRank(name);
+      const utlt = gridNum(t.monthly_utlt);
+      const cot = gridNum(t.monthly_cot);
+      tiers[name] = {
+        key: name,
+        label: t.name || name,
+        price: gridNum(t.price),
+        tokens: { utlt: utlt, cot: cot, total: utlt + cot },
+        max_campaigns: gridCap(t.max_campaigns),
+        max_sessions: gridCap(t.max_sessions),
+        max_characters: gridCap(t.max_characters),
+        max_assets: gridCap(t.max_assets),
+        max_archives_per_campaign: gridCap(t.max_archives_per_campaign),
+        max_panels: gridMaxPanels(t),
+        art_styles: gridStyleCount(ART_STYLE_MIN_RANK, artStyleAllowed, rank),
+        narrative_styles: gridStyleCount(NARRATIVE_STYLE_MIN_RANK, narrativeStyleAllowed, rank),
+        can_create: canCreate(name),
+        can_export: !!t.can_export,
+        // An extra version is an ENTITLEMENT on your own plan, not a creative capability,
+        // so the gate in routes/sessions.js reads tierRank and not accessRank. The
+        // threshold is taken from the tier table rather than written as 3.
+        multi_version: tierRank(name) >= tierRank('gold'),
+        // Both of these ask isTruePlatinum(userId), which is defined as
+        // getEffectiveTier(uid, null) === 'platinum' -- your OWN plan, never inherited.
+        custom_art_styles: name === 'platinum',
+        title_builder: name === 'platinum'
+      };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ order: order, tiers: tiers });
+  } catch (e) {
+    console.error('GET public tier-grid error:', e.message);
+    res.status(500).json({ error: 'tier details unavailable' });
   }
 });
 
