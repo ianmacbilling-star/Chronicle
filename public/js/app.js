@@ -21619,9 +21619,16 @@ function reorderApplySelections() {
   set('print-ship-street1', R.shipTo.street1);
   set('print-ship-street2', R.shipTo.street2);
   set('print-ship-city', R.shipTo.city);
-  set('print-ship-state', R.shipTo.state);
+  // v3.0.878 -- TD-756. NORMALISE, THEN PICK -- AND LET IT FAIL LOUDLY.
+  // These two are now pickers, and set() on a picker whose option is missing leaves
+  // it silently on the first entry, which on an address means quietly shipping the
+  // book somewhere nobody chose. pick() aborts the reorder with a sentence instead.
+  // The normalise step is what heals an order stored before this batch: a row
+  // holding "Virginia" becomes VA and repeats cleanly rather than aborting.
+  cgFillShipSelects();
+  if (!pick('print-ship-state', cgNormalizeStateCode(R.shipTo.state), 'that state')) return;
   set('print-ship-postcode', R.shipTo.postcode);
-  set('print-ship-country', R.shipTo.country);
+  if (!pick('print-ship-country', cgNormalizeCountryCode(R.shipTo.country), 'that country')) return;
   set('print-ship-phone', R.shipTo.phone);
   pick('print-ship-level', R.shippingLevel, 'that shipping speed');
   R.applied = true;
@@ -21956,6 +21963,112 @@ function refreshPrintOptions(pageCount) {
     .catch(function () {});
 }
 
+// ============================================================
+// v3.0.878 -- TD-756. TWO-LETTER CODES, CHOSEN RATHER THAN TYPED.
+//
+// A reader's price failed four times in a row and the request carried
+// stateCode: "Virginia". Lulu's own documentation is explicit -- "All States and
+// Countries should not be fully spelled out, and should be entered as
+// 2-characters", validated against ISO 3166-1 alpha-2 -- so every one of those
+// quotes was refused before it started. Ian reproduced it in one try by typing
+// the word instead of the code.
+//
+// The list lives HERE and not in app.html on purpose: the picker and the
+// name-to-code normaliser are the same data, so they cannot drift apart. That is
+// the shape the cream paper already uses, where the picker, buildSpec and the SKU
+// builder all say the same thing and no one of them is the only guard.
+// ============================================================
+var CG_US_STATES = [
+  ['AL', 'Alabama'], ['AK', 'Alaska'], ['AZ', 'Arizona'], ['AR', 'Arkansas'],
+  ['CA', 'California'], ['CO', 'Colorado'], ['CT', 'Connecticut'], ['DE', 'Delaware'],
+  ['FL', 'Florida'], ['GA', 'Georgia'], ['HI', 'Hawaii'], ['ID', 'Idaho'],
+  ['IL', 'Illinois'], ['IN', 'Indiana'], ['IA', 'Iowa'], ['KS', 'Kansas'],
+  ['KY', 'Kentucky'], ['LA', 'Louisiana'], ['ME', 'Maine'], ['MD', 'Maryland'],
+  ['MA', 'Massachusetts'], ['MI', 'Michigan'], ['MN', 'Minnesota'], ['MS', 'Mississippi'],
+  ['MO', 'Missouri'], ['MT', 'Montana'], ['NE', 'Nebraska'], ['NV', 'Nevada'],
+  ['NH', 'New Hampshire'], ['NJ', 'New Jersey'], ['NM', 'New Mexico'], ['NY', 'New York'],
+  ['NC', 'North Carolina'], ['ND', 'North Dakota'], ['OH', 'Ohio'], ['OK', 'Oklahoma'],
+  ['OR', 'Oregon'], ['PA', 'Pennsylvania'], ['RI', 'Rhode Island'], ['SC', 'South Carolina'],
+  ['SD', 'South Dakota'], ['TN', 'Tennessee'], ['TX', 'Texas'], ['UT', 'Utah'],
+  ['VT', 'Vermont'], ['VA', 'Virginia'], ['WA', 'Washington'], ['WV', 'West Virginia'],
+  ['WI', 'Wisconsin'], ['WY', 'Wyoming'],
+  ['DC', 'District of Columbia'],
+  // Territories and the forces addresses Lulu's own shipping notes call out
+  // ("Hawaii, Alaska, and Puerto Rico", "Armed Forces Europe, Armed Forces Pacific,
+  // and Armed Forces America"), so a reader at one of them is not locked out.
+  ['PR', 'Puerto Rico'], ['VI', 'U.S. Virgin Islands'], ['GU', 'Guam'],
+  ['AS', 'American Samoa'], ['MP', 'Northern Mariana Islands'],
+  ['AA', 'Armed Forces Americas'], ['AE', 'Armed Forces Europe'], ['AP', 'Armed Forces Pacific']
+];
+
+// Stage 1 is United States only. Not because Lulu refuses the rest -- they ship
+// wherever FedEx goes -- but because no non-US quote has ever been confirmed and
+// the price on this screen is real money. Stage 2 replaces this with the list
+// Lulu itself answers with.
+var CG_COUNTRIES = [['US', 'United States']];
+
+function cgKeyify(s) {
+  return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+// Full name -> code, built FROM the list above so a new entry cannot be missed.
+// The extra keys are the spellings people actually type.
+var CG_STATE_BY_NAME = (function () {
+  var m = {};
+  for (var i = 0; i < CG_US_STATES.length; i++) {
+    m[cgKeyify(CG_US_STATES[i][1])] = CG_US_STATES[i][0];
+    m[CG_US_STATES[i][0]] = CG_US_STATES[i][0];
+  }
+  m[cgKeyify('Washington DC')] = 'DC';
+  m[cgKeyify('Washington D.C.')] = 'DC';
+  m[cgKeyify('Virgin Islands')] = 'VI';
+  m[cgKeyify('US Virgin Islands')] = 'VI';
+  return m;
+})();
+
+var CG_COUNTRY_BY_NAME = (function () {
+  var m = { US: 'US' };
+  m[cgKeyify('United States')] = 'US';
+  m[cgKeyify('United States of America')] = 'US';
+  m[cgKeyify('USA')] = 'US';
+  m[cgKeyify('America')] = 'US';
+  return m;
+})();
+
+// Turn whatever is stored or typed into the code Lulu wants. Returns '' when it
+// cannot tell, and NEVER guesses -- a wrong two-letter code is the failure mode
+// this whole change exists to remove, and "ME" for Mexico really is Montenegro.
+function cgNormalizeStateCode(v) {
+  var k = cgKeyify(v);
+  if (!k) return '';
+  return CG_STATE_BY_NAME[k] || '';
+}
+function cgNormalizeCountryCode(v) {
+  var k = cgKeyify(v);
+  if (!k) return '';
+  return CG_COUNTRY_BY_NAME[k] || '';
+}
+
+// Idempotent: safe to call on every visit to the Order tab.
+function cgFillShipSelects() {
+  try {
+    var c = document.getElementById('print-ship-country');
+    if (c && !c.options.length) {
+      for (var i = 0; i < CG_COUNTRIES.length; i++) {
+        c.appendChild(new Option(CG_COUNTRIES[i][1], CG_COUNTRIES[i][0]));
+      }
+      c.value = 'US';
+    }
+    var s = document.getElementById('print-ship-state');
+    if (s && !s.options.length) {
+      s.appendChild(new Option('Select a state\u2026', ''));
+      for (var j = 0; j < CG_US_STATES.length; j++) {
+        s.appendChild(new Option(CG_US_STATES[j][1] + ' (' + CG_US_STATES[j][0] + ')', CG_US_STATES[j][0]));
+      }
+    }
+  } catch (e) {}
+}
+
 function printSelectionBody() {
   if (!printNovelInfo || !state.currentCampaign) return null;
   function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
@@ -21981,9 +22094,13 @@ function printSelectionBody() {
       street1: val('print-ship-street1'),
       street2: val('print-ship-street2'),
       city: val('print-ship-city'),
-      stateCode: val('print-ship-state'),
+      stateCode: (cgNormalizeStateCode(val('print-ship-state')) || val('print-ship-state')),
       postcode: val('print-ship-postcode'),
-      countryCode: (val('print-ship-country') || 'US').toUpperCase(),
+      // v3.0.878 -- TD-756. The picker already yields a code; this normalises anyway,
+      // because the picker must not be the only guard (the cream pattern) and because
+      // a browser that failed to populate the select would otherwise send an empty
+      // country and get an opaque refusal from the printer.
+      countryCode: (cgNormalizeCountryCode(val('print-ship-country')) || 'US'),
       phone: val('print-ship-phone')
     }
   };
@@ -22075,6 +22192,9 @@ function invalidatePreparedOrder() {
 // Attach change/input listeners to every order-affecting control once, so any
 // edit invalidates a prepared order. Safe to call repeatedly (guarded).
 function wirePrintOrderLock() {
+  // BEFORE the guard, and idempotent, so the pickers are populated every time the
+  // Order tab is opened rather than only on the first visit of a session.
+  cgFillShipSelects();
   if (printLockWired) return;
   printLockWired = true;
   var ids = ['print-binding','print-color','print-finish','print-qty','print-book-title',

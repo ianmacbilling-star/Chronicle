@@ -666,8 +666,13 @@
                       <input id="print-ship-city" type="text" placeholder="City" class="ord-in">
                     </div>
                     <div class="ord-f2">
-                      <label class="ord-lbl">State/Province</label>
-                      <input id="print-ship-state" type="text" placeholder="State/Province code" class="ord-in">
+                      <label class="ord-lbl">State</label>
+                      <!-- v3.0.878 -- TD-756. THIS WAS A FREE-TEXT BOX AND IT COST A READER FOUR
+                           FAILED PRICES. She typed "Virginia"; Lulu requires the two-letter code and
+                           refused every quote, and the refusal arrived as eleven undifferentiated
+                           words. The options are filled by cgFillShipSelects() rather than written
+                           here, so the list and the name-to-code normaliser cannot drift apart. -->
+                      <select id="print-ship-state" class="ord-in"></select>
                     </div>
                   </div>
                   <div class="ord-row">
@@ -677,7 +682,14 @@
                     </div>
                     <div class="ord-f3">
                       <label class="ord-lbl">Country</label>
-                      <input id="print-ship-country" type="text" placeholder="US" value="US" maxlength="2" class="ord-in">
+                      <!-- v3.0.878 -- TD-756. THE WORSE HALF OF THE SAME BUG. maxlength="2" did not
+                           reject a typed country name, it TRUNCATED it: "Germany" became GE, which is
+                           not a country code; "Mexico" became ME, which is Montenegro -- a valid code
+                           for the wrong continent, so it could have quoted and shipped somewhere
+                           nobody asked for. The state field failed loudly; this one could fail quietly.
+                           United States only for now: no non-US quote has ever been confirmed, and
+                           stage 2 opens this list from what Lulu actually answers, not from a guess. -->
+                      <select id="print-ship-country" class="ord-in"></select>
                     </div>
                   </div>
                   <label class="ord-lbl">Shipping speed</label>

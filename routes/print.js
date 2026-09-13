@@ -379,6 +379,41 @@ function logPrintFailure(req, where, e) {
   } catch (_e) {}
 }
 
+// v3.0.878 -- TD-756. THE PICKER MUST NOT BE THE ONLY GUARD.
+//
+// A reader typed "Virginia" into a free-text box and four quotes were refused by Lulu,
+// each arriving back as the same undifferentiated sentence. The form is a picker now, but
+// a form is client-side and this route is the one that spends money, so the same rule is
+// asserted here -- exactly as cream paper is refused by the picker, by buildSpec AND by
+// the SKU builder, so that no single one of them is load-bearing.
+//
+// It answers 400 with `details`, which the Order tab already renders in full, so a bad
+// address now names itself instead of becoming a 502 from the printer.
+const US_STATE_CODES = ('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS ' +
+  'MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC ' +
+  'PR VI GU AS MP AA AE AP').split(' ');
+
+function shipToErrors(body) {
+  const s = (body && body.shipTo) || {};
+  const errs = [];
+  const cc = String(s.countryCode || '').trim().toUpperCase();
+  const st = String(s.stateCode || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) {
+    errs.push('The country must be a two-letter code such as US, not a country name.');
+  }
+  if (cc === 'US') {
+    if (!st) {
+      errs.push('Please choose a state.');
+    } else if (US_STATE_CODES.indexOf(st) === -1) {
+      // Named, because "it must be two letters" is not much help to someone
+      // looking at the word they just typed.
+      errs.push('The state must be its two-letter code -- VA for Virginia, for example -- not the full name. ' +
+        'We were given "' + String(s.stateCode).slice(0, 40) + '".');
+    }
+  }
+  return errs;
+}
+
 // Map the public request body to a neutral OrderRequest the provider takes.
 function buildOrderRequest(body, spec, externalId, contactEmail) {
   const s = body.shipTo || {};
@@ -497,6 +532,9 @@ router.post('/quote', requireSession, async function (req, res) {
     const { selection, pageCount } = req.body || {};
     const built = catalog.buildSpec(selection, parseInt(pageCount, 10));
     if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
+    // v3.0.878 -- TD-756. Before the printer is asked, and before any money path.
+    const _shipErrs = shipToErrors(req.body);
+    if (_shipErrs.length) return res.status(400).json({ error: 'Check the shipping address', details: _shipErrs });
 
     const provider = getPrintProvider();
     const orderReq = buildOrderRequest(req.body, built.spec, 'quote', null);
@@ -562,6 +600,12 @@ router.post('/order', requireSession, async function (req, res) {
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
   }
+  // v3.0.878 -- TD-756. THE SAME CHECK ON BOTH DOORS. /quote and /order take the same
+  // shipTo and a rule applied to one path and not its twin is the fault this project
+  // records most often (rules 5c). Placed before the vendor probe and before the row,
+  // so a bad address costs nothing at all.
+  const _ordShipErrs = shipToErrors(body);
+  if (_ordShipErrs.length) return res.status(400).json({ error: 'Check the shipping address', details: _ordShipErrs });
   // v3.0.782 -- TD-576. Before the quote, before the row, before the Checkout session: no
   // money may move for a book whose files the printer demonstrably cannot collect. Placed
   // here so a definite negative costs nothing at all -- no vendor call, no database row.
