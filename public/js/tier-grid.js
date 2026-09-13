@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892, v3.0.893).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892, v3.0.893, v3.0.894).
 
    Ian, 2026-09-13: "Can you create a web page or Modal that lists in grid style
    all the different features each tier has. 4 columns Copper, Silver, Gold,
@@ -149,9 +149,11 @@
       '</div>' +
       '<div class="tg-scroll" id="tg-scroll"><div class="tg-loading">Reading the current plans\u2026</div></div>' +
       '<div class="tg-foot">' +
-        '<div class="tg-note"><b>Copper is invite only.</b> No monthly subscription is needed to play ' +
-          'under a subscription holder: Copper inherits its Story Master\u2019s features, and you make ' +
-          'your own version of each session \u2014 nothing else.</div>' +
+        '<div class="tg-note tg-note-coin">' +
+          '<img src="' + COINS.copper + '" alt="" />' +
+          '<span><b>Copper is invite only.</b> No monthly subscription \u2014 token purchases only, to ' +
+          'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +
+          '</span></div>' +
         '<div class="tg-note">More than one version needs <b>Gold or higher on your own plan</b>. ' +
           'Unlike the creative options, it is not inherited from your Story Master.</div>' +
       '</div>' +
