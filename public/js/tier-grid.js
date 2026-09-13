@@ -1,5 +1,5 @@
 /* ============================================================================
-   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891).
+   COMPARE THE TIERS -- the landing page's tier comparison grid (v3.0.891, v3.0.892).
 
    Ian, 2026-09-13: "Can you create a web page or Modal that lists in grid style
    all the different features each tier has. 4 columns Copper, Silver, Gold,
@@ -69,11 +69,15 @@
     { label: 'Sessions per Campaign', cell: function (t) {
         return t.can_create ? val(esc(cap(t.max_sessions))) : dash('your own version of each');
       } },
-    { label: 'Panels per Session', cell: function (t) {
+    { label: 'Image Panels per Session', cell: function (t) {
         return val(esc(cap(t.max_panels)));
       } },
     { label: 'Art Styles', cell: function (t) {
-        return t.can_create ? val(esc(t.art_styles)) : na();
+        // v3.0.892 -- Ian: "In the art styles for platinum say 11 + Custom". Driven by the
+        // SAME field the Custom Art Styles row renders, so the count and the row cannot
+        // disagree, and a tier name still decides nothing here.
+        if (!t.can_create) return na();
+        return val(esc(t.art_styles) + (t.custom_art_styles ? ' + Custom' : ''));
       } },
     { label: 'Narrative Styles', cell: function (t) {
         return t.can_create ? val(esc(t.narrative_styles)) : na();
@@ -155,6 +159,9 @@
     overlay.addEventListener('click', function (ev) {
       if (ev.target === overlay || (ev.target.getAttribute && ev.target.getAttribute('data-tg-close'))) close();
     });
+    var sc = overlay.querySelector('.tg-scroll');
+    if (sc) sc.addEventListener('scroll', updateScrollCue);
+    window.addEventListener('resize', updateScrollCue);
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -162,6 +169,28 @@
   function paint(html) {
     var el = document.getElementById('tg-scroll');
     if (el) el.innerHTML = html;
+    updateScrollCue();
+  }
+
+  // v3.0.892 -- MORE BELOW.
+  //
+  // Ian asked for a Title Builder row that had been there since v3.0.891 -- because on a
+  // laptop window fourteen rows do not fit, the panel scrolls inside itself, and the
+  // footnotes sitting under the scroll region read as the end of the table. A scrollbar is
+  // not a cue; it is a mechanism. So the panel says so, and stops saying it at the bottom.
+  //
+  // The arithmetic is its own function because that is the part worth testing: a cue that
+  // shows when there is nothing more below is worse than no cue.
+  function moreBelow(scrollTop, clientHeight, scrollHeight) {
+    return (scrollHeight - (scrollTop + clientHeight)) > 8;   // 8px of slack for sub-pixel heights
+  }
+  function updateScrollCue() {
+    if (!overlay) return;
+    var el = overlay.querySelector('.tg-scroll');
+    var panel = overlay.querySelector('.tg-panel');
+    if (!el || !panel) return;
+    if (moreBelow(el.scrollTop, el.clientHeight, el.scrollHeight)) panel.classList.add('tg-more');
+    else panel.classList.remove('tg-more');
   }
 
   function load() {
@@ -194,6 +223,8 @@
     var btn = ov.querySelector('.tg-close');
     if (btn) btn.focus();
     load();
+    // The table arrives asynchronously on the first open, so paint() calls this again.
+    updateScrollCue();
   }
 
   function close() {
