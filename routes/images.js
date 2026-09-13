@@ -1568,7 +1568,10 @@ router.post('/retouch-prompt', requireAuth, async function (req, res) {
     if (place) parts.push('The place they indicated on the picture: ' + place);
     if (shape) parts.push('Panel shape: ' + shape);
     if (panelText.trim()) parts.push('What this panel depicts: ' + panelText.trim().slice(0, 600));
-    if (cast.length) parts.push('Characters cast on this panel (identity references are sent with the edit): ' + cast.join(', '));
+    // v3.0.883 -- TD-760. The list now carries assets too, so the sentence naming it must
+    // not say "Characters" -- a model told these are characters will not treat a location
+    // or an item as a nameable subject, which is the whole point of sending them.
+    if (cast.length) parts.push('Named references cast on this panel -- characters, locations and items, whose identity reference pictures are sent with the edit: ' + cast.join(', '));
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

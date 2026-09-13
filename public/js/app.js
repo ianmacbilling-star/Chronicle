@@ -4060,12 +4060,30 @@ function _reviewPanel(momentId) {
 // A MISSING referenceCast IS LEFT ALONE RATHER THAN CLEARED. The field is absent when the
 // server could not compute it; blanking the list on that would turn a stale picker into an
 // empty one, which is worse.
-function _patchMomentRefCast(momentId, refCast) {
-  if (!refCast || !Array.isArray(refCast)) return false;
+// v3.0.883 -- TD-760. THE ASSET LIST IS PATCHED TOO, AND THIS IS THE THIRD TIME THIS
+// PAIR HAS DIVERGED.
+//
+// v3.0.849 (TD-703b) taught this function to patch the CHARACTER list so the retouch
+// picker did not have to wait for a session reload. The asset list beside it was left
+// reading whatever the session load wrote, so an asset added to a panel was invisible
+// to `rgPanelRefs` until the whole session was fetched again. TD-755 was the same shape
+// one layer out, in the cast picker's own source list.
+//
+// EACH LIST IS PATCHED ONLY WHEN ITS OWN ARRAY ARRIVES. Both server helpers return null
+// when they fail, and null must leave the existing list alone -- replacing a good list
+// with an empty one would read to the reader as everything having been removed from the
+// panel, which is worse than a stale list and much harder to disbelieve.
+function _patchMomentRefCast(momentId, refCast, refAssets) {
+  var haveC = Array.isArray(refCast), haveA = Array.isArray(refAssets);
+  if (!haveC && !haveA) return false;
   var ms = (state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
     var mid = (ms[i] && ms[i].id != null) ? ms[i].id : (ms[i] && ms[i].moment_id);
-    if (String(mid) === String(momentId)) { ms[i].characters = refCast; return true; }
+    if (String(mid) === String(momentId)) {
+      if (haveC) ms[i].characters = refCast;
+      if (haveA) ms[i].assets = refAssets;
+      return true;
+    }
   }
   return false;
 }
@@ -4080,7 +4098,7 @@ function _saveCast(p) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not save casting: ' + data.error); loadReview(); return; }
-    _patchMomentRefCast(p.moment_id, data.referenceCast);   // v3.0.849 -- TD-703b, before the re-render
+    _patchMomentRefCast(p.moment_id, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, before the re-render; v3.0.883 -- TD-760, the asset half
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
     if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
   })
@@ -4125,7 +4143,7 @@ function castReset(momentId) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showError('Could not reset casting: ' + data.error); return; }
-    _patchMomentRefCast(momentId, data.referenceCast);   // v3.0.849 -- TD-703b, the reset path needs it too
+    _patchMomentRefCast(momentId, data.referenceCast, data.referenceAssets);   // v3.0.849 -- TD-703b, the reset path needs it too; v3.0.883 -- TD-760, so does the asset half
     state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
@@ -12118,7 +12136,11 @@ var RG_ACTIONS = {
     ph: 'What should change about it? e.g. make it a darker red'
   },
   reface: {
-    cells: ['from'], cast: 'Who it should be',
+    // v3.0.883 -- TD-760. "Which reference", not "Who it should be": this picker offers
+    // locations and items as well as people, and a question starting with Who tells the
+    // reader that half the list is not for them. *(Ian, 2026-09-13.)* `add` keeps its own
+    // wording, where "Who to add" is still exactly right.
+    cells: ['from'], cast: 'Which reference',
     from: 'Which figure is wrong? Click them in the picture.',
     ph: 'Anything else? Optional.'
   },
@@ -12288,13 +12310,18 @@ function rgArticle(s) {
 // reface action exists to repair.
 // Characters AND assets: both are sent to the image model as references, so
 // both must be selectable. An asset drawn wrong was previously untargetable.
+// v3.0.883 -- TD-760. Each entry is TAGGED with what it is, because the picker shows
+// characters and assets in one list and a bare name cannot say which. Names are all the
+// server matches on, so the tag is for the label only and never for the value.
 function rgPanelRefs() {
-  var out = rgPanelCast();
+  var out = rgPanelCast().map(function (c) { return { name: c.name, kind: 'character' }; });
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
     if (ms[i] && String(ms[i].id) === String(rgState.momentId)) {
       var as = ms[i].assets || [];
-      for (var j = 0; j < as.length; j++) if (as[j] && as[j].name) out.push(as[j]);
+      for (var j = 0; j < as.length; j++) {
+        if (as[j] && as[j].name) out.push({ name: as[j].name, kind: 'asset', category: as[j].category || '' });
+      }
       break;
     }
   }
@@ -12314,6 +12341,10 @@ function rgPanelCast() {
   return out;
 }
 
+// v3.0.883 -- TD-760. SHORT forms, as v3.0.848 settled for the cast picker: this sits
+// inside a <select> option beside a name, where the full term runs the line too long.
+var RG_REF_CAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
+
 function rgEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
 function rgCastSelect(label) {
@@ -12324,7 +12355,17 @@ function rgCastSelect(label) {
   }
   var s = '<label style="font-size:11px;color:var(--gold-dim);">' + label +
     '<select class="form-input" id="rg-who" style="margin-top:3px;">';
-  for (var i = 0; i < cs.length; i++) s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(cs[i].name) + '</option>';
+  // v3.0.883 -- TD-760. THE LABEL GAINS THE CATEGORY, THE VALUE DOES NOT.
+  // Characters and assets share this list and both rendered as a bare name, so a
+  // location called the same thing as a character was indistinguishable -- and on a
+  // real collision the server takes the first match, which is always the character.
+  // The option VALUE stays the plain name because that is what retouch-moment matches.
+  for (var i = 0; i < cs.length; i++) {
+    var _rl = cs[i].name + ((cs[i].kind === 'asset')
+      ? (' \u00b7 ' + (RG_REF_CAT[cs[i].category] || cs[i].category || 'Asset'))
+      : '');
+    s += '<option value="' + rgEsc(cs[i].name) + '">' + rgEsc(_rl) + '</option>';
+  }
   return s + '</select></label>' +
     '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Not there? <button class="btn btn-sm" onclick="rgOpenCast()">Check the cast on this image</button></div>';
 }
@@ -12813,7 +12854,11 @@ function rgBuildFinal(done) {
     template: tpl,
     cell: rgState.from || rgState.to || null,
     place: rgPlace(rgState.to || rgState.from),
-    cast: rgPanelCast().map(function (c) { return c.name; })
+    // v3.0.883 -- TD-760. THE COMBINED LIST, NOT THE CHARACTERS ONLY. Assets are sent to
+    // the image model as identity references exactly as characters are, so a rewrite that
+    // was only told the characters could not resolve a pronoun onto an asset subject --
+    // which is rule 10, the one that has already put a change onto the wrong figure once.
+    cast: rgPanelRefs().map(function (c) { return c.name; })
   };
   fetch('/api/images/retouch-prompt', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
