@@ -7,7 +7,7 @@ const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
 const { sendAlertEmail } = require('./routes/email');
 const { startScheduler } = require('./scheduler');
-const { isTesterEmail } = require('./middleware/auth');   // v3.0.796 -- TD-600, the /version gate
+const { isTesterEmail, isAdminEmail } = require('./middleware/auth');   // v3.0.796 -- TD-600, the /version gate; v3.0.898 -- TD-770, the draft landing page
 
 const app = express();
 
@@ -295,6 +295,37 @@ app.get('/library', function(req, res) {
 // is not a thing to discover after launch.
 app.get('/our-story', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'our-story.html'));
+});
+// v3.0.898 -- TD-770. THE DRAFT STORYTELLER LANDING PAGE. ADMIN ONLY.
+//
+// *(Ian, 2026-09-13: "Can you work something up and just make it accessible by Admin only from a
+// small link in the top banner for now.")*
+//
+// IT LIVES OUTSIDE public/ ON PURPOSE. express.static (mounted above) serves everything under
+// public/ to everyone, so a gated page cannot sit there -- views/story.html is reachable only
+// through this route. Its stylesheet IS public, because a stylesheet has to be fetchable; it
+// gives away nothing but a hatch pattern.
+//
+// 404 AND NOT 403: a 403 confirms the page exists. Nothing on it is secret, but an unfinished
+// front door is not a thing to advertise while it is unfinished.
+//
+// no-store, because this is a per-user answer on a path an edge cache would otherwise be happy
+// to hold: one cached copy served to an anonymous visitor would undo the whole gate.
+//
+// AND IT FAILS CLOSED. Any error in the lookup leaves ok false -- an access question is the one
+// place where a database hiccup must not become a yes.
+app.get('/story', async function (req, res) {
+  var ok = false;
+  try {
+    if (req.session && req.session.userId) {
+      const db = await getDb();
+      const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+      ok = !!(u && isAdminEmail(u.email));
+    }
+  } catch (e) { ok = false; }
+  if (!ok) return res.status(404).send('Not found');
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'story.html'));
 });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
