@@ -197,16 +197,24 @@ body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text 
 .btn-tier:hover { transform: none; box-shadow: none; filter: brightness(1.08); }
 
 /* ---- 3. THE PAYOFF: who it is for ---- */
-/* The book handed to the person the stories belong to. This replaces the D&D payoff art that
-   this page had been inheriting from landing.css since v3.0.898.
+/* Four friends round a kitchen table, mid-reaction to seeing themselves drawn in a finished
+   book. v3.0.909 replaced the photograph of a family handing a book to a grandfather: that was
+   one of the three audiences the eyebrow names, and this is all three.
 
-   center 35% IS MEASURED, NOT PREFERRED. This panel renders nearly square and crops from the
-   top, so the default cut the open book off entirely and dropped the gold caption onto the
-   granddaughter's face; cutting lower lost the parents' heads. At 35% all five faces, the book
-   and the wrapping paper are in frame, and "This could be your storybook" lands on the paper. */
+   IT IS PAINTED, NOT PHOTOGRAPHED, and deliberately so -- it is generated in Campaignia's own
+   'Everyday life illustration' preset, so the panel that says "this could be your storybook"
+   is drawn in a style the product can actually produce.
+
+   center 50% IS MEASURED, NOT PREFERRED. The panel renders 674x600 and the picture is 896x1200,
+   so cover fills by width and throws away 303px of 903 -- a third of the image. The five
+   positions were built and compared: at 35% the book is a sliver at the bottom edge, at 75% the
+   faces are cut off at the eyes. At 50% all four faces and the whole open spread are in frame.
+
+   AND IT CARRIES A ?v= STAMP NOW, which it never did. A new filename has nothing stale to bust;
+   a file REPLACED IN PLACE does, and without this Cloudflare serves the grandfather forever. */
 .panel-payoff {
-  background-image: url('/images/story-payoff.jpg');
+  background-image: url('/images/story-payoff.jpg?v=3.0.909');
   background-size: cover;
-  background-position: center 35%;
+  background-position: center 50%;
   background-color: var(--ink-mid, #160e06);
 }
