@@ -368,7 +368,28 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_sections: viewForkRow ? (viewForkRow.narrative_sections || null) : (session.narrative_sections || null),
     narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
-    narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || 'classic',
+    // v3.0.913 -- TD-779. THE TAIL IS GONE, AND THAT IS THE WHOLE FIX.
+    //
+    // It used to end "|| 'classic'", so this field was NEVER null and the client's
+    // narrativeStyleFor() -- whose first line is "if (data.narrative_style) return it" --
+    // returned Classic before it could ever ask the genre. TD-777's voice chains were
+    // therefore unreachable on screen from the day they shipped, and so were TD-669's for
+    // Family Story and Skill Story from v3.0.839. THE SERVER WAS NEVER AFFECTED: it reads the
+    // session_forks column directly, which really is NULL until somebody picks a style, so it
+    // applied the genre default while the button said Classic. The button and the prose
+    // disagreed, which is worse than either being wrong on its own.
+    //
+    // THIS IS THE FALLBACK-READ-AS-A-DEFAULT TRAP, AND IT IS NAMED IN OUR OWN TO-DO (TD-694):
+    // a fallback tail read as if it were a stored value. NULL HAS TO MEAN NEVER CHOSEN, which
+    // is precisely what genreDefaults() returning null rather than filling blanks was for.
+    //
+    // AND THE TWIN ON THE NEXT LINE IS WHY THIS WAS INVISIBLE: art_style_override has no tail,
+    // arrives null, and its default has worked correctly the whole time. One missing '||' was
+    // the entire difference between the two halves of the same feature.
+    //
+    // Both client readers of this field are null-safe: narrativeStyleFor() wants the null, and
+    // the multiplayer sync is already guarded by a typeof string test. Checked, not assumed.
+    narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || null,
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
     narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
