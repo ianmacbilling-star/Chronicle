@@ -27,7 +27,7 @@
 //   7  The Drop Point                Streets of Silver Shadow   pen and ink, handwritten type
 //   8  The Company                   Embers of Damnation    the character page
 //   9  Hell of a First Date          The ANOMALIES          comic-page layout, superhero
-//  10  Battle for the Rift           test campaign          science fiction
+//  10  The Signal Arrives            test campaign          science fiction
 //  11  The Aetherheart Disturbance   Starbound Skies        anime-leaning, aurora palette
 //  12  Stranger at the Door          test campaign          romance / suspense
 //  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
@@ -36,11 +36,17 @@
 // ELEVEN GENRES, SEVEN ART STYLES, FOUR LAYOUTS, a cover and a character page. The two styles
 // still unrepresented are watercolor and charcoal.
 //
+// SLOT TEN WAS RE-PICKED IN v3.0.904. The first science-fiction page was a fleet action -- ships
+// and empty space, like every other page in that book. This one is a control room with four
+// people around a console, faces lit blue by the screens. It is the only bright page in a very
+// dark book, which is what a panel on a near-black page needs, and it is the only one with
+// anybody in it.
+//
 // AT 3.8 SECONDS A PAGE THIS IS A 53-SECOND CYCLE and nobody sees the end of it. The coverage is
 // for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.903';        // cache stamp -- bump when the pictures are replaced in place
+  var V = '3.0.904';        // cache stamp -- bump when the pictures are replaced in place
   var COUNT = 14;             // story-pic1.jpg .. story-pic14.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 
