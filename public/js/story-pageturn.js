@@ -11,12 +11,37 @@
 // the two numbers match -- a script that swaps the images before the rotation finishes shows
 // the reader the trick.
 //
-// THE PAGE LIST IS ONE LINE. Replacing the placeholders is: drop the new files in, change COUNT
-// if it changed, bump V. Nothing else in this file moves.
+// THE PAGE LIST IS ONE LINE, and v3.0.903 is the proof: swapping five placeholders for fourteen
+// real pages was three edits -- COUNT, V, and the files themselves. Nothing else in here moved.
+//
+// THE FOURTEEN, in order. The first four are the only ones most visitors see, so they carry the
+// argument between them: a dark interior drama, a bright modern real-life page, a finished COVER
+// so that "book" registers early, and a full-bleed fantasy battlefield.
+//
+//   1  Knock at the Closed Door      Our Family Stories     family memoir / period drama
+//   2  The Long Way Down             test campaign          real life, modern, textless
+//   3  (cover)                       Dojo of the Dragon Spirits   a cover, and a title
+//   4  The Last Cultist Falls        The Strangers          dark fantasy, full-bleed
+//   5  Paddle Raft Chaos             River of No Return     family adventure
+//   6  Filling the Cavity            Going to the Dentist   children's / skill story
+//   7  The Drop Point                Streets of Silver Shadow   pen and ink, handwritten type
+//   8  The Company                   Embers of Damnation    the character page
+//   9  Hell of a First Date          The ANOMALIES          comic-page layout, superhero
+//  10  Battle for the Rift           test campaign          science fiction
+//  11  The Aetherheart Disturbance   Starbound Skies        anime-leaning, aurora palette
+//  12  Stranger at the Door          test campaign          romance / suspense
+//  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
+//  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
+//
+// ELEVEN GENRES, SEVEN ART STYLES, FOUR LAYOUTS, a cover and a character page. The two styles
+// still unrepresented are watercolor and charcoal.
+//
+// AT 3.8 SECONDS A PAGE THIS IS A 53-SECOND CYCLE and nobody sees the end of it. The coverage is
+// for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.902';        // cache stamp -- bump when the pictures are replaced in place
-  var COUNT = 5;              // story-pic1.jpg .. story-pic5.jpg
+  var V = '3.0.903';        // cache stamp -- bump when the pictures are replaced in place
+  var COUNT = 14;             // story-pic1.jpg .. story-pic14.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 
   function src(n) { return '/images/story-pic' + (((n % COUNT) + COUNT) % COUNT + 1) + '.jpg?v=' + V; }

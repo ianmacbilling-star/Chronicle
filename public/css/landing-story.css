@@ -28,9 +28,10 @@
 /* *(Ian, 2026-09-14: "animate one of those picture boxes to look like pages turning" ... "I'm
    thinking it should be above the fold in the hero picture box.")*
 
-   REAL PAGES FROM REAL BOOKS, turning one into the next. story-pic1..story-pic5.jpg are
-   PLACEHOLDERS -- Ian is sending the final set -- which is why they are numbered rather than
-   named after what is on them, and why every reference carries a ?v= stamp. THAT IS THE OPPOSITE
+   REAL PAGES FROM REAL BOOKS, turning one into the next. story-pic1..story-pic14.jpg are the
+   real set as of v3.0.903, drawn from ten Campaignia books; they stay numbered rather than named
+   after what is on them because they are still swappable, and every reference carries a ?v=
+   stamp for the same reason. THAT IS THE OPPOSITE
    CALL FROM v3.0.900, deliberately: those filenames were new and permanent so there was no stale
    copy to bust, and a stamp that never moves is a stamp that lies. These files are MEANT to be
    replaced in place under the same names, so without a stamp Cloudflare would keep serving the
@@ -46,7 +47,7 @@
    the script adds sits on top of it, so a blocked script, an old browser or a slow network all
    degrade to a picture rather than to a black rectangle. */
 .hero-img-panel.story-img-slot {
-  background-image: url('/images/story-pic1.jpg?v=3.0.902');
+  background-image: url('/images/story-pic1.jpg?v=3.0.903');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
