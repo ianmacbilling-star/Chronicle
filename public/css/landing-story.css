@@ -118,6 +118,80 @@
   background-color: var(--ink-mid, #160e06);
 }
 
+/* ============================================================================
+   THE STORYTELLER PAGE'S OWN TYPOGRAPHY (v3.0.905, TD-774) -- "THE BOOK"
+
+   *(Ian, 2026-09-14: "change the styling on this landing page a little... Get away from the
+   comic look and replace it with something more classic. The layout is fine... its the Font and
+   Buttons and panels don't really match this more generic message... The colors are still good.")*
+
+   THIS IS WHAT THE SWAP SHEET WAS FOR. index.html and story.html share landing.css and differ
+   only by the sheet that loads after it -- so the D&D page keeps every comic convention and this
+   page stops borrowing them, with no fork of the layout and no second copy of anything.
+
+   WHAT WAS READING AS "COMIC", precisely: a display face on TWENTY-TWO elements (headline,
+   buttons, section tags, step numbers, tier names, FAQ questions), a 5px solid ink outline on
+   every panel, and hard offset shadows -- 3px 3px 0, 5px 5px 0 -- with the buttons physically
+   shifting on hover. All three go. Colours do not change: same ink, same gold, same crimson.
+
+   NO NEW FONT FILES. campaignia.com already self-hosts EB Garamond in /css/fonts.css alongside
+   Cinzel, Crimson Text, Lora and Merriweather -- five families served, three used. This spends
+   one that was already paid for.
+
+   AND NOT ONE !important. Everything here beats landing.css on source order alone, which was
+   checked by building it both ways and diffing the computed styles of every element it touches.
+   The one selector that genuinely resisted was .btn-tier -- see the note on the metals below.
+   ============================================================================ */
+
+/* ============================================================================
+   OPTION A -- "THE BOOK"
+   ============================================================================ */
+.btn-nav, .hero-eyebrow, .hero-title, .btn-hero, .section-tag, .section-title,
+.step-num, .step-label, .step-title, .features-strip-title, .feature-title,
+.pricing-header-title, .tier-name-row, .tier-price-tag, .btn-tier, .payoff-title,
+.btn-cta, .cta-strip-text, .faq-header-title, .faq-q, .caption-box.gold-cap::before {
+  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+  font-weight: 500;
+}
+body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text {
+  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+}
+.hero-title { font-weight: 600; letter-spacing: -0.5px; line-height: 1.06; }
+.hero-eyebrow, .section-tag, .step-label, .pricing-header-title, .faq-header-title,
+.features-strip-title { font-weight: 500; letter-spacing: 4px; }
+
+.panel, .panel-how, .panel-pricing, .panel-payoff, .faq-cell, .step-row, .tier-row,
+.features-strip-body > * {
+  border: 1px solid rgba(201,168,76,0.22);
+  box-shadow: none;
+}
+
+.btn-hero, .btn-cta, .btn-nav, .btn-tier {
+  border-radius: 2px;
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 500;
+}
+.btn-hero, .btn-cta {
+  border: 1px solid rgba(201,168,76,0.55);
+  background: #8c2318;
+  color: #f3ead6;
+}
+.btn-hero:hover, .btn-cta:hover { transform: none; background: #a02a1d; }
+ /* THE NAV BUTTON SITS ON THE ORANGE BANNER, so an outline in gold is unreadable there --
+   at phone width it nearly disappeared. It keeps a solid ink fill and parchment type. */
+.btn-nav {
+  border: 1px solid rgba(201,168,76,0.55);
+  background: rgba(10,8,6,0.88);
+  color: #f0e8d0;
+}
+.btn-nav:hover { transform: none; background: rgba(10,8,6,1); }
+
+/* THE TIER BUTTONS KEEP THEIR METAL. Only the shape and the type change. */
+.btn-tier { border: 1px solid rgba(10,8,6,0.45); }
+.btn-tier:hover { transform: none; box-shadow: none; filter: brightness(1.08); }
+
 /* ---- 3. THE PAYOFF: who it is for ---- */
 /* The book handed to the person the stories belong to. This replaces the D&D payoff art that
    this page had been inheriting from landing.css since v3.0.898.
