@@ -28,7 +28,7 @@
 //   8  The Company                   Embers of Damnation    the character page
 //   9  Hell of a First Date          The ANOMALIES          comic-page layout, superhero
 //  10  The Signal Arrives            test campaign          science fiction
-//  11  The Aetherheart Disturbance   Starbound Skies        anime-leaning, aurora palette
+//  11  The Shadow Grabs a Star       Starbound Skies        anime-leaning, aurora palette
 //  12  Stranger at the Door          test campaign          romance / suspense
 //  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
 //  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
@@ -42,11 +42,16 @@
 // dark book, which is what a panel on a near-black page needs, and it is the only one with
 // anybody in it.
 //
+// SLOT ELEVEN WAS RE-PICKED IN v3.0.906, on the same reasoning and at Ian's direction. The
+// Aetherheart Disturbance was a sky -- enormous, and nobody in it bigger than a thumbnail. The
+// Shadow Grabs a Star is two characters at arm's length, lit by the fragment one of them is
+// holding, with the comet field behind them. A panel this small wants faces.
+//
 // AT 3.8 SECONDS A PAGE THIS IS A 53-SECOND CYCLE and nobody sees the end of it. The coverage is
 // for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.904';        // cache stamp -- bump when the pictures are replaced in place
+  var V = '3.0.906';        // cache stamp -- bump when the pictures are replaced in place
   var COUNT = 14;             // story-pic1.jpg .. story-pic14.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 

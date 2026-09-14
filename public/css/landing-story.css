@@ -47,7 +47,7 @@
    the script adds sits on top of it, so a blocked script, an old browser or a slow network all
    degrade to a picture rather than to a black rectangle. */
 .hero-img-panel.story-img-slot {
-  background-image: url('/images/story-pic1.jpg?v=3.0.904');
+  background-image: url('/images/story-pic1.jpg?v=3.0.906');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
@@ -159,6 +159,10 @@ body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text 
 .hero-title { font-weight: 600; letter-spacing: -0.5px; line-height: 1.06; }
 .hero-eyebrow, .section-tag, .step-label, .pricing-header-title, .faq-header-title,
 .features-strip-title { font-weight: 500; letter-spacing: 4px; }
+/* THE EYEBROW CARRIES A THIRD AUDIENCE SINCE v3.0.906 and no longer fits on one line above
+   1000px, where the hero panel is half the window. Measured: it wants 551px and has 443.
+   Balanced it breaks 280/263 instead of 407/137. Unsupported, it wraps as it does now. */
+.hero-eyebrow { text-wrap: balance; }
 
 .panel, .panel-how, .panel-pricing, .panel-payoff, .faq-cell, .step-row, .tier-row,
 .features-strip-body > * {
