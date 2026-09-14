@@ -43,7 +43,7 @@
        three panel images are set in landing.css, not in this markup, so they can only be
        cleared from a stylesheet -- and clearing them HERE is what keeps index.html untouched.
        This is the file to hand different art, or a different look, when the time comes. -->
-  <link rel="stylesheet" href="/css/landing-story.css?v=3.0.900">
+  <link rel="stylesheet" href="/css/landing-story.css?v=3.0.902">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -114,6 +114,18 @@
     <!-- RIGHT: the hero image (v3.0.900, TD-770). Set in landing-story.css, not here, so this
          page and the D&D page keep the same markup and differ only by stylesheet. -->
     <div class="panel hero-img-panel story-img-slot" style="flex:1;position:relative;">
+      <!-- v3.0.902 -- TD-772. The turning page. aria-hidden because it is decoration: the pages
+           carry no information a reader needs, and announcing five book pages to a screen reader
+           in the middle of the headline would be noise. The panel's own background is page one,
+           so this degrades to a still picture if the script never runs. -->
+      <div class="pageturn" id="story-pageturn" aria-hidden="true">
+        <div class="pt-under"></div>
+        <div class="pt-leaf">
+          <div class="pt-face pt-front"></div>
+          <div class="pt-face pt-back"></div>
+        </div>
+        <div class="pt-sweep"></div>
+      </div>
     </div>
 
   </div>
@@ -366,5 +378,6 @@
 function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
 function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>
+<script src="/js/story-pageturn.js?v=3.0.902" defer></script>
 </body>
 </html>
