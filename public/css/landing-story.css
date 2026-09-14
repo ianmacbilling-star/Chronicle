@@ -6,56 +6,62 @@
    for: "Soon we are going to build another Landing page and I want to be able to switch out
    CSSs for each landing page."
 
-   RIGHT NOW THAT DIFFERENCE IS THE ARTWORK, AND THE ARTWORK IS NOT DRAWN YET. Ian, 2026-09-13:
-   the slots stay empty until he has art for this audience. Two of the three panel images are
-   set in landing.css rather than in the markup, so they can only be cleared from a stylesheet --
-   and clearing them HERE is what keeps index.html untouched.
+   THE ARTWORK IS HERE NOW (v3.0.900). All three panel images are set in landing.css, so on this
+   page they can only be replaced from a stylesheet -- and replacing them HERE is what keeps
+   index.html untouched and the D&D page exactly as it was.
 
-   PUTTING ART BACK IS ONE LINE PER SLOT: a background-image on .story-img-slot below, or on
-   .panel-hero / .panel-players if the two slots should differ. Nothing else needs to change.
+   THE THIRD ONE WAS A MISS. v3.0.898 cleared the two slots it knew about and left .panel-payoff
+   inheriting Campaignia_Book_Payoff2.png -- three players, a hooded Dungeon Master, a dragon and
+   a pile of d20s -- under the words "This could be your storybook". Judged by its filename rather
+   than by opening it, and the v3.0.898 guard then asserted it should STAY. Corrected here: read
+   the image, not the name.
+
+   NO ?v= STAMPS ON THE IMAGE URLS, deliberately. These are new filenames that nothing else has
+   ever served, so there is no stale copy anywhere to bust. Replace one of these images in place
+   later and it needs a stamp added THEN -- a stamp that never moves is a stamp that lies.
 
    Values use var(--token, literal) so this file still renders sensibly if it is ever paired with
    a different landing.css that does not define the same tokens.
    ============================================================================ */
 
-/* ---- the two slots that carried game art ---- */
-/* .panel-hero is the mobile/stacked hero, .panel-players the row-2 panel. Both are cleared by
-   selector rather than by !important: this sheet loads after landing.css, so it simply wins. */
-.panel-hero,
-.panel-players {
-  background-image: none;
-}
-
-/* ---- what an empty slot looks like ---- */
-/* A blank inked panel with a quiet diagonal hatch, so it reads as a deliberate space rather than
-   a broken image. CSS only -- no file, no page weight, nothing to delete later. */
-.story-img-slot {
+/* ---- 1. THE HERO: what the product makes ---- */
+/* A pile of finished books, each open to a different layout -- Picture Book, Comic Page,
+   Magazine and Gazette, the four real styles from services/layoutAI/brief.js -- across four
+   genres, with a fantasy and a romance cover on the closed books behind. It sells RANGE, which
+   is the job of the panel beside the headline. Cropped from the top: the pile sits high in the
+   frame and the near edge of the table falls into the dark the page already wants there. */
+.hero-img-panel.story-img-slot {
+  background-image: url('/images/story-hero.jpg');
+  background-size: cover;
+  background-position: center top;
   background-color: var(--ink-mid, #160e06);
-  background-image:
-    repeating-linear-gradient(135deg,
-      rgba(201,168,76,0.045) 0px,
-      rgba(201,168,76,0.045) 2px,
-      transparent 2px,
-      transparent 14px);
-  box-shadow: inset 0 0 0 1px rgba(201,168,76,0.16);
 }
 
-/* The hero slot says so, once, small. The row-2 slot already holds a caption box and needs no
-   label of its own. */
-.story-img-slot-note {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 18px;
-  text-align: center;
-  font-family: 'Cinzel', serif;
-  font-size: 10px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: rgba(201,168,76,0.38);
-  pointer-events: none;
+/* ---- 2. ROW TWO: proof, and the only real artifact on the page ---- */
+/* An actual page from an actual Campaignia book -- "Knock at the Closed Door" from Our Family
+   Stories -- not a photograph of a book and not a generated one. The page is 1275x1650 and this
+   panel is 496x640, near enough the same proportions that nothing is cropped: the caption bar
+   and both paragraphs read edge to edge, and the narrator box lands on the margin below them.
+   TRIMMING THE PAGE MARGINS MADE THIS WORSE, not better -- a tighter crop is wider than the
+   panel, so cover ate the left and right edges and sliced the caption mid-word. */
+.panel-players.story-img-slot {
+  background-image: url('/images/story-row2.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-color: var(--ink-mid, #160e06);
 }
 
-@media (max-width: 900px) {
-  .story-img-slot-note { bottom: 10px; font-size: 9px; letter-spacing: 2px; }
+/* ---- 3. THE PAYOFF: who it is for ---- */
+/* The book handed to the person the stories belong to. This replaces the D&D payoff art that
+   this page had been inheriting from landing.css since v3.0.898.
+
+   center 35% IS MEASURED, NOT PREFERRED. This panel renders nearly square and crops from the
+   top, so the default cut the open book off entirely and dropped the gold caption onto the
+   granddaughter's face; cutting lower lost the parents' heads. At 35% all five faces, the book
+   and the wrapping paper are in frame, and "This could be your storybook" lands on the paper. */
+.panel-payoff {
+  background-image: url('/images/story-payoff.jpg');
+  background-size: cover;
+  background-position: center 35%;
+  background-color: var(--ink-mid, #160e06);
 }

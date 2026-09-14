@@ -17,11 +17,11 @@
   <meta property="og:url" content="https://campaignia.com/story" />
   <meta property="og:title" content="Campaignia — You make it legendary. We make it forever." />
   <meta property="og:description" content="Turn the stories you tell into stunning graphic novels. Paste in what you wrote down, AI generates your storyboard and images, export a print-ready PDF." />
-  <meta property="og:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <meta property="og:image" content="https://campaignia.com/images/story-hero.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Campaignia — You make it legendary. We make it forever." />
   <meta name="twitter:description" content="Turn the stories you tell into stunning graphic novels with AI." />
-  <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <meta name="twitter:image" content="https://campaignia.com/images/story-hero.jpg" />
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
   <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
@@ -43,7 +43,7 @@
        three panel images are set in landing.css, not in this markup, so they can only be
        cleared from a stylesheet -- and clearing them HERE is what keeps index.html untouched.
        This is the file to hand different art, or a different look, when the time comes. -->
-  <link rel="stylesheet" href="/css/landing-story.css?v=3.0.898">
+  <link rel="stylesheet" href="/css/landing-story.css?v=3.0.900">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -111,13 +111,9 @@
       </div>
     </div>
 
-    <!-- RIGHT: image slot -- EMPTY ON PURPOSE (v3.0.898, TD-770).
-         Ian, 2026-09-13, asked for the slots left empty until he has art for this audience, and
-         nothing in this toolchain can draw it. The panel is styled in landing-story.css so it
-         reads as a deliberate blank rather than a broken image; putting art back is ONE LINE --
-         a background-image on .story-img-slot in that file. -->
+    <!-- RIGHT: the hero image (v3.0.900, TD-770). Set in landing-story.css, not here, so this
+         page and the D&D page keep the same markup and differ only by stylesheet. -->
     <div class="panel hero-img-panel story-img-slot" style="flex:1;position:relative;">
-      <div class="story-img-slot-note">ARTWORK TO COME</div>
     </div>
 
   </div>
