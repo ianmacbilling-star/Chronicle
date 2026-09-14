@@ -7,7 +7,7 @@ const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
 const { sendAlertEmail } = require('./routes/email');
 const { startScheduler } = require('./scheduler');
-const { isTesterEmail } = require('./middleware/auth');   // v3.0.796 -- TD-600, the /version gate
+const { isTesterEmail } = require('./middleware/auth');   // v3.0.796 -- TD-600, the /version gate. isAdminEmail was dropped in v3.0.908 with the /story gate
 
 const app = express();
 
@@ -295,6 +295,35 @@ app.get('/library', function(req, res) {
 // is not a thing to discover after launch.
 app.get('/our-story', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'our-story.html'));
+});
+// v3.0.898 -- TD-770. THE STORYTELLER LANDING PAGE.
+// v3.0.908 -- THE ADMIN GATE IS GONE. Anyone holding the link sees the page.
+//
+// *(Ian, 2026-09-14: "can we do something to make it so I can give someone this url and they can
+// see it... So remove the Admin Gating on it." / "The DnD one should really be the only live one
+// out there.")*
+//
+// TWO CONTROLS, AND ONLY ONE OF THEM IS BEING REMOVED. The gate decided WHO could open the page;
+// the noindex in story.html decides whether SEARCH can find it. Ian wants to hand the URL to
+// people and wants index.html to remain the only landing page Google lists, so the gate goes and
+// the noindex stays. Anyone changing that second control is changing a decision, not a detail.
+//
+// IT STILL LIVES OUTSIDE public/ and is still served only through this route. That was originally
+// because express.static would have handed a gated file to everyone; it stays that way because
+// this route sets a header that static serving would not, and because a second copy of the page
+// in a directory that serves itself is how a page ends up reachable at two URLs.
+//
+// no-store, FOR A DIFFERENT REASON THAN BEFORE. It used to be that an edge cache holding one
+// anonymous copy would undo the gate. There is no gate now; what remains is that this document
+// carries no version stamp of its own -- its stylesheet and script do, but the HTML that names
+// them cannot stamp itself -- so a cached copy would keep pointing at the previous batch's files
+// after the next one ships.
+//
+// NO SESSION READ, NO DATABASE, NOT ASYNC. A route that no longer asks a question should not keep
+// the machinery for asking it.
+app.get('/story', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'story.html'));
 });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

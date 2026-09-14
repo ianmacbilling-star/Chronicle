@@ -1,0 +1,220 @@
+/* ============================================================================
+   STORY / FAMILY LANDING PAGE -- OVERRIDES ONLY (v3.0.898, TD-770)
+
+   Loaded AFTER /css/landing.css by views/story.html and by nothing else. The shared sheet
+   carries the whole design; this file carries only what differs, which is the shape Ian asked
+   for: "Soon we are going to build another Landing page and I want to be able to switch out
+   CSSs for each landing page."
+
+   THE ARTWORK IS HERE NOW (v3.0.900). All three panel images are set in landing.css, so on this
+   page they can only be replaced from a stylesheet -- and replacing them HERE is what keeps
+   index.html untouched and the D&D page exactly as it was.
+
+   THE THIRD ONE WAS A MISS. v3.0.898 cleared the two slots it knew about and left .panel-payoff
+   inheriting Campaignia_Book_Payoff2.png -- three players, a hooded Dungeon Master, a dragon and
+   a pile of d20s -- under the words "This could be your storybook". Judged by its filename rather
+   than by opening it, and the v3.0.898 guard then asserted it should STAY. Corrected here: read
+   the image, not the name.
+
+   NO ?v= STAMPS ON THE IMAGE URLS, deliberately. These are new filenames that nothing else has
+   ever served, so there is no stale copy anywhere to bust. Replace one of these images in place
+   later and it needs a stamp added THEN -- a stamp that never moves is a stamp that lies.
+
+   Values use var(--token, literal) so this file still renders sensibly if it is ever paired with
+   a different landing.css that does not define the same tokens.
+   ============================================================================ */
+
+/* ---- 1. THE HERO: pages turning ---- */
+/* *(Ian, 2026-09-14: "animate one of those picture boxes to look like pages turning" ... "I'm
+   thinking it should be above the fold in the hero picture box.")*
+
+   REAL PAGES FROM REAL BOOKS, turning one into the next. story-pic1..story-pic14.jpg are the
+   real set as of v3.0.903, drawn from ten Campaignia books; they stay numbered rather than named
+   after what is on them because they are still swappable, and every reference carries a ?v=
+   stamp for the same reason. THAT IS THE OPPOSITE
+   CALL FROM v3.0.900, deliberately: those filenames were new and permanent so there was no stale
+   copy to bust, and a stamp that never moves is a stamp that lies. These files are MEANT to be
+   replaced in place under the same names, so without a stamp Cloudflare would keep serving the
+   placeholder after the real page shipped. The batch that swaps the pictures bumps the stamp.
+
+   contain, NOT cover. This panel is 541x1116 -- a ratio of 0.48 -- and a rendered page is 0.77.
+   At cover a page shows about 62% of its width, cutting a third off every line of text: the same
+   fault as trimming the row-2 page, measured rather than guessed. contain floats the whole page
+   on the dark instead, and the vignette below makes the bands above and below it read as a dark
+   surface rather than dead space.
+
+   THE BACKGROUND ON THE PANEL ITSELF IS THE NO-JAVASCRIPT ANSWER: page one, static. Everything
+   the script adds sits on top of it, so a blocked script, an old browser or a slow network all
+   degrade to a picture rather than to a black rectangle. */
+.hero-img-panel.story-img-slot {
+  background-image: url('/images/story-pic1.jpg?v=3.0.910');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-color: var(--ink, #0a0806);
+}
+
+/* The turning surface. Three layers: the next page underneath, the leaf that rotates, and the
+   shadow the leaf throws across the page below it. */
+.pageturn { position: absolute; inset: 0; overflow: hidden; perspective: 1900px; }
+.pageturn::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  box-shadow: inset 0 0 90px 30px rgba(10,8,6,0.55);
+}
+.pt-under, .pt-leaf { position: absolute; inset: 0; }
+.pt-under, .pt-face {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-color: var(--ink, #0a0806);
+}
+.pt-leaf {
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  transition: transform 1.2s cubic-bezier(.42,0,.58,1);
+  will-change: transform;
+}
+.pageturn.turning .pt-leaf { transform: rotateY(-172deg); }
+.pt-face { position: absolute; inset: 0; backface-visibility: hidden; }
+/* The reverse of a page is paper, with the gutter shadow now falling on the other side. No asset
+   -- at this size that is all the back of a page needs to be. */
+.pt-back {
+  transform: rotateY(180deg);
+  background-image: linear-gradient(to left, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.04) 14%, rgba(0,0,0,0) 40%);
+  background-color: #efe7d6;
+}
+.pt-sweep {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 2;
+  background: linear-gradient(to right, rgba(10,8,6,0.55) 0%, rgba(10,8,6,0.12) 45%, rgba(10,8,6,0) 70%);
+  transition: opacity 1.2s ease;
+}
+.pageturn.turning .pt-sweep { opacity: 1; }
+
+/* NOTHING MOVES FOR A READER WHO ASKED FOR THAT. The script checks the same query and simply
+   never starts, so this is belt and braces rather than the whole answer. */
+@media (prefers-reduced-motion: reduce) {
+  .pt-leaf { transition: none; }
+  .pt-sweep { display: none; }
+}
+
+/* ---- 2. ROW TWO: the pile of books ---- */
+/* THIS PICTURE MOVED DOWN FROM THE HERO (v3.0.902). The turning pages now carry range above the
+   fold, so the pile -- four layouts, six genres, all in one glance -- reads better as the second
+   beat than as competition for the first.
+
+   THE FILE IS NEW, THE PICTURE IS NOT: story-books.jpg is the same photograph that shipped as
+   story-hero.jpg in v3.0.900, renamed for where it now lives. A file called story-hero that is
+   not in the hero is the kind of small lie that costs somebody an afternoon later.
+   story-hero.jpg and story-row2.jpg are now unreferenced; they stay on disk until the art is
+   final and one tidy batch removes them together.
+
+   cover, center top -- this panel is 496x640 and the photograph is 896x960, so the near edge of
+   the table falls away below the fold of the panel, which is where its own gradient lives. */
+.panel-players.story-img-slot {
+  background-image: url('/images/story-books.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-color: var(--ink-mid, #160e06);
+}
+
+/* ============================================================================
+   THE STORYTELLER PAGE'S OWN TYPOGRAPHY (v3.0.905, TD-774) -- "THE BOOK"
+
+   *(Ian, 2026-09-14: "change the styling on this landing page a little... Get away from the
+   comic look and replace it with something more classic. The layout is fine... its the Font and
+   Buttons and panels don't really match this more generic message... The colors are still good.")*
+
+   THIS IS WHAT THE SWAP SHEET WAS FOR. index.html and story.html share landing.css and differ
+   only by the sheet that loads after it -- so the D&D page keeps every comic convention and this
+   page stops borrowing them, with no fork of the layout and no second copy of anything.
+
+   WHAT WAS READING AS "COMIC", precisely: a display face on TWENTY-TWO elements (headline,
+   buttons, section tags, step numbers, tier names, FAQ questions), a 5px solid ink outline on
+   every panel, and hard offset shadows -- 3px 3px 0, 5px 5px 0 -- with the buttons physically
+   shifting on hover. All three go. Colours do not change: same ink, same gold, same crimson.
+
+   NO NEW FONT FILES. campaignia.com already self-hosts EB Garamond in /css/fonts.css alongside
+   Cinzel, Crimson Text, Lora and Merriweather -- five families served, three used. This spends
+   one that was already paid for.
+
+   AND NOT ONE !important. Everything here beats landing.css on source order alone, which was
+   checked by building it both ways and diffing the computed styles of every element it touches.
+   The one selector that genuinely resisted was .btn-tier -- see the note on the metals below.
+   ============================================================================ */
+
+/* ============================================================================
+   OPTION A -- "THE BOOK"
+   ============================================================================ */
+.btn-nav, .hero-eyebrow, .hero-title, .btn-hero, .section-tag, .section-title,
+.step-num, .step-label, .step-title, .features-strip-title, .feature-title,
+.pricing-header-title, .tier-name-row, .tier-price-tag, .btn-tier, .payoff-title,
+.btn-cta, .cta-strip-text, .faq-header-title, .faq-q, .caption-box.gold-cap::before {
+  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+  font-weight: 500;
+}
+body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text {
+  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+}
+.hero-title { font-weight: 600; letter-spacing: -0.5px; line-height: 1.06; }
+.hero-eyebrow, .section-tag, .step-label, .pricing-header-title, .faq-header-title,
+.features-strip-title { font-weight: 500; letter-spacing: 4px; }
+/* THE EYEBROW CARRIES A THIRD AUDIENCE SINCE v3.0.906 and no longer fits on one line above
+   1000px, where the hero panel is half the window. Measured: it wants 551px and has 443.
+   Balanced it breaks 280/263 instead of 407/137. Unsupported, it wraps as it does now. */
+.hero-eyebrow { text-wrap: balance; }
+
+.panel, .panel-how, .panel-pricing, .panel-payoff, .faq-cell, .step-row, .tier-row,
+.features-strip-body > * {
+  border: 1px solid rgba(201,168,76,0.22);
+  box-shadow: none;
+}
+
+.btn-hero, .btn-cta, .btn-nav, .btn-tier {
+  border-radius: 2px;
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 500;
+}
+.btn-hero, .btn-cta {
+  border: 1px solid rgba(201,168,76,0.55);
+  background: #8c2318;
+  color: #f3ead6;
+}
+.btn-hero:hover, .btn-cta:hover { transform: none; background: #a02a1d; }
+ /* THE NAV BUTTON SITS ON THE ORANGE BANNER, so an outline in gold is unreadable there --
+   at phone width it nearly disappeared. It keeps a solid ink fill and parchment type. */
+.btn-nav {
+  border: 1px solid rgba(201,168,76,0.55);
+  background: rgba(10,8,6,0.88);
+  color: #f0e8d0;
+}
+.btn-nav:hover { transform: none; background: rgba(10,8,6,1); }
+
+/* THE TIER BUTTONS KEEP THEIR METAL. Only the shape and the type change. */
+.btn-tier { border: 1px solid rgba(10,8,6,0.45); }
+.btn-tier:hover { transform: none; box-shadow: none; filter: brightness(1.08); }
+
+/* ---- 3. THE PAYOFF: who it is for ---- */
+/* Four friends round a kitchen table, mid-reaction to seeing themselves drawn in a finished
+   book. v3.0.909 replaced the photograph of a family handing a book to a grandfather: that was
+   one of the three audiences the eyebrow names, and this is all three.
+
+   IT IS PAINTED, NOT PHOTOGRAPHED, and deliberately so -- it is generated in Campaignia's own
+   'Everyday life illustration' preset, so the panel that says "this could be your storybook"
+   is drawn in a style the product can actually produce.
+
+   center 50% IS MEASURED, NOT PREFERRED. The panel renders 674x600 and the picture is 896x1200,
+   so cover fills by width and throws away 303px of 903 -- a third of the image. The five
+   positions were built and compared: at 35% the book is a sliver at the bottom edge, at 75% the
+   faces are cut off at the eyes. At 50% all four faces and the whole open spread are in frame.
+
+   AND IT CARRIES A ?v= STAMP NOW, which it never did. A new filename has nothing stale to bust;
+   a file REPLACED IN PLACE does, and without this Cloudflare serves the grandfather forever. */
+.panel-payoff {
+  background-image: url('/images/story-payoff.jpg?v=3.0.909');
+  background-size: cover;
+  background-position: center 50%;
+  background-color: var(--ink-mid, #160e06);
+}

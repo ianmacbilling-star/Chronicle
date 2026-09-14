@@ -1,0 +1,151 @@
+// ============================================================
+// STORY PAGE -- THE TURNING PAGE IN THE HERO PANEL
+// v3.0.902 -- TD-772.
+// ============================================================
+//
+// *(Ian, 2026-09-14: "animate one of those picture boxes to look like pages turning" /
+// "Slow it down... maybe 3 to 4 seconds each page.")*
+//
+// 3.8 SECONDS A PAGE: 2600ms holding still, 1200ms turning. The turn duration lives in the
+// stylesheet as a transition; TURN below only has to agree with it, and the guard checks that
+// the two numbers match -- a script that swaps the images before the rotation finishes shows
+// the reader the trick.
+//
+// THE PAGE LIST IS ONE LINE, and v3.0.903 is the proof: swapping five placeholders for fourteen
+// real pages was three edits -- COUNT, V, and the files themselves. Nothing else in here moved.
+//
+// THE FIFTEEN, in order. The first four are the only ones most visitors see, so they carry the
+// argument between them: a dark interior drama, a bright modern real-life page, a finished COVER
+// so that "book" registers early, and a full-bleed fantasy battlefield.
+//
+//   1  Knock at the Closed Door      Our Family Stories     family memoir / period drama
+//   2  The Long Way Down             test campaign          real life, modern, textless
+//   3  (cover)                       Dojo of the Dragon Spirits   a cover, and a title
+//   4  The Last Cultist Falls        The Strangers          dark fantasy, full-bleed
+//   5  Paddle Raft Chaos             River of No Return     family adventure
+//   6  Filling the Cavity            Going to the Dentist   children's / skill story
+//   7  The Drop Point                Streets of Silver Shadow   pen and ink, handwritten type
+//   8  The Company                   Embers of Damnation    the character page
+//   9  Solara Closes the Rifts       The ANOMALIES          superhero, drawn sound effects
+//  10  The Signal Arrives            test campaign          science fiction
+//  11  The Shadow Grabs a Star       Starbound Skies        anime-leaning, aurora palette
+//  12  Stranger at the Door          test campaign          romance / suspense
+//  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
+//  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
+//  15  Gold Through the Mirror       The Strangers (1)      oil paint, visible impasto
+//
+// A COVER, A CHARACTER PAGE, and four page SHAPES that are visible rather than asserted:
+// full-bleed (3), a wide image over prose (5), a portrait beside a column (7), and a small image
+// with a side column (9). THE ART STYLES ARE NAMED PER SLOT rather than counted here, for the
+// same reason v3.0.907 stopped counting layouts: the count was a number nobody could check
+// without each book's generation settings, and the descriptors can be checked by looking.
+// Watercolor and charcoal are the two presets nothing in the set uses.
+//
+// THE LAYOUT COUNT USED TO BE FOUR NAMED LAYOUTS and slot nine was called the comic-page one.
+// It never was: what I had read as a panel grid is three figures standing side by side inside a
+// single illustration. The count above is now of shapes anyone can check by looking at the four
+// pages named, which is the only kind of claim a comment should be making.
+//
+// SLOT TEN WAS RE-PICKED IN v3.0.904. The first science-fiction page was a fleet action -- ships
+// and empty space, like every other page in that book. This one is a control room with four
+// people around a console, faces lit blue by the screens. It is the only bright page in a very
+// dark book, which is what a panel on a near-black page needs, and it is the only one with
+// anybody in it.
+//
+// SLOT ELEVEN WAS RE-PICKED IN v3.0.906, on the same reasoning and at Ian's direction. The
+// Aetherheart Disturbance was a sky -- enormous, and nobody in it bigger than a thumbnail. The
+// Shadow Grabs a Star is two characters at arm's length, lit by the fragment one of them is
+// holding, with the comet field behind them. A panel this small wants faces.
+//
+// SLOT NINE WAS RE-PICKED IN v3.0.907 at Ian's direction -- the THIRD SLOT to go on the same
+// reasoning, after ten and eleven. Hell of a First Date is three heroes standing still in a
+// damaged hall after the fight; Solara Closes the Rifts is one of them mid-action with the
+// collapsing canister lit between her hands. The page SHAPE is identical, so the set loses
+// nothing by the swap. The drawn sound effects (CRUNCH, KRA-KOOM, VORTEX) all spell correctly,
+// checked at full resolution because this book is rasterised and has no text to read.
+//
+// SLOT FIFTEEN WAS ADDED IN v3.0.910 AND NOTHING WAS REPLACED. Ian asked for an oil painting and
+// then asked for it to be added rather than swapped in, which is the better call: the set had no
+// painting in it at all, and every page already in it had been chosen on purpose.
+//
+// IT IS LAST BECAUSE THE FILENAMES ARE THE ORDER. story-pic5.jpg IS slot five, so inserting in
+// the middle means renaming ten files and re-shipping about 1.5MB; appending ships one. Moving
+// it forward later is an exchange of two files' CONTENT, not a renumbering -- cheap, whenever
+// its position is worth a batch of its own.
+//
+// AT 3.8 SECONDS A PAGE THIS IS A 57-SECOND CYCLE and nobody sees the end of it. The coverage is
+// for the pages' own sake; the ORDER is what a visitor actually experiences.
+(function () {
+  'use strict';
+  var V = '3.0.910';        // cache stamp -- bump when the pictures are replaced in place
+  var COUNT = 15;             // story-pic1.jpg .. story-pic15.jpg
+  var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
+
+  function src(n) { return '/images/story-pic' + (((n % COUNT) + COUNT) % COUNT + 1) + '.jpg?v=' + V; }
+
+  var box = document.getElementById('story-pageturn');
+  if (!box || COUNT < 2) return;
+
+  // ASKED NOT TO ANIMATE: do not. The panel already shows page one behind this, so returning
+  // here leaves a picture rather than an empty box.
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  } catch (e) {}
+
+  var under = box.querySelector('.pt-under'),
+      front = box.querySelector('.pt-front'),
+      leaf  = box.querySelector('.pt-leaf');
+  if (!under || !front || !leaf) return;
+
+  var i = 0, timer = null, visible = true, running = false;
+
+  front.style.backgroundImage = "url('" + src(0) + "')";
+  under.style.backgroundImage = "url('" + src(1) + "')";
+
+  // THE NEXT PAGE IS ALREADY FETCHED by the time it is needed: it is sitting in .pt-under for
+  // the whole 2.6s dwell. That is the whole lazy-loading strategy -- pages 3 onward are never
+  // requested until their turn comes round, so the hero costs one picture on first paint.
+  function advance() {
+    running = false;
+    i++;
+    front.style.backgroundImage = "url('" + src(i) + "')";
+    under.style.backgroundImage = "url('" + src(i + 1) + "')";
+    // Reset the leaf to flat WITHOUT animating back through 172 degrees, which would look like
+    // the page flapping shut. Transition off, force a reflow so the browser accepts the new
+    // transform as a starting point, transition back on.
+    leaf.style.transition = 'none';
+    box.classList.remove('turning');
+    void leaf.offsetWidth;
+    leaf.style.transition = '';
+    schedule();
+  }
+
+  function turn() {
+    // KEEP POLLING, NEVER ANIMATE UNSEEN. Rescheduling instead of cancelling is what stops a
+    // scroll-past mid-turn from leaving `running` stuck true forever -- the first version
+    // cleared the timer that finishes the turn, and the panel never turned again.
+    if (!visible || running) { schedule(); return; }
+    running = true;
+    box.classList.add('turning');
+    timer = setTimeout(advance, TURN);
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(turn, DWELL);
+  }
+
+  // OFF SCREEN OR IN A BACKGROUND TAB, IT STOPS. An animation nobody is looking at is battery
+  // and nothing else, and on a phone this panel leaves the screen almost immediately.
+  function setVisible(v) { visible = v; }
+  try {
+    document.addEventListener('visibilitychange', function () { setVisible(!document.hidden); });
+    if (window.IntersectionObserver) {
+      new window.IntersectionObserver(function (rows) {
+        setVisible(rows[0].isIntersecting && !document.hidden);
+      }, { threshold: 0.1 }).observe(box);
+    }
+  } catch (e) {}
+
+  schedule();
+})();

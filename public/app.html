@@ -61,7 +61,7 @@
 
 <!-- APP HEADER -->
 <div class="app-header">
-  <div class="app-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span class="app-logo-text">Campaignia</span><span id="build-stamp" style="display:none;margin-left:7px;font:11px/1 ui-monospace,Menlo,Consolas,monospace;color:#9a8a68;opacity:0.75;letter-spacing:0.02em;align-self:center;"></span></div>
+  <div class="app-logo" id="app-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span class="app-logo-text">Campaignia</span><span id="build-stamp" style="display:none;margin-left:7px;font:11px/1 ui-monospace,Menlo,Consolas,monospace;color:#9a8a68;opacity:0.75;letter-spacing:0.02em;align-self:center;"></span></div>
   <div class="app-header-right">
     <button class="btn btn-sm" id="header-campaigns-btn" onclick="showView('campaigns')">My Campaigns</button>
     <!-- v3.0.672 -- TD-475. The tier, always visible. For a tester it also says they are not being
@@ -3010,6 +3010,51 @@
         el.textContent = 'v' + (v.version || '?') + (v.env && v.env !== 'production' ? ' \u00b7 ' + v.env : '');
         if (v.commit) el.title = 'commit ' + v.commit + '  \u00b7  ' + (v.ts || '');
         el.style.display = 'inline';
+      })
+      .catch(function(){});
+  } catch (e) {}
+})();
+</script>
+<script>
+// v3.0.899 -- TD-770. THE ADMIN DOOR TO THE DRAFT STORYTELLER PAGE.
+//
+// *(Ian, 2026-09-13: "show it if I click on the logo in the top left of the banner... And only do
+// it if I'm an Admin" / "open the new page in a new tab")*
+//
+// The v3.0.898 door was a DRAFT chip on the landing page -- which a signed-in reader never sees,
+// because signing in lands you here and nothing links back. So the door moved to the banner that
+// is actually in front of him.
+//
+// NOTHING IS ATTACHED FOR A NON-ADMIN. Not a disabled handler, not a hidden one: the listener,
+// the cursor and the tooltip are only ever created inside the is_admin branch, so for every other
+// reader this logo stays the inert div it has always been. That is the whole safety argument --
+// there is no handler to misfire and no behaviour to regress.
+//
+// AND THE BROWSER IS NOT THE GATE. /story looks the caller up server-side and 404s for anyone who
+// is not an admin. This only decides whether a door is WORTH DRAWING, which is why deciding it
+// here is safe.
+//
+// NOT /version, WHICH IS THE NEARBY TEMPTATION. The build stamp above reveals itself from
+// /version, decided server-side -- better plumbing than this. But its 'show' is true for admins
+// AND TESTERS (TD-600), and /story is admin-only, so reusing it would hand every tester a link
+// that 404s. is_admin from /api/auth/me is the signal that matches the gate it opens.
+//
+// A NEW TAB, NOT THIS ONE: he asked for a new tab, and it means a half-finished draft page never
+// costs him the app state he was in the middle of.
+(function(){
+  try {
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (!d || !d.is_admin) return;
+        var el = document.getElementById('app-logo');
+        if (!el) return;
+        el.style.cursor = 'pointer';
+        el.title = 'Admin: open the draft storyteller landing page in a new tab';
+        el.onclick = function(){
+          var w = window.open('/story', '_blank');
+          if (w) { try { w.opener = null; } catch (e) {} }
+        };
       })
       .catch(function(){});
   } catch (e) {}

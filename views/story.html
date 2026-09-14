@@ -5,19 +5,27 @@
   <meta charset="UTF-8">
   <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campaignia — You make it legendary. We make it forever.</title>
-  <meta name="description" content="Turn your TTRPG sessions into stunning graphic novels. AI-powered storyboards, image generation, and PDF export for Dungeon Masters." />
-  <link rel="canonical" href="https://campaignia.com/" />
+  <title>You make it legendary. Campaignia makes it forever.</title>
+  <meta name="description" content="Turn the stories you tell into stunning graphic novels. AI-powered storyboards, image generation, and print-ready PDF export for storytellers, gamers and families." />
+    <link rel="canonical" href="https://campaignia.com/story" />
+  <!-- v3.0.908 -- TD-770. THIS IS NOW THE ONLY THING KEEPING THE PAGE OUT OF SEARCH, and it is
+       deliberate rather than leftover. The admin gate came off so the URL can be handed to
+       people; Ian's instruction in the same breath was that the D&D page should stay the only
+       landing page Google lists. Two landing pages selling one product compete for the same
+       searches and split their own signals. Removing this line is a positioning decision. -->
+  <meta name="robots" content="noindex, nofollow" />
   <meta property="og:site_name" content="Campaignia" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://campaignia.com" />
-  <meta property="og:title" content="Campaignia — You make it legendary. We make it forever." />
-  <meta property="og:description" content="Turn your TTRPG sessions into stunning graphic novels. Paste your transcript, AI generates your storyboard and images, export a print-ready PDF." />
-  <meta property="og:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <meta property="og:url" content="https://campaignia.com/story" />
+  <meta property="og:title" content="You make it legendary. Campaignia makes it forever." />
+  <meta property="og:description" content="Turn the stories you tell into stunning graphic novels. Paste in what you wrote down, AI generates your storyboard and images, export a print-ready PDF." />
+  <meta property="og:image" content="https://campaignia.com/images/story-share.jpg" />
+  <meta property="og:image:width" content="896" />
+  <meta property="og:image:height" content="470" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Campaignia — You make it legendary. We make it forever." />
-  <meta name="twitter:description" content="Turn your TTRPG sessions into stunning graphic novels with AI." />
-  <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <meta name="twitter:title" content="You make it legendary. Campaignia makes it forever." />
+  <meta name="twitter:description" content="Turn the stories you tell into stunning graphic novels with AI." />
+  <meta name="twitter:image" content="https://campaignia.com/images/story-share.jpg" />
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
   <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
@@ -35,6 +43,11 @@
        the head, which blocks painting until it arrives -- so there is no flash of unstyled page,
        only one extra request on a first visit that the edge then caches. -->
   <link rel="stylesheet" href="/css/landing.css?v=3.0.897">
+  <!-- v3.0.898 -- TD-770. THE SHARED SHEET ABOVE, THIS PAGE'S OVERRIDES BELOW. Two of the
+       three panel images are set in landing.css, not in this markup, so they can only be
+       cleared from a stylesheet -- and clearing them HERE is what keeps index.html untouched.
+       This is the file to hand different art, or a different look, when the time comes. -->
+  <link rel="stylesheet" href="/css/landing-story.css?v=3.0.910">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -54,21 +67,16 @@
   </a>
   <div class="nav-actions">
     <a href="/our-story" class="nav-link">OUR STORY</a>
-    <a href="/library?genre=fantasy,thriller,scifi,horror" class="nav-link">LIBRARY</a>
+    <a href="/library" class="nav-link">LIBRARY</a>
     <a href="#pricing" class="nav-link">PRICING</a>
     <a href="#faq" class="nav-link">FAQ</a>
-    <!-- v3.0.898 -- TD-770. Admin-only link to the draft storyteller landing page.
-         HIDDEN IN THE MARKUP, so the default -- no JavaScript, anonymous visitor, failed fetch --
-         is invisible. The page itself is gated at the route; this only decides whether the link is
-         worth showing, which is why it is safe for it to be decided in the browser. -->
-    <a href="/story" id="nav-story-draft" class="nav-link" style="display:none;font-size:9px;letter-spacing:1px;opacity:0.5;" title="Admin only: draft storyteller landing page">DRAFT</a>
     <a href="/login" class="btn-nav">SIGN IN</a>
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="cmpToggleNav()">&#9776;</button>
   </div>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
   <a href="/our-story" onclick="cmpCloseNav()">OUR STORY</a>
-  <a href="/library?genre=fantasy,thriller,scifi,horror" onclick="cmpCloseNav()">LIBRARY</a>
+  <a href="/library" onclick="cmpCloseNav()">LIBRARY</a>
   <a href="#pricing" onclick="cmpCloseNav()">PRICING</a>
   <a href="#faq" onclick="cmpCloseNav()">FAQ</a>
 </div>
@@ -86,7 +94,7 @@
       <!-- subtle background texture -->
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
       <div class="hero-content" style="position:relative;z-index:1;">
-        <div class="hero-eyebrow">⚔ FOR GAME MASTERS AND STORYTELLERS ⚔</div>
+        <div class="hero-eyebrow">FOR STORYTELLERS, GAMERS AND FAMILY ADVENTURERS</div>
         <h1 class="hero-title">
           You make it<br>
           <span class="white">legendary.</span><br>
@@ -94,22 +102,34 @@
           <span class="red">forever.</span>
         </h1>
         <p class="hero-sub">
-          Your players still talk about that session. The betrayal. The sacrifice.
-          The moment everything changed at the table.<br>
-          Now imagine handing them a graphic novel of exactly that night.
+          You still talk about that day. The mishap. The rescue.
+          The moment everything changed.<br>
+          Now imagine a graphic novel of exactly that story.
         </p>
         <div class="hero-cta-wrap">
           <a href="/login?signup" class="btn-hero">START FREE TRIAL</a>
           <a href="#pricing" class="btn-ghost">See Plans</a>
         </div>
-        <div class="hero-trial">⚔ 30-day free trial · No credit card required to explore<br>
+        <div class="hero-trial">30-day free trial · No credit card required to explore<br>
         AI storyboards · Custom image generation · Print-ready PDF export · Cancel anytime</div>
       </div>
     </div>
 
-    <!-- RIGHT: DM image panel -->
-    <div class="panel hero-img-panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
-      <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,8,6,0.3) 0%,transparent 40%);"></div>
+    <!-- RIGHT: the hero image (v3.0.900, TD-770). Set in landing-story.css, not here, so this
+         page and the D&D page keep the same markup and differ only by stylesheet. -->
+    <div class="panel hero-img-panel story-img-slot" style="flex:1;position:relative;">
+      <!-- v3.0.902 -- TD-772. The turning page. aria-hidden because it is decoration: the pages
+           carry no information a reader needs, and announcing five book pages to a screen reader
+           in the middle of the headline would be noise. The panel's own background is page one,
+           so this degrades to a still picture if the script never runs. -->
+      <div class="pageturn" id="story-pageturn" aria-hidden="true">
+        <div class="pt-under"></div>
+        <div class="pt-leaf">
+          <div class="pt-face pt-front"></div>
+          <div class="pt-face pt-back"></div>
+        </div>
+        <div class="pt-sweep"></div>
+      </div>
     </div>
 
   </div>
@@ -119,11 +139,11 @@
        ============================================================ -->
   <div class="comic-row">
 
-    <!-- LEFT: Players image panel -->
-    <div class="panel panel-players">
+    <!-- LEFT: image slot -- EMPTY ON PURPOSE. See the hero slot above. -->
+    <div class="panel panel-players story-img-slot">
       <div class="players-caption">
         <div class="caption-box gold-cap" data-label="NARRATOR">
-          These are the moments your players talked about. Campaignia makes sure they never forget.
+          These are the moments you remember, you imagined, you lived. Campaignia makes sure nobody forgets them.
         </div>
       </div>
     </div>
@@ -131,8 +151,8 @@
     <!-- RIGHT: How It Works -->
     <div class="panel-how">
       <div class="how-title-panel">
-        <span class="section-tag">⚡ THE QUEST</span>
-        <div class="section-title">THREE STEPS TO IMMORTALITY</div>
+        <span class="section-tag">HOW IT WORKS</span>
+        <div class="section-title">THREE STEPS TO FOREVER</div>
       </div>
 
       <div class="how-steps">
@@ -141,7 +161,7 @@
           <div class="step-content">
             <div class="step-label">STEP ONE</div>
             <div class="step-title">CREATE YOUR CHARACTERS</div>
-            <div class="step-desc">Add reference pictures of your party and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every session.</div>
+            <div class="step-desc">Add reference pictures of your family and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every chapter.</div>
           </div>
         </div>
 
@@ -150,7 +170,7 @@
           <div class="step-content">
             <div class="step-label">STEP TWO</div>
             <div class="step-title">PASTE IN YOUR STORY</div>
-            <div class="step-desc">Drop in your session — notes, chat logs, whatever you've got. Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</div>
+            <div class="step-desc">Drop in your chapter — notes, voice-to-text, emails, whatever you've got. Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</div>
           </div>
         </div>
 
@@ -159,7 +179,7 @@
           <div class="step-content">
             <div class="step-label">STEP THREE</div>
             <div class="step-title">ORDER YOUR GRAPHIC NOVEL</div>
-            <div class="step-desc">Choose your layout, preview it in the app, and order your story as a bound book — comic, hardback, or softback, your call. Hand it to your players. Frame it. It's a real record of your campaign.</div>
+            <div class="step-desc">Choose your layout, preview it in the app, and order your story as a bound book — comic, hardback, or softback, your call. Hand it to your family. Frame it. It's a real storybook.</div>
           </div>
         </div>
       </div>
@@ -172,12 +192,12 @@
        ============================================================ -->
   <div class="features-strip">
     <div class="features-strip-header">
-      <div class="features-strip-title">YOUR ARSENAL — CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
+      <div class="features-strip-title">WHAT YOU GET — CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
     </div>
     <div class="features-strip-body">
       <div class="feature-cell">
         <div class="feature-title">AI IMAGE GENERATION</div>
-        <div class="feature-desc">Every panel gets a unique AI illustration. High fantasy, dark and gritty, watercolor, anime — choose the style that matches your campaign. You control the prompts, you control the scenes.</div>
+        <div class="feature-desc">Every panel gets a unique AI illustration. Storybook, watercolor, pen and ink, everyday life — choose the style that matches your story. You control the prompts, you control the scenes.</div>
       </div>
       <div class="feature-cell">
         <div class="feature-title">NARRATIVE PROSE</div>
@@ -185,7 +205,7 @@
       </div>
       <div class="feature-cell">
         <div class="feature-title">CHARACTER MEMORY</div>
-        <div class="feature-desc">Upload reference images for each character. Campaignia keeps your party visually consistent across every session of your campaign.</div>
+        <div class="feature-desc">Upload reference images for each character. Campaignia keeps your family visually consistent across every chapter of your story.</div>
       </div>
       <div class="feature-cell">
         <div class="feature-title">MULTIPLE LAYOUT STYLES</div>
@@ -203,7 +223,7 @@
     <div class="panel-pricing">
       <div class="pricing-header">
         <div class="pricing-header-title">CHOOSE YOUR TIER</div>
-        <div class="pricing-header-sub">Every adventurer starts somewhere. Your 30-day trial begins on your first campaign.</div>
+        <div class="pricing-header-sub">Every story starts somewhere. Your 30-day trial begins on your first story.</div>
       </div>
       <div class="pricing-tiers">
 
@@ -231,7 +251,7 @@
           <img src="/images/Sliver_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Silver" />
           <div class="tier-info">
             <div class="tier-name-row">SILVER</div>
-            <div class="tier-perks">1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options</div>
+            <div class="tier-perks">1 story · unlimited chapters · unlimited characters · free tokens · limited moments · limited styling options</div>
           </div>
           <div class="tier-price-tag" data-tier="silver">$10<small>per month</small></div>
           <a href="/login?signup&amp;plan=silver" class="btn-tier">GET SILVER</a>
@@ -241,7 +261,7 @@
           <img src="/images/Gold_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Gold" />
           <div class="tier-info">
             <div class="tier-name-row">GOLD ⭐</div>
-            <div class="tier-perks">3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options · multiple versions</div>
+            <div class="tier-perks">3 stories · unlimited chapters · unlimited characters · more free tokens · more moments · more styling options · multiple versions</div>
           </div>
           <div class="tier-price-tag" data-tier="gold">$15<small>per month</small></div>
           <a href="/login?signup&amp;plan=gold" class="btn-tier">GET GOLD</a>
@@ -251,7 +271,7 @@
           <img src="/images/Platinum_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Platinum" />
           <div class="tier-info">
             <div class="tier-name-row">PLATINUM</div>
-            <div class="tier-perks">unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles · multiple versions</div>
+            <div class="tier-perks">unlimited stories · unlimited chapters · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles · multiple versions</div>
           </div>
           <div class="tier-price-tag" data-tier="platinum">$22<small>per month</small></div>
           <a href="/login?signup&amp;plan=platinum" class="btn-tier">GO PLATINUM</a>
@@ -270,16 +290,16 @@
     <div style="flex:1;display:flex;flex-direction:column;">
       <div class="panel panel-payoff" style="flex:1;">
         <div class="payoff-content">
-          <div class="payoff-title">This could be<br>your campaign.</div>
+          <div class="payoff-title">This could be<br>your storybook.</div>
         </div>
       </div>
       <div class="cta-strip">
         <div>
-          <div class="cta-strip-text">YOUR NEXT SESSION DESERVES TO BE REMEMBERED.</div>
-          <div class="cta-strip-sub">Every campaign has a moment the whole table will never forget.</div>
+          <div class="cta-strip-text">YOUR NEXT CHAPTER DESERVES TO BE REMEMBERED.</div>
+          <div class="cta-strip-sub">If you've got a story to tell, let Campaignia help you tell it.</div>
         </div>
         <div style="text-align:center;flex-shrink:0;">
-          <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
+          <a href="/login?signup" class="btn-cta">BEGIN YOUR STORY</a>
           <div class="cta-note" style="color:rgba(240,232,208,0.5);">30-DAY FREE TRIAL</div>
         </div>
       </div>
@@ -292,20 +312,20 @@
        ============================================================ -->
   <div class="faq-strip" id="faq">
     <div class="faq-header">
-      <div class="faq-header-title">THE LORE — FREQUENTLY ASKED QUESTIONS</div>
+      <div class="faq-header-title">FAQs</div>
     </div>
     <div class="faq-grid">
       <div class="faq-cell">
-        <div class="faq-q">What transcript format does Campaignia need?</div>
-        <div class="faq-a">Anything goes — session notes, Discord logs, Roll20 exports, voice-to-text recordings, or your own summary. The more detail, the richer the output.</div>
+        <div class="faq-q">What do I need to paste in?</div>
+        <div class="faq-a">Anything goes — your notes, a voice-to-text recording, emails, a chat thread, or what you typed up afterwards. The more detail, the richer the output.</div>
       </div>
       <div class="faq-cell">
         <div class="faq-q">How does the AI know which moments matter?</div>
-        <div class="faq-a">Campaignia identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--gold);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
+        <div class="faq-a">Campaignia finds the turning points, the surprises and the emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--gold);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
       </div>
       <div class="faq-cell">
-        <div class="faq-q">Can I use Campaignia for any TTRPG system?</div>
-        <div class="faq-a">Absolutely. D&D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership — any system with a story worth telling. Campaignia works from the transcript, not the ruleset.</div>
+        <div class="faq-q">Can I use Campaignia for any kind of story?</div>
+        <div class="faq-a">Absolutely. A holiday, a birthday, a school year, a road trip, the bedtime saga you have been telling for years, or a night around the table — anything with a story worth telling. Campaignia works from what you wrote down, not from a format.</div>
       </div>
       <div class="faq-cell">
         <div class="faq-q">Do I need my own AI API keys?</div>
@@ -313,11 +333,11 @@
       </div>
       <div class="faq-cell">
         <div class="faq-q">What does the exported PDF look like?</div>
-        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--gold);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
+        <div class="faq-a">A print-ready storybook with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--gold);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
       </div>
       <div class="faq-cell">
         <div class="faq-q">Can I cancel anytime?</div>
-        <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible — your stories don't disappear.</div>
+        <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your stories and chapters are always accessible — they don't disappear.</div>
       </div>
     </div>
   </div>
@@ -331,14 +351,14 @@
     <div class="footer-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>
     <div class="footer-links">
       <a href="/login" class="footer-link">Sign In</a>
-      <a href="/library?genre=fantasy,thriller,scifi,horror" class="footer-link">Public Library</a>
+      <a href="/library" class="footer-link">Public Library</a>
       <a href="#pricing" class="footer-link">Pricing</a>
       <a href="mailto:info@campaignia.com" class="footer-link">Contact</a>
       <a href="/terms.html" class="footer-link">Terms</a>
       <a href="/privacy.html" class="footer-link">Privacy</a>
     </div>
   </div>
-  <div class="footer-copy">&copy; <span id="footer-year"></span> So It Begins, LLC &middot; Campaignia. Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
+  <div class="footer-copy">&copy; <span id="footer-year"></span> So It Begins, LLC &middot; Campaignia.</div>
 </footer>
 
 <script>
@@ -359,21 +379,9 @@
 })();
 </script>
 <script>
-// v3.0.898 -- TD-770. Reveal the DRAFT link for an admin and for nobody else. Fails closed by
-// doing nothing: the link is display:none in the markup, so an anonymous visitor, a blocked
-// request or no JavaScript at all all leave it hidden.
-(function(){
-  try {
-    fetch('/api/auth/me', { credentials: 'same-origin' })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){
-        if (d && d.is_admin) { var a = document.getElementById('nav-story-draft'); if (a) a.style.display = ''; }
-      })
-      .catch(function(){});
-  } catch (e) {}
-})();
 function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
 function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>
+<script src="/js/story-pageturn.js?v=3.0.910" defer></script>
 </body>
 </html>

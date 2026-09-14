@@ -319,6 +319,24 @@ function isTesterEmail(email) {
 // the tier editor, the promo codes and the impersonation trail. The three routes this guards write
 // to req.session.userId and nothing else -- verified, not assumed -- so the worst a tester can do
 // with them is change their own account, which is the entire intent.
+// v3.0.898 -- TD-770. ONE READING OF ADMIN_EMAILS.
+//
+// The list was parsed in three places in this file and a fourth in routes/auth.js, and the draft
+// landing page needed a fifth. Five copies of an entitlement test is how one of them ends up
+// disagreeing, and the one that disagrees is the one that lets somebody in.
+//
+// READ FRESH ON EVERY CALL, never cached -- the same contract the inline copies had, and the
+// reason a deploy is not needed to add an admin.
+//
+// routes/auth.js still has its own copy, computing the is_admin UI HINT on /me. Left alone
+// deliberately: it is a different file and a different question, and widening an auth change to
+// tidy a fourth site is not a trade to make in a batch about a landing page.
+function isAdminEmail(email) {
+  if (!email) return false;
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+  return adminEmails.indexOf(email) >= 0;
+}
+
 async function requireAdminOrTester(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -327,8 +345,7 @@ async function requireAdminOrTester(req, res, next) {
     const db = await getDb();
     const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.status(403).json({ error: 'Admin access required' });
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
-    if (adminEmails.includes(user.email) || isTesterEmail(user.email)) return next();
+    if (isAdminEmail(user.email) || isTesterEmail(user.email)) return next();
     return res.status(403).json({ error: 'Admin access required' });
   } catch (e) {
     return res.status(500).json({ error: 'Admin check failed' });
@@ -342,8 +359,7 @@ async function requireAdmin(req, res, next) {
   try {
     const db = await getDb();
     const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
-    if (!user || !adminEmails.includes(user.email)) {
+    if (!user || !isAdminEmail(user.email)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
     next();
@@ -356,6 +372,7 @@ module.exports = {
   requireAuth,
   requireAdmin,
   requireAdminOrTester,
+  isAdminEmail,
   isTesterEmail,
   getCampaignRole,
   verifyCampaignMember,
