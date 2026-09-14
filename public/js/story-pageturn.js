@@ -32,7 +32,7 @@
 //  12  Stranger at the Door          test campaign          romance / suspense
 //  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
 //  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
-//  15  Gold Through the Mirror       The Strangers (1)      oil paint, visible impasto
+//  15  Oya Returns the Diamond       The Strangers (1)      oil paint, prismatic scatter
 //
 // A COVER, A CHARACTER PAGE, and four page SHAPES that are visible rather than asserted:
 // full-bleed (3), a wide image over prose (5), a portrait beside a column (7), and a small image
@@ -73,11 +73,19 @@
 // it forward later is an exchange of two files' CONTENT, not a renumbering -- cheap, whenever
 // its position is worth a batch of its own.
 //
+// AND THE PAGE ITSELF CHANGED IN v3.0.911, from Gold Through the Mirror to Oya Returns the
+// Diamond -- the other mirror page from the same book. Both were offered, Ian took the gold one,
+// looked at it in the panel and switched. THE ARGUMENT FOR THE DIAMOND IS THE PANEL, NOT THE
+// PAINTING: at 3.8 seconds in a 541px column what carries is shape and colour, and this is the
+// only page in the fifteen with either -- a circle that reads instantly, and a prismatic scatter
+// that is the only pure colour in the set. The gold page is the better painting in the hand and
+// the weaker one here, where it reads as brown. Judge a picture in the slot, at the size.
+//
 // AT 3.8 SECONDS A PAGE THIS IS A 57-SECOND CYCLE and nobody sees the end of it. The coverage is
 // for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.910';        // cache stamp -- bump when the pictures are replaced in place
+  var V = '3.0.911';        // cache stamp -- bump when the pictures are replaced in place
   var COUNT = 15;             // story-pic1.jpg .. story-pic15.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 
