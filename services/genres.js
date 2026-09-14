@@ -56,21 +56,27 @@
 
 var GENRES = [
   { slug: 'fantasy',    label: 'Fantasy', category: 'fiction',
+    artChain: ['Dark Fantasy', 'High fantasy illustration'], voiceChain: ['epic'],
     prose:  'Wonder and scale. Treat the impossible as real and unremarked.',
     panels: 'Favour spectacle, landscape, and creature reveals.' },
   { slug: 'romance',    label: 'Romance', category: 'fiction',
+    artChain: ['Watercolor painterly', 'Anime manga style', 'High fantasy illustration'], voiceChain: ['journal'],
     prose:  'Interiority and wanting. Weight glances, proximity, and what is left unsaid.',
     panels: 'Favour two-person framing, faces, and held moments over action.' },
   { slug: 'thriller',   label: 'Thriller / Suspense', category: 'fiction',
+    artChain: ['Dark Fantasy', 'Dark gritty comic book'], voiceChain: ['noir', 'cinematic'],
     prose:  'Momentum and threat. Short sentences under pressure. Withhold.',
     panels: 'Favour pursuit, confrontation, and the beat just before danger lands.' },
   { slug: 'scifi',      label: 'Sci Fi', category: 'fiction',
+    artChain: ['Dark Fantasy', 'Anime manga style'], voiceChain: ['epic'],
     prose:  'Consequence and system. Treat technology as ordinary and load-bearing.',
     panels: 'Favour machinery, scale, and unfamiliar environments made concrete.' },
   { slug: 'horror',     label: 'Horror', category: 'fiction',
+    artChain: ['Dark Fantasy', 'Dark gritty comic book'], voiceChain: ['grim', 'cinematic'],
     prose:  'Dread over shock. Let the reader see it before the characters do.',
     panels: 'Favour restraint, partial reveals, and a wrong detail in an ordinary frame.' },
   { slug: 'biography',  label: 'Biography', category: 'nonfiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['epic'],
     prose:  'A real life recounted. Ground every event in one person\u2019s arc.',
     panels: 'Favour the subject; frame everyone else in relation to them. Real period dress, tools and places; never fantasy or costume.',
     // v3.0.840 -- TD-685. THE LITERAL, NOT THE CONSTANT (see family/skillstory below).
@@ -80,46 +86,62 @@ var GENRES = [
     // for a life story, and re-pointing an existing campaign's styles is a separate call.
     safety: 'sensitive' },
   { slug: 'mystery',    label: 'Mystery / Crime', category: 'fiction',
+    artChain: ['Dark gritty comic book'], voiceChain: ['noir', 'cinematic'],
     prose:  'Withheld information. Plant what pays off. Let the reader work.',
     panels: 'Favour evidence, reaction, and the moment of noticing.' },
   { slug: 'childrens',  label: "Children's", category: 'fiction',
+    artChain: ['Watercolor painterly', 'Anime manga style'], voiceChain: ['storybook'],
     prose:  'Warm, simple and concrete. Short sentences, plain words, one clear feeling at a time. Frightening things are faced and resolved, never dwelt on.',
     panels: 'Favour clear, uncluttered frames with one thing happening. Keep faces friendly and readable; no gore, no dread.' },
   { slug: 'ya',         label: 'Young Adult', category: 'fiction',
+    artChain: ['Anime manga style'], voiceChain: ['anime'],
     prose:  'Immediate and emotionally direct. First-person energy, clear stakes.',
     panels: 'Favour character over setting; keep faces in frame.' },
   { slug: 'historical', label: 'Historical Fiction', category: 'fiction',
+    artChain: ['Classic pen and ink'], voiceChain: ['lorekeeper', 'epic'],
     prose:  'Period texture, materially specific. No modern idiom.',
     panels: 'Favour period detail in dress, tools, and place.' },
   { slug: 'literary',   label: 'Literary Fiction', category: 'fiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['journal'],
     prose:  'Language carries the weight. Ambiguity is allowed to stand.',
     panels: 'Favour the quiet frame; resist the obvious dramatic beat.' },
   { slug: 'nonfiction', label: 'Nonfiction', category: 'nonfiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['cinematic'],
     prose:  'Report what happened. Clarity over ornament. No invented interiority.',
     panels: 'Favour the plain, legible depiction of events. Real period dress, tools and places; never fantasy or costume.' },
   { slug: 'family',     label: 'Family Story', category: 'nonfiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['epic'],
     prose:  'A real life, told warmly. Ordinary moments carry the weight; no fantasy idiom, no invented interiority.',
     panels: 'Favour real places, clothes and objects as they actually are. Faces readable and moments candid; never costume, never fantasy.',
     // v3.0.834 -- TD-668. THE LITERAL, NOT THE CONSTANT. SAFETY_SENSITIVE is declared
     // BELOW this array, so at the moment this literal is evaluated it is still undefined
     // and every one of these records would silently read as standard. The guard proves
     // these two reduce to sensitive precisely so that mistake cannot be made quietly.
-    safety: 'sensitive',
     // v3.0.836 -- TD-681/TD-669. REPOINTED, because the previous pair could not be reached.
     // 'Watercolor painterly' is rank 3 (Gold) and 'storybook' is rank 4 (Platinum), so a
     // Silver user choosing one of these genres could use NEITHER and would land on the
     // floor -- High fantasy and Classic -- which is the exact failure these defaults exist
     // to prevent. A default nobody can reach is not a default.
-    defaultArt: 'Everyday life illustration', defaultVoice: 'calm' },
+    // v3.0.912 -- TD-777. defaultArt/defaultVoice BECAME artChain/voiceChain, at the top of
+    // this record like every other genre. THE ART ANSWER IS UNCHANGED. The VOICE moved to Epic
+    // Saga at Gold and above -- Ian, 2026-09-14: "The only style that should use Calm & Literal
+    // is Skill Story." Calm & Literal is a step-by-step PREPARATION voice (first person, present
+    // tense, "I can try to hold still") and is wrong for a family memoir. Silver therefore lands
+    // on classic, whose own voice text still says "like a fantasy novel" -- that cost is TD-778,
+    // recorded rather than built, because rewording classic changes every book that exists.
+    safety: 'sensitive' },
   { slug: 'skillstory', label: 'Skill Story', category: 'skillstory',
+    artChain: ['Everyday life illustration'], voiceChain: ['calm'],
     prose:  'Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.',
     // v3.0.836 -- TD-681. THE SETTING CLAUSE THIS WAS MISSING. Family Story already ended
     // "never costume, never fantasy"; this did not, so when the art style said "epic high
     // fantasy" nothing here argued back and a real dentist surgery came out as a castle.
     panels: 'One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. An ordinary real place with ordinary real objects, exactly as it would actually look; never fantasy, never costume, never invented ornament. Nothing frightening, nothing ambiguous, no dramatic angles.',
-    safety: 'sensitive',
-    defaultArt: 'Everyday life illustration', defaultVoice: 'calm' },
+    // v3.0.912 -- TD-777. defaultArt/defaultVoice became artChain/voiceChain at the top of
+    // this record. BOTH ANSWERS ARE BYTE-IDENTICAL to what v3.0.836 shipped for TD-681.
+    safety: 'sensitive' },
   { slug: 'other',      label: 'Other (use Prompt)',
+    artChain: ['High fantasy illustration'], voiceChain: ['classic'],
     prose:  '', panels: '' }
 ];
 
@@ -207,24 +229,43 @@ function campaignSafety(rowOrValue) {
 function isSensitive(rowOrValue) { return campaignSafety(rowOrValue) === SAFETY_SENSITIVE; }
 
 // v3.0.834 -- TD-669. THE GENRE SUPPLIES A DEFAULT, NOT A LOCK (Ian, 2026-09-09).
-// Order is meaningful, so the FIRST genre that declares defaults wins; a campaign that
-// names Skill Story second is still primarily whatever it named first. Returns null when
-// nothing declares them, so a caller can tell "no opinion" from "an opinion that happens
-// to match the global default" -- those are different, and the difference is the whole
-// reason this returns an object rather than filling in blanks itself.
+// v3.0.912 -- TD-777. AND NOW IT SUPPLIES AN ORDERED CHAIN RATHER THAN ONE PAIR.
 //
-// NOTHING CONSUMES THIS YET, DELIBERATELY. Wiring it means deciding where a member pref
-// stops and a campaign default starts, and campaigns.art_style carries a DB default of
-// 'High fantasy illustration' -- so an untouched campaign and one deliberately set to
-// High fantasy are indistinguishable in the column. Guessing there would silently
-// overwrite a real choice. The resolver ships now so there is ONE definition of what a
-// genre prefers; the wiring point is chosen with that question answered. See TD-669.
+// Order is meaningful, so the FIRST genre that declares chains wins; a campaign that names Skill
+// Story second is still primarily whatever it named first. Same reduction as campaignCategory().
+//
+// WHY A CHAIN AND NOT A PAIR. Every style carries a minimum tier rank, so a single preferred id is
+// only an answer for the tiers that can reach it. v3.0.834 shipped a pair naming 'Watercolor
+// painterly' (rank 3) and 'storybook' (rank 4), which a Silver user could reach NEITHER of, and
+// v3.0.836 had to repoint both. A DEFAULT NOBODY CAN REACH IS NOT A DEFAULT (TD-681) -- a chain
+// makes that structural instead of a thing to remember, because the consumer walks it and takes
+// the first entry the member's effective rank allows.
+//
+// THE INVARIANT, AND IT IS ENFORCED BY THE BATCH GUARD RATHER THAN BY THIS COMMENT:
+// EVERY CHAIN IS WRITTEN IN STRICTLY DESCENDING RANK ORDER. Same-rank alternatives are meaningless
+// here -- a tier either allows both or neither -- so a REPEATED rank is always a dead entry no one
+// can ever be given, and a RANK-1 entry ends the chain because everybody can reach it. Both traps
+// caught a real pick while this grid was being chosen (Romance had a rank-1 style second; Sci Fi
+// had two rank-3 styles in a row), which is why it is a lint and not a note.
+//
+// THIS FUNCTION STAYS TIER-BLIND ON PURPOSE. It ships the chain; each consumer applies the tier
+// test it already owns -- routes/narrative.js has the server gate, public/js/app.js has the
+// picker's own lock test character for character. Resolving here would mean an effective-tier
+// lookup per campaign inside the campaigns list endpoint, and a second definition of the lock.
+//
+// Returns null when nothing declares, so a caller can still tell "no opinion" from "an opinion
+// that happens to match the global default" -- those are different, and the difference is the
+// whole reason this returns an object rather than filling in blanks itself.
 function genreDefaults(rowOrValue) {
   var slugs = campaignGenres(rowOrValue);
   for (var i = 0; i < slugs.length; i++) {
     var gg = BY_SLUG[slugs[i]];
-    if (gg && (gg.defaultArt || gg.defaultVoice)) {
-      return { art: gg.defaultArt || null, narrative: gg.defaultVoice || null, from: gg.slug };
+    if (gg && ((gg.artChain && gg.artChain.length) || (gg.voiceChain && gg.voiceChain.length))) {
+      return {
+        art: (gg.artChain || []).slice(),
+        narrative: (gg.voiceChain || []).slice(),
+        from: gg.slug
+      };
     }
   }
   return null;

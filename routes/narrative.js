@@ -379,9 +379,16 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     try {
       const _cgRow = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(session.campaign_id);
       const _gd = genresvc.genreDefaults(_cgRow);
-      if (_gd && _gd.narrative && NARRATIVE_STYLES[_gd.narrative]) {
+      // v3.0.912 -- TD-777. WALK THE CHAIN AND TAKE THE FIRST ENTRY THIS TIER ALLOWS.
+      // The chain is written in strictly descending rank order (see genreDefaults), so this
+      // loop cannot skip a reachable entry to land on an unreachable one, and falling off the
+      // end leaves _gdVoice null -> 'classic', which is the pre-TD-669 behaviour.
+      if (_gd && _gd.narrative && _gd.narrative.length) {
         const _effR = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
-        if (narrativeStyleAllowed(_effR, _gd.narrative)) _gdVoice = _gd.narrative;
+        for (var _ci = 0; _ci < _gd.narrative.length; _ci++) {
+          var _cid = _gd.narrative[_ci];
+          if (NARRATIVE_STYLES[_cid] && narrativeStyleAllowed(_effR, _cid)) { _gdVoice = _cid; break; }
+        }
       }
     } catch (e) { _gdVoice = null; }
   }

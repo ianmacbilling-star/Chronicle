@@ -5102,14 +5102,23 @@ function genreDefaultStyle(kind) {
   var c = state.currentCampaign;
   var gd = c && c.genre_defaults;
   if (!gd) return null;
-  var id = (kind === 'art') ? gd.art : gd.narrative;
-  if (!id) return null;
+  // v3.0.912 -- TD-777. The server now sends an ORDERED CHAIN per kind, not one id.
+  // Take the first entry this member's effective rank allows. The chain is written in
+  // strictly descending rank order (services/genres.js), so the first allowed entry is
+  // also the best allowed entry, and falling off the end returns null -> the caller's
+  // own floor, which is exactly the pre-TD-669 behaviour.
+  var chain = (kind === 'art') ? gd.art : gd.narrative;
+  if (!chain || !chain.length) return null;
   var locks = (kind === 'art') ? (state.tierInfo && state.tierInfo.art_locks)
                                 : (state.tierInfo && state.tierInfo.narrative_locks);
   var eff = (state.tierInfo && state.tierInfo.effective_rank) || 0;
-  var min = (locks && locks[id]) || 1;
-  if (min > eff) return null;
-  return id;
+  for (var ci = 0; ci < chain.length; ci++) {
+    var id = chain[ci];
+    if (!id) continue;
+    var min = (locks && locks[id]) || 1;
+    if (min <= eff) return id;
+  }
+  return null;
 }
 
 // The voice this version opens on. Three call sites used to carry this expression
