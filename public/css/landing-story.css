@@ -47,7 +47,7 @@
    the script adds sits on top of it, so a blocked script, an old browser or a slow network all
    degrade to a picture rather than to a black rectangle. */
 .hero-img-panel.story-img-slot {
-  background-image: url('/images/story-pic1.jpg?v=3.0.907');
+  background-image: url('/images/story-pic1.jpg?v=3.0.910');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;

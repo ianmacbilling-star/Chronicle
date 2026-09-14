@@ -14,7 +14,7 @@
 // THE PAGE LIST IS ONE LINE, and v3.0.903 is the proof: swapping five placeholders for fourteen
 // real pages was three edits -- COUNT, V, and the files themselves. Nothing else in here moved.
 //
-// THE FOURTEEN, in order. The first four are the only ones most visitors see, so they carry the
+// THE FIFTEEN, in order. The first four are the only ones most visitors see, so they carry the
 // argument between them: a dark interior drama, a bright modern real-life page, a finished COVER
 // so that "book" registers early, and a full-bleed fantasy battlefield.
 //
@@ -32,11 +32,14 @@
 //  12  Stranger at the Door          test campaign          romance / suspense
 //  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
 //  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
+//  15  Gold Through the Mirror       The Strangers (1)      oil paint, visible impasto
 //
-// ELEVEN GENRES, SEVEN ART STYLES, a cover and a character page, and four page SHAPES that are
-// visible rather than asserted: full-bleed (3), a wide image over prose (5), a portrait beside a
-// column (7), and a small image with a side column (9). The two art styles still unrepresented
-// are watercolor and charcoal.
+// A COVER, A CHARACTER PAGE, and four page SHAPES that are visible rather than asserted:
+// full-bleed (3), a wide image over prose (5), a portrait beside a column (7), and a small image
+// with a side column (9). THE ART STYLES ARE NAMED PER SLOT rather than counted here, for the
+// same reason v3.0.907 stopped counting layouts: the count was a number nobody could check
+// without each book's generation settings, and the descriptors can be checked by looking.
+// Watercolor and charcoal are the two presets nothing in the set uses.
 //
 // THE LAYOUT COUNT USED TO BE FOUR NAMED LAYOUTS and slot nine was called the comic-page one.
 // It never was: what I had read as a panel grid is three figures standing side by side inside a
@@ -61,12 +64,21 @@
 // nothing by the swap. The drawn sound effects (CRUNCH, KRA-KOOM, VORTEX) all spell correctly,
 // checked at full resolution because this book is rasterised and has no text to read.
 //
-// AT 3.8 SECONDS A PAGE THIS IS A 53-SECOND CYCLE and nobody sees the end of it. The coverage is
+// SLOT FIFTEEN WAS ADDED IN v3.0.910 AND NOTHING WAS REPLACED. Ian asked for an oil painting and
+// then asked for it to be added rather than swapped in, which is the better call: the set had no
+// painting in it at all, and every page already in it had been chosen on purpose.
+//
+// IT IS LAST BECAUSE THE FILENAMES ARE THE ORDER. story-pic5.jpg IS slot five, so inserting in
+// the middle means renaming ten files and re-shipping about 1.5MB; appending ships one. Moving
+// it forward later is an exchange of two files' CONTENT, not a renumbering -- cheap, whenever
+// its position is worth a batch of its own.
+//
+// AT 3.8 SECONDS A PAGE THIS IS A 57-SECOND CYCLE and nobody sees the end of it. The coverage is
 // for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.907';        // cache stamp -- bump when the pictures are replaced in place
-  var COUNT = 14;             // story-pic1.jpg .. story-pic14.jpg
+  var V = '3.0.910';        // cache stamp -- bump when the pictures are replaced in place
+  var COUNT = 15;             // story-pic1.jpg .. story-pic15.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 
   function src(n) { return '/images/story-pic' + (((n % COUNT) + COUNT) % COUNT + 1) + '.jpg?v=' + V; }
