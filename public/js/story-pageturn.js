@@ -26,15 +26,22 @@
 //   6  Filling the Cavity            Going to the Dentist   children's / skill story
 //   7  The Drop Point                Streets of Silver Shadow   pen and ink, handwritten type
 //   8  The Company                   Embers of Damnation    the character page
-//   9  Hell of a First Date          The ANOMALIES          comic-page layout, superhero
+//   9  Solara Closes the Rifts       The ANOMALIES          superhero, drawn sound effects
 //  10  The Signal Arrives            test campaign          science fiction
 //  11  The Shadow Grabs a Star       Starbound Skies        anime-leaning, aurora palette
 //  12  Stranger at the Door          test campaign          romance / suspense
 //  13  Laughter That Becomes Music   Dojo of the Dragon Spirits   luminous high fantasy
 //  14  I'd a Bet on Him Too          Our Family Stories     the closing beat
 //
-// ELEVEN GENRES, SEVEN ART STYLES, FOUR LAYOUTS, a cover and a character page. The two styles
-// still unrepresented are watercolor and charcoal.
+// ELEVEN GENRES, SEVEN ART STYLES, a cover and a character page, and four page SHAPES that are
+// visible rather than asserted: full-bleed (3), a wide image over prose (5), a portrait beside a
+// column (7), and a small image with a side column (9). The two art styles still unrepresented
+// are watercolor and charcoal.
+//
+// THE LAYOUT COUNT USED TO BE FOUR NAMED LAYOUTS and slot nine was called the comic-page one.
+// It never was: what I had read as a panel grid is three figures standing side by side inside a
+// single illustration. The count above is now of shapes anyone can check by looking at the four
+// pages named, which is the only kind of claim a comment should be making.
 //
 // SLOT TEN WAS RE-PICKED IN v3.0.904. The first science-fiction page was a fleet action -- ships
 // and empty space, like every other page in that book. This one is a control room with four
@@ -47,11 +54,18 @@
 // Shadow Grabs a Star is two characters at arm's length, lit by the fragment one of them is
 // holding, with the comet field behind them. A panel this small wants faces.
 //
+// SLOT NINE WAS RE-PICKED IN v3.0.907 at Ian's direction -- the THIRD SLOT to go on the same
+// reasoning, after ten and eleven. Hell of a First Date is three heroes standing still in a
+// damaged hall after the fight; Solara Closes the Rifts is one of them mid-action with the
+// collapsing canister lit between her hands. The page SHAPE is identical, so the set loses
+// nothing by the swap. The drawn sound effects (CRUNCH, KRA-KOOM, VORTEX) all spell correctly,
+// checked at full resolution because this book is rasterised and has no text to read.
+//
 // AT 3.8 SECONDS A PAGE THIS IS A 53-SECOND CYCLE and nobody sees the end of it. The coverage is
 // for the pages' own sake; the ORDER is what a visitor actually experiences.
 (function () {
   'use strict';
-  var V = '3.0.906';        // cache stamp -- bump when the pictures are replaced in place
+  var V = '3.0.907';        // cache stamp -- bump when the pictures are replaced in place
   var COUNT = 14;             // story-pic1.jpg .. story-pic14.jpg
   var DWELL = 2600, TURN = 1200;  // TURN must equal the transition in landing-story.css
 
