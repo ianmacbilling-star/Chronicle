@@ -8,7 +8,8 @@ const multer = require('multer');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const path = require('path');
 const imageHelpers = require('./images');
-const { getTokenCost, canAfford } = require('./tokens');
+const { getTokenCost, canAfford, recordGeneration } = require('./tokens');
+const { HELP_MODEL } = require('../config/models');
 
 // Memory storage — we push to the R2 storage layer ourselves.
 const upload = multer({
@@ -92,6 +93,98 @@ router.post('/', requireAuth, verifyCampaignAssetCreator, guardUpload(uploadSing
   } catch (e) {
     console.error('create asset error:', e.message);
     res.json({ error: 'Could not create the asset.' });
+  }
+});
+
+// ============================================================================
+// v3.0.915 -- TD-783. CLASSIFY ASSET NAMES. ONE call for a whole import, and it is FREE.
+//
+// WHY IT EXISTS: the bulk importer's word test scored 2 of 14 on Ian's first real import. The
+// misses were proper nouns (Vallynne, Ythryn), creatures (Aboleth, Manes, Boneclaw, Tabaxi) and
+// people's names -- the class a keyword list cannot do at any length.
+//
+// NO TOKENS ARE SPENT AND NONE ARE QUOTED. Ian: "If we can keep it free to the user I'd really
+// like to", then "I'm ok with the minute cost. Make it automatic." So this is the one place in
+// the product that calls a model on the house. It is deliberately the cheapest possible shape:
+// HELP_MODEL (Haiku), NAMES ONLY -- never the images -- and one request for the whole batch.
+//
+// IT IS STILL RECORDED. recordGeneration() logs it with tokens_redeemed 0, so a free-but-costly
+// call shows up in the same place every other generation does rather than being invisible spend.
+//
+// IT MAY ANSWER "I DON'T KNOW", AND THAT MATTERS. The prompt asks it to omit rather than guess,
+// and anything outside CATEGORIES is dropped below. A name nobody can place reaches the review
+// list still flagged -- which is the rule the feature had before a model was involved.
+//
+// NEVER AN ERROR THE CALLER HAS TO HANDLE. Every failure returns an empty map, and the client
+// then behaves exactly as v3.0.914 did: the rows stay unset and a person picks.
+// ============================================================================
+var CLASSIFY_MAX_NAMES = 50;
+var CLASSIFY_MAX_LEN = 120;
+var CLASSIFY_SYSTEM =
+  'You sort the names of story assets into exactly one of three categories.' +
+  ' location = a place, building, room or setting.' +
+  ' npc = any living or once-living being: a person, a creature, a monster, an animal.' +
+  ' item = a physical object a character could carry, wear, wield or use.' +
+  ' Names may be invented, may come from tabletop games, or may be real people.' +
+  ' Return ONLY a JSON object whose keys are the input names exactly as given and whose values' +
+  ' are one of location, npc, item. OMIT any name you cannot place with reasonable confidence --' +
+  ' a missing entry is better than a wrong one. No prose, no code fence, JSON only.';
+
+router.post('/classify-names', requireAuth, verifyCampaignAssetCreator, async function (req, res) {
+  try {
+    var raw = (req.body && Array.isArray(req.body.names)) ? req.body.names : [];
+    var names = [], seen = {};
+    raw.forEach(function (n) {
+      var v = String(n == null ? '' : n).trim().slice(0, CLASSIFY_MAX_LEN);
+      if (!v || seen[v]) return;
+      seen[v] = 1;
+      if (names.length < CLASSIFY_MAX_NAMES) names.push(v);
+    });
+    if (!names.length) return res.json({ map: {} });
+
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.json({ map: {} });
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: HELP_MODEL,
+        max_tokens: 1000,
+        system: CLASSIFY_SYSTEM,
+        messages: [{ role: 'user', content: JSON.stringify(names) }]
+      })
+    });
+    const data = await response.json();
+    if (!data || data.error) return res.json({ map: {} });
+    var text = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
+    var m = text.indexOf('{') >= 0 ? text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1) : '';
+    var parsed = null;
+    try { parsed = JSON.parse(m); } catch (e) { parsed = null; }
+    if (!parsed || typeof parsed !== 'object') return res.json({ map: {} });
+
+    // ONLY the three categories, and ONLY names we actually asked about. A model that invents a
+    // fourth category, or answers about something we did not send, is dropped rather than trusted.
+    var out = {};
+    names.forEach(function (n) {
+      var v = parsed[n];
+      if (typeof v !== 'string') return;
+      v = v.toLowerCase().trim();
+      if (CATEGORIES.indexOf(v) !== -1) out[n] = v;
+    });
+
+    try {
+      await recordGeneration(req.session.userId, {
+        event_type: 'asset_classify_names', tokens_redeemed: 0,
+        quantity: names.length, unit: 'names', model: HELP_MODEL,
+        related_campaign_id: req.params.campaignId
+      });
+    } catch (e) {}
+
+    res.json({ map: out });
+  } catch (e) {
+    console.error('classify asset names error:', e.message);
+    res.json({ map: {} });
   }
 });
 
