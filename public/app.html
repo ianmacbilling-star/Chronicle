@@ -181,6 +181,12 @@
         <div class="add-char-card dm-only" onclick="openAssetModal()">
           <div class="plus">+</div><span>Add asset</span>
         </div>
+        <!-- v3.0.914 -- TD-783. renderAssets() rebuilds this grid wholesale, so this card is
+             only what stands here before the first render. Its twin lives in renderAssets and
+             the two must agree; the batch guard asserts both exist. -->
+        <div class="add-char-card dm-only" onclick="openAssetImport()">
+          <div class="plus">&#8681;</div><span>Import</span>
+        </div>
       </div>
     </div>
 
@@ -2111,6 +2117,30 @@
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAssetModal()">Done</button>
+    </div>
+    <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>
+  </div>
+</div>
+
+<!-- ASSET IMPORT MODAL -- v3.0.914, TD-783.
+     Many image files in, many assets out. Nothing here costs a token: every row posts to the same
+     /assets endpoint the single-asset upload uses, and that route has no cost check and no spend.
+     z-index matches the fileimport modal so uiConfirm still lands on top of it. -->
+<div class="modal-overlay hidden" id="assetimport-modal" style="z-index:100000;" onclick="if(event.target===this)closeAssetImport()">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div class="modal-title">Import assets from files</div>
+      <button class="modal-close" onclick="closeAssetImport()">&times;</button>
+    </div>
+    <div class="form-group">
+      <input type="file" id="assetimport-input" accept="image/jpeg,image/png,image/webp" multiple
+             onchange="aimpFilesChosen(event)" />
+    </div>
+    <div id="assetimport-body" style="max-height:46vh;overflow-y:auto;"></div>
+    <div class="form-hint" id="assetimport-note" style="margin-top:6px;color:var(--gold);"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAssetImport()">Cancel</button>
+      <button class="btn btn-primary" id="assetimport-go" onclick="aimpRun()" disabled>Import</button>
     </div>
     <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>
   </div>

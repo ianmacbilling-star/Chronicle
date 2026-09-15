@@ -5810,7 +5810,355 @@ function renderAssets() {
   var _addCard = _canAddAsset
     ? '<div class="add-char-card" onclick="openAssetModal()"><div class="plus">+</div><span>Add asset</span></div>'
     : '';
-  grid.innerHTML = _addCard + cards;
+  // v3.0.914 -- TD-783. The bulk importer, behind the SAME permission as Add asset. A control
+  // that creates ten assets must not be reachable by someone who may not create one.
+  var _impCard = _canAddAsset
+    ? '<div class="add-char-card" onclick="openAssetImport()"><div class="plus">\u21e9</div><span>Import</span></div>'
+    : '';
+  grid.innerHTML = _addCard + _impCard + cards;
+}
+
+
+// ============================================================================
+// v3.0.914 -- TD-783. BULK ASSET IMPORT: many image files in, many assets out.
+//
+// Ian, 2026-09-15: "build the button on the main asset screen called Import, then let them select
+// many image files from a folder... use the name of each file as the name of each asset... See if
+// you can make it smart enough to know if the Asset is a location, A Monster or NPC, or if it is an
+// Item. So if they put 10 files in there they should get 10 Assets."
+//
+// IT COSTS NOTHING, AND THAT IS A DESIGN CONSTRAINT RATHER THAN AN ACCIDENT. Ian: "If we can keep
+// it free to the user I'd really like to." So there is NO AI call anywhere in this path. The
+// category is guessed from the file's own name by the word test below, and each row posts to the
+// SAME /assets endpoint the single-asset upload already uses -- which spends no tokens (the only
+// paying routes in routes/assets.js are /generate, /retouch and /regenerate, all of which make an
+// image; this makes none).
+//
+// WHY THIS IS NOT fiOpen(). TD-733 built one import control precisely so a new caller costs a
+// function rather than a drop zone, and that instinct is right often enough to be worth stating
+// where it does NOT apply: fiOpen takes ONE file and hands TEXT back to a caller. This takes MANY
+// files and creates RECORDS, with a review pass in between. Generalising fiOpen to cover both would
+// put the multi-file case inside the control whose guard asserts it never uploads anything. Two
+// controls, one considered decision.
+// ============================================================================
+
+var AIMP_MAX_FILES = 50;          // a folder drop should not become a thousand POSTs by accident
+var AIMP_MIN_NAME = 3;            // see AIMP_WARN_SHORT below -- TD-663
+
+// The CLIENT copy of the server's upload rules. Deliberately derived from the two constants that
+// already exist in this file rather than retyped: isSupportedUploadImage() is the same test the
+// single-asset upload makes, and UPLOAD_TYPE_MSG is the same sentence. The batch guard additionally
+// asserts BOTH match middleware/uploadGuard.js byte for byte, because a client that accepts a file
+// the server will reject just moves the error later and makes it look like our bug.
+var AIMP_MAX_BYTES = 5 * 1024 * 1024;
+var AIMP_SIZE_MSG = 'That image is too large -- the maximum size is 5 MB.';
+
+// ---------------------------------------------------------------------------
+// THE CATEGORY GUESS.
+//
+// WORD MATCHING, NOT SUBSTRING MATCHING, AND THIS IS THE WHOLE CARE IN THIS FUNCTION.
+// TD-663 is open precisely because asset name matching elsewhere is an unbounded substring test, so
+// a short alias matches inside unrelated words. Writing this heuristic the naive way reproduces that
+// bug immediately: "Grumbo the Innkeeper" contains "inn", and a substring test files a tavern
+// keeper under Locations. So the filename is split into WORDS and only whole words count --
+// "innkeeper" is not "inn". The fixture table in the guard contains that exact case.
+//
+// UNSURE RETURNS EMPTY, IT DOES NOT GUESS. Ian: "Flag it." A category nobody was asked about is
+// worse than a blank one, because assets are matched into panels by name and a wrong category is
+// invisible until it shows up in a book.
+// ---------------------------------------------------------------------------
+var AIMP_WORDS_LOCATION = ('tavern inn alehouse castle keep fort fortress tower temple shrine church ' +
+  'cathedral cave cavern grotto dungeon crypt tomb catacombs forest woods wood glade swamp marsh ' +
+  'desert mountain mountains hill hills valley canyon river lake sea ocean coast beach island ' +
+  'bridge road path trail gate gates wall city town village hamlet market marketplace square ' +
+  'harbor harbour port docks dock camp encampment ruins ruin hall throneroom library archive mine ' +
+  'quarry farm farmhouse field orchard garden courtyard kitchen bedroom parlour parlor house home ' +
+  'cabin lodge manor mansion palace citadel prison jail dungeons arena stadium academy school ' +
+  'hospital clinic office station street alley cellar attic basement chamber room sanctum vault ' +
+  'observatory lighthouse monastery abbey outpost waystation crossroads').split(' ');
+
+var AIMP_WORDS_ITEM = ('sword blade greatsword axe hammer mace flail spear lance pike bow crossbow ' +
+  'arrow quiver dagger knife staff wand rod sceptre scepter orb potion elixir vial flask scroll ' +
+  'tome grimoire book ledger journal ring amulet necklace pendant talisman charm crown circlet ' +
+  'shield buckler armor armour breastplate helm helmet gauntlet gauntlets boots cloak robe cape ' +
+  'map chart key keys gem gemstone jewel crystal shard coin coins gold treasure hoard chest crate ' +
+  'barrel lantern torch candle horn flute lute harp drum banner flag standard letter note parchment ' +
+  'contract ticket badge medal trophy cup goblet chalice bottle jar bag pack pouch satchel rope ' +
+  'chain lockpick tool tools kit compass hourglass mirror').split(' ');
+
+var AIMP_WORDS_NPC = ('king queen prince princess lord lady sir dame baron duke duchess captain ' +
+  'sergeant guard guardsman soldier knight squire wizard mage sorcerer sorceress witch warlock ' +
+  'priest priestess cleric monk nun bard minstrel rogue thief assassin merchant trader shopkeeper ' +
+  'smith blacksmith innkeeper keeper barkeep bartender farmer fisherman sailor captain pirate hunter ' +
+  'ranger druid doctor nurse teacher professor chief elder shaman oracle seer prophet beggar ' +
+  'urchin orphan goblin hobgoblin orc troll ogre giant kobold gnoll dragon wyvern drake wolf ' +
+  'direwolf bear boar spider serpent snake demon devil imp fiend ghost wraith spectre specter ' +
+  'zombie skeleton lich vampire werewolf golem elemental slime mimic hag banshee minotaur ' +
+  'centaur satyr fairy sprite pixie mr mrs ms dr uncle aunt auntie grandma grandpa granny nana ' +
+  'papa mum mom dad father mother brother sister cousin nephew niece friend neighbour neighbor ' +
+  'the-cat the-dog').split(' ');
+
+function aimpWords(s) {
+  return String(s || '').toLowerCase().split(/[^a-z]+/).filter(function (w) { return w.length > 1; });
+}
+
+// '' when it cannot tell. Never falls through to a category.
+function aimpGuessCategory(name) {
+  var words = aimpWords(name);
+  if (!words.length) return '';
+  var score = { location: 0, npc: 0, item: 0 };
+  words.forEach(function (w) {
+    if (AIMP_WORDS_LOCATION.indexOf(w) !== -1) score.location++;
+    if (AIMP_WORDS_NPC.indexOf(w) !== -1) score.npc++;
+    if (AIMP_WORDS_ITEM.indexOf(w) !== -1) score.item++;
+  });
+  var best = '', bestN = 0, tied = false;
+  ['location', 'npc', 'item'].forEach(function (k) {
+    if (score[k] > bestN) { best = k; bestN = score[k]; tied = false; }
+    else if (score[k] === bestN && bestN > 0 && k !== best) { tied = true; }
+  });
+  if (!bestN) return '';             // nothing recognised at all -- say so rather than guess
+
+  // THE TIE-BREAK IS THE LAST RECOGNISED WORD, because English puts the head noun last.
+  // "Nana's kitchen" scores npc 1 / location 1, and it is a kitchen. "Dragon Sword" scores npc 1 /
+  // item 1, and it is a sword. Taking the last match reads the name the way a person does. Found by
+  // the guard's own fixture table rather than by thinking about it.
+  if (tied) {
+    var last = '';
+    words.forEach(function (w) {
+      if (AIMP_WORDS_LOCATION.indexOf(w) !== -1) last = 'location';
+      if (AIMP_WORDS_NPC.indexOf(w) !== -1) last = 'npc';
+      if (AIMP_WORDS_ITEM.indexOf(w) !== -1) last = 'item';
+    });
+    return last;
+  }
+  return best;
+}
+
+// The file's own name, minus the extension, tidied just enough to read as a name. Underscores and
+// dashes become spaces; a trailing "(1)" or " copy" from a duplicated download is dropped; runs of
+// whitespace collapse. Nothing is title-cased -- the user's capitalisation is the user's.
+function aimpNameFromFile(filename) {
+  var n = String(filename || '');
+  var dot = n.lastIndexOf('.');
+  if (dot > 0) n = n.slice(0, dot);
+  // Underscores become spaces; HYPHENS ARE LEFT ALONE. An earlier draft spaced them out too and
+  // turned "Sword-of-Dawn.png" into "Sword - of - Dawn". aimpWords() splits on every non-letter
+  // anyway, so a hyphenated name still tokenises correctly for the category guess.
+  n = n.replace(/[_]+/g, ' ');
+  n = n.replace(/\s*\(\d+\)\s*$/, '').replace(/\s+copy$/i, '');
+  return n.replace(/\s+/g, ' ').trim();
+}
+
+// ---------------------------------------------------------------------------
+// THE CONTROL
+// ---------------------------------------------------------------------------
+var aimpRows = [];        // { file, name, category, warn }  -- the ones that can be imported
+var aimpRejects = [];     // { filename, reason }            -- the ones that cannot
+var aimpBusy = false;
+
+function openAssetImport() {
+  aimpRows = [];
+  aimpRejects = [];
+  aimpBusy = false;
+  var inp = document.getElementById('assetimport-input');
+  if (inp) inp.value = '';
+  var m = document.getElementById('assetimport-modal');
+  if (m) m.classList.remove('hidden');
+  aimpRender();
+}
+
+function closeAssetImport() {
+  if (aimpBusy) return;      // never yank the window out from under an import in flight
+  var m = document.getElementById('assetimport-modal');
+  if (m) m.classList.add('hidden');
+  aimpRows = [];
+  aimpRejects = [];
+}
+
+// EVERY FILE IS EITHER A ROW OR A REJECT, AND A REJECT IS SHOWN WITH ITS REASON. Ian: "flag files
+// that couldn't be consumed.. maybe wrong file types etc." A file that vanishes silently is the
+// version of this feature that makes someone count their assets twice and distrust the result.
+function aimpFilesChosen(ev) {
+  var files = (ev && ev.target && ev.target.files) ? Array.prototype.slice.call(ev.target.files) : [];
+  aimpRows = [];
+  aimpRejects = [];
+  if (!files.length) { aimpRender(); return; }
+
+  if (files.length > AIMP_MAX_FILES) {
+    var extra = files.slice(AIMP_MAX_FILES);
+    files = files.slice(0, AIMP_MAX_FILES);
+    extra.forEach(function (f) {
+      aimpRejects.push({ filename: f.name, reason: 'Over the ' + AIMP_MAX_FILES + '-file limit for one import.' });
+    });
+  }
+
+  var seen = {};
+  files.forEach(function (f) {
+    if (!isSupportedUploadImage(f)) { aimpRejects.push({ filename: f.name, reason: UPLOAD_TYPE_MSG }); return; }
+    if (f.size > AIMP_MAX_BYTES) { aimpRejects.push({ filename: f.name, reason: AIMP_SIZE_MSG }); return; }
+    var name = aimpNameFromFile(f.name);
+    if (!name) { aimpRejects.push({ filename: f.name, reason: 'That file name is empty once the extension is removed.' }); return; }
+    var warn = '';
+    // TD-663. Asset names are matched into panels by name, and the matcher is an unbounded
+    // substring test, so a two-letter name reaches into words it has nothing to do with. Warned
+    // rather than blocked -- the user may have meant it, and blocking somebody's own file name is
+    // not this control's business.
+    if (name.length < AIMP_MIN_NAME) warn = 'Very short names can match inside other words -- consider something longer.';
+    var key = name.toLowerCase();
+    if (seen[key]) warn = 'Another file in this import has the same name.';
+    seen[key] = 1;
+    aimpRows.push({ file: f, name: name, category: aimpGuessCategory(name), warn: warn });
+  });
+  aimpRender();
+}
+
+function aimpSetName(i, v) { if (aimpRows[i]) aimpRows[i].name = String(v || '').trim(); aimpUpdateFooter(); }
+function aimpSetCat(i, v) { if (aimpRows[i]) aimpRows[i].category = v || ''; aimpRender(); }
+function aimpDrop(i) { if (!aimpBusy) { aimpRows.splice(i, 1); aimpRender(); } }
+
+function aimpUnsetCount() {
+  var n = 0;
+  aimpRows.forEach(function (r) { if (!r.category) n++; });
+  return n;
+}
+
+function aimpEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function aimpRender() {
+  var body = document.getElementById('assetimport-body');
+  if (!body) return;
+  var h = '';
+
+  if (!aimpRows.length && !aimpRejects.length) {
+    h = '<div class="form-hint" style="text-align:center;padding:18px 4px;">' +
+        'Choose image files and each one becomes an asset, named after the file.' +
+        '<br />JPG, PNG or WebP, up to ' + AIMP_MAX_FILES + ' at a time. Nothing here costs a token.</div>';
+    body.innerHTML = h;
+    aimpUpdateFooter();
+    return;
+  }
+
+  if (aimpRows.length) {
+    h += '<div class="form-hint" style="margin-bottom:6px;">' + aimpRows.length +
+         ' file' + (aimpRows.length === 1 ? '' : 's') + ' ready. Check the names and categories before importing.</div>';
+    aimpRows.forEach(function (r, i) {
+      var unset = !r.category;
+      var border = unset ? 'border-left:3px solid var(--gold);' : 'border-left:3px solid transparent;';
+      h += '<div class="aimp-row" style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 6px;' + border + '">' +
+        '<input class="form-input" style="flex:2;min-width:0;" value="' + aimpEsc(r.name) + '" ' +
+          'oninput="aimpSetName(' + i + ', this.value)" aria-label="Asset name" />' +
+        '<select class="form-input" style="flex:1.4;min-width:0;" onchange="aimpSetCat(' + i + ', this.value)" aria-label="Category">' +
+          '<option value=""' + (unset ? ' selected' : '') + '>&mdash; pick a category &mdash;</option>' +
+          '<option value="location"' + (r.category === 'location' ? ' selected' : '') + '>Location</option>' +
+          '<option value="npc"' + (r.category === 'npc' ? ' selected' : '') + '>Supporting Character / NPC</option>' +
+          '<option value="item"' + (r.category === 'item' ? ' selected' : '') + '>Item</option>' +
+        '</select>' +
+        '<button class="panel-pill" onclick="aimpDrop(' + i + ')" title="Do not import this one">&#10005;</button>' +
+      '</div>';
+      if (r.warn) {
+        h += '<div class="form-hint" style="margin:0 0 4px 9px;color:var(--gold);">' + aimpEsc(r.warn) + '</div>';
+      }
+    });
+  }
+
+  if (aimpRejects.length) {
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(245,232,200,0.15);">' +
+         '<div class="form-hint" style="color:var(--gold);font-weight:600;">' + aimpRejects.length +
+         ' file' + (aimpRejects.length === 1 ? '' : 's') + ' could not be used:</div>';
+    aimpRejects.forEach(function (x) {
+      h += '<div class="form-hint" style="margin-left:6px;">' + aimpEsc(x.filename) + ' &mdash; ' + aimpEsc(x.reason) + '</div>';
+    });
+    h += '</div>';
+  }
+
+  body.innerHTML = h;
+  aimpUpdateFooter();
+}
+
+// The Import button is DISABLED while any row has no category. That is the whole point of flagging
+// rather than defaulting: the user cannot walk past the question by accident.
+function aimpUpdateFooter() {
+  var btn = document.getElementById('assetimport-go');
+  var note = document.getElementById('assetimport-note');
+  if (!btn) return;
+  var unset = aimpUnsetCount();
+  var n = aimpRows.length;
+  btn.disabled = aimpBusy || !n || unset > 0;
+  btn.textContent = aimpBusy ? 'Importing...' : (n ? ('Import ' + n + ' asset' + (n === 1 ? '' : 's')) : 'Import');
+  if (note) {
+    note.textContent = unset
+      ? (unset + ' file' + (unset === 1 ? '' : 's') + ' need' + (unset === 1 ? 's' : '') + ' a category before importing.')
+      : '';
+  }
+}
+
+// Sequential on purpose: each POST runs the server's own asset cap check and its own R2 upload, and
+// a progress line that counts up is worth more than a few seconds saved. A failure does not stop
+// the run -- the rest still import and the failures are listed at the end by name.
+async function aimpRun() {
+  if (aimpBusy || !aimpRows.length || aimpUnsetCount() > 0) return;
+  if (!state.currentCampaign || !state.currentCampaign.id) { showAlert('Open a campaign first.'); return; }
+  aimpBusy = true;
+  aimpUpdateFooter();
+
+  var body = document.getElementById('assetimport-body');
+  var total = aimpRows.length;
+  var done = 0, failed = [];
+
+  for (var i = 0; i < aimpRows.length; i++) {
+    var r = aimpRows[i];
+    if (body) {
+      body.innerHTML = '<div class="form-hint" style="text-align:center;padding:24px 4px;">Importing ' +
+        (done + 1) + ' of ' + total + '<br />' + aimpEsc(r.name) + '</div>';
+    }
+    var fd = new FormData();
+    fd.append('name', r.name);
+    fd.append('category', r.category);
+    fd.append('description', '');
+    fd.append('image', r.file);
+    var data = null;
+    try {
+      var resp = await fetch('/api/campaigns/' + state.currentCampaign.id + '/assets', { method: 'POST', body: fd });
+      data = await resp.json();
+    } catch (e) {
+      data = { error: 'Could not reach the server.' };
+    }
+    if (data && data.error) {
+      failed.push({ name: r.name, reason: data.error });
+    } else if (data && data.id != null) {
+      state.assets = (state.assets || []);
+      state.assets.push(data);
+      _syncReviewAsset('upsert', data);
+      done++;
+    } else {
+      failed.push({ name: r.name, reason: 'The server did not return the new asset.' });
+    }
+  }
+
+  aimpBusy = false;
+  renderAssets();
+
+  var m = document.getElementById('assetimport-modal');
+  if (m) m.classList.add('hidden');
+  aimpRows = [];
+  aimpRejects = [];
+
+  // ONE HONEST SENTENCE, INCLUDING THE FAILURES BY NAME. "Some of them worked" is the shrug this
+  // project keeps writing down as a fault (TD-587): a result that does not say which is worse than
+  // no result, because the reader has to go and count.
+  if (!failed.length) {
+    showAlert(done + ' asset' + (done === 1 ? '' : 's') + ' imported.');
+  } else {
+    var NL = String.fromCharCode(10);
+    var msg = done + ' of ' + total + ' imported.' + NL + NL + 'These did not:' + NL;
+    failed.slice(0, 10).forEach(function (f) { msg += NL + f.name + ' — ' + f.reason; });
+    if (failed.length > 10) msg += NL + '...and ' + (failed.length - 10) + ' more.';
+    await uiConfirm(msg, { title: 'Import finished with problems', hideCancel: true, okText: 'OK', preserveLines: true });
+  }
 }
 
 function openAssetModal(assetId) {
