@@ -225,14 +225,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Glass dark panels for all views except campaigns */
 #view-sessions,#view-characters,#view-novel,
-#view-session-detail,#view-settings{
+/* v3.0.915 -- #view-assets joins the group it should always have been in. Without the
+   panel behind it the page's text sat straight on the background image. */
+#view-session-detail,#view-settings,#view-assets{
   background:rgba(12,8,4,0.72);
   min-height:calc(100vh - 44px - 35px);
   backdrop-filter:blur(10px);
 }
 #view-sessions .page-title,#view-characters .page-title,
 #view-novel .page-title,#view-session-detail .page-title,
-#view-settings .page-title{
+#view-settings .page-title,#view-assets .page-title{
   color:var(--gold);font-family:var(--font-display);letter-spacing:1px;
 }
 #view-sessions .page-subtitle,#view-characters .page-subtitle,
@@ -2597,6 +2599,17 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .asset-card-name{font-weight:600;color:var(--gold-light);font-size:14px;line-height:1.3;word-break:break-word;}
 .asset-card-cls{font-size:12px;color:rgba(201,168,76,0.6);margin-top:2px;}
 .asset-grid .add-char-card{min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border-radius:var(--radius-lg);}
+/* v3.0.915 -- LEGIBILITY, the half the theme groups above do not cover.
+   The subtitle is deliberately brighter than its siblings' 0.5 gold because it is the line
+   Ian named. The two cards are BOTH .add-char-card inside .asset-grid -- the one standing in
+   app.html before the first render and the one renderAssets() writes -- so a single rule
+   reaches all four without the twins having to agree about anything. The plus glyph had no
+   size rule at all here and was inheriting the card's 12px, which is most of why it read as
+   faint rather than small. */
+#view-assets .page-subtitle{color:rgba(232,213,163,0.78);}
+.asset-grid .add-char-card{border:2px dashed rgba(201,168,76,0.5);color:rgba(232,213,163,0.85);background:rgba(28,20,8,0.72);}
+.asset-grid .add-char-card:hover{border-color:var(--gold);color:var(--gold-light);background:rgba(48,34,12,0.8);}
+.asset-grid .add-char-card .plus{font-size:30px;line-height:1;color:var(--gold);}
 /* Asset pills are always visible (storyboard pills default to opacity:0 and rely
    on a .storyboard-panel hover rule that does not apply here). Keep them overlaid
    even on mobile, where the shared rule would otherwise push them below the image. */

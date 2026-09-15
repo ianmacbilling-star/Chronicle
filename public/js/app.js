@@ -5875,7 +5875,9 @@ var AIMP_WORDS_LOCATION = ('tavern inn alehouse castle keep fort fortress tower 
   'quarry farm farmhouse field orchard garden courtyard kitchen bedroom parlour parlor house home ' +
   'cabin lodge manor mansion palace citadel prison jail dungeons arena stadium academy school ' +
   'hospital clinic office station street alley cellar attic basement chamber room sanctum vault ' +
-  'observatory lighthouse monastery abbey outpost waystation crossroads').split(' ');
+  'observatory lighthouse monastery abbey outpost waystation crossroads ' +
+  // v3.0.915 -- everyday and modern places, because this product is not only fantasy any more
+  'classroom playground gym gymnasium cafeteria surgery clinic ward pharmacy salon cafe diner restaurant bakery shop store supermarket mall park playroom nursery daycare church chapel hall stadium pitch court rink pool beachfront driveway porch backyard yard basement garage shed treehouse campsite hotel motel airport terminal platform carpark ').split(' ');
 
 var AIMP_WORDS_ITEM = ('sword blade greatsword axe hammer mace flail spear lance pike bow crossbow ' +
   'arrow quiver dagger knife staff wand rod sceptre scepter orb potion elixir vial flask scroll ' +
@@ -5884,7 +5886,9 @@ var AIMP_WORDS_ITEM = ('sword blade greatsword axe hammer mace flail spear lance
   'map chart key keys gem gemstone jewel crystal shard coin coins gold treasure hoard chest crate ' +
   'barrel lantern torch candle horn flute lute harp drum banner flag standard letter note parchment ' +
   'contract ticket badge medal trophy cup goblet chalice bottle jar bag pack pouch satchel rope ' +
-  'chain lockpick tool tools kit compass hourglass mirror').split(' ');
+  'chain lockpick tool tools kit compass hourglass mirror ' +
+  // v3.0.915 -- everyday objects, same reason
+  'phone laptop camera guitar bicycle bike skateboard backpack lunchbox teddy doll toy ball trophy certificate diploma recipe cookbook kettle teapot mug plate spoon toothbrush wheelchair crutches glasses inhaler bandage plaster suitcase passport').split(' ');
 
 var AIMP_WORDS_NPC = ('king queen prince princess lord lady sir dame baron duke duchess captain ' +
   'sergeant guard guardsman soldier knight squire wizard mage sorcerer sorceress witch warlock ' +
@@ -5896,19 +5900,57 @@ var AIMP_WORDS_NPC = ('king queen prince princess lord lady sir dame baron duke 
   'zombie skeleton lich vampire werewolf golem elemental slime mimic hag banshee minotaur ' +
   'centaur satyr fairy sprite pixie mr mrs ms dr uncle aunt auntie grandma grandpa granny nana ' +
   'papa mum mom dad father mother brother sister cousin nephew niece friend neighbour neighbor ' +
-  'the-cat the-dog').split(' ');
+  // v3.0.915 -- RACES AND CLASSES. "Halfling Archer" was a miss in Ian's real import and it is
+  // the most guessable kind of name there is: it says what the thing is twice.
+  'halfling elf elves dwarf dwarves gnome tiefling dragonborn tabaxi aasimar genasi goliath firbolg kenku triton changeling warforged archer fighter barbarian paladin ranger artificer swashbuckler berserker duelist ' +
+  // v3.0.915 -- the common bestiary. NOT exhaustive and never will be, which is exactly why the
+  // batched pass exists: Aboleth, Manes, Boneclaw and Tabaxi were all misses, and a list long
+  // enough to hold every creature in every system is a list nobody maintains.
+  'aboleth beholder owlbear displacer mimic gelatinous flumph modron slaad githyanki githzerai umberhulk otyugh roper bulette chimera manticore basilisk cockatrice gorgon harpy medusa naga sphinx treant ent unicorn pegasus griffon hippogriff wyvern roc kraken beholder illithid mindflayer duergar drow svirfneblin quaggoth grell darkmantle ghoul ghast wight mummy revenant boneclaw manes quasit imp succubus incubus erinyes balor marilith hezrou vrock nalfeshnee glabrezu barlgura dretch ').split(' ');
 
 function aimpWords(s) {
   return String(s || '').toLowerCase().split(/[^a-z]+/).filter(function (w) { return w.length > 1; });
 }
 
 // '' when it cannot tell. Never falls through to a category.
+// v3.0.915 -- INVENTED PLACE NAMES. A word list can never hold "Thornwood" or "Ravenshire",
+// but English place names are built out of a small set of endings and those ARE listable. Tested
+// on the whole word and only when the stem is long enough, so "bury" does not make "bury" a
+// place and "instead" is not a homestead.
+//
+// DELIBERATELY MISSING: -ton, -watch and -mere, the three that collide with ordinary English
+// hardest -- skeleton, carton, button, stopwatch, cashmere. A suffix that turns a monster into
+// a location is worse than one that misses Brighton, because a miss goes to the batched pass
+// and then to the person still flagged, while a wrong hit is imported silently.
+var AIMP_PLACE_SUFFIX = ('wood burg bury ville shire haven heim gard port ford bridge field dale moor fell crest hold gate spire stead keep falls reach vale glen holm thorpe wick caster chester minster').split(' ');
+function aimpLooksLikePlace(w) {
+  for (var i = 0; i < AIMP_PLACE_SUFFIX.length; i++) {
+    var sfx = AIMP_PLACE_SUFFIX[i];
+    if (w.length >= sfx.length + 3 && w.slice(-sfx.length) === sfx) return true;
+  }
+  return false;
+}
+
+// v3.0.915 -- PHRASES, which the word scorer cannot see because it works one word at a time.
+// "Bill Lineweaver Head Shot2" was a miss: head and shot mean nothing apart and a person
+// together. A phrase hit is decisive -- somebody labelling a file a headshot has told us.
+// NO TRAILING \b: Ian's own file was "Bill Lineweaver Head Shot2", and "shot\b" cannot match
+// "Shot2" because a digit is a word character. A trailing boundary would have made this rule
+// miss the exact file that motivated it.
+var AIMP_PHRASE_NPC = /\bhead[\s_-]*shot|\bmug[\s_-]*shot|\bportrait|\bselfie|\bprofile[\s_-]*pic/i;
+
 function aimpGuessCategory(name) {
+  if (AIMP_PHRASE_NPC.test(String(name || ''))) return 'npc';
   var words = aimpWords(name);
   if (!words.length) return '';
   var score = { location: 0, npc: 0, item: 0 };
   words.forEach(function (w) {
+    // v3.0.915 -- the suffix rule is a FALLBACK FOR UNKNOWN WORDS ONLY. A word any list already
+    // knows is never re-read as a place, which is what keeps "passport" an item.
+    var _known = AIMP_WORDS_LOCATION.indexOf(w) !== -1 || AIMP_WORDS_NPC.indexOf(w) !== -1 ||
+                 AIMP_WORDS_ITEM.indexOf(w) !== -1;
     if (AIMP_WORDS_LOCATION.indexOf(w) !== -1) score.location++;
+    else if (!_known && aimpLooksLikePlace(w)) score.location++;   // Thornwood, Ravenshire
     if (AIMP_WORDS_NPC.indexOf(w) !== -1) score.npc++;
     if (AIMP_WORDS_ITEM.indexOf(w) !== -1) score.item++;
   });
@@ -5926,7 +5968,10 @@ function aimpGuessCategory(name) {
   if (tied) {
     var last = '';
     words.forEach(function (w) {
-      if (AIMP_WORDS_LOCATION.indexOf(w) !== -1) last = 'location';
+      // v3.0.915 -- the exact mirror of the scorer above: suffix only where nothing knows the word.
+      if (AIMP_WORDS_LOCATION.indexOf(w) !== -1 ||
+          (AIMP_WORDS_NPC.indexOf(w) === -1 && AIMP_WORDS_ITEM.indexOf(w) === -1 &&
+           aimpLooksLikePlace(w))) last = 'location';
       if (AIMP_WORDS_NPC.indexOf(w) !== -1) last = 'npc';
       if (AIMP_WORDS_ITEM.indexOf(w) !== -1) last = 'item';
     });
@@ -5979,7 +6024,7 @@ function closeAssetImport() {
 // EVERY FILE IS EITHER A ROW OR A REJECT, AND A REJECT IS SHOWN WITH ITS REASON. Ian: "flag files
 // that couldn't be consumed.. maybe wrong file types etc." A file that vanishes silently is the
 // version of this feature that makes someone count their assets twice and distrust the result.
-function aimpFilesChosen(ev) {
+async function aimpFilesChosen(ev) {
   var files = (ev && ev.target && ev.target.files) ? Array.prototype.slice.call(ev.target.files) : [];
   aimpRows = [];
   aimpRejects = [];
@@ -6000,6 +6045,12 @@ function aimpFilesChosen(ev) {
     var name = aimpNameFromFile(f.name);
     if (!name) { aimpRejects.push({ filename: f.name, reason: 'That file name is empty once the extension is removed.' }); return; }
     var warn = '';
+    // v3.0.915 -- Ian's own import contained arch-1780425100880-511c893f8a3c072e: an image
+    // downloaded OUT of Campaignia and put back in. No classifier will ever do anything with
+    // that name, and neither will he when he reads the asset list in six months.
+    if (/^arch-\d{10,}-[0-9a-f]{6,}$/i.test(name)) {
+      warn = 'This looks like a file downloaded from Campaignia -- give it a real name?';
+    }
     // TD-663. Asset names are matched into panels by name, and the matcher is an unbounded
     // substring test, so a two-letter name reaches into words it has nothing to do with. Warned
     // rather than blocked -- the user may have meant it, and blocking somebody's own file name is
@@ -6008,13 +6059,72 @@ function aimpFilesChosen(ev) {
     var key = name.toLowerCase();
     if (seen[key]) warn = 'Another file in this import has the same name.';
     seen[key] = 1;
-    aimpRows.push({ file: f, name: name, category: aimpGuessCategory(name), warn: warn });
+    // v3.0.915 -- a row now remembers WHERE its category came from, so the review list can show
+    // which ones a machine guessed. 'name' = the free word test, 'ai' = the batched pass,
+    // '' = nobody has said yet.
+    var guess = aimpGuessCategory(name);
+    aimpRows.push({ file: f, name: name, category: guess, src: guess ? 'name' : '', warn: warn });
   });
+  aimpRender();
+  await aimpClassifyRemaining();
+}
+
+// ---------------------------------------------------------------------------
+// v3.0.915 -- THE BATCHED PASS, and it runs ONLY on what the free test could not place.
+//
+// Ian's real import scored 2 of 14. The twelve misses were proper nouns, D&D creatures and
+// people's names -- the one class a word list structurally cannot do. Ian, 2026-09-15, on the
+// cost: "I'm ok with the minute cost. Make it automatic."
+//
+// STILL FREE TO THE USER. No token is spent and none is quoted, because the whole feature was
+// built on that promise. It is ONE call for the whole batch and it sends NAMES, not images --
+// a few hundred tokens of Haiku, not a vision pass per file.
+//
+// AND IT IS ALLOWED TO SAY IT DOES NOT KNOW. The server drops anything outside the three
+// categories and the prompt asks it to omit rather than guess, so a name nobody can place
+// still arrives at the review list flagged. That was the rule before the model was involved
+// and the model does not get to break it.
+//
+// EVERY FAILURE PATH DEGRADES TO v3.0.914 EXACTLY: offline, a 500, a timeout, a malformed
+// reply -- the rows simply stay unset and the person picks, which is what happened before
+// this existed.
+// ---------------------------------------------------------------------------
+async function aimpClassifyRemaining() {
+  var pending = aimpRows.filter(function (r) { return !r.category; });
+  if (!pending.length) return;
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+
+  var body = document.getElementById('assetimport-body');
+  var keep = body ? body.innerHTML : '';
+  if (body) {
+    body.innerHTML = '<div class="form-hint" style="text-align:center;padding:24px 4px;">' +
+      'Working out ' + pending.length + ' more categor' + (pending.length === 1 ? 'y' : 'ies') + '...' +
+      '<br />This is free.</div>';
+  }
+
+  var map = null;
+  try {
+    var resp = await fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/classify-names', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names: pending.map(function (r) { return r.name; }) })
+    });
+    var data = await resp.json();
+    map = (data && data.map) ? data.map : null;
+  } catch (e) { map = null; }
+
+  if (map) {
+    aimpRows.forEach(function (r) {
+      if (r.category) return;
+      var g = map[r.name];
+      if (g === 'location' || g === 'npc' || g === 'item') { r.category = g; r.src = 'ai'; }
+    });
+  }
+  if (body && !aimpRows.length && keep) body.innerHTML = keep;
   aimpRender();
 }
 
 function aimpSetName(i, v) { if (aimpRows[i]) aimpRows[i].name = String(v || '').trim(); aimpUpdateFooter(); }
-function aimpSetCat(i, v) { if (aimpRows[i]) aimpRows[i].category = v || ''; aimpRender(); }
+function aimpSetCat(i, v) { if (aimpRows[i]) { aimpRows[i].category = v || ''; aimpRows[i].src = v ? 'user' : ''; } aimpRender(); }
 function aimpDrop(i) { if (!aimpBusy) { aimpRows.splice(i, 1); aimpRender(); } }
 
 function aimpUnsetCount() {
@@ -6059,6 +6169,10 @@ function aimpRender() {
         '</select>' +
         '<button class="panel-pill" onclick="aimpDrop(' + i + ')" title="Do not import this one">&#10005;</button>' +
       '</div>';
+      // v3.0.915 -- say which ones a machine chose, so a person knows where to look first.
+      if (r.src === 'ai') {
+        h += '<div class="form-hint" style="margin:0 0 4px 9px;">guessed from the name &mdash; check this one</div>';
+      }
       if (r.warn) {
         h += '<div class="form-hint" style="margin:0 0 4px 9px;color:var(--gold);">' + aimpEsc(r.warn) + '</div>';
       }
