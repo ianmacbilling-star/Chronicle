@@ -6002,9 +6002,22 @@ var aimpRows = [];        // { file, name, category, warn }  -- the ones that ca
 var aimpRejects = [];     // { filename, reason }            -- the ones that cannot
 var aimpBusy = false;
 
-function openAssetImport() {
+// v3.0.916 -- ONE place a row's preview URL is released, and ONE place the list is emptied.
+// There are THREE callers that discard the rows -- opening the window, closing it, and the end
+// of a run -- and every one of them has to revoke. That is exactly the shape §5c keeps
+// recording: a rule settled on one path and never applied to its twins. A fourth caller
+// written next month cannot forget, because there is nothing to remember.
+function aimpRevokeRow(r) {
+  if (r && r.url) { try { URL.revokeObjectURL(r.url); } catch (e) {} r.url = ''; }
+}
+function aimpClearRows() {
+  aimpRows.forEach(aimpRevokeRow);
   aimpRows = [];
   aimpRejects = [];
+}
+
+function openAssetImport() {
+  aimpClearRows();
   aimpBusy = false;
   var inp = document.getElementById('assetimport-input');
   if (inp) inp.value = '';
@@ -6017,8 +6030,7 @@ function closeAssetImport() {
   if (aimpBusy) return;      // never yank the window out from under an import in flight
   var m = document.getElementById('assetimport-modal');
   if (m) m.classList.add('hidden');
-  aimpRows = [];
-  aimpRejects = [];
+  aimpClearRows();
 }
 
 // EVERY FILE IS EITHER A ROW OR A REJECT, AND A REJECT IS SHOWN WITH ITS REASON. Ian: "flag files
@@ -6063,7 +6075,12 @@ async function aimpFilesChosen(ev) {
     // which ones a machine guessed. 'name' = the free word test, 'ai' = the batched pass,
     // '' = nobody has said yet.
     var guess = aimpGuessCategory(name);
-    aimpRows.push({ file: f, name: name, category: guess, src: guess ? 'name' : '', warn: warn });
+    // v3.0.916 -- a blob URL for the thumbnail. The file is already in memory, so the picture
+    // costs no request, no upload and no token. It MUST be revoked when the row goes away or it
+    // holds the whole image until the tab closes -- see aimpClearRows.
+    var url = '';
+    try { url = URL.createObjectURL(f); } catch (e) { url = ''; }
+    aimpRows.push({ file: f, name: name, category: guess, src: guess ? 'name' : '', warn: warn, url: url });
   });
   aimpRender();
   await aimpClassifyRemaining();
@@ -6125,7 +6142,7 @@ async function aimpClassifyRemaining() {
 
 function aimpSetName(i, v) { if (aimpRows[i]) aimpRows[i].name = String(v || '').trim(); aimpUpdateFooter(); }
 function aimpSetCat(i, v) { if (aimpRows[i]) { aimpRows[i].category = v || ''; aimpRows[i].src = v ? 'user' : ''; } aimpRender(); }
-function aimpDrop(i) { if (!aimpBusy) { aimpRows.splice(i, 1); aimpRender(); } }
+function aimpDrop(i) { if (!aimpBusy) { aimpRevokeRow(aimpRows[i]); aimpRows.splice(i, 1); aimpRender(); } }
 
 function aimpUnsetCount() {
   var n = 0;
@@ -6159,6 +6176,14 @@ function aimpRender() {
       var unset = !r.category;
       var border = unset ? 'border-left:3px solid var(--gold);' : 'border-left:3px solid transparent;';
       h += '<div class="aimp-row" style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 6px;' + border + '">' +
+        // v3.0.916 -- Ian: "add a small thumbnail of each in front of the name." FIRST in the
+        // row, because that is what he asked for and because the eye wants the picture before
+        // the label it is checking. An empty box stands in when there is no URL, so a row
+        // without a preview lines up with the rest instead of collapsing -- and an empty
+        // src attribute would resolve to the page itself and draw a broken-image icon.
+        (r.url
+          ? '<img class="aimp-thumb" src="' + aimpEsc(r.url) + '" alt="" aria-hidden="true" />'
+          : '<span class="aimp-thumb" aria-hidden="true"></span>') +
         '<input class="form-input" style="flex:2;min-width:0;" value="' + aimpEsc(r.name) + '" ' +
           'oninput="aimpSetName(' + i + ', this.value)" aria-label="Asset name" />' +
         '<select class="form-input" style="flex:1.4;min-width:0;" onchange="aimpSetCat(' + i + ', this.value)" aria-label="Category">' +
@@ -6258,8 +6283,7 @@ async function aimpRun() {
 
   var m = document.getElementById('assetimport-modal');
   if (m) m.classList.add('hidden');
-  aimpRows = [];
-  aimpRejects = [];
+  aimpClearRows();
 
   // ONE HONEST SENTENCE, INCLUDING THE FAILURES BY NAME. "Some of them worked" is the shrug this
   // project keeps writing down as a fault (TD-587): a result that does not say which is worse than
