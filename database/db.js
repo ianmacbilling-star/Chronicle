@@ -413,6 +413,26 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_brand TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_last4 TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_exp TEXT',
+    // v3.0.917 -- TD-780 Push 1. PLATINUM PASS. A one-time purchase that grants Platinum
+    // for a fixed number of months. NOTHING IN THE TREE READS THESE YET -- this batch is
+    // deliberately inert, and its guard proves it by refusing to find either name anywhere
+    // outside this file.
+    //
+    // THE PASS LIVES IN ITS OWN COLUMNS AND users.tier IS NEVER OVERWRITTEN. The free trial
+    // gets away with writing users.tier because it always lapses to copper by definition; a
+    // pass buyer may already be Silver or Gold, and overwriting would destroy the only record
+    // of what to restore. Keeping them separate makes lapse a no-op rather than a guess.
+    //
+    // AND IT IS NOT MERELY TIDIER -- IT IS LOAD-BEARING. routes/tokens.js reads users.tier to
+    // decide the MONTHLY token allotment. A pass grants ONE carry-over lump at purchase and
+    // never again, so that site must keep seeing the subscription's own tier. If the pass were
+    // written into users.tier, a pass holder would collect a Platinum allowance every month on
+    // top of the lump they already paid for, forever.
+    //
+    // NO DEFAULT ON EITHER COLUMN, for the reason spelled out on characters.height_ft above:
+    // a default would silently declare that every existing account holds a pass.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_tier TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_expires_at TIMESTAMP',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS back_cover_image_url TEXT',
