@@ -426,7 +426,9 @@ async function attachTier(req, res, next) {
     if (user) {
       await lapseTrialIfExpired(user, db);
       req.user = user;
-      req.userTier = getTier(user.tier);
+      // v3.0.918 -- ownTier, not user.tier. This is what every request sees as "my plan".
+      req.userTier = getTier(ownTier(user));
+      req.userPass = passIsLive(user) ? { tier: user.pass_tier, expires_at: user.pass_expires_at } : null;
       req.trialExpired = isTrialExpired(user);
     }
     next();
@@ -463,6 +465,65 @@ function maxTier(a, b) {
   return tierRank(a) >= tierRank(b) ? a : b;
 }
 
+// ============================================================================
+// v3.0.918 -- TD-780 Push 2. THE PLATINUM PASS, AND THE ONE PLACE IT IS RESOLVED.
+//
+// A pass is a one-time purchase granting Platinum for a fixed number of months. It lives in
+// users.pass_tier / users.pass_expires_at and NEVER overwrites users.tier, because a buyer may
+// already be Silver or Gold and overwriting would destroy the only record of what to restore.
+// (It is also load-bearing: routes/tokens.js reads users.tier to size the MONTHLY allotment, and
+// a pass grants ONE lump at purchase. If the pass were written into users.tier, a pass holder
+// would collect a Platinum allowance every month on top of what they bought, forever.)
+//
+// SO users.tier NOW MEANS "what this account's SUBSCRIPTION entitles it to", AND ownTier() MEANS
+// "what tier this person actually has". Every site that asks the second question must go through
+// here. Ian, 2026-09-15: "no active pass holder should be on copper. They would still be platinum."
+//
+// TWO EXPRESSIONS OF ONE RULE, AND THEY CANNOT BE COLLAPSED.
+//   ownTier()      the JS half, for a row already in hand.
+//   sqlLivePass()  the SQL half, for bulk queries that cannot call a function per row -- the
+//                  lifecycle sweep walks every Copper in one statement.
+// This is the S5c twin shape with no way out, so the guard drives BOTH across the same matrix
+// and requires the same answer. A rule in two places that nobody compares is how this project
+// spends its afternoons.
+//
+// ONE HONEST IMPRECISION: the SQL half compares against the DATABASE's clock and the JS half
+// against the APP's. On one UTC host they agree; under skew they can disagree by seconds at the
+// instant of expiry. Nothing turns on that second -- lapse is lazy and the worst case is one more
+// request served at Platinum -- but it is written down rather than discovered later.
+// ============================================================================
+function sqlLivePass(alias) {
+  var p = alias ? (alias + '.') : '';
+  return '(' + p + 'pass_tier IS NOT NULL AND ' + p + 'pass_expires_at IS NOT NULL AND ' +
+         p + 'pass_expires_at > CURRENT_TIMESTAMP)';
+}
+
+// A row is only holding a pass if it has BOTH columns and the date is still ahead. `now` is
+// injectable so the guard can stand on both sides of an expiry boundary without sleeping.
+function passIsLive(row, now) {
+  if (!row || !row.pass_tier || !row.pass_expires_at) return false;
+  var raw = row.pass_expires_at;
+  var ms = (raw instanceof Date) ? raw.getTime() : Date.parse(String(raw));
+  if (!isFinite(ms)) return false;   // an unparseable date is NOT a live pass
+  return ms > (now == null ? Date.now() : now);
+}
+
+// The answer to "what tier is this person". Takes the HIGHER of the account tier and a live
+// pass, so a pass can only ever lift somebody -- a Gold subscriber who buys a Platinum pass is
+// Platinum, and a Platinum subscriber holding some lesser pass stays Platinum.
+function ownTier(row, now) {
+  var base = (row && row.tier) || 'copper';
+  if (!passIsLive(row, now)) return base;
+  // A pass_tier that is not a real tier is refused rather than trusted. BE HONEST ABOUT WHAT
+  // THIS DOES: today it changes no answer, because tierRank() returns `t.rank || 1` and so an
+  // unknown name ranks 1, which never beats a real tier -- maxTier already discards it. It is
+  // here for the day somebody tidies that `|| 1` away, at which point an unknown pass_tier
+  // would start winning against the Free Trial. The guard asserts this line at the source
+  // rather than by behaviour, because there is no behaviour to assert yet.
+  if (!Object.prototype.hasOwnProperty.call(TIERS, row.pass_tier)) return base;
+  return maxTier(base, row.pass_tier);
+}
+
 // A "paid" tier is any tier above the free floor -- i.e. a real subscription
 // (Silver and up, rank >= 2). Trial (rank 0) and Copper (rank 1) are free.
 function isPaidTier(tierName) {
@@ -482,8 +543,8 @@ async function canPurchaseTokens(userId) {
   const { getDb } = require('../database/db');
   try {
     const db = await getDb();
-    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
-    const myTier = (me && me.tier) || 'copper';
+    const me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+    const myTier = ownTier(me);   // v3.0.918 -- a live pass buys tokens like any paid plan
     if (isPaidTier(myTier)) return true;
     // Account-lifecycle decision: ANY copper (lone OR covered) may buy tokens.
     // Only the Free Trial (and any non-paid, non-copper) must subscribe first.
@@ -501,8 +562,10 @@ async function isLoneCopper(userId) {
   const { getDb } = require('../database/db');
   try {
     const db = await getDb();
-    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
-    const myTier = (me && me.tier) || 'copper';
+    const me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+    // v3.0.918 -- NO LIVE PASS HOLDER IS A COPPER. They are Platinum, so the account-lifecycle
+    // clock must not run on them at all. It stops here rather than in each caller.
+    const myTier = ownTier(me);
     if (myTier !== 'copper') return false;
     const paidTiers = Object.keys(TIERS).filter(function(t){ return isPaidTier(t); });
     if (!paidTiers.length) return true;
@@ -511,7 +574,9 @@ async function isLoneCopper(userId) {
       "SELECT 1 AS ok FROM campaign_members cm " +
       "JOIN campaign_members dm ON dm.campaign_id = cm.campaign_id AND dm.role = 'dm' " +
       "JOIN users u ON u.id = dm.user_id " +
-      "WHERE cm.user_id = ? AND u.tier IN (" + placeholders + ") LIMIT 1"
+      // v3.0.918 -- a Story Master covers their members on a live PASS as well as on a
+      // subscription. In SQL rather than in JS because this walks every campaign a member is in.
+      "WHERE cm.user_id = ? AND (u.tier IN (" + placeholders + ") OR " + sqlLivePass('u') + ") LIMIT 1"
     ).get([userId].concat(paidTiers));
     return !row;
   } catch (e) {
@@ -529,14 +594,22 @@ async function getEffectiveTier(userId, campaignId) {
   const { getDb } = require('../database/db');
   try {
     const db = await getDb();
-    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
-    const myTier = (me && me.tier) || 'copper';
+    // v3.0.918 -- EVERY row that decides a tier now carries the pass columns. Selecting `tier`
+    // alone is precisely how a pass holder silently becomes a Copper, because ownTier() has
+    // nothing to read and falls back to the base.
+    const me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+    const myTier = ownTier(me);
     if (!campaignId) return myTier;
+    // AND THE STORY MASTER TOO. A pass-holding SM lifts their members exactly as a subscribing
+    // one does: the member bought nothing and cannot tell the difference.
     const sm = await db.prepare(
-      "SELECT u.tier AS tier FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+      "SELECT u.tier AS tier, u.pass_tier AS pass_tier, u.pass_expires_at AS pass_expires_at " +
+      "FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
       "WHERE cm.campaign_id = ? AND cm.role = 'dm' LIMIT 1"
     ).get(campaignId);
-    const smTier = (sm && sm.tier) || myTier;
+    // the (sm && sm.tier) shape is kept so a Story Master row with no tier still falls back to
+    // my own, exactly as before -- only the pass is new.
+    const smTier = (sm && (sm.tier || sm.pass_tier)) ? ownTier(sm) : myTier;
     return maxTier(myTier, smTier);
   } catch (e) {
     return 'copper';
@@ -625,4 +698,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, canCreate, isTruePlatinum, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
