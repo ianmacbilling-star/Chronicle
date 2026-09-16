@@ -2401,7 +2401,13 @@
 
     <!-- Intro -->
     <div style="font-size:13px;color:#4a3526;margin-bottom:18px;line-height:1.55;">
-      Tokens are used to generate images &mdash; a storyboard panel, a character reference, or an amended portrait. Bigger packs give you more tokens for your money. Purchased tokens never expire.
+      <!-- v3.0.932 -- TD-781. WAS: "Tokens are used to generate images". That is wrong, and
+           wrong in the expensive direction: story generation, narrative prose and Optimize
+           are about 22% of all token spend product-wide, so somebody would generate a
+           narrative, watch the balance drop, and have been told that could not happen. The
+           non-image spend is now named rather than hedged with "and more" -- the fault was
+           a list that read as exhaustive and was not. -->
+      Tokens pay for everything Campaignia generates for you &mdash; storyboard panels, character references, narrative prose, and Optimize. Bigger packs give you more tokens for your money. Purchased tokens never expire.
     </div>
 
     <!-- The pack ladder -->
@@ -2411,6 +2417,18 @@
     <div id="token-purchase-msg" style="display:none;margin-top:18px;padding:14px 16px;border-radius:8px;font-size:13px;text-align:center;background:#f5ecd4;border:1px solid rgba(201,168,76,0.55);color:#3d2a18;line-height:1.5;"></div>
 
     <div class="modal-footer">
+      <!-- v3.0.932 -- TD-780. A QUIET WAY OUT. See the batch note: packs are the CHEAPEST fuel in
+           the product, so this is not a better-value pitch -- it is the only route from the one
+           screen that is purely about spending money to the other two things you can spend it on.
+           Deliberately .btn and not .btn-primary: Buy is the primary action here.
+
+           goToPlans() closes this modal itself before it scrolls, so there is nothing to close
+           first -- and duplicating that here would be a second place to keep it in step.
+
+           Hidden by renderTokenPacks() for anyone who CANNOT buy, because that person already
+           gets a larger "See plans" button inside the block message. Two on one screen reads as
+           nagging. -->
+      <button class="btn btn-sm" id="tokens-modal-plans-btn" onclick="goToPlans()">Plans &amp; passes</button>
       <button class="btn" onclick="closeTokensModal()">Close</button>
     </div>
   </div>

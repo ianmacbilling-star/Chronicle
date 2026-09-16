@@ -657,6 +657,16 @@ function renderTokenPacks() {
       '</div>';
   }).join('');
   wrap.innerHTML = html;
+
+  // v3.0.932 -- TD-780. THE FOOTER LINK IS HIDDEN FOR THE ONE PERSON WHO ALREADY HAS ONE. A user
+  // who cannot buy gets a full-width "See plans" button inside the block message below; showing a
+  // second one in the footer at the same time is the product asking twice.
+  //
+  // IT DEFAULTS TO VISIBLE IN THE MARKUP AND IS ONLY EVER HIDDEN HERE, which is the safe
+  // direction: if this function never runs, the person still has a way to the plans.
+  var _plansBtn = document.getElementById('tokens-modal-plans-btn');
+  if (_plansBtn) _plansBtn.style.display = canBuy ? '' : 'none';
+
   if (!canBuy) {
     var _pmsg = document.getElementById('token-purchase-msg');
     if (_pmsg) {
