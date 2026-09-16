@@ -1986,6 +1986,14 @@ function loadAccount() {
     .then(function(me) {
       if (!me || !me.authenticated) return;
       renderAccountTier(me);
+      // v3.0.929 -- TD-780 Push 6. The standing panel needs nothing but `me`; the pass cards need
+      // the catalog, so that fetch is its own and FAILS QUIETLY -- a billing page that renders
+      // nothing because a price list timed out is worse than one with no pass panel on it.
+      renderAccountStanding(me);
+      fetch('/api/public/pricing')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { renderAccountPasses(me, d); })
+        .catch(function () {});
       renderAccountPlans(me);
       var _ppn = document.getElementById('settings-penname'); if (_ppn) _ppn.value = me.penName || '';
       var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
@@ -2196,11 +2204,115 @@ function refreshUsageTokens() {
     .catch(function() {});
 }
 
+// v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE RIGHT NOW, in as many rows as it takes.
+//
+// TWO FACTS, NEVER MERGED. The account tier is what they pay for (or fall back to); the pass is
+// what sits on top of it until a date. A single "Platinum" would be true today and a surprise on
+// the morning it lapses.
+function renderAccountStanding(me) {
+  var el = document.getElementById('account-standing');
+  if (!el) return;
+  var all = me.allTiers || {};
+  var acct = me.accountTier || me.tier || 'copper';
+  var acctName = (all[acct] && all[acct].name) || acct;
+  var pass = me.pass || null;
+  var live = hasLiveSubscription(me);
+
+  function row(label, value, note) {
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;' +
+      'padding:8px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+      '<span style="font-size:12px;color:var(--text-light);">' + label + '</span>' +
+      '<span style="font-family:var(--font-display);font-size:15px;color:var(--text);text-align:right;">' +
+      value + (note ? '<span style="display:block;font-family:inherit;font-size:11px;color:var(--text-light);font-weight:400;">' + note + '</span>' : '') +
+      '</span></div>';
+  }
+
+  var html = '';
+  html += row('Your account', escapeHtml(acctName),
+    live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : ''));
+
+  if (pass && pass.expiresAt) {
+    var until = '';
+    try {
+      until = new Date(pass.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    } catch (e) { until = ''; }
+    var pName = (all[pass.tier] && all[pass.tier].name) || pass.tier;
+    html += row(escapeHtml(pName) + ' Pass', until ? ('until ' + until) : 'active',
+      'then your account returns to ' + escapeHtml(acctName));
+  }
+
+  // THE OVERLAP, STATED. Ian chose not to cancel anything automatically, which makes saying this
+  // out loud the whole of the feature: two live things, two end dates, one of them theirs to stop.
+  if (pass && live) {
+    html += '<div style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
+      'background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);font-size:12px;' +
+      'line-height:1.5;color:var(--text);">' +
+      'You have both a pass and a subscription. <b>Buying a pass does not cancel a subscription</b> ' +
+      '&mdash; yours keeps billing until you stop it yourself, using Manage subscription &amp; billing below.' +
+      '</div>';
+  }
+
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
+}
+
+// v3.0.929 -- THE PASSES, FROM THE SERVER CATALOG. Same endpoint the landing pages read, which is
+// the same catalog createPassCheckout charges from -- so this panel cannot show a price the
+// checkout will not honour. On any failure the panel simply stays hidden: an empty space is
+// better than a made-up price.
+function renderAccountPasses(me, data) {
+  var wrap = document.getElementById('account-passes-wrap');
+  var box = document.getElementById('account-passes');
+  if (!wrap || !box) return;
+  var list = (data && data.passes) || [];
+  if (!list.length) { wrap.style.display = 'none'; return; }
+
+  var live = hasLiveSubscription(me);
+  var hasPass = !!(me && me.pass);
+
+  // IAN, 2026-09-16: a live subscriber CAN buy a pass, "with the overlap spelled out". The line
+  // changes, the buttons never do.
+  var desc = document.getElementById('account-passes-desc');
+  if (desc) {
+    if (live) {
+      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. ' +
+        'Your subscription is not cancelled when you buy one \u2014 it keeps billing until you stop it ' +
+        'yourself. Any time you have already paid for is added to the pass rather than lost.';
+    } else if (hasPass) {
+      desc.textContent = 'Buying another pass extends the one you have rather than replacing it.';
+    } else {
+      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
+    }
+  }
+
+  box.innerHTML = list.map(function (p) {
+    var dollars = Number(p.price_cents) / 100;
+    var money = isFinite(dollars) ? ('$' + (dollars % 1 === 0 ? String(dollars) : dollars.toFixed(2))) : '';
+    var months = Number(p.months) || 0;
+    return '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);' +
+      'padding:16px;display:flex;flex-direction:column;">' +
+      '<div style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:#e5e4e2;">' +
+        months + (months === 1 ? ' MONTH' : ' MONTHS') + '</div>' +
+      '<div style="font-family:var(--font-display);font-size:22px;color:var(--gold);margin:8px 0 0;">' +
+        Number(p.tokens) + ' tokens</div>' +
+      '<div style="font-size:11px;color:var(--text-light);">yours to spend whenever</div>' +
+      '<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin:10px 0 0;">' + money + '</div>' +
+      '<button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%;" ' +
+        'onclick="startPassCheckout(\'' + escapeHtml(String(p.id)) + '\')">Buy this pass</button>' +
+    '</div>';
+  }).join('');
+  wrap.style.display = 'block';
+}
+
 function renderAccountPlans(me) {
   var el = document.getElementById('account-plans');
   if (!el) return;
   var all = me.allTiers || {};
-  var current = me.tier || 'copper';
+  // v3.0.929 -- TD-780 Push 6. THE ACCOUNT TIER, NOT THE EFFECTIVE ONE. me.tier is ownTier() and
+  // includes a live pass, so reading it here marked a Copper pass holder as CURRENT: Platinum --
+  // with no Manage button, because they have no subscription, and Subscribe on the tiers below it.
+  // This grid is about what they SUBSCRIBE to; the pass is shown in #account-standing above.
+  var current = me.accountTier || me.tier || 'copper';
   var order = ['copper','silver','gold','platinum'];
   var live = hasLiveSubscription(me);
 

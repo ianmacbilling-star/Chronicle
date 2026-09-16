@@ -1241,7 +1241,20 @@
         <div class="settings-section-desc">Your plan and your options</div>
         <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
         <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(184,115,51,0.12);border:1px solid rgba(184,115,51,0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
+        <!-- v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE, as two facts rather than one.
+             A pass does not replace the account tier, it sits on top of it for a while, and the
+             day it lapses the account goes back to whatever is underneath. Merging them into one
+             value hides the thing the holder most needs to know before that day. -->
+        <div id="account-standing" style="display:none;margin-top:14px;"></div>
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
+
+        <!-- v3.0.929 -- the passes. Rendered from /api/public/pricing, which is the same catalog
+             the checkout charges from, so this panel cannot quote a price Stripe will not honour. -->
+        <div id="account-passes-wrap" style="display:none;margin-top:22px;">
+          <div class="settings-section-title" style="font-size:14px;">Platinum Passes</div>
+          <div class="settings-section-desc" id="account-passes-desc">Months of Platinum access and a block of tokens, paid once. Nothing to cancel.</div>
+          <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
+        </div>
         <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
           <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
