@@ -19342,6 +19342,31 @@ function loadPassesConfig() {
     .catch(function (e) { if (box) box.textContent = 'Could not load passes: ' + e.message; });
 }
 
+// ============================================================
+// v3.0.922 -- TD-780 Push 4c. PRICE PER TOKEN. Ian, 2026-09-16: "Add Price per token... And
+// also do the same price per token on each Tier... Include the UTLT tokens on that math."
+//
+// IT IS THE STICKER PRICE DIVIDED BY THE TOKENS, AND THAT IS DELIBERATELY NOT THE SAME NUMBER
+// AS THE FINANCIAL MODEL'S TOKEN COST. The model splits a subscription two-thirds access /
+// one-third tokens, which puts a Platinum token at about 13 cents. This line does no such
+// split -- it divides the whole price by all the tokens, for every row, so a pass and a tier
+// can be read against each other on one screen. Two honest numbers answering two different
+// questions; the label says which one this is so nobody has to remember.
+//
+// THREE DECIMALS, because two collapses $0.3725 and $0.3986 into the same $0.37/$0.40 and the
+// whole point is comparing rows that sit close together.
+//
+// ONE FORMATTER FOR BOTH PANELS. The passes and the tiers ask the same question, so they get
+// the same arithmetic and the same rounding. Two copies that round differently is how one pass
+// reads $0.39 in one place and $0.40 in another.
+// ============================================================
+function pricePerToken(priceDollars, tokens) {
+  if (!isFinite(priceDollars) || !isFinite(tokens)) return '';
+  if (tokens <= 0) return 'no tokens';                       // Copper: nothing to divide by
+  if (priceDollars <= 0) return 'free (' + tokens + ' tokens)';   // Trial, and Copper's own price
+  return '$' + (priceDollars / tokens).toFixed(3) + ' per token';
+}
+
 function passPerMonth(id) {
   var pEl = document.getElementById('pcf-' + id + '-price_dollars');
   var tEl = document.getElementById('pcf-' + id + '-tokens');
@@ -19350,9 +19375,12 @@ function passPerMonth(id) {
   var months = parseInt(out.getAttribute('data-months'), 10) || 0;
   var price = parseFloat(pEl.value);
   var tokens = parseInt(tEl.value, 10);
-  if (!months || isNaN(price) || isNaN(tokens)) { out.textContent = ''; return; }
-  out.textContent = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
-    Math.round(tokens / months) + ' tokens per month';
+  if (!months || isNaN(price) || isNaN(tokens)) { out.innerHTML = ''; return; }
+  // Two lines rather than one: at a third of the panel width a single run of three figures
+  // wraps in the middle of a number, which reads as a typo.
+  out.innerHTML = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
+    Math.round(tokens / months) + ' tokens per month' +
+    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>';
 }
 
 function renderPassesConfig(data) {
@@ -19457,10 +19485,16 @@ function renderTiersConfig(data) {
         '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
+        // v3.0.922 -- recompute as you type. Bound on EVERY field rather than only the three
+        // it reads, because this renderer is driven by the server's field list and a later
+        // field that turns out to matter should not need this line changed again.
+        'oninput="tierDerived(\'' + tierKey + '\')" ' +
         'style="width:74px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
     html += '</div>';
+    // v3.0.922 -- the same readout the pass panels carry, just above the Save button.
+    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--gold);"></div>';
     html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
       '<button class="btn btn-primary btn-sm" onclick="saveTierPanel(\'' + tierKey + '\')">Save ' + (t.name || tierKey) + '</button>' +
       '<span class="settings-section-desc" id="tier-save-msg-' + tierKey + '" style="margin:0;"></span>' +
@@ -19468,6 +19502,33 @@ function renderTiersConfig(data) {
     html += '</div>';
   });
   box.innerHTML = html;
+  (data.order || []).forEach(function (k) { tierDerived(k); });
+}
+
+// v3.0.922 -- A TIER'S MONTHLY TOKENS ARE UTLT + CO, AND IAN ASKED FOR IT THAT WAY:
+// "Include the UTLT tokens on that math." Which is right for this readout -- it is what a
+// subscriber is handed each month and what they compare against a pass. It is NOT what they
+// keep: only the CO half carries over, and roughly a quarter of the UTLT half has
+// historically expired unspent. That is a margin question and this is a shopping-comparison
+// line, so the label says "incl. UTLT" and leaves the other question to the financial model.
+function tierDerived(tierKey) {
+  var out = document.getElementById('tier-derived-' + tierKey);
+  if (!out) return;
+  function num(field) {
+    var el = document.getElementById('tcf-' + tierKey + '-' + field);
+    if (!el) return NaN;
+    var v = parseFloat(el.value);
+    return (el.value === '' || isNaN(v)) ? 0 : v;   // a blank field means zero, not broken
+  }
+  var price = num('price');
+  var utlt = num('monthly_utlt');
+  var cot = num('monthly_cot');
+  var priceEl = document.getElementById('tcf-' + tierKey + '-price');
+  if (!priceEl) { out.innerHTML = ''; return; }   // this tier has no price field to divide
+  var tokens = utlt + cot;
+  out.innerHTML = tokens + ' tokens per month (' + utlt + ' UTLT + ' + cot + ' CO)' +
+    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
+    (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
 }
 
 function saveTierPanel(tierKey) {
