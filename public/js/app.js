@@ -2418,10 +2418,19 @@ function renderAccountPlans(me) {
   var order = ['copper','silver','gold','platinum'];
   var live = hasLiveSubscription(me);
 
+  // v3.0.934 -- A PASS HOLDER WITH NO SUBSCRIPTION HAS NO CURRENT PLAN IN THIS GRID.
+  // Ian: "if they are on a pass... can you NOT highlight the copper subscription panel."
+  // Not `current === 'copper'`: a subscriber holding a pass is still being billed and still needs
+  // their Manage button, and that is the one control that stops the billing.
+  var passOnly = !!(me.pass && me.pass.expiresAt) && !live;
+
   el.innerHTML = order.map(function(key) {
     var t = all[key];
     if (!t) return '';
     var isCurrent = (key === current);
+    // v3.0.934 -- DISPLAY ONLY. isCurrent still decides which action button this card gets and
+    // must not be redefined; this decides only whether the card is dressed as the one they are on.
+    var markCurrent = isCurrent && !passOnly;
     var col = TIER_COLORS[key] || TIER_COLORS.copper;
     var priceText = t.price ? ('$' + t.price + '<span style="font-size:11px;color:var(--text-light);">/mo</span>') : 'Free';
     var action = '';
@@ -2435,16 +2444,23 @@ function renderAccountPlans(me) {
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
-    return '<div style="border:1px solid ' + (isCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
+    return '<div style="border:1px solid ' + (markCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
-      (isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
+      (markCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
           (t.name || key).toUpperCase() + '</span>' +
-        (isCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
+        (markCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
       '</div>' +
       '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0;">' + priceText + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);line-height:1.5;">' + (t.description || '') + '</div>' +
+      // v3.0.934 -- one quiet line where the CURRENT badge used to be, on the card it is about.
+      // 10px on --text-light is 3.09:1 and BELOW the 4.5:1 floor, which is why this carries no
+      // information that is not already stated at full contrast in WHERE YOU STAND directly above.
+      // It is a footnote to a fact, not the place the fact is made.
+      ((passOnly && isCurrent) ? '<div style="font-size:10px;color:var(--text-light);' +
+        'line-height:1.4;margin-top:6px;font-style:italic;">where your account returns when your ' +
+        'pass ends</div>' : '') +
       action +
     '</div>';
   }).join('');
