@@ -2339,6 +2339,9 @@ function renderAccountStanding(me) {
   // are on today. DERIVED, NOT TYPED: 'copper' is a key into the same allTiers catalog that names
   // every other tier on this panel, so a rename lands here too.
   var _subOutlivesPass = live && !me.cancelAtPeriodEnd;
+  // v3.0.938 -- one phrase, two callers, so the row and the note cannot disagree about whether
+  // there is another payment coming.
+  var _billNote = me.cancelAtPeriodEnd ? 'ending' : 'billed monthly';
   var fallbackKey = _subOutlivesPass ? acct : 'copper';
   var fallbackName = (all[fallbackKey] && all[fallbackKey].name) || fallbackKey;
 
@@ -2363,10 +2366,13 @@ function renderAccountStanding(me) {
   // a Gold subscriber reading PLATINUM still needs to see that Gold is what bills them.
   html += row('Your account', escapeHtml(ownName),
     raisedByPass
-      ? (live ? 'by pass \u2014 ' + escapeHtml(acctName) + ' subscription, billed monthly'
+      // v3.0.938 -- A SUBSCRIPTION THAT IS ENDING IS NOT "BILLED MONTHLY". Ian's screenshot had
+      // this row reading "Silver subscription, billed monthly" directly above "Subscription ends
+      // October 9, 2026". No date is repeated here -- the row below owns it.
+      ? (live ? 'by pass \u2014 ' + escapeHtml(acctName) + ' subscription, ' + _billNote
               : (acct === 'copper' ? 'by pass \u2014 no subscription'
                                    : 'by pass \u2014 your account is ' + escapeHtml(acctName)))
-      : (live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : '')));
+      : (live ? _billNote : (acct === 'copper' ? 'no subscription' : '')));
 
   // v3.0.931 -- WHEN THE NEXT THING HAPPENS. Ian: "If they have a subscription it should say
   // Next billing date: xxx." A pending cancel replaces it rather than adding a row, because on a
@@ -2540,6 +2546,15 @@ function renderAccountPlans(me) {
   // their Manage button, and that is the one control that stops the billing.
   var passOnly = !!(me.pass && me.pass.expiresAt) && !live;
 
+  // v3.0.938 -- TD-792. NO PLAN CHANGES ON A SUBSCRIPTION THAT IS ALREADY ENDING UNDER A PASS.
+  // Ian: "hide the buttons if you have a subscription ending and are on a pass."
+  //
+  // DELIBERATELY NOT passOnly, AND DELIBERATELY NOT "any pass holder". Those are three different
+  // people and only this one has nothing to gain: a pass holder with NO subscription is lining one
+  // up for when the pass runs out and keeps Subscribe, and a pass holder whose subscription is NOT
+  // ending is paying twice, for whom a downgrade is a real way to spend less.
+  var subEndingUnderPass = !!(me.pass && me.pass.expiresAt) && live && !!me.cancelAtPeriodEnd;
+
   el.innerHTML = order.map(function(key) {
     var t = all[key];
     if (!t) return '';
@@ -2552,7 +2567,10 @@ function renderAccountPlans(me) {
     var action = '';
     if (key !== 'copper' && !isCurrent && !live) {
       action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="subscribeTier(&#39;' + key + '&#39;)">Subscribe</button>';
-    } else if (key !== 'copper' && !isCurrent && live) {
+    // v3.0.938 -- and NOT when the subscription is already ending under a pass. Only this branch
+    // is gated: the Manage branch below it is the Stripe portal, which is exactly where somebody
+    // whose subscription is stopping may want to go.
+    } else if (key !== 'copper' && !isCurrent && live && !subEndingUnderPass) {
       // TF-15: in-place plan change for an existing subscriber (proration on next invoice).
       var curIdx = order.indexOf(current), thisIdx = order.indexOf(key);
       var swLabel = (thisIdx > curIdx) ? ('Upgrade to ' + (t.name || key)) : ('Switch to ' + (t.name || key));
