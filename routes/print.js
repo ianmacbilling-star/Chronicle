@@ -30,7 +30,7 @@ const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErr
 // failed price leaves a record naming the cause. routes/debug requires only the database
 // and the auth middleware, so there is no cycle.
 const { logDebug } = require('./debug');
-const { getTier } = require('../middleware/tiers');
+const { getTier, ownTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
@@ -670,8 +670,11 @@ router.post('/order', requireSession, async function (req, res) {
   // bypassed. Keyed on the account tier's watermark flag.
   try {
     const _wdb = await getDb();
-    const _wu = await _wdb.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
-    const _wt = getTier((_wu && _wu.tier) || 'copper');
+    // v3.0.919 -- TD-780 Push 3. THE WORST ONE ON THE LIST IF IT IS MISSED. A pass holder
+    // whose account tier is Copper would pay for a pass, make their book, and be told at the
+    // order button that it is watermarked and cannot be printed.
+    const _wu = await _wdb.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+    const _wt = getTier(ownTier(_wu));
     if (_wt && _wt.watermark) {
       return res.status(403).json({ error: "This book is watermarked and can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order." });
     }

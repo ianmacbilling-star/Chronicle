@@ -12,7 +12,7 @@
 const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
 const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail } = require('./routes/email');
-const { getTier, isLoneCopper } = require('./middleware/tiers');
+const { getTier, isLoneCopper, sqlLivePass } = require('./middleware/tiers');
 const { logDebug } = require('./routes/debug');
 
 const HOUR = 60 * 60 * 1000;
@@ -96,6 +96,10 @@ async function runMilestone(db, type, daysAgo, requireNotMember) {
     "WHERE u.trial_started_at IS NOT NULL " +
     "AND u.trial_started_at::date = (CURRENT_DATE - (? * INTERVAL '1 day'))::date " +
     "AND u.tier NOT IN ('silver','gold','platinum') " +
+    // v3.0.919 -- TD-780 Push 3. NOR anyone holding a live pass. They are Platinum; chasing
+    // them with "your trial is ending, upgrade" mail is the version of this feature that
+    // makes a paying customer think nobody is looking.
+    "AND NOT " + sqlLivePass('u') + " " +
     "AND NOT EXISTS (SELECT 1 FROM lifecycle_emails le WHERE le.user_id = u.id AND le.email_type = ?)";
   if (requireNotMember) {
     sql += " AND NOT EXISTS (SELECT 1 FROM campaign_members cm WHERE cm.user_id = u.id AND cm.role = 'player')";
@@ -167,10 +171,22 @@ async function runLifecycleSweep(db, opts) {
   if (!(graceDays >= LIFECYCLE_FLOOR_DAYS)) graceDays = LIFECYCLE_FLOOR_DAYS;
 
   // Anyone no longer copper (e.g. upgraded) shouldn't carry a lone clock.
-  try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND tier <> 'copper'").run(); } catch (e) {}
+  // v3.0.919 -- TD-780 Push 3. A LIVE PASS HOLDER IS NOT A COPPER EITHER. Ian, 2026-09-15:
+  // "no active pass holder should be on copper. They would still be platinum." Their account
+  // tier is untouched by a pass (see ownTier in middleware/tiers.js), so a bare tier test
+  // still sees 'copper' and would leave the clock running on somebody who has paid.
+  try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND (tier <> 'copper' OR " + sqlLivePass() + ")").run(); } catch (e) {}
 
+  // v3.0.919 -- TD-780 Push 3. The live-pass clause is here rather than only inside
+  // isLoneCopper() for two reasons: the sweep should not walk people it cannot act on, and
+  // the rule reads correctly at the point somebody looks at this query. (isLoneCopper has
+  // been returning false for them since v3.0.918, so the BEHAVIOUR was already right -- this
+  // makes it visible and saves the per-row call.)
+  // pass_expires_at is selected because the idle clock below has to start when the pass
+  // ended, not when they last logged in.
   const coppers = await db.prepare(
-    "SELECT id, name, email, lone_since, last_active_at, last_purchase_at, idle_warned_at FROM users WHERE tier = 'copper' AND status = 'active'"
+    "SELECT id, name, email, lone_since, last_active_at, last_purchase_at, idle_warned_at, pass_expires_at " +
+    "FROM users WHERE tier = 'copper' AND status = 'active' AND NOT " + sqlLivePass()
   ).all();
   for (let i = 0; i < coppers.length; i++) {
     const u = coppers[i];
@@ -188,8 +204,14 @@ async function runLifecycleSweep(db, opts) {
       loneSince = nowIso;
       summary.loneStamped++;
     }
-    // Clock 1 start = max(lone_since, last_active_at, last_purchase_at).
-    const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at));
+    // Clock 1 start = max(lone_since, last_active_at, last_purchase_at, pass_expires_at).
+    // v3.0.919 -- TD-780 Push 3. pass_expires_at IS THE IMPORTANT ONE HERE, and it is the
+    // reason this is not merely tidying. Somebody buys a twelve-month pass, makes their book
+    // in month one and does not come back. Their last_active_at is eleven months old when the
+    // pass finally lapses, so on the very first sweep afterwards they are already past the
+    // idle threshold and get warned immediately -- having been a paying customer the day
+    // before. Taking the pass expiry into the max starts their clock when the pass ended.
+    const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at), _ms(u.pass_expires_at));
     const ageDays = (nowMs - startMs) / 86400000;
     if (ageDays >= idleDays && !u.idle_warned_at) {
       if (opts.dryRun || !emailsEnabled) {

@@ -6,7 +6,7 @@ const { getDb, getAppSettingInt } = require('../database/db');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
-const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper } = require('../middleware/tiers');
+const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper, ownTier } = require('../middleware/tiers');
 const { listPacks } = require('../services/billing/packs');
 const { sendHelpTranscriptEmail } = require('./email');
 
@@ -147,11 +147,14 @@ router.post('/ask', requireAuth, async function(req, res) {
               utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, email, tier, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, email, tier, pass_tier, pass_expires_at, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.email = u.email || null;
-      ctx.tier = u.tier || 'unknown';
+      // v3.0.919 -- TD-780 Push 3. The help assistant answers questions about what somebody
+      // can do. Handing it the account tier would have it tell a pass holder they are on
+      // Copper, confidently, in their own words.
+      ctx.tier = (u.tier || u.pass_tier) ? ownTier(u) : 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
       ctx.in_free_trial = (u.subscription_status === 'trialing');
       ctx.vocab = u.vocab || 'ttrpg';

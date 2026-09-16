@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
@@ -308,11 +308,14 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
-    const tier = getTier(user.tier || 'copper');
+    // v3.0.919 -- TD-780 Push 3. THE FEATURES A PASS HOLDER SEES ARE THE PASS'S FEATURES.
+    // This is the read every session makes, so getting it wrong means the screen says Copper
+    // while the server treats them as Platinum -- and the user believes the screen.
+    const tier = getTier(ownTier(user));
     const trialExpired = isTrialExpired(user);
     // Free trial = within the 30-day window from trial_started_at and not yet
     // converted to a paid plan. Drives the on-screen trial watermark.
@@ -379,7 +382,13 @@ router.get('/me', async function(req, res) {
       name: user.name,
       email: user.email,
       id: user.id,
-      tier: user.tier || 'copper',
+      // v3.0.919 -- `tier` is what they HAVE, so existing readers stay correct with no change.
+      // accountTier and pass are ADDITIVE, for the account card in Push 6: what is theirs by
+      // subscription, and what the pass adds on top. Never merged into one value -- somebody
+      // has to be able to see that their Gold is still underneath.
+      tier: ownTier(user),
+      accountTier: user.tier || 'copper',
+      pass: passIsLive(user) ? { tier: user.pass_tier, expiresAt: user.pass_expires_at } : null,
       tierName: tier.name,
       isTester: isTester,
       tierFeatures: tier,
@@ -442,6 +451,13 @@ router.post('/suspend', async function(req, res) {
       catch (e) { console.error('Suspend: subscription cancel failed:', e.message); }
     }
 
+    // v3.0.919 -- TD-780 Push 3. A LIVE PASS IS DELIBERATELY LEFT ALONE HERE.
+    // Ian, 2026-09-16, asked directly: "nothing should happen if a pass holder hits suspend."
+    // A pass buys TIME, not usage, so the clock simply keeps running -- and a suspended account
+    // cannot sign in, so a live pass on one is inert anyway. Freezing the remaining days and
+    // restoring them on unsuspend is more generous and a great deal more state to get wrong.
+    // This comment exists so that the ABSENCE of a pass_tier write here reads as a decision
+    // rather than an oversight; the batch guard asserts nothing in this route touches them.
     // TF-05 (B): a suspended account returns on the FREE tier. Drop paid tiers
     // to copper now (idempotent with the cancel webhook); leave trial/copper as
     // is so a trial simply resumes (and lapses naturally if it expires).
