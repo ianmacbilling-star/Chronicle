@@ -20612,7 +20612,35 @@ function serializeCustomOpts(o){
 }
 function customOptsQ(ctx, prefix){
   // ctx is accepted for call-site compatibility but ignored: there is ONE unified layout now.
-  if(!customActive) return '';
+  //
+  // v3.0.939 -- TD-732. THE LAYOUT IS ALWAYS SENT. This used to open with
+  //
+  //     if(!customActive) return '';
+  //
+  // and that one line is the whole of the bug Ian reported: with no co on the URL, buildLayout
+  // takes its LEGACY PRESET arm instead of renderLayout, and the legacy presets draw narration
+  // with buildClassicTextPanel -- the tan box. Every book's FIRST preview rendered through a
+  // different engine than every preview after it.
+  //
+  // customActive IS NOT TOUCHED, and that is deliberate. It means "the reader has explicitly
+  // chosen a layout", not "send the layout", and two things still lean on that meaning:
+  // storedLayoutCo turns the saved-vs-screen mismatch comparison OFF while it is false (TD-610 --
+  // not knowing must be reported as nothing), and the Layout button reads plain "Layout" until a
+  // choice exists. Flipping the flag would have changed all three answers at once; this changes
+  // one.
+  //
+  // WHAT GETS SENT WHEN NOBODY HAS CHOSEN is CUSTOM_LAYOUT_DEFAULTS -- Picture Book, thin keyline,
+  // title bar, drop cap -- which is precisely what the Layout modal has been showing them all
+  // along. The preview finally agrees with the panel above it.
+  //
+  // AND IT REACHES THE ORDER PATH ON PURPOSE. print-interior prints the SAVED APPROVED book when
+  // the co names paired / magazine / gazette, and answers 409 optimize_required when there is
+  // none (TD-214). Before this line changed, an untouched book skipped that branch and was
+  // RE-RENDERED LIVE into the interior PDF -- a book nobody approved, which pdf.js itself calls
+  // "the worst outcome this code can produce". The refusal is not a new problem introduced here;
+  // it is an old one that was being answered by printing something worse. v3.0.422 already puts
+  // that message on the Order tab the moment it opens, in plain English, long before a card is
+  // out -- see prepareInteriorCount.
   return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts));
 }
 
