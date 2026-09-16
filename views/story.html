@@ -42,7 +42,7 @@
        tier-grid.css, so the cascade is byte-for-byte the cascade it was. And it is a stylesheet in
        the head, which blocks painting until it arrives -- so there is no flash of unstyled page,
        only one extra request on a first visit that the edge then caches. -->
-  <link rel="stylesheet" href="/css/landing.css?v=3.0.925">
+  <link rel="stylesheet" href="/css/landing.css?v=3.0.926">
   <!-- v3.0.898 -- TD-770. THE SHARED SHEET ABOVE, THIS PAGE'S OVERRIDES BELOW. Two of the
        three panel images are set in landing.css, not in this markup, so they can only be
        cleared from a stylesheet -- and clearing them HERE is what keeps index.html untouched.
@@ -192,7 +192,9 @@
        ============================================================ -->
   <div class="features-strip">
     <div class="features-strip-header">
-      <div class="features-strip-title">WHAT YOU GET — CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
+      <!-- v3.0.926 -- the leading "WHAT YOU GET —" came off when v3.0.925 put a panel of
+           that name directly above this banner. -->
+      <div class="features-strip-title">CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
     </div>
     <div class="features-strip-body">
       <div class="feature-cell">
