@@ -15,6 +15,7 @@ const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
+const { getPass, listPasses } = require('../services/billing/passes');   // v3.0.923 -- TD-780
 const stripeProvider = require('../services/billing/stripeProvider');
 const { logDebug } = require('./debug');
 const { isTesterEmail } = require('../middleware/auth');   // v3.0.672 -- TD-475
@@ -496,6 +497,58 @@ router.post('/checkout', async function(req, res) {
   }
 });
 
+// ============================================================================
+// v3.0.923 -- TD-780 Push 5. BUY A PLATINUM PASS.
+//
+// ANYBODY SIGNED IN MAY BUY ONE. Deliberately NOT gated behind canPurchaseTokens the way a token
+// pack is: a pack is fuel for an account that already has access, while a pass IS the access.
+// Gating it would mean a Copper had to subscribe before they could buy the thing that exists so
+// they do not have to subscribe.
+//
+// AN EXISTING SUBSCRIPTION IS LEFT ALONE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
+// Ian was away when this was built, so it takes the reversible option. Cancelling somebody's
+// subscription from inside a purchase flow is irreversible from their side -- they would have to
+// re-subscribe, possibly at a price that has moved -- whereas leaving it running costs at most
+// one month they can cancel themselves, and ownTier() already returns Platinum either way so
+// nothing is broken meanwhile. stripeProvider.cancelSubscriptionAtPeriodEnd() is written and
+// waiting if the answer turns out to be yes.
+// ============================================================================
+router.post('/pass-checkout', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const pass = getPass((req.body || {}).passId);
+  if (!pass) return res.status(400).json({ error: 'Unknown pass' });
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  try {
+    const db = await getDb();
+    let buyerEmail = null;
+    try {
+      const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+      buyerEmail = (u && u.email) || null;
+    } catch (e) { buyerEmail = null; }
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const session = await stripeProvider.createPassCheckout({
+      pass: pass,
+      userId: req.session.userId,
+      customerEmail: buyerEmail,
+      successUrl: base + '/app.html?pass=success',
+      cancelUrl: base + '/app.html?pass=cancel'
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
+    console.error('pass checkout error:', e && e.message);
+    await logDebug(req.session.userId, {
+      level: 'error', source: 'stripe',
+      page: '/api/tokens/pass-checkout', fn: 'createPassCheckout',
+      message: 'Stripe pass checkout failed: ' + ((e && e.message) || 'unknown'),
+      detail: stripeErrDetail(e, { passId: (pass && pass.id) || '', tokens: (pass && pass.tokens) || '' })
+    });
+    res.status(500).json({ error: friendlyError(e, "We couldn't start your pass purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.") });
+  }
+});
+
 // POST /api/tokens/subscribe -- start a hosted Checkout for a paid-tier subscription.
 // body: { tier } (silver|gold|platinum). The recurring Price is resolved SERVER-side
 // from STRIPE_TIER_PRICES; the client never supplies a price. Returns { url }.
@@ -733,6 +786,12 @@ async function stripeWebhook(req, res) {
         // Tier subscription started: link the user; tier/status follow via
         // customer.subscription.created. (Token packs are mode:payment, below.)
         await linkSubscriptionCheckout(s);
+      } else if (s && s.metadata && s.metadata.kind === 'pass') {
+        // v3.0.923 -- TD-780 Push 5. A pass is mode:payment like a token pack, so it has to be
+        // told apart by its metadata BEFORE the fulfillCheckout fallback claims it -- that path
+        // looks up md.pack_id, would find nothing, and would return having granted nothing at
+        // all. Money taken, silence.
+        await fulfillPassCheckout(s, event.id);
       } else if (s && s.metadata && s.metadata.kind === 'print_order') {
         // Paid book order: submit the job to the print vendor now (payment-first).
         await require('./print').fulfillPrintOrder(s, event.id);
@@ -814,6 +873,96 @@ async function fulfillCheckout(session, eventId) {
   }
 }
 // ------------------------------------------------------------
+// ============================================================================
+// v3.0.923 -- TD-780 Push 5. FULFIL A PASS PURCHASE.
+//
+// IDEMPOTENT THE SAME WAY A TOKEN PACK IS: one token_purchases row per Stripe session, checked
+// first. Stripe retries webhooks, and a doubled pass_grant is real money. The row is written
+// BEFORE the tokens are credited, so a crash between the two costs a grant rather than doubling
+// one -- the direction to fail in when only one is recoverable by hand.
+//
+// pack_tier carries 'pass:p3' rather than 'p3'. The column is a catalog id and the table is
+// purchases of tokens, which a pass is; the prefix means getPack() can never mistake one for a
+// pack, and a future query can tell them apart without a migration.
+//
+// THE QUOTE IS READ FROM THE SESSION, NOT FROM THE CATALOG. Ian edits prices and token counts
+// from the dashboard while this is live. Whoever paid agreed to the numbers that were on screen,
+// and those are the numbers Stripe carried into the metadata. Re-deriving from getPass() here
+// would hand a buyer a different allotment from the one they bought, some of the time, silently.
+// The catalog is only consulted as a fallback for a session that predates this field.
+//
+// STACKING, NOT REPLACING. A second pass extends the first rather than throwing away whatever is
+// left of it, and a subscriber's current period is absorbed too, so nobody ever loses time they
+// have already paid for:
+//     new expiry = GREATEST(now, existing pass expiry, subscription period end) + months
+// pass_tier is set immediately regardless, so a Gold subscriber who buys a Platinum pass is
+// Platinum from the moment they pay rather than when their Gold month happens to run out.
+//
+// users.tier IS NEVER TOUCHED. That is the whole data model (see ownTier in middleware/tiers.js).
+// ============================================================================
+function passStackFrom(nowMs, existingExpiry, subPeriodEnd) {
+  function ms(v) {
+    if (!v) return 0;
+    const t = (v instanceof Date) ? v.getTime() : Date.parse(String(v));
+    return isFinite(t) ? t : 0;
+  }
+  return Math.max(nowMs, ms(existingExpiry), ms(subPeriodEnd));
+}
+function passAddMonths(fromMs, months) {
+  // Calendar months, not 30-day blocks: a 12-month pass bought on the 31st of a long month lands
+  // on the same date a year later, which is what the buyer will check.
+  const d = new Date(fromMs);
+  const day = d.getUTCDate();
+  d.setUTCMonth(d.getUTCMonth() + months);
+  // setUTCMonth rolls a 31st into the next month where the target is shorter; pull it back to the
+  // last day of the intended month so 31 Jan + 1 month is 28 Feb rather than 3 March.
+  if (d.getUTCDate() < day) d.setUTCDate(0);
+  return d;
+}
+
+async function fulfillPassCheckout(session, eventId) {
+  const db = await getDb();
+  const sessionId = session.id;
+  const existing = await db.prepare('SELECT id FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
+  if (existing) return;   // already fulfilled -- Stripe is retrying
+  const md = session.metadata || {};
+  const userId = parseInt(md.user_id, 10);
+  const pass = getPass(md.pass_id);
+  if (!userId || !pass) return;
+
+  const quotedTokens = parseInt(md.quoted_tokens, 10);
+  const tokens = (isFinite(quotedTokens) && quotedTokens >= 0) ? quotedTokens : pass.tokens;
+  const quotedMonths = parseInt(md.quoted_months, 10);
+  const months = (isFinite(quotedMonths) && quotedMonths > 0) ? quotedMonths : pass.months;
+  const passTier = md.quoted_tier || pass.tier || 'platinum';
+  const paid = (session.amount_total != null) ? session.amount_total : pass.price_cents;
+
+  const insRes = await db.prepare(
+    `INSERT INTO token_purchases
+       (user_id, pack_tier, price_paid_cents, tokens_granted, stripe_session_id, stripe_payment_id, attributed_campaign_id)
+     VALUES (?, ?, ?, ?, ?, ?, NULL)`
+  ).run(userId, 'pass:' + pass.id, paid, tokens, sessionId, session.payment_intent || null);
+  const purchaseId = (insRes && insRes.lastInsertRowid) ? insRes.lastInsertRowid : null;
+
+  const row = await db.prepare('SELECT pass_expires_at, current_period_end FROM users WHERE id = ?').get(userId);
+  const fromMs = passStackFrom(Date.now(), row && row.pass_expires_at, row && row.current_period_end);
+  const until = passAddMonths(fromMs, months);
+  await db.prepare('UPDATE users SET pass_tier = ?, pass_expires_at = ? WHERE id = ?')
+    .run(passTier, until.toISOString(), userId);
+
+  // ALL OF IT AS CARRY-OVER, IN ONE LUMP. A pass buyer's whole premise is making their book when
+  // they sit down to it; a monthly drip would recreate the use-it-or-lose-it problem the pass
+  // exists to avoid. It also means routes/tokens.js's monthly grant must keep reading users.tier
+  // rather than ownTier -- otherwise a pass holder collects an allowance on top of this, forever.
+  await creditTokens(userId, tokens, {
+    bucket: 'cot', event_type: 'pass_grant', source: 'stripe',
+    related_purchase_id: purchaseId, stripe_event_id: eventId
+  });
+
+  // Account-lifecycle: a real purchase resets the lone-copper idle clock, exactly as a pack does.
+  try { await db.prepare('UPDATE users SET last_purchase_at = ? WHERE id = ?').run(new Date().toISOString(), userId); } catch (e) {}
+}
+
 // ------------------------------------------------------------
 // Subscription helpers + webhook-driven state sync.
 // ------------------------------------------------------------

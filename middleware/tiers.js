@@ -511,6 +511,21 @@ function passIsLive(row, now) {
 // The answer to "what tier is this person". Takes the HIGHER of the account tier and a live
 // pass, so a pass can only ever lift somebody -- a Gold subscriber who buys a Platinum pass is
 // Platinum, and a Platinum subscriber holding some lesser pass stays Platinum.
+// v3.0.923 -- TD-780 Push 5. THERE IS DELIBERATELY NO lapsePassIfExpired().
+//
+// The spec called for one, mirroring lapseTrialIfExpired -- a lazy write that clears the two
+// columns once a pass has run out. It is NOT built, and the reason is not caution:
+//
+// CLEARING pass_expires_at WOULD UNDO v3.0.919. The account-lifecycle sweep starts a lapsed
+// holder's idle clock at MAX(lone_since, last_active_at, last_purchase_at, pass_expires_at),
+// precisely so somebody who bought twelve months, made their book in month one and went quiet
+// is not already past the idle threshold the day their pass ends. Blank that column on lapse
+// and the term becomes zero and the fix evaporates -- for exactly the people it was written
+// for, and silently.
+//
+// Nothing needs the write anyway. passIsLive() is a date comparison, so an expired pass
+// already reads as no pass everywhere, and the admin display is better off showing WHEN it
+// ended than showing nothing. The date is the record; leave it alone.
 function ownTier(row, now) {
   var base = (row && row.tier) || 'copper';
   if (!passIsLive(row, now)) return base;

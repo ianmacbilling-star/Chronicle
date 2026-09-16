@@ -20,15 +20,22 @@
 //   id / name    NO  -- the id is referenced by Stripe metadata on every
 //                       purchase ever made; renaming it orphans history.
 //
-// PRICES AND ALLOTMENTS as decided 2026-09-16 (Ian: "$79, $149 and $279...
-// Looks a little better"). Tokens are sold at the subscription's own rate of
-// 7.50 tokens per dollar, so the entire pass premium sits on access and none of
-// it on fuel -- which is the half of the pricing that has to be sayable out loud.
+// PRICES AND ALLOTMENTS as settled 2026-09-16. $79 / $149 / $279, and 200 / 375 / 700
+// tokens, which puts all three within half a cent of $0.39 per token.
+//
+// THE COMPARISON THAT MATTERS IS PER TOKEN, and it is Ian's, not the financial model's:
+// subscriptions run about 33 cents a token and passes about 39. "You pay a little more
+// per token on the passes but not a ton more. But you aren't on the hook as long." That
+// is one number a customer already knows how to read; the two-thirds-access split in the
+// financial model is a margin tool and was never a sales story.
+//
+// THESE ARE FALLBACKS, NOT THE LIVE NUMBERS. app_settings.pass_config shadows them, and
+// the dashboard writes that. They are kept in step so that losing the row costs nothing.
 // ============================================================================
 
 const PASSES = {
   p3:  { id: 'p3',  name: '3 Month Platinum Pass',  tier: 'platinum', months: 3,  tokens: 200, price_cents: 7900 },
-  p6:  { id: 'p6',  name: '6 Month Platinum Pass',  tier: 'platinum', months: 6,  tokens: 400, price_cents: 14900 },
+  p6:  { id: 'p6',  name: '6 Month Platinum Pass',  tier: 'platinum', months: 6,  tokens: 375, price_cents: 14900 },
   p12: { id: 'p12', name: '12 Month Platinum Pass', tier: 'platinum', months: 12, tokens: 700, price_cents: 27900 }
 };
 

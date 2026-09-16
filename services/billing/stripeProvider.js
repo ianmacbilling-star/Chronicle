@@ -94,6 +94,59 @@ async function createCheckoutSession(opts) {
   return await stripe.checkout.sessions.create(params);
 }
 
+// v3.0.923 -- TD-780 Push 5. A PLATINUM PASS IS A ONE-TIME PAYMENT, so this is the token-pack
+// path with a different catalog behind it: mode 'payment', an ad-hoc price whose unit_amount is
+// computed on the SERVER, and the real Product attached only when STRIPE_PRODUCT_PASSES is set
+// (which is optional, and exists solely so a promo code can be scoped to passes).
+//
+// THE QUOTE IS FROZEN INTO THE SESSION METADATA. Ian edits pass prices and token counts from the
+// dashboard, so the catalog can legitimately change between somebody opening Checkout and paying.
+// Stripe already holds the amount they agreed to; stamping the token count beside it means the
+// webhook grants WHAT WAS QUOTED rather than whatever the catalog says when it fires.
+async function createPassCheckout(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const pass = opts.pass;
+  const params = {
+    mode: 'payment',
+    customer_creation: 'always',
+    allow_promotion_codes: true,
+    line_items: [{
+      quantity: 1,
+      price_data: Object.assign({
+        currency: 'usd',
+        unit_amount: pass.price_cents
+      }, productRef('STRIPE_PRODUCT_PASSES', 'Campaignia -- ' + pass.name + ' (' + pass.tokens + ' tokens)'))
+    }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    client_reference_id: String(opts.userId),
+    metadata: {
+      kind: 'pass',
+      user_id: String(opts.userId),
+      pass_id: pass.id,
+      // the frozen quote -- read back by fulfillPassCheckout, never re-derived
+      quoted_tokens: String(pass.tokens),
+      quoted_price_cents: String(pass.price_cents),
+      quoted_months: String(pass.months),
+      quoted_tier: String(pass.tier)
+    }
+  };
+  if (opts.customerEmail) params.customer_email = opts.customerEmail;
+  return await stripe.checkout.sessions.create(params);
+}
+
+// v3.0.923 -- TD-780 Push 5. NOT CALLED BY ANYTHING YET, and that is deliberate -- see the note
+// on the pass checkout route in routes/tokens.js. cancelSubscription() above ends a subscription
+// IMMEDIATELY and would take paid days off somebody who just spent $279; this is the variant that
+// lets the period they already bought run out. It is here so the decision is a one-line change
+// rather than a new Stripe call written under time pressure.
+async function cancelSubscriptionAtPeriodEnd(subId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
+}
+
 // Create a hosted Checkout Session for a recurring tier SUBSCRIPTION. priceId is a
 // recurring Stripe Price (resolved from STRIPE_TIER_PRICES). We stamp user_id onto
 // both the session metadata AND the resulting subscription's metadata so the
@@ -269,6 +322,7 @@ async function getSessionPromoCode(session) {
 }
 
 module.exports = {
+  createPassCheckout, cancelSubscriptionAtPeriodEnd,
   isConfigured,
   cancelSubscription,
   changeSubscriptionPrice,
