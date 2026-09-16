@@ -505,13 +505,19 @@ router.post('/checkout', async function(req, res) {
 // Gating it would mean a Copper had to subscribe before they could buy the thing that exists so
 // they do not have to subscribe.
 //
-// AN EXISTING SUBSCRIPTION IS LEFT ALONE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
-// Ian was away when this was built, so it takes the reversible option. Cancelling somebody's
-// subscription from inside a purchase flow is irreversible from their side -- they would have to
-// re-subscribe, possibly at a price that has moved -- whereas leaving it running costs at most
-// one month they can cancel themselves, and ownTier() already returns Platinum either way so
-// nothing is broken meanwhile. stripeProvider.cancelSubscriptionAtPeriodEnd() is written and
-// waiting if the answer turns out to be yes.
+// AN EXISTING SUBSCRIPTION IS STOPPED AT THE END OF ITS PERIOD. v3.0.935, TD-792.
+//
+// THIS REVERSES WHAT THIS COMMENT SAID FOR TEN VERSIONS, and the old text is worth knowing about
+// because it is the argument against: cancelling from inside a purchase flow is irreversible from
+// the buyer's side, whereas leaving it running cost at most one month they could cancel
+// themselves. v3.0.923 took the reversible option because Ian was away.
+//
+// He answered on 2026-09-16: "we don't want Campaignia to keep billing someone monthly once a
+// pass kicks in... to me that is cancelling the subscription but the account isn't suspended."
+// So a pass and a subscription are CONSECUTIVE, never concurrent.
+//
+// The cancel itself lives at the END of fulfillPassCheckout, not here -- it must happen only once
+// money has actually changed hands and the pass is written. See the note there.
 // ============================================================================
 router.post('/pass-checkout', async function(req, res) {
   if (!requireSession(req, res)) return;
@@ -944,7 +950,7 @@ async function fulfillPassCheckout(session, eventId) {
   ).run(userId, 'pass:' + pass.id, paid, tokens, sessionId, session.payment_intent || null);
   const purchaseId = (insRes && insRes.lastInsertRowid) ? insRes.lastInsertRowid : null;
 
-  const row = await db.prepare('SELECT pass_expires_at, current_period_end FROM users WHERE id = ?').get(userId);
+  const row = await db.prepare('SELECT pass_expires_at, current_period_end, stripe_subscription_id, subscription_status FROM users WHERE id = ?').get(userId);
   const fromMs = passStackFrom(Date.now(), row && row.pass_expires_at, row && row.current_period_end);
   const until = passAddMonths(fromMs, months);
   await db.prepare('UPDATE users SET pass_tier = ?, pass_expires_at = ? WHERE id = ?')
@@ -961,6 +967,60 @@ async function fulfillPassCheckout(session, eventId) {
 
   // Account-lifecycle: a real purchase resets the lone-copper idle clock, exactly as a pack does.
   try { await db.prepare('UPDATE users SET last_purchase_at = ? WHERE id = ?').run(new Date().toISOString(), userId); } catch (e) {}
+
+  // v3.0.935 -- TD-792. A PASS AND A SUBSCRIPTION NEVER BILL AT THE SAME TIME.
+  //
+  // Ian: "we don't want Campaignia to keep billing someone monthly once a pass kicks in... to me
+  // that is cancelling the subscription but the account isn't suspended." That is exactly what
+  // cancel_at_period_end is: the next charge does not happen, the current period runs out as paid,
+  // nothing is suspended and nothing is refunded.
+  //
+  // IT IS LAST IN THIS FUNCTION ON PURPOSE, AND THAT ORDERING IS THE WHOLE SAFETY OF IT. The pass
+  // is written and the tokens are credited ABOVE. Cancel first and a failure anywhere after it
+  // ends a live subscription while granting nothing -- the worst outcome this money path has. In
+  // this order the worst case is a subscription that keeps billing, which is visible, reversible
+  // and something a human can fix.
+  //
+  // AND IT CANNOT THROW PAST THIS POINT. Stripe being unreachable must not fail the webhook: the
+  // purchase is already fulfilled, and a 500 here would have Stripe retry an event whose work is
+  // done. Idempotency is free twice over -- fulfillPassCheckout returns early on a session it has
+  // already seen, and cancel_at_period_end is a set-to-true, not a toggle.
+  //
+  // THE STATUS LIST IS THE THIRD IN THIS CODEBASE AND IT IS NOT MERGED WITH THE OTHER TWO HERE.
+  // hasLiveSubscription() in app.js counts five (including paused); the change-plan path near
+  // line 620 counts four, asks STRIPE rather than our DB, and answers a different question -- can
+  // this subscription be re-priced. Folding them together would change behaviour in a billing read
+  // this batch has no business touching. Recorded instead: the convergence is its own item.
+  try {
+    const subId = row && row.stripe_subscription_id;
+    const st = (row && row.subscription_status) || '';
+    const canStillBill = ['active', 'trialing', 'past_due', 'unpaid', 'paused'].indexOf(st) !== -1;
+    if (subId && canStillBill) {
+      await stripeProvider.cancelSubscriptionAtPeriodEnd(subId);
+      // The local columns are NOT written here. customer.subscription.updated lands within
+      // seconds and syncSubscriptionToUser writes cancel_at_period_end from Stripe, and the
+      // account page calls /sync-subscription before it renders anyway. A write here would be a
+      // second source of truth for a field Stripe already owns.
+      try {
+        await logDebug(userId, {
+          level: 'info', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
+          message: 'Pass bought while subscribed -- subscription set to cancel at period end',
+          detail: { subscription: subId, status: st, pass: pass.id }
+        });
+      } catch (_le) {}
+    }
+  } catch (e) {
+    // LOUD IN THE LOG, SILENT TO STRIPE. Somebody is now holding a pass AND a live subscription,
+    // which is the state this batch exists to prevent, so it must be findable -- but the purchase
+    // succeeded and the webhook must still answer 200.
+    try {
+      await logDebug(userId, {
+        level: 'error', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
+        message: 'COULD NOT CANCEL THE SUBSCRIPTION after a pass purchase -- this user is being',
+        detail: { error: e && e.message, subscription: row && row.stripe_subscription_id }
+      });
+    } catch (_le2) {}
+  }
 }
 
 // ------------------------------------------------------------

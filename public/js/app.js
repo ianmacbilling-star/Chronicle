@@ -759,7 +759,46 @@ function hasLiveSubscription(me) {
 //
 // This function is all Push 7 needs: it completes the landing-page flow (pick a pass, sign up,
 // verify, land in the app, checkout opens). THE ACCOUNT-PAGE UI THAT ALSO CALLS IT IS PUSH 6.
+// v3.0.935 -- TD-792. The freshest /me this page has seen. See the note above startPassCheckout.
+var _cmpAccountMe = null;
+
+function _cmpMe() { return _cmpAccountMe || (typeof state !== 'undefined' && state.user) || null; }
+
 function startPassCheckout(passId) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+
+  // v3.0.935 -- TD-792. SAY IT BEFORE THEY PAY. Ian, asked whether this belongs at purchase or
+  // only afterwards on the account page: "You can say both."
+  //
+  // THE THIRD PARAGRAPH IS THE ONE THAT MATTERS AND IT IS THE EASIEST TO LEAVE OUT. Everything
+  // else here is good news -- you keep what you paid for, you are raised immediately, the clock
+  // waits. The part somebody will be unhappy about in twelve months is that their old plan does
+  // not come back, and that has to be said while they still have the choice.
+  var _me = _cmpMe();
+  var _live = hasLiveSubscription(_me);
+  if (_live && typeof uiConfirm === 'function') {
+    var _all = (_me && _me.allTiers) || {};
+    var _acct = (_me && (_me.accountTier || _me.tier)) || 'copper';
+    var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
+    var _copperName = (_all.copper && _all.copper.name) || 'Copper';
+    uiConfirm(
+      'You have a ' + _acctName + ' subscription.\n\n' +
+      'Buying a pass stops it. ' + _acctName + ' will not bill again after your current billing ' +
+      'period ends, and you keep your ' + _acctName + ' access until then.\n\n' +
+      'The pass raises your account straight away, and its clock does not start until that billing ' +
+      'period ends \u2014 so you lose none of what you have already paid for.\n\n' +
+      'When the pass runs out your account returns to ' + _copperName + ', not to ' + _acctName + '. ' +
+      'You would need to subscribe again or buy another pass.',
+      { title: 'Your subscription will stop billing', preserveLines: true,
+        okText: 'Buy the pass', cancelText: 'Not yet' }
+    ).then(function (ok) { if (ok) _startPassCheckout(passId); });
+    return;
+  }
+  _startPassCheckout(passId);
+}
+
+function _startPassCheckout(passId) {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
   fetch('/api/tokens/pass-checkout', {
@@ -782,6 +821,41 @@ function startPassCheckout(passId) {
 }
 
 function subscribeTier(tier) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+
+  // v3.0.935 -- TD-792. THE OTHER DIRECTION. Ian: warn "only when they hit a button that is about
+  // to take them to stripe to do the purchase".
+  //
+  // Stripe's own Billing Portal cannot be intercepted -- it is their page. This grid is the route
+  // a pass holder actually takes back to a subscription, so this is where it gets said, and it
+  // says the useful thing rather than the discouraging one: waiting is cheaper, and another pass
+  // stacks onto the end of this one rather than overwriting it.
+  //
+  // NOT SUPPRESSED FOR THE POST-VERIFICATION AUTO-START in maybeStartCheckout(). Somebody arriving
+  // there with a live pass is about to pay twice for the same access, which is exactly the person
+  // this dialog is for -- and a freshly verified signup has no pass, so it does not fire for them.
+  var _me = _cmpMe();
+  var _pass = _me && _me.pass;
+  if (_pass && _pass.expiresAt && typeof uiConfirm === 'function') {
+    var _all = (_me && _me.allTiers) || {};
+    var _pName = (_all[_pass.tier] && _all[_pass.tier].name) || _pass.tier;
+    var _until = (typeof _cmpNiceDate === 'function') ? _cmpNiceDate(_pass.expiresAt) : '';
+    uiConfirm(
+      'Your ' + _pName + ' pass runs ' + (_until ? ('until ' + _until) : 'for a while yet') + '.\n\n' +
+      'A subscription does not stack with it. Starting one now bills you monthly from today for ' +
+      'access your pass already gives you.\n\n' +
+      'If you want to keep going after the pass ends, it costs less to wait and subscribe then ' +
+      '\u2014 or to buy another pass, which adds its months onto the end of this one.',
+      { title: 'You already have a pass', preserveLines: true,
+        okText: 'Subscribe anyway', cancelText: 'Not now' }
+    ).then(function (ok) { if (ok) _subscribeTier(tier); });
+    return;
+  }
+  _subscribeTier(tier);
+}
+
+function _subscribeTier(tier) {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
   fetch('/api/tokens/subscribe', {
@@ -1995,6 +2069,10 @@ function loadAccount() {
     .then(function(r) { return r.json(); })
     .then(function(me) {
       if (!me || !me.authenticated) return;
+      // v3.0.935 -- TD-792. KEEP IT. Both purchase confirms need to know, at click time, whether
+      // there is a live subscription or a live pass, and state.user is whatever checkAuth() read
+      // when the page loaded -- which is stale the moment a purchase completes.
+      _cmpAccountMe = me;
       renderAccountTier(me);
       // v3.0.929 -- TD-780 Push 6. The standing panel needs nothing but `me`; the pass cards need
       // the catalog, so that fetch is its own and FAILS QUIETLY -- a billing page that renders
@@ -2255,6 +2333,15 @@ function renderAccountStanding(me) {
   var ownName = (all[own] && all[own].name) || own;
   var raisedByPass = !!(pass && pass.expiresAt && own !== acct);
 
+  // v3.0.935 -- TD-792. WHAT THEY ACTUALLY LAND ON WHEN THE PASS RUNS OUT.
+  // A subscription only survives the pass if it is still going to be there -- so a pending cancel,
+  // which is now what buying a pass causes, means the answer is Copper rather than the plan they
+  // are on today. DERIVED, NOT TYPED: 'copper' is a key into the same allTiers catalog that names
+  // every other tier on this panel, so a rename lands here too.
+  var _subOutlivesPass = live && !me.cancelAtPeriodEnd;
+  var fallbackKey = _subOutlivesPass ? acct : 'copper';
+  var fallbackName = (all[fallbackKey] && all[fallbackKey].name) || fallbackKey;
+
   // v3.0.930 -- LABEL THEN VALUE, SIDE BY SIDE. This was justify-content:space-between, which in a
   // wide settings column threw the value to the far right and left the label stranded about forty
   // characters away with nothing between them. Ian: "Move the Platinum Billed Monthly Text over
@@ -2291,7 +2378,12 @@ function renderAccountStanding(me) {
   var _problem = live && (_billStatus === 'past_due' || _billStatus === 'unpaid');
   if (live && !_problem && _when) {
     if (me.cancelAtPeriodEnd) {
-      html += row('Subscription ends', _when, 'then your account moves to Copper');
+      // v3.0.935 -- TD-792. WHO TAKES OVER. Before this batch a pending cancel could only mean
+      // Copper. Now it is usually a pass that caused the cancel in the first place, and telling
+      // that person their account 'moves to Copper' on a date they are still Platinum would be
+      // the same false alarm v3.0.933 fixed one row up.
+      html += row('Subscription ends', _when,
+        pass ? 'billing stops \u2014 your pass carries on' : 'then your account moves to Copper');
     } else {
       html += row('Next billing date', _when);
     }
@@ -2311,19 +2403,38 @@ function renderAccountStanding(me) {
     // right -- but it dropped the only place the panel said WHAT the pass grants. A Copper
     // account holding a Platinum pass would have read "Your account: Copper" and a date, and
     // nowhere learned they are Platinum today. The batch guard caught that.
+    // v3.0.935 -- fallbackName, not acctName. A Gold subscriber who buys a pass has a Gold
+    // subscription that is now cancelling, so they do NOT return to Gold -- they return to Copper.
+    // Reading acctName here would have promised them a plan that will not exist.
     html += row('Pass expires on', until || '\u2014',
-      until ? (escapeHtml(pName) + ' until then \u2014 your account returns to ' + escapeHtml(acctName)) :
+      until ? (escapeHtml(pName) + ' until then \u2014 your account returns to ' + escapeHtml(fallbackName)) :
               (escapeHtml(pName) + ' pass, no end date on file'));
   }
 
-  // THE OVERLAP, STATED. Ian chose not to cancel anything automatically, which makes saying this
-  // out loud the whole of the feature: two live things, two end dates, one of them theirs to stop.
+  // v3.0.935 -- TD-792. THIS NOTICE USED TO SAY THE OPPOSITE OF WHAT NOW HAPPENS. Until this batch
+  // it read "buying a pass does not cancel a subscription -- yours keeps billing until you stop it
+  // yourself", which was true and is now false. Left in place it would be the single most expensive
+  // sentence on the page: somebody reads it, goes hunting for a cancel button, and finds their
+  // subscription already cancelling.
+  //
+  // TWO STATES, BECAUSE THERE REALLY ARE TWO. The normal one is a cancel we caused. The other is a
+  // subscription that is live and NOT cancelling next to a pass -- a legacy overlap from before
+  // this batch, or somebody who re-subscribed past the warning on the way to Stripe. That person
+  // genuinely is paying twice and still needs the old sentence.
   if (pass && live) {
-    html += '<div style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
+    // data-cmp names this block so a check can find it by WHAT IT IS rather than by a phrase
+    // inside it. v3.0.934's check 2b looked for the words "does not cancel", and this batch
+    // legitimately rewrote them -- the third time a guard here has been anchored to prose.
+    html += '<div data-cmp="overlap-notice" style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
       'background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);font-size:12px;' +
       'line-height:1.5;color:var(--text);">' +
-      'You have both a pass and a subscription. <b>Buying a pass does not cancel a subscription</b> ' +
-      '&mdash; yours keeps billing until you stop it yourself, using Manage subscription &amp; billing below.' +
+      (me.cancelAtPeriodEnd
+        ? ('Your ' + escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the ' +
+           'current period &mdash; it will not bill again, and you keep ' + escapeHtml(acctName) + ' ' +
+           'access until then. Your pass carries you from there.')
+        : ('You have both a pass and a subscription, and <b>they do not stack</b> &mdash; your ' +
+           'subscription is billing you for access your pass already gives you. You can stop it ' +
+           'with Manage subscription &amp; billing below.')) +
       '</div>';
   }
 
