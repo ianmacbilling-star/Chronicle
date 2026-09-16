@@ -1,4 +1,5 @@
 const express = require('express');
+const { getPass } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
@@ -44,6 +45,28 @@ async function resolvePenName(db, raw, excludeUserId) {
   var clash = await db.prepare("SELECT id FROM users WHERE lower(pen_name) = lower(?) AND id <> ?").get(pen, excludeUserId || 0);
   if (clash) return { ok: false, error: "That pen name is already taken" };
   return { ok: true, value: pen };
+}
+
+// ============================================================
+// v3.0.924 -- TD-780 Push 7. WHAT MAY BE STASHED IN users.pending_plan, DECIDED ONCE.
+//
+// Returns the canonical value to store, or null to store nothing. A tier keeps its bare name so
+// no existing row changes meaning; a pass is stored as "pass:<id>".
+//
+// THE PASS BRANCH DELIBERATELY HAS NO LIST OF IDS. getPass() is the catalog the checkout charges
+// from and it returns null for anything it does not know, so an id can be added to
+// services/billing/passes.js and work here with no edit. A second list is how a landing page ends
+// up offering a pass that signup silently drops.
+// ============================================================
+function pendingPlanValue(raw) {
+  const v = (typeof raw === 'string') ? raw.trim().toLowerCase() : '';
+  if (!v) return null;
+  if (v === 'silver' || v === 'gold' || v === 'platinum') return v;
+  if (v.indexOf('pass:') === 0) {
+    const id = v.slice(5);
+    try { return getPass(id) ? ('pass:' + id) : null; } catch (e) { return null; }
+  }
+  return null;
 }
 
 router.post('/register', async function(req, res) {
@@ -115,9 +138,19 @@ router.post('/register', async function(req, res) {
     // Remember a paid-plan choice from the landing page so we can route them to
     // checkout AFTER they verify (they aren't logged in until then).
     try {
-      const _plan = (typeof plan === 'string') ? plan.toLowerCase() : '';
-      if (_plan === 'silver' || _plan === 'gold' || _plan === 'platinum') {
+      const _plan = pendingPlanValue(plan);
+      if (_plan) {
         await db.prepare('UPDATE users SET pending_plan = ? WHERE id = ?').run(_plan, newUserId);
+        // READ IT BACK. This write has always been wrapped in a non-fatal catch, which is right --
+        // a failed stash must not cost somebody their account. But it means a rejected value
+        // (a CHECK constraint, a column too narrow) disappears without a trace, and the person
+        // then signs up for a pass, verifies, lands in the app and is never taken to checkout.
+        // Confirmed TEXT with no length cap on 2026-09-16; this is the guard against it changing.
+        const _back = await db.prepare('SELECT pending_plan FROM users WHERE id = ?').get(newUserId);
+        if (!_back || _back.pending_plan !== _plan) {
+          console.error('pending_plan did not stick for user ' + newUserId +
+                        ': wanted ' + _plan + ', column holds ' + JSON.stringify(_back && _back.pending_plan));
+        }
       }
     } catch (planErr) { console.error('pending_plan store failed (non-fatal):', planErr.message); }
 
@@ -251,10 +284,14 @@ router.get('/verify', async function (req, res) {
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userEmail = user.email;
-    var _pending = (user.pending_plan || '').toLowerCase();
-    if (_pending === 'silver' || _pending === 'gold' || _pending === 'platinum') {
+    // v3.0.924 -- the SAME decision function that stored it decides how to resume it. The pass
+    // id is re-validated here rather than trusted: the catalog can have changed between signup
+    // and verification, and a pass that no longer exists should drop the person into the app
+    // rather than into a checkout that will refuse them.
+    var _pending = pendingPlanValue(user.pending_plan);
+    if (_pending) {
       try { await db.prepare('UPDATE users SET pending_plan = NULL WHERE id = ?').run(user.id); } catch (e) {}
-      return res.redirect('/app.html?verified=1&start_checkout=' + _pending);
+      return res.redirect('/app.html?verified=1&start_checkout=' + encodeURIComponent(_pending));
     }
     res.redirect('/app.html?verified=1');
   } catch (e) {

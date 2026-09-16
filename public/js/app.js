@@ -599,8 +599,13 @@ function maybeStartCheckout() {
   try {
     var q = new URLSearchParams(window.location.search);
     var plan = (q.get('start_checkout') || '').toLowerCase();
-    if (plan !== 'silver' && plan !== 'gold' && plan !== 'platinum') return;
+    if (!plan) return;
     try { history.replaceState(history.state, '', window.location.pathname); } catch (e) {}
+    // v3.0.924 -- TD-780 Push 7. NO LIST OF PASS IDS HERE EITHER. /api/tokens/pass-checkout
+    // resolves the id through the server catalog and refuses an unknown one, so a hand-typed or
+    // tampered URL cannot buy anything -- and a new pass needs no edit in this file.
+    if (plan.indexOf('pass:') === 0) { startPassCheckout(plan.slice(5)); return; }
+    if (plan !== 'silver' && plan !== 'gold' && plan !== 'platinum') return;
     subscribeTier(plan);
   } catch (e) {}
 }
@@ -732,6 +737,38 @@ function hasLiveSubscription(me) {
   if (!me || !me.hasSubscription) return false;
   var st = me.subscriptionStatus || '';
   return st === 'active' || st === 'trialing' || st === 'past_due' || st === 'unpaid' || st === 'paused';
+}
+
+// v3.0.924 -- TD-780 Push 7. START A PASS CHECKOUT. Deliberately the same shape as
+// subscribeTier below, including where it puts its error text, because the two are the same
+// action to the person taking it.
+//
+// THE ID IS PASSED THROUGH, NOT CHECKED. routes/tokens.js resolves it with getPass() and answers
+// 400 for anything it does not know -- that check is on the server because that is where the
+// money is, and a second copy here could only ever disagree with it.
+//
+// This function is all Push 7 needs: it completes the landing-page flow (pick a pass, sign up,
+// verify, land in the app, checkout opens). THE ACCOUNT-PAGE UI THAT ALSO CALLS IT IS PUSH 6.
+function startPassCheckout(passId) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+  fetch('/api/tokens/pass-checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passId: passId })
+  }).then(function(r) {
+    if (r.status === 503) {
+      show('Passes are being set up and will be available shortly.');
+      return null;
+    }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.url) { window.location = data.url; return; }
+    show((data && (data.message || data.error)) ? (data.message || data.error) : "We couldn't start your pass purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
+  }).catch(function() {
+    show('Could not reach the billing service. Please try again.');
+  });
 }
 
 function subscribeTier(tier) {

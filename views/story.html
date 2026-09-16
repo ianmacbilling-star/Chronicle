@@ -217,12 +217,17 @@
   <!-- ============================================================
        ROW 4 — Pricing + Campaignia Book Payoff
        ============================================================ -->
-  <div class="comic-row" id="pricing">
+  <!-- v3.0.924 -- TD-780 Push 7. THE PRICING PANEL TAKES THE WHOLE ROW. It used to be 42%
+       of a two-column row with the book payoff beside it, which left roughly 170px per pass
+       card. Three cards need the width, and a section that is now a trial row plus three
+       passes plus three tiers is not a sidebar list any more. The payoff and the call to
+       action move to their own row DIRECTLY BELOW, so the reading order is still plans ->
+       "this could be yours" -> BEGIN. -->
+  <div class="comic-row comic-row-pricing" id="pricing">
 
-    <!-- LEFT: Pricing -->
     <div class="panel-pricing">
       <div class="pricing-header">
-        <div class="pricing-header-title">CHOOSE YOUR TIER</div>
+        <div class="pricing-header-title">CHOOSE YOUR PATH</div>
         <div class="pricing-header-sub">Every story starts somewhere. Your 30-day trial begins on your first story.</div>
       </div>
       <div class="pricing-tiers">
@@ -237,14 +242,43 @@
           <a href="/login?signup" class="btn-tier">START FREE</a>
         </div>
 
-        <div class="tier-row tier-copper">
-          <img src="/images/Copper_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Copper" />
-          <div class="tier-info">
-            <div class="tier-name-row">COPPER</div>
-            <div class="tier-perks">Get your own version of the story · no monthly subscription · token purchases only</div>
+        <div class="plan-blurb plan-blurb-pass">
+          <b>GOT A PROJECT? GET A PASS.</b>
+          <span>Months of Platinum access and a pile of tokens, paid once. Nothing to cancel.</span>
+        </div>
+
+        <div class="pass-cards">
+          <div class="pass-card" data-pass="p3">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">3 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p3">200 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p3">$79</div>
+            <a href="/login?signup&amp;pass=p3" class="btn-tier btn-pass">GET THE 3-MONTH PASS</a>
           </div>
-          <div class="tier-price-tag" data-tier="copper"><small>Tokens only</small></div>
-          <a href="/login?signup" class="btn-tier">GET STARTED</a>
+
+          <div class="pass-card" data-pass="p6">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">6 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p6">375 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p6">$149</div>
+            <a href="/login?signup&amp;pass=p6" class="btn-tier btn-pass">GET THE 6-MONTH PASS</a>
+          </div>
+
+          <div class="pass-card" data-pass="p12">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">12 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p12">700 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p12">$279</div>
+            <a href="/login?signup&amp;pass=p12" class="btn-tier btn-pass">GET THE 12-MONTH PASS</a>
+          </div>
+        </div>
+
+        <div class="plan-blurb plan-blurb-sub">
+          <b>IN IT FOR THE LONG HAUL?</b>
+          <span>Tokens every month, at the best per-token price we offer.</span>
         </div>
 
         <div class="tier-row tier-silver">
@@ -286,7 +320,14 @@
       </div>
     </div>
 
-    <!-- RIGHT: Campaignia Book Payoff -->
+  </div>
+
+  <!-- ============================================================
+       ROW 4b — Campaignia Book Payoff + the call to action
+       (v3.0.924 -- split out of Row 4 when the pricing panel went full width.)
+       ============================================================ -->
+  <div class="comic-row">
+
     <div style="flex:1;display:flex;flex-direction:column;">
       <div class="panel panel-payoff" style="flex:1;">
         <div class="payoff-content">
@@ -367,14 +408,34 @@
 
 <script>
 (function(){
+  // v3.0.924 -- TD-780 Push 7. Money is formatted from CENTS, and a price that is not a whole
+  // number of dollars must not be rounded into one: 7950 is $79.50, never $80.
+  function _cmpDollars(cents){
+    var d=Number(cents)/100;
+    if(!isFinite(d)) return null;
+    return '$'+(d%1===0?String(d):d.toFixed(2));
+  }
   fetch('/api/public/pricing').then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.pricing) return;
-    Object.keys(d.pricing).forEach(function(tier){
-      var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
-      if(!el) return;
-      var p=Number(d.pricing[tier]);
-      if(p>0) el.innerHTML='$'+p+'<small>per month</small>';
-    });
+    if(!d) return;
+    // THE TWO HALVES ARE INDEPENDENT ON PURPOSE -- see the note in the batch.
+    if(d.pricing){
+      Object.keys(d.pricing).forEach(function(tier){
+        var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
+        if(!el) return;
+        var p=Number(d.pricing[tier]);
+        if(p>0) el.innerHTML='$'+p+'<small>per month</small>';
+      });
+    }
+    if(d.passes && d.passes.length){
+      d.passes.forEach(function(p){
+        if(!p||!p.id) return;
+        var pr=document.querySelector('.pass-card-price[data-pass-price="'+p.id+'"]');
+        var money=_cmpDollars(p.price_cents);
+        if(pr&&money) pr.textContent=money;
+        var tk=document.querySelector('.pass-card-tokens[data-pass-tokens="'+p.id+'"]');
+        if(tk&&Number(p.tokens)>0) tk.textContent=Number(p.tokens)+' tokens';
+      });
+    }
   }).catch(function(){});
 })();
 </script>

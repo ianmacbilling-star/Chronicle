@@ -586,6 +586,96 @@
     .tier-row:last-child { border-bottom: none; }
     .tier-row:hover { background: rgba(201,168,76,0.05); }
 
+    /* ============================================================
+       v3.0.924 -- TD-780 Push 7. PASSES ON THE STOREFRONT.
+
+       .panel-pricing keeps its 42% rule untouched; the full-width behaviour is added by a
+       PARENT class instead. That is deliberate -- a width this page has depended on for months
+       is not worth rewriting when one more specific selector does the job, and any other row
+       that ever wants the old proportions still has them.
+       ============================================================ */
+    .comic-row-pricing .panel-pricing { width: 100%; }
+
+    .plan-blurb {
+      padding: 12px 20px 10px;
+      border-bottom: 2px solid rgba(201,168,76,0.1);
+    }
+    .plan-blurb b {
+      font-family: 'Bangers', cursive;
+      font-size: 18px;
+      letter-spacing: 1.5px;
+      color: var(--gold);
+      display: block;
+    }
+    .plan-blurb span {
+      font-size: 13px;
+      color: rgba(240,232,208,0.62);
+      font-style: italic;
+    }
+
+    .pass-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      padding: 14px 20px 16px;
+      border-bottom: 2px solid rgba(201,168,76,0.1);
+      align-items: stretch;
+    }
+
+    .pass-card {
+      border: 2px solid rgba(201,168,76,0.45);
+      border-radius: 3px;
+      background: rgba(201,168,76,0.04);
+      padding: 14px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 2px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .pass-card:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+
+    .pass-card-kicker {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(229,228,226,0.75);
+      text-transform: uppercase;
+    }
+    .pass-card-term {
+      font-family: 'Bangers', cursive;
+      font-size: 26px;
+      letter-spacing: 2px;
+      color: #e5e4e2;
+      line-height: 1.1;
+    }
+    /* TOKENS LEAD, AND THEY ARE THE BIGGEST THING ON THE CARD. It is where a pass actually wins:
+       one carry-over lump against a monthly grant that is partly use-it-or-lose-it. */
+    .pass-card-tokens {
+      font-family: 'Bangers', cursive;
+      font-size: 30px;
+      letter-spacing: 1px;
+      color: var(--gold);
+      margin-top: 6px;
+      line-height: 1;
+    }
+    .pass-card-tokens-sub {
+      font-size: 12px;
+      font-style: italic;
+      color: rgba(240,232,208,0.55);
+      margin-bottom: 8px;
+    }
+    .pass-card-price {
+      font-family: 'Bangers', cursive;
+      font-size: 24px;
+      color: var(--parchment);
+      margin-bottom: 10px;
+    }
+    /* NO PER-MONTH FIGURE ON A PASS CARD. See the batch note: every pass is above Platinum's $22
+       per month, and the subscription rows are directly underneath. */
+
+    .btn-pass { margin-top: auto; width: 100%; font-size: 13px; }
+
     .tier-coin { font-size: 28px; flex-shrink: 0; }
 
     .tier-info { flex: 1; }
@@ -876,6 +966,8 @@
       .comic-row { flex-direction: column; }
       .panel-players { width: 100%; min-height: 400px; }
       .panel-pricing { width: 100%; }
+      /* v3.0.924 -- one card per row rather than three slivers. */
+      .pass-cards { grid-template-columns: 1fr; }
       .panel-payoff { min-height: 460px; }
       .features-strip-body { grid-template-columns: 1fr 1fr; }
       .faq-grid { grid-template-columns: 1fr; }

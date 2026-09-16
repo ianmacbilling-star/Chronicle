@@ -174,6 +174,13 @@
           '<span><b>Copper is invite only.</b> No monthly subscription \u2014 token purchases only, to ' +
           'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +
           '</span></div>' +
+        // v3.0.924 -- TD-780 Push 7. A PASS GETS A LINE, NOT A COLUMN. A Platinum Pass grants the
+        // Platinum column exactly as it reads; a fifth column would be a second copy of it.
+        '<div class="tg-note tg-note-coin">' +
+          '<img src="' + COINS.platinum + '" alt="" />' +
+          '<span><b>A Platinum Pass is Platinum.</b> Every feature in the Platinum column, for the ' +
+          'months you buy, with the tokens granted up front. See the passes on the page behind this one.' +
+          '</span></div>' +
       '</div>' +
     '</div>';
   }
