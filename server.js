@@ -493,6 +493,11 @@ process.on('unhandledRejection', function(reason) { handleFatal('unhandledReject
 
 getDb().then(async function() {
   try { await require('./middleware/tiers').loadTierConfig(); } catch (e) { console.error('tier_config load failed (using code defaults):', e.message); }
+  // v3.0.920 -- TD-780 Push 4a. Same shape as tier_config: the dashboard overrides live in
+  // app_settings and are read once here. A failure leaves the code defaults standing, which
+  // is the right way round -- a pass with a stale price still sells, a pass with no price
+  // does not.
+  try { await require('./services/billing/passes').loadPassConfig(); } catch (e) { console.error('pass_config load failed (using code defaults):', e.message); }
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');

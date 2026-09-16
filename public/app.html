@@ -1322,7 +1322,7 @@
       <div class="settings-tabs">
         <button class="settings-tab" id="settings-tab-usertesting" onclick="switchSettingsTab('usertesting')">User Testing</button>
         <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">Settings</button>
-        <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers</button>
+        <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers and Passes</button>
         <button class="settings-tab" id="settings-tab-stats" onclick="switchSettingsTab('stats')">Stats</button>
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
@@ -1604,6 +1604,20 @@
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
+        <!-- v3.0.920 -- TD-780 Push 4a. PASSES SIT ABOVE THE TIERS. Ian, 2026-09-16: "I think
+             passes are really going to be bigger than subscriptions so lets put it up top."
+             The tab id stays 'tiers' so the admin/tester gating in SETTINGS_TABS_ALL is
+             untouched -- only the label and the contents move. -->
+        <div class="settings-section-title" style="margin-bottom:6px;">Platinum Passes</div>
+        <div class="settings-section-desc" style="margin-bottom:14px;">
+          One-time purchases that grant Platinum for a fixed run of months. Set the token allotment and the price; the duration is fixed per pass and is not editable here. Blank a field to fall back to the code default.
+        </div>
+        <div id="passes-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
+        <div id="passes-config-container">Loading passes...</div>
+
+        <div style="height:1px;background:rgba(201,168,76,0.18);margin:26px 0 20px;"></div>
+
+        <div class="settings-section-title" style="margin-bottom:6px;">Subscription Tiers</div>
         <div class="settings-section-desc" style="margin-bottom:14px;">
           Edit per-tier limits. Values are stored in the database and override the code defaults; blank a field to fall back to the default. Changes apply to new checks immediately.
         </div>

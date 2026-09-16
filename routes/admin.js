@@ -8,6 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin, endImpersonation, impersonationExpired, IMPERSONATION_MAX_MS } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
+const passes = require('../services/billing/passes');
 const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 
@@ -59,6 +60,68 @@ router.put('/tier-config', requireAuth, requireAdmin, async function (req, res) 
   } catch (e) {
     console.error('PUT tier-config error:', e.message);
     res.status(500).json({ error: 'Could not save tier config' });
+  }
+});
+
+// ============================================================================
+// v3.0.920 -- TD-780 Push 4a. PLATINUM PASS CATALOG, read and written by the
+// "Tiers and Passes" tab. Mirrors tier-config exactly, including the
+// blank-means-fall-back-to-the-code-default behaviour.
+//
+// PRICE CROSSES THIS BOUNDARY IN DOLLARS AND IS STORED IN CENTS. The admin
+// types 79; Stripe is handed 7900. Doing the conversion HERE rather than in the
+// browser means a client that sends nonsense cannot invent a price -- and the
+// catalog stays the single source of what anybody is charged.
+// ============================================================================
+function passToWire(p) {
+  return {
+    id: p.id, name: p.name, tier: p.tier, months: p.months,
+    tokens: p.tokens,
+    price_dollars: Math.round(p.price_cents) / 100,
+    price_cents: p.price_cents
+  };
+}
+
+// GET /api/admin/pass-config
+router.get('/pass-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const out = {};
+    passes.PASS_ORDER.forEach(function (id) {
+      const p = passes.getPass(id);
+      if (p) out[id] = passToWire(p);
+    });
+    res.json({ passes: out, order: passes.PASS_ORDER });
+  } catch (e) {
+    console.error('GET pass-config error:', e.message);
+    res.status(500).json({ error: 'Could not load pass config' });
+  }
+});
+
+// PUT /api/admin/pass-config
+// Body: { pass: 'p3', values: { tokens: 200, price_dollars: 79 } }
+router.put('/pass-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const id = req.body && req.body.pass;
+    const values = (req.body && req.body.values) || {};
+    if (!id || !passes.getPass(id)) return res.status(400).json({ error: 'Unknown pass' });
+    const write = {};
+    if (Object.prototype.hasOwnProperty.call(values, 'tokens')) write.tokens = values.tokens;
+    if (Object.prototype.hasOwnProperty.call(values, 'price_dollars')) {
+      const d = values.price_dollars;
+      // Blank clears the override and the code default returns. A number becomes cents.
+      if (d === null || d === '' || d === undefined) write.price_cents = null;
+      else {
+        const f = parseFloat(d);
+        write.price_cents = (isNaN(f) || f < 0) ? null : Math.round(f * 100);
+      }
+    }
+    // months, tier, id and name are NOT accepted from the wire at all -- see the
+    // note at the top of services/billing/passes.js for why each one is fixed.
+    const merged = await passes.savePassConfig(id, write);
+    res.json({ success: true, pass: id, values: passToWire(merged) });
+  } catch (e) {
+    console.error('PUT pass-config error:', e.message);
+    res.status(500).json({ error: 'Could not save pass config' });
   }
 });
 

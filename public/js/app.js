@@ -19111,7 +19111,9 @@ function switchSettingsTab(tab) {
     if (btn) btn.classList.toggle('active', t === tab);
   });
   if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings(); }
-  if (tab === 'tiers') loadTiersConfig();
+  // v3.0.920 -- TD-780 Push 4a. One tab, two things to load. Passes first, because they
+  // render first and a slow tier fetch should not hold up the half Ian asked to put on top.
+  if (tab === 'tiers') { loadPassesConfig(); loadTiersConfig(); }
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
@@ -19237,6 +19239,113 @@ function togglePromoCode(id) {
     .catch(function () {});
 }
 
+
+// ============================================================
+// v3.0.920 -- TD-780 Push 4a. PLATINUM PASSES, at the top of the Tiers and Passes tab.
+//
+// Rendered explicitly rather than from a server-driven field list, unlike the tier editor
+// below it. There are exactly two editable numbers per pass and the panel shows arithmetic
+// derived from them, so a generic renderer would cost more than it saves.
+//
+// THE DERIVED LINE IS PURE ARITHMETIC ON WHAT IS IN THE BOXES -- price per month and tokens
+// per month, recomputed as you type. It deliberately does NOT show margin or "share of a
+// book", because both of those need constants ($0.103 per token, 341 tokens per book) that
+// live in a financial model rather than in the code, and a number on screen that quietly goes
+// stale is worse than no number at all.
+// ============================================================
+function loadPassesConfig() {
+  var box = document.getElementById('passes-config-container');
+  var msg = document.getElementById('passes-config-msg');
+  if (msg) msg.textContent = '';
+  if (box) box.textContent = 'Loading passes...';
+  fetch('/api/admin/pass-config')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || !data.passes) {
+        if (box) box.textContent = (data && (data.message || data.error)) || 'Could not load passes.';
+        return;
+      }
+      renderPassesConfig(data);
+    })
+    .catch(function (e) { if (box) box.textContent = 'Could not load passes: ' + e.message; });
+}
+
+function passPerMonth(id) {
+  var pEl = document.getElementById('pcf-' + id + '-price_dollars');
+  var tEl = document.getElementById('pcf-' + id + '-tokens');
+  var out = document.getElementById('pass-derived-' + id);
+  if (!pEl || !tEl || !out) return;
+  var months = parseInt(out.getAttribute('data-months'), 10) || 0;
+  var price = parseFloat(pEl.value);
+  var tokens = parseInt(tEl.value, 10);
+  if (!months || isNaN(price) || isNaN(tokens)) { out.textContent = ''; return; }
+  out.textContent = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
+    Math.round(tokens / months) + ' tokens per month';
+}
+
+function renderPassesConfig(data) {
+  var box = document.getElementById('passes-config-container');
+  if (!box) return;
+  var html = '';
+  (data.order || []).forEach(function (id) {
+    var p = data.passes[id];
+    if (!p) return;
+    html += '<div class="settings-section tier-config-panel panel-dark" id="pass-panel-' + id + '">';
+    html += '<div class="settings-section-title">' + aimpEsc(p.name || id) + '</div>';
+    html += '<div class="settings-section-desc" style="margin-bottom:10px;">' +
+      'Grants <strong>' + aimpEsc(p.tier || 'platinum') + '</strong> for <strong>' + p.months + ' months</strong>. Duration and tier are fixed.' +
+      '</div>';
+    [['tokens', 'Token allotment (one-time, carry-over)', 'number', '1'],
+     ['price_dollars', 'Price ($, one-time)', 'number', '0.01']].forEach(function (f) {
+      var val = (p[f[0]] === null || p[f[0]] === undefined) ? '' : p[f[0]];
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+        '<label class="form-label" for="pcf-' + id + '-' + f[0] + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + f[1] + '</label>' +
+        '<input id="pcf-' + id + '-' + f[0] + '" class="form-input pass-config-input" type="' + f[2] + '" min="0" step="' + f[3] + '" ' +
+        'data-pass="' + id + '" data-field="' + f[0] + '" value="' + val + '" oninput="passPerMonth(\'' + id + '\')" ' +
+        'style="width:96px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
+        '</div>';
+    });
+    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--gold);"></div>';
+    html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
+      '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save ' + aimpEsc(p.name || id) + '</button>' +
+      '<span class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:0;"></span>' +
+      '</div>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+  (data.order || []).forEach(function (id) { passPerMonth(id); });
+}
+
+function savePassPanel(id) {
+  var inputs = document.querySelectorAll('.pass-config-input[data-pass="' + id + '"]');
+  var values = {};
+  inputs.forEach(function (inp) {
+    var f = inp.getAttribute('data-field');
+    var v = inp.value;
+    // Sent as typed. The SERVER converts dollars to cents and decides what an empty
+    // or nonsense value means -- the browser never computes a price.
+    values[f] = (v === '' ? null : v);
+  });
+  var msgEl = document.getElementById('pass-save-msg-' + id);
+  if (msgEl) { msgEl.textContent = 'Saving...'; msgEl.style.color = ''; }
+  fetch('/api/admin/pass-config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pass: id, values: values })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.success) {
+        // Re-render from what the SERVER stored, not from what was typed. A blank that fell
+        // back to a code default has to show that default, or the box lies about what is live.
+        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--gold)'; }
+        loadPassesConfig();
+      } else {
+        if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
+      }
+    })
+    .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
+}
 
 function loadTiersConfig() {
   var box = document.getElementById('tiers-config-container');
