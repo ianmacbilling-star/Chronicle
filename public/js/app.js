@@ -2204,6 +2204,19 @@ function refreshUsageTokens() {
     .catch(function() {});
 }
 
+// v3.0.930 -- ONE DATE FORMATTER FOR THIS PAGE, and the reason it exists is a bug that shipped.
+// new Date(x).toLocaleDateString() RETURNS the string "Invalid Date" for junk input rather than
+// throwing, so every try/catch around one of these was decorative. Returns '' on anything that
+// will not parse, and callers decide what to print instead.
+function _cmpNiceDate(raw) {
+  if (!raw) return '';
+  var d = new Date(raw);
+  if (!d || !isFinite(d.getTime())) return '';
+  try {
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch (e) { return ''; }
+}
+
 // v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE RIGHT NOW, in as many rows as it takes.
 //
 // TWO FACTS, NEVER MERGED. The account tier is what they pay for (or fall back to); the pass is
@@ -2218,13 +2231,18 @@ function renderAccountStanding(me) {
   var pass = me.pass || null;
   var live = hasLiveSubscription(me);
 
+  // v3.0.930 -- LABEL THEN VALUE, SIDE BY SIDE. This was justify-content:space-between, which in a
+  // wide settings column threw the value to the far right and left the label stranded about forty
+  // characters away with nothing between them. Ian: "Move the Platinum Billed Monthly Text over
+  // closer to the Your Account Text." A fixed label column does that at every width, and the note
+  // now sits inline after the value rather than under it, so each fact is one readable line.
   function row(label, value, note) {
-    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;' +
-      'padding:8px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
-      '<span style="font-size:12px;color:var(--text-light);">' + label + '</span>' +
-      '<span style="font-family:var(--font-display);font-size:15px;color:var(--text);text-align:right;">' +
-      value + (note ? '<span style="display:block;font-family:inherit;font-size:11px;color:var(--text-light);font-weight:400;">' + note + '</span>' : '') +
-      '</span></div>';
+    return '<div style="display:flex;align-items:baseline;gap:10px;' +
+      'padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+      '<span style="font-size:12px;color:var(--text-muted);flex:0 0 108px;">' + label + '</span>' +
+      '<span style="font-family:var(--font-display);font-size:16px;color:var(--text);">' + value + '</span>' +
+      (note ? '<span style="font-size:12px;color:var(--text-muted);font-style:italic;">' + note + '</span>' : '') +
+      '</div>';
   }
 
   var html = '';
@@ -2232,10 +2250,10 @@ function renderAccountStanding(me) {
     live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : ''));
 
   if (pass && pass.expiresAt) {
-    var until = '';
-    try {
-      until = new Date(pass.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-    } catch (e) { until = ''; }
+    // v3.0.930 -- isFinite(getTime()), NOT try/catch. toLocaleDateString on an unparseable date
+    // returns the STRING "Invalid Date" rather than throwing, so the catch never fired and the
+    // words went to the page.
+    var until = _cmpNiceDate(pass.expiresAt);
     var pName = (all[pass.tier] && all[pass.tier].name) || pass.tier;
     html += row(escapeHtml(pName) + ' Pass', until ? ('until ' + until) : 'active',
       'then your account returns to ' + escapeHtml(acctName));
@@ -2252,7 +2270,14 @@ function renderAccountStanding(me) {
       '</div>';
   }
 
-  el.innerHTML = html;
+  // v3.0.930 -- A FRAME, BECAUSE IAN HAD NEVER NOTICED IT. Unframed, this was loose text floating
+  // above the tier cards; the same gold panel every other notice on this page uses makes it a
+  // thing you look at. The heading is part of that -- a panel with no name is still just text.
+  el.innerHTML = '<div style="padding:12px 16px 4px;border:1px solid rgba(201,168,76,0.45);' +
+    'border-radius:var(--radius-lg);background:rgba(201,168,76,0.08);">' +
+    '<div style="font-family:var(--font-display);font-size:12px;letter-spacing:1.5px;' +
+    'text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Where you stand</div>' +
+    html + '</div>';
   el.style.display = html ? 'block' : 'none';
 }
 
@@ -2269,6 +2294,9 @@ function renderAccountPasses(me, data) {
 
   var live = hasLiveSubscription(me);
   var hasPass = !!(me && me.pass);
+  // Platinum's own colour, from the one table that defines it. Retyping #3a3d6b here would be a
+  // second definition of Platinum waiting to disagree with the first.
+  var PLAT = (TIER_COLORS.platinum && TIER_COLORS.platinum.bg) || '#3a3d6b';
 
   // IAN, 2026-09-16: a live subscriber CAN buy a pass, "with the overlap spelled out". The line
   // changes, the buttons never do.
@@ -2279,7 +2307,15 @@ function renderAccountPasses(me, data) {
         'Your subscription is not cancelled when you buy one \u2014 it keeps billing until you stop it ' +
         'yourself. Any time you have already paid for is added to the pass rather than lost.';
     } else if (hasPass) {
-      desc.textContent = 'Buying another pass extends the one you have rather than replacing it.';
+      // v3.0.930 -- WITH THE DATE, ONCE. Ian asked whether an expiry belongs under the pass
+      // panels. It belongs in this sentence rather than on three cards: the question somebody
+      // asks here is not "when does mine end" -- that is in the panel above -- it is "what
+      // happens if I buy another", and that answer needs the date in it.
+      var _until = _cmpNiceDate(me.pass && me.pass.expiresAt);
+      desc.textContent = _until
+        ? ('Your pass runs to ' + _until + '. Buying another adds to it rather than replacing it \u2014 ' +
+           'the new months start when the current pass ends.')
+        : 'Buying another pass extends the one you have rather than replacing it.';
     } else {
       desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
     }
@@ -2289,14 +2325,18 @@ function renderAccountPasses(me, data) {
     var dollars = Number(p.price_cents) / 100;
     var money = isFinite(dollars) ? ('$' + (dollars % 1 === 0 ? String(dollars) : dollars.toFixed(2))) : '';
     var months = Number(p.months) || 0;
+    // v3.0.930 -- THE HEADER IS PLATINUM'S OWN COLOUR, READ FROM TIER_COLORS. It was #e5e4e2,
+    // which is 1.27:1 on a white card -- this page is a LIGHT theme and the first version of these
+    // cards was written as if it were dark. The token figure was var(--gold) at 1.92:1, which is
+    // worse, because it is the biggest thing on the card and the number the card exists to show.
     return '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);' +
       'padding:16px;display:flex;flex-direction:column;">' +
-      '<div style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:#e5e4e2;">' +
+      '<div style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + PLAT + ';">' +
         months + (months === 1 ? ' MONTH' : ' MONTHS') + '</div>' +
-      '<div style="font-family:var(--font-display);font-size:22px;color:var(--gold);margin:8px 0 0;">' +
+      '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0 0;">' +
         Number(p.tokens) + ' tokens</div>' +
-      '<div style="font-size:11px;color:var(--text-light);">yours to spend whenever</div>' +
-      '<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin:10px 0 0;">' + money + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);">yours to spend whenever</div>' +
+      '<div style="font-family:var(--font-display);font-size:18px;color:var(--text-muted);margin:10px 0 0;">' + money + '</div>' +
       '<button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%;" ' +
         'onclick="startPassCheckout(\'' + escapeHtml(String(p.id)) + '\')">Buy this pass</button>' +
     '</div>';
