@@ -401,6 +401,62 @@
       border: var(--border);
     }
 
+    /* ============================================================
+       v3.0.925 -- TD-780 Push 7b. WHAT YOU GET.
+
+       Shaped on .panel-how / .how-step-panel deliberately, and it reuses .how-title-panel,
+       .section-tag and .section-title rather than inventing a second header: every one of those
+       is already named in landing-story.css's re-skin, so the story page gets them right for
+       free. Only the two lines that had no equivalent are new.
+
+       42%, matching what .panel-pricing used to take, so the payoff beside it keeps the 58% it
+       was cropped for. The items are flex:1 so four of them fill the column against the payoff's
+       600px rather than leaving a gap under the last one.
+       ============================================================ */
+    .panel-reward {
+      width: 42%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gutter);
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .reward-items {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gutter);
+    }
+
+    .reward-item {
+      flex: 1;
+      border: var(--border);
+      background: var(--ink-mid);
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .reward-item-title {
+      font-family: 'Bangers', cursive;
+      font-size: 20px;
+      color: var(--gold);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .reward-item-desc {
+      font-family: 'Crimson Text', serif;
+      font-size: 14px;
+      font-style: italic;
+      color: rgba(240,232,208,0.7);
+      line-height: 1.55;
+    }
+
     .section-tag {
       font-family: 'Bangers', cursive;
       font-size: 11px;
@@ -966,6 +1022,8 @@
       .comic-row { flex-direction: column; }
       .panel-players { width: 100%; min-height: 400px; }
       .panel-pricing { width: 100%; }
+      /* v3.0.925 -- the reward panel stacks above the payoff rather than beside it. */
+      .panel-reward { width: 100%; }
       /* v3.0.924 -- one card per row rather than three slivers. */
       .pass-cards { grid-template-columns: 1fr; }
       .panel-payoff { min-height: 460px; }
