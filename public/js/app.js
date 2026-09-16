@@ -2239,8 +2239,9 @@ function renderAccountStanding(me) {
   function row(label, value, note) {
     return '<div style="display:flex;align-items:baseline;gap:10px;' +
       'padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
-      '<span style="font-size:12px;color:var(--text-muted);flex:0 0 108px;">' + label + '</span>' +
-      '<span style="font-family:var(--font-display);font-size:16px;color:var(--text);">' + value + '</span>' +
+      // v3.0.931 -- 128px, because "Next billing date" is seventeen characters and 108 wrapped it.
+      '<span style="font-size:12px;color:var(--text-muted);flex:0 0 128px;">' + label + '</span>' +
+      '<span style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);">' + value + '</span>' +
       (note ? '<span style="font-size:12px;color:var(--text-muted);font-style:italic;">' + note + '</span>' : '') +
       '</div>';
   }
@@ -2249,14 +2250,39 @@ function renderAccountStanding(me) {
   html += row('Your account', escapeHtml(acctName),
     live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : ''));
 
+  // v3.0.931 -- WHEN THE NEXT THING HAPPENS. Ian: "If they have a subscription it should say
+  // Next billing date: xxx." A pending cancel replaces it rather than adding a row, because on a
+  // subscription that is ending there IS no next billing date and showing one would be a lie.
+  // A payment problem suppresses both: the date is not the story, and the alert beside the Manage
+  // button is.
+  var _when = _cmpNiceDate(me.currentPeriodEnd);
+  var _billStatus = me.subscriptionStatus || '';
+  var _problem = live && (_billStatus === 'past_due' || _billStatus === 'unpaid');
+  if (live && !_problem && _when) {
+    if (me.cancelAtPeriodEnd) {
+      html += row('Subscription ends', _when, 'then your account moves to Copper');
+    } else {
+      html += row('Next billing date', _when);
+    }
+  }
+
   if (pass && pass.expiresAt) {
     // v3.0.930 -- isFinite(getTime()), NOT try/catch. toLocaleDateString on an unparseable date
     // returns the STRING "Invalid Date" rather than throwing, so the catch never fired and the
     // words went to the page.
     var until = _cmpNiceDate(pass.expiresAt);
     var pName = (all[pass.tier] && all[pass.tier].name) || pass.tier;
-    html += row(escapeHtml(pName) + ' Pass', until ? ('until ' + until) : 'active',
-      'then your account returns to ' + escapeHtml(acctName));
+    // v3.0.931 -- Ian's wording, and deliberately the same SHAPE as the billing row above it:
+    // a label that names the event, a date, and a note saying what happens after. The tier name
+    // moves into the note, where it was always the more useful half -- "Platinum Pass" told
+    // somebody nothing they did not already know from the row above.
+    // AND THE NOTE HAS TO NAME THE TIER. Ian asked for the label "Pass expires on", which is
+    // right -- but it dropped the only place the panel said WHAT the pass grants. A Copper
+    // account holding a Platinum pass would have read "Your account: Copper" and a date, and
+    // nowhere learned they are Platinum today. The batch guard caught that.
+    html += row('Pass expires on', until || '\u2014',
+      until ? (escapeHtml(pName) + ' until then \u2014 your account returns to ' + escapeHtml(acctName)) :
+              (escapeHtml(pName) + ' pass, no end date on file'));
   }
 
   // THE OVERLAP, STATED. Ian chose not to cancel anything automatically, which makes saying this
@@ -2273,10 +2299,15 @@ function renderAccountStanding(me) {
   // v3.0.930 -- A FRAME, BECAUSE IAN HAD NEVER NOTICED IT. Unframed, this was loose text floating
   // above the tier cards; the same gold panel every other notice on this page uses makes it a
   // thing you look at. The heading is part of that -- a panel with no name is still just text.
-  el.innerHTML = '<div style="padding:12px 16px 4px;border:1px solid rgba(201,168,76,0.45);' +
-    'border-radius:var(--radius-lg);background:rgba(201,168,76,0.08);">' +
-    '<div style="font-family:var(--font-display);font-size:12px;letter-spacing:1.5px;' +
-    'text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Where you stand</div>' +
+  // v3.0.931 -- LOUDER, in four specific ways rather than by turning everything up. Ian: "It's
+  // still a little benign." 2px frame, roughly double the fill, the heading in full --text
+  // instead of muted grey, and the values in bold (see row()). THE LABELS STAY MUTED on purpose:
+  // making everything loud is the same as making nothing loud, and the label is the half you
+  // already know -- the value and the date are what you came to read.
+  el.innerHTML = '<div style="padding:14px 18px 6px;border:2px solid rgba(201,168,76,0.6);' +
+    'border-radius:var(--radius-lg);background:rgba(201,168,76,0.16);">' +
+    '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:1.5px;' +
+    'text-transform:uppercase;color:var(--text);font-weight:700;margin-bottom:8px;">Where you stand</div>' +
     html + '</div>';
   el.style.display = html ? 'block' : 'none';
 }
@@ -2394,21 +2425,17 @@ function renderAccountPlans(me) {
   if (bs) {
     var feat = (me.allTiers && me.allTiers[current]) ? me.allTiers[current] : null;
     var tierLabel = (feat && feat.name) ? feat.name : current;
-    var dateStr = '';
-    if (me.currentPeriodEnd) {
-      try {
-        dateStr = new Date(me.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      } catch (e) { dateStr = ''; }
-    }
+    // v3.0.931 -- THIS STRIP IS NOW AN ALERT AND NOTHING ELSE. The next-billing date and the
+    // pending-cancel date moved up into WHERE YOU STAND, where somebody looks for them; what is
+    // left is the one message that is not a fact about your standing but an INSTRUCTION, and it
+    // belongs here beside the Manage button that carries it out.
+    //
+    // The date formatting that used to live here went with them, which removes the third copy of
+    // the try/catch around toLocaleDateString -- a call that returns the STRING "Invalid Date"
+    // rather than throwing, so the catch never did anything. See _cmpNiceDate.
     var billStatus = me.subscriptionStatus || '';
     if (live && (billStatus === 'past_due' || billStatus === 'unpaid')) {
       bs.textContent = 'There is a problem with your most recent payment (often an expired or declined card). Open "Manage subscription & billing" to update your card and keep your ' + tierLabel + ' plan.';
-      bs.style.display = 'block';
-    } else if (live && me.cancelAtPeriodEnd && dateStr) {
-      bs.textContent = 'Your ' + tierLabel + ' plan is set to cancel on ' + dateStr + ". You'll keep " + tierLabel + ' access until then, after which your account moves to Copper.';
-      bs.style.display = 'block';
-    } else if (live && !me.cancelAtPeriodEnd && dateStr) {
-      bs.textContent = 'Next billing date: ' + dateStr + '.';
       bs.style.display = 'block';
     } else {
       bs.textContent = '';
