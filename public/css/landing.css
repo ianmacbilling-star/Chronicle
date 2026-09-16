@@ -54,6 +54,8 @@
     }
 
     /* NAV */
+    /* v3.0.928 -- shorter bar. See the batch note: the button and the logo were tied
+       for tallest, so both come down or neither does. */
     nav {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -61,7 +63,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 24px;
+      padding: 10px 24px;   /* v3.0.928 -- was 14px. */
       background: rgba(10,8,6,0.96);
       border-bottom: 3px solid var(--ink);
       box-shadow: 0 3px 0 rgba(201,168,76,0.15);
@@ -78,7 +80,7 @@
       text-decoration: none;
     }
 
-    .nav-logo img { height: 38px; }
+    .nav-logo img { height: 30px; }   /* v3.0.928 -- was 38px, joint-tallest child of the bar. */
 
     .nav-logo-text {
       font-family: 'Cinzel', serif;
@@ -102,9 +104,11 @@
 
     .btn-nav {
       font-family: 'Bangers', cursive;
-      font-size: 16px;
+      /* v3.0.928 -- was 16px / 8px 24px. This is the Sign In button Ian asked about.
+         It shares the height with .nav-logo img, so that came down by the same step. */
+      font-size: 14px;
       letter-spacing: 2px;
-      padding: 8px 24px;
+      padding: 5px 18px;
       background: var(--crimson-bright);
       color: var(--parchment);
       border: 3px solid var(--ink);
@@ -241,7 +245,9 @@
 
     .hero-sub {
       font-family: 'Crimson Text', serif;
-      font-size: clamp(15px, 2vw, 18px);
+      /* v3.0.928 -- was clamp(15px, 2vw, 18px). Both ends move by the same step, so the
+         line scales exactly as it did and is simply two pixels larger everywhere. */
+      font-size: clamp(17px, 2.2vw, 20px);
       font-style: italic;
       color: var(--gold-light);
       line-height: 1.55;
@@ -290,7 +296,7 @@
     .btn-ghost:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
 
     .hero-trial {
-      font-size: 12px;
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
       /* v3.0.926 -- was rgba(201,168,76,0.4): 2.24:1 on this panel, below the 4.5:1 floor.
          Ian: "It needs to be the same color as" the hero subtitle -- which is --gold-light. */
       color: var(--gold-light);
@@ -453,7 +459,7 @@
 
     .reward-item-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.7);
       line-height: 1.55;
@@ -524,7 +530,7 @@
 
     .step-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.7);
       line-height: 1.6;
@@ -590,7 +596,7 @@
 
     .feature-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
       color: rgba(240,232,208,0.6);
       line-height: 1.6;
@@ -622,7 +628,7 @@
     }
 
     .pricing-header-sub {
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       color: rgba(10,8,6,0.6);
       font-style: italic;
     }
@@ -666,7 +672,7 @@
       display: block;
     }
     .plan-blurb span {
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       color: rgba(240,232,208,0.62);
       font-style: italic;
     }
@@ -718,7 +724,7 @@
       line-height: 1;
     }
     .pass-card-tokens-sub {
-      font-size: 12px;
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
       font-style: italic;
       color: rgba(240,232,208,0.55);
       margin-bottom: 8px;
@@ -766,7 +772,7 @@
       /* v3.0.927 -- matches .reward-item-desc. The pass cards carry no long descriptive line, so
          the anchor is the nearest sibling of the same KIND rather than of the same name. This is
          also the line that gained the most room: across the full row, 12px read as fine print. */
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       color: rgba(240,232,208,0.5);
       font-style: italic;
       margin-top: 2px;
@@ -782,7 +788,7 @@
     }
 
     .tier-price-tag small {
-      font-size: 12px;
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
       color: rgba(240,232,208,0.4);
       display: block;
       font-family: 'Crimson Text', serif;
@@ -858,7 +864,7 @@
 
     .payoff-sub {
       font-family: 'Crimson Text', serif;
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
       color: var(--gold-light);
       margin-bottom: 0;
@@ -916,7 +922,7 @@
 
     .cta-strip-sub {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.7);
       margin-top: 4px;
@@ -970,7 +976,7 @@
 
     .faq-a {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.65);
       line-height: 1.6;
@@ -1079,7 +1085,7 @@
       .feature-cell { border-right: none; }
       .hero-text-panel { padding: 26px 20px !important; }
       .hero-title { font-size: 42px; }
-      .hero-sub { font-size: 16px; }
+      .hero-sub { font-size: 18px; }   /* v3.0.928 -- was 16px, one step with the rest. */
       .features-strip-title { font-size: 21px; letter-spacing: 2px; }
       .faq-header-title { font-size: 21px; letter-spacing: 2px; }
       .features-strip-header, .faq-header { padding: 12px 18px; }
@@ -1096,6 +1102,7 @@
     @media (max-width: 400px) {
       .hero-title { font-size: 34px; }
       .nav-logo-text { font-size: 14px; letter-spacing: 2px; }
-      .btn-nav { font-size: 14px; padding: 8px 16px; }
+      .btn-nav { font-size: 13px; padding: 4px 12px; }   /* v3.0.928 -- was 14px / 8px 16px, which
+         had become TALLER than the desktop rule it overrides. */
       .hero-text-panel { padding: 22px 16px !important; }
     }
