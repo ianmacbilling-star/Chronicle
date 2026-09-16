@@ -2241,6 +2241,20 @@ function renderAccountStanding(me) {
   var pass = me.pass || null;
   var live = hasLiveSubscription(me);
 
+  // v3.0.933 -- THE TIER THEY ARE, NOT THE TIER THEY WOULD BE WITHOUT THE PASS.
+  //
+  // me.tier is ownTier(user) from routes/auth.js: users.tier raised by a live pass, and NOTHING
+  // else. It is not the campaign-aware inherited tier -- that is a different function taking a
+  // campaign id, and it never enters this payload. So a Copper playing inside somebody else's
+  // Platinum campaign still reads Copper here, which is what Ian asked for.
+  //
+  // The || acct fallback is the safe direction: if a payload ever arrives without `tier`, this
+  // row falls back to the subscription tier -- understating what somebody has, never overstating
+  // it. An account page that claims a tier the server will not honour is the worse failure.
+  var own = me.tier || acct;
+  var ownName = (all[own] && all[own].name) || own;
+  var raisedByPass = !!(pass && pass.expiresAt && own !== acct);
+
   // v3.0.930 -- LABEL THEN VALUE, SIDE BY SIDE. This was justify-content:space-between, which in a
   // wide settings column threw the value to the far right and left the label stranded about forty
   // characters away with nothing between them. Ian: "Move the Platinum Billed Monthly Text over
@@ -2257,8 +2271,15 @@ function renderAccountStanding(me) {
   }
 
   var html = '';
-  html += row('Your account', escapeHtml(acctName),
-    live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : ''));
+  // v3.0.933 -- the VALUE is the tier they hold today; the NOTE says how they hold it. When a pass
+  // is doing the lifting, the subscription state moves into the note rather than off the panel --
+  // a Gold subscriber reading PLATINUM still needs to see that Gold is what bills them.
+  html += row('Your account', escapeHtml(ownName),
+    raisedByPass
+      ? (live ? 'by pass \u2014 ' + escapeHtml(acctName) + ' subscription, billed monthly'
+              : (acct === 'copper' ? 'by pass \u2014 no subscription'
+                                   : 'by pass \u2014 your account is ' + escapeHtml(acctName)))
+      : (live ? 'billed monthly' : (acct === 'copper' ? 'no subscription' : '')));
 
   // v3.0.931 -- WHEN THE NEXT THING HAPPENS. Ian: "If they have a subscription it should say
   // Next billing date: xxx." A pending cancel replaces it rather than adding a row, because on a
