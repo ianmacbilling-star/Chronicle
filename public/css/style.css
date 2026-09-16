@@ -2629,6 +2629,20 @@ html.staging-env .app-logo-text{color:#2b1400;}
   /* A 390px row holds a picture, a name, a category and the x. The picture gives up 6px. */
   .aimp-thumb{flex:0 0 28px;width:28px;height:28px;}
 }
+
+/* v3.0.921 -- TD-780 Push 4b. THE THREE PASS PANELS SIT ACROSS ONE ROW. Ian, 2026-09-16:
+   "They take up way too much vertical space and there is a lot of horizontal dead space."
+   minmax(0,1fr) rather than 1fr because a long pass name in a grid track whose minimum is
+   auto will push the row wider than its container instead of wrapping. The panels lose their
+   own bottom margin so the grid gap is the only thing setting the spacing, and stretch to a
+   common height so three Save buttons line up. */
+#passes-config-container{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
+#passes-config-container .settings-section{margin-bottom:0;display:flex;flex-direction:column;}
+#passes-config-container .pass-panel-foot{margin-top:auto;}
+@media (max-width:1000px){
+  /* Below this the three columns stop being readable, so they stack. */
+  #passes-config-container{grid-template-columns:1fr;}
+}
 /* Asset pills are always visible (storyboard pills default to opacity:0 and rely
    on a .storyboard-panel hover rule that does not apply here). Keep them overlaid
    even on mobile, where the shared rule would otherwise push them below the image. */

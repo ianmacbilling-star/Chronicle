@@ -19128,10 +19128,82 @@ function switchSettingsTab(tab) {
 function initUserTestingTab() {
   fetch('/api/auth/me').then(function(r){ return r.json(); }).then(function(me){
     if (!me || !me.authenticated) return;
-    var tt = document.getElementById('dev-trial-toggle'); if (tt) tt.checked = (me.tier === 'trial');
+    // v3.0.921 -- TD-780 Push 4b. accountTier, NOT tier. Since v3.0.919 me.tier is the
+    // EFFECTIVE tier, so a trial user holding a pass reads as platinum -- and this checkbox
+    // is asking what the ACCOUNT is, which is the question it has always been asking.
+    var _acct = me.accountTier || me.tier;
+    var tt = document.getElementById('dev-trial-toggle'); if (tt) tt.checked = (_acct === 'trial');
     var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
-    var ov = document.getElementById('account-tier-override'); if (ov && me.tier) ov.value = me.tier;
+    var ov = document.getElementById('account-tier-override'); if (ov && _acct) ov.value = _acct;
+    renderPassOverride(me);
   }).catch(function(){});
+}
+
+// ============================================================
+// v3.0.921 -- TD-780 Push 4b. PASS CONTROL ON THE USER TESTING TAB.
+//
+// Ian, 2026-09-16: "a flag ... that says if they are a subscriber or pass holder, so I can switch
+// between the two when testing. And also a place in that same section to set the expiration date."
+//
+// SELF ONLY, exactly like the tier override beside it -- every write names the signed-in user.
+// A pass is ADDITIVE, so this does not replace the tier dropdown: the account tier and the pass
+// are set separately, which is the only way to exercise the combinations that matter (Copper with
+// a pass, Gold with a pass, Gold with an EXPIRED pass, and so on).
+// ============================================================
+function renderPassOverride(me) {
+  var box = document.getElementById('pass-override-state');
+  var sel = document.getElementById('account-pass-override');
+  var dt = document.getElementById('account-pass-expires');
+  var acct = me.accountTier || me.tier || 'copper';
+  var pass = me.pass || null;
+  if (sel) sel.value = pass ? (pass.tier || 'platinum') : '';
+  if (dt) dt.value = (pass && pass.expiresAt) ? String(pass.expiresAt).slice(0, 10) : '';
+  if (!box) return;
+  // THE FLAG. Says what they are in one line, and says the resolved answer too, because the
+  // whole point of the pass design is that the account tier and what they actually HAVE differ.
+  var effective = me.tier || acct;
+  var who = pass ? 'PASS HOLDER' : 'SUBSCRIBER';
+  var line = '<strong style="color:var(--gold);">' + who + '</strong>' +
+    ' &mdash; account tier <strong>' + aimpEsc(acct) + '</strong>';
+  if (pass) {
+    line += ', pass <strong>' + aimpEsc(pass.tier || '?') + '</strong> until <strong>' +
+      aimpEsc(String(pass.expiresAt || '').slice(0, 10)) + '</strong>';
+  } else {
+    line += ', no live pass';
+  }
+  line += '<br />Resolves to <strong>' + aimpEsc(effective) + '</strong> everywhere in the app.';
+  box.innerHTML = line;
+}
+
+// Offsets from today. -1 is the one that gets used most: it makes the pass ALREADY expired, so
+// the lapse path can be exercised without waiting for a date to arrive.
+function passDatePreset(days) {
+  var el = document.getElementById('account-pass-expires');
+  if (!el) return;
+  el.value = new Date(Date.now() + (days * 86400000)).toISOString().slice(0, 10);
+}
+
+function setPassOverride() {
+  var sel = document.getElementById('account-pass-override');
+  var dt = document.getElementById('account-pass-expires');
+  var msg = document.getElementById('account-pass-override-msg');
+  if (!sel) return;
+  if (sel.value && !(dt && dt.value)) {
+    if (msg) { msg.textContent = 'Pick an expiry date, or set the pass to None.'; msg.style.color = 'var(--error)'; }
+    return;
+  }
+  if (msg) { msg.textContent = 'Applying...'; msg.style.color = ''; }
+  fetch('/api/auth/set-pass', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pass_tier: sel.value || null, expires_on: (dt && dt.value) || null })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) { window.location.reload(); }
+      else if (msg) { msg.textContent = 'Could not set the pass: ' + ((d && d.error) || 'unknown'); msg.style.color = 'var(--error)'; }
+    })
+    .catch(function (e) { if (msg) { msg.textContent = 'Could not set the pass: ' + e.message; msg.style.color = 'var(--error)'; } });
 }
 
 var _promoEditId = null;
@@ -19293,22 +19365,25 @@ function renderPassesConfig(data) {
     html += '<div class="settings-section tier-config-panel panel-dark" id="pass-panel-' + id + '">';
     html += '<div class="settings-section-title">' + aimpEsc(p.name || id) + '</div>';
     html += '<div class="settings-section-desc" style="margin-bottom:10px;">' +
-      'Grants <strong>' + aimpEsc(p.tier || 'platinum') + '</strong> for <strong>' + p.months + ' months</strong>. Duration and tier are fixed.' +
+      'Grants <strong>' + aimpEsc(p.tier || 'platinum') + '</strong> for <strong>' + p.months + ' months</strong>.<br />Duration and tier are fixed. One-time payment, one-time carry-over token grant.' +
       '</div>';
-    [['tokens', 'Token allotment (one-time, carry-over)', 'number', '1'],
-     ['price_dollars', 'Price ($, one-time)', 'number', '0.01']].forEach(function (f) {
+    // v3.0.921 -- SHORT LABELS. At a third of the width the old sentence-long labels wrapped
+    // to three lines each and pushed the panels taller than the stacked layout they replaced,
+    // which would have been the opposite of the point. What they meant now lives one line up.
+    [['tokens', 'Tokens', 'number', '1'],
+     ['price_dollars', 'Price ($)', 'number', '0.01']].forEach(function (f) {
       var val = (p[f[0]] === null || p[f[0]] === undefined) ? '' : p[f[0]];
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
         '<label class="form-label" for="pcf-' + id + '-' + f[0] + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + f[1] + '</label>' +
         '<input id="pcf-' + id + '-' + f[0] + '" class="form-input pass-config-input" type="' + f[2] + '" min="0" step="' + f[3] + '" ' +
         'data-pass="' + id + '" data-field="' + f[0] + '" value="' + val + '" oninput="passPerMonth(\'' + id + '\')" ' +
-        'style="width:96px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
+        'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
     html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--gold);"></div>';
-    html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
-      '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save ' + aimpEsc(p.name || id) + '</button>' +
-      '<span class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:0;"></span>' +
+    html += '<div class="pass-panel-foot" style="padding-top:12px;">' +
+      '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save</button>' +
+      '<div class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
       '</div>';
     html += '</div>';
   });

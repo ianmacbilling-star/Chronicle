@@ -502,6 +502,39 @@ router.post('/set-tier', requireAdminOrTester, async function(req, res) {
   }
 });
 
+// POST /api/auth/set-pass -- TESTING ONLY, and the sibling of /set-tier above.
+// v3.0.921 -- TD-780 Push 4b. ADMIN OR TESTER. Self-only: every write names req.session.userId.
+//
+// Lets the signed-in user give themselves a pass, or take it away, so the pass paths can be
+// exercised before a purchase path exists. It does NOT touch users.tier -- a pass is additive,
+// and keeping the two separate here is what makes Copper-with-a-pass testable at all.
+//
+// THE DATE IS STORED AT THE END OF THE CHOSEN DAY. A date input gives YYYY-MM-DD, and midnight
+// would mean a pass set to expire "today" was already dead the moment it was saved -- which
+// reads as a bug rather than as a boundary. 23:59:59 makes the chosen day the last day it works.
+router.post('/set-pass', requireAdminOrTester, async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  const raw = (req.body && typeof req.body.pass_tier === 'string') ? req.body.pass_tier.trim().toLowerCase() : '';
+  try {
+    const db = await getDb();
+    if (!raw) {
+      await db.prepare('UPDATE users SET pass_tier = NULL, pass_expires_at = NULL WHERE id = ?').run(req.session.userId);
+      return res.json({ success: true, pass: null });
+    }
+    if (!TIERS[raw]) return res.status(400).json({ error: 'Unknown tier for a pass' });
+    const on = (req.body && typeof req.body.expires_on === 'string') ? req.body.expires_on.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) return res.status(400).json({ error: 'Expiry must be a YYYY-MM-DD date' });
+    const when = new Date(on + 'T23:59:59.000Z');
+    if (isNaN(when.getTime())) return res.status(400).json({ error: 'That is not a real date' });
+    await db.prepare('UPDATE users SET pass_tier = ?, pass_expires_at = ? WHERE id = ?')
+      .run(raw, when.toISOString(), req.session.userId);
+    res.json({ success: true, pass: { tier: raw, expiresAt: when.toISOString() } });
+  } catch (e) {
+    console.error('set-pass error:', e.message);
+    res.status(500).json({ error: 'Could not set the pass. Please try again.' });
+  }
+});
+
 router.put('/profile', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const { name, email, pen_name } = req.body;

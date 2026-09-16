@@ -1808,6 +1808,36 @@
           <button class="btn btn-primary btn-sm" onclick="setTierOverride()">Apply</button>
         </div>
         <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+
+        <!-- v3.0.921 -- TD-780 Push 4b. PLATINUM PASS, in the same section and self-only,
+             exactly like the tier override above it. The pass is ADDITIVE rather than a
+             third state of the dropdown, because that is what it is in the data: the
+             account tier stays put and the pass sits on top of it. Setting them separately
+             is the only way to test Copper-with-a-pass against Gold-with-a-pass against
+             Gold-with-an-expired-one. -->
+        <div style="height:1px;background:rgba(201,168,76,0.18);margin:14px 0 12px;"></div>
+        <div class="settings-section-desc" id="pass-override-state" style="margin:0 0 10px;padding:8px 10px;border-radius:6px;background:rgba(20,14,6,0.5);">Loading...</div>
+        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
+          <div style="flex:0 0 170px;">
+            <label class="form-label">Pass</label>
+            <select class="form-input" id="account-pass-override">
+              <option value="">None &mdash; subscriber</option>
+              <option value="platinum">Platinum pass</option>
+            </select>
+          </div>
+          <div style="flex:0 0 180px;">
+            <label class="form-label">Expires</label>
+            <input class="form-input" type="date" id="account-pass-expires" />
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="setPassOverride()">Apply pass</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="passDatePreset(-1)">Yesterday</button>
+          <button class="btn btn-sm" onclick="passDatePreset(90)">+3 months</button>
+          <button class="btn btn-sm" onclick="passDatePreset(180)">+6 months</button>
+          <button class="btn btn-sm" onclick="passDatePreset(365)">+12 months</button>
+        </div>
+        <div id="account-pass-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
       </div>
 
       <!-- TESTING ONLY: clear this account's guided-tour history so tours
