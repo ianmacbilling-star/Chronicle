@@ -2428,10 +2428,15 @@ function renderAccountStanding(me) {
     html += '<div data-cmp="overlap-notice" style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
       'background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);font-size:12px;' +
       'line-height:1.5;color:var(--text);">' +
+      // v3.0.937 -- LEAD WITH WHAT THEY HAVE. This said "you keep Gold access until then", which
+      // is true of the BILLING and wrong about the READER: they are Platinum, from the moment the
+      // webhook landed, and naming the tier they are leaving reads as a warning about losing it.
+      // Same fault as the headline row in v3.0.933 and the CURRENT badge in v3.0.934 -- third time
+      // in one day. The billing fact stays, second, where it answers "will I be charged again".
       (me.cancelAtPeriodEnd
-        ? ('Your ' + escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the ' +
-           'current period &mdash; it will not bill again, and you keep ' + escapeHtml(acctName) + ' ' +
-           'access until then. Your pass carries you from there.')
+        ? ('You are on <b>' + escapeHtml(ownName) + '</b> from now until your pass ends. Your ' +
+           escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the current ' +
+           'period &mdash; it will not bill again, and nothing about your access changes when it does.')
         : ('You have both a pass and a subscription, and <b>they do not stack</b> &mdash; your ' +
            'subscription is billing you for access your pass already gives you. You can stop it ' +
            'with Manage subscription &amp; billing below.')) +
