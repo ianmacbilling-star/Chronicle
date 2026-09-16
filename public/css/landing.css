@@ -751,7 +751,8 @@
 
     .tier-name-row {
       font-family: 'Bangers', cursive;
-      font-size: 20px;
+      /* v3.0.927 -- TD-780 Push 7d. 20px was sized for a 42% column. Matches .pass-card-term. */
+      font-size: 26px;
       letter-spacing: 2px;
     }
 
@@ -762,7 +763,10 @@
     .tier-trial .tier-name-row { color: var(--crimson-bright); }
 
     .tier-perks {
-      font-size: 12px;
+      /* v3.0.927 -- matches .reward-item-desc. The pass cards carry no long descriptive line, so
+         the anchor is the nearest sibling of the same KIND rather than of the same name. This is
+         also the line that gained the most room: across the full row, 12px read as fine print. */
+      font-size: 14px;
       color: rgba(240,232,208,0.5);
       font-style: italic;
       margin-top: 2px;
@@ -770,7 +774,8 @@
 
     .tier-price-tag {
       font-family: 'Bangers', cursive;
-      font-size: 22px;
+      /* v3.0.927 -- matches .pass-card-price. */
+      font-size: 24px;
       color: var(--parchment);
       text-align: right;
       flex-shrink: 0;
