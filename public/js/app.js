@@ -2379,6 +2379,17 @@ function renderAccountStanding(me) {
   // subscription that is ending there IS no next billing date and showing one would be a lie.
   // A payment problem suppresses both: the date is not the story, and the alert beside the Manage
   // button is.
+  // v3.0.940 -- THE TRIAL GETS A ROW. Ian, looking at a trial account showing a subscription date
+  // from a subscription that does not exist: "It should be ending in 9/18/2026 right? not July."
+  // It should. The date comes from the server, which derives it from the configured trial length.
+  // Placed above the subscription rows because for a trial account they no longer render at all --
+  // that was Fault 1, and this row is what fills the space it was wrongly occupying.
+  var _trialEnds = _cmpNiceDate(me.trialEndsAt);
+  if (_trialEnds) {
+    var _afterTrial = (all.copper && all.copper.name) || 'Copper';
+    html += row('Trial ends', _trialEnds, 'then your account moves to ' + escapeHtml(_afterTrial));
+  }
+
   var _when = _cmpNiceDate(me.currentPeriodEnd);
   var _billStatus = me.subscriptionStatus || '';
   var _problem = live && (_billStatus === 'past_due' || _billStatus === 'unpaid');

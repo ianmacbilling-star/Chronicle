@@ -354,9 +354,15 @@ router.get('/me', async function(req, res) {
     // while the server treats them as Platinum -- and the user believes the screen.
     const tier = getTier(ownTier(user));
     const trialExpired = isTrialExpired(user);
-    // Free trial = within the 30-day window from trial_started_at and not yet
+    // Free trial = within the configured window from trial_started_at and not yet
     // converted to a paid plan. Drives the on-screen trial watermark.
-    const _trialMs = 30 * 24 * 60 * 60 * 1000;
+    // v3.0.940 -- ONE NUMBER. This function wrote 30 out twice while isTrialExpired() and the
+    // scheduler both read getTier('trial').trial_days -- which is EDITABLE in the tier config.
+    // Raise the trial to 45 days in the dashboard and the lapse and the emails would move while
+    // the watermark and the day counter stayed at 30.
+    let _trialDays = 30;
+    try { _trialDays = getTier('trial').trial_days || 30; } catch (e) { _trialDays = 30; }
+    const _trialMs = _trialDays * 24 * 60 * 60 * 1000;
     // On the free trial = still on the 'trial' TIER and inside the 30-day window.
     // Keyed off tier (the authoritative signal), NOT subscription_status: a paid
     // subscriber whose Stripe subscription is in its own 'trialing' period would
@@ -365,11 +371,18 @@ router.get('/me', async function(req, res) {
       !!user.trial_started_at &&
       (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs;
 
-    // Calculate trial days remaining
+    // Calculate trial days remaining, and WHEN IT ENDS.
+    // v3.0.940 -- trialEndsAt is new. WHERE YOU STAND had a row for a subscription and a row for a
+    // pass and nothing for the third way to hold a tier, so a trial account's only visible date was
+    // whatever stale subscription figure Fault 1 let through. Computed here rather than in the
+    // browser: the client already has no business owning this number, and it would have been the
+    // fifth copy of it.
     let trialDaysLeft = null;
+    let trialEndsAt = null;
     if (user.tier === 'trial' && user.trial_started_at) {
       const started = new Date(user.trial_started_at);
-      const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const expires = new Date(started.getTime() + _trialMs);
+      trialEndsAt = isFinite(expires.getTime()) ? expires.toISOString() : null;
       trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
     }
 
@@ -431,7 +444,11 @@ router.get('/me', async function(req, res) {
       tierFeatures: tier,
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
-      subscriptionStatus: user.subscription_status || 'trialing',
+      // v3.0.940 -- WAS `|| 'trialing'`, and that is a live status. Any account holding a
+      // stripe_subscription_id with a null status therefore read as a CURRENT SUBSCRIBER, and the
+      // account page drew its subscription rows off a stale current_period_end. Not-knowing must
+      // not answer yes; hasLiveSubscription already treats '' as no.
+      subscriptionStatus: user.subscription_status || '',
       currentPeriodEnd: user.current_period_end || null,
       cancelAtPeriodEnd: !!user.cancel_at_period_end,
       loneCopper: await isLoneCopper(user.id),
@@ -441,6 +458,7 @@ router.get('/me', async function(req, res) {
       penName: user.pen_name || '',
       inFreeTrial: inFreeTrial,
       trialStartedAt: user.trial_started_at || null,
+      trialEndsAt: trialEndsAt,   // v3.0.940 -- null unless they are ON the trial tier with a start date
       vocab: user.vocab || 'ttrpg',
       notifyPromo: user.notify_promo !== false,
       notifyFeatures: user.notify_features !== false,
