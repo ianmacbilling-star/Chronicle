@@ -1848,8 +1848,8 @@
 
         <!-- SUBSCRIPTION -->
         <div id="asm-pane-subscription" style="display:none;">
-          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;">
-            <div style="flex:1;max-width:260px;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
+            <div style="flex:0 0 170px;">
               <label class="form-label">Tier</label>
               <select class="form-input" id="account-tier-override">
                 <option value="copper">Copper</option>
@@ -1858,9 +1858,21 @@
                 <option value="platinum">Platinum</option>
               </select>
             </div>
+            <!-- v3.0.944 -- Ian: "can you give me a billing date so I can set that too. Like the
+                 free trial." OPTIONAL, and the pane says what leaving it blank does, because
+                 blank is not 'unset' here -- it actively removes the stand-in subscription. -->
+            <div style="flex:0 0 180px;">
+              <label class="form-label">Next billing date</label>
+              <input class="form-input" id="asm-sub-period-end" type="date" />
+            </div>
             <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
           </div>
-          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get.</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="subDatePreset(1)">Tomorrow</button>
+            <button class="btn btn-sm" onclick="subDatePreset(14)">+14 days</button>
+            <button class="btn btn-sm" onclick="subDatePreset(30)">+1 month</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get. <strong>Next billing date</strong> is optional: set one and the account is given a stand-in subscription id (sub_TESTING_&lt;your id&gt;) so My Account treats it as a real subscriber, and a pass bought here will defer its clock to that date. Leave it blank and the stand-in is taken away again. A genuine Stripe subscription is never touched either way.</div>
         </div>
 
         <!-- PASS -->

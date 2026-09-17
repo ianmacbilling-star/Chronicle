@@ -19609,6 +19609,13 @@ function initUserTestingTab() {
     // is asking what the ACCOUNT is, which is the question it has always been asking.
     var _acct = me.accountTier || me.tier;
     var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
+    // v3.0.944 -- and the billing date, but ONLY when a subscription record actually exists.
+    // v3.0.940's lesson in one field: a stale current_period_end on an account with no
+    // subscription is not a billing date, and prefilling it here would let one click of Apply turn
+    // a dead July date into a live one. Cleared rather than left alone, so switching between
+    // accounts cannot carry the previous one's date into this one.
+    var sd = document.getElementById('asm-sub-period-end');
+    if (sd) sd.value = (me.hasSubscription && me.currentPeriodEnd) ? String(me.currentPeriodEnd).slice(0,10) : '';
     // v3.0.943 -- the trial checkbox is gone (the trial is a MODE now), and 'trial' is no longer an
     // option in this dropdown, so assigning it would leave the select on -1 and paint blank -- the
     // exact fault v3.0.864 spent a session on. Only real subscription tiers are set here.
@@ -19732,7 +19739,14 @@ function applyAccountState() {
     // 'trial' is deliberately not in this dropdown any more -- it is its own mode. Refusing it
     // here too means a hand-edited option cannot reach the path that ignores the start date.
     if (tier === 'trial') { say('Use the Free Trial mode above for the trial tier.', true); return; }
-    chain = clearPass().then(function () { return post('/api/auth/set-tier', { tier: tier }); });
+    // v3.0.944 -- THE KEY IS OMITTED RATHER THAN SENT EMPTY, and that distinction is the whole
+    // contract with the server: a period_end present means 'make this look like a subscriber', and
+    // its absence means 'take the stand-in away'. Sending period_end:'' would be a third state
+    // neither side has a meaning for.
+    var sbody = { tier: tier };
+    var sdt = document.getElementById('asm-sub-period-end');
+    if (sdt && sdt.value) sbody.period_end = sdt.value;
+    chain = clearPass().then(function () { return post('/api/auth/set-tier', sbody); });
   }
   chain.then(function () { window.location.reload(); })
     .catch(function (e) { say('Could not apply: ' + (e && e.message ? e.message : 'unknown') + ' (nothing further was changed)', true); });
@@ -19740,11 +19754,18 @@ function applyAccountState() {
 
 // Offsets from today. -1 is the one that gets used most: it makes the pass ALREADY expired, so
 // the lapse path can be exercised without waiting for a date to arrive.
-function passDatePreset(days) {
-  var el = document.getElementById('account-pass-expires');
+//
+// v3.0.944 -- ONE IMPLEMENTATION, TWO ROWS OF BUTTONS. The subscription pane has its own date now,
+// and a second copy of three lines of date arithmetic is the twin problem in miniature (Sec 5c):
+// the fix is not to remember to change both, it is to make there be only one. The element id is
+// the parameter, and the two named functions are what the markup calls.
+function _asmDatePreset(id, days) {
+  var el = document.getElementById(id);
   if (!el) return;
   el.value = new Date(Date.now() + (days * 86400000)).toISOString().slice(0, 10);
 }
+function passDatePreset(days) { _asmDatePreset('account-pass-expires', days); }
+function subDatePreset(days) { _asmDatePreset('asm-sub-period-end', days); }
 
 function setPassOverride() {
   var sel = document.getElementById('account-pass-override');

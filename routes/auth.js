@@ -531,10 +531,50 @@ router.post('/suspend', async function(req, res) {
 // archive caps, effective tier). NOT a real upgrade path -- remove before
 // production (paid tiers will be Stripe-gated). Grep 'set-tier' to find it.
 // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: every write below names req.session.userId.
+//
+// v3.0.944 -- AND IT CAN NOW SET A NEXT BILLING DATE, WHICH MEANS IT HAS TO INVENT A SUBSCRIPTION.
+//
+// Ian: "for a subscription setting... can you give me a billing date so I can set that too. Like
+// the free trial." A date on its own would have rendered NOTHING: since v3.0.942 every money
+// sentence on the account page is gated on hasBillingSubscription(), which needs hasSubscription,
+// which is !!users.stripe_subscription_id -- and a testing account has never been through Stripe.
+//
+// SO IT PLANTS AN ID, AND THE ID IS DELIBERATELY NOT PLAUSIBLE: sub_TESTING_<userid>. It cannot
+// collide with a real Stripe id, it is unmistakable in a row or a log line, and -- the reason that
+// matters -- it is EXACTLY recognisable, which is what lets this route take back only what it put
+// there.
+//
+// THE RULE, AND IT IS THE WHOLE DESIGN: THIS PANEL CREATES AND DESTROYS ITS OWN ID, NEVER A REAL
+// ONE. With a date, the id is planted only into an EMPTY column. Without a date, the testing id is
+// removed along with the columns that go with it, and a real subscription is left untouched. That
+// second half is not tidiness: Pass mode calls this route with tier 'copper' and no date, and a
+// pass holder still carrying a subscription id is exactly the half-state v3.0.943 was built to
+// stop this panel producing.
 router.post('/set-tier', requireAdminOrTester, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const tier = (req.body && typeof req.body.tier === 'string') ? req.body.tier.trim().toLowerCase() : '';
   if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
+
+  // OPTIONAL. Absent or empty means 'no billing date', which is a real answer and not an error --
+  // it is what Pass mode and the plain tier flip both send. A malformed one IS an error, rather
+  // than a silent fall-through to the clearing branch that would look like it had worked.
+  //
+  // STORED AT THE END OF THE CHOSEN DAY, same convention as /set-pass above and for the same
+  // reason: midnight would make a date set to 'today' already in the past the moment it was saved.
+  const periodRaw = (req.body && typeof req.body.period_end === 'string') ? req.body.period_end.trim() : '';
+  let periodEnd = null;
+  if (periodRaw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodRaw)) return res.status(400).json({ error: 'Next billing date must be a YYYY-MM-DD date' });
+    const whenPE = new Date(periodRaw + 'T23:59:59.000Z');
+    if (isNaN(whenPE.getTime())) return res.status(400).json({ error: 'That is not a real date' });
+    periodEnd = whenPE.toISOString();
+  }
+  // The one subscription id this panel is allowed to create, and therefore the only one it is
+  // allowed to destroy. Compared with = rather than LIKE on purpose -- LIKE would treat the
+  // underscores as wildcards, and a pattern that matches more than it was written for is how a
+  // testing control ends up deleting a real customer's subscription id.
+  const testSubId = 'sub_TESTING_' + req.session.userId;
+
   try {
     const db = await getDb();
     // Flipping TO the trial tier starts a fresh 30-day window so it won't lapse
@@ -542,15 +582,44 @@ router.post('/set-tier', requireAdminOrTester, async function(req, res) {
     // to backdate the start when testing expiry/lapse).
     if (tier === 'trial') {
       await db.prepare("UPDATE users SET tier = ?, subscription_status = 'trialing', trial_started_at = ? WHERE id = ?").run(tier, new Date().toISOString(), req.session.userId);
+    } else if (periodEnd) {
+      // v3.0.944 -- A BILLING DATE WAS CHOSEN, SO THIS ACCOUNT IS TO LOOK LIKE A SUBSCRIBER.
+      //
+      // cancel_at_period_end IS CLEARED. Without it an account that has bought a pass keeps
+      // saying 'ending' for ever -- v3.0.935 sets that flag on purchase and nothing here would
+      // ever unset it, so the one control meant to put the account back to a plain subscriber
+      // could not actually do it.
+      //
+      // COALESCE(NULLIF(...)) IS THE 'ONLY INTO AN EMPTY COLUMN' HALF OF THE RULE. A real Stripe
+      // id survives this write untouched; only a blank column gets the stand-in.
+      await db.prepare(
+        "UPDATE users SET tier = ?, subscription_status = 'active', current_period_end = ?, cancel_at_period_end = FALSE, " +
+        "stripe_subscription_id = COALESCE(NULLIF(stripe_subscription_id, ''), ?) WHERE id = ?"
+      ).run(tier, periodEnd, testSubId, req.session.userId);
     } else {
       // Switching to any non-trial tier means the account is no longer on the free
       // trial, so mark it active. inFreeTrial / userInFreeTrial key off
       // subscription_status, so without this the tier override alone leaves the
       // account flagged as trialing (and blocked from publishing). Matches the
       // trial-testing OFF path.
-      await db.prepare("UPDATE users SET tier = ?, subscription_status = 'active' WHERE id = ?").run(tier, req.session.userId);
+      //
+      // v3.0.944 -- NO BILLING DATE, SO THIS ACCOUNT IS NOT TO LOOK LIKE A SUBSCRIBER.
+      //
+      // Every CASE below tests the id the row held BEFORE this statement -- Postgres evaluates an
+      // UPDATE's SET expressions against the old row, so all three agree with each other even
+      // though the first of them is rewriting the very column the other two are reading.
+      //
+      // A REAL SUBSCRIPTION FALLS THROUGH EVERY ELSE BRANCH UNCHANGED. That is the other half of
+      // the rule, and it is why this is not simply 'set the columns to null'.
+      await db.prepare(
+        "UPDATE users SET tier = ?, subscription_status = 'active', " +
+        "stripe_subscription_id = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE stripe_subscription_id END, " +
+        "current_period_end = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE current_period_end END, " +
+        "cancel_at_period_end = CASE WHEN stripe_subscription_id = ? THEN FALSE ELSE cancel_at_period_end END " +
+        "WHERE id = ?"
+      ).run(tier, testSubId, testSubId, testSubId, req.session.userId);
     }
-    res.json({ success: true, tier: tier });
+    res.json({ success: true, tier: tier, currentPeriodEnd: periodEnd });
   } catch (e) {
     console.error('set-tier error:', e.message);
     res.status(500).json({ error: 'Could not change tier. Please try again.' });
@@ -669,6 +738,9 @@ router.put('/trial-testing', requireAdminOrTester, async function(req, res) {
     const db = await getDb();
     const now = new Date().toISOString();
     const inTrial = !!(req.body && req.body.inTrial);
+    // v3.0.944 -- the same stand-in id /set-tier plants, so the trial can take back what the
+    // subscription mode put there. Same rule, same exact comparison, same hands-off for a real one.
+    const testSubId = 'sub_TESTING_' + req.session.userId;
     let startedAt = null;
     if (inTrial) {
       const raw = req.body && req.body.started_at;
@@ -676,8 +748,19 @@ router.put('/trial-testing', requireAdminOrTester, async function(req, res) {
       if (!startedAt) startedAt = now;
       // Put the account ON the real trial TIER (badge + caps engage, exactly like a
       // fresh signup) and start the window. Persisted in the DB -> survives logins.
-      await db.prepare("UPDATE users SET tier = 'trial', subscription_status = 'trialing', trial_started_at = ?, edited_at = ?, edited_by = ? WHERE id = ?")
-        .run(startedAt, now, req.session.userId, req.session.userId);
+      //
+      // v3.0.944 -- AND IT TAKES THE STAND-IN SUBSCRIPTION WITH IT. Set Gold with a billing date,
+      // then flip to Free Trial, and without these three CASEs the account is a trial still
+      // holding sub_TESTING_<id> and a future billing date. Nothing renders that today, because
+      // the trial tier has no price and hasBillingSubscription() is false -- which is exactly what
+      // makes it the kind of quiet wrong state that surfaces as a bug the next time somebody asks
+      // a slightly different question of the same row. A REAL subscription is left alone.
+      await db.prepare("UPDATE users SET tier = 'trial', subscription_status = 'trialing', trial_started_at = ?, " +
+        "stripe_subscription_id = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE stripe_subscription_id END, " +
+        "current_period_end = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE current_period_end END, " +
+        "cancel_at_period_end = CASE WHEN stripe_subscription_id = ? THEN FALSE ELSE cancel_at_period_end END, " +
+        "edited_at = ?, edited_by = ? WHERE id = ?")
+        .run(startedAt, testSubId, testSubId, testSubId, now, req.session.userId, req.session.userId);
     } else {
       // Out of trial: drop a trial account to copper (the real post-trial tier); leave
       // any non-trial tier untouched so this never clobbers a tier set via the override.
