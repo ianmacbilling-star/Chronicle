@@ -19608,10 +19608,13 @@ function initUserTestingTab() {
     // EFFECTIVE tier, so a trial user holding a pass reads as platinum -- and this checkbox
     // is asking what the ACCOUNT is, which is the question it has always been asking.
     var _acct = me.accountTier || me.tier;
-    var tt = document.getElementById('dev-trial-toggle'); if (tt) tt.checked = (_acct === 'trial');
     var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
-    var ov = document.getElementById('account-tier-override'); if (ov && _acct) ov.value = _acct;
-    renderPassOverride(me);
+    // v3.0.943 -- the trial checkbox is gone (the trial is a MODE now), and 'trial' is no longer an
+    // option in this dropdown, so assigning it would leave the select on -1 and paint blank -- the
+    // exact fault v3.0.864 spent a session on. Only real subscription tiers are set here.
+    var ov = document.getElementById('account-tier-override');
+    if (ov && _acct && _acct !== 'trial') ov.value = _acct;
+    renderPassOverride(me);   // ...which also picks the mode the panel opens on.
   }).catch(function(){});
 }
 
@@ -19649,6 +19652,90 @@ function renderPassOverride(me) {
   }
   line += '<br />Resolves to <strong>' + aimpEsc(effective) + '</strong> everywhere in the app.';
   box.innerHTML = line;
+
+  // v3.0.943 -- AND THE PANEL OPENS ON WHATEVER THE ACCOUNT IS. Ian: "it should load up with
+  // whatever the user currently is." Read in the order the modes outrank each other: a live pass
+  // is what the account resolves to, so it wins the tab; a trial tier is next; everything else is
+  // a subscription. Same precedence ownTier() uses, so the tab agrees with the line above it.
+  if (typeof acctStateMode === 'function') {
+    acctStateMode(pass ? 'pass' : (acct === 'trial' ? 'trial' : 'subscription'));
+  }
+}
+
+// v3.0.943 -- THE MODE. Three states, and the panel opens on whichever one the account is in.
+//
+// _acctStateMode is set by acctStateMode() when somebody clicks, and by renderPassOverride() from
+// /me when the tab loads -- Ian: "it should load up with whatever the user currently is."
+var _acctStateMode = 'subscription';
+
+function acctStateMode(m) {
+  _acctStateMode = m;
+  ['subscription', 'pass', 'trial'].forEach(function (k) {
+    var pane = document.getElementById('asm-pane-' + k);
+    if (pane) pane.style.display = (k === m) ? 'block' : 'none';
+    var btn = document.getElementById('asm-btn-' + k);
+    // The active mode is the only PRIMARY button, so the panel says which state it is describing
+    // without a word of prose.
+    if (btn) btn.className = 'btn btn-sm' + ((k === m) ? ' btn-primary' : '');
+  });
+  var m1 = document.getElementById('account-tier-override-msg'); if (m1) m1.textContent = '';
+  var m2 = document.getElementById('account-pass-override-msg'); if (m2) m2.textContent = '';
+}
+
+// ONE APPLY, AND IT WRITES THE WHOLE STATE RATHER THAN ONE COLUMN.
+//
+// This is the actual fix for what caught Ian three times: the old panel set the tier and the pass
+// independently, and ownTier() takes the HIGHER of the two -- so setting the tier to Gold under a
+// live Platinum pass wrote the column and changed nothing anybody could see. Every mode here
+// clears what would otherwise outrank it.
+//
+// THE CALLS ARE SEQUENTIAL AND THE ORDER IS CHOSEN FOR WHAT A HALF-FAILURE LEAVES BEHIND:
+//
+//   Pass mode sets the TIER FIRST, then the pass. If the pass write fails, the account is a plain
+//   Copper -- obvious, and one click from correct. The other order would leave a Platinum pass
+//   sitting on the previous tier, which is the confusing overlap this batch exists to remove.
+//
+//   Subscription and Trial mode clear the PASS FIRST. If the second call fails the account is
+//   whatever it was minus the pass, which is again the plainer of the two wrecks.
+//
+// A FAILED STEP SAYS SO AND DOES NOT RELOAD. The old handlers reloaded on success and left the
+// message on screen otherwise; with two calls in a row, reloading after a half-application would
+// hide which half.
+function applyAccountState() {
+  var msg = document.getElementById('account-tier-override-msg');
+  function say(t, bad) { if (msg) { msg.textContent = t; msg.style.color = bad ? 'var(--error)' : ''; } }
+  function post(url, body) {
+    return fetch(url, { method: (url.indexOf('trial-testing') !== -1) ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d || !d.success) { throw new Error((d && (d.message || d.error)) || 'unknown'); } return d; });
+  }
+  var clearPass = function () { return post('/api/auth/set-pass', { pass_tier: null, expires_on: null }); };
+
+  say('Applying...');
+  var chain;
+  if (_acctStateMode === 'pass') {
+    var psel = document.getElementById('account-pass-override');
+    var pdt = document.getElementById('account-pass-expires');
+    var ptier = (psel && psel.value) || 'platinum';
+    if (!(pdt && pdt.value)) { say('Pick an expiry date first, or use one of the presets.', true); return; }
+    chain = post('/api/auth/set-tier', { tier: 'copper' })
+      .then(function () { return post('/api/auth/set-pass', { pass_tier: ptier, expires_on: pdt.value }); });
+  } else if (_acctStateMode === 'trial') {
+    var tdt = document.getElementById('dev-trial-date');
+    var body = { inTrial: true };
+    if (tdt && tdt.value) body.started_at = tdt.value;
+    chain = clearPass().then(function () { return post('/api/auth/trial-testing', body); });
+  } else {
+    var tsel = document.getElementById('account-tier-override');
+    var tier = (tsel && tsel.value) || 'copper';
+    // 'trial' is deliberately not in this dropdown any more -- it is its own mode. Refusing it
+    // here too means a hand-edited option cannot reach the path that ignores the start date.
+    if (tier === 'trial') { say('Use the Free Trial mode above for the trial tier.', true); return; }
+    chain = clearPass().then(function () { return post('/api/auth/set-tier', { tier: tier }); });
+  }
+  chain.then(function () { window.location.reload(); })
+    .catch(function (e) { say('Could not apply: ' + (e && e.message ? e.message : 'unknown') + ' (nothing further was changed)', true); });
 }
 
 // Offsets from today. -1 is the one that gets used most: it makes the pass ALREADY expired, so

@@ -1812,53 +1812,95 @@
       </div>
 
       <!-- TESTING ONLY: manual tier override (remove before production) -->
-      <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
-        <div class="settings-section-title">Testing — Manual Tier Override</div>
-        <div class="settings-section-desc">Temporary: switch this account's tier to test tier-gated features. Not a real upgrade — will be removed later.</div>
-        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;">
-          <div style="flex:1;">
-            <label class="form-label">Tier</label>
-            <select class="form-input" id="account-tier-override">
-              <option value="trial">Free Trial</option>
-              <option value="copper">Copper</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="platinum">Platinum</option>
-            </select>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="setTierOverride()">Apply</button>
-        </div>
-        <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+      <!-- v3.0.943 -- ONE PANEL, THREE STATES, AND SETTING A STATE SETS IT.
 
-        <!-- v3.0.921 -- TD-780 Push 4b. PLATINUM PASS, in the same section and self-only,
-             exactly like the tier override above it. The pass is ADDITIVE rather than a
-             third state of the dropdown, because that is what it is in the data: the
-             account tier stays put and the pass sits on top of it. Setting them separately
-             is the only way to test Copper-with-a-pass against Gold-with-a-pass against
-             Gold-with-an-expired-one. -->
-        <div style="height:1px;background:rgba(201,168,76,0.18);margin:14px 0 12px;"></div>
-        <div class="settings-section-desc" id="pass-override-state" style="margin:0 0 10px;padding:8px 10px;border-radius:6px;background:rgba(20,14,6,0.5);">Loading...</div>
-        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
-          <div style="flex:0 0 170px;">
-            <label class="form-label">Pass</label>
-            <select class="form-input" id="account-pass-override">
-              <option value="">None &mdash; subscriber</option>
-              <option value="platinum">Platinum pass</option>
-            </select>
-          </div>
-          <div style="flex:0 0 180px;">
-            <label class="form-label">Expires</label>
-            <input class="form-input" type="date" id="account-pass-expires" />
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="setPassOverride()">Apply pass</button>
+           Ian, after the pass swallowed a tier change three times in one day: "Maybe a toggle that
+           makes it obvious how to set it to Pass or Subscription. And it should load up with
+           whatever the user currently is."
+
+           WHAT WAS WRONG: this panel mirrored the DATA, where a pass sits ON TOP of an account
+           tier rather than beside it. Two additive controls, and ownTier() silently taking the
+           higher of the two -- so picking Gold with a live pass wrote the column and changed
+           nothing visible.
+
+           IAN CHOSE THE TRUE SWITCH. Each mode now writes the WHOLE state: picking Subscription or
+           Free Trial clears the pass, and picking Pass drops the account tier to Copper beneath it.
+           The cost, recorded rather than hidden: Gold-with-a-live-pass is no longer reachable from
+           here. It is a legacy overlap the account page still words differently, and it now needs
+           SQL to set up. See TD-796.
+
+           THE FREE TRIAL SECTION IS FOLDED IN. It used to be its own panel below Guided Tours,
+           with its own checkbox, while "Free Trial" was ALSO an option in this dropdown -- two
+           controls for one state that could disagree with each other. The dropdown option is gone;
+           the trial is the third mode. -->
+      <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
+        <div class="settings-section-title">Testing &mdash; Account State</div>
+        <div class="settings-section-desc">Temporary: put this account into one of the three states below, to test tier-gated features. Not a real upgrade &mdash; will be removed later.</div>
+
+        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(20,14,6,0.5);">Loading...</div>
+
+        <label class="form-label">This account is on</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="btn btn-sm" id="asm-btn-subscription" onclick="acctStateMode('subscription')">Subscription</button>
+          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')">Pass</button>
+          <button class="btn btn-sm" id="asm-btn-trial" onclick="acctStateMode('trial')">Free Trial</button>
         </div>
-        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-          <button class="btn btn-sm" onclick="passDatePreset(-1)">Yesterday</button>
-          <button class="btn btn-sm" onclick="passDatePreset(90)">+3 months</button>
-          <button class="btn btn-sm" onclick="passDatePreset(180)">+6 months</button>
-          <button class="btn btn-sm" onclick="passDatePreset(365)">+12 months</button>
+
+        <!-- SUBSCRIPTION -->
+        <div id="asm-pane-subscription" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;">
+            <div style="flex:1;max-width:260px;">
+              <label class="form-label">Tier</label>
+              <select class="form-input" id="account-tier-override">
+                <option value="copper">Copper</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get.</div>
         </div>
-        <div id="account-pass-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+
+        <!-- PASS -->
+        <div id="asm-pane-pass" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
+            <div style="flex:0 0 170px;">
+              <label class="form-label">Pass</label>
+              <select class="form-input" id="account-pass-override">
+                <option value="platinum">Platinum pass</option>
+              </select>
+            </div>
+            <div style="flex:0 0 180px;">
+              <label class="form-label">Expires</label>
+              <input class="form-input" id="account-pass-expires" type="date" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="passDatePreset(-1)">Yesterday</button>
+            <button class="btn btn-sm" onclick="passDatePreset(90)">+3 months</button>
+            <button class="btn btn-sm" onclick="passDatePreset(180)">+6 months</button>
+            <button class="btn btn-sm" onclick="passDatePreset(365)">+12 months</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Sets the account tier to Copper underneath, which is what a real pass holder looks like. <strong>Yesterday</strong> makes the pass already expired, for testing the lapse.</div>
+        </div>
+
+        <!-- FREE TRIAL -->
+        <div id="asm-pane-trial" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;">
+            <div style="flex:1;max-width:260px;">
+              <label class="form-label">Trial start date</label>
+              <input class="form-input" id="dev-trial-date" type="date" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass. Leave the date blank to start the trial today; set it ~31 days ago to confirm the watermark switches off past the window.</div>
+        </div>
+
+        <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:10px;"></div>
+        <div id="account-pass-override-msg" class="settings-section-desc" style="margin-top:2px;"></div>
       </div>
 
       <!-- TESTING ONLY: clear this account's guided-tour history so tours
@@ -1876,23 +1918,6 @@
       <!-- TESTING ONLY: put this account in/out of the free trial to exercise
            the trial watermark. Backed by /api/auth/trial-testing (self only).
            REMOVE with the other testing controls before production. -->
-      <div class="settings-section" id="dev-trial-section" style="border:1px dashed rgba(201,168,76,0.5);">
-        <div class="settings-section-title">Testing &mdash; Free Trial</div>
-        <div class="settings-section-desc">Temporary: flip this account in or out of the 30-day free trial to test the trial watermark. Will be removed later.</div>
-        <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;">
-          <input type="checkbox" id="dev-trial-toggle" style="flex-shrink:0;" />
-          <span style="font-weight:600;">In free trial</span>
-        </label>
-        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;">
-          <div style="flex:1;max-width:220px;">
-            <label class="form-label">Trial start date (optional)</label>
-            <input class="form-input" id="dev-trial-date" type="date" />
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="devApplyTrial()">Apply</button>
-        </div>
-        <div class="settings-section-desc" style="margin-top:6px;">Tip: set the start date ~31 days ago with the toggle on to confirm the watermark switches off past the window.</div>
-        <div id="dev-trial-msg" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-      </div>
       </div>
 
     </div>
