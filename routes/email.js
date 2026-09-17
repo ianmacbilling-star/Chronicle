@@ -905,6 +905,52 @@ async function sendPurgeWarningEmail(name, email, daysLeft, dateStr) {
   return true;
 }
 
+// v3.0.936 -- TD-780 Push 8 of 8. THE PASS EXPIRY MAILS.
+//
+// TWO THINGS ARE DELIBERATELY ABSENT FROM THIS COPY.
+//
+// IT DOES NOT SAY "RENEW". A pass holder has two ways to carry on -- another pass, which STACKS
+// its months onto the end of the one they have, or a subscription -- and which is better depends
+// on how long they expect to keep going. The mail points at the plans page and lets them choose,
+// rather than steering them at the one that happens to cost more.
+//
+// IT DOES NOT SAY "YOU WILL LOSE YOUR WORK", because they will not. Copper keeps everything they
+// have made; what ends is the Platinum toolkit. A deadline mail that overstates the loss is the
+// kind a reader remembers for the wrong reason.
+async function sendPassEndingSoonEmail(name, email, tierName, dateStr, daysLeft) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  const copy = {
+    subject: 'Your Campaignia ' + tierName + ' pass ends in ' + daysLeft + ' days',
+    headline: 'Your ' + tierName + ' pass ends on ' + dateStr,
+    body: 'Your ' + tierName + ' pass runs out on ' + dateStr + ' (' + daysLeft + ' days from now), ' +
+      'and your account moves to the free Copper tier. <b>Everything you have made stays exactly ' +
+      'where it is</b> &mdash; what ends is ' + tierName + ' access. To keep going you can buy ' +
+      'another pass, which adds its months onto the end of this one, or start a subscription.',
+    cta: 'See passes and plans'
+  };
+  await sendEmail(email, copy.subject, trialLifecycleHTML(copy, name, ctaUrl));
+  return true;
+}
+
+// Sent on the day the pass runs out. Past tense, no deadline, no pressure -- the moment for urgency
+// has been and gone, and this one is here so nobody discovers the change by finding a button greyed
+// out mid-session.
+async function sendPassExpiredEmail(name, email, tierName) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  const copy = {
+    subject: 'Your Campaignia ' + tierName + ' pass has ended',
+    headline: 'Your ' + tierName + ' pass has ended',
+    body: 'Your ' + tierName + ' pass has run its course, so your account has moved to the free ' +
+      'Copper tier. Your campaigns, characters and books are all still there. Whenever you want ' +
+      tierName + ' back, another pass or a subscription turns it on again in one step.',
+    cta: 'See passes and plans'
+  };
+  await sendEmail(email, copy.subject, trialLifecycleHTML(copy, name, ctaUrl));
+  return true;
+}
+
 // Final 'account closed' notice, sent at tombstone time (before the address is
 // scrubbed). We do not delete stored content yet -- that reclaim runs later.
 async function sendAccountClosedEmail(name, email) {
@@ -1058,4 +1104,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

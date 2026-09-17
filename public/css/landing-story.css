@@ -149,7 +149,11 @@
 .btn-nav, .hero-eyebrow, .hero-title, .btn-hero, .section-tag, .section-title,
 .step-num, .step-label, .step-title, .features-strip-title, .feature-title,
 .pricing-header-title, .tier-name-row, .tier-price-tag, .btn-tier, .payoff-title,
-.btn-cta, .cta-strip-text, .faq-header-title, .faq-q, .caption-box.gold-cap::before {
+.btn-cta, .cta-strip-text, .faq-header-title, .faq-q, .caption-box.gold-cap::before,
+/* v3.0.925 -- TD-780. Everything Push 7 and 7b invented. A class that declares Bangers in
+   landing.css and is not named here renders in a comic face on a page that has none; the batch
+   guard now asserts this list covers them all. */
+.plan-blurb b, .pass-card-term, .pass-card-tokens, .pass-card-price, .reward-item-title {
   font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
   font-weight: 500;
 }
@@ -165,10 +169,23 @@ body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text 
 .hero-eyebrow { text-wrap: balance; }
 
 .panel, .panel-how, .panel-pricing, .panel-payoff, .faq-cell, .step-row, .tier-row,
+/* v3.0.925 -- the pass cards and the reward items are panels on this page too. */
+.pass-card, .reward-item,
 .features-strip-body > * {
   border: 1px solid rgba(201,168,76,0.22);
   box-shadow: none;
 }
+
+/* v3.0.925 -- the pass card’s hover is a comic-page brightening; here it is a quieter edge,
+   matching .tier-row and the rest of this page’s restraint. */
+.pass-card:hover {
+  border-color: rgba(201,168,76,0.55);
+  background: rgba(201,168,76,0.05);
+}
+
+/* The kicker and the token subtitle are the two small-caps lines Push 7 added; they follow the
+   same letterspacing this page gives every other eyebrow. */
+.pass-card-kicker { letter-spacing: 3px; font-weight: 500; }
 
 .btn-hero, .btn-cta, .btn-nav, .btn-tier {
   border-radius: 2px;

@@ -18,7 +18,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
 const { sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 const { grantSignupBonus } = require('./tokens');
-const { isPaidTier } = require('../middleware/tiers');
+const { isPaidTier, ownTier } = require('../middleware/tiers');
 
 const INVITE_TTL_DAYS = 7;
 
@@ -43,8 +43,9 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   // Enforced server-side so the client intercept can't be bypassed.
   try {
     const _idb = await getDb();
-    const _iu = await _idb.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-    if (_iu && _iu.tier === 'trial') {
+    // v3.0.919 -- TD-780 Push 3. ownTier, so a trial user holding a live pass may invite.
+    const _iu = await _idb.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(req.session.userId);
+    if (_iu && ownTier(_iu) === 'trial') {
       return res.status(403).json({ error: 'Inviting players is a paid feature. Upgrade to a paid plan to invite your table.' });
     }
   } catch (e) { /* lookup failure -> fall through */ }
@@ -438,8 +439,11 @@ router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verif
   // tier (Silver+). A Free Trial or Copper user would inherit a campaign they
   // cannot extend -- checkSessionLimit hard-blocks Copper -- so block the
   // handoff here rather than leave them with a half-dead campaign.
-  const targetUser = await db.prepare('SELECT tier FROM users WHERE id = ?').get(targetUserId);
-  if (!targetUser || !isPaidTier(targetUser.tier)) {
+  // v3.0.919 -- TD-780 Push 3. A live pass is a campaign-capable plan, so it qualifies to
+  // receive a handoff. The reasoning above is about whether the incoming Story Master can
+  // EXTEND the campaign, and a pass holder can.
+  const targetUser = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(targetUserId);
+  if (!targetUser || !isPaidTier(ownTier(targetUser))) {
     return res.status(403).json({
       error: 'The new Story Master needs a Silver plan or higher. Ask them to upgrade before you hand off.',
       code: 'SM_NOT_PAID'

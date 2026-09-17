@@ -599,8 +599,13 @@ function maybeStartCheckout() {
   try {
     var q = new URLSearchParams(window.location.search);
     var plan = (q.get('start_checkout') || '').toLowerCase();
-    if (plan !== 'silver' && plan !== 'gold' && plan !== 'platinum') return;
+    if (!plan) return;
     try { history.replaceState(history.state, '', window.location.pathname); } catch (e) {}
+    // v3.0.924 -- TD-780 Push 7. NO LIST OF PASS IDS HERE EITHER. /api/tokens/pass-checkout
+    // resolves the id through the server catalog and refuses an unknown one, so a hand-typed or
+    // tampered URL cannot buy anything -- and a new pass needs no edit in this file.
+    if (plan.indexOf('pass:') === 0) { startPassCheckout(plan.slice(5)); return; }
+    if (plan !== 'silver' && plan !== 'gold' && plan !== 'platinum') return;
     subscribeTier(plan);
   } catch (e) {}
 }
@@ -652,6 +657,16 @@ function renderTokenPacks() {
       '</div>';
   }).join('');
   wrap.innerHTML = html;
+
+  // v3.0.932 -- TD-780. THE FOOTER LINK IS HIDDEN FOR THE ONE PERSON WHO ALREADY HAS ONE. A user
+  // who cannot buy gets a full-width "See plans" button inside the block message below; showing a
+  // second one in the footer at the same time is the product asking twice.
+  //
+  // IT DEFAULTS TO VISIBLE IN THE MARKUP AND IS ONLY EVER HIDDEN HERE, which is the safe
+  // direction: if this function never runs, the person still has a way to the plans.
+  var _plansBtn = document.getElementById('tokens-modal-plans-btn');
+  if (_plansBtn) _plansBtn.style.display = canBuy ? '' : 'none';
+
   if (!canBuy) {
     var _pmsg = document.getElementById('token-purchase-msg');
     if (_pmsg) {
@@ -734,7 +749,157 @@ function hasLiveSubscription(me) {
   return st === 'active' || st === 'trialing' || st === 'past_due' || st === 'unpaid' || st === 'paused';
 }
 
+// v3.0.942 -- IS MONEY ACTUALLY GOING OUT. A DIFFERENT QUESTION FROM THE ONE ABOVE.
+//
+// hasLiveSubscription() means "there is a subscription RECORD in a live-ish state", which is true
+// of accounts that are not being charged anything: a Free Trial, and a Copper still carrying a
+// stripe_subscription_id from a plan that ended months ago. Ian saw the difference twice -- a trial
+// told its subscription would stop billing (v3.0.941), and then a trial account showing
+// "Subscription ends JULY 27, 2026" for a subscription that has not existed since July.
+//
+// v3.0.941 FIXED THAT IN ONE FUNCTION, INLINE. This is the same rule, written once, so the account
+// panel and the purchase dialog cannot answer it differently -- and so the NEXT surface that needs
+// it calls something rather than reinventing it.
+//
+// THE TEST IS THE TIER'S PRICE, FROM THE CATALOG the server already sends. Copper and Free Trial
+// are free and have none. Deliberately not a list of tier names: this codebase hardcodes
+// ('silver','gold','platinum') in several places and each one is somewhere a future tier gets
+// forgotten. FAILS QUIET -- no catalog means no billing claims, which is the safe direction for
+// every sentence that depends on it.
+function hasBillingSubscription(me) {
+  if (!hasLiveSubscription(me)) return false;
+  var all = (me && me.allTiers) || {};
+  var acct = (me && (me.accountTier || me.tier)) || 'copper';
+  return !!(all[acct] && all[acct].price);
+}
+
+// v3.0.924 -- TD-780 Push 7. START A PASS CHECKOUT. Deliberately the same shape as
+// subscribeTier below, including where it puts its error text, because the two are the same
+// action to the person taking it.
+//
+// THE ID IS PASSED THROUGH, NOT CHECKED. routes/tokens.js resolves it with getPass() and answers
+// 400 for anything it does not know -- that check is on the server because that is where the
+// money is, and a second copy here could only ever disagree with it.
+//
+// This function is all Push 7 needs: it completes the landing-page flow (pick a pass, sign up,
+// verify, land in the app, checkout opens). THE ACCOUNT-PAGE UI THAT ALSO CALLS IT IS PUSH 6.
+// v3.0.935 -- TD-792. The freshest /me this page has seen. See the note above startPassCheckout.
+var _cmpAccountMe = null;
+
+function _cmpMe() { return _cmpAccountMe || (typeof state !== 'undefined' && state.user) || null; }
+
+function startPassCheckout(passId) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+
+  // v3.0.935 -- TD-792. SAY IT BEFORE THEY PAY. Ian, asked whether this belongs at purchase or
+  // only afterwards on the account page: "You can say both."
+  //
+  // THE THIRD PARAGRAPH IS THE ONE THAT MATTERS AND IT IS THE EASIEST TO LEAVE OUT. Everything
+  // else here is good news -- you keep what you paid for, you are raised immediately, the clock
+  // waits. The part somebody will be unhappy about in twelve months is that their old plan does
+  // not come back, and that has to be said while they still have the choice.
+  var _me = _cmpMe();
+  var _all = (_me && _me.allTiers) || {};
+  var _acct = (_me && (_me.accountTier || _me.tier)) || 'copper';
+
+  // v3.0.941 -- ONLY WARN SOMEBODY WHO IS ACTUALLY BEING BILLED.
+  //
+  // Ian, buying a pass on a Free Trial: "not all this makes sense... They haven't paid for
+  // anything at this point that they would loose. There is no Billing." Correct -- the dialog
+  // told a trial user their subscription would stop billing, that they would keep access until
+  // the billing period ended, and that they would lose none of what they had paid for. None of
+  // those four things is true of a trial.
+  //
+  // hasLiveSubscription() ANSWERS A DIFFERENT QUESTION. It means "is there a subscription record
+  // in a live-ish state", which is what the account panel wants. This dialog needs "is money
+  // going out", and the two differ for exactly the accounts Ian named: a Free Trial, and a Copper
+  // still carrying a stale subscription id from a plan that ended months ago.
+  //
+  // THE TEST IS THE TIER'S PRICE, OUT OF THE CATALOG. Copper and the Free Trial are free and have
+  // none; Silver, Gold and Platinum do. Deliberately not a list of tier names -- this codebase
+  // hardcodes ('silver','gold','platinum') in several places and each one is somewhere a future
+  // tier gets forgotten. It also fails QUIET: no catalog means no dialog, which is the safe
+  // direction for a warning.
+  // v3.0.942 -- WAS TWO LINES OF THE SAME RULE WRITTEN OUT HERE. It is a function now, shared with
+  // the account panel, because a rule in two places is a rule that will be updated in one of them.
+  if (hasBillingSubscription(_me) && typeof uiConfirm === 'function') {
+    var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
+    var _copperName = (_all.copper && _all.copper.name) || 'Copper';
+    uiConfirm(
+      'You have a ' + _acctName + ' subscription.\n\n' +
+      'Buying a pass stops it. ' + _acctName + ' will not bill again after your current billing ' +
+      'period ends, and you keep your ' + _acctName + ' access until then.\n\n' +
+      'The pass raises your account straight away, and its clock does not start until that billing ' +
+      'period ends \u2014 so you lose none of what you have already paid for.\n\n' +
+      'When the pass runs out your account returns to ' + _copperName + ', not to ' + _acctName + '. ' +
+      'You would need to subscribe again or buy another pass.',
+      { title: 'Your subscription will stop billing', preserveLines: true,
+        okText: 'Buy the pass', cancelText: 'Not yet' }
+    ).then(function (ok) { if (ok) _startPassCheckout(passId); });
+    return;
+  }
+  _startPassCheckout(passId);
+}
+
+function _startPassCheckout(passId) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+  fetch('/api/tokens/pass-checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passId: passId })
+  }).then(function(r) {
+    if (r.status === 503) {
+      show('Passes are being set up and will be available shortly.');
+      return null;
+    }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.url) { window.location = data.url; return; }
+    show((data && (data.message || data.error)) ? (data.message || data.error) : "We couldn't start your pass purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
+  }).catch(function() {
+    show('Could not reach the billing service. Please try again.');
+  });
+}
+
 function subscribeTier(tier) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+
+  // v3.0.935 -- TD-792. THE OTHER DIRECTION. Ian: warn "only when they hit a button that is about
+  // to take them to stripe to do the purchase".
+  //
+  // Stripe's own Billing Portal cannot be intercepted -- it is their page. This grid is the route
+  // a pass holder actually takes back to a subscription, so this is where it gets said, and it
+  // says the useful thing rather than the discouraging one: waiting is cheaper, and another pass
+  // stacks onto the end of this one rather than overwriting it.
+  //
+  // NOT SUPPRESSED FOR THE POST-VERIFICATION AUTO-START in maybeStartCheckout(). Somebody arriving
+  // there with a live pass is about to pay twice for the same access, which is exactly the person
+  // this dialog is for -- and a freshly verified signup has no pass, so it does not fire for them.
+  var _me = _cmpMe();
+  var _pass = _me && _me.pass;
+  if (_pass && _pass.expiresAt && typeof uiConfirm === 'function') {
+    var _all = (_me && _me.allTiers) || {};
+    var _pName = (_all[_pass.tier] && _all[_pass.tier].name) || _pass.tier;
+    var _until = (typeof _cmpNiceDate === 'function') ? _cmpNiceDate(_pass.expiresAt) : '';
+    uiConfirm(
+      'Your ' + _pName + ' pass runs ' + (_until ? ('until ' + _until) : 'for a while yet') + '.\n\n' +
+      'A subscription does not stack with it. Starting one now bills you monthly from today for ' +
+      'access your pass already gives you.\n\n' +
+      'If you want to keep going after the pass ends, it costs less to wait and subscribe then ' +
+      '\u2014 or to buy another pass, which adds its months onto the end of this one.',
+      { title: 'You already have a pass', preserveLines: true,
+        okText: 'Subscribe anyway', cancelText: 'Not now' }
+    ).then(function (ok) { if (ok) _subscribeTier(tier); });
+    return;
+  }
+  _subscribeTier(tier);
+}
+
+function _subscribeTier(tier) {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
   fetch('/api/tokens/subscribe', {
@@ -1948,7 +2113,19 @@ function loadAccount() {
     .then(function(r) { return r.json(); })
     .then(function(me) {
       if (!me || !me.authenticated) return;
+      // v3.0.935 -- TD-792. KEEP IT. Both purchase confirms need to know, at click time, whether
+      // there is a live subscription or a live pass, and state.user is whatever checkAuth() read
+      // when the page loaded -- which is stale the moment a purchase completes.
+      _cmpAccountMe = me;
       renderAccountTier(me);
+      // v3.0.929 -- TD-780 Push 6. The standing panel needs nothing but `me`; the pass cards need
+      // the catalog, so that fetch is its own and FAILS QUIETLY -- a billing page that renders
+      // nothing because a price list timed out is worse than one with no pass panel on it.
+      renderAccountStanding(me);
+      fetch('/api/public/pricing')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { renderAccountPasses(me, d); })
+        .catch(function () {});
       renderAccountPlans(me);
       var _ppn = document.getElementById('settings-penname'); if (_ppn) _ppn.value = me.penName || '';
       var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
@@ -2159,24 +2336,320 @@ function refreshUsageTokens() {
     .catch(function() {});
 }
 
+// v3.0.930 -- ONE DATE FORMATTER FOR THIS PAGE, and the reason it exists is a bug that shipped.
+// new Date(x).toLocaleDateString() RETURNS the string "Invalid Date" for junk input rather than
+// throwing, so every try/catch around one of these was decorative. Returns '' on anything that
+// will not parse, and callers decide what to print instead.
+function _cmpNiceDate(raw) {
+  if (!raw) return '';
+  var d = new Date(raw);
+  if (!d || !isFinite(d.getTime())) return '';
+  try {
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch (e) { return ''; }
+}
+
+// v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE RIGHT NOW, in as many rows as it takes.
+//
+// TWO FACTS, NEVER MERGED. The account tier is what they pay for (or fall back to); the pass is
+// what sits on top of it until a date. A single "Platinum" would be true today and a surprise on
+// the morning it lapses.
+function renderAccountStanding(me) {
+  var el = document.getElementById('account-standing');
+  if (!el) return;
+  var all = me.allTiers || {};
+  var acct = me.accountTier || me.tier || 'copper';
+  var acctName = (all[acct] && all[acct].name) || acct;
+  var pass = me.pass || null;
+  // v3.0.942 -- EVERY USE OF `live` IN THIS FUNCTION PUTS A MONEY WORD ON THE SCREEN --
+  // "subscription", "billed monthly", "billing stops", "Next billing date" -- so the question it
+  // must ask is whether this account is BILLED, not whether a subscription record exists. Those
+  // differ for a Free Trial and for a Copper carrying a dead subscription id, which is exactly
+  // what put "Subscription ends JULY 27, 2026" on Ian's trial account.
+  var live = hasBillingSubscription(me);
+
+  // v3.0.933 -- THE TIER THEY ARE, NOT THE TIER THEY WOULD BE WITHOUT THE PASS.
+  //
+  // me.tier is ownTier(user) from routes/auth.js: users.tier raised by a live pass, and NOTHING
+  // else. It is not the campaign-aware inherited tier -- that is a different function taking a
+  // campaign id, and it never enters this payload. So a Copper playing inside somebody else's
+  // Platinum campaign still reads Copper here, which is what Ian asked for.
+  //
+  // The || acct fallback is the safe direction: if a payload ever arrives without `tier`, this
+  // row falls back to the subscription tier -- understating what somebody has, never overstating
+  // it. An account page that claims a tier the server will not honour is the worse failure.
+  var own = me.tier || acct;
+  var ownName = (all[own] && all[own].name) || own;
+  var raisedByPass = !!(pass && pass.expiresAt && own !== acct);
+
+  // v3.0.935 -- TD-792. WHAT THEY ACTUALLY LAND ON WHEN THE PASS RUNS OUT.
+  // A subscription only survives the pass if it is still going to be there -- so a pending cancel,
+  // which is now what buying a pass causes, means the answer is Copper rather than the plan they
+  // are on today. DERIVED, NOT TYPED: 'copper' is a key into the same allTiers catalog that names
+  // every other tier on this panel, so a rename lands here too.
+  var _subOutlivesPass = live && !me.cancelAtPeriodEnd;
+  // v3.0.938 -- one phrase, two callers, so the row and the note cannot disagree about whether
+  // there is another payment coming.
+  var _billNote = me.cancelAtPeriodEnd ? 'ending' : 'billed monthly';
+  var fallbackKey = _subOutlivesPass ? acct : 'copper';
+  var fallbackName = (all[fallbackKey] && all[fallbackKey].name) || fallbackKey;
+
+  // v3.0.930 -- LABEL THEN VALUE, SIDE BY SIDE. This was justify-content:space-between, which in a
+  // wide settings column threw the value to the far right and left the label stranded about forty
+  // characters away with nothing between them. Ian: "Move the Platinum Billed Monthly Text over
+  // closer to the Your Account Text." A fixed label column does that at every width, and the note
+  // now sits inline after the value rather than under it, so each fact is one readable line.
+  function row(label, value, note) {
+    return '<div style="display:flex;align-items:baseline;gap:10px;' +
+      'padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+      // v3.0.931 -- 128px, because "Next billing date" is seventeen characters and 108 wrapped it.
+      '<span style="font-size:12px;color:var(--text-muted);flex:0 0 128px;">' + label + '</span>' +
+      '<span style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);">' + value + '</span>' +
+      (note ? '<span style="font-size:12px;color:var(--text-muted);font-style:italic;">' + note + '</span>' : '') +
+      '</div>';
+  }
+
+  var html = '';
+  // v3.0.933 -- the VALUE is the tier they hold today; the NOTE says how they hold it. When a pass
+  // is doing the lifting, the subscription state moves into the note rather than off the panel --
+  // a Gold subscriber reading PLATINUM still needs to see that Gold is what bills them.
+  html += row('Your account', escapeHtml(ownName),
+    raisedByPass
+      // v3.0.938 -- A SUBSCRIPTION THAT IS ENDING IS NOT "BILLED MONTHLY". Ian's screenshot had
+      // this row reading "Silver subscription, billed monthly" directly above "Subscription ends
+      // October 9, 2026". No date is repeated here -- the row below owns it.
+      ? (live ? 'by pass \u2014 ' + escapeHtml(acctName) + ' subscription, ' + _billNote
+              : (acct === 'copper' ? 'by pass \u2014 no subscription'
+                                   : 'by pass \u2014 your account is ' + escapeHtml(acctName)))
+      : (live ? _billNote : (acct === 'copper' ? 'no subscription' : '')));
+
+  // v3.0.931 -- WHEN THE NEXT THING HAPPENS. Ian: "If they have a subscription it should say
+  // Next billing date: xxx." A pending cancel replaces it rather than adding a row, because on a
+  // subscription that is ending there IS no next billing date and showing one would be a lie.
+  // A payment problem suppresses both: the date is not the story, and the alert beside the Manage
+  // button is.
+  // v3.0.940 -- THE TRIAL GETS A ROW. Ian, looking at a trial account showing a subscription date
+  // from a subscription that does not exist: "It should be ending in 9/18/2026 right? not July."
+  // It should. The date comes from the server, which derives it from the configured trial length.
+  // Placed above the subscription rows because for a trial account they no longer render at all --
+  // that was Fault 1, and this row is what fills the space it was wrongly occupying.
+  var _trialEnds = _cmpNiceDate(me.trialEndsAt);
+  // v3.0.942 -- ...UNLESS A PASS HAS ALREADY MADE IT A NON-EVENT. Ian, with a trial ending tomorrow
+  // and a three-month pass just bought: "Seems to me the Trial has already ended now that i bought
+  // the pass." The row was not merely noise, it was an ALARM -- "then your account moves to Copper"
+  // on an account that does nothing of the kind tomorrow. The pass row below already carries the
+  // real date.
+  //
+  // COMPARED AS TIMES. A pass that expires BEFORE the trial would (a short pass bought on a fresh
+  // trial) leaves the trial's end a real event, and that row stays.
+  var _passOutlastsTrial = false;
+  try {
+    if (pass && pass.expiresAt && me.trialEndsAt) {
+      var _pMs = Date.parse(String(pass.expiresAt));
+      var _tMs = Date.parse(String(me.trialEndsAt));
+      _passOutlastsTrial = isFinite(_pMs) && isFinite(_tMs) && _pMs >= _tMs;
+    }
+  } catch (e) { _passOutlastsTrial = false; }
+  if (_trialEnds && !_passOutlastsTrial) {
+    var _afterTrial = (all.copper && all.copper.name) || 'Copper';
+    html += row('Trial ends', _trialEnds, 'then your account moves to ' + escapeHtml(_afterTrial));
+  }
+
+  var _when = _cmpNiceDate(me.currentPeriodEnd);
+  var _billStatus = me.subscriptionStatus || '';
+  var _problem = live && (_billStatus === 'past_due' || _billStatus === 'unpaid');
+  if (live && !_problem && _when) {
+    if (me.cancelAtPeriodEnd) {
+      // v3.0.935 -- TD-792. WHO TAKES OVER. Before this batch a pending cancel could only mean
+      // Copper. Now it is usually a pass that caused the cancel in the first place, and telling
+      // that person their account 'moves to Copper' on a date they are still Platinum would be
+      // the same false alarm v3.0.933 fixed one row up.
+      html += row('Subscription ends', _when,
+        pass ? 'billing stops \u2014 your pass carries on' : 'then your account moves to Copper');
+    } else {
+      html += row('Next billing date', _when);
+    }
+  }
+
+  if (pass && pass.expiresAt) {
+    // v3.0.930 -- isFinite(getTime()), NOT try/catch. toLocaleDateString on an unparseable date
+    // returns the STRING "Invalid Date" rather than throwing, so the catch never fired and the
+    // words went to the page.
+    var until = _cmpNiceDate(pass.expiresAt);
+    var pName = (all[pass.tier] && all[pass.tier].name) || pass.tier;
+    // v3.0.931 -- Ian's wording, and deliberately the same SHAPE as the billing row above it:
+    // a label that names the event, a date, and a note saying what happens after. The tier name
+    // moves into the note, where it was always the more useful half -- "Platinum Pass" told
+    // somebody nothing they did not already know from the row above.
+    // AND THE NOTE HAS TO NAME THE TIER. Ian asked for the label "Pass expires on", which is
+    // right -- but it dropped the only place the panel said WHAT the pass grants. A Copper
+    // account holding a Platinum pass would have read "Your account: Copper" and a date, and
+    // nowhere learned they are Platinum today. The batch guard caught that.
+    // v3.0.935 -- fallbackName, not acctName. A Gold subscriber who buys a pass has a Gold
+    // subscription that is now cancelling, so they do NOT return to Gold -- they return to Copper.
+    // Reading acctName here would have promised them a plan that will not exist.
+    html += row('Pass expires on', until || '\u2014',
+      until ? (escapeHtml(pName) + ' until then \u2014 your account returns to ' + escapeHtml(fallbackName)) :
+              (escapeHtml(pName) + ' pass, no end date on file'));
+  }
+
+  // v3.0.935 -- TD-792. THIS NOTICE USED TO SAY THE OPPOSITE OF WHAT NOW HAPPENS. Until this batch
+  // it read "buying a pass does not cancel a subscription -- yours keeps billing until you stop it
+  // yourself", which was true and is now false. Left in place it would be the single most expensive
+  // sentence on the page: somebody reads it, goes hunting for a cancel button, and finds their
+  // subscription already cancelling.
+  //
+  // TWO STATES, BECAUSE THERE REALLY ARE TWO. The normal one is a cancel we caused. The other is a
+  // subscription that is live and NOT cancelling next to a pass -- a legacy overlap from before
+  // this batch, or somebody who re-subscribed past the warning on the way to Stripe. That person
+  // genuinely is paying twice and still needs the old sentence.
+  if (pass && live) {
+    // data-cmp names this block so a check can find it by WHAT IT IS rather than by a phrase
+    // inside it. v3.0.934's check 2b looked for the words "does not cancel", and this batch
+    // legitimately rewrote them -- the third time a guard here has been anchored to prose.
+    html += '<div data-cmp="overlap-notice" style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
+      'background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);font-size:12px;' +
+      'line-height:1.5;color:var(--text);">' +
+      // v3.0.937 -- LEAD WITH WHAT THEY HAVE. This said "you keep Gold access until then", which
+      // is true of the BILLING and wrong about the READER: they are Platinum, from the moment the
+      // webhook landed, and naming the tier they are leaving reads as a warning about losing it.
+      // Same fault as the headline row in v3.0.933 and the CURRENT badge in v3.0.934 -- third time
+      // in one day. The billing fact stays, second, where it answers "will I be charged again".
+      (me.cancelAtPeriodEnd
+        ? ('You are on <b>' + escapeHtml(ownName) + '</b> from now until your pass ends. Your ' +
+           escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the current ' +
+           'period &mdash; it will not bill again, and nothing about your access changes when it does.')
+        : ('You have both a pass and a subscription, and <b>they do not stack</b> &mdash; your ' +
+           'subscription is billing you for access your pass already gives you. You can stop it ' +
+           'with Manage subscription &amp; billing below.')) +
+      '</div>';
+  }
+
+  // v3.0.930 -- A FRAME, BECAUSE IAN HAD NEVER NOTICED IT. Unframed, this was loose text floating
+  // above the tier cards; the same gold panel every other notice on this page uses makes it a
+  // thing you look at. The heading is part of that -- a panel with no name is still just text.
+  // v3.0.931 -- LOUDER, in four specific ways rather than by turning everything up. Ian: "It's
+  // still a little benign." 2px frame, roughly double the fill, the heading in full --text
+  // instead of muted grey, and the values in bold (see row()). THE LABELS STAY MUTED on purpose:
+  // making everything loud is the same as making nothing loud, and the label is the half you
+  // already know -- the value and the date are what you came to read.
+  el.innerHTML = '<div style="padding:14px 18px 6px;border:2px solid rgba(201,168,76,0.6);' +
+    'border-radius:var(--radius-lg);background:rgba(201,168,76,0.16);">' +
+    '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:1.5px;' +
+    'text-transform:uppercase;color:var(--text);font-weight:700;margin-bottom:8px;">Where you stand</div>' +
+    html + '</div>';
+  el.style.display = html ? 'block' : 'none';
+}
+
+// v3.0.929 -- THE PASSES, FROM THE SERVER CATALOG. Same endpoint the landing pages read, which is
+// the same catalog createPassCheckout charges from -- so this panel cannot show a price the
+// checkout will not honour. On any failure the panel simply stays hidden: an empty space is
+// better than a made-up price.
+function renderAccountPasses(me, data) {
+  var wrap = document.getElementById('account-passes-wrap');
+  var box = document.getElementById('account-passes');
+  if (!wrap || !box) return;
+  var list = (data && data.passes) || [];
+  if (!list.length) { wrap.style.display = 'none'; return; }
+
+  var live = hasLiveSubscription(me);
+  var hasPass = !!(me && me.pass);
+  // Platinum's own colour, from the one table that defines it. Retyping #3a3d6b here would be a
+  // second definition of Platinum waiting to disagree with the first.
+  var PLAT = (TIER_COLORS.platinum && TIER_COLORS.platinum.bg) || '#3a3d6b';
+
+  // IAN, 2026-09-16: a live subscriber CAN buy a pass, "with the overlap spelled out". The line
+  // changes, the buttons never do.
+  var desc = document.getElementById('account-passes-desc');
+  if (desc) {
+    if (live) {
+      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. ' +
+        'Your subscription is not cancelled when you buy one \u2014 it keeps billing until you stop it ' +
+        'yourself. Any time you have already paid for is added to the pass rather than lost.';
+    } else if (hasPass) {
+      // v3.0.930 -- WITH THE DATE, ONCE. Ian asked whether an expiry belongs under the pass
+      // panels. It belongs in this sentence rather than on three cards: the question somebody
+      // asks here is not "when does mine end" -- that is in the panel above -- it is "what
+      // happens if I buy another", and that answer needs the date in it.
+      var _until = _cmpNiceDate(me.pass && me.pass.expiresAt);
+      desc.textContent = _until
+        ? ('Your pass runs to ' + _until + '. Buying another adds to it rather than replacing it \u2014 ' +
+           'the new months start when the current pass ends.')
+        : 'Buying another pass extends the one you have rather than replacing it.';
+    } else {
+      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
+    }
+  }
+
+  box.innerHTML = list.map(function (p) {
+    var dollars = Number(p.price_cents) / 100;
+    var money = isFinite(dollars) ? ('$' + (dollars % 1 === 0 ? String(dollars) : dollars.toFixed(2))) : '';
+    var months = Number(p.months) || 0;
+    // v3.0.930 -- THE HEADER IS PLATINUM'S OWN COLOUR, READ FROM TIER_COLORS. It was #e5e4e2,
+    // which is 1.27:1 on a white card -- this page is a LIGHT theme and the first version of these
+    // cards was written as if it were dark. The token figure was var(--gold) at 1.92:1, which is
+    // worse, because it is the biggest thing on the card and the number the card exists to show.
+    return '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);' +
+      'padding:16px;display:flex;flex-direction:column;">' +
+      '<div style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + PLAT + ';">' +
+        months + (months === 1 ? ' MONTH' : ' MONTHS') + '</div>' +
+      '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0 0;">' +
+        Number(p.tokens) + ' tokens</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);">yours to spend whenever</div>' +
+      '<div style="font-family:var(--font-display);font-size:18px;color:var(--text-muted);margin:10px 0 0;">' + money + '</div>' +
+      '<button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%;" ' +
+        'onclick="startPassCheckout(\'' + escapeHtml(String(p.id)) + '\')">Buy this pass</button>' +
+    '</div>';
+  }).join('');
+  wrap.style.display = 'block';
+}
+
 function renderAccountPlans(me) {
   var el = document.getElementById('account-plans');
   if (!el) return;
   var all = me.allTiers || {};
-  var current = me.tier || 'copper';
+  // v3.0.929 -- TD-780 Push 6. THE ACCOUNT TIER, NOT THE EFFECTIVE ONE. me.tier is ownTier() and
+  // includes a live pass, so reading it here marked a Copper pass holder as CURRENT: Platinum --
+  // with no Manage button, because they have no subscription, and Subscribe on the tiers below it.
+  // This grid is about what they SUBSCRIBE to; the pass is shown in #account-standing above.
+  var current = me.accountTier || me.tier || 'copper';
   var order = ['copper','silver','gold','platinum'];
-  var live = hasLiveSubscription(me);
+  // v3.0.942 -- the same question. Manage, Upgrade and Switch all act on a subscription that is
+  // being paid for; offering them to a trial account with a dead subscription id is the grid
+  // making the same claim the panel above it was making.
+  var live = hasBillingSubscription(me);
+
+  // v3.0.934 -- A PASS HOLDER WITH NO SUBSCRIPTION HAS NO CURRENT PLAN IN THIS GRID.
+  // Ian: "if they are on a pass... can you NOT highlight the copper subscription panel."
+  // Not `current === 'copper'`: a subscriber holding a pass is still being billed and still needs
+  // their Manage button, and that is the one control that stops the billing.
+  var passOnly = !!(me.pass && me.pass.expiresAt) && !live;
+
+  // v3.0.938 -- TD-792. NO PLAN CHANGES ON A SUBSCRIPTION THAT IS ALREADY ENDING UNDER A PASS.
+  // Ian: "hide the buttons if you have a subscription ending and are on a pass."
+  //
+  // DELIBERATELY NOT passOnly, AND DELIBERATELY NOT "any pass holder". Those are three different
+  // people and only this one has nothing to gain: a pass holder with NO subscription is lining one
+  // up for when the pass runs out and keeps Subscribe, and a pass holder whose subscription is NOT
+  // ending is paying twice, for whom a downgrade is a real way to spend less.
+  var subEndingUnderPass = !!(me.pass && me.pass.expiresAt) && live && !!me.cancelAtPeriodEnd;
 
   el.innerHTML = order.map(function(key) {
     var t = all[key];
     if (!t) return '';
     var isCurrent = (key === current);
+    // v3.0.934 -- DISPLAY ONLY. isCurrent still decides which action button this card gets and
+    // must not be redefined; this decides only whether the card is dressed as the one they are on.
+    var markCurrent = isCurrent && !passOnly;
     var col = TIER_COLORS[key] || TIER_COLORS.copper;
     var priceText = t.price ? ('$' + t.price + '<span style="font-size:11px;color:var(--text-light);">/mo</span>') : 'Free';
     var action = '';
     if (key !== 'copper' && !isCurrent && !live) {
       action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="subscribeTier(&#39;' + key + '&#39;)">Subscribe</button>';
-    } else if (key !== 'copper' && !isCurrent && live) {
+    // v3.0.938 -- and NOT when the subscription is already ending under a pass. Only this branch
+    // is gated: the Manage branch below it is the Stripe portal, which is exactly where somebody
+    // whose subscription is stopping may want to go.
+    } else if (key !== 'copper' && !isCurrent && live && !subEndingUnderPass) {
       // TF-15: in-place plan change for an existing subscriber (proration on next invoice).
       var curIdx = order.indexOf(current), thisIdx = order.indexOf(key);
       var swLabel = (thisIdx > curIdx) ? ('Upgrade to ' + (t.name || key)) : ('Switch to ' + (t.name || key));
@@ -2184,16 +2657,23 @@ function renderAccountPlans(me) {
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
-    return '<div style="border:1px solid ' + (isCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
+    return '<div style="border:1px solid ' + (markCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
-      (isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
+      (markCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
           (t.name || key).toUpperCase() + '</span>' +
-        (isCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
+        (markCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
       '</div>' +
       '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0;">' + priceText + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);line-height:1.5;">' + (t.description || '') + '</div>' +
+      // v3.0.934 -- one quiet line where the CURRENT badge used to be, on the card it is about.
+      // 10px on --text-light is 3.09:1 and BELOW the 4.5:1 floor, which is why this carries no
+      // information that is not already stated at full contrast in WHERE YOU STAND directly above.
+      // It is a footnote to a fact, not the place the fact is made.
+      ((passOnly && isCurrent) ? '<div style="font-size:10px;color:var(--text-light);' +
+        'line-height:1.4;margin-top:6px;font-style:italic;">where your account returns when your ' +
+        'pass ends</div>' : '') +
       action +
     '</div>';
   }).join('');
@@ -2205,21 +2685,17 @@ function renderAccountPlans(me) {
   if (bs) {
     var feat = (me.allTiers && me.allTiers[current]) ? me.allTiers[current] : null;
     var tierLabel = (feat && feat.name) ? feat.name : current;
-    var dateStr = '';
-    if (me.currentPeriodEnd) {
-      try {
-        dateStr = new Date(me.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      } catch (e) { dateStr = ''; }
-    }
+    // v3.0.931 -- THIS STRIP IS NOW AN ALERT AND NOTHING ELSE. The next-billing date and the
+    // pending-cancel date moved up into WHERE YOU STAND, where somebody looks for them; what is
+    // left is the one message that is not a fact about your standing but an INSTRUCTION, and it
+    // belongs here beside the Manage button that carries it out.
+    //
+    // The date formatting that used to live here went with them, which removes the third copy of
+    // the try/catch around toLocaleDateString -- a call that returns the STRING "Invalid Date"
+    // rather than throwing, so the catch never did anything. See _cmpNiceDate.
     var billStatus = me.subscriptionStatus || '';
     if (live && (billStatus === 'past_due' || billStatus === 'unpaid')) {
       bs.textContent = 'There is a problem with your most recent payment (often an expired or declined card). Open "Manage subscription & billing" to update your card and keep your ' + tierLabel + ' plan.';
-      bs.style.display = 'block';
-    } else if (live && me.cancelAtPeriodEnd && dateStr) {
-      bs.textContent = 'Your ' + tierLabel + ' plan is set to cancel on ' + dateStr + ". You'll keep " + tierLabel + ' access until then, after which your account moves to Copper.';
-      bs.style.display = 'block';
-    } else if (live && !me.cancelAtPeriodEnd && dateStr) {
-      bs.textContent = 'Next billing date: ' + dateStr + '.';
       bs.style.display = 'block';
     } else {
       bs.textContent = '';
@@ -19111,7 +19587,9 @@ function switchSettingsTab(tab) {
     if (btn) btn.classList.toggle('active', t === tab);
   });
   if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings(); }
-  if (tab === 'tiers') loadTiersConfig();
+  // v3.0.920 -- TD-780 Push 4a. One tab, two things to load. Passes first, because they
+  // render first and a slow tier fetch should not hold up the half Ian asked to put on top.
+  if (tab === 'tiers') { loadPassesConfig(); loadTiersConfig(); }
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
@@ -19126,117 +19604,509 @@ function switchSettingsTab(tab) {
 function initUserTestingTab() {
   fetch('/api/auth/me').then(function(r){ return r.json(); }).then(function(me){
     if (!me || !me.authenticated) return;
-    var tt = document.getElementById('dev-trial-toggle'); if (tt) tt.checked = (me.tier === 'trial');
+    // v3.0.921 -- TD-780 Push 4b. accountTier, NOT tier. Since v3.0.919 me.tier is the
+    // EFFECTIVE tier, so a trial user holding a pass reads as platinum -- and this checkbox
+    // is asking what the ACCOUNT is, which is the question it has always been asking.
+    var _acct = me.accountTier || me.tier;
     var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
-    var ov = document.getElementById('account-tier-override'); if (ov && me.tier) ov.value = me.tier;
+    // v3.0.944 -- and the billing date, but ONLY when a subscription record actually exists.
+    // v3.0.940's lesson in one field: a stale current_period_end on an account with no
+    // subscription is not a billing date, and prefilling it here would let one click of Apply turn
+    // a dead July date into a live one. Cleared rather than left alone, so switching between
+    // accounts cannot carry the previous one's date into this one.
+    var sd = document.getElementById('asm-sub-period-end');
+    if (sd) sd.value = (me.hasSubscription && me.currentPeriodEnd) ? String(me.currentPeriodEnd).slice(0,10) : '';
+    // v3.0.943 -- the trial checkbox is gone (the trial is a MODE now), and 'trial' is no longer an
+    // option in this dropdown, so assigning it would leave the select on -1 and paint blank -- the
+    // exact fault v3.0.864 spent a session on. Only real subscription tiers are set here.
+    var ov = document.getElementById('account-tier-override');
+    if (ov && _acct && _acct !== 'trial') ov.value = _acct;
+    renderPassOverride(me);   // ...which also picks the mode the panel opens on.
   }).catch(function(){});
 }
 
-var _promoEditId = null;
+// ============================================================
+// v3.0.921 -- TD-780 Push 4b. PASS CONTROL ON THE USER TESTING TAB.
+//
+// Ian, 2026-09-16: "a flag ... that says if they are a subscriber or pass holder, so I can switch
+// between the two when testing. And also a place in that same section to set the expiration date."
+//
+// SELF ONLY, exactly like the tier override beside it -- every write names the signed-in user.
+// A pass is ADDITIVE, so this does not replace the tier dropdown: the account tier and the pass
+// are set separately, which is the only way to exercise the combinations that matter (Copper with
+// a pass, Gold with a pass, Gold with an EXPIRED pass, and so on).
+// ============================================================
+function renderPassOverride(me) {
+  var box = document.getElementById('pass-override-state');
+  var sel = document.getElementById('account-pass-override');
+  var dt = document.getElementById('account-pass-expires');
+  var acct = me.accountTier || me.tier || 'copper';
+  var pass = me.pass || null;
+  if (sel) sel.value = pass ? (pass.tier || 'platinum') : '';
+  if (dt) dt.value = (pass && pass.expiresAt) ? String(pass.expiresAt).slice(0, 10) : '';
+  if (!box) return;
+  // THE FLAG. Says what they are in one line, and says the resolved answer too, because the
+  // whole point of the pass design is that the account tier and what they actually HAVE differ.
+  var effective = me.tier || acct;
+  var who = pass ? 'PASS HOLDER' : 'SUBSCRIBER';
+  var line = '<strong style="color:var(--gold);">' + who + '</strong>' +
+    ' &mdash; account tier <strong>' + aimpEsc(acct) + '</strong>';
+  if (pass) {
+    line += ', pass <strong>' + aimpEsc(pass.tier || '?') + '</strong> until <strong>' +
+      aimpEsc(String(pass.expiresAt || '').slice(0, 10)) + '</strong>';
+  } else {
+    line += ', no live pass';
+  }
+  line += '<br />Resolves to <strong>' + aimpEsc(effective) + '</strong> everywhere in the app.';
+  box.innerHTML = line;
+
+  // v3.0.943 -- AND THE PANEL OPENS ON WHATEVER THE ACCOUNT IS. Ian: "it should load up with
+  // whatever the user currently is." Read in the order the modes outrank each other: a live pass
+  // is what the account resolves to, so it wins the tab; a trial tier is next; everything else is
+  // a subscription. Same precedence ownTier() uses, so the tab agrees with the line above it.
+  if (typeof acctStateMode === 'function') {
+    acctStateMode(pass ? 'pass' : (acct === 'trial' ? 'trial' : 'subscription'));
+  }
+}
+
+// v3.0.943 -- THE MODE. Three states, and the panel opens on whichever one the account is in.
+//
+// _acctStateMode is set by acctStateMode() when somebody clicks, and by renderPassOverride() from
+// /me when the tab loads -- Ian: "it should load up with whatever the user currently is."
+var _acctStateMode = 'subscription';
+
+function acctStateMode(m) {
+  _acctStateMode = m;
+  ['subscription', 'pass', 'trial'].forEach(function (k) {
+    var pane = document.getElementById('asm-pane-' + k);
+    if (pane) pane.style.display = (k === m) ? 'block' : 'none';
+    var btn = document.getElementById('asm-btn-' + k);
+    // The active mode is the only PRIMARY button, so the panel says which state it is describing
+    // without a word of prose.
+    if (btn) btn.className = 'btn btn-sm' + ((k === m) ? ' btn-primary' : '');
+  });
+  var m1 = document.getElementById('account-tier-override-msg'); if (m1) m1.textContent = '';
+  var m2 = document.getElementById('account-pass-override-msg'); if (m2) m2.textContent = '';
+}
+
+// ONE APPLY, AND IT WRITES THE WHOLE STATE RATHER THAN ONE COLUMN.
+//
+// This is the actual fix for what caught Ian three times: the old panel set the tier and the pass
+// independently, and ownTier() takes the HIGHER of the two -- so setting the tier to Gold under a
+// live Platinum pass wrote the column and changed nothing anybody could see. Every mode here
+// clears what would otherwise outrank it.
+//
+// THE CALLS ARE SEQUENTIAL AND THE ORDER IS CHOSEN FOR WHAT A HALF-FAILURE LEAVES BEHIND:
+//
+//   Pass mode sets the TIER FIRST, then the pass. If the pass write fails, the account is a plain
+//   Copper -- obvious, and one click from correct. The other order would leave a Platinum pass
+//   sitting on the previous tier, which is the confusing overlap this batch exists to remove.
+//
+//   Subscription and Trial mode clear the PASS FIRST. If the second call fails the account is
+//   whatever it was minus the pass, which is again the plainer of the two wrecks.
+//
+// A FAILED STEP SAYS SO AND DOES NOT RELOAD. The old handlers reloaded on success and left the
+// message on screen otherwise; with two calls in a row, reloading after a half-application would
+// hide which half.
+function applyAccountState() {
+  var msg = document.getElementById('account-tier-override-msg');
+  function say(t, bad) { if (msg) { msg.textContent = t; msg.style.color = bad ? 'var(--error)' : ''; } }
+  function post(url, body) {
+    return fetch(url, { method: (url.indexOf('trial-testing') !== -1) ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d || !d.success) { throw new Error((d && (d.message || d.error)) || 'unknown'); } return d; });
+  }
+  var clearPass = function () { return post('/api/auth/set-pass', { pass_tier: null, expires_on: null }); };
+
+  say('Applying...');
+  var chain;
+  if (_acctStateMode === 'pass') {
+    var psel = document.getElementById('account-pass-override');
+    var pdt = document.getElementById('account-pass-expires');
+    var ptier = (psel && psel.value) || 'platinum';
+    if (!(pdt && pdt.value)) { say('Pick an expiry date first, or use one of the presets.', true); return; }
+    chain = post('/api/auth/set-tier', { tier: 'copper' })
+      .then(function () { return post('/api/auth/set-pass', { pass_tier: ptier, expires_on: pdt.value }); });
+  } else if (_acctStateMode === 'trial') {
+    var tdt = document.getElementById('dev-trial-date');
+    var body = { inTrial: true };
+    if (tdt && tdt.value) body.started_at = tdt.value;
+    chain = clearPass().then(function () { return post('/api/auth/trial-testing', body); });
+  } else {
+    var tsel = document.getElementById('account-tier-override');
+    var tier = (tsel && tsel.value) || 'copper';
+    // 'trial' is deliberately not in this dropdown any more -- it is its own mode. Refusing it
+    // here too means a hand-edited option cannot reach the path that ignores the start date.
+    if (tier === 'trial') { say('Use the Free Trial mode above for the trial tier.', true); return; }
+    // v3.0.944 -- THE KEY IS OMITTED RATHER THAN SENT EMPTY, and that distinction is the whole
+    // contract with the server: a period_end present means 'make this look like a subscriber', and
+    // its absence means 'take the stand-in away'. Sending period_end:'' would be a third state
+    // neither side has a meaning for.
+    var sbody = { tier: tier };
+    var sdt = document.getElementById('asm-sub-period-end');
+    if (sdt && sdt.value) sbody.period_end = sdt.value;
+    chain = clearPass().then(function () { return post('/api/auth/set-tier', sbody); });
+  }
+  chain.then(function () { window.location.reload(); })
+    .catch(function (e) { say('Could not apply: ' + (e && e.message ? e.message : 'unknown') + ' (nothing further was changed)', true); });
+}
+
+// Offsets from today. -1 is the one that gets used most: it makes the pass ALREADY expired, so
+// the lapse path can be exercised without waiting for a date to arrive.
+//
+// v3.0.944 -- ONE IMPLEMENTATION, TWO ROWS OF BUTTONS. The subscription pane has its own date now,
+// and a second copy of three lines of date arithmetic is the twin problem in miniature (Sec 5c):
+// the fix is not to remember to change both, it is to make there be only one. The element id is
+// the parameter, and the two named functions are what the markup calls.
+function _asmDatePreset(id, days) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.value = new Date(Date.now() + (days * 86400000)).toISOString().slice(0, 10);
+}
+function passDatePreset(days) { _asmDatePreset('account-pass-expires', days); }
+function subDatePreset(days) { _asmDatePreset('asm-sub-period-end', days); }
+
+function setPassOverride() {
+  var sel = document.getElementById('account-pass-override');
+  var dt = document.getElementById('account-pass-expires');
+  var msg = document.getElementById('account-pass-override-msg');
+  if (!sel) return;
+  if (sel.value && !(dt && dt.value)) {
+    if (msg) { msg.textContent = 'Pick an expiry date, or set the pass to None.'; msg.style.color = 'var(--error)'; }
+    return;
+  }
+  if (msg) { msg.textContent = 'Applying...'; msg.style.color = ''; }
+  fetch('/api/auth/set-pass', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pass_tier: sel.value || null, expires_on: (dt && dt.value) || null })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) { window.location.reload(); }
+      else if (msg) { msg.textContent = 'Could not set the pass: ' + ((d && d.error) || 'unknown'); msg.style.color = 'var(--error)'; }
+    })
+    .catch(function (e) { if (msg) { msg.textContent = 'Could not set the pass: ' + e.message; msg.style.color = 'var(--error)'; } });
+}
+
+// ============================================================
+// v3.0.947 -- TD-799 stage 1. THE PROMO CODES TAB, REWORKED FOR CODES MADE IN ONE PLACE.
+// Server: routes/admin.js /promo-codes and services/billing/promoCodes.js, which enforce every rule
+// shown here -- this form only makes the rules visible. Saved codes are read-only apart from the
+// label and on/off. Spec: claude/PROMO_CODES_SPEC.md.
+// ============================================================
 var _promoLoaded = [];
+var PROMO_PRODUCT_NAMES = { token_pack: 'Token packs', pass: 'Passes', book: 'Books', 'sub:silver': 'Silver sub', 'sub:gold': 'Gold sub', 'sub:platinum': 'Platinum sub' };
+var PROMO_SIGNUP_PRODUCTS = ['pass', 'sub:silver', 'sub:gold', 'sub:platinum'];
+
 function loadPromoCodes() {
   var box = document.getElementById('promo-codes-list');
   if (box) box.textContent = 'Loading...';
   fetch('/api/admin/promo-codes')
     .then(function (r) { return r.json(); })
-    .then(function (d) { _promoLoaded = (d && d.codes) || []; renderPromoCodes(_promoLoaded); })
+    .then(function (d) {
+      _promoLoaded = (d && d.codes) || [];
+      var warn = document.getElementById('promo-stripe-warn');
+      if (warn) warn.style.display = (d && d.stripeConfigured === false) ? '' : 'none';
+      renderPromoCodes(_promoLoaded);
+      promoFormRefresh();
+    })
     .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
+}
+
+// Show and hide the parts of the form that depend on other choices. Never decides anything the
+// server does not also enforce.
+function promoFormRefresh() {
+  var g = function (x) { return document.getElementById(x); };
+  var dtype = (g('promo-discount-type') || {}).value || 'none';
+  var dval = g('promo-discount-value');
+  if (dval) {
+    dval.style.display = (dtype === 'none') ? 'none' : '';
+    dval.step = (dtype === 'amount') ? '0.01' : '1';
+    dval.placeholder = (dtype === 'amount') ? 'dollars, e.g. 5' : 'percent, e.g. 20';
+  }
+  var signup = !!(g('promo-signup-input') || {}).checked;
+  var boxes = document.querySelectorAll('.promo-prod');
+  var anyTier = false, book = false;
+  for (var i = 0; i < boxes.length; i++) {
+    var b = boxes[i];
+    var allowed = !signup || PROMO_SIGNUP_PRODUCTS.indexOf(b.value) !== -1;
+    if (!allowed) b.checked = false;
+    b.disabled = !allowed;
+    if (b.parentNode) b.parentNode.style.opacity = allowed ? '' : '0.45';
+    if (b.checked && b.value.indexOf('sub:') === 0) anyTier = true;
+    if (b.checked && b.value === 'book') book = true;
+  }
+  var showDur = anyTier && dtype !== 'none';
+  if (g('promo-subdur-label')) g('promo-subdur-label').style.display = showDur ? '' : 'none';
+  if (g('promo-subdur-wrap')) g('promo-subdur-wrap').style.display = showDur ? 'flex' : 'none';
+  if (g('promo-submonths-input')) g('promo-submonths-input').style.display = (showDur && (g('promo-subdur-input') || {}).value === 'repeating') ? '' : 'none';
+  if (g('promo-book-warn')) g('promo-book-warn').style.display = (book && dtype !== 'none') ? '' : 'none';
+}
+
+function promoEasternDate(v) {
+  if (!v) return 'never';
+  try { return new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); } catch (e) { return String(v).slice(0, 10); }
+}
+
+function promoDescribe(c) {
+  if (c.schema_v !== 2) {
+    var val = (c.action_type === 'percent_off') ? (c.action_value + '% off (Stripe, set by hand)')
+            : (c.action_type === 'amount_off') ? ('$' + c.action_value + ' off (Stripe, set by hand)')
+            : (c.action_value + ' bonus tokens');
+    return 'Legacy: ' + val;
+  }
+  var bits = [];
+  if (c.discount_type === 'percent') bits.push(c.discount_value + '% off');
+  if (c.discount_type === 'amount') bits.push('$' + (Number(c.discount_value) / 100).toFixed(2).replace(/\.00$/, '') + ' off');
+  if (c.bonus_tokens > 0) bits.push(c.bonus_tokens + ' bonus tokens');
+  var prods = Array.isArray(c.products) ? c.products.map(function (p) { return PROMO_PRODUCT_NAMES[p] || p; }).join(', ') : '';
+  var s = bits.join(' + ') + (prods ? ' on ' + prods : '');
+  var hasTier = Array.isArray(c.products) && c.products.some(function (p) { return p.indexOf('sub:') === 0; });
+  if (hasTier && c.discount_type && c.discount_type !== 'none') {
+    s += ' (' + (c.sub_duration === 'forever' ? 'every payment' : c.sub_duration === 'repeating' ? (c.sub_duration_months + ' payments') : 'first payment') + ')';
+  }
+  return s;
 }
 
 function renderPromoCodes(codes) {
   var box = document.getElementById('promo-codes-list');
   if (!box) return;
   if (!codes.length) { box.textContent = 'No promo codes yet.'; return; }
-  var typeLabel = { token_grant: 'Tokens', percent_off: '% off', amount_off: '$ off' };
-  var rows = codes.map(function (c) {
-    var val = (c.action_type === 'percent_off') ? (c.action_value + '%')
-            : (c.action_type === 'amount_off') ? ('$' + c.action_value)
-            : (c.action_value + ' CO');
-    var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
-    var badge = c.active ? 'Active' : 'Inactive';
-    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
-      // v3.0.803 -- TD-613. Same unreadable gold as the Orders tab had, on the list the Orders
-      // rows were modelled on. Found by the guard written for the other one.
+  box.innerHTML = codes.map(function (c) {
+    var flags = [];
+    if (c.is_signup) flags.push('Sign-up');
+    if (c.schema_v === 2) flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
+    var uses = 'used ' + (c.redeemed_count || 0) + (c.max_redemptions ? ' of ' + c.max_redemptions : '');
+    var stripe = c.stripe_promotion_code_id ? ('Stripe ' + (c.stripe_livemode ? 'live' : 'sandbox')) : (c.schema_v === 2 ? 'Campaignia only' : '');
+    return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
-      '<span style="min-width:140px;">' + escapeHtml(c.label || '') + '</span>' +
-      '<span style="min-width:100px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
-      '<span style="min-width:90px;">' + escapeHtml(String(c.per_user_limit || 1)) + '/user</span>' +
-      '<span style="min-width:105px;">exp: ' + escapeHtml(exp) + '</span>' +
-      '<span style="min-width:70px;">used: ' + (c.redeemed_count || 0) + '</span>' +
-      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + badge + '</span>' +
-      '<button class="btn btn-sm" onclick="editPromoCode(' + c.id + ')">Edit</button>' +
-      '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Deactivate' : 'Activate') + '</button>' +
+      '<input class="form-input" id="promo-label-' + c.id + '" value="' + escapeHtml(c.label || '') + '" maxlength="120" placeholder="label (source)" style="width:180px;padding:4px 8px;font-size:12px;" />' +
+      '<button class="btn btn-sm" onclick="savePromoLabel(' + c.id + ')">Save label</button>' +
+      '<span style="min-width:220px;">' + escapeHtml(promoDescribe(c)) + '</span>' +
+      (flags.length ? '<span>' + escapeHtml(flags.join(' / ')) + '</span>' : '') +
+      '<span>' + escapeHtml(uses) + '</span>' +
+      '<span>expires ' + escapeHtml(promoEasternDate(c.expires_at)) + '</span>' +
+      (stripe ? '<span style="color:var(--text-muted);">' + escapeHtml(stripe) + '</span>' : '') +
+      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (c.active ? 'On' : 'Off') + '</span>' +
+      '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Switch off' : 'Switch on') + '</button>' +
+      '<span class="settings-section-desc" id="promo-row-msg-' + c.id + '" style="margin:0;flex-basis:100%;"></span>' +
       '</div>';
   }).join('');
-  box.innerHTML = rows;
 }
 
-function editPromoCode(id) {
-  var c = null;
-  for (var i = 0; i < _promoLoaded.length; i++) { if (_promoLoaded[i].id === id) { c = _promoLoaded[i]; break; } }
-  if (!c) return;
+function resetPromoForm() {
   var g = function (x) { return document.getElementById(x); };
-  if (g('promo-code-input')) { g('promo-code-input').value = c.code; g('promo-code-input').readOnly = true; }
-  if (g('promo-label-input')) g('promo-label-input').value = c.label || '';
-  if (g('promo-type-input')) g('promo-type-input').value = c.action_type || 'token_grant';
-  if (g('promo-value-input')) g('promo-value-input').value = (c.action_value != null ? c.action_value : 0);
-  if (g('promo-peruser-input')) g('promo-peruser-input').value = (c.per_user_limit || 1);
-  if (g('promo-expires-input')) g('promo-expires-input').value = c.expires_at ? String(c.expires_at).slice(0, 10) : '';
-  _promoEditId = id;
-  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Save changes';
-  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = '';
-  var msg = g('promo-create-msg'); if (msg) msg.textContent = 'Editing ' + c.code + ' (code cannot be changed).';
-  if (g('promo-code-input')) g('promo-code-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function cancelPromoEdit() {
-  var g = function (x) { return document.getElementById(x); };
-  _promoEditId = null;
-  ['promo-code-input','promo-label-input','promo-value-input','promo-expires-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
-  if (g('promo-peruser-input')) g('promo-peruser-input').value = '1';
-  if (g('promo-type-input')) g('promo-type-input').value = 'token_grant';
-  if (g('promo-code-input')) g('promo-code-input').readOnly = false;
-  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Create code';
-  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = 'none';
-  var msg = g('promo-create-msg'); if (msg) msg.textContent = '';
+  ['promo-code-input', 'promo-label-input', 'promo-discount-value', 'promo-max-input', 'promo-expires-input', 'promo-submonths-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
+  if (g('promo-bonus-input')) g('promo-bonus-input').value = '0';
+  if (g('promo-discount-type')) g('promo-discount-type').value = 'none';
+  if (g('promo-subdur-input')) g('promo-subdur-input').value = 'once';
+  ['promo-signup-input', 'promo-once-input'].forEach(function (id) { if (g(id)) g(id).checked = false; });
+  var boxes = document.querySelectorAll('.promo-prod');
+  for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  promoFormRefresh();
 }
 
 function createPromoCode() {
   var g = function (id) { return document.getElementById(id); };
   var msg = g('promo-create-msg');
+  var products = [];
+  var boxes = document.querySelectorAll('.promo-prod');
+  for (var i = 0; i < boxes.length; i++) { if (boxes[i].checked && !boxes[i].disabled) products.push(boxes[i].value); }
   var payload = {
     code: (g('promo-code-input') || {}).value || '',
     label: (g('promo-label-input') || {}).value || '',
-    action_type: (g('promo-type-input') || {}).value || 'token_grant',
-    action_value: (g('promo-value-input') || {}).value || '0',
-    per_user_limit: (g('promo-peruser-input') || {}).value || '1',
-    expires_at: (g('promo-expires-input') || {}).value || ''
+    discount_type: (g('promo-discount-type') || {}).value || 'none',
+    discount_value: (g('promo-discount-value') || {}).value || '',
+    bonus_tokens: (g('promo-bonus-input') || {}).value || '0',
+    is_signup: !!(g('promo-signup-input') || {}).checked,
+    products: products,
+    sub_duration: (g('promo-subdur-input') || {}).value || 'once',
+    sub_duration_months: (g('promo-submonths-input') || {}).value || '',
+    once_per_customer: !!(g('promo-once-input') || {}).checked,
+    max_redemptions: (g('promo-max-input') || {}).value || '',
+    expires_on: (g('promo-expires-input') || {}).value || ''
   };
-  var editing = _promoEditId;
-  var url = editing ? ('/api/admin/promo-codes/' + editing + '/update') : '/api/admin/promo-codes';
-  if (msg) msg.textContent = 'Saving...';
-  fetch(url, {
+  var btn = g('promo-submit-btn');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Saving...'; msg.style.color = ''; }
+  fetch('/api/admin/promo-codes', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
+      if (btn) btn.disabled = false;
       if (res.ok && res.j && res.j.ok) {
-        cancelPromoEdit();
-        if (msg) msg.textContent = editing ? 'Saved.' : 'Created.';
+        resetPromoForm();
+        if (msg) msg.textContent = 'Created' + (res.j.stripe ? ', with its discount in Stripe (' + (res.j.stripe.livemode ? 'live' : 'sandbox') + ').' : ' (bonus tokens only, nothing in Stripe).');
         loadPromoCodes();
       } else {
-        if (msg) msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not save.';
+        if (msg) { msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not save.'; msg.style.color = 'var(--error)'; }
       }
     })
-    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+    .catch(function () { if (btn) btn.disabled = false; if (msg) { msg.textContent = 'Could not save.'; msg.style.color = 'var(--error)'; } });
 }
 
+function savePromoLabel(id) {
+  var inp = document.getElementById('promo-label-' + id);
+  var rm = document.getElementById('promo-row-msg-' + id);
+  fetch('/api/admin/promo-codes/' + id + '/update', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: inp ? inp.value : '' })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (rm) rm.textContent = (res.ok && res.j && res.j.ok) ? 'Label saved.' : ((res.j && res.j.error) || 'Could not save the label.'); })
+    .catch(function () { if (rm) rm.textContent = 'Could not save the label.'; });
+}
+
+// Stripe is switched first on the server; if it refuses, the reason is shown on the row and nothing changes.
 function togglePromoCode(id) {
+  var rm = document.getElementById('promo-row-msg-' + id);
+  if (rm) rm.textContent = 'Switching...';
   fetch('/api/admin/promo-codes/' + id + '/toggle', { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function () { loadPromoCodes(); })
-    .catch(function () {});
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) { loadPromoCodes(); }
+      else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
+    })
+    .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
 }
 
+// ============================================================
+// v3.0.920 -- TD-780 Push 4a. PLATINUM PASSES, at the top of the Tiers and Passes tab.
+//
+// Rendered explicitly rather than from a server-driven field list, unlike the tier editor
+// below it. There are exactly two editable numbers per pass and the panel shows arithmetic
+// derived from them, so a generic renderer would cost more than it saves.
+//
+// THE DERIVED LINE IS PURE ARITHMETIC ON WHAT IS IN THE BOXES -- price per month and tokens
+// per month, recomputed as you type. It deliberately does NOT show margin or "share of a
+// book", because both of those need constants ($0.103 per token, 341 tokens per book) that
+// live in a financial model rather than in the code, and a number on screen that quietly goes
+// stale is worse than no number at all.
+// ============================================================
+function loadPassesConfig() {
+  var box = document.getElementById('passes-config-container');
+  var msg = document.getElementById('passes-config-msg');
+  if (msg) msg.textContent = '';
+  if (box) box.textContent = 'Loading passes...';
+  fetch('/api/admin/pass-config')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || !data.passes) {
+        if (box) box.textContent = (data && (data.message || data.error)) || 'Could not load passes.';
+        return;
+      }
+      renderPassesConfig(data);
+    })
+    .catch(function (e) { if (box) box.textContent = 'Could not load passes: ' + e.message; });
+}
+
+// ============================================================
+// v3.0.922 -- TD-780 Push 4c. PRICE PER TOKEN. Ian, 2026-09-16: "Add Price per token... And
+// also do the same price per token on each Tier... Include the UTLT tokens on that math."
+//
+// IT IS THE STICKER PRICE DIVIDED BY THE TOKENS, AND THAT IS DELIBERATELY NOT THE SAME NUMBER
+// AS THE FINANCIAL MODEL'S TOKEN COST. The model splits a subscription two-thirds access /
+// one-third tokens, which puts a Platinum token at about 13 cents. This line does no such
+// split -- it divides the whole price by all the tokens, for every row, so a pass and a tier
+// can be read against each other on one screen. Two honest numbers answering two different
+// questions; the label says which one this is so nobody has to remember.
+//
+// THREE DECIMALS, because two collapses $0.3725 and $0.3986 into the same $0.37/$0.40 and the
+// whole point is comparing rows that sit close together.
+//
+// ONE FORMATTER FOR BOTH PANELS. The passes and the tiers ask the same question, so they get
+// the same arithmetic and the same rounding. Two copies that round differently is how one pass
+// reads $0.39 in one place and $0.40 in another.
+// ============================================================
+function pricePerToken(priceDollars, tokens) {
+  if (!isFinite(priceDollars) || !isFinite(tokens)) return '';
+  if (tokens <= 0) return 'no tokens';                       // Copper: nothing to divide by
+  if (priceDollars <= 0) return 'free (' + tokens + ' tokens)';   // Trial, and Copper's own price
+  return '$' + (priceDollars / tokens).toFixed(3) + ' per token';
+}
+
+function passPerMonth(id) {
+  var pEl = document.getElementById('pcf-' + id + '-price_dollars');
+  var tEl = document.getElementById('pcf-' + id + '-tokens');
+  var out = document.getElementById('pass-derived-' + id);
+  if (!pEl || !tEl || !out) return;
+  var months = parseInt(out.getAttribute('data-months'), 10) || 0;
+  var price = parseFloat(pEl.value);
+  var tokens = parseInt(tEl.value, 10);
+  if (!months || isNaN(price) || isNaN(tokens)) { out.innerHTML = ''; return; }
+  // Two lines rather than one: at a third of the panel width a single run of three figures
+  // wraps in the middle of a number, which reads as a typo.
+  out.innerHTML = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
+    Math.round(tokens / months) + ' tokens per month' +
+    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>';
+}
+
+function renderPassesConfig(data) {
+  var box = document.getElementById('passes-config-container');
+  if (!box) return;
+  var html = '';
+  (data.order || []).forEach(function (id) {
+    var p = data.passes[id];
+    if (!p) return;
+    html += '<div class="settings-section tier-config-panel panel-dark" id="pass-panel-' + id + '">';
+    html += '<div class="settings-section-title">' + aimpEsc(p.name || id) + '</div>';
+    html += '<div class="settings-section-desc" style="margin-bottom:10px;">' +
+      'Grants <strong>' + aimpEsc(p.tier || 'platinum') + '</strong> for <strong>' + p.months + ' months</strong>.<br />Duration and tier are fixed. One-time payment, one-time carry-over token grant.' +
+      '</div>';
+    // v3.0.921 -- SHORT LABELS. At a third of the width the old sentence-long labels wrapped
+    // to three lines each and pushed the panels taller than the stacked layout they replaced,
+    // which would have been the opposite of the point. What they meant now lives one line up.
+    [['tokens', 'Tokens', 'number', '1'],
+     ['price_dollars', 'Price ($)', 'number', '0.01']].forEach(function (f) {
+      var val = (p[f[0]] === null || p[f[0]] === undefined) ? '' : p[f[0]];
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+        '<label class="form-label" for="pcf-' + id + '-' + f[0] + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + f[1] + '</label>' +
+        '<input id="pcf-' + id + '-' + f[0] + '" class="form-input pass-config-input" type="' + f[2] + '" min="0" step="' + f[3] + '" ' +
+        'data-pass="' + id + '" data-field="' + f[0] + '" value="' + val + '" oninput="passPerMonth(\'' + id + '\')" ' +
+        'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
+        '</div>';
+    });
+    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--gold);"></div>';
+    html += '<div class="pass-panel-foot" style="padding-top:12px;">' +
+      '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save</button>' +
+      '<div class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
+      '</div>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+  (data.order || []).forEach(function (id) { passPerMonth(id); });
+}
+
+function savePassPanel(id) {
+  var inputs = document.querySelectorAll('.pass-config-input[data-pass="' + id + '"]');
+  var values = {};
+  inputs.forEach(function (inp) {
+    var f = inp.getAttribute('data-field');
+    var v = inp.value;
+    // Sent as typed. The SERVER converts dollars to cents and decides what an empty
+    // or nonsense value means -- the browser never computes a price.
+    values[f] = (v === '' ? null : v);
+  });
+  var msgEl = document.getElementById('pass-save-msg-' + id);
+  if (msgEl) { msgEl.textContent = 'Saving...'; msgEl.style.color = ''; }
+  fetch('/api/admin/pass-config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pass: id, values: values })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.success) {
+        // Re-render from what the SERVER stored, not from what was typed. A blank that fell
+        // back to a code default has to show that default, or the box lies about what is live.
+        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--gold)'; }
+        loadPassesConfig();
+      } else {
+        if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
+      }
+    })
+    .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
+}
 
 function loadTiersConfig() {
   var box = document.getElementById('tiers-config-container');
@@ -19273,10 +20143,16 @@ function renderTiersConfig(data) {
         '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
+        // v3.0.922 -- recompute as you type. Bound on EVERY field rather than only the three
+        // it reads, because this renderer is driven by the server's field list and a later
+        // field that turns out to matter should not need this line changed again.
+        'oninput="tierDerived(\'' + tierKey + '\')" ' +
         'style="width:74px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
     html += '</div>';
+    // v3.0.922 -- the same readout the pass panels carry, just above the Save button.
+    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--gold);"></div>';
     html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
       '<button class="btn btn-primary btn-sm" onclick="saveTierPanel(\'' + tierKey + '\')">Save ' + (t.name || tierKey) + '</button>' +
       '<span class="settings-section-desc" id="tier-save-msg-' + tierKey + '" style="margin:0;"></span>' +
@@ -19284,6 +20160,33 @@ function renderTiersConfig(data) {
     html += '</div>';
   });
   box.innerHTML = html;
+  (data.order || []).forEach(function (k) { tierDerived(k); });
+}
+
+// v3.0.922 -- A TIER'S MONTHLY TOKENS ARE UTLT + CO, AND IAN ASKED FOR IT THAT WAY:
+// "Include the UTLT tokens on that math." Which is right for this readout -- it is what a
+// subscriber is handed each month and what they compare against a pass. It is NOT what they
+// keep: only the CO half carries over, and roughly a quarter of the UTLT half has
+// historically expired unspent. That is a margin question and this is a shopping-comparison
+// line, so the label says "incl. UTLT" and leaves the other question to the financial model.
+function tierDerived(tierKey) {
+  var out = document.getElementById('tier-derived-' + tierKey);
+  if (!out) return;
+  function num(field) {
+    var el = document.getElementById('tcf-' + tierKey + '-' + field);
+    if (!el) return NaN;
+    var v = parseFloat(el.value);
+    return (el.value === '' || isNaN(v)) ? 0 : v;   // a blank field means zero, not broken
+  }
+  var price = num('price');
+  var utlt = num('monthly_utlt');
+  var cot = num('monthly_cot');
+  var priceEl = document.getElementById('tcf-' + tierKey + '-price');
+  if (!priceEl) { out.innerHTML = ''; return; }   // this tier has no price field to divide
+  var tokens = utlt + cot;
+  out.innerHTML = tokens + ' tokens per month (' + utlt + ' UTLT + ' + cot + ' CO)' +
+    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
+    (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
 }
 
 function saveTierPanel(tierKey) {
@@ -19970,7 +20873,35 @@ function serializeCustomOpts(o){
 }
 function customOptsQ(ctx, prefix){
   // ctx is accepted for call-site compatibility but ignored: there is ONE unified layout now.
-  if(!customActive) return '';
+  //
+  // v3.0.939 -- TD-732. THE LAYOUT IS ALWAYS SENT. This used to open with
+  //
+  //     if(!customActive) return '';
+  //
+  // and that one line is the whole of the bug Ian reported: with no co on the URL, buildLayout
+  // takes its LEGACY PRESET arm instead of renderLayout, and the legacy presets draw narration
+  // with buildClassicTextPanel -- the tan box. Every book's FIRST preview rendered through a
+  // different engine than every preview after it.
+  //
+  // customActive IS NOT TOUCHED, and that is deliberate. It means "the reader has explicitly
+  // chosen a layout", not "send the layout", and two things still lean on that meaning:
+  // storedLayoutCo turns the saved-vs-screen mismatch comparison OFF while it is false (TD-610 --
+  // not knowing must be reported as nothing), and the Layout button reads plain "Layout" until a
+  // choice exists. Flipping the flag would have changed all three answers at once; this changes
+  // one.
+  //
+  // WHAT GETS SENT WHEN NOBODY HAS CHOSEN is CUSTOM_LAYOUT_DEFAULTS -- Picture Book, thin keyline,
+  // title bar, drop cap -- which is precisely what the Layout modal has been showing them all
+  // along. The preview finally agrees with the panel above it.
+  //
+  // AND IT REACHES THE ORDER PATH ON PURPOSE. print-interior prints the SAVED APPROVED book when
+  // the co names paired / magazine / gazette, and answers 409 optimize_required when there is
+  // none (TD-214). Before this line changed, an untouched book skipped that branch and was
+  // RE-RENDERED LIVE into the interior PDF -- a book nobody approved, which pdf.js itself calls
+  // "the worst outcome this code can produce". The refusal is not a new problem introduced here;
+  // it is an old one that was being answered by printing something worse. v3.0.422 already puts
+  // that message on the Order tab the moment it opens, in plain English, long before a card is
+  // out -- see prepareInteriorCount.
   return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts));
 }
 

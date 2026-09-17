@@ -1200,6 +1200,56 @@
 
 
       <!-- Account actions (Sign out relocated here from the Settings screen) -->
+      <!-- Usage -->
+      <div class="settings-section">
+        <div class="settings-section-title">Usage</div>
+        <div class="settings-section-desc">Your current usage this period</div>
+        <div id="account-usage" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"></div>
+      </div>
+
+      <!-- Plans -->
+      <div id="account-upgrade-section" class="settings-section">
+        <div class="settings-section-title">Plans &amp; Subscription Info</div>
+        <div class="settings-section-desc">Your plan and your options</div>
+        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
+        <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(184,115,51,0.12);border:1px solid rgba(184,115,51,0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
+        <!-- v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE, as two facts rather than one.
+             A pass does not replace the account tier, it sits on top of it for a while, and the
+             day it lapses the account goes back to whatever is underneath. Merging them into one
+             value hides the thing the holder most needs to know before that day. -->
+        <div id="account-standing" style="display:none;margin-top:14px;"></div>
+        <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
+
+        <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+          <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
+          <!-- v3.0.669 -- TD-473. Ian: "If there is a way to put a link in Campaignia to be able to
+               take them to their payment history in stripe, that would be great." It is the SAME
+               portal the button above opens -- Stripe puts invoices and receipts on it once
+               Customer portal -> Invoice history is enabled in the dashboard (TD-472). A second
+               labelled door rather than a second destination: "Manage subscription" is not where
+               anyone looks for a receipt. -->
+          <button class="btn btn-sm" id="account-payment-history-btn" onclick="openBillingPortal()" style="display:none;">View payment history</button>
+          <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
+        </div>
+        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
+        <!-- v3.0.930 -- TD-780 Push 6b. THE PASSES MOVED BELOW THE BILLING CONTROLS. Ian:
+             "99% of the time there is nothing to manage on a Pass but there might be on a
+             subscription." Stronger than that, in fact: a pass is a one-time payment, so there is
+             NOTHING to manage on one -- no card to update, no renewal to stop, no invoices. Every
+             button above belongs to the subscription. -->
+        <!-- v3.0.929 -- the passes. Rendered from /api/public/pricing, which is the same catalog
+             the checkout charges from, so this panel cannot quote a price Stripe will not honour. -->
+        <div id="account-passes-wrap" style="display:none;margin-top:22px;">
+          <div class="settings-section-title" style="font-size:14px;">Platinum Passes</div>
+          <div class="settings-section-desc" id="account-passes-desc">Months of Platinum access and a block of tokens, paid once. Nothing to cancel.</div>
+          <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <!-- v3.0.931 -- TD-780 Push 6c. Notifications and Guided tours moved down to here, from
+           between Profile and Usage. Ian: "below the billing panels and above the My Published
+           Stories Panel." Both keep their ids, so any deep link still lands. -->
       <div class="settings-section" id="account-prefs-section">
         <div class="settings-section-title">Notifications</div>
         <div class="settings-section-desc">Choose which emails you would like to receive from us. We will always send important account, billing, and order emails.</div>
@@ -1226,35 +1276,6 @@
         <div class="settings-section-desc">Want a refresher? Turn the guided tours back on. Each screen's tour plays once as you visit it, then settles down again.</div>
         <div id="tours-replay-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
         <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Show guided tours again</button>
-      </div>
-
-      <!-- Usage -->
-      <div class="settings-section">
-        <div class="settings-section-title">Usage</div>
-        <div class="settings-section-desc">Your current usage this period</div>
-        <div id="account-usage" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"></div>
-      </div>
-
-      <!-- Plans -->
-      <div id="account-upgrade-section" class="settings-section">
-        <div class="settings-section-title">Plans &amp; Subscription Info</div>
-        <div class="settings-section-desc">Your plan and your options</div>
-        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
-        <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(184,115,51,0.12);border:1px solid rgba(184,115,51,0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
-        <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
-        <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-          <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
-          <!-- v3.0.669 -- TD-473. Ian: "If there is a way to put a link in Campaignia to be able to
-               take them to their payment history in stripe, that would be great." It is the SAME
-               portal the button above opens -- Stripe puts invoices and receipts on it once
-               Customer portal -> Invoice history is enabled in the dashboard (TD-472). A second
-               labelled door rather than a second destination: "Manage subscription" is not where
-               anyone looks for a receipt. -->
-          <button class="btn btn-sm" id="account-payment-history-btn" onclick="openBillingPortal()" style="display:none;">View payment history</button>
-          <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
-        </div>
-        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
       </div>
 
       <!-- My Published Stories (Public Library) -->
@@ -1322,7 +1343,7 @@
       <div class="settings-tabs">
         <button class="settings-tab" id="settings-tab-usertesting" onclick="switchSettingsTab('usertesting')">User Testing</button>
         <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">Settings</button>
-        <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers</button>
+        <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers and Passes</button>
         <button class="settings-tab" id="settings-tab-stats" onclick="switchSettingsTab('stats')">Stats</button>
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
@@ -1604,6 +1625,20 @@
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
+        <!-- v3.0.920 -- TD-780 Push 4a. PASSES SIT ABOVE THE TIERS. Ian, 2026-09-16: "I think
+             passes are really going to be bigger than subscriptions so lets put it up top."
+             The tab id stays 'tiers' so the admin/tester gating in SETTINGS_TABS_ALL is
+             untouched -- only the label and the contents move. -->
+        <div class="settings-section-title" style="margin-bottom:6px;">Platinum Passes</div>
+        <div class="settings-section-desc" style="margin-bottom:14px;">
+          One-time purchases that grant Platinum for a fixed run of months. Set the token allotment and the price; the duration is fixed per pass and is not editable here. Blank a field to fall back to the code default.
+        </div>
+        <div id="passes-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
+        <div id="passes-config-container">Loading passes...</div>
+
+        <div style="height:1px;background:rgba(201,168,76,0.18);margin:26px 0 20px;"></div>
+
+        <div class="settings-section-title" style="margin-bottom:6px;">Subscription Tiers</div>
         <div class="settings-section-desc" style="margin-bottom:14px;">
           Edit per-tier limits. Values are stored in the database and override the code defaults; blank a field to fall back to the default. Changes apply to new checks immediately.
         </div>
@@ -1631,35 +1666,78 @@
       </div>
 
       <div class="settings-pane" id="settings-pane-promos" style="display:none;">
+        <!-- v3.0.947 -- TD-799 stage 1. MADE IN ONE PLACE. Saving a code with a discount creates the
+             Stripe coupon and promotion code on the server; there is nothing to set up in Stripe by
+             hand any more. Saved codes are read-only apart from the label and on/off, because Stripe
+             cannot change them either. Spec: claude/PROMO_CODES_SPEC.md. -->
         <div class="settings-section">
           <div class="settings-section-title">Create a promo code</div>
-          <div class="settings-section-desc" style="margin-bottom:10px;">Catalog a code for attribution and (for token grants) app-side perks. For a code customers type at Stripe checkout, also create the matching discount in Stripe. Token grants apply on purchase or signup; percent/amount off are recorded for metrics only.</div>
-          <div style="margin-bottom:12px;font-size:13px;">Set up the matching discount code in Stripe &rarr;
-            <a href="https://dashboard.stripe.com/acct_1ThYOtFqMN7tR0rq/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Production</a>
-            &middot;
-            <a href="https://dashboard.stripe.com/acct_1ThYP8FtFqbShree/test/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Sandbox (test)</a>
-          </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;max-width:520px;">
+          <div class="settings-section-desc" style="margin-bottom:10px;">A code can take a % or $ amount off, give bonus tokens, or both. Saving creates the matching discount in Stripe automatically &mdash; in the sandbox on staging, in live on production. Once saved, only the label and the on/off switch can change; to change anything else, switch the code off and make a new one.</div>
+          <div id="promo-stripe-warn" class="settings-section-desc" style="display:none;margin-bottom:10px;color:var(--error);">Stripe is not configured on this server, so only bonus-token codes can be created.</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;max-width:640px;">
             <label style="color:var(--gold);font-size:13px;">Code</label>
             <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
-            <label style="color:var(--gold);font-size:13px;">Label (ad source)</label>
-            <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (for your metrics)" />
-            <label style="color:var(--gold);font-size:13px;">Type</label>
-            <select class="form-input" id="promo-type-input">
-              <option value="token_grant">Token grant (CO tokens)</option>
-              <option value="percent_off">% off (configure in Stripe)</option>
-              <option value="amount_off">$ off (configure in Stripe)</option>
-            </select>
-            <label style="color:var(--gold);font-size:13px;">Value</label>
-            <input class="form-input" id="promo-value-input" type="number" min="0" step="1" placeholder="e.g. 30" style="width:140px;" />
-            <label style="color:var(--gold);font-size:13px;">Expiration (optional)</label>
-            <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
-            <label style="color:var(--gold);font-size:13px;">Per-user limit</label>
-            <input class="form-input" id="promo-peruser-input" type="number" min="1" step="1" value="1" style="width:140px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Label (source)</label>
+            <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (where this code is used)" />
+
+            <label style="color:var(--gold);font-size:13px;">Discount</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select class="form-input" id="promo-discount-type" onchange="promoFormRefresh()" style="width:160px;">
+                <option value="none">No discount</option>
+                <option value="percent">% off</option>
+                <option value="amount">$ off</option>
+              </select>
+              <input class="form-input" id="promo-discount-value" type="number" min="0" step="1" placeholder="e.g. 20" style="width:120px;display:none;" oninput="promoFormRefresh()" />
+            </div>
+
+            <label style="color:var(--gold);font-size:13px;">Bonus tokens</label>
+            <input class="form-input" id="promo-bonus-input" type="number" min="0" step="1" value="0" style="width:120px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Sign-up code</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="promo-signup-input" onchange="promoFormRefresh()" />
+              <span>First-time only: can be entered at sign-up, applies to a customer's first pass or subscription purchase</span>
+            </label>
+
+            <label style="color:var(--gold);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
+            <div id="promo-products" style="display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;">
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="token_pack" onchange="promoFormRefresh()" /> Token packs</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="pass" onchange="promoFormRefresh()" /> Passes</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="book" onchange="promoFormRefresh()" /> Books</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:silver" onchange="promoFormRefresh()" /> Silver subscription</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:gold" onchange="promoFormRefresh()" /> Gold subscription</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:platinum" onchange="promoFormRefresh()" /> Platinum subscription</label>
+            </div>
+
+            <label id="promo-subdur-label" style="color:var(--gold);font-size:13px;display:none;">Subscription discount lasts</label>
+            <div id="promo-subdur-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select class="form-input" id="promo-subdur-input" onchange="promoFormRefresh()" style="width:180px;">
+                <option value="once">First payment only</option>
+                <option value="repeating">A number of payments</option>
+                <option value="forever">Every payment</option>
+              </select>
+              <input class="form-input" id="promo-submonths-input" type="number" min="1" max="36" step="1" placeholder="payments" style="width:110px;display:none;" />
+            </div>
+
+            <label style="color:var(--gold);font-size:13px;">Once per customer</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="promo-once-input" />
+              <span>Each customer can use it one time</span>
+            </label>
+
+            <label style="color:var(--gold);font-size:13px;">Total uses (optional)</label>
+            <input class="form-input" id="promo-max-input" type="number" min="1" step="1" placeholder="unlimited" style="width:140px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Expires (optional)</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
+              <span class="settings-section-desc" style="margin:0;">end of that day, Eastern</span>
+            </div>
           </div>
+          <div id="promo-book-warn" class="settings-section-desc" style="display:none;margin-top:10px;color:var(--error);">Books are priced at Lulu's print cost plus our markup. A discount bigger than the markup sells the book for less than Lulu charges you.</div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
             <button class="btn btn-primary btn-sm" id="promo-submit-btn" onclick="createPromoCode()">Create code</button>
-            <a id="promo-cancel-edit" onclick="cancelPromoEdit()" style="display:none;color:var(--gold);cursor:pointer;text-decoration:underline;font-size:13px;">Cancel edit</a>
             <span class="settings-section-desc" id="promo-create-msg" style="margin:0;"></span>
           </div>
         </div>
@@ -1777,23 +1855,107 @@
       </div>
 
       <!-- TESTING ONLY: manual tier override (remove before production) -->
+      <!-- v3.0.943 -- ONE PANEL, THREE STATES, AND SETTING A STATE SETS IT.
+
+           Ian, after the pass swallowed a tier change three times in one day: "Maybe a toggle that
+           makes it obvious how to set it to Pass or Subscription. And it should load up with
+           whatever the user currently is."
+
+           WHAT WAS WRONG: this panel mirrored the DATA, where a pass sits ON TOP of an account
+           tier rather than beside it. Two additive controls, and ownTier() silently taking the
+           higher of the two -- so picking Gold with a live pass wrote the column and changed
+           nothing visible.
+
+           IAN CHOSE THE TRUE SWITCH. Each mode now writes the WHOLE state: picking Subscription or
+           Free Trial clears the pass, and picking Pass drops the account tier to Copper beneath it.
+           The cost, recorded rather than hidden: Gold-with-a-live-pass is no longer reachable from
+           here. It is a legacy overlap the account page still words differently, and it now needs
+           SQL to set up. See TD-796.
+
+           THE FREE TRIAL SECTION IS FOLDED IN. It used to be its own panel below Guided Tours,
+           with its own checkbox, while "Free Trial" was ALSO an option in this dropdown -- two
+           controls for one state that could disagree with each other. The dropdown option is gone;
+           the trial is the third mode. -->
       <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
-        <div class="settings-section-title">Testing — Manual Tier Override</div>
-        <div class="settings-section-desc">Temporary: switch this account's tier to test tier-gated features. Not a real upgrade — will be removed later.</div>
-        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;">
-          <div style="flex:1;">
-            <label class="form-label">Tier</label>
-            <select class="form-input" id="account-tier-override">
-              <option value="trial">Free Trial</option>
-              <option value="copper">Copper</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="platinum">Platinum</option>
-            </select>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="setTierOverride()">Apply</button>
+        <div class="settings-section-title">Testing &mdash; Account State</div>
+        <div class="settings-section-desc">Temporary: put this account into one of the three states below, to test tier-gated features. Not a real upgrade &mdash; will be removed later.</div>
+
+        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(20,14,6,0.5);">Loading...</div>
+
+        <label class="form-label">This account is on</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="btn btn-sm" id="asm-btn-subscription" onclick="acctStateMode('subscription')">Subscription</button>
+          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')">Pass</button>
+          <button class="btn btn-sm" id="asm-btn-trial" onclick="acctStateMode('trial')">Free Trial</button>
         </div>
-        <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+
+        <!-- SUBSCRIPTION -->
+        <div id="asm-pane-subscription" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
+            <div style="flex:0 0 170px;">
+              <label class="form-label">Tier</label>
+              <select class="form-input" id="account-tier-override">
+                <option value="copper">Copper</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
+              </select>
+            </div>
+            <!-- v3.0.944 -- Ian: "can you give me a billing date so I can set that too. Like the
+                 free trial." OPTIONAL, and the pane says what leaving it blank does, because
+                 blank is not 'unset' here -- it actively removes the stand-in subscription. -->
+            <div style="flex:0 0 180px;">
+              <label class="form-label">Next billing date</label>
+              <input class="form-input" id="asm-sub-period-end" type="date" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="subDatePreset(1)">Tomorrow</button>
+            <button class="btn btn-sm" onclick="subDatePreset(14)">+14 days</button>
+            <button class="btn btn-sm" onclick="subDatePreset(30)">+1 month</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get. <strong>Next billing date</strong> is optional: set one and the account is given a stand-in subscription id (sub_TESTING_&lt;your id&gt;) so My Account treats it as a real subscriber, and a pass bought here will defer its clock to that date. Leave it blank and the stand-in is taken away again. A genuine Stripe subscription is never touched either way.</div>
+        </div>
+
+        <!-- PASS -->
+        <div id="asm-pane-pass" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
+            <div style="flex:0 0 170px;">
+              <label class="form-label">Pass</label>
+              <select class="form-input" id="account-pass-override">
+                <option value="platinum">Platinum pass</option>
+              </select>
+            </div>
+            <div style="flex:0 0 180px;">
+              <label class="form-label">Expires</label>
+              <input class="form-input" id="account-pass-expires" type="date" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="passDatePreset(-1)">Yesterday</button>
+            <button class="btn btn-sm" onclick="passDatePreset(90)">+3 months</button>
+            <button class="btn btn-sm" onclick="passDatePreset(180)">+6 months</button>
+            <button class="btn btn-sm" onclick="passDatePreset(365)">+12 months</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Sets the account tier to Copper underneath, which is what a real pass holder looks like. <strong>Yesterday</strong> makes the pass already expired, for testing the lapse.</div>
+        </div>
+
+        <!-- FREE TRIAL -->
+        <div id="asm-pane-trial" style="display:none;">
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;">
+            <div style="flex:1;max-width:260px;">
+              <label class="form-label">Trial start date</label>
+              <input class="form-input" id="dev-trial-date" type="date" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+          </div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass. Leave the date blank to start the trial today; set it ~31 days ago to confirm the watermark switches off past the window.</div>
+        </div>
+
+        <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:10px;"></div>
+        <div id="account-pass-override-msg" class="settings-section-desc" style="margin-top:2px;"></div>
       </div>
 
       <!-- TESTING ONLY: clear this account's guided-tour history so tours
@@ -1811,23 +1973,6 @@
       <!-- TESTING ONLY: put this account in/out of the free trial to exercise
            the trial watermark. Backed by /api/auth/trial-testing (self only).
            REMOVE with the other testing controls before production. -->
-      <div class="settings-section" id="dev-trial-section" style="border:1px dashed rgba(201,168,76,0.5);">
-        <div class="settings-section-title">Testing &mdash; Free Trial</div>
-        <div class="settings-section-desc">Temporary: flip this account in or out of the 30-day free trial to test the trial watermark. Will be removed later.</div>
-        <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;">
-          <input type="checkbox" id="dev-trial-toggle" style="flex-shrink:0;" />
-          <span style="font-weight:600;">In free trial</span>
-        </label>
-        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;">
-          <div style="flex:1;max-width:220px;">
-            <label class="form-label">Trial start date (optional)</label>
-            <input class="form-input" id="dev-trial-date" type="date" />
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="devApplyTrial()">Apply</button>
-        </div>
-        <div class="settings-section-desc" style="margin-top:6px;">Tip: set the start date ~31 days ago with the toggle on to confirm the watermark switches off past the window.</div>
-        <div id="dev-trial-msg" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-      </div>
       </div>
 
     </div>
@@ -2336,7 +2481,13 @@
 
     <!-- Intro -->
     <div style="font-size:13px;color:#4a3526;margin-bottom:18px;line-height:1.55;">
-      Tokens are used to generate images &mdash; a storyboard panel, a character reference, or an amended portrait. Bigger packs give you more tokens for your money. Purchased tokens never expire.
+      <!-- v3.0.932 -- TD-781. WAS: "Tokens are used to generate images". That is wrong, and
+           wrong in the expensive direction: story generation, narrative prose and Optimize
+           are about 22% of all token spend product-wide, so somebody would generate a
+           narrative, watch the balance drop, and have been told that could not happen. The
+           non-image spend is now named rather than hedged with "and more" -- the fault was
+           a list that read as exhaustive and was not. -->
+      Tokens pay for everything Campaignia generates for you &mdash; storyboard panels, character references, narrative prose, and Optimize. Bigger packs give you more tokens for your money. Purchased tokens never expire.
     </div>
 
     <!-- The pack ladder -->
@@ -2346,6 +2497,18 @@
     <div id="token-purchase-msg" style="display:none;margin-top:18px;padding:14px 16px;border-radius:8px;font-size:13px;text-align:center;background:#f5ecd4;border:1px solid rgba(201,168,76,0.55);color:#3d2a18;line-height:1.5;"></div>
 
     <div class="modal-footer">
+      <!-- v3.0.932 -- TD-780. A QUIET WAY OUT. See the batch note: packs are the CHEAPEST fuel in
+           the product, so this is not a better-value pitch -- it is the only route from the one
+           screen that is purely about spending money to the other two things you can spend it on.
+           Deliberately .btn and not .btn-primary: Buy is the primary action here.
+
+           goToPlans() closes this modal itself before it scrolls, so there is nothing to close
+           first -- and duplicating that here would be a second place to keep it in step.
+
+           Hidden by renderTokenPacks() for anyone who CANNOT buy, because that person already
+           gets a larger "See plans" button inside the block message. Two on one screen reads as
+           nagging. -->
+      <button class="btn btn-sm" id="tokens-modal-plans-btn" onclick="goToPlans()">Plans &amp; passes</button>
       <button class="btn" onclick="closeTokensModal()">Close</button>
     </div>
   </div>

@@ -8,6 +8,7 @@ const artstyles = require('../services/artStyleCatalog');   // v3.0.845 -- TD-69
 const router = express.Router();
 const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrativeStyleAllowed, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
+const { listPasses } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const { sendReportEmail } = require('./email');
 
 // v3.0.845 -- TD-693 / TD-694. MULTI-VALUE FACETS, AND THEY ARE ANY-OF.
@@ -99,7 +100,22 @@ router.get('/pricing', function (req, res) {
       const t = getTier(name);
       pricing[name] = (t && typeof t.price === 'number') ? t.price : 0;
     });
-    res.json({ pricing: pricing });
+    // v3.0.924 -- TD-780 Push 7. THE PASSES, FROM THE SAME CATALOG createPassCheckout CHARGES
+    // FROM. listPasses() returns the code defaults merged with app_settings.pass_config, so the
+    // storefront cannot quote a figure the checkout will not honour. Sent as cents, formatted by
+    // the page, because a price that is not a whole number of dollars must survive the trip.
+    let passes = [];
+    try {
+      passes = listPasses().map(function (p) {
+        return { id: p.id, name: p.name, months: p.months, tokens: p.tokens, price_cents: p.price_cents };
+      });
+    } catch (passErr) {
+      // The tier half still ships. A landing page with live tiers and fallback passes beats a
+      // landing page with neither.
+      console.error('GET public pricing: passes unavailable:', passErr.message);
+      passes = [];
+    }
+    res.json({ pricing: pricing, passes: passes });
   } catch (e) {
     console.error('GET public pricing error:', e.message);
     res.status(500).json({ error: 'pricing unavailable' });

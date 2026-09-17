@@ -59,6 +59,72 @@ function productRef(envVar, fallbackName) {
   return pid ? { product: pid } : { product_data: { name: fallbackName } };
 }
 
+// v3.0.945 -- TD-791. WHO IS BUYING, for every one-time (payment-mode) checkout, decided in ONE place.
+// With the user's Stripe customer id we pass customer, so every purchase lands on the same customer
+// as their subscription and each other. Without one -- ensureStripeCustomer could not produce it --
+// we fall back to exactly what v3.0.742 did: customer_creation 'always', so Stripe still makes a REAL
+// customer rather than a gcus_ guest (TD-539), and the webhook safety net links it afterwards.
+// customer and customer_creation are mutually exclusive in Stripe, and so are customer and
+// customer_email, which is why this returns one shape or the other and never a mix.
+function buyerRef(opts) {
+  if (opts && opts.customerId) return { customer: opts.customerId };
+  const ref = { customer_creation: 'always' };
+  if (opts && opts.customerEmail) ref.customer_email = opts.customerEmail;
+  return ref;
+}
+
+// v3.0.946 -- TD-791 / TD-798. AN INVOICE FOR EVERY ONE-TIME PURCHASE, decided in ONE place.
+// Ian, 2026-09-17: "I do want it to create an invoice so it can all be viewed in the payment history
+// on stripe when someone hits the button." Stripe's customer portal lists INVOICES only. Subscription
+// payments already make one; a payment-mode Checkout makes a receipt and no invoice unless asked, so
+// packs, passes and books were invisible there. With v3.0.945 putting every purchase on the user's
+// one customer, turning invoices on puts EVERYTHING in that one history.
+//
+// THE COST IS DELIBERATE AND WAS PRICED BEFORE IT WAS BUILT: Stripe charges 0.4% of the sale, capped
+// at $2 per invoice, for post-payment invoices on one-time Checkout payments. Subscriptions are
+// unaffected -- their invoices are covered by the Billing fee already paid. Ian chose this over
+// building our own payment history page (TD-798, parked).
+//
+// THE WEBHOOK CONSEQUENCE: these invoices fire invoice.paid, the same event that grants a
+// subscription's monthly tokens. fulfillSubscriptionInvoice returns at once for an invoice with no
+// subscription, so a paid pack cannot be mistaken for a renewal -- and the v3.0.946 guard drives that
+// function with a one-time invoice to prove it rather than trusting this comment.
+//
+// metadata carries the Campaignia user id and what was bought, so any invoice can be traced back from
+// the Stripe dashboard. Stripe metadata values must be strings.
+function invoiceRef(opts, kind, extraMetadata) {
+  const md = Object.assign({}, extraMetadata || {}, { kind: String(kind) });
+  if (opts && opts.userId != null) md.user_id = String(opts.userId);
+  return { invoice_creation: { enabled: true, invoice_data: { metadata: md } } };
+}
+
+// v3.0.945 -- TD-791. Create the one Stripe customer for a Campaignia user. user_id rides in the
+// metadata so the customer can always be traced back from the Stripe dashboard.
+async function createCustomer(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const params = { metadata: { user_id: String(opts.userId) } };
+  if (opts.email) params.email = opts.email;
+  if (opts.name) params.name = opts.name;
+  const reqOpts = opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined;
+  return await stripe.customers.create(params, reqOpts);
+}
+
+// v3.0.945 -- TD-791. Does this customer exist, undeleted, in the Stripe account and mode we are
+// talking to? THREE ANSWERS, NOT TWO (TD-587): true, false (definitely gone or not ours), and null
+// (could not ask). Callers must not treat null as false and mint a duplicate over a network blip.
+async function customerExists(customerId) {
+  const stripe = getClient();
+  if (!stripe || !customerId) return null;
+  try {
+    const c = await stripe.customers.retrieve(customerId);
+    return !!(c && !c.deleted);
+  } catch (e) {
+    if (e && (e.code === 'resource_missing' || e.statusCode === 404)) return false;
+    return null;
+  }
+}
+
 // Create a hosted Checkout Session for a one-time token-pack purchase. The
 // caller redirects the buyer to the returned session.url. Amount + description
 // come from the server pack -- never from the client.
@@ -68,9 +134,8 @@ async function createCheckoutSession(opts) {
   const pack = opts.pack;
   const params = {
     mode: 'payment',
-    // v3.0.742 -- TD-539. Without this Stripe creates a GUEST customer (gcus_), the webhook
-    // stores it, and the billing portal rejects it forever after. See the note above.
-    customer_creation: 'always',
+    // v3.0.945 -- TD-791. The buyer (customer, or the TD-539 customer_creation fallback) is added
+    // by buyerRef below -- one place for all three one-time checkouts.
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -90,8 +155,62 @@ async function createCheckoutSession(opts) {
   };
   // Prefill the buyer's account email (and set the receipt email) so a browser-cached
   // Stripe Link identity isn't the default. (Link may still be offered by the browser.)
-  if (opts.customerEmail) params.customer_email = opts.customerEmail;
+  // v3.0.945 -- TD-791. With a customer id the email comes from that customer instead.
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'token_pack', { pack_id: String(pack.id) }));   // v3.0.946
   return await stripe.checkout.sessions.create(params);
+}
+
+// v3.0.923 -- TD-780 Push 5. A PLATINUM PASS IS A ONE-TIME PAYMENT, so this is the token-pack
+// path with a different catalog behind it: mode 'payment', an ad-hoc price whose unit_amount is
+// computed on the SERVER, and the real Product attached only when STRIPE_PRODUCT_PASSES is set
+// (which is optional, and exists solely so a promo code can be scoped to passes).
+//
+// THE QUOTE IS FROZEN INTO THE SESSION METADATA. Ian edits pass prices and token counts from the
+// dashboard, so the catalog can legitimately change between somebody opening Checkout and paying.
+// Stripe already holds the amount they agreed to; stamping the token count beside it means the
+// webhook grants WHAT WAS QUOTED rather than whatever the catalog says when it fires.
+async function createPassCheckout(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const pass = opts.pass;
+  const params = {
+    mode: 'payment',
+    // v3.0.945 -- TD-791. Buyer added by buyerRef below.
+    allow_promotion_codes: true,
+    line_items: [{
+      quantity: 1,
+      price_data: Object.assign({
+        currency: 'usd',
+        unit_amount: pass.price_cents
+      }, productRef('STRIPE_PRODUCT_PASSES', 'Campaignia -- ' + pass.name + ' (' + pass.tokens + ' tokens)'))
+    }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    client_reference_id: String(opts.userId),
+    metadata: {
+      kind: 'pass',
+      user_id: String(opts.userId),
+      pass_id: pass.id,
+      // the frozen quote -- read back by fulfillPassCheckout, never re-derived
+      quoted_tokens: String(pass.tokens),
+      quoted_price_cents: String(pass.price_cents),
+      quoted_months: String(pass.months),
+      quoted_tier: String(pass.tier)
+    }
+  };
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'pass', { pass_id: String(pass.id) }));   // v3.0.945 -- TD-791, v3.0.946 invoice
+  return await stripe.checkout.sessions.create(params);
+}
+
+// v3.0.923 -- TD-780 Push 5. NOT CALLED BY ANYTHING YET, and that is deliberate -- see the note
+// on the pass checkout route in routes/tokens.js. cancelSubscription() above ends a subscription
+// IMMEDIATELY and would take paid days off somebody who just spent $279; this is the variant that
+// lets the period they already bought run out. It is here so the decision is a one-line change
+// rather than a new Stripe call written under time pressure.
+async function cancelSubscriptionAtPeriodEnd(subId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
 }
 
 // Create a hosted Checkout Session for a recurring tier SUBSCRIPTION. priceId is a
@@ -172,11 +291,10 @@ function priceForTier(tierName) {
 async function createOneTimeCheckout(opts) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
-  return await stripe.checkout.sessions.create({
+  const params = {
     mode: 'payment',
-    // v3.0.742 -- TD-539, same fault, same fix: a book order is also a one-time payment, so it
-    // too created a guest and broke the buyer's portal.
-    customer_creation: 'always',
+    // v3.0.945 -- TD-791. A book order is a one-time payment like the other two, so its buyer comes
+    // from buyerRef too (customer when we have one; the TD-539 customer_creation fallback otherwise).
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -188,9 +306,12 @@ async function createOneTimeCheckout(opts) {
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     client_reference_id: opts.userId != null ? String(opts.userId) : undefined,
-    customer_email: opts.customerEmail || undefined,
     metadata: opts.metadata || {}
-  });
+  };
+  // v3.0.946 -- the order id rides on the invoice too, so a book's invoice can be matched to po-N.
+  const _om = opts.metadata || {};
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'print_order', _om.order_id != null ? { order_id: String(_om.order_id) } : {}));
+  return await stripe.checkout.sessions.create(params);
 }
 
 // Best-effort card brand + last4 from a completed payment, for display only
@@ -268,7 +389,46 @@ async function getSessionPromoCode(session) {
   }
 }
 
+// v3.0.947 -- TD-799 stage 1. Promo codes made from the Campaignia admin form. Thin wrappers only;
+// every rule lives in services/billing/promoCodes.js. Promotion codes use the current API shape,
+// promotion: { type: 'coupon', coupon }, not the older top-level coupon field.
+async function createCoupon(params) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.coupons.create(params);
+}
+async function deleteCoupon(couponId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.coupons.del(couponId);
+}
+async function createPromotionCode(params) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.promotionCodes.create(params);
+}
+async function setPromotionCodeActive(promotionCodeId, active) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.promotionCodes.update(promotionCodeId, { active: !!active });
+}
+// The active promotion code with this exact customer-facing code, or null. Stripe matches case-insensitively.
+async function findActivePromotionCode(code) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const list = await stripe.promotionCodes.list({ code: code, active: true, limit: 1 });
+  return (list && list.data && list.data[0]) || null;
+}
+async function getPrice(priceId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.prices.retrieve(priceId);
+}
+
 module.exports = {
+  createPassCheckout, cancelSubscriptionAtPeriodEnd,
+  createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
+  createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,
   cancelSubscription,
   changeSubscriptionPrice,

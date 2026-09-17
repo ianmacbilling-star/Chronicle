@@ -54,6 +54,8 @@
     }
 
     /* NAV */
+    /* v3.0.928 -- shorter bar. See the batch note: the button and the logo were tied
+       for tallest, so both come down or neither does. */
     nav {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -61,7 +63,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 24px;
+      padding: 10px 24px;   /* v3.0.928 -- was 14px. */
       background: rgba(10,8,6,0.96);
       border-bottom: 3px solid var(--ink);
       box-shadow: 0 3px 0 rgba(201,168,76,0.15);
@@ -78,7 +80,7 @@
       text-decoration: none;
     }
 
-    .nav-logo img { height: 38px; }
+    .nav-logo img { height: 30px; }   /* v3.0.928 -- was 38px, joint-tallest child of the bar. */
 
     .nav-logo-text {
       font-family: 'Cinzel', serif;
@@ -102,9 +104,11 @@
 
     .btn-nav {
       font-family: 'Bangers', cursive;
-      font-size: 16px;
+      /* v3.0.928 -- was 16px / 8px 24px. This is the Sign In button Ian asked about.
+         It shares the height with .nav-logo img, so that came down by the same step. */
+      font-size: 14px;
       letter-spacing: 2px;
-      padding: 8px 24px;
+      padding: 5px 18px;
       background: var(--crimson-bright);
       color: var(--parchment);
       border: 3px solid var(--ink);
@@ -241,7 +245,9 @@
 
     .hero-sub {
       font-family: 'Crimson Text', serif;
-      font-size: clamp(15px, 2vw, 18px);
+      /* v3.0.928 -- was clamp(15px, 2vw, 18px). Both ends move by the same step, so the
+         line scales exactly as it did and is simply two pixels larger everywhere. */
+      font-size: clamp(17px, 2.2vw, 20px);
       font-style: italic;
       color: var(--gold-light);
       line-height: 1.55;
@@ -290,8 +296,10 @@
     .btn-ghost:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
 
     .hero-trial {
-      font-size: 12px;
-      color: rgba(201,168,76,0.4);
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
+      /* v3.0.926 -- was rgba(201,168,76,0.4): 2.24:1 on this panel, below the 4.5:1 floor.
+         Ian: "It needs to be the same color as" the hero subtitle -- which is --gold-light. */
+      color: var(--gold-light);
       font-family: 'Cinzel', serif;
       letter-spacing: 1px;
       line-height: 1.45;
@@ -401,6 +409,62 @@
       border: var(--border);
     }
 
+    /* ============================================================
+       v3.0.925 -- TD-780 Push 7b. WHAT YOU GET.
+
+       Shaped on .panel-how / .how-step-panel deliberately, and it reuses .how-title-panel,
+       .section-tag and .section-title rather than inventing a second header: every one of those
+       is already named in landing-story.css's re-skin, so the story page gets them right for
+       free. Only the two lines that had no equivalent are new.
+
+       42%, matching what .panel-pricing used to take, so the payoff beside it keeps the 58% it
+       was cropped for. The items are flex:1 so four of them fill the column against the payoff's
+       600px rather than leaving a gap under the last one.
+       ============================================================ */
+    .panel-reward {
+      width: 42%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gutter);
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .reward-items {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gutter);
+    }
+
+    .reward-item {
+      flex: 1;
+      border: var(--border);
+      background: var(--ink-mid);
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .reward-item-title {
+      font-family: 'Bangers', cursive;
+      font-size: 20px;
+      color: var(--gold);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .reward-item-desc {
+      font-family: 'Crimson Text', serif;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
+      font-style: italic;
+      color: rgba(240,232,208,0.7);
+      line-height: 1.55;
+    }
+
     .section-tag {
       font-family: 'Bangers', cursive;
       font-size: 11px;
@@ -466,7 +530,7 @@
 
     .step-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.7);
       line-height: 1.6;
@@ -532,7 +596,7 @@
 
     .feature-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
       color: rgba(240,232,208,0.6);
       line-height: 1.6;
@@ -564,7 +628,7 @@
     }
 
     .pricing-header-sub {
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       color: rgba(10,8,6,0.6);
       font-style: italic;
     }
@@ -586,13 +650,115 @@
     .tier-row:last-child { border-bottom: none; }
     .tier-row:hover { background: rgba(201,168,76,0.05); }
 
+    /* ============================================================
+       v3.0.924 -- TD-780 Push 7. PASSES ON THE STOREFRONT.
+
+       .panel-pricing keeps its 42% rule untouched; the full-width behaviour is added by a
+       PARENT class instead. That is deliberate -- a width this page has depended on for months
+       is not worth rewriting when one more specific selector does the job, and any other row
+       that ever wants the old proportions still has them.
+       ============================================================ */
+    .comic-row-pricing .panel-pricing { width: 100%; }
+
+    .plan-blurb {
+      padding: 12px 20px 10px;
+      border-bottom: 2px solid rgba(201,168,76,0.1);
+    }
+    .plan-blurb b {
+      font-family: 'Bangers', cursive;
+      font-size: 18px;
+      letter-spacing: 1.5px;
+      color: var(--gold);
+      display: block;
+    }
+    .plan-blurb span {
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
+      color: rgba(240,232,208,0.62);
+      font-style: italic;
+    }
+
+    .pass-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      padding: 14px 20px 16px;
+      border-bottom: 2px solid rgba(201,168,76,0.1);
+      align-items: stretch;
+    }
+
+    .pass-card {
+      border: 2px solid rgba(201,168,76,0.45);
+      border-radius: 3px;
+      background: rgba(201,168,76,0.04);
+      padding: 14px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 2px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .pass-card:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+
+    .pass-card-kicker {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(229,228,226,0.75);
+      text-transform: uppercase;
+    }
+    .pass-card-term {
+      font-family: 'Bangers', cursive;
+      font-size: 26px;
+      letter-spacing: 2px;
+      color: #e5e4e2;
+      line-height: 1.1;
+    }
+    /* TOKENS LEAD, AND THEY ARE THE BIGGEST THING ON THE CARD. It is where a pass actually wins:
+       one carry-over lump against a monthly grant that is partly use-it-or-lose-it. */
+    .pass-card-tokens {
+      font-family: 'Bangers', cursive;
+      font-size: 30px;
+      letter-spacing: 1px;
+      color: var(--gold);
+      margin-top: 6px;
+      line-height: 1;
+    }
+    .pass-card-tokens-sub {
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
+      font-style: italic;
+      color: rgba(240,232,208,0.55);
+      margin-bottom: 8px;
+    }
+    .pass-card-price {
+      font-family: 'Bangers', cursive;
+      font-size: 24px;
+      color: var(--parchment);
+      margin-bottom: 10px;
+    }
+    /* NO PER-MONTH FIGURE ON A PASS CARD. See the batch note: every pass is above Platinum's $22
+       per month, and the subscription rows are directly underneath. */
+
+    /* v3.0.926 -- THE PASS BUTTON WEARS PLATINUM, and not merely because Ian asked for that
+       colour: a Platinum Pass grants the Platinum tier, so the button that buys one should be the
+       button that buys Platinum. The value is written out rather than inherited because
+       .tier-platinum .btn-tier is a descendant rule and a pass card has no .tier-platinum
+       ancestor -- the guard asserts the two stay equal. */
+    .btn-pass {
+      margin-top: auto;
+      width: 100%;
+      font-size: 13px;
+      background: #e5e4e2;
+      color: var(--ink);
+    }
+
     .tier-coin { font-size: 28px; flex-shrink: 0; }
 
     .tier-info { flex: 1; }
 
     .tier-name-row {
       font-family: 'Bangers', cursive;
-      font-size: 20px;
+      /* v3.0.927 -- TD-780 Push 7d. 20px was sized for a 42% column. Matches .pass-card-term. */
+      font-size: 26px;
       letter-spacing: 2px;
     }
 
@@ -603,7 +769,10 @@
     .tier-trial .tier-name-row { color: var(--crimson-bright); }
 
     .tier-perks {
-      font-size: 12px;
+      /* v3.0.927 -- matches .reward-item-desc. The pass cards carry no long descriptive line, so
+         the anchor is the nearest sibling of the same KIND rather than of the same name. This is
+         also the line that gained the most room: across the full row, 12px read as fine print. */
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       color: rgba(240,232,208,0.5);
       font-style: italic;
       margin-top: 2px;
@@ -611,14 +780,15 @@
 
     .tier-price-tag {
       font-family: 'Bangers', cursive;
-      font-size: 22px;
+      /* v3.0.927 -- matches .pass-card-price. */
+      font-size: 24px;
       color: var(--parchment);
       text-align: right;
       flex-shrink: 0;
     }
 
     .tier-price-tag small {
-      font-size: 12px;
+      /* v3.0.928 -- was 12px. */ font-size: 14px;
       color: rgba(240,232,208,0.4);
       display: block;
       font-family: 'Crimson Text', serif;
@@ -641,6 +811,13 @@
       flex-shrink: 0;
     }
     .btn-tier:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+
+    /* v3.0.926 -- TD-780 Push 7c. A SAFE DEFAULT, so this class is never colourless again.
+       Every background below is a MODIFIER; before this line .btn-tier had none of its own, so a
+       .btn-tier used outside a .tier-* row rendered as the browser's default link -- blue text on
+       nothing. That is exactly what happened to the pass buttons in v3.0.924, and it looked like a
+       decision rather than an omission. The modifiers still win; this only catches the fall. */
+    .btn-tier { background: var(--parchment); color: var(--ink); }
 
     .tier-copper .btn-tier { background: #b87333; color: var(--parchment); }
     .tier-silver .btn-tier { background: #c0c0c0; color: var(--ink); }
@@ -687,7 +864,7 @@
 
     .payoff-sub {
       font-family: 'Crimson Text', serif;
-      font-size: 13px;
+      /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
       color: var(--gold-light);
       margin-bottom: 0;
@@ -745,7 +922,7 @@
 
     .cta-strip-sub {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.7);
       margin-top: 4px;
@@ -799,7 +976,7 @@
 
     .faq-a {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
       color: rgba(240,232,208,0.65);
       line-height: 1.6;
@@ -841,16 +1018,22 @@
       font-family: 'Cinzel', serif;
       font-size: 11px;
       letter-spacing: 1px;
-      color: rgba(201,168,76,0.4);
+      /* v3.0.926 -- was rgba(201,168,76,0.4), 2.23:1 on --ink. */
+      color: var(--gold-light);
       text-decoration: none;
       transition: color 0.2s;
     }
-    .footer-link:hover { color: var(--gold); }
+    /* AND THE HOVER HAD TO MOVE WITH IT. --gold (#c9a84c) is DARKER than --gold-light (#e8d5a3),
+       so leaving the hover alone would have made these links DIM on hover -- an affordance
+       pointing the wrong way. Hover now goes to --parchment, which is brighter than the base. */
+    .footer-link:hover { color: var(--parchment); }
 
     .footer-copy {
       font-size: 11.5px;
       line-height: 1.5;
-      color: rgba(201,168,76,0.4);
+      /* v3.0.926 -- was rgba(201,168,76,0.4), 2.23:1 on --ink. This is the copyright and the
+         publisher disclaimer, so it is now as legible as everything else in the footer. */
+      color: var(--gold-light);
       text-align: center;
       max-width: 880px;
       width: 100%;
@@ -876,6 +1059,10 @@
       .comic-row { flex-direction: column; }
       .panel-players { width: 100%; min-height: 400px; }
       .panel-pricing { width: 100%; }
+      /* v3.0.925 -- the reward panel stacks above the payoff rather than beside it. */
+      .panel-reward { width: 100%; }
+      /* v3.0.924 -- one card per row rather than three slivers. */
+      .pass-cards { grid-template-columns: 1fr; }
       .panel-payoff { min-height: 460px; }
       .features-strip-body { grid-template-columns: 1fr 1fr; }
       .faq-grid { grid-template-columns: 1fr; }
@@ -898,7 +1085,7 @@
       .feature-cell { border-right: none; }
       .hero-text-panel { padding: 26px 20px !important; }
       .hero-title { font-size: 42px; }
-      .hero-sub { font-size: 16px; }
+      .hero-sub { font-size: 18px; }   /* v3.0.928 -- was 16px, one step with the rest. */
       .features-strip-title { font-size: 21px; letter-spacing: 2px; }
       .faq-header-title { font-size: 21px; letter-spacing: 2px; }
       .features-strip-header, .faq-header { padding: 12px 18px; }
@@ -915,6 +1102,7 @@
     @media (max-width: 400px) {
       .hero-title { font-size: 34px; }
       .nav-logo-text { font-size: 14px; letter-spacing: 2px; }
-      .btn-nav { font-size: 14px; padding: 8px 16px; }
+      .btn-nav { font-size: 13px; padding: 4px 12px; }   /* v3.0.928 -- was 14px / 8px 16px, which
+         had become TALLER than the desktop rule it overrides. */
       .hero-text-panel { padding: 22px 16px !important; }
     }

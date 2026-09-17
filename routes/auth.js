@@ -1,8 +1,9 @@
 const express = require('express');
+const { getPass } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
@@ -44,6 +45,28 @@ async function resolvePenName(db, raw, excludeUserId) {
   var clash = await db.prepare("SELECT id FROM users WHERE lower(pen_name) = lower(?) AND id <> ?").get(pen, excludeUserId || 0);
   if (clash) return { ok: false, error: "That pen name is already taken" };
   return { ok: true, value: pen };
+}
+
+// ============================================================
+// v3.0.924 -- TD-780 Push 7. WHAT MAY BE STASHED IN users.pending_plan, DECIDED ONCE.
+//
+// Returns the canonical value to store, or null to store nothing. A tier keeps its bare name so
+// no existing row changes meaning; a pass is stored as "pass:<id>".
+//
+// THE PASS BRANCH DELIBERATELY HAS NO LIST OF IDS. getPass() is the catalog the checkout charges
+// from and it returns null for anything it does not know, so an id can be added to
+// services/billing/passes.js and work here with no edit. A second list is how a landing page ends
+// up offering a pass that signup silently drops.
+// ============================================================
+function pendingPlanValue(raw) {
+  const v = (typeof raw === 'string') ? raw.trim().toLowerCase() : '';
+  if (!v) return null;
+  if (v === 'silver' || v === 'gold' || v === 'platinum') return v;
+  if (v.indexOf('pass:') === 0) {
+    const id = v.slice(5);
+    try { return getPass(id) ? ('pass:' + id) : null; } catch (e) { return null; }
+  }
+  return null;
 }
 
 router.post('/register', async function(req, res) {
@@ -115,9 +138,19 @@ router.post('/register', async function(req, res) {
     // Remember a paid-plan choice from the landing page so we can route them to
     // checkout AFTER they verify (they aren't logged in until then).
     try {
-      const _plan = (typeof plan === 'string') ? plan.toLowerCase() : '';
-      if (_plan === 'silver' || _plan === 'gold' || _plan === 'platinum') {
+      const _plan = pendingPlanValue(plan);
+      if (_plan) {
         await db.prepare('UPDATE users SET pending_plan = ? WHERE id = ?').run(_plan, newUserId);
+        // READ IT BACK. This write has always been wrapped in a non-fatal catch, which is right --
+        // a failed stash must not cost somebody their account. But it means a rejected value
+        // (a CHECK constraint, a column too narrow) disappears without a trace, and the person
+        // then signs up for a pass, verifies, lands in the app and is never taken to checkout.
+        // Confirmed TEXT with no length cap on 2026-09-16; this is the guard against it changing.
+        const _back = await db.prepare('SELECT pending_plan FROM users WHERE id = ?').get(newUserId);
+        if (!_back || _back.pending_plan !== _plan) {
+          console.error('pending_plan did not stick for user ' + newUserId +
+                        ': wanted ' + _plan + ', column holds ' + JSON.stringify(_back && _back.pending_plan));
+        }
       }
     } catch (planErr) { console.error('pending_plan store failed (non-fatal):', planErr.message); }
 
@@ -251,10 +284,14 @@ router.get('/verify', async function (req, res) {
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userEmail = user.email;
-    var _pending = (user.pending_plan || '').toLowerCase();
-    if (_pending === 'silver' || _pending === 'gold' || _pending === 'platinum') {
+    // v3.0.924 -- the SAME decision function that stored it decides how to resume it. The pass
+    // id is re-validated here rather than trusted: the catalog can have changed between signup
+    // and verification, and a pass that no longer exists should drop the person into the app
+    // rather than into a checkout that will refuse them.
+    var _pending = pendingPlanValue(user.pending_plan);
+    if (_pending) {
       try { await db.prepare('UPDATE users SET pending_plan = NULL WHERE id = ?').run(user.id); } catch (e) {}
-      return res.redirect('/app.html?verified=1&start_checkout=' + _pending);
+      return res.redirect('/app.html?verified=1&start_checkout=' + encodeURIComponent(_pending));
     }
     res.redirect('/app.html?verified=1');
   } catch (e) {
@@ -308,15 +345,24 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
-    const tier = getTier(user.tier || 'copper');
+    // v3.0.919 -- TD-780 Push 3. THE FEATURES A PASS HOLDER SEES ARE THE PASS'S FEATURES.
+    // This is the read every session makes, so getting it wrong means the screen says Copper
+    // while the server treats them as Platinum -- and the user believes the screen.
+    const tier = getTier(ownTier(user));
     const trialExpired = isTrialExpired(user);
-    // Free trial = within the 30-day window from trial_started_at and not yet
+    // Free trial = within the configured window from trial_started_at and not yet
     // converted to a paid plan. Drives the on-screen trial watermark.
-    const _trialMs = 30 * 24 * 60 * 60 * 1000;
+    // v3.0.940 -- ONE NUMBER. This function wrote 30 out twice while isTrialExpired() and the
+    // scheduler both read getTier('trial').trial_days -- which is EDITABLE in the tier config.
+    // Raise the trial to 45 days in the dashboard and the lapse and the emails would move while
+    // the watermark and the day counter stayed at 30.
+    let _trialDays = 30;
+    try { _trialDays = getTier('trial').trial_days || 30; } catch (e) { _trialDays = 30; }
+    const _trialMs = _trialDays * 24 * 60 * 60 * 1000;
     // On the free trial = still on the 'trial' TIER and inside the 30-day window.
     // Keyed off tier (the authoritative signal), NOT subscription_status: a paid
     // subscriber whose Stripe subscription is in its own 'trialing' period would
@@ -325,11 +371,18 @@ router.get('/me', async function(req, res) {
       !!user.trial_started_at &&
       (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs;
 
-    // Calculate trial days remaining
+    // Calculate trial days remaining, and WHEN IT ENDS.
+    // v3.0.940 -- trialEndsAt is new. WHERE YOU STAND had a row for a subscription and a row for a
+    // pass and nothing for the third way to hold a tier, so a trial account's only visible date was
+    // whatever stale subscription figure Fault 1 let through. Computed here rather than in the
+    // browser: the client already has no business owning this number, and it would have been the
+    // fifth copy of it.
     let trialDaysLeft = null;
+    let trialEndsAt = null;
     if (user.tier === 'trial' && user.trial_started_at) {
       const started = new Date(user.trial_started_at);
-      const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const expires = new Date(started.getTime() + _trialMs);
+      trialEndsAt = isFinite(expires.getTime()) ? expires.toISOString() : null;
       trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
     }
 
@@ -379,13 +432,23 @@ router.get('/me', async function(req, res) {
       name: user.name,
       email: user.email,
       id: user.id,
-      tier: user.tier || 'copper',
+      // v3.0.919 -- `tier` is what they HAVE, so existing readers stay correct with no change.
+      // accountTier and pass are ADDITIVE, for the account card in Push 6: what is theirs by
+      // subscription, and what the pass adds on top. Never merged into one value -- somebody
+      // has to be able to see that their Gold is still underneath.
+      tier: ownTier(user),
+      accountTier: user.tier || 'copper',
+      pass: passIsLive(user) ? { tier: user.pass_tier, expiresAt: user.pass_expires_at } : null,
       tierName: tier.name,
       isTester: isTester,
       tierFeatures: tier,
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
-      subscriptionStatus: user.subscription_status || 'trialing',
+      // v3.0.940 -- WAS `|| 'trialing'`, and that is a live status. Any account holding a
+      // stripe_subscription_id with a null status therefore read as a CURRENT SUBSCRIBER, and the
+      // account page drew its subscription rows off a stale current_period_end. Not-knowing must
+      // not answer yes; hasLiveSubscription already treats '' as no.
+      subscriptionStatus: user.subscription_status || '',
       currentPeriodEnd: user.current_period_end || null,
       cancelAtPeriodEnd: !!user.cancel_at_period_end,
       loneCopper: await isLoneCopper(user.id),
@@ -395,6 +458,7 @@ router.get('/me', async function(req, res) {
       penName: user.pen_name || '',
       inFreeTrial: inFreeTrial,
       trialStartedAt: user.trial_started_at || null,
+      trialEndsAt: trialEndsAt,   // v3.0.940 -- null unless they are ON the trial tier with a start date
       vocab: user.vocab || 'ttrpg',
       notifyPromo: user.notify_promo !== false,
       notifyFeatures: user.notify_features !== false,
@@ -442,6 +506,13 @@ router.post('/suspend', async function(req, res) {
       catch (e) { console.error('Suspend: subscription cancel failed:', e.message); }
     }
 
+    // v3.0.919 -- TD-780 Push 3. A LIVE PASS IS DELIBERATELY LEFT ALONE HERE.
+    // Ian, 2026-09-16, asked directly: "nothing should happen if a pass holder hits suspend."
+    // A pass buys TIME, not usage, so the clock simply keeps running -- and a suspended account
+    // cannot sign in, so a live pass on one is inert anyway. Freezing the remaining days and
+    // restoring them on unsuspend is more generous and a great deal more state to get wrong.
+    // This comment exists so that the ABSENCE of a pass_tier write here reads as a decision
+    // rather than an oversight; the batch guard asserts nothing in this route touches them.
     // TF-05 (B): a suspended account returns on the FREE tier. Drop paid tiers
     // to copper now (idempotent with the cancel webhook); leave trial/copper as
     // is so a trial simply resumes (and lapses naturally if it expires).
@@ -460,10 +531,50 @@ router.post('/suspend', async function(req, res) {
 // archive caps, effective tier). NOT a real upgrade path -- remove before
 // production (paid tiers will be Stripe-gated). Grep 'set-tier' to find it.
 // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: every write below names req.session.userId.
+//
+// v3.0.944 -- AND IT CAN NOW SET A NEXT BILLING DATE, WHICH MEANS IT HAS TO INVENT A SUBSCRIPTION.
+//
+// Ian: "for a subscription setting... can you give me a billing date so I can set that too. Like
+// the free trial." A date on its own would have rendered NOTHING: since v3.0.942 every money
+// sentence on the account page is gated on hasBillingSubscription(), which needs hasSubscription,
+// which is !!users.stripe_subscription_id -- and a testing account has never been through Stripe.
+//
+// SO IT PLANTS AN ID, AND THE ID IS DELIBERATELY NOT PLAUSIBLE: sub_TESTING_<userid>. It cannot
+// collide with a real Stripe id, it is unmistakable in a row or a log line, and -- the reason that
+// matters -- it is EXACTLY recognisable, which is what lets this route take back only what it put
+// there.
+//
+// THE RULE, AND IT IS THE WHOLE DESIGN: THIS PANEL CREATES AND DESTROYS ITS OWN ID, NEVER A REAL
+// ONE. With a date, the id is planted only into an EMPTY column. Without a date, the testing id is
+// removed along with the columns that go with it, and a real subscription is left untouched. That
+// second half is not tidiness: Pass mode calls this route with tier 'copper' and no date, and a
+// pass holder still carrying a subscription id is exactly the half-state v3.0.943 was built to
+// stop this panel producing.
 router.post('/set-tier', requireAdminOrTester, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const tier = (req.body && typeof req.body.tier === 'string') ? req.body.tier.trim().toLowerCase() : '';
   if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
+
+  // OPTIONAL. Absent or empty means 'no billing date', which is a real answer and not an error --
+  // it is what Pass mode and the plain tier flip both send. A malformed one IS an error, rather
+  // than a silent fall-through to the clearing branch that would look like it had worked.
+  //
+  // STORED AT THE END OF THE CHOSEN DAY, same convention as /set-pass above and for the same
+  // reason: midnight would make a date set to 'today' already in the past the moment it was saved.
+  const periodRaw = (req.body && typeof req.body.period_end === 'string') ? req.body.period_end.trim() : '';
+  let periodEnd = null;
+  if (periodRaw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodRaw)) return res.status(400).json({ error: 'Next billing date must be a YYYY-MM-DD date' });
+    const whenPE = new Date(periodRaw + 'T23:59:59.000Z');
+    if (isNaN(whenPE.getTime())) return res.status(400).json({ error: 'That is not a real date' });
+    periodEnd = whenPE.toISOString();
+  }
+  // The one subscription id this panel is allowed to create, and therefore the only one it is
+  // allowed to destroy. Compared with = rather than LIKE on purpose -- LIKE would treat the
+  // underscores as wildcards, and a pattern that matches more than it was written for is how a
+  // testing control ends up deleting a real customer's subscription id.
+  const testSubId = 'sub_TESTING_' + req.session.userId;
+
   try {
     const db = await getDb();
     // Flipping TO the trial tier starts a fresh 30-day window so it won't lapse
@@ -471,18 +582,80 @@ router.post('/set-tier', requireAdminOrTester, async function(req, res) {
     // to backdate the start when testing expiry/lapse).
     if (tier === 'trial') {
       await db.prepare("UPDATE users SET tier = ?, subscription_status = 'trialing', trial_started_at = ? WHERE id = ?").run(tier, new Date().toISOString(), req.session.userId);
+    } else if (periodEnd) {
+      // v3.0.944 -- A BILLING DATE WAS CHOSEN, SO THIS ACCOUNT IS TO LOOK LIKE A SUBSCRIBER.
+      //
+      // cancel_at_period_end IS CLEARED. Without it an account that has bought a pass keeps
+      // saying 'ending' for ever -- v3.0.935 sets that flag on purchase and nothing here would
+      // ever unset it, so the one control meant to put the account back to a plain subscriber
+      // could not actually do it.
+      //
+      // COALESCE(NULLIF(...)) IS THE 'ONLY INTO AN EMPTY COLUMN' HALF OF THE RULE. A real Stripe
+      // id survives this write untouched; only a blank column gets the stand-in.
+      await db.prepare(
+        "UPDATE users SET tier = ?, subscription_status = 'active', current_period_end = ?, cancel_at_period_end = FALSE, " +
+        "stripe_subscription_id = COALESCE(NULLIF(stripe_subscription_id, ''), ?) WHERE id = ?"
+      ).run(tier, periodEnd, testSubId, req.session.userId);
     } else {
       // Switching to any non-trial tier means the account is no longer on the free
       // trial, so mark it active. inFreeTrial / userInFreeTrial key off
       // subscription_status, so without this the tier override alone leaves the
       // account flagged as trialing (and blocked from publishing). Matches the
       // trial-testing OFF path.
-      await db.prepare("UPDATE users SET tier = ?, subscription_status = 'active' WHERE id = ?").run(tier, req.session.userId);
+      //
+      // v3.0.944 -- NO BILLING DATE, SO THIS ACCOUNT IS NOT TO LOOK LIKE A SUBSCRIBER.
+      //
+      // Every CASE below tests the id the row held BEFORE this statement -- Postgres evaluates an
+      // UPDATE's SET expressions against the old row, so all three agree with each other even
+      // though the first of them is rewriting the very column the other two are reading.
+      //
+      // A REAL SUBSCRIPTION FALLS THROUGH EVERY ELSE BRANCH UNCHANGED. That is the other half of
+      // the rule, and it is why this is not simply 'set the columns to null'.
+      await db.prepare(
+        "UPDATE users SET tier = ?, subscription_status = 'active', " +
+        "stripe_subscription_id = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE stripe_subscription_id END, " +
+        "current_period_end = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE current_period_end END, " +
+        "cancel_at_period_end = CASE WHEN stripe_subscription_id = ? THEN FALSE ELSE cancel_at_period_end END " +
+        "WHERE id = ?"
+      ).run(tier, testSubId, testSubId, testSubId, req.session.userId);
     }
-    res.json({ success: true, tier: tier });
+    res.json({ success: true, tier: tier, currentPeriodEnd: periodEnd });
   } catch (e) {
     console.error('set-tier error:', e.message);
     res.status(500).json({ error: 'Could not change tier. Please try again.' });
+  }
+});
+
+// POST /api/auth/set-pass -- TESTING ONLY, and the sibling of /set-tier above.
+// v3.0.921 -- TD-780 Push 4b. ADMIN OR TESTER. Self-only: every write names req.session.userId.
+//
+// Lets the signed-in user give themselves a pass, or take it away, so the pass paths can be
+// exercised before a purchase path exists. It does NOT touch users.tier -- a pass is additive,
+// and keeping the two separate here is what makes Copper-with-a-pass testable at all.
+//
+// THE DATE IS STORED AT THE END OF THE CHOSEN DAY. A date input gives YYYY-MM-DD, and midnight
+// would mean a pass set to expire "today" was already dead the moment it was saved -- which
+// reads as a bug rather than as a boundary. 23:59:59 makes the chosen day the last day it works.
+router.post('/set-pass', requireAdminOrTester, async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  const raw = (req.body && typeof req.body.pass_tier === 'string') ? req.body.pass_tier.trim().toLowerCase() : '';
+  try {
+    const db = await getDb();
+    if (!raw) {
+      await db.prepare('UPDATE users SET pass_tier = NULL, pass_expires_at = NULL WHERE id = ?').run(req.session.userId);
+      return res.json({ success: true, pass: null });
+    }
+    if (!TIERS[raw]) return res.status(400).json({ error: 'Unknown tier for a pass' });
+    const on = (req.body && typeof req.body.expires_on === 'string') ? req.body.expires_on.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) return res.status(400).json({ error: 'Expiry must be a YYYY-MM-DD date' });
+    const when = new Date(on + 'T23:59:59.000Z');
+    if (isNaN(when.getTime())) return res.status(400).json({ error: 'That is not a real date' });
+    await db.prepare('UPDATE users SET pass_tier = ?, pass_expires_at = ? WHERE id = ?')
+      .run(raw, when.toISOString(), req.session.userId);
+    res.json({ success: true, pass: { tier: raw, expiresAt: when.toISOString() } });
+  } catch (e) {
+    console.error('set-pass error:', e.message);
+    res.status(500).json({ error: 'Could not set the pass. Please try again.' });
   }
 });
 
@@ -565,6 +738,9 @@ router.put('/trial-testing', requireAdminOrTester, async function(req, res) {
     const db = await getDb();
     const now = new Date().toISOString();
     const inTrial = !!(req.body && req.body.inTrial);
+    // v3.0.944 -- the same stand-in id /set-tier plants, so the trial can take back what the
+    // subscription mode put there. Same rule, same exact comparison, same hands-off for a real one.
+    const testSubId = 'sub_TESTING_' + req.session.userId;
     let startedAt = null;
     if (inTrial) {
       const raw = req.body && req.body.started_at;
@@ -572,8 +748,19 @@ router.put('/trial-testing', requireAdminOrTester, async function(req, res) {
       if (!startedAt) startedAt = now;
       // Put the account ON the real trial TIER (badge + caps engage, exactly like a
       // fresh signup) and start the window. Persisted in the DB -> survives logins.
-      await db.prepare("UPDATE users SET tier = 'trial', subscription_status = 'trialing', trial_started_at = ?, edited_at = ?, edited_by = ? WHERE id = ?")
-        .run(startedAt, now, req.session.userId, req.session.userId);
+      //
+      // v3.0.944 -- AND IT TAKES THE STAND-IN SUBSCRIPTION WITH IT. Set Gold with a billing date,
+      // then flip to Free Trial, and without these three CASEs the account is a trial still
+      // holding sub_TESTING_<id> and a future billing date. Nothing renders that today, because
+      // the trial tier has no price and hasBillingSubscription() is false -- which is exactly what
+      // makes it the kind of quiet wrong state that surfaces as a bug the next time somebody asks
+      // a slightly different question of the same row. A REAL subscription is left alone.
+      await db.prepare("UPDATE users SET tier = 'trial', subscription_status = 'trialing', trial_started_at = ?, " +
+        "stripe_subscription_id = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE stripe_subscription_id END, " +
+        "current_period_end = CASE WHEN stripe_subscription_id = ? THEN NULL ELSE current_period_end END, " +
+        "cancel_at_period_end = CASE WHEN stripe_subscription_id = ? THEN FALSE ELSE cancel_at_period_end END, " +
+        "edited_at = ?, edited_by = ? WHERE id = ?")
+        .run(startedAt, testSubId, testSubId, testSubId, now, req.session.userId, req.session.userId);
     } else {
       // Out of trial: drop a trial account to copper (the real post-trial tier); leave
       // any non-trial tier untouched so this never clobbers a tier set via the override.

@@ -30,11 +30,12 @@ const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErr
 // failed price leaves a record naming the cause. routes/debug requires only the database
 // and the auth middleware, so there is no cycle.
 const { logDebug } = require('./debug');
-const { getTier } = require('../middleware/tiers');
+const { getTier, ownTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
 const stripeProvider = require('../services/billing/stripeProvider');
+const { ensureStripeCustomer } = require('../services/billing/stripeCustomer');   // v3.0.945 -- TD-791
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
@@ -670,8 +671,11 @@ router.post('/order', requireSession, async function (req, res) {
   // bypassed. Keyed on the account tier's watermark flag.
   try {
     const _wdb = await getDb();
-    const _wu = await _wdb.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
-    const _wt = getTier((_wu && _wu.tier) || 'copper');
+    // v3.0.919 -- TD-780 Push 3. THE WORST ONE ON THE LIST IF IT IS MISSED. A pass holder
+    // whose account tier is Copper would pay for a pass, make their book, and be told at the
+    // order button that it is watermarked and cannot be printed.
+    const _wu = await _wdb.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+    const _wt = getTier(ownTier(_wu));
     if (_wt && _wt.watermark) {
       return res.status(403).json({ error: "This book is watermarked and can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order." });
     }
@@ -843,8 +847,12 @@ router.post('/order', requireSession, async function (req, res) {
     const amountCents = Math.round(Number(customerCharge) * 100);
     const descBits = [bookTitle || orderName || 'Campaignia book'];
     if (quoteReq.quantity > 1) descBits.push('x' + quoteReq.quantity);
+    // v3.0.945 -- TD-791. The buyer's one Stripe customer, the same one their tokens, passes and
+    // subscription use. null falls back to the pre-945 behaviour and never blocks the order.
+    const _buyerCustomerId = await ensureStripeCustomer(userId);
     const session = await stripeProvider.createOneTimeCheckout({
       amountCents: amountCents,
+      customerId: _buyerCustomerId,
       currency: (quote.currency || 'usd').toLowerCase(),
       description: descBits.join(' '),
       userId: userId,

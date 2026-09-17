@@ -34,7 +34,7 @@
        tier-grid.css, so the cascade is byte-for-byte the cascade it was. And it is a stylesheet in
        the head, which blocks painting until it arrives -- so there is no flash of unstyled page,
        only one extra request on a first visit that the edge then caches. -->
-  <link rel="stylesheet" href="/css/landing.css?v=3.0.897">
+  <link rel="stylesheet" href="/css/landing.css?v=3.0.928">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -197,12 +197,79 @@
   <!-- ============================================================
        ROW 4 — Pricing + Campaignia Book Payoff
        ============================================================ -->
-  <div class="comic-row" id="pricing">
+  <!-- v3.0.925 -- TD-780 Push 7b. ROW 4 IS TWO COLUMNS AGAIN, and that is what puts the book
+       back in the picture: a full-width .panel-payoff crops a 0.667 portrait image down to its
+       top 29% and the book falls out of frame. WHAT YOU GET now fills the column the pricing
+       panel used to occupy, so the payoff keeps the proportions it was cropped for and the
+       space beside it says what the photograph is of. -->
+  <div class="comic-row">
 
-    <!-- LEFT: Pricing -->
+    <!-- LEFT: what you actually walk away with.
+         NOT A THIRD FEATURE LIST. "THREE STEPS TO IMMORTALITY" is how you use it and "YOUR
+         ARSENAL" is what the app does; both are already on this page. What was missing is what
+         you END UP HOLDING -- which is exactly what the photograph beside it shows. Every claim
+         here is already made somewhere on the page (step three, and the FAQ), so this states the
+         product rather than extending it. -->
+    <div class="panel-reward">
+      <div class="how-title-panel">
+        <span class="section-tag">🏆 THE REWARD</span>
+        <div class="section-title">WHAT YOU GET</div>
+      </div>
+      <div class="reward-items">
+        <div class="reward-item">
+          <div class="reward-item-title">A REAL BOOK</div>
+          <div class="reward-item-desc">Comic, hardback or softback, printed and shipped to your door.</div>
+        </div>
+        <div class="reward-item">
+          <div class="reward-item-title">A PRINT-READY PDF</div>
+          <div class="reward-item-desc">Cover page, illustrated panels, narrative prose and your character cast. Four layout styles, previewed before you print.</div>
+        </div>
+        <!-- IAN, 2026-09-16: "I want to start pushing a little narrative here... I don't want
+             people thinking that Campaignia makes up stories -- it rewrites the users stories."
+             So this item says whose story it is BEFORE it says how long we keep it, and it is
+             worded for the page it sits on: a table played a campaign, a person lived a story. -->
+        <div class="reward-item">
+          <div class="reward-item-title">IT’S YOUR STORY</div>
+          <div class="reward-item-desc">Campaignia doesn’t invent your campaign — it retells the one your table actually played. And it stays yours, long after a plan ends.</div>
+        </div>
+        <div class="reward-item">
+          <div class="reward-item-title">A PLACE TO SHOW IT</div>
+          <div class="reward-item-desc">Put it in the public Library for other tables to read, or keep it to your own.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Campaignia Book Payoff. BACK IN A 58% COLUMN, which is the proportion this
+         picture was cropped for -- see the note above. -->
+    <div style="flex:1;display:flex;flex-direction:column;">
+      <div class="panel panel-payoff" style="flex:1;">
+        <div class="payoff-content">
+          <div class="payoff-title">This could be<br>your campaign.</div>
+        </div>
+      </div>
+      <div class="cta-strip">
+        <div>
+          <div class="cta-strip-text">YOUR NEXT SESSION DESERVES TO BE REMEMBERED.</div>
+          <div class="cta-strip-sub">Every campaign has a moment the whole table will never forget.</div>
+        </div>
+        <div style="text-align:center;flex-shrink:0;">
+          <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
+          <div class="cta-note" style="color:rgba(240,232,208,0.5);">30-DAY FREE TRIAL</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       ROW 5 — the plans. FULL WIDTH, and that part of Push 7 stands: three pass cards in a
+       42% column were roughly 170px each.
+       ============================================================ -->
+  <div class="comic-row comic-row-pricing" id="pricing">
+
     <div class="panel-pricing">
       <div class="pricing-header">
-        <div class="pricing-header-title">CHOOSE YOUR TIER</div>
+        <div class="pricing-header-title">CHOOSE YOUR PATH</div>
         <div class="pricing-header-sub">Every adventurer starts somewhere. Your 30-day trial begins on your first campaign.</div>
       </div>
       <div class="pricing-tiers">
@@ -217,14 +284,43 @@
           <a href="/login?signup" class="btn-tier">START FREE</a>
         </div>
 
-        <div class="tier-row tier-copper">
-          <img src="/images/Copper_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Copper" />
-          <div class="tier-info">
-            <div class="tier-name-row">COPPER</div>
-            <div class="tier-perks">Get your own version of the story · no monthly subscription · token purchases only</div>
+        <div class="plan-blurb plan-blurb-pass">
+          <b>GOT A PROJECT? GET A PASS.</b>
+          <span>Months of Platinum access and a pile of tokens, paid once. Nothing to cancel.</span>
+        </div>
+
+        <div class="pass-cards">
+          <div class="pass-card" data-pass="p3">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">3 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p3">200 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p3">$79</div>
+            <a href="/login?signup&amp;pass=p3" class="btn-tier btn-pass">GET THE 3-MONTH PASS</a>
           </div>
-          <div class="tier-price-tag" data-tier="copper"><small>Tokens only</small></div>
-          <a href="/login?signup" class="btn-tier">GET STARTED</a>
+
+          <div class="pass-card" data-pass="p6">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">6 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p6">375 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p6">$149</div>
+            <a href="/login?signup&amp;pass=p6" class="btn-tier btn-pass">GET THE 6-MONTH PASS</a>
+          </div>
+
+          <div class="pass-card" data-pass="p12">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">12 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p12">700 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p12">$279</div>
+            <a href="/login?signup&amp;pass=p12" class="btn-tier btn-pass">GET THE 12-MONTH PASS</a>
+          </div>
+        </div>
+
+        <div class="plan-blurb plan-blurb-sub">
+          <b>IN IT FOR THE LONG HAUL? SUBSCRIBE.</b>
+          <span>Tokens every month, at the best per-token price we offer.</span>
         </div>
 
         <div class="tier-row tier-silver">
@@ -240,7 +336,7 @@
         <div class="tier-row tier-gold">
           <img src="/images/Gold_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Gold" />
           <div class="tier-info">
-            <div class="tier-name-row">GOLD ⭐</div>
+            <div class="tier-name-row">GOLD</div>
             <div class="tier-perks">3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options · multiple versions</div>
           </div>
           <div class="tier-price-tag" data-tier="gold">$15<small>per month</small></div>
@@ -263,25 +359,6 @@
            markup it needs, so another landing page can carry the feature with one button. -->
       <div class="tg-root tg-open-wrap">
         <button type="button" id="tg-open-btn" class="tg-open">COMPARE THE TIERS</button>
-      </div>
-    </div>
-
-    <!-- RIGHT: Campaignia Book Payoff -->
-    <div style="flex:1;display:flex;flex-direction:column;">
-      <div class="panel panel-payoff" style="flex:1;">
-        <div class="payoff-content">
-          <div class="payoff-title">This could be<br>your campaign.</div>
-        </div>
-      </div>
-      <div class="cta-strip">
-        <div>
-          <div class="cta-strip-text">YOUR NEXT SESSION DESERVES TO BE REMEMBERED.</div>
-          <div class="cta-strip-sub">Every campaign has a moment the whole table will never forget.</div>
-        </div>
-        <div style="text-align:center;flex-shrink:0;">
-          <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
-          <div class="cta-note" style="color:rgba(240,232,208,0.5);">30-DAY FREE TRIAL</div>
-        </div>
       </div>
     </div>
 
@@ -347,14 +424,34 @@
 
 <script>
 (function(){
+  // v3.0.924 -- TD-780 Push 7. Money is formatted from CENTS, and a price that is not a whole
+  // number of dollars must not be rounded into one: 7950 is $79.50, never $80.
+  function _cmpDollars(cents){
+    var d=Number(cents)/100;
+    if(!isFinite(d)) return null;
+    return '$'+(d%1===0?String(d):d.toFixed(2));
+  }
   fetch('/api/public/pricing').then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.pricing) return;
-    Object.keys(d.pricing).forEach(function(tier){
-      var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
-      if(!el) return;
-      var p=Number(d.pricing[tier]);
-      if(p>0) el.innerHTML='$'+p+'<small>per month</small>';
-    });
+    if(!d) return;
+    // THE TWO HALVES ARE INDEPENDENT ON PURPOSE -- see the note in the batch.
+    if(d.pricing){
+      Object.keys(d.pricing).forEach(function(tier){
+        var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
+        if(!el) return;
+        var p=Number(d.pricing[tier]);
+        if(p>0) el.innerHTML='$'+p+'<small>per month</small>';
+      });
+    }
+    if(d.passes && d.passes.length){
+      d.passes.forEach(function(p){
+        if(!p||!p.id) return;
+        var pr=document.querySelector('.pass-card-price[data-pass-price="'+p.id+'"]');
+        var money=_cmpDollars(p.price_cents);
+        if(pr&&money) pr.textContent=money;
+        var tk=document.querySelector('.pass-card-tokens[data-pass-tokens="'+p.id+'"]');
+        if(tk&&Number(p.tokens)>0) tk.textContent=Number(p.tokens)+' tokens';
+      });
+    }
   }).catch(function(){});
 })();
 </script>

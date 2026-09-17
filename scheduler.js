@@ -11,8 +11,8 @@
 // ============================================================
 const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
-const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail } = require('./routes/email');
-const { getTier, isLoneCopper } = require('./middleware/tiers');
+const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendPassEndingSoonEmail, sendPassExpiredEmail } = require('./routes/email');
+const { getTier, TIERS, isLoneCopper, sqlLivePass } = require('./middleware/tiers');
 const { logDebug } = require('./routes/debug');
 
 const HOUR = 60 * 60 * 1000;
@@ -96,6 +96,10 @@ async function runMilestone(db, type, daysAgo, requireNotMember) {
     "WHERE u.trial_started_at IS NOT NULL " +
     "AND u.trial_started_at::date = (CURRENT_DATE - (? * INTERVAL '1 day'))::date " +
     "AND u.tier NOT IN ('silver','gold','platinum') " +
+    // v3.0.919 -- TD-780 Push 3. NOR anyone holding a live pass. They are Platinum; chasing
+    // them with "your trial is ending, upgrade" mail is the version of this feature that
+    // makes a paying customer think nobody is looking.
+    "AND NOT " + sqlLivePass('u') + " " +
     "AND NOT EXISTS (SELECT 1 FROM lifecycle_emails le WHERE le.user_id = u.id AND le.email_type = ?)";
   if (requireNotMember) {
     sql += " AND NOT EXISTS (SELECT 1 FROM campaign_members cm WHERE cm.user_id = u.id AND cm.role = 'player')";
@@ -133,6 +137,101 @@ async function maybeDailyTrialPass(db) {
 }
 
 // ---------------------------------------------------------------------------
+// v3.0.936 -- TD-780 Push 8 of 8. PASS EXPIRY EMAILS.
+//
+// Same shape as the trial pass above: production-gated behind LIFECYCLE_EMAILS_ENABLED, at most
+// one run per calendar day, one row in lifecycle_emails per send. The differences are all in the
+// key and in who is excluded.
+//
+// THE KEY CARRIES THE PASS'S OWN EXPIRY DATE -- 'pass_warn_30:2026-12-16'. lifecycle_emails is
+// UNIQUE (user_id, email_type) and email_type is TEXT, so putting the occurrence in the key gives
+// a repeat buyer a fresh row without any DDL against a live production database. TD-780 recorded
+// this push as blocked on a schema change; it was not.
+//
+// THE DATE COMES OUT OF POSTGRES ALREADY FORMATTED. Doing it in JS would mean parsing a timestamp
+// the query has already compared against CURRENT_DATE, and the two could then disagree about which
+// day it is -- which is exactly how a mail goes out keyed to one date and reading another.
+// `offset` is days from today to the pass expiry date: POSITIVE for a warning ahead of time,
+// NEGATIVE for the notice afterwards.
+//
+// THE SIGN ALSO DECIDES WHETHER THE PASS MUST STILL BE LIVE, and getting that wrong was the first
+// version of this function. It required sqlLivePass() for every milestone, which for the
+// end-of-pass notice is a contradiction: pass_expires_at is a TIMESTAMP, so on the expiry day the
+// pass is live until its own time of day. That query would have mailed "your pass has ended" in
+// the morning while it was still running, and then -- once the hour passed -- matched nobody at
+// all, because the row is no longer live. The notice would simply never have gone out, and the
+// daily gate means one silent miss per person, forever.
+//
+// So the notice runs the day AFTER at offset -1, against a pass that is definitely OVER.
+async function runPassMilestone(db, prefix, offset) {
+  // WHO IS DELIBERATELY NOT MAILED:
+  //  * anybody whose account status is not active -- a suspended account has other mail coming.
+  //  * anybody with a live subscription that is NOT cancelling. Their access does not end when the
+  //    pass does, so "your pass ends" is a false alarm. A subscriber who bought a pass IS mailed,
+  //    because v3.0.935 set their subscription to stop and they really will land on Copper.
+  //  * anybody who bought another pass -- no clause needed, because that moves pass_expires_at and
+  //    the date arithmetic below stops matching the old one.
+  const stillLive = (offset > 0)
+    ? sqlLivePass('u')
+    : "(u.pass_tier IS NOT NULL AND u.pass_expires_at IS NOT NULL AND u.pass_expires_at <= CURRENT_TIMESTAMP)";
+  const sql =
+    "SELECT u.id, u.name, u.email, u.pass_tier, " +
+    "  to_char(u.pass_expires_at, 'YYYY-MM-DD') AS key_date, " +
+    "  to_char(u.pass_expires_at, 'FMMonth FMDD, YYYY') AS nice_date " +
+    "FROM users u " +
+    "WHERE " + stillLive + " " +
+    "AND u.pass_expires_at::date = (CURRENT_DATE + (? * INTERVAL '1 day'))::date " +
+    "AND COALESCE(u.status, 'active') = 'active' " +
+    "AND NOT (u.tier IN ('silver','gold','platinum') AND COALESCE(u.cancel_at_period_end, false) = false) " +
+    "AND NOT EXISTS (SELECT 1 FROM lifecycle_emails le WHERE le.user_id = u.id " +
+    "                AND le.email_type = ?::text || ':' || to_char(u.pass_expires_at, 'YYYY-MM-DD'))";
+  const rows = await db.prepare(sql).all(offset, prefix);
+  let sent = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const u = rows[i];
+    const type = prefix + ':' + u.key_date;
+    const tierName = (TIERS[u.pass_tier] && TIERS[u.pass_tier].name) || u.pass_tier || 'Platinum';
+    try {
+      if (offset > 0) await sendPassEndingSoonEmail(u.name, u.email, tierName, u.nice_date, offset);
+      else await sendPassExpiredEmail(u.name, u.email, tierName);
+      // THE ROW GOES IN AFTER THE SEND, NEVER BEFORE. Recording first and failing to send would
+      // mean this person is never warned about THIS pass again -- the unique index guarantees it.
+      // The other way round, a send that succeeds and a row that does not costs one duplicate.
+      await db.prepare("INSERT INTO lifecycle_emails (user_id, email_type) VALUES (?, ?) ON CONFLICT (user_id, email_type) DO NOTHING").run(u.id, type);
+      sent++;
+      console.log('[scheduler] ' + type + ' -> user ' + u.id);
+    } catch (e) {
+      console.error('[scheduler] ' + type + ' failed for user ' + u.id + ':', e && e.message);
+    }
+  }
+  return sent;
+}
+
+async function maybeDailyPassPass(db) {
+  if (process.env.LIFECYCLE_EMAILS_ENABLED !== 'true') return;   // production-gated
+  const today = new Date().toISOString().slice(0, 10);
+  const last = await getSetting(db, 'scheduler_last_pass_email_pass');
+  if (last === today) return;                                    // already ran today
+
+  // Offsets are configurable the same way the purge warnings are, and for the same reason: the
+  // right notice for a three-month pass is not obviously the right one for a twelve-month pass,
+  // and that is a judgement to make from real behaviour rather than to guess at now.
+  const raw = (await getSetting(db, 'pass_warn_days')) || '30,7';
+  const offsets = String(raw).split(',')
+    .map(function (s) { return parseInt(s.trim(), 10); })
+    .filter(function (n) { return Number.isFinite(n) && n > 0; });
+  for (let i = 0; i < offsets.length; i++) {
+    await runPassMilestone(db, 'pass_warn_' + offsets[i], offsets[i]);
+  }
+  // THE DAY AFTER, NOT THE DAY OF. See the note on runPassMilestone: on the expiry day the pass is
+  // still live until its own time of day, so a day-0 notice is either premature or never sent.
+  await runPassMilestone(db, 'pass_expired', -1);
+
+  await setSetting(db, 'scheduler_last_pass_email_pass', today);
+  console.log('[scheduler] daily pass-expiry pass complete for ' + today);
+}
+
+// ---------------------------------------------------------------------------
 // Account-lifecycle idle sweep (ACCOUNT_LIFECYCLE_SPEC Phase 2). PHASE 2 SHIPS
 // IN WARN-ONLY MODE: it reconciles lone_since for every active copper user and
 // flags warn-stage users (idle_warned_at). Suspend (Phase 3) and purge (Phase 4)
@@ -167,10 +266,22 @@ async function runLifecycleSweep(db, opts) {
   if (!(graceDays >= LIFECYCLE_FLOOR_DAYS)) graceDays = LIFECYCLE_FLOOR_DAYS;
 
   // Anyone no longer copper (e.g. upgraded) shouldn't carry a lone clock.
-  try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND tier <> 'copper'").run(); } catch (e) {}
+  // v3.0.919 -- TD-780 Push 3. A LIVE PASS HOLDER IS NOT A COPPER EITHER. Ian, 2026-09-15:
+  // "no active pass holder should be on copper. They would still be platinum." Their account
+  // tier is untouched by a pass (see ownTier in middleware/tiers.js), so a bare tier test
+  // still sees 'copper' and would leave the clock running on somebody who has paid.
+  try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND (tier <> 'copper' OR " + sqlLivePass() + ")").run(); } catch (e) {}
 
+  // v3.0.919 -- TD-780 Push 3. The live-pass clause is here rather than only inside
+  // isLoneCopper() for two reasons: the sweep should not walk people it cannot act on, and
+  // the rule reads correctly at the point somebody looks at this query. (isLoneCopper has
+  // been returning false for them since v3.0.918, so the BEHAVIOUR was already right -- this
+  // makes it visible and saves the per-row call.)
+  // pass_expires_at is selected because the idle clock below has to start when the pass
+  // ended, not when they last logged in.
   const coppers = await db.prepare(
-    "SELECT id, name, email, lone_since, last_active_at, last_purchase_at, idle_warned_at FROM users WHERE tier = 'copper' AND status = 'active'"
+    "SELECT id, name, email, lone_since, last_active_at, last_purchase_at, idle_warned_at, pass_expires_at " +
+    "FROM users WHERE tier = 'copper' AND status = 'active' AND NOT " + sqlLivePass()
   ).all();
   for (let i = 0; i < coppers.length; i++) {
     const u = coppers[i];
@@ -188,8 +299,14 @@ async function runLifecycleSweep(db, opts) {
       loneSince = nowIso;
       summary.loneStamped++;
     }
-    // Clock 1 start = max(lone_since, last_active_at, last_purchase_at).
-    const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at));
+    // Clock 1 start = max(lone_since, last_active_at, last_purchase_at, pass_expires_at).
+    // v3.0.919 -- TD-780 Push 3. pass_expires_at IS THE IMPORTANT ONE HERE, and it is the
+    // reason this is not merely tidying. Somebody buys a twelve-month pass, makes their book
+    // in month one and does not come back. Their last_active_at is eleven months old when the
+    // pass finally lapses, so on the very first sweep afterwards they are already past the
+    // idle threshold and get warned immediately -- having been a paying customer the day
+    // before. Taking the pass expiry into the max starts their clock when the pass ended.
+    const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at), _ms(u.pass_expires_at));
     const ageDays = (nowMs - startMs) / 86400000;
     if (ageDays >= idleDays && !u.idle_warned_at) {
       if (opts.dryRun || !emailsEnabled) {
@@ -296,6 +413,13 @@ async function tick() {
     await maybeDailyTrialPass(db);
   } catch (e) {
     console.error('[scheduler] trial-lifecycle pass failed:', e && e.message);
+  }
+  // v3.0.936 -- TD-780 Push 8. ITS OWN try, like every other job here: a throw in the pass mails
+  // must not stop the lifecycle sweep that runs after it.
+  try {
+    await maybeDailyPassPass(db);
+  } catch (e) {
+    console.error('[scheduler] pass-expiry pass failed:', e && e.message);
   }
   try {
     await maybeDailyLifecyclePass(db);
