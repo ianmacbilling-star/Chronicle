@@ -181,6 +181,13 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
 // live tables, so a weekly job snapshots them into metric_snapshots.
 // Timestamp-based metrics (purchases) stay computed live. Idempotent per week.
 
+// v3.0.948 -- TD-800. The pass durations the Trends chart draws a line for, in display order.
+// Taken from the pass catalog rather than written out again, so a fourth duration becomes a fourth
+// line by itself instead of being forgotten here.
+const PASS_SNAPSHOT_KEYS = (passes && Array.isArray(passes.PASS_ORDER) && passes.PASS_ORDER.length)
+  ? passes.PASS_ORDER.slice()
+  : ['p3', 'p6', 'p12'];
+
 function mondayOf(dateObj) {
   var d = new Date(dateObj.getTime());
   var day = (d.getUTCDay() + 6) % 7; // 0 = Monday
@@ -212,8 +219,44 @@ async function runSnapshot(db) {
   tierRows.forEach(function (r) {
     if (r && r.tier && Object.prototype.hasOwnProperty.call(tierMap, r.tier)) tierMap[r.tier] = Number(r.c);
   });
+  // v3.0.948 -- TD-800. ACTIVE PASSES, BY THE DURATION THEY BOUGHT.
+  //
+  // Ian: "a new graph on the trends tab... for Active Passes... a line for 3 month, 6 month and
+  // 12 month. So I can see how many are active."
+  //
+  // WHY IT HAS TO BE A JOIN. users carries only pass_tier and pass_expires_at -- that somebody
+  // HAS a pass, never WHICH one. Stacking makes that irreversible: a 3-month bought on top of a
+  // 12-month leaves one later expiry date and no trace of either duration. So the duration comes
+  // from the purchase record, and a holder is counted under the pass they MOST RECENTLY bought.
+  // One row per holder (DISTINCT ON), so the three lines add up to the number of people holding a
+  // live pass rather than to the number of passes ever sold.
+  //
+  // PASSES SET FROM THE TESTING PANEL ARE DELIBERATELY ABSENT (Ian: "don't worry about the testing
+  // panel / manual passes, leave them out"). They have no token_purchases row, so the JOIN drops
+  // them -- the exclusion is the join, not a filter that could be forgotten.
+  //
+  // The zeros matter as much as the counts: a duration nobody holds this week must still write a 0,
+  // or that line has no history at all and the chart quietly omits it (TD-592, the same lesson the
+  // tier lines learned).
+  const passRows = await db.prepare(
+    "SELECT latest.pack_tier AS pack_tier, COUNT(*) AS c FROM (" +
+    "  SELECT DISTINCT ON (u.id) u.id AS uid, tp.pack_tier AS pack_tier" +
+    "    FROM users u" +
+    "    JOIN token_purchases tp ON tp.user_id = u.id AND tp.pack_tier LIKE 'pass:%'" +
+    "   WHERE u.pass_tier IS NOT NULL AND u.pass_expires_at > NOW()" +
+    "   ORDER BY u.id, tp.created_at DESC, tp.id DESC" +
+    ") latest GROUP BY latest.pack_tier"
+  ).all();
+  const passMap = {};
+  PASS_SNAPSHOT_KEYS.forEach(function (k) { passMap[k] = 0; });
+  (passRows || []).forEach(function (r) {
+    const key = String((r && r.pack_tier) || '').replace(/^pass:/, '');
+    if (Object.prototype.hasOwnProperty.call(passMap, key)) passMap[key] = Number(r.c);
+  });
+
   const rows = [['active_users', '', Number((active && active.c) || 0)]];
   Object.keys(tierMap).forEach(function (t) { rows.push(['tier_count', t, tierMap[t]]); });
+  PASS_SNAPSHOT_KEYS.forEach(function (k) { rows.push(['active_pass', k, passMap[k]]); });
   for (var i = 0; i < rows.length; i++) {
     await upsertSnapshot(db, weekStart, rows[i][0], rows[i][1], rows[i][2]);
   }
@@ -259,6 +302,16 @@ router.get('/trends', requireAuth, requireAdmin, async function (req, res) {
       "SELECT date_trunc('week', created_at)::date AS week_start, COALESCE(SUM(amount),0) AS value " +
       "FROM token_ledger WHERE event_type = 'purchase' AND created_at >= " + since + " GROUP BY week_start ORDER BY week_start"
     ).all();
+    // v3.0.948 -- TD-800. The active-pass lines, from the same weekly snapshots.
+    const passSnapRows = await db.prepare(
+      "SELECT week_start, tier, value FROM metric_snapshots WHERE metric = 'active_pass' AND week_start >= (" + since + ")::date ORDER BY week_start"
+    ).all();
+    const pass_counts = {};
+    PASS_SNAPSHOT_KEYS.forEach(function (k) { pass_counts[k] = []; });
+    (passSnapRows || []).forEach(function (r) {
+      if (r && r.tier && pass_counts[r.tier]) pass_counts[r.tier].push({ week_start: r.week_start, value: Number(r.value) });
+    });
+
     const tier_counts = emptyTierMap(function () { return []; });
     tierRows.forEach(function (r) {
       if (r && r.tier && tier_counts[r.tier]) tier_counts[r.tier].push({ week_start: r.week_start, value: Number(r.value) });
@@ -267,6 +320,7 @@ router.get('/trends', requireAuth, requireAdmin, async function (req, res) {
       weeks: weeks,
       active_users: activeRows.map(function (r) { return { week_start: r.week_start, value: Number(r.value) }; }),
       tier_counts: tier_counts,
+      pass_counts: pass_counts,   // v3.0.948 -- TD-800
       tokens_purchased: purchaseRows.map(function (r) { return { week_start: r.week_start, value: Number(r.value) }; })
     });
   } catch (e) {
