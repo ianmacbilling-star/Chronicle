@@ -73,6 +73,31 @@ function buyerRef(opts) {
   return ref;
 }
 
+// v3.0.946 -- TD-791 / TD-798. AN INVOICE FOR EVERY ONE-TIME PURCHASE, decided in ONE place.
+// Ian, 2026-09-17: "I do want it to create an invoice so it can all be viewed in the payment history
+// on stripe when someone hits the button." Stripe's customer portal lists INVOICES only. Subscription
+// payments already make one; a payment-mode Checkout makes a receipt and no invoice unless asked, so
+// packs, passes and books were invisible there. With v3.0.945 putting every purchase on the user's
+// one customer, turning invoices on puts EVERYTHING in that one history.
+//
+// THE COST IS DELIBERATE AND WAS PRICED BEFORE IT WAS BUILT: Stripe charges 0.4% of the sale, capped
+// at $2 per invoice, for post-payment invoices on one-time Checkout payments. Subscriptions are
+// unaffected -- their invoices are covered by the Billing fee already paid. Ian chose this over
+// building our own payment history page (TD-798, parked).
+//
+// THE WEBHOOK CONSEQUENCE: these invoices fire invoice.paid, the same event that grants a
+// subscription's monthly tokens. fulfillSubscriptionInvoice returns at once for an invoice with no
+// subscription, so a paid pack cannot be mistaken for a renewal -- and the v3.0.946 guard drives that
+// function with a one-time invoice to prove it rather than trusting this comment.
+//
+// metadata carries the Campaignia user id and what was bought, so any invoice can be traced back from
+// the Stripe dashboard. Stripe metadata values must be strings.
+function invoiceRef(opts, kind, extraMetadata) {
+  const md = Object.assign({}, extraMetadata || {}, { kind: String(kind) });
+  if (opts && opts.userId != null) md.user_id = String(opts.userId);
+  return { invoice_creation: { enabled: true, invoice_data: { metadata: md } } };
+}
+
 // v3.0.945 -- TD-791. Create the one Stripe customer for a Campaignia user. user_id rides in the
 // metadata so the customer can always be traced back from the Stripe dashboard.
 async function createCustomer(opts) {
@@ -131,7 +156,7 @@ async function createCheckoutSession(opts) {
   // Prefill the buyer's account email (and set the receipt email) so a browser-cached
   // Stripe Link identity isn't the default. (Link may still be offered by the browser.)
   // v3.0.945 -- TD-791. With a customer id the email comes from that customer instead.
-  Object.assign(params, buyerRef(opts));
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'token_pack', { pack_id: String(pack.id) }));   // v3.0.946
   return await stripe.checkout.sessions.create(params);
 }
 
@@ -173,7 +198,7 @@ async function createPassCheckout(opts) {
       quoted_tier: String(pass.tier)
     }
   };
-  Object.assign(params, buyerRef(opts));   // v3.0.945 -- TD-791
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'pass', { pass_id: String(pass.id) }));   // v3.0.945 -- TD-791, v3.0.946 invoice
   return await stripe.checkout.sessions.create(params);
 }
 
@@ -283,7 +308,9 @@ async function createOneTimeCheckout(opts) {
     client_reference_id: opts.userId != null ? String(opts.userId) : undefined,
     metadata: opts.metadata || {}
   };
-  Object.assign(params, buyerRef(opts));
+  // v3.0.946 -- the order id rides on the invoice too, so a book's invoice can be matched to po-N.
+  const _om = opts.metadata || {};
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'print_order', _om.order_id != null ? { order_id: String(_om.order_id) } : {}));
   return await stripe.checkout.sessions.create(params);
 }
 
