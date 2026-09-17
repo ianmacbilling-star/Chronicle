@@ -749,6 +749,30 @@ function hasLiveSubscription(me) {
   return st === 'active' || st === 'trialing' || st === 'past_due' || st === 'unpaid' || st === 'paused';
 }
 
+// v3.0.942 -- IS MONEY ACTUALLY GOING OUT. A DIFFERENT QUESTION FROM THE ONE ABOVE.
+//
+// hasLiveSubscription() means "there is a subscription RECORD in a live-ish state", which is true
+// of accounts that are not being charged anything: a Free Trial, and a Copper still carrying a
+// stripe_subscription_id from a plan that ended months ago. Ian saw the difference twice -- a trial
+// told its subscription would stop billing (v3.0.941), and then a trial account showing
+// "Subscription ends JULY 27, 2026" for a subscription that has not existed since July.
+//
+// v3.0.941 FIXED THAT IN ONE FUNCTION, INLINE. This is the same rule, written once, so the account
+// panel and the purchase dialog cannot answer it differently -- and so the NEXT surface that needs
+// it calls something rather than reinventing it.
+//
+// THE TEST IS THE TIER'S PRICE, FROM THE CATALOG the server already sends. Copper and Free Trial
+// are free and have none. Deliberately not a list of tier names: this codebase hardcodes
+// ('silver','gold','platinum') in several places and each one is somewhere a future tier gets
+// forgotten. FAILS QUIET -- no catalog means no billing claims, which is the safe direction for
+// every sentence that depends on it.
+function hasBillingSubscription(me) {
+  if (!hasLiveSubscription(me)) return false;
+  var all = (me && me.allTiers) || {};
+  var acct = (me && (me.accountTier || me.tier)) || 'copper';
+  return !!(all[acct] && all[acct].price);
+}
+
 // v3.0.924 -- TD-780 Push 7. START A PASS CHECKOUT. Deliberately the same shape as
 // subscribeTier below, including where it puts its error text, because the two are the same
 // action to the person taking it.
@@ -776,7 +800,6 @@ function startPassCheckout(passId) {
   // waits. The part somebody will be unhappy about in twelve months is that their old plan does
   // not come back, and that has to be said while they still have the choice.
   var _me = _cmpMe();
-  var _live = hasLiveSubscription(_me);
   var _all = (_me && _me.allTiers) || {};
   var _acct = (_me && (_me.accountTier || _me.tier)) || 'copper';
 
@@ -798,8 +821,9 @@ function startPassCheckout(passId) {
   // hardcodes ('silver','gold','platinum') in several places and each one is somewhere a future
   // tier gets forgotten. It also fails QUIET: no catalog means no dialog, which is the safe
   // direction for a warning.
-  var _bills = !!(_all[_acct] && _all[_acct].price);
-  if (_live && _bills && typeof uiConfirm === 'function') {
+  // v3.0.942 -- WAS TWO LINES OF THE SAME RULE WRITTEN OUT HERE. It is a function now, shared with
+  // the account panel, because a rule in two places is a rule that will be updated in one of them.
+  if (hasBillingSubscription(_me) && typeof uiConfirm === 'function') {
     var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
     var _copperName = (_all.copper && _all.copper.name) || 'Copper';
     uiConfirm(
@@ -2337,7 +2361,12 @@ function renderAccountStanding(me) {
   var acct = me.accountTier || me.tier || 'copper';
   var acctName = (all[acct] && all[acct].name) || acct;
   var pass = me.pass || null;
-  var live = hasLiveSubscription(me);
+  // v3.0.942 -- EVERY USE OF `live` IN THIS FUNCTION PUTS A MONEY WORD ON THE SCREEN --
+  // "subscription", "billed monthly", "billing stops", "Next billing date" -- so the question it
+  // must ask is whether this account is BILLED, not whether a subscription record exists. Those
+  // differ for a Free Trial and for a Copper carrying a dead subscription id, which is exactly
+  // what put "Subscription ends JULY 27, 2026" on Ian's trial account.
+  var live = hasBillingSubscription(me);
 
   // v3.0.933 -- THE TIER THEY ARE, NOT THE TIER THEY WOULD BE WITHOUT THE PASS.
   //
@@ -2405,7 +2434,23 @@ function renderAccountStanding(me) {
   // Placed above the subscription rows because for a trial account they no longer render at all --
   // that was Fault 1, and this row is what fills the space it was wrongly occupying.
   var _trialEnds = _cmpNiceDate(me.trialEndsAt);
-  if (_trialEnds) {
+  // v3.0.942 -- ...UNLESS A PASS HAS ALREADY MADE IT A NON-EVENT. Ian, with a trial ending tomorrow
+  // and a three-month pass just bought: "Seems to me the Trial has already ended now that i bought
+  // the pass." The row was not merely noise, it was an ALARM -- "then your account moves to Copper"
+  // on an account that does nothing of the kind tomorrow. The pass row below already carries the
+  // real date.
+  //
+  // COMPARED AS TIMES. A pass that expires BEFORE the trial would (a short pass bought on a fresh
+  // trial) leaves the trial's end a real event, and that row stays.
+  var _passOutlastsTrial = false;
+  try {
+    if (pass && pass.expiresAt && me.trialEndsAt) {
+      var _pMs = Date.parse(String(pass.expiresAt));
+      var _tMs = Date.parse(String(me.trialEndsAt));
+      _passOutlastsTrial = isFinite(_pMs) && isFinite(_tMs) && _pMs >= _tMs;
+    }
+  } catch (e) { _passOutlastsTrial = false; }
+  if (_trialEnds && !_passOutlastsTrial) {
     var _afterTrial = (all.copper && all.copper.name) || 'Copper';
     html += row('Trial ends', _trialEnds, 'then your account moves to ' + escapeHtml(_afterTrial));
   }
@@ -2569,7 +2614,10 @@ function renderAccountPlans(me) {
   // This grid is about what they SUBSCRIBE to; the pass is shown in #account-standing above.
   var current = me.accountTier || me.tier || 'copper';
   var order = ['copper','silver','gold','platinum'];
-  var live = hasLiveSubscription(me);
+  // v3.0.942 -- the same question. Manage, Upgrade and Switch all act on a subscription that is
+  // being paid for; offering them to a trial account with a dead subscription id is the grid
+  // making the same claim the panel above it was making.
+  var live = hasBillingSubscription(me);
 
   // v3.0.934 -- A PASS HOLDER WITH NO SUBSCRIPTION HAS NO CURRENT PLAN IN THIS GRID.
   // Ian: "if they are on a pass... can you NOT highlight the copper subscription panel."
