@@ -1666,35 +1666,78 @@
       </div>
 
       <div class="settings-pane" id="settings-pane-promos" style="display:none;">
+        <!-- v3.0.947 -- TD-799 stage 1. MADE IN ONE PLACE. Saving a code with a discount creates the
+             Stripe coupon and promotion code on the server; there is nothing to set up in Stripe by
+             hand any more. Saved codes are read-only apart from the label and on/off, because Stripe
+             cannot change them either. Spec: claude/PROMO_CODES_SPEC.md. -->
         <div class="settings-section">
           <div class="settings-section-title">Create a promo code</div>
-          <div class="settings-section-desc" style="margin-bottom:10px;">Catalog a code for attribution and (for token grants) app-side perks. For a code customers type at Stripe checkout, also create the matching discount in Stripe. Token grants apply on purchase or signup; percent/amount off are recorded for metrics only.</div>
-          <div style="margin-bottom:12px;font-size:13px;">Set up the matching discount code in Stripe &rarr;
-            <a href="https://dashboard.stripe.com/acct_1ThYOtFqMN7tR0rq/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Production</a>
-            &middot;
-            <a href="https://dashboard.stripe.com/acct_1ThYP8FtFqbShree/test/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Sandbox (test)</a>
-          </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;max-width:520px;">
+          <div class="settings-section-desc" style="margin-bottom:10px;">A code can take a % or $ amount off, give bonus tokens, or both. Saving creates the matching discount in Stripe automatically &mdash; in the sandbox on staging, in live on production. Once saved, only the label and the on/off switch can change; to change anything else, switch the code off and make a new one.</div>
+          <div id="promo-stripe-warn" class="settings-section-desc" style="display:none;margin-bottom:10px;color:var(--error);">Stripe is not configured on this server, so only bonus-token codes can be created.</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;max-width:640px;">
             <label style="color:var(--gold);font-size:13px;">Code</label>
             <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
-            <label style="color:var(--gold);font-size:13px;">Label (ad source)</label>
-            <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (for your metrics)" />
-            <label style="color:var(--gold);font-size:13px;">Type</label>
-            <select class="form-input" id="promo-type-input">
-              <option value="token_grant">Token grant (CO tokens)</option>
-              <option value="percent_off">% off (configure in Stripe)</option>
-              <option value="amount_off">$ off (configure in Stripe)</option>
-            </select>
-            <label style="color:var(--gold);font-size:13px;">Value</label>
-            <input class="form-input" id="promo-value-input" type="number" min="0" step="1" placeholder="e.g. 30" style="width:140px;" />
-            <label style="color:var(--gold);font-size:13px;">Expiration (optional)</label>
-            <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
-            <label style="color:var(--gold);font-size:13px;">Per-user limit</label>
-            <input class="form-input" id="promo-peruser-input" type="number" min="1" step="1" value="1" style="width:140px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Label (source)</label>
+            <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (where this code is used)" />
+
+            <label style="color:var(--gold);font-size:13px;">Discount</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select class="form-input" id="promo-discount-type" onchange="promoFormRefresh()" style="width:160px;">
+                <option value="none">No discount</option>
+                <option value="percent">% off</option>
+                <option value="amount">$ off</option>
+              </select>
+              <input class="form-input" id="promo-discount-value" type="number" min="0" step="1" placeholder="e.g. 20" style="width:120px;display:none;" oninput="promoFormRefresh()" />
+            </div>
+
+            <label style="color:var(--gold);font-size:13px;">Bonus tokens</label>
+            <input class="form-input" id="promo-bonus-input" type="number" min="0" step="1" value="0" style="width:120px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Sign-up code</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="promo-signup-input" onchange="promoFormRefresh()" />
+              <span>First-time only: can be entered at sign-up, applies to a customer's first pass or subscription purchase</span>
+            </label>
+
+            <label style="color:var(--gold);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
+            <div id="promo-products" style="display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;">
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="token_pack" onchange="promoFormRefresh()" /> Token packs</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="pass" onchange="promoFormRefresh()" /> Passes</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="book" onchange="promoFormRefresh()" /> Books</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:silver" onchange="promoFormRefresh()" /> Silver subscription</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:gold" onchange="promoFormRefresh()" /> Gold subscription</label>
+              <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:platinum" onchange="promoFormRefresh()" /> Platinum subscription</label>
+            </div>
+
+            <label id="promo-subdur-label" style="color:var(--gold);font-size:13px;display:none;">Subscription discount lasts</label>
+            <div id="promo-subdur-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select class="form-input" id="promo-subdur-input" onchange="promoFormRefresh()" style="width:180px;">
+                <option value="once">First payment only</option>
+                <option value="repeating">A number of payments</option>
+                <option value="forever">Every payment</option>
+              </select>
+              <input class="form-input" id="promo-submonths-input" type="number" min="1" max="36" step="1" placeholder="payments" style="width:110px;display:none;" />
+            </div>
+
+            <label style="color:var(--gold);font-size:13px;">Once per customer</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="promo-once-input" />
+              <span>Each customer can use it one time</span>
+            </label>
+
+            <label style="color:var(--gold);font-size:13px;">Total uses (optional)</label>
+            <input class="form-input" id="promo-max-input" type="number" min="1" step="1" placeholder="unlimited" style="width:140px;" />
+
+            <label style="color:var(--gold);font-size:13px;">Expires (optional)</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
+              <span class="settings-section-desc" style="margin:0;">end of that day, Eastern</span>
+            </div>
           </div>
+          <div id="promo-book-warn" class="settings-section-desc" style="display:none;margin-top:10px;color:var(--error);">Books are priced at Lulu's print cost plus our markup. A discount bigger than the markup sells the book for less than Lulu charges you.</div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
             <button class="btn btn-primary btn-sm" id="promo-submit-btn" onclick="createPromoCode()">Create code</button>
-            <a id="promo-cancel-edit" onclick="cancelPromoEdit()" style="display:none;color:var(--gold);cursor:pointer;text-decoration:underline;font-size:13px;">Cancel edit</a>
             <span class="settings-section-desc" id="promo-create-msg" style="margin:0;"></span>
           </div>
         </div>

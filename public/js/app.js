@@ -19790,111 +19790,185 @@ function setPassOverride() {
     .catch(function (e) { if (msg) { msg.textContent = 'Could not set the pass: ' + e.message; msg.style.color = 'var(--error)'; } });
 }
 
-var _promoEditId = null;
+// ============================================================
+// v3.0.947 -- TD-799 stage 1. THE PROMO CODES TAB, REWORKED FOR CODES MADE IN ONE PLACE.
+// Server: routes/admin.js /promo-codes and services/billing/promoCodes.js, which enforce every rule
+// shown here -- this form only makes the rules visible. Saved codes are read-only apart from the
+// label and on/off. Spec: claude/PROMO_CODES_SPEC.md.
+// ============================================================
 var _promoLoaded = [];
+var PROMO_PRODUCT_NAMES = { token_pack: 'Token packs', pass: 'Passes', book: 'Books', 'sub:silver': 'Silver sub', 'sub:gold': 'Gold sub', 'sub:platinum': 'Platinum sub' };
+var PROMO_SIGNUP_PRODUCTS = ['pass', 'sub:silver', 'sub:gold', 'sub:platinum'];
+
 function loadPromoCodes() {
   var box = document.getElementById('promo-codes-list');
   if (box) box.textContent = 'Loading...';
   fetch('/api/admin/promo-codes')
     .then(function (r) { return r.json(); })
-    .then(function (d) { _promoLoaded = (d && d.codes) || []; renderPromoCodes(_promoLoaded); })
+    .then(function (d) {
+      _promoLoaded = (d && d.codes) || [];
+      var warn = document.getElementById('promo-stripe-warn');
+      if (warn) warn.style.display = (d && d.stripeConfigured === false) ? '' : 'none';
+      renderPromoCodes(_promoLoaded);
+      promoFormRefresh();
+    })
     .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
+}
+
+// Show and hide the parts of the form that depend on other choices. Never decides anything the
+// server does not also enforce.
+function promoFormRefresh() {
+  var g = function (x) { return document.getElementById(x); };
+  var dtype = (g('promo-discount-type') || {}).value || 'none';
+  var dval = g('promo-discount-value');
+  if (dval) {
+    dval.style.display = (dtype === 'none') ? 'none' : '';
+    dval.step = (dtype === 'amount') ? '0.01' : '1';
+    dval.placeholder = (dtype === 'amount') ? 'dollars, e.g. 5' : 'percent, e.g. 20';
+  }
+  var signup = !!(g('promo-signup-input') || {}).checked;
+  var boxes = document.querySelectorAll('.promo-prod');
+  var anyTier = false, book = false;
+  for (var i = 0; i < boxes.length; i++) {
+    var b = boxes[i];
+    var allowed = !signup || PROMO_SIGNUP_PRODUCTS.indexOf(b.value) !== -1;
+    if (!allowed) b.checked = false;
+    b.disabled = !allowed;
+    if (b.parentNode) b.parentNode.style.opacity = allowed ? '' : '0.45';
+    if (b.checked && b.value.indexOf('sub:') === 0) anyTier = true;
+    if (b.checked && b.value === 'book') book = true;
+  }
+  var showDur = anyTier && dtype !== 'none';
+  if (g('promo-subdur-label')) g('promo-subdur-label').style.display = showDur ? '' : 'none';
+  if (g('promo-subdur-wrap')) g('promo-subdur-wrap').style.display = showDur ? 'flex' : 'none';
+  if (g('promo-submonths-input')) g('promo-submonths-input').style.display = (showDur && (g('promo-subdur-input') || {}).value === 'repeating') ? '' : 'none';
+  if (g('promo-book-warn')) g('promo-book-warn').style.display = (book && dtype !== 'none') ? '' : 'none';
+}
+
+function promoEasternDate(v) {
+  if (!v) return 'never';
+  try { return new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); } catch (e) { return String(v).slice(0, 10); }
+}
+
+function promoDescribe(c) {
+  if (c.schema_v !== 2) {
+    var val = (c.action_type === 'percent_off') ? (c.action_value + '% off (Stripe, set by hand)')
+            : (c.action_type === 'amount_off') ? ('$' + c.action_value + ' off (Stripe, set by hand)')
+            : (c.action_value + ' bonus tokens');
+    return 'Legacy: ' + val;
+  }
+  var bits = [];
+  if (c.discount_type === 'percent') bits.push(c.discount_value + '% off');
+  if (c.discount_type === 'amount') bits.push('$' + (Number(c.discount_value) / 100).toFixed(2).replace(/\.00$/, '') + ' off');
+  if (c.bonus_tokens > 0) bits.push(c.bonus_tokens + ' bonus tokens');
+  var prods = Array.isArray(c.products) ? c.products.map(function (p) { return PROMO_PRODUCT_NAMES[p] || p; }).join(', ') : '';
+  var s = bits.join(' + ') + (prods ? ' on ' + prods : '');
+  var hasTier = Array.isArray(c.products) && c.products.some(function (p) { return p.indexOf('sub:') === 0; });
+  if (hasTier && c.discount_type && c.discount_type !== 'none') {
+    s += ' (' + (c.sub_duration === 'forever' ? 'every payment' : c.sub_duration === 'repeating' ? (c.sub_duration_months + ' payments') : 'first payment') + ')';
+  }
+  return s;
 }
 
 function renderPromoCodes(codes) {
   var box = document.getElementById('promo-codes-list');
   if (!box) return;
   if (!codes.length) { box.textContent = 'No promo codes yet.'; return; }
-  var typeLabel = { token_grant: 'Tokens', percent_off: '% off', amount_off: '$ off' };
-  var rows = codes.map(function (c) {
-    var val = (c.action_type === 'percent_off') ? (c.action_value + '%')
-            : (c.action_type === 'amount_off') ? ('$' + c.action_value)
-            : (c.action_value + ' CO');
-    var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
-    var badge = c.active ? 'Active' : 'Inactive';
-    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
-      // v3.0.803 -- TD-613. Same unreadable gold as the Orders tab had, on the list the Orders
-      // rows were modelled on. Found by the guard written for the other one.
+  box.innerHTML = codes.map(function (c) {
+    var flags = [];
+    if (c.is_signup) flags.push('Sign-up');
+    if (c.schema_v === 2) flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
+    var uses = 'used ' + (c.redeemed_count || 0) + (c.max_redemptions ? ' of ' + c.max_redemptions : '');
+    var stripe = c.stripe_promotion_code_id ? ('Stripe ' + (c.stripe_livemode ? 'live' : 'sandbox')) : (c.schema_v === 2 ? 'Campaignia only' : '');
+    return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
-      '<span style="min-width:140px;">' + escapeHtml(c.label || '') + '</span>' +
-      '<span style="min-width:100px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
-      '<span style="min-width:90px;">' + escapeHtml(String(c.per_user_limit || 1)) + '/user</span>' +
-      '<span style="min-width:105px;">exp: ' + escapeHtml(exp) + '</span>' +
-      '<span style="min-width:70px;">used: ' + (c.redeemed_count || 0) + '</span>' +
-      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + badge + '</span>' +
-      '<button class="btn btn-sm" onclick="editPromoCode(' + c.id + ')">Edit</button>' +
-      '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Deactivate' : 'Activate') + '</button>' +
+      '<input class="form-input" id="promo-label-' + c.id + '" value="' + escapeHtml(c.label || '') + '" maxlength="120" placeholder="label (source)" style="width:180px;padding:4px 8px;font-size:12px;" />' +
+      '<button class="btn btn-sm" onclick="savePromoLabel(' + c.id + ')">Save label</button>' +
+      '<span style="min-width:220px;">' + escapeHtml(promoDescribe(c)) + '</span>' +
+      (flags.length ? '<span>' + escapeHtml(flags.join(' / ')) + '</span>' : '') +
+      '<span>' + escapeHtml(uses) + '</span>' +
+      '<span>expires ' + escapeHtml(promoEasternDate(c.expires_at)) + '</span>' +
+      (stripe ? '<span style="color:var(--text-muted);">' + escapeHtml(stripe) + '</span>' : '') +
+      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (c.active ? 'On' : 'Off') + '</span>' +
+      '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Switch off' : 'Switch on') + '</button>' +
+      '<span class="settings-section-desc" id="promo-row-msg-' + c.id + '" style="margin:0;flex-basis:100%;"></span>' +
       '</div>';
   }).join('');
-  box.innerHTML = rows;
 }
 
-function editPromoCode(id) {
-  var c = null;
-  for (var i = 0; i < _promoLoaded.length; i++) { if (_promoLoaded[i].id === id) { c = _promoLoaded[i]; break; } }
-  if (!c) return;
+function resetPromoForm() {
   var g = function (x) { return document.getElementById(x); };
-  if (g('promo-code-input')) { g('promo-code-input').value = c.code; g('promo-code-input').readOnly = true; }
-  if (g('promo-label-input')) g('promo-label-input').value = c.label || '';
-  if (g('promo-type-input')) g('promo-type-input').value = c.action_type || 'token_grant';
-  if (g('promo-value-input')) g('promo-value-input').value = (c.action_value != null ? c.action_value : 0);
-  if (g('promo-peruser-input')) g('promo-peruser-input').value = (c.per_user_limit || 1);
-  if (g('promo-expires-input')) g('promo-expires-input').value = c.expires_at ? String(c.expires_at).slice(0, 10) : '';
-  _promoEditId = id;
-  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Save changes';
-  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = '';
-  var msg = g('promo-create-msg'); if (msg) msg.textContent = 'Editing ' + c.code + ' (code cannot be changed).';
-  if (g('promo-code-input')) g('promo-code-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function cancelPromoEdit() {
-  var g = function (x) { return document.getElementById(x); };
-  _promoEditId = null;
-  ['promo-code-input','promo-label-input','promo-value-input','promo-expires-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
-  if (g('promo-peruser-input')) g('promo-peruser-input').value = '1';
-  if (g('promo-type-input')) g('promo-type-input').value = 'token_grant';
-  if (g('promo-code-input')) g('promo-code-input').readOnly = false;
-  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Create code';
-  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = 'none';
-  var msg = g('promo-create-msg'); if (msg) msg.textContent = '';
+  ['promo-code-input', 'promo-label-input', 'promo-discount-value', 'promo-max-input', 'promo-expires-input', 'promo-submonths-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
+  if (g('promo-bonus-input')) g('promo-bonus-input').value = '0';
+  if (g('promo-discount-type')) g('promo-discount-type').value = 'none';
+  if (g('promo-subdur-input')) g('promo-subdur-input').value = 'once';
+  ['promo-signup-input', 'promo-once-input'].forEach(function (id) { if (g(id)) g(id).checked = false; });
+  var boxes = document.querySelectorAll('.promo-prod');
+  for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  promoFormRefresh();
 }
 
 function createPromoCode() {
   var g = function (id) { return document.getElementById(id); };
   var msg = g('promo-create-msg');
+  var products = [];
+  var boxes = document.querySelectorAll('.promo-prod');
+  for (var i = 0; i < boxes.length; i++) { if (boxes[i].checked && !boxes[i].disabled) products.push(boxes[i].value); }
   var payload = {
     code: (g('promo-code-input') || {}).value || '',
     label: (g('promo-label-input') || {}).value || '',
-    action_type: (g('promo-type-input') || {}).value || 'token_grant',
-    action_value: (g('promo-value-input') || {}).value || '0',
-    per_user_limit: (g('promo-peruser-input') || {}).value || '1',
-    expires_at: (g('promo-expires-input') || {}).value || ''
+    discount_type: (g('promo-discount-type') || {}).value || 'none',
+    discount_value: (g('promo-discount-value') || {}).value || '',
+    bonus_tokens: (g('promo-bonus-input') || {}).value || '0',
+    is_signup: !!(g('promo-signup-input') || {}).checked,
+    products: products,
+    sub_duration: (g('promo-subdur-input') || {}).value || 'once',
+    sub_duration_months: (g('promo-submonths-input') || {}).value || '',
+    once_per_customer: !!(g('promo-once-input') || {}).checked,
+    max_redemptions: (g('promo-max-input') || {}).value || '',
+    expires_on: (g('promo-expires-input') || {}).value || ''
   };
-  var editing = _promoEditId;
-  var url = editing ? ('/api/admin/promo-codes/' + editing + '/update') : '/api/admin/promo-codes';
-  if (msg) msg.textContent = 'Saving...';
-  fetch(url, {
+  var btn = g('promo-submit-btn');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Saving...'; msg.style.color = ''; }
+  fetch('/api/admin/promo-codes', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
+      if (btn) btn.disabled = false;
       if (res.ok && res.j && res.j.ok) {
-        cancelPromoEdit();
-        if (msg) msg.textContent = editing ? 'Saved.' : 'Created.';
+        resetPromoForm();
+        if (msg) msg.textContent = 'Created' + (res.j.stripe ? ', with its discount in Stripe (' + (res.j.stripe.livemode ? 'live' : 'sandbox') + ').' : ' (bonus tokens only, nothing in Stripe).');
         loadPromoCodes();
       } else {
-        if (msg) msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not save.';
+        if (msg) { msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not save.'; msg.style.color = 'var(--error)'; }
       }
     })
-    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+    .catch(function () { if (btn) btn.disabled = false; if (msg) { msg.textContent = 'Could not save.'; msg.style.color = 'var(--error)'; } });
 }
 
+function savePromoLabel(id) {
+  var inp = document.getElementById('promo-label-' + id);
+  var rm = document.getElementById('promo-row-msg-' + id);
+  fetch('/api/admin/promo-codes/' + id + '/update', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: inp ? inp.value : '' })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (rm) rm.textContent = (res.ok && res.j && res.j.ok) ? 'Label saved.' : ((res.j && res.j.error) || 'Could not save the label.'); })
+    .catch(function () { if (rm) rm.textContent = 'Could not save the label.'; });
+}
+
+// Stripe is switched first on the server; if it refuses, the reason is shown on the row and nothing changes.
 function togglePromoCode(id) {
+  var rm = document.getElementById('promo-row-msg-' + id);
+  if (rm) rm.textContent = 'Switching...';
   fetch('/api/admin/promo-codes/' + id + '/toggle', { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function () { loadPromoCodes(); })
-    .catch(function () {});
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) { loadPromoCodes(); }
+      else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
+    })
+    .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
 }
-
 
 // ============================================================
 // v3.0.920 -- TD-780 Push 4a. PLATINUM PASSES, at the top of the Tiers and Passes tab.

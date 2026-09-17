@@ -889,6 +889,22 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code)');
   await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS per_user_limit INTEGER NOT NULL DEFAULT 1');
+  // v3.0.947 -- TD-799 stage 1. New-style codes (schema_v = 2) made in one place with their Stripe
+  // side. Additive and nullable, so every legacy row reads exactly as before. discount_value is a
+  // whole percent for 'percent' and CENTS for 'amount'. See claude/PROMO_CODES_SPEC.md section 4a.
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS schema_v INTEGER');
+  await pool.query("ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS discount_type TEXT");
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS discount_value INTEGER');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS bonus_tokens INTEGER NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS products JSONB');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS sub_duration TEXT');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS sub_duration_months INTEGER');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS once_per_customer BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS max_redemptions INTEGER');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_signup BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS stripe_coupon_id TEXT');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS stripe_promotion_code_id TEXT');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS stripe_livemode BOOLEAN');
   // Redemptions: one row per use (purchase or signup) -- the attribution/metrics spine.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS promo_redemptions (

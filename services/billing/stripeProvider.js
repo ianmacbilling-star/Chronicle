@@ -389,8 +389,45 @@ async function getSessionPromoCode(session) {
   }
 }
 
+// v3.0.947 -- TD-799 stage 1. Promo codes made from the Campaignia admin form. Thin wrappers only;
+// every rule lives in services/billing/promoCodes.js. Promotion codes use the current API shape,
+// promotion: { type: 'coupon', coupon }, not the older top-level coupon field.
+async function createCoupon(params) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.coupons.create(params);
+}
+async function deleteCoupon(couponId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.coupons.del(couponId);
+}
+async function createPromotionCode(params) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.promotionCodes.create(params);
+}
+async function setPromotionCodeActive(promotionCodeId, active) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.promotionCodes.update(promotionCodeId, { active: !!active });
+}
+// The active promotion code with this exact customer-facing code, or null. Stripe matches case-insensitively.
+async function findActivePromotionCode(code) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const list = await stripe.promotionCodes.list({ code: code, active: true, limit: 1 });
+  return (list && list.data && list.data[0]) || null;
+}
+async function getPrice(priceId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.prices.retrieve(priceId);
+}
+
 module.exports = {
   createPassCheckout, cancelSubscriptionAtPeriodEnd,
+  createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,
   cancelSubscription,

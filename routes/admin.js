@@ -712,42 +712,76 @@ router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async functi
 });
 
 // ============================================================
-// PROMO CODES (Stage 1): admin CRUD for the app-side promo catalog.
-// Codes are normalized uppercase. token_grant is the only action executed
-// app-side (wired in Stage 2). percent_off/amount_off are cataloged here for
-// attribution; the actual checkout discount is configured in Stripe.
+// PROMO CODES -- v3.0.947, TD-799 stage 1. MADE IN ONE PLACE.
+//
+// Creating a code with a discount now creates the Stripe coupon and promotion code through the
+// API (services/billing/promoCodes.js), so a code is never made twice. Bonus-token-only codes make
+// nothing in Stripe. Saved codes are READ-ONLY apart from the label and on/off: Stripe cannot
+// change a coupon's discount, products, limits or expiry, and Ian's rule is "if you can't change
+// them in stripe then we probably shouldn't either. I can always turn one off and make a new one."
+//
+// Legacy rows (schema_v null, made before 947) are listed and can be relabelled or switched on and
+// off, and keep granting tokens exactly as before.
 // ============================================================
+const promoCodes = require('../services/billing/promoCodes');
+const stripeProviderForPromos = require('../services/billing/stripeProvider');
+
+const PROMO_COLUMNS = 'id, code, label, action_type, action_value, per_user_limit, expires_at, active, redeemed_count, created_at, ' +
+  'schema_v, discount_type, discount_value, bonus_tokens, products, sub_duration, sub_duration_months, once_per_customer, ' +
+  'max_redemptions, is_signup, stripe_coupon_id, stripe_promotion_code_id, stripe_livemode';
+
 router.get('/promo-codes', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const rows = await db.prepare('SELECT id, code, label, action_type, action_value, per_user_limit, expires_at, active, redeemed_count, created_at FROM promo_codes ORDER BY created_at DESC').all();
-    res.json({ codes: Array.isArray(rows) ? rows : [] });
+    const rows = await db.prepare('SELECT ' + PROMO_COLUMNS + ' FROM promo_codes ORDER BY created_at DESC').all();
+    res.json({ codes: Array.isArray(rows) ? rows : [], stripeConfigured: stripeProviderForPromos.isConfigured() });
   } catch (e) { console.error('promo-codes list error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
 router.post('/promo-codes', requireAuth, requireAdmin, async function (req, res) {
+  let made = null;
   try {
     const db = await getDb();
-    const body = req.body || {};
-    let code = String(body.code || '').trim().toUpperCase();
-    if (!code) return res.status(400).json({ error: 'Code is required.' });
-    if (!/^[A-Z0-9_-]{2,40}$/.test(code)) return res.status(400).json({ error: 'Code must be 2-40 characters: letters, numbers, - or _.' });
-    const label = body.label ? String(body.label).trim().slice(0, 120) : null;
-    const allowed = ['token_grant', 'percent_off', 'amount_off'];
-    const actionType = allowed.indexOf(body.action_type) !== -1 ? body.action_type : 'token_grant';
-    let actionValue = parseInt(body.action_value, 10);
-    if (!Number.isFinite(actionValue) || actionValue < 0) actionValue = 0;
-    let expiresAt = null;
-    if (body.expires_at) { const d = new Date(body.expires_at); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
-    let perUserLimit = parseInt(body.per_user_limit, 10);
-    if (!Number.isFinite(perUserLimit) || perUserLimit < 1) perUserLimit = 1;
-    const dup = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(code);
-    if (dup) return res.status(400).json({ error: 'That code already exists.' });
-    await db.prepare('INSERT INTO promo_codes (code, label, action_type, action_value, per_user_limit, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(code, label, actionType, actionValue, perUserLimit, expiresAt);
-    res.json({ ok: true });
-  } catch (e) { console.error('promo-codes create error:', e.message); res.status(500).json({ error: 'Server error' }); }
+    const checked = promoCodes.validate(req.body || {}, new Date());
+    if (!checked.ok) return res.status(400).json({ error: checked.error });
+    const v = checked.v;
+    const dup = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(v.code);
+    if (dup) return res.status(400).json({ error: 'That code already exists in Campaignia.' });
+
+    if (v.discountType !== 'none') {
+      if (!stripeProviderForPromos.isConfigured()) return res.status(503).json({ error: 'Stripe is not configured on this server, so a discount code cannot be created.' });
+      try {
+        made = await promoCodes.createInStripe(v, process.env, stripeProviderForPromos);
+      } catch (se) {
+        return res.status(400).json({ error: 'Stripe refused the code: ' + ((se && se.message) || 'unknown error') });
+      }
+    }
+
+    const lf = promoCodes.legacyFields(v);
+    await db.prepare(
+      'INSERT INTO promo_codes (code, label, action_type, action_value, per_user_limit, expires_at, ' +
+      'schema_v, discount_type, discount_value, bonus_tokens, products, sub_duration, sub_duration_months, once_per_customer, ' +
+      'max_redemptions, is_signup, stripe_coupon_id, stripe_promotion_code_id, stripe_livemode) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      v.code, v.label, lf.action_type, lf.action_value, lf.per_user_limit, v.expiresAt ? v.expiresAt.toISOString() : null,
+      v.discountType, v.discountValue, v.bonusTokens, JSON.stringify(v.products), v.subDuration, v.subMonths, v.oncePerCustomer,
+      v.maxRedemptions, v.isSignup, made ? made.couponId : null, made ? made.promotionCodeId : null, made ? made.livemode : null
+    );
+    res.json({ ok: true, stripe: made ? { coupon: made.couponId, promotionCode: made.promotionCodeId, livemode: made.livemode } : null });
+  } catch (e) {
+    console.error('promo-codes create error:', e.message);
+    // The Stripe side exists but our row does not: switch the Stripe code off so it cannot be used
+    // un-tracked, and say so. Better an inert code in Stripe than a live one Campaignia knows nothing about.
+    if (made && made.promotionCodeId) {
+      try { await stripeProviderForPromos.setPromotionCodeActive(made.promotionCodeId, false); } catch (_) {}
+      return res.status(500).json({ error: 'The Stripe code was created but Campaignia could not save it, so it has been switched off in Stripe. Try again with a different code.' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
+// LABEL ONLY. Everything else is fixed once a code exists (see the header).
 router.post('/promo-codes/:id/update', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
@@ -757,27 +791,29 @@ router.post('/promo-codes/:id/update', requireAuth, requireAdmin, async function
     if (!row) return res.status(404).json({ error: 'Not found.' });
     const body = req.body || {};
     const label = body.label ? String(body.label).trim().slice(0, 120) : null;
-    const allowed = ['token_grant', 'percent_off', 'amount_off'];
-    const actionType = allowed.indexOf(body.action_type) !== -1 ? body.action_type : 'token_grant';
-    let actionValue = parseInt(body.action_value, 10);
-    if (!Number.isFinite(actionValue) || actionValue < 0) actionValue = 0;
-    let perUserLimit = parseInt(body.per_user_limit, 10);
-    if (!Number.isFinite(perUserLimit) || perUserLimit < 1) perUserLimit = 1;
-    let expiresAt = null;
-    if (body.expires_at) { const d = new Date(body.expires_at); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
-    await db.prepare('UPDATE promo_codes SET label = ?, action_type = ?, action_value = ?, per_user_limit = ?, expires_at = ? WHERE id = ?').run(label, actionType, actionValue, perUserLimit, expiresAt, id);
+    await db.prepare('UPDATE promo_codes SET label = ? WHERE id = ?').run(label, id);
     res.json({ ok: true });
   } catch (e) { console.error('promo-codes update error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
+// ON/OFF. For a code with a Stripe side, STRIPE FIRST: if Stripe refuses -- most often because a code
+// that reached its use limit or expiry is permanently inactive there -- ours is left as it was, so the
+// switch never shows a state Stripe is not in.
 router.post('/promo-codes/:id/toggle', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id.' });
-    const row = await db.prepare('SELECT id, active FROM promo_codes WHERE id = ?').get(id);
+    const row = await db.prepare('SELECT id, active, stripe_promotion_code_id FROM promo_codes WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ error: 'Not found.' });
     const next = !row.active;
+    if (row.stripe_promotion_code_id) {
+      try {
+        await stripeProviderForPromos.setPromotionCodeActive(row.stripe_promotion_code_id, next);
+      } catch (se) {
+        return res.status(409).json({ error: 'Stripe would not switch this code ' + (next ? 'on' : 'off') + ': ' + ((se && se.message) || 'unknown error') + (next ? ' A code that reached its use limit or expiry cannot be switched back on; make a new one.' : '') });
+      }
+    }
     await db.prepare('UPDATE promo_codes SET active = ? WHERE id = ?').run(next, id);
     res.json({ ok: true, active: next });
   } catch (e) { console.error('promo-codes toggle error:', e.message); res.status(500).json({ error: 'Server error' }); }
