@@ -35,6 +35,7 @@ const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
 const stripeProvider = require('../services/billing/stripeProvider');
+const { ensureStripeCustomer } = require('../services/billing/stripeCustomer');   // v3.0.945 -- TD-791
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
@@ -846,8 +847,12 @@ router.post('/order', requireSession, async function (req, res) {
     const amountCents = Math.round(Number(customerCharge) * 100);
     const descBits = [bookTitle || orderName || 'Campaignia book'];
     if (quoteReq.quantity > 1) descBits.push('x' + quoteReq.quantity);
+    // v3.0.945 -- TD-791. The buyer's one Stripe customer, the same one their tokens, passes and
+    // subscription use. null falls back to the pre-945 behaviour and never blocks the order.
+    const _buyerCustomerId = await ensureStripeCustomer(userId);
     const session = await stripeProvider.createOneTimeCheckout({
       amountCents: amountCents,
+      customerId: _buyerCustomerId,
       currency: (quote.currency || 'usd').toLowerCase(),
       description: descBits.join(' '),
       userId: userId,

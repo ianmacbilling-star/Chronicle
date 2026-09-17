@@ -59,6 +59,47 @@ function productRef(envVar, fallbackName) {
   return pid ? { product: pid } : { product_data: { name: fallbackName } };
 }
 
+// v3.0.945 -- TD-791. WHO IS BUYING, for every one-time (payment-mode) checkout, decided in ONE place.
+// With the user's Stripe customer id we pass customer, so every purchase lands on the same customer
+// as their subscription and each other. Without one -- ensureStripeCustomer could not produce it --
+// we fall back to exactly what v3.0.742 did: customer_creation 'always', so Stripe still makes a REAL
+// customer rather than a gcus_ guest (TD-539), and the webhook safety net links it afterwards.
+// customer and customer_creation are mutually exclusive in Stripe, and so are customer and
+// customer_email, which is why this returns one shape or the other and never a mix.
+function buyerRef(opts) {
+  if (opts && opts.customerId) return { customer: opts.customerId };
+  const ref = { customer_creation: 'always' };
+  if (opts && opts.customerEmail) ref.customer_email = opts.customerEmail;
+  return ref;
+}
+
+// v3.0.945 -- TD-791. Create the one Stripe customer for a Campaignia user. user_id rides in the
+// metadata so the customer can always be traced back from the Stripe dashboard.
+async function createCustomer(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const params = { metadata: { user_id: String(opts.userId) } };
+  if (opts.email) params.email = opts.email;
+  if (opts.name) params.name = opts.name;
+  const reqOpts = opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined;
+  return await stripe.customers.create(params, reqOpts);
+}
+
+// v3.0.945 -- TD-791. Does this customer exist, undeleted, in the Stripe account and mode we are
+// talking to? THREE ANSWERS, NOT TWO (TD-587): true, false (definitely gone or not ours), and null
+// (could not ask). Callers must not treat null as false and mint a duplicate over a network blip.
+async function customerExists(customerId) {
+  const stripe = getClient();
+  if (!stripe || !customerId) return null;
+  try {
+    const c = await stripe.customers.retrieve(customerId);
+    return !!(c && !c.deleted);
+  } catch (e) {
+    if (e && (e.code === 'resource_missing' || e.statusCode === 404)) return false;
+    return null;
+  }
+}
+
 // Create a hosted Checkout Session for a one-time token-pack purchase. The
 // caller redirects the buyer to the returned session.url. Amount + description
 // come from the server pack -- never from the client.
@@ -68,9 +109,8 @@ async function createCheckoutSession(opts) {
   const pack = opts.pack;
   const params = {
     mode: 'payment',
-    // v3.0.742 -- TD-539. Without this Stripe creates a GUEST customer (gcus_), the webhook
-    // stores it, and the billing portal rejects it forever after. See the note above.
-    customer_creation: 'always',
+    // v3.0.945 -- TD-791. The buyer (customer, or the TD-539 customer_creation fallback) is added
+    // by buyerRef below -- one place for all three one-time checkouts.
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -90,7 +130,8 @@ async function createCheckoutSession(opts) {
   };
   // Prefill the buyer's account email (and set the receipt email) so a browser-cached
   // Stripe Link identity isn't the default. (Link may still be offered by the browser.)
-  if (opts.customerEmail) params.customer_email = opts.customerEmail;
+  // v3.0.945 -- TD-791. With a customer id the email comes from that customer instead.
+  Object.assign(params, buyerRef(opts));
   return await stripe.checkout.sessions.create(params);
 }
 
@@ -109,7 +150,7 @@ async function createPassCheckout(opts) {
   const pass = opts.pass;
   const params = {
     mode: 'payment',
-    customer_creation: 'always',
+    // v3.0.945 -- TD-791. Buyer added by buyerRef below.
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -132,7 +173,7 @@ async function createPassCheckout(opts) {
       quoted_tier: String(pass.tier)
     }
   };
-  if (opts.customerEmail) params.customer_email = opts.customerEmail;
+  Object.assign(params, buyerRef(opts));   // v3.0.945 -- TD-791
   return await stripe.checkout.sessions.create(params);
 }
 
@@ -225,11 +266,10 @@ function priceForTier(tierName) {
 async function createOneTimeCheckout(opts) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
-  return await stripe.checkout.sessions.create({
+  const params = {
     mode: 'payment',
-    // v3.0.742 -- TD-539, same fault, same fix: a book order is also a one-time payment, so it
-    // too created a guest and broke the buyer's portal.
-    customer_creation: 'always',
+    // v3.0.945 -- TD-791. A book order is a one-time payment like the other two, so its buyer comes
+    // from buyerRef too (customer when we have one; the TD-539 customer_creation fallback otherwise).
     allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
@@ -241,9 +281,10 @@ async function createOneTimeCheckout(opts) {
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     client_reference_id: opts.userId != null ? String(opts.userId) : undefined,
-    customer_email: opts.customerEmail || undefined,
     metadata: opts.metadata || {}
-  });
+  };
+  Object.assign(params, buyerRef(opts));
+  return await stripe.checkout.sessions.create(params);
 }
 
 // Best-effort card brand + last4 from a completed payment, for display only
@@ -323,6 +364,7 @@ async function getSessionPromoCode(session) {
 
 module.exports = {
   createPassCheckout, cancelSubscriptionAtPeriodEnd,
+  createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,
   cancelSubscription,
   changeSubscriptionPrice,

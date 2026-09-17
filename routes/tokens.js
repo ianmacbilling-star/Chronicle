@@ -17,6 +17,7 @@ const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/ti
 const { getPack, listPacks } = require('../services/billing/packs');
 const { getPass, listPasses } = require('../services/billing/passes');   // v3.0.923 -- TD-780
 const stripeProvider = require('../services/billing/stripeProvider');
+const { ensureStripeCustomer, linkPaymentCustomer } = require('../services/billing/stripeCustomer');   // v3.0.945 -- TD-791
 const { logDebug } = require('./debug');
 const { isTesterEmail } = require('../middleware/auth');   // v3.0.672 -- TD-475
 
@@ -475,9 +476,12 @@ router.post('/checkout', async function(req, res) {
       buyerEmail = (u && u.email) || null;
     } catch (e) { attributed = null; }
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    // v3.0.945 -- TD-791. The user's one Stripe customer; null falls back to the pre-945 behaviour.
+    const _buyerCustomerId = await ensureStripeCustomer(req.session.userId);
     const session = await stripeProvider.createCheckoutSession({
       pack: pack,
       userId: req.session.userId,
+      customerId: _buyerCustomerId,
       attributedCampaignId: attributed,
       customerEmail: buyerEmail,
       successUrl: base + '/app.html?purchase=success',
@@ -534,9 +538,12 @@ router.post('/pass-checkout', async function(req, res) {
       buyerEmail = (u && u.email) || null;
     } catch (e) { buyerEmail = null; }
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    // v3.0.945 -- TD-791. The user's one Stripe customer; null falls back to the pre-945 behaviour.
+    const _buyerCustomerId = await ensureStripeCustomer(req.session.userId);
     const session = await stripeProvider.createPassCheckout({
       pass: pass,
       userId: req.session.userId,
+      customerId: _buyerCustomerId,
       customerEmail: buyerEmail,
       successUrl: base + '/app.html?pass=success',
       cancelUrl: base + '/app.html?pass=cancel'
@@ -574,6 +581,9 @@ router.post('/subscribe', async function(req, res) {
     const db = await getDb();
     const u = await db.prepare('SELECT email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
     customerId = (u && u.stripe_customer_id) || null;
+    // v3.0.945 -- TD-791. Same one customer as every other purchase. Falls back to the stored id
+    // (the pre-945 behaviour) if ensureStripeCustomer cannot answer.
+    customerId = (await ensureStripeCustomer(req.session.userId)) || customerId;
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
     const session = await stripeProvider.createSubscriptionCheckout({
       priceId: priceId,
@@ -639,7 +649,7 @@ router.post('/change-plan', async function(req, res) {
     const session = await stripeProvider.createSubscriptionCheckout({
       priceId: priceId,
       userId: req.session.userId,
-      customerId: (u && u.stripe_customer_id) || null,
+      customerId: (await ensureStripeCustomer(req.session.userId)) || (u && u.stripe_customer_id) || null,   // v3.0.945 -- TD-791
       customerEmail: (u && u.email) || null,
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
@@ -803,6 +813,12 @@ async function stripeWebhook(req, res) {
         await require('./print').fulfillPrintOrder(s, event.id);
       } else {
         await fulfillCheckout(s, event.id);
+      }
+      // v3.0.945 -- TD-791. SAFETY NET. If a one-time checkout went out without a customer (the
+      // ensureStripeCustomer fallback), store the one Stripe created -- only on a user with no real
+      // customer yet, and never failing the webhook, because the purchase above is already fulfilled.
+      if (s && s.mode === 'payment') {
+        try { await linkPaymentCustomer(s); } catch (linkErr) { console.error('payment customer link failed (non-fatal):', linkErr && linkErr.message); }
       }
       try { await recordAndGrantPromo(s, event.id); } catch (promoErr) { console.error('promo grant failed (non-fatal):', promoErr.message); }
     } else if (event.type === 'invoice.payment_failed') {
