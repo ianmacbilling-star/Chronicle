@@ -22750,6 +22750,17 @@ function renderTrends(data) {
   html += trendBlock('Tokens purchased (weekly)', svgFromSeries([
     { name: 'Tokens purchased', color: 'var(--gold)', points: data.tokens_purchased || [] }
   ]));
+  // v3.0.948 -- TD-800. ACTIVE PASSES. Each line counts the people holding a live pass right now,
+  // grouped by the pass they most recently bought, so the three add up to all live pass holders.
+  // Passes set from the testing panel are not counted (they have no purchase behind them).
+  // Colours are deliberately outside the five tier colours below: a pass is not a tier, and the two
+  // charts sit on the same screen.
+  var pcs = data.pass_counts || {};
+  html += trendBlock('Active passes (weekly)', svgFromSeries([
+    { name: '3 month', color: '#9d8bd6', points: pcs.p3 || [] },
+    { name: '6 month', color: '#6fb3a8', points: pcs.p6 || [] },
+    { name: '12 month', color: '#e0776b', points: pcs.p12 || [] }
+  ]));
   html += trendBlock('Users by tier (weekly)', svgFromSeries([
     // v3.0.792 -- TD-592. A muted green, chosen to sit apart from the four metal colours rather
     // than compete with them -- trial is not a rung on the same ladder.
