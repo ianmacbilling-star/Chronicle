@@ -777,9 +777,29 @@ function startPassCheckout(passId) {
   // not come back, and that has to be said while they still have the choice.
   var _me = _cmpMe();
   var _live = hasLiveSubscription(_me);
-  if (_live && typeof uiConfirm === 'function') {
-    var _all = (_me && _me.allTiers) || {};
-    var _acct = (_me && (_me.accountTier || _me.tier)) || 'copper';
+  var _all = (_me && _me.allTiers) || {};
+  var _acct = (_me && (_me.accountTier || _me.tier)) || 'copper';
+
+  // v3.0.941 -- ONLY WARN SOMEBODY WHO IS ACTUALLY BEING BILLED.
+  //
+  // Ian, buying a pass on a Free Trial: "not all this makes sense... They haven't paid for
+  // anything at this point that they would loose. There is no Billing." Correct -- the dialog
+  // told a trial user their subscription would stop billing, that they would keep access until
+  // the billing period ended, and that they would lose none of what they had paid for. None of
+  // those four things is true of a trial.
+  //
+  // hasLiveSubscription() ANSWERS A DIFFERENT QUESTION. It means "is there a subscription record
+  // in a live-ish state", which is what the account panel wants. This dialog needs "is money
+  // going out", and the two differ for exactly the accounts Ian named: a Free Trial, and a Copper
+  // still carrying a stale subscription id from a plan that ended months ago.
+  //
+  // THE TEST IS THE TIER'S PRICE, OUT OF THE CATALOG. Copper and the Free Trial are free and have
+  // none; Silver, Gold and Platinum do. Deliberately not a list of tier names -- this codebase
+  // hardcodes ('silver','gold','platinum') in several places and each one is somewhere a future
+  // tier gets forgotten. It also fails QUIET: no catalog means no dialog, which is the safe
+  // direction for a warning.
+  var _bills = !!(_all[_acct] && _all[_acct].price);
+  if (_live && _bills && typeof uiConfirm === 'function') {
     var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
     var _copperName = (_all.copper && _all.copper.name) || 'Copper';
     uiConfirm(
