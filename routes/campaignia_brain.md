@@ -142,7 +142,8 @@ stockpile for something big like a large end-of-campaign print run.
 **What spends tokens:** generating, regenerating, or retouching an image, plus analyzing or
 previewing a custom art style, **reading a character sheet from a file**, and **reading any file that
 is only pictures** — a scan or a photographed page — where the cost is a token a page.
-**Free actions:** replacing a panel image from the Archive, locking an image, archiving an image, and
+**Free actions:** replacing a panel image from the Archive, locking an image, archiving an image,
+**importing a batch of asset images into the Asset Library**, and
 **importing text from a file into the Story or Lore boxes**, which happens in your browser with no AI
 involved at all. Generation is **spend-on-success** — if an image fails, you are **not** charged,
 and a file the AI reads but finds nothing in is not charged either.
@@ -693,6 +694,11 @@ what the total is, and asks before spending anything. Up to **50 pages**, and th
 come to under 8MB; beyond either it says so and stops rather than reading part of it. **Pasting the
 text in yourself is always free**, and the offer says so.
 
+**Handwritten pages can be read this way too** — a photographed notebook, a journal, minutes written
+in longhand. How well it goes depends on the handwriting, and **names are the thing to check**: it
+settles on its best reading of a name rather than leaving a gap, so read the imported text over
+before you generate.
+
 **Generate Story** reads the transcript *and* the notes, picks the key moments worth
 illustrating, and produces a **story outline** (reviewed on the Review tab before any
 images are made). It also:
@@ -1005,6 +1011,31 @@ image exists you can **Regenerate** it (a fresh take from the description), **Re
 word it), **Revert** the last change, or **Replace** it with an image from your
 **Archive**. There's no separate save step — the asset is created the moment you generate
 or upload, and edits save as you go.
+
+**Adding a lot of assets at once.** Beside **Add asset** there is an **Import** card, and it takes
+**many image files in one go** — a whole folder of them. Each file becomes an asset, so a pile of
+pictures you already have turns into a library without filling in the same form fifty times.
+**It costs nothing.** No token is spent at any point and none is quoted, because nothing here draws
+a picture: the images are the ones you brought.
+
+- **The name comes from the file name.** *Grayson's Store.png* becomes an asset called Grayson's
+  Store. Underscores become spaces, and a trailing *(1)* or *copy* is dropped. A name shorter than
+  **three characters** is flagged rather than refused — a very short name matches inside other
+  words, so an asset called *Inn* would reach into *innkeeper*.
+- **The category is filled in where Campaignia can work it out** — Location, Supporting Character /
+  NPC, or Item. The ones it was least sure of carry a note saying **guessed from the name — check
+  this one**, so you know where to look first; choosing one yourself clears the note.
+- **Every row shows a thumbnail** in front of the name, so you are checking the name against the
+  picture rather than against a file name.
+- **Nothing is saved on a guess nobody looked at.** **Import** stays greyed out until every row has
+  a category, and the line underneath says how many are still waiting. You can drop any row you did
+  not mean to include.
+- **Files that could not be used are listed with the reason** — the wrong file type, an image over
+  5 MB, or more than fifty files in one go. Nothing disappears quietly.
+
+Up to **50 files** at a time, **JPG, PNG or WebP**. They arrive as ordinary assets, so you can open
+any of them afterwards to add a description or change anything. Whoever is allowed to add assets in
+that campaign can use it.
 
 **Asset vs. character:** a *minor or one-off* recurring figure (the tavern barkeep)
 belongs here as a Supporting Character / NPC asset; a *major, important* recurring
@@ -1424,6 +1455,10 @@ Friction points and what's actually going on.
   reference steers every panel that character appears in — so it saves the character, tells you,
   and leaves the drawing to you. Add a picture to one of the reference slots and press **Build
   character prompt**.
+- **"I dropped a pile of images into the Asset Library and the Import button is greyed out."** One
+  or more rows still have no category, and the line under the list says how many. Pick **Location**,
+  **Supporting Character / NPC** or **Item** for each of them and the button comes to life. It works
+  that way on purpose: a category nobody chose would file assets you never looked at.
 
 ---
 
@@ -1437,6 +1472,12 @@ Friction points and what's actually going on.
   and it asks first.
 - **Is my file uploaded anywhere?** A story or lore file with text in it never leaves your browser.
   A file that has to be read as pictures has those pages sent to be read, and nothing is kept.
+- **Can it read handwriting?** Often, yes. A scanned or photographed handwritten page is read the
+  same way as any other picture PDF — a token a page, quoted before you agree. Neat handwriting
+  reads better than rushed, and it is worth checking names and dates afterwards.
+- **Can I add a lot of assets at once?** Yes — **Import** in the Asset Library takes up to 50 image
+  files, names each asset after its file, and fills in the category where it can. It costs no
+  tokens. See 12.
 - **Why did it not use the picture in my sheet?** It takes a picture only when exactly one in the
   file looks like a portrait, so a logo, a banner, or two possible pictures means it takes none.
 - **Do tokens expire?** Your monthly use-it-or-lose-it tokens do (each cycle); purchased

@@ -341,10 +341,19 @@ router.post('/parse-sheet', requireAuth, verifyCampaignDM, async function (req, 
       '- A party roster or a group write-up returns several objects, most prominent first.',
       '- If the document is not about a character at all -- a rulebook, an invoice, a blank form --',
       '  return []. An empty array is the right answer and is expected.',
-      '- You may be given PAGE IMAGES of a printed sheet rather than text. Read them the same way:',
-      '  a printed character sheet keeps the name and class at the top of page one, and the',
-      '  appearance, personality and backstory on a later page. Gather the description from every',
-      '  page it appears on, and read only what is printed -- an empty box is an empty field.'
+      // v3.0.949 -- TD-784. THE MEDIUM IS NOT STATED. These pages reach the model through the
+      // same client renderer and the same model as the story OCR, which reads longhand happily.
+      // Naming a medium here does not help it read and does harm when it is wrong: under the
+      // neighbouring rules ("an empty field is a correct answer") the cheapest way to obey an
+      // instruction about a medium the page is not in is to return nothing, which arrives as a
+      // blank card and looks exactly like a sparse sheet. The anti-invention rule in the last
+      // line is the point of that line and is kept; only its medium is gone.
+      '- You may be given PAGE IMAGES of a sheet rather than text. Read them the same way. The',
+      '  sheet may be printed, typed, filled in by hand, or a photograph of a handwritten page --',
+      '  read handwriting as carefully as print. A character sheet keeps the name and class at the',
+      '  top of page one, and the appearance, personality and backstory on a later page. Gather the',
+      '  description from every page it appears on, and read only what is actually on the page --',
+      '  a box nobody wrote in is an empty field.'
     ].join('\n');
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
