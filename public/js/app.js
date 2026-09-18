@@ -2197,6 +2197,19 @@ function loadUpdates() {
     });
 }
 
+// yyyy-mm-dd to "18 Sep 2026". Built from the parts rather than handed to Date(), because
+// new Date('2026-09-18') parses as UTC midnight and then prints in the reader's local zone,
+// which west of Greenwich is the previous day. A changelog that is off by one is worse than
+// one with no dates in it at all.
+function updatesDate(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return '';
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mi = parseInt(m[2], 10) - 1;
+  if (mi < 0 || mi > 11) return '';
+  return String(parseInt(m[3], 10)) + ' ' + months[mi] + ' ' + m[1];
+}
+
 function updatesToggle(key) {
   updatesState.open[key] = !updatesState.open[key];
   var el = document.getElementById('upd-detail-' + key);
@@ -2221,9 +2234,23 @@ function renderUpdates(data) {
     var feats = v.entries.filter(function (e) { return e.kind !== 'fix'; });
     var fixes = v.entries.filter(function (e) { return e.kind === 'fix'; });
     h += '<div style="margin-bottom:18px;">';
+    // v3.0.951 -- TD-804 batch B. THE DATE, AND THE HONEST WORD FOR IT.
+    //
+    // "here" rather than "on production", because the server cannot tell one environment about
+    // another and a page that says "released" on staging would be stating something it does not
+    // know. A privileged viewer gets the build date too, which is the pair that actually answers
+    // a tester's question: built then, running here since then.
+    var _when = '';
+    if (priv) {
+      _when = (v.live_here && v.first_seen)
+        ? 'built ' + escapeHtml(v.staged_on || '?') + ' &middot; here since ' + updatesDate(v.first_seen)
+        : 'built ' + escapeHtml(v.staged_on || '?') + ' &middot; not running here yet';
+    } else if (v.live_here && v.first_seen) {
+      _when = updatesDate(v.first_seen);
+    }
     h += '<div style="font-weight:600;">v' + escapeHtml(v.version) +
-         (priv && v.staged_on ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">built ' +
-                                escapeHtml(v.staged_on) + '</span>' : '') + '</div>';
+         (_when ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">' + _when + '</span>' : '') +
+         '</div>';
     h += updatesGroup('New features', feats, priv, vi);
     h += updatesGroup('Bug fixes', fixes, priv, vi);
     h += '</div>';
@@ -2241,7 +2268,7 @@ function updatesGroup(title, entries, priv, vi) {
       h += ' <span class="form-hint" style="color:var(--gold);">not shown to users</span>';
     }
     if (priv && e.detail) {
-      h += ' <button class="panel-pill" id="upd-toggle-' + key + '" onclick="updatesToggle(\'' + key + '\')">Tester detail</button>';
+      h += ' <button class="btn btn-sm" id="upd-toggle-' + key + '" onclick="updatesToggle(\'' + key + '\')">Tester detail</button>';
       h += '<div class="form-hint" id="upd-detail-' + key + '" style="display:none;margin-top:4px;">' + escapeHtml(e.detail) +
            (e.td && e.td.length ? '<br />' + escapeHtml(e.td.join(', ')) : '') + '</div>';
     }

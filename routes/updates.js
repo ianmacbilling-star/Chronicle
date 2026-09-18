@@ -52,10 +52,36 @@ function compareVersions(a, b) {
   return 0;
 }
 
+// v3.0.951 -- TD-804 batch B. THE OBSERVED DATES.
+//
+// Read per request rather than cached at startup, because unlike the entries themselves this
+// changes WITHOUT a deploy: the row for the running version is written at boot, and on a fresh
+// database the first request can arrive before anybody has looked at the page.
+//
+// A FAILURE HERE COSTS THE DATES AND NOTHING ELSE. Could-not-read is returned as an empty map,
+// so the page renders the entries with no date rather than failing -- and an empty map means
+// "we have no record", which the page states as such instead of guessing.
+async function releaseDates() {
+  var map = {};
+  try {
+    const db = await getDb();
+    const rows = await db.prepare('SELECT version, first_seen FROM version_releases').all();
+    (rows || []).forEach(function (r) {
+      if (!r || !r.version) return;
+      var d = r.first_seen;
+      var iso = (d && typeof d.toISOString === 'function') ? d.toISOString() : String(d || '');
+      if (iso) map[String(r.version)] = iso.slice(0, 10);
+    });
+  } catch (e) {
+    console.error('updates: could not read version_releases:', e && e.message);
+  }
+  return map;
+}
+
 // THE FILTER. Given the whole file and one viewer, return what that viewer is allowed to have.
 // Exported so the batch guard can drive it directly with a fixture of each viewer type and assert
 // the OUTPUT -- a grep for an if proves nothing about what goes over the wire.
-function viewFor(all, privileged) {
+function viewFor(all, privileged, releases) {
   var out = [];
   (Array.isArray(all) ? all : []).forEach(function (block) {
     if (!block || !Array.isArray(block.entries)) return;
@@ -85,6 +111,18 @@ function viewFor(all, privileged) {
     // A version with nothing this viewer may see is not an empty heading; it is not there.
     if (!entries.length) return;
     var o = { version: String(block.version || ''), entries: entries };
+
+    // WHAT THIS DATE IS, EXACTLY: the first time this version ran in THIS environment. On
+    // production that is the day it went live, which is the date that means something to a
+    // reader. On staging it is the day staging got it. No row means no record -- which the
+    // page states rather than papering over with a date it does not have.
+    //
+    // A STAGING DATABASE CANNOT KNOW WHAT PRODUCTION IS RUNNING, and asking it to would mean
+    // one environment reaching into the other's database -- the coupling this whole design
+    // exists to avoid. So the honest word is HERE, and the page says so.
+    var _seen = (releases && releases[o.version]) || '';
+    o.live_here = !!_seen;
+    if (_seen) o.first_seen = _seen;
     // The build date is for the people who work on it. A user gets no date in this build --
     // the date that means something to them is the day it reached production, and that arrives
     // with the release tracking (TD-804 batch B). A build date shown to a user would be a
@@ -106,9 +144,9 @@ function isPrivilegedEmail(email) {
   return !!(email && (isAdminEmail(email) || isTesterEmail(email)));
 }
 
-function payloadFor(email) {
+function payloadFor(email, releases) {
   var privileged = isPrivilegedEmail(email);
-  return { ok: true, privileged: privileged, versions: viewFor(UPDATES, privileged) };
+  return { ok: true, privileged: privileged, versions: viewFor(UPDATES, privileged, releases || {}) };
 }
 
 // GET /api/updates
@@ -131,7 +169,7 @@ router.get('/', requireAuth, async function (req, res) {
       console.error('updates: could not resolve the viewer:', e && e.message);
       email = '';
     }
-    res.json(payloadFor(email));
+    res.json(payloadFor(email, await releaseDates()));
   } catch (e) {
     console.error('updates error:', e && e.message);
     res.json({ ok: true, privileged: false, versions: [] });

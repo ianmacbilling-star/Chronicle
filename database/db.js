@@ -375,6 +375,20 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_debug_logs_user ON debug_logs(user_id, id)');
 
+  // v3.0.951 -- TD-804 batch B. WHEN DID THIS VERSION FIRST RUN HERE?
+  //
+  // The Updates list needs a release date, and it is the one field that cannot be written
+  // by hand: an entry ships in the same commit as the code it describes, days or weeks
+  // before the promote. A date typed at authoring time would be wrong until corrected, and
+  // a placeholder would be TD-779's shape -- a field answering confidently when the truth
+  // is "not yet".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS version_releases (
+      version     TEXT PRIMARY KEY,
+      first_seen  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // ALTER TABLE migrations for existing databases
   const alterations = [
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS debug_mode BOOLEAN DEFAULT false',
@@ -629,6 +643,30 @@ async function initPostgres() {
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
   }
+
+  // v3.0.951 -- TD-804 batch B. STAMP THIS VERSION, ONCE, THE FIRST TIME IT RUNS HERE.
+  //
+  // FIRST SEEN WINS, AND "DO NOTHING" IS THE WHOLE MECHANISM. A restart for any other
+  // reason -- a crash, a Railway variable change, a scale event -- cannot move a date that
+  // is already recorded, so the row means "the first boot of this version in this
+  // environment" and nothing else.
+  //
+  // IT IS NAMED FOR WHAT IT CAN KNOW. After a rollback and a re-promote the date stays the
+  // first one; that is the correct reading of first-seen and the wrong reading of "the
+  // version you are running arrived on", which is why nothing calls it a release date in
+  // the schema.
+  //
+  // AND IT MUST NOT BE ABLE TO STOP THE BOOT. This is a changelog nicety. If it throws,
+  // the date is missing and the page says so; the application still starts.
+  try {
+    let _vrv = '';
+    try { _vrv = String(require('../version-info.json').version || ''); } catch (e) { _vrv = ''; }
+    if (_vrv) {
+      const _vr = await pool.query(
+        'INSERT INTO version_releases (version) VALUES ($1) ON CONFLICT (version) DO NOTHING', [_vrv]);
+      if (_vr && _vr.rowCount) console.log('[db] version_releases: first boot of v' + _vrv + ' in this environment');
+    }
+  } catch (e) { console.error('[db] version_releases stamp failed: ' + (e && e.message)); }
 
   // v3.0.485 -- GENRE BACKFILL. Fantasy is the default and is true of very nearly
   // every campaign that exists. Runs after the ALTERs, is idempotent, and touches
