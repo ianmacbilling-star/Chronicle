@@ -1,0 +1,45 @@
+[
+  {
+    "version": "3.0.950",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "950-updates-list",
+        "kind": "feature",
+        "public": true,
+        "summary": "This page now carries a list of what has changed in Campaignia, newest first.",
+        "detail": "Feedback page, below the feedback form. As an admin or a tester you see EVERY entry, including ones not shown to users, each marked, with this description underneath. A normal user sees only the entries marked public, as bullets, with no descriptions at all -- and their browser never receives the rest, because the route filters by who is asking rather than the page hiding it. To check that: open the page as a normal account and read the network response for /api/updates -- it must contain no detail text and no non-public entry. See TD-804.",
+        "td": [
+          "TD-804"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.949",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "949-assistant-knows-bulk-import",
+        "kind": "feature",
+        "public": true,
+        "summary": "The in-app assistant can now explain how to import a whole folder of asset images at once, and what to do when the Import button stays greyed out.",
+        "detail": "Ask the assistant: \"can I add a lot of assets at once\", \"why is the Import button greyed out\", \"can it read handwriting\". All three should answer. The bulk import must be described as costing NO tokens. The assistant should say nothing about handwriting on a character sheet -- that is deliberate and unproven. The Brain is read once at startup, so this only works after the deploy finishes, not after the push. See TD-801, TD-783.",
+        "td": [
+          "TD-801",
+          "TD-783"
+        ]
+      },
+      {
+        "id": "949-sheet-prompt-medium",
+        "kind": "fix",
+        "public": false,
+        "summary": "Importing a character sheet no longer assumes the page is printed.",
+        "detail": "Character window > Import a sheet, with a HANDWRITTEN sheet -- photographed or scanned as a PDF. The fields should fill. Before this the prompt told the model the page was printed and to read only what was printed, so a handwritten sheet came back blank and was indistinguishable from a sparse sheet. UNPROVEN: this test is what decides TD-802, which is why it is not shown to users.",
+        "td": [
+          "TD-802"
+        ]
+      }
+    ]
+  }
+]

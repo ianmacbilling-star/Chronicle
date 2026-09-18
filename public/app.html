@@ -1124,6 +1124,17 @@
         </div>
         <button class="btn btn-primary" id="feedback-submit-btn" style="margin-top:8px;" onclick="submitFeedback()">Send feedback</button>
       </div>
+
+      <!-- v3.0.950 -- TD-804. THE UPDATES LIST. Spec: claude/UPDATES_LIST_SPEC.md.
+           Everything inside updates-body is written by renderUpdates() from whatever
+           /api/updates chose to send THIS viewer. There is no markup here for the tester
+           descriptions and no class that hides them, deliberately: a normal user's browser
+           never receives them at all, so there is nothing here to reveal. -->
+      <div class="settings-section" id="updates-section" style="margin-top:18px;">
+        <div class="settings-section-title">Updates</div>
+        <div class="settings-section-desc">What has changed in Campaignia, newest first.</div>
+        <div id="updates-body" style="margin-top:14px;"></div>
+      </div>
     </div>
 
     <div id="view-orders" class="view" style="display:none;">

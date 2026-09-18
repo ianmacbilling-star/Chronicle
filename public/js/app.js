@@ -2160,6 +2160,96 @@ function savePreferences() {
     .catch(function(){ if (msg) { msg.style.display='block'; msg.style.color='var(--error)'; msg.textContent='Could not save preferences.'; } });
 }
 
+// =================================================================================================
+// v3.0.950 -- TD-804. THE UPDATES LIST.
+//
+// This renders ONLY what the server chose to send. It does not filter, and it must never learn to:
+// the moment this file decides what a user may see, the descriptions are in every browser and the
+// gate is decorative. If you are here to add a "hide this from users" rule, it belongs in
+// routes/updates.js instead.
+//
+// data.privileged tells us which shape arrived, so the page can label the entries an ordinary user
+// is NOT being shown. It is not a permission -- it is a description of the payload we already have.
+// =================================================================================================
+var updatesState = { loaded: false, loading: false, open: {} };
+
+function updatesReset() { updatesState = { loaded: false, loading: false, open: {} }; }
+
+function loadUpdates() {
+  // Idempotent on purpose. showView() is declared TWICE at top level in this file and the later
+  // one wins, so BOTH copies call this -- and a second call while the first is in flight, or after
+  // it has landed, must be a no-op rather than a second request.
+  if (updatesState.loading || updatesState.loaded) return;
+  updatesState.loading = true;
+  var body = document.getElementById('updates-body');
+  if (body) body.innerHTML = '<div class="form-hint">Loading...</div>';
+  fetch('/api/updates')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      updatesState.loading = false;
+      updatesState.loaded = true;
+      renderUpdates(data);
+    })
+    .catch(function () {
+      updatesState.loading = false;
+      var b = document.getElementById('updates-body');
+      if (b) b.innerHTML = '<div class="form-hint">The updates list could not be loaded just now.</div>';
+    });
+}
+
+function updatesToggle(key) {
+  updatesState.open[key] = !updatesState.open[key];
+  var el = document.getElementById('upd-detail-' + key);
+  var btn = document.getElementById('upd-toggle-' + key);
+  if (el) el.style.display = updatesState.open[key] ? 'block' : 'none';
+  if (btn) btn.textContent = updatesState.open[key] ? 'Hide detail' : 'Tester detail';
+}
+
+function renderUpdates(data) {
+  var body = document.getElementById('updates-body');
+  if (!body) return;
+  var versions = (data && Array.isArray(data.versions)) ? data.versions : [];
+  var priv = !!(data && data.privileged);
+
+  if (!versions.length) {
+    body.innerHTML = '<div class="form-hint">Nothing here yet. New features and fixes will be listed as they arrive.</div>';
+    return;
+  }
+
+  var h = '';
+  versions.forEach(function (v, vi) {
+    var feats = v.entries.filter(function (e) { return e.kind !== 'fix'; });
+    var fixes = v.entries.filter(function (e) { return e.kind === 'fix'; });
+    h += '<div style="margin-bottom:18px;">';
+    h += '<div style="font-weight:600;">v' + escapeHtml(v.version) +
+         (priv && v.staged_on ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">built ' +
+                                escapeHtml(v.staged_on) + '</span>' : '') + '</div>';
+    h += updatesGroup('New features', feats, priv, vi);
+    h += updatesGroup('Bug fixes', fixes, priv, vi);
+    h += '</div>';
+  });
+  body.innerHTML = h;
+}
+
+function updatesGroup(title, entries, priv, vi) {
+  if (!entries.length) return '';
+  var h = '<div class="form-hint" style="margin:8px 0 4px;font-weight:600;">' + title + '</div><ul style="margin:0 0 0 18px;padding:0;">';
+  entries.forEach(function (e, i) {
+    var key = vi + '-' + title.charAt(0) + '-' + i;
+    h += '<li style="margin-bottom:6px;">' + escapeHtml(e.summary);
+    if (priv && e.public === false) {
+      h += ' <span class="form-hint" style="color:var(--gold);">not shown to users</span>';
+    }
+    if (priv && e.detail) {
+      h += ' <button class="panel-pill" id="upd-toggle-' + key + '" onclick="updatesToggle(\'' + key + '\')">Tester detail</button>';
+      h += '<div class="form-hint" id="upd-detail-' + key + '" style="display:none;margin-top:4px;">' + escapeHtml(e.detail) +
+           (e.td && e.td.length ? '<br />' + escapeHtml(e.td.join(', ')) : '') + '</div>';
+    }
+    h += '</li>';
+  });
+  return h + '</ul>';
+}
+
 function resetFeedbackForm() {
   var c = document.getElementById('feedback-category'); if (c) c.value = 'Suggestion';
   var sub = document.getElementById('feedback-subject'); if (sub) sub.value = '';
@@ -2800,6 +2890,7 @@ function showView(view) {
       {label:'Feedback'}
     ]);
     if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
+    if (typeof loadUpdates === 'function') loadUpdates();          // v3.0.950 -- TD-804
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
@@ -15734,6 +15825,7 @@ function showView(view) {
       {label:'Feedback'}
     ]);
     if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
+    if (typeof loadUpdates === 'function') loadUpdates();          // v3.0.950 -- TD-804
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
