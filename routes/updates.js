@@ -83,6 +83,12 @@ async function releaseDates() {
 // the OUTPUT -- a grep for an if proves nothing about what goes over the wire.
 function viewFor(all, privileged, releases) {
   var out = [];
+
+  // The oldest version we have any record of. Everything before it predates the recording.
+  var _oldestKnown = '';
+  Object.keys(releases || {}).forEach(function (v) {
+    if (!_oldestKnown || compareVersions(v, _oldestKnown) < 0) _oldestKnown = v;
+  });
   (Array.isArray(all) ? all : []).forEach(function (block) {
     if (!block || !Array.isArray(block.entries)) return;
     var entries = [];
@@ -122,7 +128,14 @@ function viewFor(all, privileged, releases) {
     // exists to avoid. So the honest word is HERE, and the page says so.
     var _seen = (releases && releases[o.version]) || '';
     o.live_here = !!_seen;
-    if (_seen) o.first_seen = _seen;
+    if (_seen) {
+      o.first_seen = _seen;
+    } else if (!_oldestKnown || compareVersions(o.version, _oldestKnown) < 0) {
+      // Older than anything we ever recorded, or we have recorded nothing at all. We were
+      // not watching, so we do not know -- and TD-587's rule is that not knowing must never
+      // be reported as a no.
+      o.no_record = true;
+    }
     // The build date is for the people who work on it. A user gets no date in this build --
     // the date that means something to them is the day it reached production, and that arrives
     // with the release tracking (TD-804 batch B). A build date shown to a user would be a

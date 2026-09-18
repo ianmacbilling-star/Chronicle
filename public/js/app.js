@@ -2171,7 +2171,8 @@ function savePreferences() {
 // data.privileged tells us which shape arrived, so the page can label the entries an ordinary user
 // is NOT being shown. It is not a permission -- it is a description of the payload we already have.
 // =================================================================================================
-var updatesState = { loaded: false, loading: false, open: {} };
+var updatesState = { loaded: false, loading: false, open: {}, showAll: false, data: null };
+var UPDATES_VISIBLE = 8;    // version blocks shown before "show older"
 
 function updatesReset() { updatesState = { loaded: false, loading: false, open: {} }; }
 
@@ -2188,6 +2189,7 @@ function loadUpdates() {
     .then(function (data) {
       updatesState.loading = false;
       updatesState.loaded = true;
+      updatesState.data = data;
       renderUpdates(data);
     })
     .catch(function () {
@@ -2230,7 +2232,8 @@ function renderUpdates(data) {
   }
 
   var h = '';
-  versions.forEach(function (v, vi) {
+  var shown = updatesState.showAll ? versions : versions.slice(0, UPDATES_VISIBLE);
+  shown.forEach(function (v, vi) {
     var feats = v.entries.filter(function (e) { return e.kind !== 'fix'; });
     var fixes = v.entries.filter(function (e) { return e.kind === 'fix'; });
     h += '<div style="margin-bottom:18px;">';
@@ -2240,11 +2243,14 @@ function renderUpdates(data) {
     // another and a page that says "released" on staging would be stating something it does not
     // know. A privileged viewer gets the build date too, which is the pair that actually answers
     // a tester's question: built then, running here since then.
+    // v3.0.952 -- three states, not two. A row means we saw it start here. No row and a
+    // version OLDER than anything we recorded means we were not watching, and the page says
+    // nothing rather than denying it. Only a version we should have caught gets "not yet".
     var _when = '';
     if (priv) {
-      _when = (v.live_here && v.first_seen)
-        ? 'built ' + escapeHtml(v.staged_on || '?') + ' &middot; here since ' + updatesDate(v.first_seen)
-        : 'built ' + escapeHtml(v.staged_on || '?') + ' &middot; not running here yet';
+      _when = 'built ' + escapeHtml(v.staged_on || '?');
+      if (v.live_here && v.first_seen) _when += ' &middot; here since ' + updatesDate(v.first_seen);
+      else if (!v.no_record) _when += ' &middot; not running here yet';
     } else if (v.live_here && v.first_seen) {
       _when = updatesDate(v.first_seen);
     }
@@ -2255,7 +2261,19 @@ function renderUpdates(data) {
     h += updatesGroup('Bug fixes', fixes, priv, vi);
     h += '</div>';
   });
+  var hidden = versions.length - shown.length;
+  if (hidden > 0) {
+    h += '<button class="btn btn-sm" onclick="updatesShowAll()">Show ' + hidden +
+         ' older version' + (hidden === 1 ? '' : 's') + '</button>';
+  }
   body.innerHTML = h;
+}
+
+// Re-renders from the payload already in hand. No second request: the list is one small
+// response and the cap was only ever about the height of the page.
+function updatesShowAll() {
+  updatesState.showAll = true;
+  if (updatesState.data) renderUpdates(updatesState.data);
 }
 
 function updatesGroup(title, entries, priv, vi) {
