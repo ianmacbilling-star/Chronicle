@@ -1,0 +1,899 @@
+[
+  {
+    "version": "3.0.955",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "955-sensitive-tick-follows-genre",
+        "kind": "fix",
+        "public": true,
+        "summary": "Changing a campaign’s genre now updates the “Publish as link only” tick straight away, instead of leaving the publish card showing the previous genre’s answer until you reload.",
+        "detail": "TD-807, second half, found by the Erin Bot retest of v3.0.954. v3.0.954 fixed the STYLE defaults and left this one because a correct flag and a ticked box are different claims: the cached sensitive value did follow the genre change, but prepSyncUnlisted() -- the only thing that ticks the box and shows its note -- is called from the preview-tab entry and the campaign switch and from nothing else, so the card kept what it was drawn with. TO TEST, and do NOT reload at any point: (1) create a campaign as Fantasy, save; change it to Skill Story BEFORE making any session; open Publish -- link only must be TICKED with its note. (2) Change it back to Fantasy, still with no sessions -- the tick must CLEAR. (3) Now make a session and generate; change the genre to Skill Story -- the tick must come back ON. (4) Change it to Fantasy again, sessions now present -- the tick must STAY ON and only the note disappear. THE RULE IS DECIDED BY WHETHER SESSIONS EXISTED WHEN THE CHANGE WAS MADE, not by what exists when you open the publish card: no sessions means the card follows the new genre outright, sessions means it may only ADD the link-only tick and never remove it. Becoming sensitive ticks the box either way -- that direction has no exceptions, because it is the one where being wrong publishes a real person’s story. ALSO IN THIS BATCH: the campaign CREATE response now carries its genre-derived fields, which the v3.0.954 sweep missed.",
+        "td": [
+          "TD-807"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.954",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "954-genre-change-updates-styles",
+        "kind": "fix",
+        "public": true,
+        "summary": "Changing a campaign’s genre now updates its suggested art and narrative styles straight away, instead of keeping the previous genre’s until you navigate away and back.",
+        "detail": "TD-807, from the Erin Bot run, and it is NOT the bug the report describes. The genre defaults were never frozen at campaign creation -- the narrative side re-reads the campaign genre at generate time and always has. What went stale was the BROWSER’S CACHED COPY: genre_defaults and sensitive are derived from the genre by the server, the list route sends them, and the save route did not -- so after a genre change the page held the new genre beside the old genre’s style chains. TO TEST: create a campaign as Fantasy, save, change it to Skill Story, save, and WITHOUT reloading open a new session and look at the Review tab -- the art and voice buttons must read Everyday life illustration and Calm & Literal, not Dark Fantasy and Epic Saga. Then check the publish card: \"link only\" must be ticked with its note, because Skill Story is a sensitive genre and that tick was also driven by the stale copy. THE ART HALF WAS NOT COSMETIC -- the image generator takes the art style from the browser, so a stale chain could really have drawn the panels; the narrative half never could. A campaign created as one genre and left alone was correct before this and is correct after it.",
+        "td": [
+          "TD-807"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.953",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "953-pass-converts-account",
+        "kind": "fix",
+        "public": true,
+        "summary": "Buying a Platinum Pass now converts the whole account straight away — the campaign and session limits, and the trial watermark on your images.",
+        "detail": "TD-806, from the Erin Bot run. Buy a pass on a Free Trial account and check, without reloading and again after a reload: \"+ New campaign\" no longer quotes the trial limit; the storyboard images carry no CAMPAIGNIA TRIAL mark; sessions and characters are not capped at trial numbers. The watermark was always a display-time CSS class and never baked into the file, so nothing needs regenerating. THE THREE SITES THE BOT COULD NOT SEE were the session limit, the character limit and the shared trial test -- the sweep found those, not the report. AND ONE THING IS DELIBERATELY UNCHANGED: the monthly token allotment still reads the subscription tier, because a pass grants one lump at purchase and pointing that at the effective tier would hand every pass holder a full Platinum allowance every month forever. NOT FIXED because it never existed: there is no pass purchase or welcome email.",
+        "td": [
+          "TD-806"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.951",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "951-release-dates",
+        "kind": "feature",
+        "public": true,
+        "summary": "Each update now shows the date it went live.",
+        "detail": "The date is recorded when a version first BOOTS in an environment, so it cannot be typed wrong. A version older than the oldest date on record shows no date at all rather than claiming anything.",
+        "td": [
+          "TD-804"
+        ]
+      },
+      {
+        "id": "951-visible-tester-button",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Tester detail buttons on this page were in the page but invisible.",
+        "detail": "They carried panel-pill, whose base rule in style.css is opacity:0, revealed only by hover rules scoped to screens this list is not on. Now btn btn-sm. The guard now reads the class the control actually carries and fails if its resting state is invisible.",
+        "td": [
+          "TD-804"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.950",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "950-updates-list",
+        "kind": "feature",
+        "public": true,
+        "summary": "This page now carries a list of what has changed in Campaignia, newest first.",
+        "detail": "As an admin or tester you see every entry, including ones not shown to users, with this description underneath. A normal user sees only the public bullets, and their browser never receives the rest -- check the network response for /api/updates on an ordinary account.",
+        "td": [
+          "TD-804"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.949",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "949-assistant-knows-bulk-import",
+        "kind": "feature",
+        "public": true,
+        "summary": "The in-app assistant can now explain how to import a whole folder of asset images at once, and what to do when the Import button stays greyed out.",
+        "detail": "Ask the assistant: can I add a lot of assets at once; why is the Import button greyed out; can it read handwriting. All three should answer, and the bulk import must be described as costing NO tokens.",
+        "td": [
+          "TD-801",
+          "TD-783"
+        ]
+      },
+      {
+        "id": "949-sheet-prompt-medium",
+        "kind": "fix",
+        "public": false,
+        "summary": "Importing a character sheet no longer assumes the page is printed.",
+        "detail": "Import a sheet with a HANDWRITTEN sheet, photographed or scanned. The fields should fill. UNPROVEN: this test decides TD-802.",
+        "td": [
+          "TD-802"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.948",
+    "staged_on": "2026-09-17",
+    "entries": [
+      {
+        "id": "948-active-passes-trends",
+        "kind": "feature",
+        "public": false,
+        "summary": "Active passes on the Trends tab -- weekly lines for three, six and twelve month passes.",
+        "detail": "Admin dashboard. Duration comes from token_purchases.pack_tier, because users records only that somebody holds a pass and never which one.",
+        "td": [
+          "TD-800"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.947",
+    "staged_on": "2026-09-17",
+    "entries": [
+      {
+        "id": "947-promo-codes",
+        "kind": "feature",
+        "public": false,
+        "summary": "Promo codes are created in one place, and the Stripe coupon and promotion code are made through the API rather than by hand.",
+        "detail": "Admin only. Codes created on PRODUCTION land in LIVE Stripe, so test codes belong on staging.",
+        "td": [
+          "TD-799"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.946",
+    "staged_on": "2026-09-17",
+    "entries": [
+      {
+        "id": "946-invoices",
+        "kind": "feature",
+        "public": true,
+        "summary": "Every purchase -- tokens, passes and print orders -- now appears in your billing history with an invoice.",
+        "detail": "Customer portal, History tab. Needs Stripe portal invoice history switched on, which is configuration rather than code.",
+        "td": [
+          "TD-791"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.945",
+    "staged_on": "2026-09-17",
+    "entries": [
+      {
+        "id": "945-one-stripe-customer",
+        "kind": "fix",
+        "public": true,
+        "summary": "One billing record per account, so tokens, passes, print orders and subscriptions all sit together instead of being spread across separate customer records.",
+        "detail": "The fault this fixed: a pass buyer who never subscribed had no billing record at all, so no receipt and no billing buttons. Check a never-subscribed account that buys a pass.",
+        "td": [
+          "TD-791"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.940",
+    "staged_on": "2026-09-16",
+    "entries": [
+      {
+        "id": "940-trial-ends-row",
+        "kind": "fix",
+        "public": true,
+        "summary": "Your account page shows when a free trial ends, and an account with no subscription no longer reads as though it had a live one.",
+        "detail": "A stale subscription id with a null status used to read as a current subscriber and print a phantom billing date. Check a Copper account carrying a dead subscription id.",
+        "td": [
+          "TD-779"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.939",
+    "staged_on": "2026-09-16",
+    "entries": [
+      {
+        "id": "939-first-preview-layout",
+        "kind": "fix",
+        "public": true,
+        "summary": "The first preview of a book no longer comes up in the old layout with boxed narration.",
+        "detail": "Open a book you have never previewed in this session. Narration should be plain from the first render, without opening the layout modal and pressing Apply.",
+        "td": [
+          "TD-732"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.929",
+    "staged_on": "2026-09-16",
+    "entries": [
+      {
+        "id": "929-platinum-passes",
+        "kind": "feature",
+        "public": true,
+        "summary": "Platinum Passes -- three, six and twelve months of Platinum bought outright, with the tokens granted immediately. If you already subscribe, the pass starts when your subscription ends rather than overlapping it.",
+        "detail": "Covers v3.0.917 through v3.0.938. MONEY PATH, real cards. The account page shows the tier you hold, not the tier you would hold without the pass. Buying a pass cancels a live subscription at period end and warns first. A free trial has no period end, so a trial buyer pass starts now.",
+        "td": [
+          "TD-780",
+          "TD-792"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.914",
+    "staged_on": "2026-09-15",
+    "entries": [
+      {
+        "id": "914-bulk-asset-import",
+        "kind": "feature",
+        "public": true,
+        "summary": "Import a folder of asset images at once. Each file becomes an asset named after the file, with the category filled in where Campaignia can work it out, a thumbnail on every row, and nothing saved until you have looked. It costs no tokens.",
+        "detail": "Covers v3.0.914 through v3.0.916. Asset Library > Import. Confirm: name from the file name; most categories pre-filled; the ones a model placed say guessed from the name -- check this one; Import greyed until every row has a category; rejects listed with reasons; and the token balance does not move.",
+        "td": [
+          "TD-783"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.913",
+    "staged_on": "2026-09-14",
+    "entries": [
+      {
+        "id": "913-voice-fallback",
+        "kind": "fix",
+        "public": false,
+        "summary": "A narrative voice nobody chose is no longer reported as Classic, which made never-chosen and chose-Classic impossible to tell apart.",
+        "detail": "TD-779 shape: a fallback that answers confidently when the truth is I do not know.",
+        "td": [
+          "TD-779"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.912",
+    "staged_on": "2026-09-14",
+    "entries": [
+      {
+        "id": "912-genre-style-defaults",
+        "kind": "feature",
+        "public": true,
+        "summary": "Every genre carries its own default art style and narrative voice, chosen to suit it and to fit whatever tier you are on.",
+        "detail": "Fifteen genres, each with an ordered chain; the consumer takes the first entry the effective tier allows. Check a Silver account gets a Silver-legal style for a genre whose first choice is Platinum.",
+        "td": [
+          "TD-777"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.891",
+    "staged_on": "2026-09-13",
+    "entries": [
+      {
+        "id": "891-compare-the-tiers",
+        "kind": "feature",
+        "public": true,
+        "summary": "Compare the Tiers -- a public page laying the tiers out side by side, built from the live configuration rather than a second copy of the numbers.",
+        "detail": "Landing page, under the tier rows. Change a tier in the dashboard and confirm the grid follows without a deploy.",
+        "td": [
+          "TD-767"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.889",
+    "staged_on": "2026-09-13",
+    "entries": [
+      {
+        "id": "889-add-characters-button",
+        "kind": "feature",
+        "public": true,
+        "summary": "The nudge before Generate Story now offers an Add Characters button that takes you there.",
+        "detail": "Offered only to a Story Master, because a player cannot create a campaign character. Check both roles.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.884",
+    "staged_on": "2026-09-13",
+    "entries": [
+      {
+        "id": "884-retouch-cast-tray",
+        "kind": "feature",
+        "public": true,
+        "summary": "The cast tray moved inside the Retouch panel, so you can add a character or an asset to a retouch without closing it and losing what you typed.",
+        "detail": "Storyboard > Retouch. Add a character mid-retouch; your typed words and both markers must survive.",
+        "td": [
+          "TD-761"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.880",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "880-delivery-fallback",
+        "kind": "fix",
+        "public": true,
+        "summary": "When the printer does not offer your chosen delivery speed to your address, the quote moves up to the next one that exists instead of failing, and tells you which it used.",
+        "detail": "Quote a slow delivery to an address the printer will not serve at that level. You should get a price and a sentence naming the level it used.",
+        "td": [
+          "TD-758"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.879",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "879-shipping-pickers",
+        "kind": "feature",
+        "public": true,
+        "summary": "Shipping country and state are chosen from lists rather than typed, covering the 211 destinations the printer actually delivers to, and a bad postal code is caught before you pay.",
+        "detail": "Order path, MONEY. The state field should appear only where the printer requires one. The country list was measured against the printer, not typed from memory.",
+        "td": [
+          "TD-756"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.877",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "877-api-errors",
+        "kind": "fix",
+        "public": false,
+        "summary": "An error from the server can no longer reach a reader as raw browser text, and a failed price quote records why it failed.",
+        "detail": "Found from a real support report: a user saw a browser error string. /api can no longer answer with HTML.",
+        "td": [
+          "TD-754"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.876",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "876-brain-imports",
+        "kind": "feature",
+        "public": true,
+        "summary": "The in-app assistant can describe all three import buttons and what each one costs.",
+        "detail": "Ask it what importing a story costs, and what importing a sheet costs. The prices are NOT uniform and that is the part it must get right: text import free, sheet one token, pictures a token a page.",
+        "td": [
+          "TD-753"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.875",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "875-picture-pdf-read",
+        "kind": "feature",
+        "public": true,
+        "summary": "A story, lore file or character sheet that is only pictures -- a scan or a photograph -- can be read by looking at the pages. It quotes the price before spending anything.",
+        "detail": "A token a page, capped at 50 pages and 8MB, and it always asks first. Handwriting works on the Story and Lore boxes (TD-784, proved on a 1939 ledger); the character sheet is unproven and is TD-802.",
+        "td": [
+          "TD-752"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.868",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "868-import-character-sheet",
+        "kind": "feature",
+        "public": true,
+        "summary": "Import a character sheet. It fills the card in for you, takes a portrait from the file when there is exactly one, and builds the character in a single pass. Fillable PDFs are read properly, including the answers typed into form fields.",
+        "detail": "Covers v3.0.868 through v3.0.872. Test: a fillable PDF from a character-builder site; a sheet with several characters (it should ask which); a sheet with no picture (it should save the character and tell you rather than inventing a face). Reading a sheet costs ONE token.",
+        "td": [
+          "TD-735",
+          "TD-740",
+          "TD-745",
+          "TD-746"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.866",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "866-import-lore",
+        "kind": "feature",
+        "public": true,
+        "summary": "The same import on Lore / Background.",
+        "detail": "Campaign details > Lore. Same control, plus a warning when the file overruns the 6,000-character field.",
+        "td": [
+          "TD-735"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.865",
+    "staged_on": "2026-09-12",
+    "entries": [
+      {
+        "id": "865-import-story",
+        "kind": "feature",
+        "public": true,
+        "summary": "Import a story or transcript from a file -- PDF, Word or plain text -- straight into the Story box. The file is read in your browser, never uploaded, and it costs nothing.",
+        "detail": "Story tab > Import from a file. Watch the network tab: nothing should be uploaded. The old .doc format is not supported and should say so.",
+        "td": [
+          "TD-733"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.863",
+    "staged_on": "2026-09-11",
+    "entries": [
+      {
+        "id": "863-deploy-inflight",
+        "kind": "fix",
+        "public": false,
+        "summary": "A deploy can no longer land on top of a live Optimize run and destroy it.",
+        "detail": "GET /api/pdf/deploy-inflight, and inflight.sh in the repo root. Every apply script waits on it. Not user-visible, and it protects somebody else money.",
+        "td": [
+          "TD-598"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.859",
+    "staged_on": "2026-09-11",
+    "entries": [
+      {
+        "id": "859-help-prompt-cache",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant prompt is cached, so it answers faster and costs a fraction of what it did.",
+        "detail": "The Brain and the reference blocks moved to the front of the system prompt as a cached prefix, built once at module scope. Measure a cold and a warm question.",
+        "td": [
+          "TD-684"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.850",
+    "staged_on": "2026-09-10",
+    "entries": [
+      {
+        "id": "850-asset-pill-name",
+        "kind": "fix",
+        "public": true,
+        "summary": "An asset's pill shows the asset's name and nothing else.",
+        "detail": "Storyboard cast tray. The pill used to carry more than the name and was hard to read at a glance.",
+        "td": [
+          "TD-706"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.848",
+    "staged_on": "2026-09-10",
+    "entries": [
+      {
+        "id": "848-supporting-character",
+        "kind": "feature",
+        "public": true,
+        "summary": "NPCs are now called Supporting Character / NPC everywhere, so the same words mean the same thing on every screen.",
+        "detail": "Sweep the forward-facing surfaces: the Characters tab flag, the Asset Library categories, the Brain. One name in all three.",
+        "td": [
+          "TD-700"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.847",
+    "staged_on": "2026-09-10",
+    "entries": [
+      {
+        "id": "847-tours-back-on",
+        "kind": "feature",
+        "public": true,
+        "summary": "Turn the guided tours back on yourself, from your own account.",
+        "detail": "Account page, on a NORMAL account -- this used to be admin-only.",
+        "td": [
+          "TD-699"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.845",
+    "staged_on": "2026-09-10",
+    "entries": [
+      {
+        "id": "845-library-facets",
+        "kind": "feature",
+        "public": true,
+        "summary": "Filter the public Library by genre and by art style, several at a time.",
+        "detail": "Public Library. Multi-select on both facets; combinations should narrow rather than replace.",
+        "td": [
+          "TD-693",
+          "TD-694",
+          "TD-672"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.838",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "838-brain-genre",
+        "kind": "feature",
+        "public": true,
+        "summary": "The in-app assistant can explain genres.",
+        "detail": "Ask the assistant what genres do and how to choose one. The Brain is read at startup, so this needs the deploy.",
+        "td": [
+          "TD-683"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.836",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "836-everyday-life-and-calm",
+        "kind": "feature",
+        "public": true,
+        "summary": "Everyday life illustration, an art style for stories set in the real world, and Calm & Literal, a plain narrative voice to go with it.",
+        "detail": "The pair that fixes a real-world story rendering as fantasy. Try a dentist surgery or a 1950s kitchen with each style and compare.",
+        "td": [
+          "TD-681"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.835",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "835-genre-examples",
+        "kind": "feature",
+        "public": true,
+        "summary": "The example text in the session boxes now matches the genre you chose.",
+        "detail": "Change a campaign genre and reopen a session; the placeholder examples should follow it.",
+        "td": [
+          "TD-680"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.834",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "834-family-and-skill-stories",
+        "kind": "feature",
+        "public": true,
+        "summary": "Family Stories and Skill Stories -- two ways of making a book that is not a game session.",
+        "detail": "Both publish as LINK ONLY by design, so a missing Library entry is correct, not a bug. Check the defaults resolver picks sensible style and voice for each.",
+        "td": [
+          "TD-668",
+          "TD-669"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.833",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "833-publish-faster",
+        "kind": "fix",
+        "public": true,
+        "summary": "Publishing is much faster, and the Publish card no longer shows another campaign's book after you switch campaigns.",
+        "detail": "Publish a book and time it -- this closed a 109-second publish. Then switch campaigns and confirm the Publish card resets.",
+        "td": [
+          "TD-678",
+          "TD-679"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.828",
+    "staged_on": "2026-09-09",
+    "entries": [
+      {
+        "id": "828-unlisted-stories",
+        "kind": "feature",
+        "public": true,
+        "summary": "Publish a story as link only. It is not listed in the public Library and is reachable only by the link you share.",
+        "detail": "Publish link-only, confirm it is absent from the Library and that the share link works. Account page > My Stories has Copy link.",
+        "td": [
+          "TD-673"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.825",
+    "staged_on": "2026-09-02",
+    "entries": [
+      {
+        "id": "825-dark-fantasy-gold",
+        "kind": "feature",
+        "public": true,
+        "summary": "Dark Fantasy is now available on Gold as well as Platinum.",
+        "detail": "Check the style picker on a Gold account and on Silver -- Gold should offer it, Silver should not.",
+        "td": [
+          "TD-659"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.822",
+    "staged_on": "2026-09-02",
+    "entries": [
+      {
+        "id": "822-title-builder-panel",
+        "kind": "fix",
+        "public": true,
+        "summary": "Generate Images no longer overwrites a panel you built in the Title Builder.",
+        "detail": "Build a title panel, then run Generate Images on the same session. The title panel must survive.",
+        "td": [
+          "TD-656"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.819",
+    "staged_on": "2026-09-01",
+    "entries": [
+      {
+        "id": "819-refs-not-line-art",
+        "kind": "fix",
+        "public": true,
+        "summary": "Character and asset reference pictures are properly painted again instead of coming back as outlined line art.",
+        "detail": "Generate a fresh character reference and look at it. This was a picture-level fault; judge it by the image, not the prompt.",
+        "td": [
+          "TD-644"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.816",
+    "staged_on": "2026-09-01",
+    "entries": [
+      {
+        "id": "816-regen-refs-in-style",
+        "kind": "feature",
+        "public": true,
+        "summary": "Redraw a character's reference picture in the art style of the version you are working on.",
+        "detail": "Characters tab, on a version whose art style differs from the one the reference was drawn in. The redraw is per version, not global.",
+        "td": [
+          "TD-645"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.815",
+    "staged_on": "2026-09-01",
+    "entries": [
+      {
+        "id": "815-dark-fantasy",
+        "kind": "feature",
+        "public": true,
+        "summary": "Dark Fantasy, a new art style.",
+        "detail": "Art style picker. Shipped Platinum-only at this version; it moved to Gold at v3.0.825.",
+        "td": [
+          "TD-642"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.812",
+    "staged_on": "2026-08-31",
+    "entries": [
+      {
+        "id": "812-optimize-long-books",
+        "kind": "fix",
+        "public": true,
+        "summary": "Optimize on a very long book used to wait for every page to draw before it started, and on the longest books never started at all.",
+        "detail": "Optimize a 140-page book. It should begin promptly. This is the one to test on the largest book available.",
+        "td": [
+          "TD-631"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.811",
+    "staged_on": "2026-08-31",
+    "entries": [
+      {
+        "id": "811-optimize-faster",
+        "kind": "feature",
+        "public": true,
+        "summary": "Optimize is substantially faster, and the progress bar moves the whole way rather than sticking part way with nothing to say.",
+        "detail": "The per-pass render was removed -- about 40 percent of a run, and nothing used the output. Time a run against a book you optimized before this.",
+        "td": [
+          "TD-618",
+          "TD-626",
+          "TD-627"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.809",
+    "staged_on": "2026-08-27",
+    "entries": [
+      {
+        "id": "809-optimize-job",
+        "kind": "fix",
+        "public": true,
+        "summary": "A long Optimize can no longer be cut off part way through. It runs as a background job and reports progress as it goes.",
+        "detail": "Optimize a long book. It should survive past the old proxy ceiling and report per-operation progress throughout, including the apply, which used to go silent.",
+        "td": [
+          "TD-623",
+          "TD-624"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.803",
+    "staged_on": "2026-08-27",
+    "entries": [
+      {
+        "id": "803-orders-back-button",
+        "kind": "feature",
+        "public": true,
+        "summary": "A Back button on My Print Orders.",
+        "detail": "My Print Orders: Back returns you where you came from, the same way the Archive page does.",
+        "td": [
+          "TD-613"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.802",
+    "staged_on": "2026-08-27",
+    "entries": [
+      {
+        "id": "802-order-status-refresh",
+        "kind": "fix",
+        "public": true,
+        "summary": "Order status refreshes on its own while you watch it.",
+        "detail": "Open My Print Orders on an order in progress and leave it. Status updates without a reload. It refreshes on staleness now rather than counting five attempts.",
+        "td": [
+          "TD-612"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.799",
+    "staged_on": "2026-08-26",
+    "entries": [
+      {
+        "id": "799-mismatch-warns-once",
+        "kind": "fix",
+        "public": true,
+        "summary": "If your book has changed since you last prepared it, the warning appears once, beside the button it applies to, instead of blocking the order.",
+        "detail": "Edit a book after preparing it, then open Order. One notice, next to the button. It used to be a hard stop and it used to appear more than once.",
+        "td": [
+          "TD-608",
+          "TD-609"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.791",
+    "staged_on": "2026-08-25",
+    "entries": [
+      {
+        "id": "791-cover-from-trim",
+        "kind": "fix",
+        "public": true,
+        "summary": "Printed covers are measured from the trimmed page rather than the full sheet, so the artwork sits where it should on the finished book.",
+        "detail": "Cover geometry. Compare a prepared cover against the printer template; the wordmark and spine should sit on the trim, not the sheet. Ian has physical proofs from after this shipped.",
+        "td": [
+          "TD-591"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.787",
+    "staged_on": "2026-08-24",
+    "entries": [
+      {
+        "id": "787-tracking-arrives",
+        "kind": "fix",
+        "public": true,
+        "summary": "Tracking numbers now arrive for print orders.",
+        "detail": "My Print Orders: a shipped order shows its tracking number. The sweep that fetches it was also narrowed, so check an old order as well as a new one.",
+        "td": [
+          "TD-588"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.784",
+    "staged_on": "2026-08-24",
+    "entries": [
+      {
+        "id": "784-bw-interiors-cream",
+        "kind": "feature",
+        "public": true,
+        "summary": "Black-and-white interiors, and cream paper unlocked to go with them.",
+        "detail": "Order tab: choose a black-and-white interior and confirm cream is offered alongside it. Before this, cream was only reachable on some colour grades.",
+        "td": [
+          "TD-585"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.782",
+    "staged_on": "2026-08-24",
+    "entries": [
+      {
+        "id": "782-no-charge-without-files",
+        "kind": "fix",
+        "public": true,
+        "summary": "You are no longer charged for a print order when the files could not be produced, and a failure says what went wrong instead of stopping silently.",
+        "detail": "Force a print failure on a test order and confirm no charge is taken and the reason is shown. This is a MONEY path -- read the charge, not just the message.",
+        "td": [
+          "TD-576",
+          "TD-577",
+          "TD-578"
+        ]
+      }
+    ]
+  }
+]

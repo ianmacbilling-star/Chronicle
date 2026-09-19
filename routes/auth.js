@@ -3,7 +3,7 @@ const { getPass } = require('../services/billing/passes');   // v3.0.924 -- TD-7
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive, isOnFreeTrial } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
@@ -363,13 +363,15 @@ router.get('/me', async function(req, res) {
     let _trialDays = 30;
     try { _trialDays = getTier('trial').trial_days || 30; } catch (e) { _trialDays = 30; }
     const _trialMs = _trialDays * 24 * 60 * 60 * 1000;
-    // On the free trial = still on the 'trial' TIER and inside the 30-day window.
-    // Keyed off tier (the authoritative signal), NOT subscription_status: a paid
-    // subscriber whose Stripe subscription is in its own 'trialing' period would
-    // otherwise be misread as on our free trial.
-    const inFreeTrial = (user.tier === 'trial') &&
-      !!user.trial_started_at &&
-      (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs;
+    // On the free trial = the trial is the best thing this account has, AND it is inside the
+    // window. Keyed off the TIER, not subscription_status: a paid subscriber whose Stripe
+    // subscription is in its own 'trialing' period would otherwise be misread as on our trial.
+    //
+    // v3.0.953 -- TD-806. THROUGH ownTier, VIA ONE SHARED DEFINITION. This read user.tier, so an
+    // account that bought a Platinum Pass on top of a Free Trial still reported inFreeTrial and
+    // the storyboard still stamped CAMPAIGNIA TRIAL on their images -- while the badge in the
+    // same payload, which does go through ownTier, correctly said Platinum.
+    const inFreeTrial = isOnFreeTrial(user);
 
     // Calculate trial days remaining, and WHEN IT ENDS.
     // v3.0.940 -- trialEndsAt is new. WHERE YOU STAND had a row for a subscription and a row for a

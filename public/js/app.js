@@ -2160,6 +2160,141 @@ function savePreferences() {
     .catch(function(){ if (msg) { msg.style.display='block'; msg.style.color='var(--error)'; msg.textContent='Could not save preferences.'; } });
 }
 
+// =================================================================================================
+// v3.0.950 -- TD-804. THE UPDATES LIST.
+//
+// This renders ONLY what the server chose to send. It does not filter, and it must never learn to:
+// the moment this file decides what a user may see, the descriptions are in every browser and the
+// gate is decorative. If you are here to add a "hide this from users" rule, it belongs in
+// routes/updates.js instead.
+//
+// data.privileged tells us which shape arrived, so the page can label the entries an ordinary user
+// is NOT being shown. It is not a permission -- it is a description of the payload we already have.
+// =================================================================================================
+var updatesState = { loaded: false, loading: false, open: {}, showAll: false, data: null };
+var UPDATES_VISIBLE = 8;    // version blocks shown before "show older"
+
+function updatesReset() { updatesState = { loaded: false, loading: false, open: {} }; }
+
+function loadUpdates() {
+  // Idempotent on purpose. showView() is declared TWICE at top level in this file and the later
+  // one wins, so BOTH copies call this -- and a second call while the first is in flight, or after
+  // it has landed, must be a no-op rather than a second request.
+  if (updatesState.loading || updatesState.loaded) return;
+  updatesState.loading = true;
+  var body = document.getElementById('updates-body');
+  if (body) body.innerHTML = '<div class="form-hint">Loading...</div>';
+  fetch('/api/updates')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      updatesState.loading = false;
+      updatesState.loaded = true;
+      updatesState.data = data;
+      renderUpdates(data);
+    })
+    .catch(function () {
+      updatesState.loading = false;
+      var b = document.getElementById('updates-body');
+      if (b) b.innerHTML = '<div class="form-hint">The updates list could not be loaded just now.</div>';
+    });
+}
+
+// yyyy-mm-dd to "18 Sep 2026". Built from the parts rather than handed to Date(), because
+// new Date('2026-09-18') parses as UTC midnight and then prints in the reader's local zone,
+// which west of Greenwich is the previous day. A changelog that is off by one is worse than
+// one with no dates in it at all.
+function updatesDate(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return '';
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mi = parseInt(m[2], 10) - 1;
+  if (mi < 0 || mi > 11) return '';
+  return String(parseInt(m[3], 10)) + ' ' + months[mi] + ' ' + m[1];
+}
+
+function updatesToggle(key) {
+  updatesState.open[key] = !updatesState.open[key];
+  var el = document.getElementById('upd-detail-' + key);
+  var btn = document.getElementById('upd-toggle-' + key);
+  if (el) el.style.display = updatesState.open[key] ? 'block' : 'none';
+  if (btn) btn.textContent = updatesState.open[key] ? 'Hide detail' : 'Tester detail';
+}
+
+function renderUpdates(data) {
+  var body = document.getElementById('updates-body');
+  if (!body) return;
+  var versions = (data && Array.isArray(data.versions)) ? data.versions : [];
+  var priv = !!(data && data.privileged);
+
+  if (!versions.length) {
+    body.innerHTML = '<div class="form-hint">Nothing here yet. New features and fixes will be listed as they arrive.</div>';
+    return;
+  }
+
+  var h = '';
+  var shown = updatesState.showAll ? versions : versions.slice(0, UPDATES_VISIBLE);
+  shown.forEach(function (v, vi) {
+    var feats = v.entries.filter(function (e) { return e.kind !== 'fix'; });
+    var fixes = v.entries.filter(function (e) { return e.kind === 'fix'; });
+    h += '<div style="margin-bottom:18px;">';
+    // v3.0.951 -- TD-804 batch B. THE DATE, AND THE HONEST WORD FOR IT.
+    //
+    // "here" rather than "on production", because the server cannot tell one environment about
+    // another and a page that says "released" on staging would be stating something it does not
+    // know. A privileged viewer gets the build date too, which is the pair that actually answers
+    // a tester's question: built then, running here since then.
+    // v3.0.952 -- three states, not two. A row means we saw it start here. No row and a
+    // version OLDER than anything we recorded means we were not watching, and the page says
+    // nothing rather than denying it. Only a version we should have caught gets "not yet".
+    var _when = '';
+    if (priv) {
+      _when = 'built ' + escapeHtml(v.staged_on || '?');
+      if (v.live_here && v.first_seen) _when += ' &middot; here since ' + updatesDate(v.first_seen);
+      else if (!v.no_record) _when += ' &middot; not running here yet';
+    } else if (v.live_here && v.first_seen) {
+      _when = updatesDate(v.first_seen);
+    }
+    h += '<div style="font-weight:600;">v' + escapeHtml(v.version) +
+         (_when ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">' + _when + '</span>' : '') +
+         '</div>';
+    h += updatesGroup('New features', feats, priv, vi);
+    h += updatesGroup('Bug fixes', fixes, priv, vi);
+    h += '</div>';
+  });
+  var hidden = versions.length - shown.length;
+  if (hidden > 0) {
+    h += '<button class="btn btn-sm" onclick="updatesShowAll()">Show ' + hidden +
+         ' older version' + (hidden === 1 ? '' : 's') + '</button>';
+  }
+  body.innerHTML = h;
+}
+
+// Re-renders from the payload already in hand. No second request: the list is one small
+// response and the cap was only ever about the height of the page.
+function updatesShowAll() {
+  updatesState.showAll = true;
+  if (updatesState.data) renderUpdates(updatesState.data);
+}
+
+function updatesGroup(title, entries, priv, vi) {
+  if (!entries.length) return '';
+  var h = '<div class="form-hint" style="margin:8px 0 4px;font-weight:600;">' + title + '</div><ul style="margin:0 0 0 18px;padding:0;">';
+  entries.forEach(function (e, i) {
+    var key = vi + '-' + title.charAt(0) + '-' + i;
+    h += '<li style="margin-bottom:6px;">' + escapeHtml(e.summary);
+    if (priv && e.public === false) {
+      h += ' <span class="form-hint" style="color:var(--gold);">not shown to users</span>';
+    }
+    if (priv && e.detail) {
+      h += ' <button class="btn btn-sm" id="upd-toggle-' + key + '" onclick="updatesToggle(\'' + key + '\')">Tester detail</button>';
+      h += '<div class="form-hint" id="upd-detail-' + key + '" style="display:none;margin-top:4px;">' + escapeHtml(e.detail) +
+           (e.td && e.td.length ? '<br />' + escapeHtml(e.td.join(', ')) : '') + '</div>';
+    }
+    h += '</li>';
+  });
+  return h + '</ul>';
+}
+
 function resetFeedbackForm() {
   var c = document.getElementById('feedback-category'); if (c) c.value = 'Suggestion';
   var sub = document.getElementById('feedback-subject'); if (sub) sub.value = '';
@@ -2800,6 +2935,7 @@ function showView(view) {
       {label:'Feedback'}
     ]);
     if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
+    if (typeof loadUpdates === 'function') loadUpdates();          // v3.0.950 -- TD-804
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
@@ -11445,12 +11581,24 @@ function prepCampaignSensitive() {
 // clears both boxes and then calls prepPanelSync, so this runs after the clear -- which is
 // the order that matters: a tick carried over from another campaign is TD-678's fault, and
 // a tick RE-DERIVED for the campaign on screen is not.
-function prepSyncUnlisted() {
+// v3.0.955 -- TD-807. TWO MODES, AND THEY DIFFER IN EXACTLY ONE CELL.
+//
+//   'additive' (the default, and what every caller before this did): ticks when the campaign
+//   is sensitive and NEVER unticks. A user's own untick survives, and so does a link-only
+//   choice made on a campaign that has since stopped being sensitive.
+//
+//   'reset': the box follows the genre outright, including unticking. Used only when the
+//   genre changed before any session existed -- at that point there is nothing built on the
+//   old genre and nothing a tick could be protecting.
+//
+// BECOMING SENSITIVE TICKS IN BOTH MODES. The modes differ only on the way out.
+function prepSyncUnlisted(mode) {
   var el = document.getElementById('prep-unlisted');
   var note = document.getElementById('prep-unlisted-note');
   if (!el) return;
   var sens = prepCampaignSensitive();
   if (sens) el.checked = true;
+  else if (mode === 'reset') el.checked = false;
   if (note) {
     note.style.display = sens ? 'block' : 'none';
     note.textContent = sens
@@ -15734,6 +15882,7 @@ function showView(view) {
       {label:'Feedback'}
     ]);
     if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
+    if (typeof loadUpdates === 'function') loadUpdates();          // v3.0.950 -- TD-804
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
@@ -22671,8 +22820,48 @@ function csCommitCampaignSettings() {
       // where we have it.
       var _nmSaved = (data && data.name !== undefined) ? data.name : (_nmVal || undefined);
       var _dsSaved = (data && data.description !== undefined) ? data.description : _dsVal;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); }
+      // v3.0.954 -- TD-807. ONE MIRROR, TWO TARGETS, AND THE DERIVED FIELDS COME WITH IT.
+      //
+      // These were two hand-copied lines assigning the same fields to state.campaigns and to
+      // state.currentCampaign. They had already been wrong twice by omission -- v3.0.485 added
+      // genre and the campaign prompt, v3.0.678 added name and description -- and this is the
+      // third: genre_defaults and sensitive are DERIVED from genres, and neither line carried
+      // them, because until now the PUT response did not contain them to carry.
+      //
+      // WE COPY THE SERVER'S ANSWER AND DO NOT COMPUTE ONE. The note above genreDefaultStyle()
+      // says the style ids come from the server rather than a list in this file, because a
+      // second mirror would drift with nothing watching it. Deriving them here would BE that
+      // second mirror. data.genre_defaults is decorateCampaign()'s output; if the response
+      // somehow lacks it we leave the cached value alone rather than inventing one.
+      // v3.0.955 -- TD-807. WHAT THE GENRE WAS BEFORE THIS SAVE. Read BEFORE the mirror runs,
+      // because the mirror is about to overwrite it.
+      var _genreWas = _csGenreOf(saveId);
+
+      _csApplySavedFields(data, saveId, {
+        allow: allow,
+        allowAssets: allowAssets,
+        lore: (_loreVal !== undefined) ? _loreVal : undefined,
+        genres: _gSaved,
+        campaign_prompt: (_cpVal !== undefined) ? _cpSaved : undefined,
+        name: (_nmSaved !== undefined) ? _nmSaved : undefined,
+        description: (_dsSaved !== undefined) ? _dsSaved : undefined
+      });
+
+      // v3.0.955 -- TD-807. AND NOW TELL THE PUBLISH CARD.
+      //
+      // v3.0.954 made state.currentCampaign.sensitive correct and stopped there. Nothing
+      // re-rendered the card, so the tick kept the answer it was drawn with and only a reload
+      // -- which is a campaign switch, which does re-sync -- appeared to fix it. A correct flag
+      // is not a ticked box; that distinction is the whole of this batch.
+      //
+      // MODE COMES FROM WHETHER SESSIONS EXISTED WHEN THE CHANGE WAS MADE. The server answers
+      // that on this very response, because asking later always says yes.
+      if (_genreWas !== _gSaved && typeof prepSyncUnlisted === 'function') {
+        var _hadSessions = !(data && data.has_sessions === false);   // absent -> assume yes
+        prepSyncUnlisted(_hadSessions ? 'additive' : 'reset');
+      }
+      if (state.currentCampaign && state.currentCampaign.id === saveId &&
+          typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay();
       // v3.0.680 -- TD-481. REPAINT OUTSIDE THE currentCampaign BRANCH.
       // v3.0.677 put this inside it, so editing a campaign from the TILE GRID -- where
       // openCampaignSettings never sets currentCampaign -- updated state.campaigns and repainted
@@ -22695,6 +22884,49 @@ function csCommitCampaignSettings() {
 
 // The Save button is gone, but keep the name working: it was the modal's only entry point for
 // two versions and anything that still calls it should write, not throw.
+// v3.0.954 -- TD-807. Applies one saved campaign's fields to every cached copy of it.
+//
+// TAKES THE SERVER'S RESPONSE, not a list of locals, so a field the server normalised (the
+// genre cap, the exclusive-other rule) lands as the server stored it. The caller still passes
+// the locals it used, because the response does not echo every field.
+//
+// genre_defaults and sensitive are DERIVED and only the server may compute them. Present in
+// the response -> copied. Absent -> left alone, because a stale value and a value we made up
+// are not equally wrong and only one of them is recoverable by a refetch.
+//
+// vals is passed in rather than held in a module variable: two saves in flight at once would
+// otherwise apply the later one's values to the earlier one's campaign.
+// v3.0.955 -- TD-807. The genres string currently cached for one campaign, or null when we
+// hold no copy of it. Used to tell a genre change from a save that touched something else --
+// re-syncing the publish card on every save would re-tick a box the user had just unticked.
+function _csGenreOf(saveId) {
+  var hit = (state.campaigns || []).find(function (x) { return x && x.id === saveId; });
+  if (!hit && state.currentCampaign && state.currentCampaign.id === saveId) hit = state.currentCampaign;
+  return hit ? hit.genres : null;
+}
+
+function _csApplySavedFields(data, saveId, vals) {
+  var v = vals || {};
+  function apply(x) {
+    if (!x || x.id !== saveId) return;
+    if (v.allow !== undefined) x.allow_player_novel_access = v.allow;
+    if (v.allowAssets !== undefined) x.allow_member_assets = v.allowAssets;
+    if (v.lore !== undefined) x.lore = v.lore;
+    if (v.genres !== undefined) x.genres = v.genres;
+    if (v.campaign_prompt !== undefined) x.campaign_prompt = v.campaign_prompt;
+    if (v.name !== undefined) x.name = v.name;
+    if (v.description !== undefined) x.description = v.description;
+    // The derived pair. Server's answer or nothing.
+    if (data && data.genre_defaults !== undefined) x.genre_defaults = data.genre_defaults;
+    if (data && data.sensitive !== undefined) x.sensitive = data.sensitive;
+  }
+  // state.currentCampaign may be the SAME object as one of state.campaigns, in which case it
+  // is applied twice -- harmless, every assignment is idempotent -- or a different object
+  // holding the same id, which is the case that made the two inline mirrors necessary.
+  (state.campaigns || []).forEach(apply);
+  if (state.currentCampaign) apply(state.currentCampaign);
+}
+
 function saveCampaignSettings() { csDirty(true); }
 
 // ----- Admin: run the weekly metrics snapshot on demand -----

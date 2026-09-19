@@ -316,6 +316,26 @@ async function lapseTrialIfExpired(user, db) {
   return false;
 }
 
+// v3.0.953 -- TD-806. IS THIS PERSON ACTUALLY ON THE FREE TRIAL?
+//
+// "Their subscription is the trial" is NOT the same question and has not been since passes
+// shipped. A Free Trial account that buys a Platinum Pass keeps users.tier = 'trial' forever --
+// that is the data model, not an oversight (ownTier's comment explains why overwriting it would
+// destroy the record of what to restore and hand out a monthly allotment nobody bought).
+//
+// So the honest test is ownTier, and every consumer of "on the trial" goes through here: the
+// watermark, the day counter, and anything added later.
+function isOnFreeTrial(user, now) {
+  if (!user) return false;
+  if (ownTier(user, now) !== 'trial') return false;       // a live pass or a subscription wins
+  if (!user.trial_started_at) return false;
+  var days = 30;
+  try { days = getTier('trial').trial_days || 30; } catch (e) { days = 30; }
+  var started = new Date(user.trial_started_at).getTime();
+  if (!started || isNaN(started)) return false;
+  return ((now ? now.getTime() : Date.now()) - started) < (days * 24 * 60 * 60 * 1000);
+}
+
 // Middleware to check campaign limit
 async function checkCampaignLimit(req, res, next) {
   const { getDb } = require('../database/db');
@@ -325,10 +345,14 @@ async function checkCampaignLimit(req, res, next) {
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
     await lapseTrialIfExpired(user, db);
-    const tier = getTier(user.tier);
+    // v3.0.953 -- TD-806. ownTier, not users.tier. A pass holder was told their Free Trial
+    // allowed one campaign, after a reload, because this asked what their SUBSCRIPTION was.
+    // lapseTrialIfExpired runs first and may rewrite user.tier, so this must read AFTER it.
+    const _own = ownTier(user);
+    const tier = getTier(_own);
 
     // v3.0.891 -- the flag, not the name. Same sentence for Copper as before.
-    if (!canCreate(user.tier)) {
+    if (!canCreate(_own)) {
       return res.status(403).json({ error: 'Creating campaigns is not available on the ' + tier.name + ' plan. Upgrade to a paid plan to start a new campaign.', code: 'CAMPAIGN_LIMIT' });
     }
 
@@ -362,10 +386,13 @@ async function checkSessionLimit(req, res, next) {
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
     await lapseTrialIfExpired(user, db);
-    const tier = getTier(user.tier);
+    // v3.0.953 -- TD-806. ownTier. NOT reported by the bot -- found by the sweep, and it would
+    // have been the next complaint: a pass holder capped at the trial's sessions per campaign.
+    const _own = ownTier(user);
+    const tier = getTier(_own);
 
     // v3.0.891 -- the flag, not the name. Same sentence for Copper as before.
-    if (!canCreate(user.tier)) {
+    if (!canCreate(_own)) {
       return res.status(403).json({ error: 'Creating sessions is not available on the ' + tier.name + ' plan. Upgrade to a paid plan to add sessions.', code: 'SESSION_LIMIT' });
     }
 
@@ -398,7 +425,8 @@ async function checkCharacterLimit(req, res, next) {
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
     await lapseTrialIfExpired(user, db);
-    const tier = getTier(user.tier);
+    // v3.0.953 -- TD-806. ownTier. Also not reported, also the same fault.
+    const tier = getTier(ownTier(user));
     if (tier.max_characters !== null && tier.max_characters !== undefined && tier.max_characters >= 0) {
       const row = await db.prepare('SELECT COUNT(*) as count FROM characters WHERE campaign_id = ?').get(req.params.campaignId);
       if (Number(row.count) >= tier.max_characters) {
@@ -713,4 +741,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

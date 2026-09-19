@@ -8,6 +8,32 @@ const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = requi
 const { flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422
 
+// v3.0.954 -- TD-807. EVERY CAMPAIGN ROW THE CLIENT RECEIVES CARRIES ITS DERIVED FIELDS,
+// AND THIS IS THE ONLY PLACE THAT SAYS WHICH THOSE ARE.
+//
+// genre_defaults and sensitive are computed FROM campaigns.genres. They were added to the
+// list route only, so PUT /:id answered with the raw row and the client -- which caches
+// these rows -- had nothing to update them from. Change the genre and, until the next
+// refetch, the browser held ["skillstory"] next to Fantasy's style chains and sensitive
+// false. genre_defaults seeds state.artStyle, and /api/images/generate-all takes the
+// client's style verbatim, so that stale answer could draw the panels.
+//
+// A DECORATOR RATHER THAN TWO MORE FIELD NAMES IN THE CLIENT'S MIRROR. The mirror is
+// hand-written and has been incomplete twice (v3.0.485 added genre and the prompt, v3.0.678
+// added name and description). A third derived field added here reaches every route that
+// decorates, and no client edit at all.
+//
+// FALLS BACK TO THE PRE-954 VALUES ON ANY FAILURE (TD-587): a row whose genres will not
+// parse gets null/false, exactly as the inline version did, rather than throwing a route.
+function decorateCampaign(c) {
+  if (!c) return c;
+  try {
+    c.genre_defaults = genres.genreDefaults(c);
+    c.sensitive = genres.isSensitive(c);
+  } catch (e) { c.genre_defaults = null; c.sensitive = false; }
+  return c;
+}
+
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
 // multi-user-aware: a player invited to a campaign sees it here too.
@@ -28,19 +54,12 @@ router.get('/', requireAuth, async function(req, res) {
     'WHERE cm.user_id = ? ' +
     'ORDER BY c.created_at DESC'
   ).all(req.session.userId);
-  // v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, RESOLVED HERE AND NOWHERE ELSE.
-  // genreDefaults() returns null for thirteen of the fifteen genres, so genre_defaults is null
-  // on almost every campaign and the client's existing behaviour is untouched for them.
-  // `sensitive` rides along from the SAME resolver the publish path and the archive gate use
-  // (campaignSafety), so the page can never disagree with the server about which campaigns are
-  // sensitive -- there is one definition and this is a read of it, not a second copy.
-  res.json((campaigns || []).map(function (c) {
-    try {
-      c.genre_defaults = genres.genreDefaults(c);
-      c.sensitive = genres.isSensitive(c);
-    } catch (e) { c.genre_defaults = null; c.sensitive = false; }
-    return c;
-  }));
+  // v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, RESOLVED IN ONE PLACE.
+  // v3.0.954 -- TD-807. That place is decorateCampaign(), at the top of this file, which the
+  // PUT now uses as well. The sentence that stood here claiming thirteen of the fifteen genres
+  // declare nothing stopped being true at v3.0.912 -- all fifteen carry a chain, so this runs
+  // for every campaign, not almost none of them.
+  res.json((campaigns || []).map(decorateCampaign));
 });
 
 // v3.0.862 -- TD-723. Can this account start a new campaign? Same middleware as the
@@ -85,7 +104,12 @@ router.post('/', requireAuth, checkCampaignLimit, async function(req, res) {
     await db.prepare('UPDATE users SET trial_started_at = ? WHERE id = ?').run(now, req.session.userId);
   }
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaignId);
-  res.json(campaign);
+  // v3.0.955 -- TD-807. THE THIRD ROUTE. v3.0.954 decorated the list and the PUT and missed
+  // this one, which is the same enumerate-every-site failure the whole item has been about.
+  // It does not bite today because saveCampaign() calls loadCampaigns() immediately after and
+  // the list route repairs the row -- which is luck, not design, and luck that would end the
+  // first time anyone used this response directly.
+  res.json(decorateCampaign(campaign));
 });
 
 // Edit campaign — DM-only. Authorization now reads campaign_members.
@@ -128,7 +152,29 @@ router.put('/:id', requireAuth, async function(req, res) {
       now, req.session.userId, campaign.id
     );
   const updated = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaign.id);
-  res.json(updated);
+  // v3.0.954 -- TD-807. DECORATED, like the list route. Saving a genre change used to answer
+  // with the raw row, so the client could mirror genres but had no new genre_defaults or
+  // sensitive to mirror -- and went on using the previous genre's style chains until something
+  // else refetched the list.
+  const _out = decorateCampaign(updated);
+  // v3.0.955 -- TD-807. DID SESSIONS EXIST AT THE MOMENT OF THIS CHANGE? Ian's rule turns on
+  // that and on nothing else: a genre change made before any session resets the publish card
+  // to the new genre outright, one made after it may only ADD the link-only tick, never
+  // remove it. The question has to be answered HERE, at save time -- by the time anyone opens
+  // the publish card there are always sessions, so asking then would always give the same
+  // answer and the rule would collapse to its second branch.
+  //
+  // NOT part of decorateCampaign(): that answers what a GENRE implies, and a session count is
+  // not genre-derived. Keeping the decorator to one subject is what makes it safe to add the
+  // next derived field to.
+  //
+  // TD-587: could-not-tell is not the same as no. A failure here reports true, which selects
+  // the additive branch -- the one that cannot remove a protection.
+  try {
+    const _s = await db.prepare('SELECT 1 AS n FROM sessions WHERE campaign_id = ? LIMIT 1').get(campaign.id);
+    _out.has_sessions = !!_s;
+  } catch (e) { _out.has_sessions = true; }
+  res.json(_out);
 });
 
 // Delete campaign — DM/owner only. Safe by default: refuses while the campaign
