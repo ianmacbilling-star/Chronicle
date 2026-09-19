@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.955",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "955-sensitive-tick-follows-genre",
+        "kind": "fix",
+        "public": true,
+        "summary": "Changing a campaign’s genre now updates the “Publish as link only” tick straight away, instead of leaving the publish card showing the previous genre’s answer until you reload.",
+        "detail": "TD-807, second half, found by the Erin Bot retest of v3.0.954. v3.0.954 fixed the STYLE defaults and left this one because a correct flag and a ticked box are different claims: the cached sensitive value did follow the genre change, but prepSyncUnlisted() -- the only thing that ticks the box and shows its note -- is called from the preview-tab entry and the campaign switch and from nothing else, so the card kept what it was drawn with. TO TEST, and do NOT reload at any point: (1) create a campaign as Fantasy, save; change it to Skill Story BEFORE making any session; open Publish -- link only must be TICKED with its note. (2) Change it back to Fantasy, still with no sessions -- the tick must CLEAR. (3) Now make a session and generate; change the genre to Skill Story -- the tick must come back ON. (4) Change it to Fantasy again, sessions now present -- the tick must STAY ON and only the note disappear. THE RULE IS DECIDED BY WHETHER SESSIONS EXISTED WHEN THE CHANGE WAS MADE, not by what exists when you open the publish card: no sessions means the card follows the new genre outright, sessions means it may only ADD the link-only tick and never remove it. Becoming sensitive ticks the box either way -- that direction has no exceptions, because it is the one where being wrong publishes a real person’s story. ALSO IN THIS BATCH: the campaign CREATE response now carries its genre-derived fields, which the v3.0.954 sweep missed.",
+        "td": [
+          "TD-807"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.954",
     "staged_on": "2026-09-18",
     "entries": [

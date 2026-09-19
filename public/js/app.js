@@ -11581,12 +11581,24 @@ function prepCampaignSensitive() {
 // clears both boxes and then calls prepPanelSync, so this runs after the clear -- which is
 // the order that matters: a tick carried over from another campaign is TD-678's fault, and
 // a tick RE-DERIVED for the campaign on screen is not.
-function prepSyncUnlisted() {
+// v3.0.955 -- TD-807. TWO MODES, AND THEY DIFFER IN EXACTLY ONE CELL.
+//
+//   'additive' (the default, and what every caller before this did): ticks when the campaign
+//   is sensitive and NEVER unticks. A user's own untick survives, and so does a link-only
+//   choice made on a campaign that has since stopped being sensitive.
+//
+//   'reset': the box follows the genre outright, including unticking. Used only when the
+//   genre changed before any session existed -- at that point there is nothing built on the
+//   old genre and nothing a tick could be protecting.
+//
+// BECOMING SENSITIVE TICKS IN BOTH MODES. The modes differ only on the way out.
+function prepSyncUnlisted(mode) {
   var el = document.getElementById('prep-unlisted');
   var note = document.getElementById('prep-unlisted-note');
   if (!el) return;
   var sens = prepCampaignSensitive();
   if (sens) el.checked = true;
+  else if (mode === 'reset') el.checked = false;
   if (note) {
     note.style.display = sens ? 'block' : 'none';
     note.textContent = sens
@@ -22821,6 +22833,10 @@ function csCommitCampaignSettings() {
       // second mirror would drift with nothing watching it. Deriving them here would BE that
       // second mirror. data.genre_defaults is decorateCampaign()'s output; if the response
       // somehow lacks it we leave the cached value alone rather than inventing one.
+      // v3.0.955 -- TD-807. WHAT THE GENRE WAS BEFORE THIS SAVE. Read BEFORE the mirror runs,
+      // because the mirror is about to overwrite it.
+      var _genreWas = _csGenreOf(saveId);
+
       _csApplySavedFields(data, saveId, {
         allow: allow,
         allowAssets: allowAssets,
@@ -22830,6 +22846,20 @@ function csCommitCampaignSettings() {
         name: (_nmSaved !== undefined) ? _nmSaved : undefined,
         description: (_dsSaved !== undefined) ? _dsSaved : undefined
       });
+
+      // v3.0.955 -- TD-807. AND NOW TELL THE PUBLISH CARD.
+      //
+      // v3.0.954 made state.currentCampaign.sensitive correct and stopped there. Nothing
+      // re-rendered the card, so the tick kept the answer it was drawn with and only a reload
+      // -- which is a campaign switch, which does re-sync -- appeared to fix it. A correct flag
+      // is not a ticked box; that distinction is the whole of this batch.
+      //
+      // MODE COMES FROM WHETHER SESSIONS EXISTED WHEN THE CHANGE WAS MADE. The server answers
+      // that on this very response, because asking later always says yes.
+      if (_genreWas !== _gSaved && typeof prepSyncUnlisted === 'function') {
+        var _hadSessions = !(data && data.has_sessions === false);   // absent -> assume yes
+        prepSyncUnlisted(_hadSessions ? 'additive' : 'reset');
+      }
       if (state.currentCampaign && state.currentCampaign.id === saveId &&
           typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay();
       // v3.0.680 -- TD-481. REPAINT OUTSIDE THE currentCampaign BRANCH.
@@ -22866,6 +22896,15 @@ function csCommitCampaignSettings() {
 //
 // vals is passed in rather than held in a module variable: two saves in flight at once would
 // otherwise apply the later one's values to the earlier one's campaign.
+// v3.0.955 -- TD-807. The genres string currently cached for one campaign, or null when we
+// hold no copy of it. Used to tell a genre change from a save that touched something else --
+// re-syncing the publish card on every save would re-tick a box the user had just unticked.
+function _csGenreOf(saveId) {
+  var hit = (state.campaigns || []).find(function (x) { return x && x.id === saveId; });
+  if (!hit && state.currentCampaign && state.currentCampaign.id === saveId) hit = state.currentCampaign;
+  return hit ? hit.genres : null;
+}
+
 function _csApplySavedFields(data, saveId, vals) {
   var v = vals || {};
   function apply(x) {
