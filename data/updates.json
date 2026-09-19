@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.953",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "953-pass-converts-account",
+        "kind": "fix",
+        "public": true,
+        "summary": "Buying a Platinum Pass now converts the whole account straight away — the campaign and session limits, and the trial watermark on your images.",
+        "detail": "TD-806, from the Erin Bot run. Buy a pass on a Free Trial account and check, without reloading and again after a reload: \"+ New campaign\" no longer quotes the trial limit; the storyboard images carry no CAMPAIGNIA TRIAL mark; sessions and characters are not capped at trial numbers. The watermark was always a display-time CSS class and never baked into the file, so nothing needs regenerating. THE THREE SITES THE BOT COULD NOT SEE were the session limit, the character limit and the shared trial test -- the sweep found those, not the report. AND ONE THING IS DELIBERATELY UNCHANGED: the monthly token allotment still reads the subscription tier, because a pass grants one lump at purchase and pointing that at the effective tier would hand every pass holder a full Platinum allowance every month forever. NOT FIXED because it never existed: there is no pass purchase or welcome email.",
+        "td": [
+          "TD-806"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.951",
     "staged_on": "2026-09-18",
     "entries": [
