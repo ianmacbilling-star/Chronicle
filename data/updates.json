@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.954",
+    "staged_on": "2026-09-18",
+    "entries": [
+      {
+        "id": "954-genre-change-updates-styles",
+        "kind": "fix",
+        "public": true,
+        "summary": "Changing a campaign’s genre now updates its suggested art and narrative styles straight away, instead of keeping the previous genre’s until you navigate away and back.",
+        "detail": "TD-807, from the Erin Bot run, and it is NOT the bug the report describes. The genre defaults were never frozen at campaign creation -- the narrative side re-reads the campaign genre at generate time and always has. What went stale was the BROWSER’S CACHED COPY: genre_defaults and sensitive are derived from the genre by the server, the list route sends them, and the save route did not -- so after a genre change the page held the new genre beside the old genre’s style chains. TO TEST: create a campaign as Fantasy, save, change it to Skill Story, save, and WITHOUT reloading open a new session and look at the Review tab -- the art and voice buttons must read Everyday life illustration and Calm & Literal, not Dark Fantasy and Epic Saga. Then check the publish card: \"link only\" must be ticked with its note, because Skill Story is a sensitive genre and that tick was also driven by the stale copy. THE ART HALF WAS NOT COSMETIC -- the image generator takes the art style from the browser, so a stale chain could really have drawn the panels; the narrative half never could. A campaign created as one genre and left alone was correct before this and is correct after it.",
+        "td": [
+          "TD-807"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.953",
     "staged_on": "2026-09-18",
     "entries": [

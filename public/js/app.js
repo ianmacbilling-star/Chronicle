@@ -22808,8 +22808,30 @@ function csCommitCampaignSettings() {
       // where we have it.
       var _nmSaved = (data && data.name !== undefined) ? data.name : (_nmVal || undefined);
       var _dsSaved = (data && data.description !== undefined) ? data.description : _dsVal;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); }
+      // v3.0.954 -- TD-807. ONE MIRROR, TWO TARGETS, AND THE DERIVED FIELDS COME WITH IT.
+      //
+      // These were two hand-copied lines assigning the same fields to state.campaigns and to
+      // state.currentCampaign. They had already been wrong twice by omission -- v3.0.485 added
+      // genre and the campaign prompt, v3.0.678 added name and description -- and this is the
+      // third: genre_defaults and sensitive are DERIVED from genres, and neither line carried
+      // them, because until now the PUT response did not contain them to carry.
+      //
+      // WE COPY THE SERVER'S ANSWER AND DO NOT COMPUTE ONE. The note above genreDefaultStyle()
+      // says the style ids come from the server rather than a list in this file, because a
+      // second mirror would drift with nothing watching it. Deriving them here would BE that
+      // second mirror. data.genre_defaults is decorateCampaign()'s output; if the response
+      // somehow lacks it we leave the cached value alone rather than inventing one.
+      _csApplySavedFields(data, saveId, {
+        allow: allow,
+        allowAssets: allowAssets,
+        lore: (_loreVal !== undefined) ? _loreVal : undefined,
+        genres: _gSaved,
+        campaign_prompt: (_cpVal !== undefined) ? _cpSaved : undefined,
+        name: (_nmSaved !== undefined) ? _nmSaved : undefined,
+        description: (_dsSaved !== undefined) ? _dsSaved : undefined
+      });
+      if (state.currentCampaign && state.currentCampaign.id === saveId &&
+          typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay();
       // v3.0.680 -- TD-481. REPAINT OUTSIDE THE currentCampaign BRANCH.
       // v3.0.677 put this inside it, so editing a campaign from the TILE GRID -- where
       // openCampaignSettings never sets currentCampaign -- updated state.campaigns and repainted
@@ -22832,6 +22854,40 @@ function csCommitCampaignSettings() {
 
 // The Save button is gone, but keep the name working: it was the modal's only entry point for
 // two versions and anything that still calls it should write, not throw.
+// v3.0.954 -- TD-807. Applies one saved campaign's fields to every cached copy of it.
+//
+// TAKES THE SERVER'S RESPONSE, not a list of locals, so a field the server normalised (the
+// genre cap, the exclusive-other rule) lands as the server stored it. The caller still passes
+// the locals it used, because the response does not echo every field.
+//
+// genre_defaults and sensitive are DERIVED and only the server may compute them. Present in
+// the response -> copied. Absent -> left alone, because a stale value and a value we made up
+// are not equally wrong and only one of them is recoverable by a refetch.
+//
+// vals is passed in rather than held in a module variable: two saves in flight at once would
+// otherwise apply the later one's values to the earlier one's campaign.
+function _csApplySavedFields(data, saveId, vals) {
+  var v = vals || {};
+  function apply(x) {
+    if (!x || x.id !== saveId) return;
+    if (v.allow !== undefined) x.allow_player_novel_access = v.allow;
+    if (v.allowAssets !== undefined) x.allow_member_assets = v.allowAssets;
+    if (v.lore !== undefined) x.lore = v.lore;
+    if (v.genres !== undefined) x.genres = v.genres;
+    if (v.campaign_prompt !== undefined) x.campaign_prompt = v.campaign_prompt;
+    if (v.name !== undefined) x.name = v.name;
+    if (v.description !== undefined) x.description = v.description;
+    // The derived pair. Server's answer or nothing.
+    if (data && data.genre_defaults !== undefined) x.genre_defaults = data.genre_defaults;
+    if (data && data.sensitive !== undefined) x.sensitive = data.sensitive;
+  }
+  // state.currentCampaign may be the SAME object as one of state.campaigns, in which case it
+  // is applied twice -- harmless, every assignment is idempotent -- or a different object
+  // holding the same id, which is the case that made the two inline mirrors necessary.
+  (state.campaigns || []).forEach(apply);
+  if (state.currentCampaign) apply(state.currentCampaign);
+}
+
 function saveCampaignSettings() { csDirty(true); }
 
 // ----- Admin: run the weekly metrics snapshot on demand -----
