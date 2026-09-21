@@ -1454,6 +1454,18 @@
         </div>
       </div>
 
+      <!-- Pass expiry sweep (admin) -- v3.0.956 -->
+      <div class="settings-section">
+        <div class="settings-section-title">Pass expiry sweep</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
+          <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
+          <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
+        </div>
+        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+      </div>
+
       <!-- Print pricing (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Print pricing</div>

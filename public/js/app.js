@@ -22929,6 +22929,116 @@ function _csApplySavedFields(data, saveId, vals) {
 
 function saveCampaignSettings() { csDirty(true); }
 
+// ============================================================
+// v3.0.956 -- THE PASS-EXPIRY SWEEP BUTTONS.
+//
+// The live button asks first, AND IT ASKS WITH A NUMBER. A confirmation that says "are you
+// sure?" is answered yes by reflex; one that says "this will email 3 people" is read. So the
+// live path runs the DRY RUN first, shows what it found, and only then asks -- which also
+// means nobody can send blind, because the preview is not optional.
+//
+// And when the dry run finds nobody, there is nothing to confirm and nothing to send, so it
+// says so and stops rather than asking a question with one sensible answer.
+// ============================================================
+function _passSweepOut(text) {
+  var el = document.getElementById('pass-sweep-output');
+  if (!el) return;
+  el.style.display = text ? 'block' : 'none';
+  el.textContent = text || '';
+}
+function _passSweepMsg(t, bad) {
+  var el = document.getElementById('pass-sweep-msg');
+  if (el) { el.textContent = t || ''; el.style.color = bad ? 'var(--error)' : ''; }
+}
+function _passSweepBusy(on) {
+  ['pass-sweep-dry-btn', 'pass-sweep-live-btn'].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (b) b.disabled = !!on;
+  });
+}
+
+// Renders a result the same way for both runs, so a live run is read with the same eyes as
+// the preview that preceded it.
+function _passSweepRender(r) {
+  var lines = [];
+  lines.push(r.dryRun ? 'DRY RUN -- nothing was sent.' : 'LIVE RUN -- mail was sent.');
+  lines.push('Offsets: ' + r.offsetsRaw + '  (' + r.offsetsSource + ')');
+  if (r.offsetsInvalid) {
+    lines.push('!! pass_warn_days parses to NO valid offsets -- every advance warning is OFF.');
+    lines.push('   Only the expired notice still runs. Fix or clear that setting.');
+  }
+  lines.push('Sending enabled in this environment: ' + (r.emailsEnabled ? 'yes' : 'NO'));
+  if (!r.emailsEnabled) {
+    lines.push('   (LIFECYCLE_EMAILS_ENABLED is not "true", so the daily job sends nothing here.)');
+  }
+  lines.push('');
+  (r.milestones || []).forEach(function (m) {
+    var when = (m.offset > 0) ? (m.offset + ' days before expiry') : 'the day after expiry';
+    lines.push(m.prefix + '  (' + when + ') -- ' + m.matched + ' matched' +
+               (r.dryRun ? '' : ', ' + m.sent + ' sent, ' + m.failed + ' failed'));
+    (m.people || []).forEach(function (p) {
+      lines.push('    ' + (p.name || '(no name)') + '  <' + p.email + '>  ' +
+                 (p.pass_tier || '?') + ' pass, expires ' + p.expires +
+                 (p.sent === false ? '   FAILED: ' + (p.error || '') : ''));
+    });
+  });
+  lines.push('');
+  lines.push('Totals: ' + r.matched + ' matched' + (r.dryRun ? '' : ', ' + r.sent + ' sent, ' + r.failed + ' failed'));
+  _passSweepOut(lines.join('\n'));
+}
+
+function _passSweepCall(live) {
+  return fetch('/api/admin/lifecycle/pass-sweep', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ live: !!live })
+  }).then(function (r) {
+    return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+  });
+}
+
+function runPassSweepDry() {
+  _passSweepBusy(true); _passSweepMsg('Running...'); _passSweepOut('');
+  _passSweepCall(false).then(function (res) {
+    _passSweepBusy(false);
+    if (!res.ok || !res.j || !res.j.ok) { _passSweepMsg((res.j && res.j.error) || 'The dry run failed.', true); return; }
+    _passSweepMsg('');
+    _passSweepRender(res.j.result);
+  }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+}
+
+function runPassSweepLive() {
+  _passSweepBusy(true); _passSweepMsg('Checking who would be mailed...'); _passSweepOut('');
+  _passSweepCall(false).then(function (res) {
+    if (!res.ok || !res.j || !res.j.ok) {
+      _passSweepBusy(false);
+      _passSweepMsg((res.j && res.j.error) || 'Could not check first, so nothing was sent.', true);
+      return;
+    }
+    var r = res.j.result;
+    _passSweepRender(r);
+    if (!r.matched) {
+      _passSweepBusy(false);
+      _passSweepMsg('Nobody is due an email right now, so nothing was sent.');
+      return;
+    }
+    _passSweepMsg('');
+    var who = (r.matched === 1) ? '1 person' : (r.matched + ' people');
+    var ask = 'Send pass expiry emails to ' + who + ' now?\n\nThis sends REAL email. ' +
+              'The list is shown below the buttons -- read it first.';
+    Promise.resolve(uiConfirm(ask)).then(function (yes) {
+      if (!yes) { _passSweepBusy(false); _passSweepMsg('Cancelled. Nothing was sent.'); return; }
+      _passSweepMsg('Sending...');
+      _passSweepCall(true).then(function (res2) {
+        _passSweepBusy(false);
+        if (!res2.ok || !res2.j || !res2.j.ok) { _passSweepMsg((res2.j && res2.j.error) || 'The send failed.', true); return; }
+        var r2 = res2.j.result;
+        _passSweepRender(r2);
+        _passSweepMsg('Sent ' + r2.sent + ' of ' + r2.matched + (r2.failed ? ', ' + r2.failed + ' failed' : '') + '.', !!r2.failed);
+      }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+    });
+  }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+}
+
 // ----- Admin: run the weekly metrics snapshot on demand -----
 function runSnapshotNow() {
   var btn = document.getElementById('snapshot-run-btn');

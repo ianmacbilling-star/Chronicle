@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.956",
+    "staged_on": "2026-09-19",
+    "entries": [
+      {
+        "id": "956-pass-sweep-on-demand",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins can run the Platinum Pass expiry email sweep on demand from Settings → Maintenance, as a dry run or for real.",
+        "detail": "Settings → Maintenance → Pass expiry sweep. DRY RUN runs the real milestone queries and lists exactly who would be mailed, at which milestone, with their expiry date — and sends nothing and writes nothing. SEND FOR REAL is the red button; it runs the dry run FIRST, shows the list, and asks a confirmation that names the number of people, so nobody can send blind. TO TEST: on the Settings tab of your own account set a Platinum pass expiring in exactly 30 days, then press Dry run — that account must appear under pass_warn_30. Set it to 7 days and it must move to pass_warn_7. Set it to yesterday and it must appear under pass_expired instead. Press Dry run twice and nothing changes; the list is identical. BOTH BUTTONS IGNORE THE ONCE-A-DAY FLAG on purpose — duplicate mail is prevented per person per milestone per expiry date, which holds however the sweep is started, and a live button that respected the daily flag would do nothing after the scheduled run and look broken. A live run refuses outright where lifecycle email is switched off, rather than reporting success having sent nothing. ALSO IN THIS BATCH, all from one hour spent proving nothing was broken: the daily completion log now carries the counts, so \"mailed nobody\" and \"found nobody\" read differently; the daily job says so when it skips instead of returning in silence; and a pass_warn_days setting that parses to no valid offsets is now reported loudly, because it silently disables every advance warning while the expired notice keeps firing.",
+        "td": [
+          "TD-832"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.955",
     "staged_on": "2026-09-18",
     "entries": [
