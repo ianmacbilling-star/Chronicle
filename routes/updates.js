@@ -84,11 +84,11 @@ async function releaseDates() {
 function viewFor(all, privileged, releases) {
   var out = [];
 
-  // The oldest version we have any record of. Everything before it predates the recording.
-  var _oldestKnown = '';
-  Object.keys(releases || {}).forEach(function (v) {
-    if (!_oldestKnown || compareVersions(v, _oldestKnown) < 0) _oldestKnown = v;
-  });
+  // v3.0.957 -- WHEN DID THIS VERSION LAND HERE?
+  //
+  // Every recorded version, in order. A row is an observed boot; the seed fills in the ones
+  // that booted before the table existed.
+  var _recorded = Object.keys(releases || {}).sort(compareVersions);
   (Array.isArray(all) ? all : []).forEach(function (block) {
     if (!block || !Array.isArray(block.entries)) return;
     var entries = [];
@@ -126,21 +126,31 @@ function viewFor(all, privileged, releases) {
     // A STAGING DATABASE CANNOT KNOW WHAT PRODUCTION IS RUNNING, and asking it to would mean
     // one environment reaching into the other's database -- the coupling this whole design
     // exists to avoid. So the honest word is HERE, and the page says so.
+    // v3.0.957 -- AN EXACT ROW, OR THE PROMOTE THAT CARRIED IT.
+    //
+    // A version with no row of its own was never deployed here under its own number: it
+    // arrived inside the next deploy that was. So the first recorded version ABOVE it is the
+    // one that brought it, and that deploy's date is the day this change went live here.
+    // That is not an approximation of the landing date; it IS the landing date.
+    //
+    // Production went 948 -> 955 in a single promote, which is why this matters there and
+    // never showed on staging: staging deploys every push, so every version has its own row.
+    //
+    // NOTHING ABOVE IT AND NO ROW leaves the date empty and the page says nothing. That can
+    // only happen if the running version's own boot write failed, and inventing a date to
+    // cover for a failure is the thing this whole feature exists not to do.
     var _seen = (releases && releases[o.version]) || '';
-    o.live_here = !!_seen;
-    if (_seen) {
-      o.first_seen = _seen;
-    } else if (!_oldestKnown || compareVersions(o.version, _oldestKnown) < 0) {
-      // Older than anything we ever recorded, or we have recorded nothing at all. We were
-      // not watching, so we do not know -- and TD-587's rule is that not knowing must never
-      // be reported as a no.
-      o.no_record = true;
+    if (!_seen) {
+      for (var _ri = 0; _ri < _recorded.length; _ri++) {
+        if (compareVersions(_recorded[_ri], o.version) > 0) { _seen = releases[_recorded[_ri]]; break; }
+      }
     }
-    // The build date is for the people who work on it. A user gets no date in this build --
-    // the date that means something to them is the day it reached production, and that arrives
-    // with the release tracking (TD-804 batch B). A build date shown to a user would be a
-    // confident answer to a question they did not ask.
-    if (privileged) o.staged_on = String(block.staged_on || '');
+    if (_seen) o.first_seen = _seen;
+    // v3.0.957 -- THE BUILD DATE IS GONE, from the payload and not merely from the screen.
+    // It answered a question nobody was asking ("when was this compiled") beside the one they
+    // were ("when did this reach me"), and two dates on one line made the second harder to
+    // read. A field left in the payload that nothing renders is an invitation to render it
+    // again. data/updates.json still carries staged_on; it is simply not served.
     out.push(o);
   });
   out.sort(function (a, b) { return compareVersions(b.version, a.version); });

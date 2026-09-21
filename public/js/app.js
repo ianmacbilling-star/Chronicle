@@ -2240,20 +2240,20 @@ function renderUpdates(data) {
     // v3.0.951 -- TD-804 batch B. THE DATE, AND THE HONEST WORD FOR IT.
     //
     // "here" rather than "on production", because the server cannot tell one environment about
-    // another and a page that says "released" on staging would be stating something it does not
-    // know. A privileged viewer gets the build date too, which is the pair that actually answers
-    // a tester's question: built then, running here since then.
-    // v3.0.952 -- three states, not two. A row means we saw it start here. No row and a
-    // version OLDER than anything we recorded means we were not watching, and the page says
-    // nothing rather than denying it. Only a version we should have caught gets "not yet".
-    var _when = '';
-    if (priv) {
-      _when = 'built ' + escapeHtml(v.staged_on || '?');
-      if (v.live_here && v.first_seen) _when += ' &middot; here since ' + updatesDate(v.first_seen);
-      else if (!v.no_record) _when += ' &middot; not running here yet';
-    } else if (v.live_here && v.first_seen) {
-      _when = updatesDate(v.first_seen);
-    }
+    // another and a page that says "released" on staging would be stating something it does
+    // not know.
+    //
+    // v3.0.957 -- ONE DATE, THE SAME ONE FOR EVERYBODY, AND NO DENIALS.
+    //
+    // The three states are gone. "Not running here yet" could not be true of anything on this
+    // list: data/updates.json ships inside the deployed commit, so the list cannot describe a
+    // version newer than the one serving it. Every version here is running here. It said
+    // otherwise for five versions on the first production promote, directly beneath the entry
+    // whose fix was the reason for the deploy that carried them.
+    //
+    // The build date is gone too. It answered "when was this compiled" next to "when did this
+    // reach me", and the second is the only one a reader wants.
+    var _when = v.first_seen ? updatesDate(v.first_seen) : '';
     h += '<div style="font-weight:600;">v' + escapeHtml(v.version) +
          (_when ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">' + _when + '</span>' : '') +
          '</div>';

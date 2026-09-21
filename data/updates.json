@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.957",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "957-updates-landing-date",
+        "kind": "fix",
+        "public": true,
+        "summary": "Every update on this list now shows the date it went live, and the list no longer says a version is not running when it plainly is.",
+        "detail": "Found on the first production promote after this page shipped. Production went 3.0.948 straight to 3.0.955 in one deploy, so versions 949 to 954 never booted under their own number — their code arrived inside 955. The page read that absence as “not running here yet” and printed it directly beneath 955’s own live date, while 955 existed because of 954’s fix. THAT PHRASE IS GONE AND CANNOT COME BACK: this list ships inside the deployed code, so it can never describe a version newer than the one serving it — everything on the list is running. A version with no boot record of its own now shows the date of the deploy that carried it, which is the first recorded version above it, and that is the landing date rather than an estimate of it. The build date has also gone, from the payload and not just the screen: it answered “when was this compiled” beside the only question a reader has. TO TEST on production: 949, 950, 951, 953 and 954 must all read 19 Sep 2026, the same as 955; 948 and 947 keep 17 Sep 2026; no heading anywhere says “not running here yet” or “built”. THIS IS v3.0.952’S BUG HALF FIXED — that batch was about no-record not meaning not-yet, and it fixed the boundary at the oldest recorded version without looking at the newest.",
+        "td": [
+          "TD-833"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.956",
     "staged_on": "2026-09-19",
     "entries": [
