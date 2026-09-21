@@ -783,6 +783,26 @@ async function recordAndGrantPromo(session, eventId) {
   }
 }
 
+// v3.0.963 -- TD-838. THE NUMBER A CUSTOMER CAN QUOTE BACK TO US.
+//
+// Ian: "You've got reference keys in there... not Purchase IDs", and "hide the whole line if
+// you don't have a legit purchase ID that's short."
+//
+// token_purchases already has a row per pack and per pass, so its id IS the purchase number;
+// it just had never been shown. The format follows print orders' existing po- convention,
+// padded to five digits at Ian's request -- "just in case we top 10000 orders one year".
+//
+// RETURNS NULL RATHER THAN A PLACEHOLDER when there is no purchase row, because the receipt
+// template omits an empty row entirely. A subscription charge has no purchase record, so it
+// gets no line at all rather than a line with something unhelpful in it.
+function purchaseNo(id) {
+  var n = parseInt(id, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  var s = String(n);
+  while (s.length < 5) s = '0' + s;
+  return 'tp-' + s;
+}
+
 // ============================================================================
 // v3.0.961 -- TD-836. SEND THE RECEIPT, EXACTLY ONCE, FOR ANY PURCHASE.
 //
@@ -947,6 +967,7 @@ async function fulfillCheckout(session, eventId) {
   // re-attempted. Nothing below this line runs again; no grant is repeated.
   if (existing) {
     return { kind: 'pack', userId: existing.user_id, reference: sessionId,
+             purchaseNo: purchaseNo(existing.id),
              itemName: 'Token pack', amountCents: existing.price_paid_cents,
              currency: session.currency, tokensGranted: existing.tokens_granted };
   }
@@ -986,6 +1007,7 @@ async function fulfillCheckout(session, eventId) {
   // catalog is editable from the dashboard, and a receipt that disagrees with the card
   // statement is worse than no receipt.
   return { kind: 'pack', userId: userId, reference: sessionId,
+           purchaseNo: purchaseNo(purchaseId),
            itemName: pack.name ? (pack.name + ' token pack') : 'Token pack',
            amountCents: paid, currency: session.currency,
            tokensGranted: pack.tokens };
@@ -1047,6 +1069,7 @@ async function fulfillPassCheckout(session, eventId) {
   if (existing) {
     const _pu = await db.prepare('SELECT pass_tier, pass_expires_at FROM users WHERE id = ?').get(existing.user_id);
     return { kind: 'pass', userId: existing.user_id, reference: sessionId,
+             purchaseNo: purchaseNo(existing.id),
              itemName: 'Platinum Pass', amountCents: existing.price_paid_cents,
              currency: session.currency, tokensGranted: existing.tokens_granted,
              tierLabel: _pu && _pu.pass_tier ? _pu.pass_tier : null,
@@ -1146,6 +1169,7 @@ async function fulfillPassCheckout(session, eventId) {
   // which tier it grants and the date it runs to. `until` is the stacked expiry computed
   // above, not months-from-today -- buying a second pass extends the first.
   return { kind: 'pass', userId: userId, reference: sessionId,
+           purchaseNo: purchaseNo(purchaseId),
            itemName: pass.name || 'Platinum Pass',
            amountCents: paid, currency: session.currency,
            tokensGranted: tokens, tierLabel: passTier,

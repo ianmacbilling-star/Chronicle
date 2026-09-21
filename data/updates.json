@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.963",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "963-receipt-layout",
+        "kind": "fix",
+        "public": true,
+        "summary": "Purchase receipts now show a short Purchase ID instead of a long internal key, and the token pack and pass receipts no longer spill outside the panel.",
+        "detail": "TD-838. The token pack and Platinum Pass receipts came out broken — labels wrapping onto two lines, values shoved right, and the reference line running clean off the edge of the panel. The subscription one looked perfect. THE LAYOUT WAS THE SYMPTOM; THE FIELD WAS THE BUG. Every receipt carried a Reference, and that was the id STRIPE uses internally — not a purchase number, and no use to anybody reading it. A subscription invoice id is about 27 characters and fits; a checkout session id, which is what a pack and a pass produce, is about 55 with no space or hyphen anywhere in it. A table column cannot break a run with nothing to break on, so it grew until it fit and pushed everything else out of shape. That is why exactly two of the three were wrong, and why the third looked fine while being just as wrong in substance. NOW IT IS A PURCHASE ID, AND ONLY WHEN THERE IS ONE. A token pack and a pass each write a purchase record, so they show tp-00042 — short, ours, and the same shape as the po- numbers print orders already use. A subscription charge has no purchase record at all, so the line is simply not there rather than showing something only support could use. The detail table also has fixed column widths now, so no future value can push it around the way that id did. TO TEST: Dashboard → Settings → Email preview / test-send. Send the token pack and Platinum Pass receipts — every label on one line, every value inside the panel, and a Purchase ID line reading tp- followed by five digits. Send the subscription, renewal and plan-change ones — they should look exactly as they did before EXCEPT that the Reference line is gone.",
+        "td": [
+          "TD-838"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.962",
     "staged_on": "2026-09-21",
     "entries": [

@@ -628,10 +628,19 @@ function purchaseReceiptHTML(name, receipt) {
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // v3.0.963 -- TD-838. THE COLUMNS ARE NOT NEGOTIABLE BY THEIR CONTENTS.
+  //
+  // These widths pair with table-layout:fixed below. Together they mean the columns are decided
+  // by these numbers rather than by the widest thing inside them, so no value can push the table
+  // past the panel the way a 55-character Stripe id did.
+  //
+  // Belt and braces, not the fix: the fix is that the long opaque value is gone from this table
+  // altogether. This is here so the NEXT long value -- an itemName, say -- cannot do it again.
+  // vertical-align:top keeps a wrapped value level with its label rather than floating.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
-      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   function money(cents, currency) {
     if (cents == null || !isFinite(Number(cents))) return '';
@@ -653,7 +662,19 @@ function purchaseReceiptHTML(name, receipt) {
   rows += row('Token balance', receipt.balanceAfter != null ? receipt.balanceAfter : '');
   rows += row('Plan', receipt.tierLabel);
   rows += row('Runs until', when(receipt.runsUntil));
-  rows += row('Reference', receipt.reference);
+  // v3.0.963 -- TD-838. A NUMBER THE CUSTOMER CAN QUOTE, OR NOTHING AT ALL.
+  //
+  // This was receipt.reference -- the Stripe session or invoice id. Ian: "You've got reference
+  // keys in there... not Purchase IDs", and "hide the whole line if you don't have a legit
+  // purchase ID that's short."
+  //
+  // purchaseNo is set only where a token_purchases row exists, which is packs and passes. A
+  // subscription charge has no purchase record, so this renders nothing and row() drops the
+  // line -- which is the instruction, and better than showing a key only support can use.
+  //
+  // receipt.reference IS STILL CARRIED, and is still what the receipt ledger keys on so a
+  // Stripe retry cannot mail twice. It is simply not shown to anybody.
+  rows += row('Purchase ID', receipt.purchaseNo);
   var lead = receipt.leadIn || 'Thank you for your purchase. Here are the details:';
   return `
 <!DOCTYPE html>
@@ -680,7 +701,7 @@ function purchaseReceiptHTML(name, receipt) {
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">${esc(lead)}</div>
       <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
-        <table>${rows}</table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can see your plan, your passes and your token balance any time on My Account.</div>
     </div>
@@ -1184,30 +1205,30 @@ function buildEmailPreview(type, name) {
     // v3.0.962 -- TD-837. THROUGH receiptEmail(), THE SAME FUNCTION THE LIVE SEND USES.
     // Not a restatement of the subject and the lead-in: the same ones, from RECEIPT_COPY.
     case 'receipt_pack':
-      return receiptEmail(who, { kind: 'pack', reference: 'cs_test_a1b2c3d4e5',
+      return receiptEmail(who, { kind: 'pack', reference: 'cs_test_b1NKkHaBSFDLtc7EFM9on2damqTwxEXgBYTf4lU9EJdcGQY', purchaseNo: 'tp-00042',
         itemName: 'Medium token pack', amountCents: 4000, currency: 'usd',
         tokensGranted: 250, balanceAfter: 293,
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_pass':
-      return receiptEmail(who, { kind: 'pass', reference: 'cs_test_f6g7h8i9j0',
+      return receiptEmail(who, { kind: 'pass', reference: 'cs_test_c2PLmQdXvRtYuIoPaSdFgHjKlZxCvBnM4qWeRtYuIoP7aSdF', purchaseNo: 'tp-00043',
         itemName: '3 Month Platinum Pass', amountCents: 7900, currency: 'usd',
         tokensGranted: 200, balanceAfter: 243, tierLabel: 'platinum',
         runsUntil: '2026-12-21T00:00:00.000Z',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_subscription':
-      return receiptEmail(who, { kind: 'subscription', reference: 'in_test_1a2b3c',
+      return receiptEmail(who, { kind: 'subscription', reference: 'in_1UIE4oFtFqbShreeDSZhnl3p',
         itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
         tokensGranted: 120, balanceAfter: 120, tierLabel: 'Gold',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_renewal':
-      return receiptEmail(who, { kind: 'renewal', reference: 'in_test_4d5e6f',
+      return receiptEmail(who, { kind: 'renewal', reference: 'in_1VJF5pGuGrcTissfETAimo4q',
         itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
         tokensGranted: 120, balanceAfter: 412, tierLabel: 'Gold',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-21T15:25:00.000Z' });
     case 'receipt_proration':
       // A mid-cycle upgrade charges the DIFFERENCE and grants no new month of tokens, so this
       // sample deliberately carries no tokens row -- that is what the real one looks like.
-      return receiptEmail(who, { kind: 'proration', reference: 'in_test_7g8h9i',
+      return receiptEmail(who, { kind: 'proration', reference: 'in_1WKG6qHvHsdUjttgFUBjnp5r',
         itemName: 'Platinum subscription', amountCents: 640, currency: 'usd',
         balanceAfter: 412, tierLabel: 'Platinum',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-05T15:25:00.000Z' });
