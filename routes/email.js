@@ -548,10 +548,15 @@ function orderConfirmationHTML(name, order) {
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // v3.0.964 -- TD-839, carrying v3.0.963's receipt fix across to the two order emails.
+  // Fixed widths pair with the fixed table layout below: the columns are decided by these
+  // numbers rather than by the widest thing inside them. PREVENTIVE -- nothing rendered here is
+  // long and unbreakable today, but Tracking is wired to a real carrier number that print.js
+  // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
-      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var total = (order.total != null) ? ('$' + Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD')) : '';
@@ -600,7 +605,7 @@ function orderConfirmationHTML(name, order) {
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
       <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
-        <table>${rows}</table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
       ${trackBtn}
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can view this order any time on your My Orders page.</div>
@@ -779,10 +784,15 @@ function orderProblemHTML(name, order) {
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // v3.0.964 -- TD-839, carrying v3.0.963's receipt fix across to the two order emails.
+  // Fixed widths pair with the fixed table layout below: the columns are decided by these
+  // numbers rather than by the widest thing inside them. PREVENTIVE -- nothing rendered here is
+  // long and unbreakable today, but Tracking is wired to a real carrier number that print.js
+  // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
-      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var bookTitle = order.bookTitle || order.orderName || order.campaignName || 'your book';
@@ -821,7 +831,7 @@ function orderProblemHTML(name, order) {
       <div class="title">There was a problem with your order</div>
       <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
       <div class="text">If your card was charged, that charge will be reversed. Our team has been notified and will look into it &mdash; you can also reply to this email and we&rsquo;ll help sort it out.</div>
-      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table>' + rows + '</table></div>' : ''}
+      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>' : ''}
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">Sorry for the inconvenience.</div>
     </div>
     <div class="footer">Campaignia &middot; Support@campaignia.com</div>
@@ -1178,7 +1188,8 @@ function buildEmailPreview(type, name) {
   var who = name || 'Ian';
   var app = _previewAppUrl();
   var sampleOrder = {
-    orderNo: 'CMP-2026-0042',
+    orderNo: 'CMP-2026-00042',
+    trackingNumber: '9400111899223197428490',
     bookTitle: 'The Sunless Citadel',
     campaignName: 'Curse of the Crimson Throne',
     binding: 'Perfect Bound', colorTier: 'Premium Color', coverFinish: 'Matte',

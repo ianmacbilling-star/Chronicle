@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.964",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "964-order-number",
+        "kind": "change",
+        "public": true,
+        "summary": "Print orders now get a proper order number -- CMP-2026-00042 -- instead of the short internal po- tag.",
+        "detail": "TD-839. Every print order was labelled po- followed by its row number: po-7, po-42. That is a database id with a prefix on it, and it was what the confirmation email showed, what the printer was told, and what support had to ask a customer to read out. THE NEW NUMBER CARRIES THE YEAR AND SORTS PROPERLY: CMP-2026-00042. Five digits, so the ten-thousandth order of a year still lines up under the ones before it. The year is the year the order was placed and it is fixed at that moment -- an order placed in December still reads 2026 when you look at it in January. The digits are the order id itself, so they keep counting rather than restarting; the year says when, not how many. ORDERS PLACED BEFORE THIS KEEP THE NUMBER THEY WERE GIVEN. A number that has already gone out on a confirmation email, and that the printer already knows the job by, does not get quietly relabelled -- old orders stay po- and are still found by it. THE NUMBER IS DECIDED ONCE, WHERE THE ORDER IS CREATED, AND EVERYTHING ELSE READS IT. The printer, the confirmation email, the problem email and the support report all take the same value, so none of them can drift into naming the order something the others do not recognise. THE TWO ORDER EMAILS ALSO GOT THE TABLE FIX from v3.0.963: fixed column widths, so a long book title or a tracking number cannot push the details past the edge of the panel the way an internal key did to the purchase receipts. TO TEST: Dashboard -> Settings -> Email preview / test-send -> Print order confirmed, and Print order problem. The order number reads CMP- then a year then five digits, every label sits on one line, and nothing runs outside the panel. Then place a real order: the number on screen, the number in the email and the number the printer shows must all be the same one.",
+        "td": [
+          "TD-839"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.963",
     "staged_on": "2026-09-21",
     "entries": [

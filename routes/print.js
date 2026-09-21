@@ -40,6 +40,39 @@ const { ensureStripeCustomer } = require('../services/billing/stripeCustomer'); 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
 const DEFAULT_PRINT_MARKUP_PCT = 10;
+
+// v3.0.964 -- TD-839. THE NUMBER A CUSTOMER READS BACK TO US.
+//
+// Orders were named po- plus the row id. Ian: CMP-2026-00042, and "add one more 0 in front of
+// the 42 just incase we top 10000 orders one year" -- so five digits.
+//
+// THE YEAR IS FIXED AT CREATION AND NEVER RECOMPUTED. It goes straight into external_id, which
+// is a column; an order placed on 31 December still reads 2026 when it is looked at in January,
+// because nothing ever formats it again. Recomputing a displayed number from the current clock
+// is how an order acquires two names.
+//
+// AND IT IS THE *UTC* YEAR, DELIBERATELY. getFullYear() answers in the server's local zone, so
+// the same order would be numbered differently depending on where the process happened to be
+// running -- the guard caught exactly that, stamping a 1 January 2027 order as 2026. Every other
+// timestamp on this row is CURRENT_TIMESTAMP, which is UTC, so the number now agrees with the
+// created_at support will read it against. The cost is that a late-December evening order in
+// Eastern time carries the next year; agreeing with the row beats agreeing with the wall clock.
+//
+// THE DIGITS ARE THE ROW ID, NOT A PER-YEAR COUNTER. Unique by construction, no second query,
+// and no chance of two simultaneous buyers being handed the same number -- which a COUNT at
+// order time would allow. The year is provenance; it does not reset the count.
+//
+// CALLED IN EXACTLY ONE PLACE: where the order row is created. Everything downstream -- the
+// printer, both emails, the error text, the support report -- reads external_id back off the
+// row, so there is one decision and no second opinion.
+function orderNo(id, when) {
+  var n = parseInt(id, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  var y = (when instanceof Date ? when : new Date()).getUTCFullYear();
+  var s = String(n);
+  while (s.length < 5) s = '0' + s;
+  return 'CMP-' + y + '-' + s;
+}
 async function getPrintMarkupPct(db) {
   try {
     const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('print_markup_pct');
@@ -850,7 +883,9 @@ router.post('/order', requireSession, async function (req, res) {
       pct
     );
     const orderId = ins.lastInsertRowid;
-    const externalId = 'po-' + orderId;
+    // v3.0.964 -- TD-839. Was 'po-' + orderId. Written to the row on the next line and read
+    // back by every consumer, so this assignment is the only place an order is ever named.
+    const externalId = orderNo(orderId);
     await db.prepare('UPDATE print_orders SET external_id = ? WHERE id = ?').run(externalId, orderId);
 
     // 3) Create the Stripe Checkout session (one-time). The amount is the
