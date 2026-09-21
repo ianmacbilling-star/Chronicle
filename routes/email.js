@@ -611,6 +611,96 @@ function orderConfirmationHTML(name, order) {
 </html>`;
 }
 
+// ============================================================
+// v3.0.961 -- TD-836. THE RECEIPT FOR EVERYTHING THAT IS NOT A PRINT ORDER.
+//
+// ONE TEMPLATE FOR FOUR KINDS OF PURCHASE, because they differ only in which rows have a
+// value. A row with nothing in it is omitted, so a token pack does not carry an empty
+// "Pass runs until" line and a subscription does not carry an empty "Tokens added".
+//
+// AMOUNTS COME FROM STRIPE, IN CENTS, AND ARE FORMATTED HERE. The caller passes
+// amount_cents exactly as the Stripe session or invoice reported it -- never a price read
+// back out of our own catalog, because the catalog can be edited after a sale and a receipt
+// that disagrees with the card statement is worse than no receipt at all.
+// ============================================================
+function purchaseReceiptHTML(name, receipt) {
+  receipt = receipt || {};
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function row(label, value) {
+    if (value == null || value === '') return '';
+    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
+      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+  }
+  function money(cents, currency) {
+    if (cents == null || !isFinite(Number(cents))) return '';
+    return '$' + (Number(cents) / 100).toFixed(2) + ' ' + String(currency || 'USD').toUpperCase();
+  }
+  function when(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+    } catch (e) { return ''; }
+  }
+  var card = (receipt.cardBrand && receipt.cardLast4) ? (receipt.cardBrand + ' ****' + receipt.cardLast4) : '';
+  var rows = '';
+  rows += row('Purchase', receipt.itemName);
+  rows += row('Amount', money(receipt.amountCents, receipt.currency));
+  rows += row('Paid with', card);
+  rows += row('Date', when(receipt.paidAt));
+  rows += row('Tokens added', receipt.tokensGranted != null ? receipt.tokensGranted : '');
+  rows += row('Token balance', receipt.balanceAfter != null ? receipt.balanceAfter : '');
+  rows += row('Plan', receipt.tierLabel);
+  rows += row('Runs until', when(receipt.runsUntil));
+  rows += row('Reference', receipt.reference);
+  var lead = receipt.leadIn || 'Thank you for your purchase. Here are the details:';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
+  <style>
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .body { padding: 32px; }
+    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    table { width: 100%; border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div class="body">
+      <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
+      <div class="text">${esc(lead)}</div>
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
+        <table>${rows}</table>
+      </div>
+      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can see your plan, your passes and your token balance any time on My Account.</div>
+    </div>
+    <div class="footer">Campaignia &middot; Receipt for your purchase.</div>
+  </div>
+</body>
+</html>`;
+}
+
+// THROWS ON FAILURE, unlike sendOrderConfirmationEmail beside it, and that is deliberate.
+// The caller records the receipt in the ledger only after this resolves, so a mail failure
+// leaves the slot unclaimed and a later Stripe retry can still deliver it. Swallowing here
+// would make every failure permanent and invisible -- which is the bug this batch is about.
+async function sendPurchaseReceiptEmail(opts) {
+  opts = opts || {};
+  if (!opts.to_email) throw new Error('purchase receipt: no address');
+  var subject = opts.subject || 'Your Campaignia receipt';
+  await sendEmail(opts.to_email, subject, purchaseReceiptHTML(opts.name, opts.receipt || {}));
+}
+
 async function sendOrderConfirmationEmail(opts) {
   // opts: { to_email, name, order }
   try {
@@ -1104,4 +1194,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

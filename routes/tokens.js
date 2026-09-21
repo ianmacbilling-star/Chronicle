@@ -783,6 +783,73 @@ async function recordAndGrantPromo(session, eventId) {
   }
 }
 
+// ============================================================================
+// v3.0.961 -- TD-836. SEND THE RECEIPT, EXACTLY ONCE, FOR ANY PURCHASE.
+//
+// THE LEDGER IS THE AUTHORITY ON WHETHER WE HAVE EMAILED, and it is a different record from
+// the one that says whether we have FULFILLED. lifecycle_emails already carries composite
+// keys of this shape for the pass-expiry sweep ('pass_warn_30:2026-12-16'), and its UNIQUE
+// (user_id, email_type) is what makes a repeat impossible.
+//
+// CHECK, SEND, THEN RECORD -- in that order, on purpose. Claiming the slot before sending
+// would turn a transient mail outage into a receipt that is permanently, silently lost.
+// Recording only after a successful send means a Stripe retry re-attempts it. The cost of
+// that order is a possible duplicate if the process dies between the send and the record,
+// and a duplicate receipt is a far smaller problem than a missing one.
+//
+// IT NEVER THROWS. The money is already taken and the tokens are already granted; a 500 here
+// would have Stripe retry an event whose work is done. A failure is logged AND alerted,
+// because a receipt nobody notices missing is exactly what this batch is fixing.
+// ============================================================================
+async function sendPurchaseReceipt(receipt) {
+  if (!receipt || !receipt.userId || !receipt.reference) return;
+  const db = await getDb();
+  const key = 'receipt:' + receipt.reference;
+  try {
+    const already = await db.prepare(
+      'SELECT 1 AS x FROM lifecycle_emails WHERE user_id = ? AND email_type = ?'
+    ).get(receipt.userId, key);
+    if (already) return;
+
+    const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(receipt.userId);
+    if (!u || !u.email) {
+      console.error('purchase receipt: no address for user ' + receipt.userId + ' (' + key + ')');
+      return;
+    }
+
+    // The balance AFTER the purchase, read rather than computed, so the number on the
+    // receipt is the number the account page will show.
+    let balanceAfter = null;
+    try { const b = await getBalance(receipt.userId); balanceAfter = (b && b.total != null) ? b.total : null; } catch (e) {}
+
+    const subjects = {
+      pack: 'Your Campaignia token purchase',
+      pass: 'Your Campaignia pass purchase',
+      subscription: 'Your Campaignia subscription',
+      renewal: 'Your Campaignia subscription renewal',
+      proration: 'Your Campaignia plan change'
+    };
+    const { sendPurchaseReceiptEmail } = require('./email');
+    await sendPurchaseReceiptEmail({
+      to_email: u.email, name: u.name,
+      subject: subjects[receipt.kind] || 'Your Campaignia receipt',
+      receipt: Object.assign({ balanceAfter: balanceAfter, paidAt: new Date().toISOString() }, receipt)
+    });
+
+    await db.prepare(
+      'INSERT INTO lifecycle_emails (user_id, email_type) VALUES (?, ?) ON CONFLICT (user_id, email_type) DO NOTHING'
+    ).run(receipt.userId, key);
+  } catch (e) {
+    console.error('PURCHASE RECEIPT FAILED for ' + key + ': ' + (e && e.message));
+    try {
+      const { sendAlertEmail } = require('./email');
+      await sendAlertEmail('Campaignia: a purchase receipt could not be sent',
+        'A ' + receipt.kind + ' purchase was fulfilled but its receipt did not send.\n' +
+        'User: ' + receipt.userId + '\nReference: ' + receipt.reference + '\nError: ' + (e && e.message));
+    } catch (alertErr) { /* the alert is best-effort; the log line above is not */ }
+  }
+}
+
 // Stripe webhook handler. Mounted in server.js BEFORE the API rate limiter and
 // WITHOUT session auth (Stripe authenticates via signature). Verifies against
 // req.rawBody (captured by express.json's verify hook). Idempotent per checkout
@@ -796,23 +863,33 @@ async function stripeWebhook(req, res) {
     return res.status(400).send('Webhook signature verification failed');
   }
   try {
+    // v3.0.961 -- TD-836. Every branch that takes money hands back what was bought, and the
+    // single send at the bottom of this block is the only place a receipt goes out. Reading
+    // this function top to bottom now answers "does every purchase send a receipt".
+    let _receipt = null;
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       if (s && s.mode === 'subscription') {
         // Tier subscription started: link the user; tier/status follow via
         // customer.subscription.created. (Token packs are mode:payment, below.)
+        // NO RECEIPT HERE, and this is not an oversight: this branch only links the customer
+        // and subscription ids. The money is reported by invoice.paid below, which is also
+        // the only event a renewal produces -- so both go through one path.
         await linkSubscriptionCheckout(s);
       } else if (s && s.metadata && s.metadata.kind === 'pass') {
         // v3.0.923 -- TD-780 Push 5. A pass is mode:payment like a token pack, so it has to be
         // told apart by its metadata BEFORE the fulfillCheckout fallback claims it -- that path
         // looks up md.pack_id, would find nothing, and would return having granted nothing at
         // all. Money taken, silence.
-        await fulfillPassCheckout(s, event.id);
+        _receipt = await fulfillPassCheckout(s, event.id);
       } else if (s && s.metadata && s.metadata.kind === 'print_order') {
         // Paid book order: submit the job to the print vendor now (payment-first).
+        // NO RECEIPT HERE EITHER, deliberately: fulfillPrintOrder sends its own confirmation
+        // once the printer has accepted the job, carrying the shipping address and the
+        // tracking line a generic receipt cannot, and a problem email when it has not.
         await require('./print').fulfillPrintOrder(s, event.id);
       } else {
-        await fulfillCheckout(s, event.id);
+        _receipt = await fulfillCheckout(s, event.id);
       }
       // v3.0.945 -- TD-791. SAFETY NET. If a one-time checkout went out without a customer (the
       // ensureStripeCustomer fallback), store the one Stripe created -- only on a user with no real
@@ -833,7 +910,8 @@ async function stripeWebhook(req, res) {
       await markCheckoutExpired(event.data.object);
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
-      await fulfillSubscriptionInvoice(event.data.object, event.id);
+      // Also the prorated charge for a mid-cycle upgrade, which gets a receipt but no grant.
+      _receipt = await fulfillSubscriptionInvoice(event.data.object, event.id);
     } else if (event.type === 'customer.subscription.created') {
       await syncSubscriptionToUser(event.data.object);
     } else if (event.type === 'customer.subscription.updated') {
@@ -845,6 +923,13 @@ async function stripeWebhook(req, res) {
                event.type === 'customer.subscription.paused' ||
                event.type === 'customer.subscription.resumed') {
       await syncSubscriptionToUser(event.data.object);
+    }
+    // THE ONE SEND SITE. Non-fatal by construction -- sendPurchaseReceipt catches its own
+    // errors -- but wrapped anyway, because a 500 from here would have Stripe retry an event
+    // whose money has already moved.
+    if (_receipt) {
+      try { await sendPurchaseReceipt(_receipt); }
+      catch (rErr) { console.error('receipt dispatch failed (non-fatal):', rErr && rErr.message); }
     }
     res.json({ received: true });
   } catch (e) {
@@ -859,12 +944,21 @@ async function stripeWebhook(req, res) {
 async function fulfillCheckout(session, eventId) {
   const db = await getDb();
   const sessionId = session.id;
-  const existing = await db.prepare('SELECT id FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
-  if (existing) return; // already fulfilled
+  const existing = await db.prepare('SELECT id, user_id, price_paid_cents, tokens_granted FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
+  // v3.0.961 -- TD-836. ALREADY FULFILLED IS NOT ALREADY EMAILED. This used to return
+  // undefined, which was fine when nothing downstream cared. Now the webhook sends the
+  // receipt, and the receipt has its OWN record -- so a retry must still describe the
+  // purchase and let the ledger decide, or a receipt whose send failed could never be
+  // re-attempted. Nothing below this line runs again; no grant is repeated.
+  if (existing) {
+    return { kind: 'pack', userId: existing.user_id, reference: sessionId,
+             itemName: 'Token pack', amountCents: existing.price_paid_cents,
+             currency: session.currency, tokensGranted: existing.tokens_granted };
+  }
   const md = session.metadata || {};
   const userId = parseInt(md.user_id, 10);
   const pack = getPack(md.pack_id);
-  if (!userId || !pack) return;
+  if (!userId || !pack) return null;
   const attributed = md.attributed_campaign_id ? parseInt(md.attributed_campaign_id, 10) : null;
   const paid = (session.amount_total != null) ? session.amount_total : pack.price_cents;
   const insRes = await db.prepare(
@@ -893,6 +987,13 @@ async function fulfillCheckout(session, eventId) {
       }
     } catch (e) { /* DM bonus is best-effort */ }
   }
+  // v3.0.961 -- TD-836. The amount is the one STRIPE charged, not pack.price_cents: the
+  // catalog is editable from the dashboard, and a receipt that disagrees with the card
+  // statement is worse than no receipt.
+  return { kind: 'pack', userId: userId, reference: sessionId,
+           itemName: pack.name ? (pack.name + ' token pack') : 'Token pack',
+           amountCents: paid, currency: session.currency,
+           tokensGranted: pack.tokens };
 }
 // ------------------------------------------------------------
 // ============================================================================
@@ -945,12 +1046,21 @@ function passAddMonths(fromMs, months) {
 async function fulfillPassCheckout(session, eventId) {
   const db = await getDb();
   const sessionId = session.id;
-  const existing = await db.prepare('SELECT id FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
-  if (existing) return;   // already fulfilled -- Stripe is retrying
+  const existing = await db.prepare('SELECT id, user_id, price_paid_cents, tokens_granted FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
+  // v3.0.961 -- TD-836. Same reasoning as the pack above: a retry still describes the
+  // purchase so the receipt ledger can decide, and grants nothing twice.
+  if (existing) {
+    const _pu = await db.prepare('SELECT pass_tier, pass_expires_at FROM users WHERE id = ?').get(existing.user_id);
+    return { kind: 'pass', userId: existing.user_id, reference: sessionId,
+             itemName: 'Platinum Pass', amountCents: existing.price_paid_cents,
+             currency: session.currency, tokensGranted: existing.tokens_granted,
+             tierLabel: _pu && _pu.pass_tier ? _pu.pass_tier : null,
+             runsUntil: _pu && _pu.pass_expires_at ? _pu.pass_expires_at : null };
+  }
   const md = session.metadata || {};
   const userId = parseInt(md.user_id, 10);
   const pass = getPass(md.pass_id);
-  if (!userId || !pass) return;
+  if (!userId || !pass) return null;
 
   const quotedTokens = parseInt(md.quoted_tokens, 10);
   const tokens = (isFinite(quotedTokens) && quotedTokens >= 0) ? quotedTokens : pass.tokens;
@@ -1037,6 +1147,14 @@ async function fulfillPassCheckout(session, eventId) {
       });
     } catch (_le2) {}
   }
+  // v3.0.961 -- TD-836. A pass receipt carries the two things a pass holder needs to keep:
+  // which tier it grants and the date it runs to. `until` is the stacked expiry computed
+  // above, not months-from-today -- buying a second pass extends the first.
+  return { kind: 'pass', userId: userId, reference: sessionId,
+           itemName: pass.name || 'Platinum Pass',
+           amountCents: paid, currency: session.currency,
+           tokensGranted: tokens, tierLabel: passTier,
+           runsUntil: until.toISOString() };
 }
 
 // ------------------------------------------------------------
@@ -1279,8 +1397,22 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   if (!subId) return; // ignore one-off (non-subscription) invoices
   // Grant on the first subscription invoice and on each renewal cycle only. Proration /
   // mid-cycle update invoices are not a new token period, so they're skipped.
+  // v3.0.961 -- TD-836. TWO QUESTIONS OFF ONE FIELD, AND THEY HAVE DIFFERENT ANSWERS.
+  //
+  //   DOES THIS INVOICE GRANT A NEW MONTH OF TOKENS?  Only a create or a cycle. A
+  //   mid-cycle upgrade is not a new token period, and granting on one would hand out a
+  //   second allotment inside a single billing month.
+  //
+  //   DOES THIS INVOICE NEED A RECEIPT?  Ian: every charge. A prorated upgrade takes money
+  //   from a real card the moment it is made, so it does.
+  //
+  // They were one condition doing double duty. Written as two named booleans so that
+  // widening the receipt could not silently widen the grant -- which is the mistake this
+  // shape exists to make impossible.
   const reason = invoice.billing_reason || '';
-  if (reason && reason !== 'subscription_create' && reason !== 'subscription_cycle') return;
+  const isPeriod = (reason === 'subscription_create' || reason === 'subscription_cycle');
+  const isProration = (reason === 'subscription_update');
+  if (!isPeriod && !isProration) return null;
   const db = await getDb();
   // Webhook ordering is NOT guaranteed: invoice.paid can arrive before the
   // customer.subscription.created event that sets users.tier + links the sub. Sync the
@@ -1297,12 +1429,33 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   if (!user && invoice.customer) {
     user = await db.prepare('SELECT id, tier FROM users WHERE stripe_customer_id = ?').get(invoice.customer);
   }
-  if (!user) return; // subscription not linked to a user yet
+  if (!user) return null; // subscription not linked to a user yet
   // One grant per invoice id = one grant per billing period. ensureMonthlyGrant reads
   // the user's account tier (users.tier) for the UTOLT + CO amounts and expires any
   // leftover use-it-or-lose-it balance before granting the new period.
-  await ensureMonthlyGrant(user.id, invoice.id);
-  try { await grantTierSignupBonus(user.id, user.tier); } catch (e) {}
+  // GUARDED BY isPeriod: a proration must not grant a second allotment inside one month.
+  let _granted = null;
+  if (isPeriod) {
+    _granted = await ensureMonthlyGrant(user.id, invoice.id);
+    try { await grantTierSignupBonus(user.id, user.tier); } catch (e) {}
+  }
+  // v3.0.961 -- TD-836. The amount is invoice.amount_paid, which is what left the card --
+  // for a proration that is the difference, not the full plan price.
+  const _amt = (invoice.amount_paid != null) ? invoice.amount_paid : invoice.total;
+  const _tierName = (user.tier || '').charAt(0).toUpperCase() + (user.tier || '').slice(1);
+  let _lead = 'Your subscription payment has gone through. Here are the details:';
+  if (reason === 'subscription_create') _lead = 'Your subscription is active. Here are the details:';
+  else if (reason === 'subscription_update') _lead = 'Your plan change has been charged. Here are the details:';
+  return { kind: (reason === 'subscription_create' ? 'subscription' : (isProration ? 'proration' : 'renewal')),
+           userId: user.id, reference: invoice.id,
+           itemName: (_tierName ? (_tierName + ' subscription') : 'Subscription'),
+           amountCents: _amt, currency: invoice.currency,
+           // ensureMonthlyGrant reports the two buckets SEPARATELY -- { skipped, cycle, utlt,
+           // cot } -- and has no total. Reading _granted.total gives undefined and the row
+           // silently vanishes from the receipt, which is the exact shape of bug this batch
+           // is about: a thing that looks sent and is not there.
+           tokensGranted: (_granted && !_granted.skipped) ? ((_granted.utlt || 0) + (_granted.cot || 0)) : null,
+           tierLabel: _tierName || null, leadIn: _lead };
 }
 
 // ------------------------------------------------------------
