@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.960",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "960-trial-pill-opens-plans",
+        "kind": "feature",
+        "public": true,
+        "summary": "The FREE TRIAL pill in the top bar is now a button — click it to go straight to plans and passes.",
+        "detail": "TD-835. The pill is the one thing on screen that tells you the account is limited, and until now it did nothing when you clicked it: a reader who wanted to do something about the trial had to know to open My Account and scroll down past several panels to find the plans. Now the pill takes you there in one click, landing on Plans & Subscription Info — which carries the subscription grid AND the passes block below it, so both ways of paying are on the screen you arrive at. It goes through the same goToPlans() that the tokens modal and the publish refusal already use, so there is one route to that panel rather than a second copy of the scroll logic. THE PILL IS A REAL CONTROL NOW, not a coloured label with a click handler: it carries a button role, it can be reached and fired from the keyboard with Tab then Enter or Space, and the tooltip says it can be clicked — a clickable thing whose tooltip never mentions clicking is a small lie, and that tooltip is also the only place the trial caps are spelled out. TO TEST on a Free Trial account: the gold star FREE TRIAL pill should be in the top bar with the days remaining beside it. Click it — you should land on My Account with Plans & Subscription Info in view, and the passes should be visible just below the plans. Then do it with the keyboard: press Tab until the pill is focused and press Enter, then try again with the space bar; both must work, and the space bar must NOT also scroll the page. Finally, on a paid account the pill is hidden entirely, exactly as before.",
+        "td": [
+          "TD-835"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.959",
     "staged_on": "2026-09-21",
     "entries": [

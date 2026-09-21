@@ -69,7 +69,16 @@
          the badge itself be the way in. No Dashboard."). -->
     <span id="tier-badge" style="display:none;"></span>
     <a href="/library?from=app" class="btn btn-sm" id="header-library-btn" title="Browse the public Library" style="text-decoration:none;">Library</a>
-    <span id="trial-badge" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark)" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
+    <!-- v3.0.960 -- TD-835. THE PILL IS THE WAY OUT NOW, not just the sign saying you are in.
+         It was inert: the one control telling a reader the account is limited, and clicking it
+         did nothing, so acting on it meant already knowing that plans live inside My Account.
+         goToPlans() is the EXISTING route there -- the tokens modal and the publish refusal both
+         use it -- and it lands on Plans & Subscription Info, which holds the subscription grid
+         AND the passes block below it. One destination, both ways of paying.
+         role/tabindex/keydown because this is a control now and the top banner is the first
+         thing a keyboard reaches. preventDefault on Space stops the browser scrolling the page
+         underneath goToPlans() while it is scrolling it somewhere else. -->
+    <span id="trial-badge" role="button" tabindex="0" onclick="goToPlans()" onkeydown="if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); goToPlans(); }" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark). Click to see plans and passes." style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;cursor:pointer;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
     <!-- v3.0.676 -- TD-475. The lone-copper badge is retired: it said COPPER beside a tier badge
          already saying Copper. Its warning lives in the tier badge tooltip now. -->
     <span id="lone-badge" style="display:none;"></span>
