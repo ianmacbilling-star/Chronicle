@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.0.965",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "965-token-tile-labels",
+        "kind": "change",
+        "public": true,
+        "summary": "The two token tiles on My Account now say in plain words what each kind of token is.",
+        "detail": "TD-845. The Usage panel showed UTOLT TOKENS and CARRY-OVER TOKENS with a number under each and nothing else. UTOLT is an acronym, and an acronym on a screen is a word only the people who built it can read. Each tile now carries a small line underneath saying what it means: Use Them or Lose Them, and Yours to Keep. NOTHING ABOUT THE NUMBERS CHANGED -- this is wording. The two tiles are the whole token model in miniature and they explain each other, which is why both got a line rather than only the confusing one. WHAT THE TWO ACTUALLY MEAN, since this is the first place it has been written down for a reader: the first tile is the tokens that come with your plan each month. They refresh on your billing date and they do not roll over, so it is worth spending them first -- and the app does spend them first, before it touches the other kind. The second tile is tokens you bought, or that came with a pass, a bonus or a plan upgrade. Those are yours and they never expire. Everything you pay for outright lands in the second tile; only the plan itself and an upgrade to it put tokens in the first. TO TEST: My Account -> Usage. Both token tiles have a small line under the label, dimmer and smaller than the label itself. The numbers are unchanged, and the five tiles beside them are untouched.",
+        "td": [
+          "TD-845",
+          "TD-814"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.964",
     "staged_on": "2026-09-21",
     "entries": [

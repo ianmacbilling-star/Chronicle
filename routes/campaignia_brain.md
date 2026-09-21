@@ -132,12 +132,35 @@ Image work is paid for with **tokens** — generating, regenerating, or retouchi
 image currently costs tokens. There are two kinds:
 
 - **Carry-over tokens** bank and roll from month to month — they **never expire**.
+  On your Account page this tile is labelled **CARRY-OVER TOKENS**, with *Yours to Keep*
+  underneath.
 - **Use-it-or-lose-it tokens** are granted each billing cycle and must be spent before
-  it ends, or they're gone.
+  it ends, or they're gone. On your Account page this tile is labelled **UTOLT TOKENS** —
+  UTOLT stands for **Use Them Or Lose Them**, with that phrase underneath it.
+
+**The two never turn into each other.** Use-it-or-lose-it tokens are either spent or they
+expire; they are never banked, converted, or moved into your carry-over pile. So if you
+see one number fall and the other rise at the same moment, those are two separate things
+that happened together — not tokens moving across.
+
+**What lands where.** Anything you pay for outright is carry-over and yours to keep: token
+packs, passes, promo codes and bonuses all go there. Only your plan itself, and an upgrade
+to it, put tokens in the use-it-or-lose-it pile.
 
 When you spend, your **use-it-or-lose-it tokens go first**, which protects your banked
 and purchased ones. **Purchased tokens are carry-over** — they never expire, so you can
 stockpile for something big like a large end-of-campaign print run.
+
+**What happens on your billing date, in order.** Any use-it-or-lose-it tokens still sitting
+there are cleared, and then the new cycle's tokens are added. That order is the whole reason
+the pile is called use-it-or-lose-it — leftovers do not stack up, and next month's allowance
+is an allowance, not an addition.
+
+**This is also why your total can move by less than a receipt says.** A receipt tells you
+what your plan gave you. Your balance changes by what it gave you *minus* whatever expired at
+the same moment. If you had a few use-it-or-lose-it tokens left on the day, both numbers are
+correct and they will differ by exactly that many. Your carry-over tokens are never touched by
+any of this.
 
 **What spends tokens:** generating, regenerating, or retouching an image, plus analyzing or
 previewing a custom art style, **reading a character sheet from a file**, and **reading any file that
@@ -167,6 +190,15 @@ actually cost.
   you're billed monthly on roughly the same date for your tier. Current pricing is on
   the Account page.
 - **Upgrades & downgrades:** change tiers anytime; Stripe handles all proration.
+- **What an upgrade does to your tokens:** moving up mid-month gives you the *difference*
+  in monthly allowance straight away — not a whole extra month, and your current
+  use-it-or-lose-it tokens are **not** cleared to do it, so nothing is lost by upgrading
+  partway through. The money and the tokens run on different clocks: the tokens arrive when
+  you upgrade, while the extra charge is usually added to your **next** invoice rather than
+  billed that day.
+- **What a downgrade does to your tokens:** nothing immediately. You keep what you have, and
+  the smaller allowance simply starts at your next billing date. Carry-over tokens are yours
+  either way.
 - **Canceling:** cancel anytime and your subscription ends; you drop to the free Copper
   tier and your card isn't charged again. Your campaigns and data stay with your account.
   If a free account later goes inactive for a long time, the inactivity policy below
@@ -224,7 +256,10 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 - **Notifications:** opt in/out of three email types — promotions, new-feature updates,
   and campaign activity (an email when someone joins one of your campaigns). Account,
   billing, and order emails are always sent.
-- **Usage:** your current token balance and usage.
+- **Usage:** your current token balance and usage. The two token tiles are
+  **UTOLT TOKENS** (Use Them Or Lose Them — this month's allowance, cleared on your billing
+  date) and **CARRY-OVER TOKENS** (Yours to Keep — bought, or from a pass, bonus or upgrade,
+  and never expiring). The number in the top bar is the two added together.
 - **Plans:** your current plan, upgrade options, and Manage subscription & billing.
 - **Account actions:** Sign out, or Suspend account.
 - **Feedback** (from the profile menu): send a typed message — pick a type, optional

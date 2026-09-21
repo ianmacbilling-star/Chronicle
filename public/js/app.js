@@ -2459,12 +2459,22 @@ function renderAccountTier(me) {
 function renderAccountUsage(usage) {
   var el = document.getElementById('account-usage');
   if (!el) return;
-  function card(num, label) {
+  // v3.0.965 -- TD-845 (and the answer to TD-814). OPTIONAL THIRD ARGUMENT.
+  //
+  // Ian: "put in small letters under the UTOLT ... Use Them or Lose Them".
+  //
+  // The five tiles that pass no sub read exactly as they did -- the row is only emitted when
+  // there is something to put in it, so nothing else on the panel moves. Smaller and dimmer
+  // than the label, because it is a gloss on the label rather than a second label.
+  function card(num, label, sub) {
+    var subRow = sub
+      ? '<div style="font-size:10px;color:var(--text-light);opacity:0.75;letter-spacing:0.3px;margin-top:3px;">' + sub + '</div>'
+      : '';
     return '<div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.18);' +
       'border-radius:var(--radius);padding:16px;text-align:center;">' +
       '<div style="font-family:var(--font-display);font-size:28px;color:var(--gold);">' + num + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);letter-spacing:0.5px;margin-top:4px;">' +
-      label + '</div></div>';
+      label + '</div>' + subRow + '</div>';
   }
   el.innerHTML =
     card(usage.campaigns || 0, 'ACTIVE CAMPAIGNS') +
@@ -2472,8 +2482,8 @@ function renderAccountUsage(usage) {
     card(usage.storyboards || 0, 'STORYBOARDS') +
     card(usage.imagesThisMonth || 0, 'IMAGES THIS MONTH') +
     card(usage.imagesAllTime || 0, 'IMAGES ALL TIME') +
-    card('<span id="usage-utlt">&mdash;</span>', 'UTOLT TOKENS') +
-    card('<span id="usage-cot">&mdash;</span>', 'CARRY-OVER TOKENS');
+    card('<span id="usage-utlt">&mdash;</span>', 'UTOLT TOKENS', 'Use Them or Lose Them') +
+    card('<span id="usage-cot">&mdash;</span>', 'CARRY-OVER TOKENS', 'Yours to Keep');
   refreshUsageTokens();
 }
 
