@@ -3,7 +3,7 @@ const router = express.Router();
 const { getDb, makeShareToken, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope, coverFromPrefs } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
-const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
+const { getEffectiveTier, accessRank, isPaidTier, getTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 const genresvc = require('../services/genres');
@@ -6382,18 +6382,33 @@ ${(fCover && (!paginated || pageOpts.page === totalSessions)) ? `<!-- BACK COVER
 // ============================================================
 
 // GET session PDF HTML
-// TRIAL: tiled "CAMPAIGNIA TRIAL" watermark for free-trial users, shown in the
-// session + novel preview and print. Dark tone so it reads on the light
-// (parchment/white) PDF pages. Gated on the VIEWER's trial status.
+// TRIAL: tiled "CAMPAIGNIA TRIAL" watermark, shown in the session + novel preview and print.
+// Dark tone so it reads on the light (parchment/white) PDF pages.
+// v3.0.959 -- TD-834. Gated on the EFFECTIVE TIER FOR THE CAMPAIGN, not on the viewer.
 var TRIAL_WM_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22320%22%20height%3D%22200%22%3E%3Ctext%20x%3D%22160%22%20y%3D%22108%22%20fill%3D%22%233a2410%22%20fill-opacity%3D%220.18%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.12%22%20stroke-width%3D%220.5%22%20font-family%3D%22Georgia%2Cserif%22%20font-size%3D%2222%22%20font-weight%3D%22700%22%20letter-spacing%3D%223%22%20text-anchor%3D%22middle%22%20transform%3D%22rotate%28-30%20160%20108%29%22%3ECAMPAIGNIA%20TRIAL%3C%2Ftext%3E%3C%2Fsvg%3E';
-async function userInFreeTrial(db, userId) {
+// v3.0.959 -- TD-834. THE WATERMARK IS A PROPERTY OF THE BOOK, NOT OF WHOEVER OPENED IT.
+//
+// This was userInFreeTrial(db, userId), reading users.tier and asking only whether the
+// person looking was on the free trial. It was wrong in two directions at once:
+//
+//   (1) IT NEVER LOOKED AT THE STORY MASTER. A free-trial member of a paid campaign got
+//       TRIAL stamped across every page of a book the Story Master is paying for.
+//   (2) IT NEVER LOOKED AT THE VIEWER'S OWN PASS. Buying a pass writes pass_tier and leaves
+//       users.tier at 'trial' -- ownTier() is what folds them together -- so a customer who
+//       had PAID for a Platinum Pass still got a TRIAL watermark on their exported PDF.
+//       Nobody reported that one; it was found reading this function.
+//
+// getEffectiveTier is max(ownTier(me), ownTier(the SM)), so one call answers both, and the
+// tier config's watermark flag then decides -- the SAME flag /tier-info serves to the
+// storyboard and the order gate reads before the printer. One rule, three doors.
+//
+// Returns false on a thrown lookup, exactly as userInFreeTrial did: the watermark has never
+// been the enforcement point for anything, and a database failure should not stamp TRIAL
+// across a paying customer's book.
+async function bookIsWatermarked(userId, campaignId) {
   try {
-    var u = await db.prepare('SELECT tier, trial_started_at FROM users WHERE id = ?').get(userId);
-    // Free trial = still on the 'trial' tier and inside the 30-day window. Keyed
-    // off tier so a paid subscriber in a Stripe-side trial is never blocked here.
-    if (!u || u.tier !== 'trial' || !u.trial_started_at) return false;
-    var within = (Date.now() - new Date(u.trial_started_at).getTime()) < 30 * 24 * 60 * 60 * 1000;
-    return within;
+    var t = getTier(await getEffectiveTier(userId, campaignId || null));
+    return !!(t && t.watermark);
   } catch (e) { return false; }
 }
 function injectTrialWatermark(html) {
@@ -6483,7 +6498,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co, { noCover: true });
-    if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
+    if (await bookIsWatermarked(req.session.userId, session.campaign_id)) html = injectTrialWatermark(html);
     // Stage 1 verification: ?measure=1 returns the text-only measured block
     // geometry for the COMIC layout (images blocked) instead of the PDF/HTML.
     if (req.query.measure === '1' || req.query.measure === 'true') {
@@ -6542,7 +6557,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       var _eplan = planComic(_engMoments, { pageHeightIn: 9.7, overflowCols: 2, maxPages: _emax });
       _eco.measureChunks = false; _eco.engine = true; _eco._enginePlan = _eplan;
       var _ehtml = buildSessionHTML(session, moments, campaign, characters, narrative, _eco, { noCover: true });
-      if (await userInFreeTrial(db, req.session.userId)) _ehtml = injectTrialWatermark(_ehtml);
+      if (await bookIsWatermarked(req.session.userId, session.campaign_id)) _ehtml = injectTrialWatermark(_ehtml);
       if (req.query.format === 'pdf') {
         return await sendHtmlAsPdf(res, _ehtml, pdfFileName([campaign.name, session.name, 'comic']));
       }
@@ -6674,7 +6689,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (req.query.pane === '1') html = paneSafeHtml(html);   // preview-safe gradients in the Finalize panes only
-  if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
+  if (await bookIsWatermarked(req.session.userId, campaign.id)) html = injectTrialWatermark(html);
   if (req.query.format === 'pdf') {
     var nMember = '';
     if (asUser) { var nu = await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser); if (nu && nu.name) nMember = nu.name; }
@@ -7671,11 +7686,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   function _ptLap(name) { var n = Date.now(); _ptPhase.push(name + '=' + (n - _ptMark) + 'ms'); _ptMark = n; }
   const db = await getDb();
 
-  // Publishing to the public Library requires a paid plan -- free-trial users
-  // are blocked here (server-side enforcement; the client also pre-checks).
-  if (await userInFreeTrial(db, req.session.userId)) {
-    return res.status(403).json({ error: 'You need to sign up to publish to the library.', code: 'publish_requires_subscription' });
-  }
+  // v3.0.959 -- TD-834. A FREE-TRIAL PRE-GATE STOOD HERE AND ITS REMOVAL IS THE POINT.
+  //
+  // It read the VIEWER's users.tier and fired above the campaign load, so a free-trial member
+  // of a PAID Story Master's campaign was refused before the effective-tier gate below -- the
+  // one whose own comment says a player under a subscribing Story Master clears it -- ever
+  // ran. Two entitlement rules on one route, and the higher one silently won.
+  //
+  // Nothing moved down to replace it on purpose: isPaidTier(getEffectiveTier(...)) below
+  // requires rank >= 2 and Free Trial is rank 0, so a lone trial user is still refused, with
+  // the same publish_requires_subscription code the client branches on.
 
   // Publish-time attestation (client shows a required checkbox; enforced here
   // too). The author confirms they own/have rights to the content and that it

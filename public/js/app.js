@@ -15505,7 +15505,19 @@ function renderStoryboard() {
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
   function buildPanel(m, i, pNum) {
-    var needsWatermark = !!state.inFreeTrial;
+    // v3.0.959 -- TD-834. THE WATERMARK FOLLOWS THE BOOK, NOT THE READER.
+    // state.inFreeTrial is an ACCOUNT flag set at login and cannot know which campaign is on
+    // screen, so a free-trial member of a PAID Story Master's campaign saw TRIAL on every
+    // panel of a book the Story Master is paying for. Erin Bot, 2026-09-21: ten panels
+    // watermarked for Tamika, zero for Erin, same campaign.
+    // state.tierInfo is served by /api/campaigns/:id/tier-info, which has answered with the
+    // EFFECTIVE tier since it was written -- the style pickers have read it all along.
+    // The fallback is the old flag and is COSMETIC: it covers the window before that fetch
+    // lands so a trial reader never sees a clean panel flash. The PDF and the order gate
+    // enforce on the server independently, so no entitlement rests on this line.
+    var needsWatermark = (state.tierInfo && typeof state.tierInfo.watermark === 'boolean')
+      ? state.tierInfo.watermark
+      : !!state.inFreeTrial;
     var imgHtml = m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +

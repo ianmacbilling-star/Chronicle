@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.959",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "959-watermark-follows-effective-tier",
+        "kind": "fix",
+        "public": true,
+        "summary": "If you play in a campaign run by someone on a paid plan or a pass, your pages are no longer stamped TRIAL — on screen, in the PDF, and at the print order button.",
+        "detail": "TD-834, from the Erin Bot / Tamika Bot run. Tamika is on the Free Trial and plays in Erin’s campaign; Erin holds a Platinum Pass. Every one of the ten storyboard panels came up watermarked for Tamika and none did for Erin — THE SAME BOOK, the same campaign, the same pages. THE WATERMARK WAS READING THE WRONG ACCOUNT. It asked “is the person looking at this on the free trial” when the question is “is THIS BOOK a trial book”, and a book made inside a paid Story Master’s campaign is not. It now follows the EFFECTIVE tier for the campaign — the higher of your own plan and the Story Master’s — which is the same rule the art and narrative style pickers have used all along. A SECOND FAULT WAS FOUND IN THE SAME PLACE AND NOBODY HAD REPORTED IT: the PDF export read users.tier directly, and buying a pass does not change that column, so a customer who had paid for a Platinum Pass still got CAMPAIGNIA TRIAL tiled across every page of their exported book. That is fixed here too. AND THE PRINT ORDER BUTTON MOVES WITH IT: it refuses watermarked books, which is right, but it was deciding on your own account rather than the book — so a member of a paid campaign was refused a physical copy of a book that carries no watermark. Ordering is unchanged in every other way; whoever places the order still pays for it. TO TEST: as a Free Trial member of a campaign run by a paid Story Master, open the storyboard — no watermark on any panel. Export the session PDF and the graphic novel — no TRIAL across the pages. Open the order page — it must let you through to payment. Then check the other direction still works: in YOUR OWN trial campaign, with no paid Story Master above you, the watermark must still be on the panels and in the PDF, and the order button must still refuse.",
+        "td": [
+          "TD-834"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.958",
     "staged_on": "2026-09-21",
     "entries": [

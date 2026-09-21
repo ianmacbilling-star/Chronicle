@@ -30,7 +30,7 @@ const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErr
 // failed price leaves a record naming the cause. routes/debug requires only the database
 // and the auth middleware, so there is no cycle.
 const { logDebug } = require('./debug');
-const { getTier, ownTier } = require('../middleware/tiers');
+const { getTier, getEffectiveTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
@@ -666,16 +666,30 @@ router.post('/quote', requireSession, async function (req, res) {
 router.post('/order', requireSession, async function (req, res) {
   const userId = req.session.userId;
   const body = req.body || {};
-  // Watermarked books (the Free Trial tier) can't be ordered as physical
-  // prints. Enforce server-side so the client-side button hide can't be
-  // bypassed. Keyed on the account tier's watermark flag.
+  // Watermarked books can't be ordered as physical prints. Enforce server-side so the
+  // client-side button hide can't be bypassed. Keyed on the watermark flag of the tier the
+  // BOOK is made under.
   try {
-    const _wdb = await getDb();
     // v3.0.919 -- TD-780 Push 3. THE WORST ONE ON THE LIST IF IT IS MISSED. A pass holder
     // whose account tier is Copper would pay for a pass, make their book, and be told at the
     // order button that it is watermarked and cannot be printed.
-    const _wu = await _wdb.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
-    const _wt = getTier(ownTier(_wu));
+    //
+    // v3.0.959 -- TD-834. AND THE SAME SENTENCE IS TRUE OF A MEMBER. ownTier folded in the
+    // reader's own pass and stopped there, so a free-trial member of a PAID Story Master's
+    // campaign -- whose book carries no watermark anywhere else in the product after this
+    // batch -- was refused a physical copy of it. This gate exists to keep WATERMARKED BOOKS
+    // off the printer; once the book is not watermarked it is refusing nothing.
+    //
+    // Whoever places the order still pays for it: /order builds a fresh quote and opens a
+    // Stripe Checkout session for THIS user. A paid Story Master is what makes the book
+    // clean, not what pays for the paper.
+    //
+    // No campaignId on the request falls back to the caller's own tier, which is what this
+    // gate has always used, so a direct API call is no weaker than it was. getEffectiveTier
+    // answers 'copper' on a thrown lookup and copper does not watermark, so the error path
+    // still falls through exactly as the catch below always did.
+    const _wcid = body.campaignId ? parseInt(body.campaignId, 10) : null;
+    const _wt = getTier(await getEffectiveTier(userId, Number.isFinite(_wcid) ? _wcid : null));
     if (_wt && _wt.watermark) {
       return res.status(403).json({ error: "This book is watermarked and can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order." });
     }
