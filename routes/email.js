@@ -690,15 +690,55 @@ function purchaseReceiptHTML(name, receipt) {
 </html>`;
 }
 
+// v3.0.962 -- TD-837. THE WORDS FOR EACH KIND OF RECEIPT, IN ONE PLACE.
+//
+// These lived in routes/tokens.js, beside the code that sends them. They are here now for one
+// reason: the admin preview has to produce THE SAME EMAIL a customer gets, and the only way to
+// guarantee that is for there to be one copy of the words and one function that builds the
+// message. Every other preview in this file restates its subject by hand -- order_confirmation's
+// is a hand-typed copy of the one in sendOrderConfirmationEmail -- and those are free to drift
+// the day either side is edited. A preview that drifts answers a question nobody asked.
+//
+// tokens.js keeps the money and no longer carries the prose.
+var RECEIPT_COPY = {
+  pack:         { subject: 'Your Campaignia token purchase',
+                  leadIn: 'Thank you for your purchase. Here are the details:' },
+  pass:         { subject: 'Your Campaignia pass purchase',
+                  leadIn: 'Your pass is active. Here are the details:' },
+  subscription: { subject: 'Your Campaignia subscription',
+                  leadIn: 'Your subscription is active. Here are the details:' },
+  renewal:      { subject: 'Your Campaignia subscription renewal',
+                  leadIn: 'Your subscription payment has gone through. Here are the details:' },
+  proration:    { subject: 'Your Campaignia plan change',
+                  leadIn: 'Your plan change has been charged. Here are the details:' }
+};
+
+// THE ONE BUILDER. Both the live send and the admin preview call this, so what an admin sees
+// in their inbox is what a customer receives, to the byte. An unknown kind still produces a
+// usable receipt rather than throwing -- a purchase that took money must never fail to report
+// itself because a label was missing.
+// It returns the NORMALISED RECEIPT alongside the message -- the one with the lead-in filled
+// in -- purely so a caller can prove the preview and the live send agree by driving the sender
+// with exactly what the preview drew. The route reads subject and html and ignores it.
+function receiptEmail(name, receipt) {
+  var r = Object.assign({}, receipt || {});
+  var copy = RECEIPT_COPY[r.kind] || {};
+  if (!r.leadIn && copy.leadIn) r.leadIn = copy.leadIn;
+  return { subject: copy.subject || 'Your Campaignia receipt', html: purchaseReceiptHTML(name, r), receipt: r };
+}
+
 // THROWS ON FAILURE, unlike sendOrderConfirmationEmail beside it, and that is deliberate.
 // The caller records the receipt in the ledger only after this resolves, so a mail failure
 // leaves the slot unclaimed and a later Stripe retry can still deliver it. Swallowing here
-// would make every failure permanent and invisible -- which is the bug this batch is about.
+// would make every failure permanent and invisible -- which is the bug v3.0.961 was about.
+//
+// NO SUBJECT OVERRIDE. The caller passes the FACTS of the purchase and this decides the words,
+// because an override is how the two copies start disagreeing again.
 async function sendPurchaseReceiptEmail(opts) {
   opts = opts || {};
   if (!opts.to_email) throw new Error('purchase receipt: no address');
-  var subject = opts.subject || 'Your Campaignia receipt';
-  await sendEmail(opts.to_email, subject, purchaseReceiptHTML(opts.name, opts.receipt || {}));
+  var built = receiptEmail(opts.name, opts.receipt || {});
+  await sendEmail(opts.to_email, built.subject, built.html);
 }
 
 async function sendOrderConfirmationEmail(opts) {
@@ -1141,6 +1181,36 @@ function buildEmailPreview(type, name) {
       return { subject: 'Your Campaignia order is confirmed (' + sampleOrder.orderNo + ')', html: orderConfirmationHTML(who, sampleOrder) };
     case 'order_problem':
       return { subject: 'There was a problem with your Campaignia order (' + sampleOrder.orderNo + ')', html: orderProblemHTML(who, sampleOrder) };
+    // v3.0.962 -- TD-837. THROUGH receiptEmail(), THE SAME FUNCTION THE LIVE SEND USES.
+    // Not a restatement of the subject and the lead-in: the same ones, from RECEIPT_COPY.
+    case 'receipt_pack':
+      return receiptEmail(who, { kind: 'pack', reference: 'cs_test_a1b2c3d4e5',
+        itemName: 'Medium token pack', amountCents: 4000, currency: 'usd',
+        tokensGranted: 250, balanceAfter: 293,
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_pass':
+      return receiptEmail(who, { kind: 'pass', reference: 'cs_test_f6g7h8i9j0',
+        itemName: '3 Month Platinum Pass', amountCents: 7900, currency: 'usd',
+        tokensGranted: 200, balanceAfter: 243, tierLabel: 'platinum',
+        runsUntil: '2026-12-21T00:00:00.000Z',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_subscription':
+      return receiptEmail(who, { kind: 'subscription', reference: 'in_test_1a2b3c',
+        itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
+        tokensGranted: 120, balanceAfter: 120, tierLabel: 'Gold',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_renewal':
+      return receiptEmail(who, { kind: 'renewal', reference: 'in_test_4d5e6f',
+        itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
+        tokensGranted: 120, balanceAfter: 412, tierLabel: 'Gold',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-21T15:25:00.000Z' });
+    case 'receipt_proration':
+      // A mid-cycle upgrade charges the DIFFERENCE and grants no new month of tokens, so this
+      // sample deliberately carries no tokens row -- that is what the real one looks like.
+      return receiptEmail(who, { kind: 'proration', reference: 'in_test_7g8h9i',
+        itemName: 'Platinum subscription', amountCents: 640, currency: 'usd',
+        balanceAfter: 412, tierLabel: 'Platinum',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-05T15:25:00.000Z' });
     case 'feedback':
       return { subject: '[Campaignia Feedback] Bug report - Storyboard not loading', html: feedbackHTML({ category: 'Bug report', subject: 'Storyboard not loading', from_name: who, from_email: 'player@example.com', tier: 'Gold', message: 'The storyboard spinner never finishes on my last session. I tried refreshing a few times with no luck.' }) };
     case 'trial_ending_soon':

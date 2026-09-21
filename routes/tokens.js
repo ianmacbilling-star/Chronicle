@@ -822,17 +822,12 @@ async function sendPurchaseReceipt(receipt) {
     let balanceAfter = null;
     try { const b = await getBalance(receipt.userId); balanceAfter = (b && b.total != null) ? b.total : null; } catch (e) {}
 
-    const subjects = {
-      pack: 'Your Campaignia token purchase',
-      pass: 'Your Campaignia pass purchase',
-      subscription: 'Your Campaignia subscription',
-      renewal: 'Your Campaignia subscription renewal',
-      proration: 'Your Campaignia plan change'
-    };
+    // v3.0.962 -- TD-837. THE SUBJECT IS NOT CHOSEN HERE ANY MORE. It is derived from
+    // receipt.kind by RECEIPT_COPY in routes/email.js, which the admin preview reads too --
+    // so the preview and this send cannot say different things. What is passed is the facts.
     const { sendPurchaseReceiptEmail } = require('./email');
     await sendPurchaseReceiptEmail({
       to_email: u.email, name: u.name,
-      subject: subjects[receipt.kind] || 'Your Campaignia receipt',
       receipt: Object.assign({ balanceAfter: balanceAfter, paidAt: new Date().toISOString() }, receipt)
     });
 
@@ -1443,9 +1438,9 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   // for a proration that is the difference, not the full plan price.
   const _amt = (invoice.amount_paid != null) ? invoice.amount_paid : invoice.total;
   const _tierName = (user.tier || '').charAt(0).toUpperCase() + (user.tier || '').slice(1);
-  let _lead = 'Your subscription payment has gone through. Here are the details:';
-  if (reason === 'subscription_create') _lead = 'Your subscription is active. Here are the details:';
-  else if (reason === 'subscription_update') _lead = 'Your plan change has been charged. Here are the details:';
+  // v3.0.962 -- TD-837. The opening sentence moved to RECEIPT_COPY in routes/email.js, keyed
+  // on the same three kinds this function already distinguishes. It was three strings here
+  // and would have had to be three more in the preview.
   return { kind: (reason === 'subscription_create' ? 'subscription' : (isProration ? 'proration' : 'renewal')),
            userId: user.id, reference: invoice.id,
            itemName: (_tierName ? (_tierName + ' subscription') : 'Subscription'),
@@ -1455,7 +1450,7 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
            // silently vanishes from the receipt, which is the exact shape of bug this batch
            // is about: a thing that looks sent and is not there.
            tokensGranted: (_granted && !_granted.skipped) ? ((_granted.utlt || 0) + (_granted.cot || 0)) : null,
-           tierLabel: _tierName || null, leadIn: _lead };
+           tierLabel: _tierName || null };
 }
 
 // ------------------------------------------------------------

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.962",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "962-receipt-previews",
+        "kind": "feature",
+        "public": false,
+        "summary": "The admin Email preview / test-send list now carries all five purchase receipts.",
+        "detail": "TD-837. v3.0.961 added a receipt for every purchase, and there was no way to look at one without spending money in the Stripe sandbox. The Dashboard’s Email preview / test-send dropdown now offers all five — token pack, Platinum Pass, subscription started, subscription renewal, and plan change — each filled with realistic sample figures and sent to your own admin address with [TEST] on the subject. THE PREVIEW IS THE REAL EMAIL, not a copy of it. The subject line and the opening sentence for each receipt kind used to be written in routes/tokens.js, right beside the code that sends it. A preview that restated them would have been a second copy, free to drift, and a preview that shows something a customer never receives is worse than no preview. Both now live in one place in routes/email.js, and the preview and the live send go through the SAME function — so what lands in your inbox is byte-for-byte what a customer gets. TO TEST: Dashboard → Settings → Email preview / test-send. Send each of the five receipt entries and check the amounts, the token counts and the pass expiry read sensibly, then confirm the subject lines match the ones on the real receipts from the previous release.",
+        "td": [
+          "TD-837"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.961",
     "staged_on": "2026-09-21",
     "entries": [
