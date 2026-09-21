@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.958",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "958-pass-purchase-return",
+        "kind": "fix",
+        "public": true,
+        "summary": "Buying a Platinum Pass now confirms the purchase on screen and updates your account straight away, instead of returning you to a page that looks unchanged.",
+        "detail": "TD-830, from the Erin Bot run, filed as “the toast lasts a few seconds and I probably missed it”. It was not missed — NOTHING FIRED. The pass checkout returns to /app.html?pass=success, and handleBillingReturn() read only purchase, subscribe, portal and order, so its bail-out line returned before doing anything at all. THE MISSING TOAST WAS THE SMALLER HALF: there was also no account refresh, so the tier badge, the token counter and everything gated on the tier kept their pre-purchase answers until something else happened to reload. MODELLED ON SUBSCRIBE, NOT PURCHASE: a token pack moves one number and refreshes once; a pass moves the tier, the tokens, the art styles, the member limit and the trial watermark, so it refreshes the whole account twice — the Stripe webhook that grants the pass can land AFTER the browser does, and a single refresh would read the account as it was before the money was taken. TO TEST on a Copper or Free Trial account: buy a pass in Stripe sandbox and DO NOT RELOAD — a success toast must appear, and within about five seconds the header badge, the token count and the plan on My Account must all show Platinum. Then start a pass purchase and CANCEL in Stripe: you must get “no charge was made”, which was also silent before. In both cases the ?pass=... must be gone from the address bar afterwards — the line that strips it sat below the bail-out, so a refresh used to re-trigger the whole thing.",
+        "td": [
+          "TD-830"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.957",
     "staged_on": "2026-09-21",
     "entries": [

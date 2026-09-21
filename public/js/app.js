@@ -1366,7 +1366,11 @@ function handleBillingReturn() {
   var subscribe = params.get('subscribe');
   var portal = params.get('portal');
   var order = params.get('order');
-  if (!purchase && !subscribe && !portal && !order) return;
+  // v3.0.958 -- TD-830. THE PASS FLOW WAS NEVER ON THIS LIST, so the line below returned on
+  // every pass purchase and nothing after it ran: no toast, no refresh, and not even the
+  // history.replaceState at the bottom that clears the query string.
+  var pass = params.get('pass');
+  if (!purchase && !subscribe && !portal && !order && !pass) return;
   function refreshAccount() {
     if (typeof checkAuth === 'function') checkAuth();
     if (document.getElementById('account-plans')) loadAccount();
@@ -1382,6 +1386,22 @@ function handleBillingReturn() {
     setTimeout(refreshAccount, 4500);
   } else if (subscribe === 'cancel') {
     billingToast('Subscription checkout canceled - no charge was made.', 'info');
+  } else if (pass === 'success') {
+    // v3.0.958 -- TD-830. A PASS IS SUBSCRIBE-SHAPED, NOT PURCHASE-SHAPED.
+    //
+    // purchase refreshes the token balance once, because tokens are the only thing that moved.
+    // A pass moves the tier, the token balance, the art styles, the member limit and the
+    // free-trial watermark -- which is the whole account picture, so it refreshes the whole
+    // account, TWICE. The second pass is not belt-and-braces: the webhook that writes
+    // pass_tier and pass_expires_at can land AFTER this page has loaded, and a single refresh
+    // would then read the account exactly as it was before the money was taken.
+    billingToast('Your pass is active - welcome to Platinum!', 'success');
+    setTimeout(refreshAccount, 1500);
+    setTimeout(refreshAccount, 4500);
+  } else if (pass === 'cancel') {
+    // Every other flow says this. The pass flow said nothing at all, so a reader who backed
+    // out of Stripe could not tell whether they had been charged.
+    billingToast('Pass checkout canceled - no charge was made.', 'info');
   } else if (portal === 'return') {
     billingToast('Billing updated.', 'success');
     // loadAccount() reconciles from Stripe when it opens, so refreshing is enough;
