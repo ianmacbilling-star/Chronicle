@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.968",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "968-summary-autosaves",
+        "kind": "change",
+        "public": true,
+        "summary": "The Summary For Next Session box now saves on its own — the Save button is gone.",
+        "detail": "It works the way the campaign Lore and Story Instructions boxes already do: your typing is written a moment after you stop, and clicking away writes it immediately rather than waiting. A short Saving then Saved appears beside the box so you can see it happen. NOTHING IS WRITTEN UNLESS YOU ACTUALLY CHANGED SOMETHING — clicking into the box to read it and clicking out again does nothing at all, which matters because editing the Summary is what makes Generate Story ask before replacing it. Only one save is ever in the air at once; if you keep typing while one is being written, the next one goes out when it returns, so two saves can never land out of order and overwrite the newer text with the older. If a save fails the message stays on screen and says so rather than disappearing — an autosave that fails quietly is worse than a button, because nobody clicked anything and nobody is watching. TO TEST: type in the box, wait a moment, and watch Saved appear; switch tabs and come back to confirm it stuck. Then click into the box, change nothing, click away — nothing should save, and Generate Story should NOT ask you about replacing it.",
+        "td": [
+          "TD-855"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.967",
     "staged_on": "2026-09-22",
     "entries": [

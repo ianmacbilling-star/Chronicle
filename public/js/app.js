@@ -30659,11 +30659,14 @@ function sbSummaryLoad() {
       // decides that and says so -- the panel does not infer it.
       var editable = (d.summary_can_edit !== false);
       ta.readOnly = !editable;
-      var btn = document.getElementById('sb-summary-save');
-      if (btn) btn.style.display = editable ? '' : 'none';
+      // v3.0.968 -- TD-855. The Save button is gone; read-only is now carried by the box itself
+      // plus this line, and by sbSummaryDirty refusing to write a read-only field at all.
       var msg = document.getElementById('sb-summary-msg');
       if (msg) msg.textContent = editable ? '' : 'Read-only \u2014 this is another version\u2019s summary.';
       sbSummaryCount();
+      // ARMED LAST, AND ONLY AFTER THE VALUE IS IN. Anything that ran before this point cannot
+      // trigger a write, so loading a Summary can never mark it edited.
+      _sbSumReady = editable;
     })
     .catch(function () {});
 }
@@ -30678,12 +30681,63 @@ function sbSummaryCount() {
   el.style.color = (n > lim) ? '#e08a6a' : 'rgba(201,168,76,0.35)';
 }
 
-function sbSummarySave() {
+// =================================================================================================
+// v3.0.968 -- TD-855. THE SUMMARY SAVES ITSELF, THE WAY THE LORE AND INSTRUCTION BOXES DO.
+//
+// Lifted from csDirty / csFlush / csCommitCampaignSettings rather than reinvented, because that
+// trio has already had the three problems knocked out of it.
+// =================================================================================================
+// Same 1200ms as the campaign fields: long enough not to write on every keystroke, short enough
+// to beat a tab switch. Its own constant rather than a reference to CS_AUTOSAVE_MS -- that one is
+// declared mid-file, which on this file means it may have a dead twin (TD-853), and a shared
+// mutable global between two unrelated panels is a coupling nobody asked for.
+var SB_SUMMARY_AUTOSAVE_MS = 1200;
+var _sbSumTimer = null, _sbSumSaving = false, _sbSumAgain = false, _sbSumReady = false;
+
+function sbSummaryState(msg, kind) {
+  var el = document.getElementById('sb-summary-msg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = (kind === 'error') ? '#e57373' : 'rgba(201,168,76,0.5)';
+}
+
+// now === true writes immediately (a flush); otherwise it debounces.
+//
+// _sbSumReady is what stops the LOAD from saving. sbSummaryLoad sets the textarea value
+// programmatically, which does not fire oninput -- but a stray call, or a future edit that starts
+// dispatching events, would otherwise write the server answer straight back and mark a Summary
+// edited that nobody touched.
+function sbSummaryDirty(now) {
+  if (!_sbSumReady || !state.currentCampaign || !state.currentSession) return;
   var ta = document.getElementById('sb-summary-text');
-  var msg = document.getElementById('sb-summary-msg');
-  if (!ta || !state.currentCampaign || !state.currentSession) return;
-  if (msg) msg.textContent = 'Saving\u2026';
-  fetch('/api/narrative/summary/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+  if (!ta || ta.readOnly) return;
+  if (_sbSumTimer) { clearTimeout(_sbSumTimer); _sbSumTimer = null; }
+  sbSummaryState('Saving\u2026');
+  if (now) sbSummaryCommit();
+  else _sbSumTimer = setTimeout(function () { _sbSumTimer = null; sbSummaryCommit(); }, SB_SUMMARY_AUTOSAVE_MS);
+}
+
+// Write a pending edit NOW rather than waiting out the debounce -- this is the blur handler.
+//
+// THE `if (_sbSumTimer)` IS THE WHOLE GUARD, AND IT MATTERS MORE HERE THAN IT DOES ON THE CAMPAIGN
+// FIELDS. A write marks the Summary edited, and an edited Summary asks before every regenerate
+// from then on. Without this, clicking into the box and straight back out -- reading it, changing
+// nothing -- would mark it edited and earn the reader a confirm they never did anything to deserve.
+function sbSummaryFlush() {
+  if (_sbSumTimer) sbSummaryDirty(true);
+}
+
+function sbSummaryCommit() {
+  if (!_sbSumReady || !state.currentCampaign || !state.currentSession) return;
+  var ta = document.getElementById('sb-summary-text');
+  if (!ta || ta.readOnly) return;
+  // One write at a time. A second edit while a PUT is in flight is remembered and replayed when
+  // it returns, rather than racing it -- two overlapping PUTs can land out of order and the
+  // winner is whichever the server finished last, not whichever the reader typed last.
+  if (_sbSumSaving) { _sbSumAgain = true; return; }
+  _sbSumSaving = true;
+  var saveCamp = state.currentCampaign.id, saveSess = state.currentSession.id;
+  fetch('/api/narrative/summary/' + saveCamp + '/' + saveSess + forkQ(), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     // An empty string is a deliberate save, not a no-op: it means start the memory again.
@@ -30691,19 +30745,30 @@ function sbSummarySave() {
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.error) { if (msg) msg.textContent = d.error; return; }
-      ta.value = (d && d.summary) || '';
+      _sbSumSaving = false;
+      if (d && d.error) { sbSummaryState(d.error, 'error'); return; }
       state._sbSummaryEdited = true;
-      sbSummaryCount();
-      if (msg) msg.textContent = 'Saved.';
-      setTimeout(function () { if (msg && msg.textContent === 'Saved.') msg.textContent = ''; }, 2500);
+      // THE BOX IS NOT REPAINTED FROM THE ANSWER. The old Save button did that, and it was safe
+      // only because nothing could be typed between the click and the reply. On a debounce the
+      // reader is still typing while the PUT is in the air, and writing the server copy back
+      // would swallow every character typed since. The server truncates at the cap and the
+      // counter already shows when that will bite.
+      // Still on the same session? A reply that lands after a switch must not talk about this one.
+      if (!state.currentSession || state.currentSession.id !== saveSess) return;
+      sbSummaryState('Saved');
+      if (_sbSumAgain) { _sbSumAgain = false; sbSummaryDirty(true); return; }
+      setTimeout(function () { var el = document.getElementById('sb-summary-msg'); if (el && el.textContent === 'Saved') el.textContent = ''; }, 2000);
     })
-    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+    .catch(function () {
+      _sbSumSaving = false;
+      // Loud, and it STAYS. An autosave that fails quietly is worse than a Save button, because
+      // nobody clicked anything and nobody is watching for a result.
+      sbSummaryState('Could not save \u2014 your text is still here, try again.', 'error');
+    });
 }
 
-// Live counter. Bound once, defensively -- the element exists from page load because app.html is
-// served whole, but a missing node must never throw at startup.
-try {
-  var _sbSumTa = document.getElementById('sb-summary-text');
-  if (_sbSumTa) _sbSumTa.addEventListener('input', function () { sbSummaryCount(); });
-} catch (e) {}
+// v3.0.968 -- TD-855. The listener that used to live here is gone. The textarea now carries
+// oninput="sbSummaryCount();sbSummaryDirty()" in the markup, which does the counting AND the
+// dirty marking in one place. Keeping the listener as well would have been two mechanisms on one
+// field, which is how they drift apart -- and the one in the markup is the one a reader editing
+// the panel will see.
