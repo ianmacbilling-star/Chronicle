@@ -6012,8 +6012,25 @@ function cancelNarr() {
 // Generate the narrative ONLY (no images). Same narrative pass as the combined
 // button, but it stops after painting the prose into the panels. Lets you
 // rewrite the story without regenerating art / spending image tokens.
+// v3.0.967 -- TD-852. ASK BEFORE REPLACING A SUMMARY SOMEBODY WROTE.
+//
+// Ian chose "ask each time". The question is only worth asking when there is something to lose,
+// so an untouched Summary regenerates silently as it should. Answering no still generates the
+// narrative -- it declines only the Summary -- because refusing the whole run would make this a
+// confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  if (!state._sbSummaryAsked && state._sbSummaryEdited) {
+    state._sbSummaryAsked = true;
+    uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?', { okText: 'Replace it', cancelText: 'Keep mine' })
+      .then(function (yes) {
+        state._sbSummaryReplace = !!yes;
+        generateNarrativeOnly();
+      })
+      .catch(function () { state._sbSummaryReplace = false; generateNarrativeOnly(); });
+    return;
+  }
+  state._sbSummaryAsked = false;
   setGenLock('Generate Narrative');
   var btn = document.getElementById('sb-generate-narr-btn');
   var origLabel = btn ? btn.textContent : '';
@@ -6046,7 +6063,10 @@ function generateNarrativeOnly() {
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: getApiKey() || 'platform' }),
+    // v3.0.967 -- TD-852. replace_summary is the ONLY thing that lets a generation overwrite a
+    // hand-edited Summary; the server refuses without it, so the five other call sites for this
+    // route cannot destroy one even though none of them knows the field exists.
+    body: JSON.stringify({ key: getApiKey() || 'platform', replace_summary: !!state._sbSummaryReplace }),
     signal: _nctl.signal
   })
   .then(function (r) { return r.json(); })
@@ -16436,6 +16456,9 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  // v3.0.967 -- TD-852. Injected into the LAST of the two switchSessionTab declarations, because
+  // this file declares 90 functions twice and the later one is the one that runs (TD-853).
+  if (tab === 'storyboard') { try { sbSummaryLoad(); } catch (e) {} }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
   // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
@@ -25531,6 +25554,7 @@ function loadGenerationSettings() {
       if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
+      if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
     })
     .catch(function () {});
 }
@@ -25548,6 +25572,7 @@ function saveGenerationSettings() {
       narrativePanelsPerToken: iv('gen-narr-ppt'),
       narrativeFloor: iv('gen-narr-floor'),
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
+      summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
       layoutLoopCostCents: (function () { var n = parseInt((g('layout-loop-cost') || {}).value, 10); return (isFinite(n) && n >= 1) ? n : 8; })()   // v3.0.356 -- never send 0
     })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -30609,3 +30634,76 @@ function resetPublishForCampaignSwitch(force) {
   // Re-pull book meta + title/thumbs for the new campaign.
   if (typeof prepPanelSync === 'function') prepPanelSync();
 }
+
+// =================================================================================================
+// v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION.
+//
+// APPENDED AT THE END OF THE FILE ON PURPOSE. app.js declares 90 top-level functions twice and
+// the later declaration wins (TD-853), so anything added mid-file risks landing in the dead copy
+// while every grep-based check passes. At the end of the file a duplicate cannot exist.
+//
+// BLANK IS NORMAL. No Summary yet, an empty box, a cleared one -- all the same state, all fine,
+// and none of them an error worth showing anybody.
+// =================================================================================================
+function sbSummaryLoad() {
+  var ta = document.getElementById('sb-summary-text');
+  if (!ta || !state.currentCampaign || !state.currentSession) return;
+  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ())
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d) return;
+      ta.value = d.summary || '';
+      state._sbSummaryEdited = !!d.summary_edited;
+      state._sbSummaryLimit = d.summary_limit || 1500;
+      // A reader may look at somebody else's version; only its owner may write it. The server
+      // decides that and says so -- the panel does not infer it.
+      var editable = (d.summary_can_edit !== false);
+      ta.readOnly = !editable;
+      var btn = document.getElementById('sb-summary-save');
+      if (btn) btn.style.display = editable ? '' : 'none';
+      var msg = document.getElementById('sb-summary-msg');
+      if (msg) msg.textContent = editable ? '' : 'Read-only \u2014 this is another version\u2019s summary.';
+      sbSummaryCount();
+    })
+    .catch(function () {});
+}
+
+function sbSummaryCount() {
+  var ta = document.getElementById('sb-summary-text');
+  var el = document.getElementById('sb-summary-count');
+  if (!ta || !el) return;
+  var lim = state._sbSummaryLimit || 1500;
+  var n = (ta.value || '').length;
+  el.textContent = n + ' / ' + lim;
+  el.style.color = (n > lim) ? '#e08a6a' : 'rgba(201,168,76,0.35)';
+}
+
+function sbSummarySave() {
+  var ta = document.getElementById('sb-summary-text');
+  var msg = document.getElementById('sb-summary-msg');
+  if (!ta || !state.currentCampaign || !state.currentSession) return;
+  if (msg) msg.textContent = 'Saving\u2026';
+  fetch('/api/narrative/summary/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    // An empty string is a deliberate save, not a no-op: it means start the memory again.
+    body: JSON.stringify({ text: ta.value || '' })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.error) { if (msg) msg.textContent = d.error; return; }
+      ta.value = (d && d.summary) || '';
+      state._sbSummaryEdited = true;
+      sbSummaryCount();
+      if (msg) msg.textContent = 'Saved.';
+      setTimeout(function () { if (msg && msg.textContent === 'Saved.') msg.textContent = ''; }, 2500);
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+// Live counter. Bound once, defensively -- the element exists from page load because app.html is
+// served whole, but a missing node must never throw at startup.
+try {
+  var _sbSumTa = document.getElementById('sb-summary-text');
+  if (_sbSumTa) _sbSumTa.addEventListener('input', function () { sbSummaryCount(); });
+} catch (e) {}

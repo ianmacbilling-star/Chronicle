@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.967",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "967-summary-for-next-session",
+        "kind": "feature",
+        "public": true,
+        "summary": "A new Summary For Next Session box at the bottom of the Storyboard — a short, editable memory of what happened, written for you when you Generate Story.",
+        "detail": "Each session now keeps a short note of what happened in it, written for the NEXT session to read: who matters now, where they are, what they are trying to do, and what is still unresolved. It sits at the very bottom of the Storyboard tab and you can edit every word of it. IT COSTS NOTHING EXTRA. Generate Story already asks the model for a handful of short summaries while it writes the prose, and this is one more field in the same answer — no second run and no extra tokens. THE LENGTH IS CAPPED AND THE MODEL KNOWS THE CAP BEFORE IT WRITES, so it keeps what still matters and lets go of what does not, rather than a fifty-session campaign ending up with a wall of text. The limit is set on the Dashboard and starts at 1,500 characters. YOURS IS KEPT: once you have edited the Summary, generating the narrative again asks before replacing it, and saying keep mine changes nothing else about the run. Leaving it blank is perfectly fine and breaks nothing. Each version has its own, like every other per-version setting — you can read another version Summary but not write it. WHAT IS NOT HERE YET: nothing reads the Summary back. Feeding it to the next session, so the story remembers itself, is the next release. TO TEST: open a session with a storyboard, run Generate Story, and read what appears in the box at the bottom. Edit it, save, switch tabs and come back to confirm it stuck. Then run Generate Story again and check you are asked before it is replaced.",
+        "td": [
+          "TD-852"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.966",
     "staged_on": "2026-09-22",
     "entries": [

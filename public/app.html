@@ -1044,6 +1044,24 @@
             <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>
           <div id="moments-grid"></div>
+          <!-- v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION. Last thing in #sb-content, which is
+               the very bottom of the Storyboard. Styled like the "Select your style" panel at the
+               top of this same tab so the two read as a pair bracketing the grid. -->
+          <div id="sb-summary-panel" style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-top:14px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(201,168,76,0.4);">Summary For Next Session</div>
+              <div id="sb-summary-count" style="font-size:10px;color:rgba(201,168,76,0.35);"></div>
+            </div>
+            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;">
+              What the next session will be told about this one &mdash; who matters, where they are, what is unresolved.
+              Generate Story writes it; you can edit it, and yours is kept.
+            </div>
+            <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" placeholder="Nothing remembered yet. Generate Story writes this, or type it yourself."></textarea>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+              <button class="btn btn-sm" id="sb-summary-save" onclick="sbSummarySave()">Save Summary</button>
+              <span id="sb-summary-msg" style="font-size:11px;color:rgba(201,168,76,0.5);"></span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1573,6 +1591,9 @@
             <option value="5m">5 minutes</option>
             <option value="1h">1 hour</option>
           </select>
+          <!-- v3.0.967 -- TD-852. The model is told this number and writes to fit it. -->
+          <label style="color:var(--gold);font-size:13px;">Summary For Next Session &mdash; character limit</label>
+          <input type="number" min="200" step="50" id="gen-summary-limit" style="width:110px;" />
         </div>
         </div>
 
