@@ -1815,6 +1815,12 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // v3.0.973 -- TD-873. The footer stamp. Left alone when the server sends nothing, so the
+      // worst case is the bare product name rather than a version that is not the one running.
+      try {
+        var _vl = document.getElementById('app-version-label');
+        if (_vl && data.appVersion) _vl.textContent = 'Campaignia v' + data.appVersion;
+      } catch (e) {}
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
@@ -15840,6 +15846,12 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // v3.0.973 -- TD-873. The footer stamp. Left alone when the server sends nothing, so the
+      // worst case is the bare product name rather than a version that is not the one running.
+      try {
+        var _vl = document.getElementById('app-version-label');
+        if (_vl && data.appVersion) _vl.textContent = 'Campaignia v' + data.appVersion;
+      } catch (e) {}
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
@@ -23462,6 +23474,7 @@ function ensureInterior() {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
       }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}   // v3.0.973 -- TD-872, the twin path
       return { url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
     });
 }
@@ -23495,6 +23508,10 @@ function prepareInteriorCount() {
         updatePrintPageDisplay(-1, false); return;
       }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      // v3.0.973 -- TD-872. The server has just said a saved book exists; repaint the line that
+      // was claiming it did not. v3.0.473 records the same lesson: clearing the flag is not
+      // enough on its own, because nothing else repaints this until a tab change.
+      try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
       // v3.0.798 -- TD-608. print-interior builds the APPROVED book and now says when that is not
       // the book on screen. This is the tab-open path, so the notice is there before anything is
       // clicked; reviewPrintOrder re-renders it from the same field when Prepare runs.
@@ -24718,6 +24735,20 @@ function quotePrintOrder() {
   // v3.0.879 -- TD-756. The old test demanded a postcode from everyone, and the
   // probe measured that 116 of the served countries price without one. Ask for
   // what each country actually needs, and say which country we are asking for.
+  // v3.0.973 -- TD-871. THE THREE FIELDS THIS FUNCTION NEVER LOOKED AT.
+  //
+  // Country, state and postcode have been checked since v3.0.879; name, street and city
+  // were not, so a form with only the bottom half filled in passed every gate here and
+  // was refused by the printer instead -- which, before TD-870, reported it as a problem
+  // with the book's format. Asked and answered here, it never leaves the page.
+  var _need = [];
+  if (!String(body.shipTo.name || '').trim()) _need.push('a name');
+  if (!String(body.shipTo.street1 || '').trim()) _need.push('a street address');
+  if (!String(body.shipTo.city || '').trim()) _need.push('a city');
+  if (_need.length) {
+    if (out) out.textContent = 'Shipping needs ' + _need.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' before it can be priced.';
+    return;
+  }
   if (!body.shipTo.countryCode) {
     if (out) out.textContent = 'Choose a country to price shipping.';
     return;
@@ -26843,7 +26874,8 @@ function finalizeUpdatePublishLink() {
   var a = document.getElementById('publish-book-link');
   var none = document.getElementById('publish-book-none');
   if (!a) return;
-  var ready = _finalizeSavedReady && !!(state && state.currentCampaign);   // v3.0.392 -- see above
+  // v3.0.973 -- TD-872. EITHER WITNESS WILL DO, and the server's is the better one.
+  var ready = (_finalizeSavedReady || finalizeServerSavedBook()) && !!(state && state.currentCampaign);   // v3.0.392 -- see above
   if (!ready) {
     a.style.display = 'none';
     if (none) none.style.display = '';
@@ -30974,4 +31006,21 @@ function _narrCancelJob(jid) {
       if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
     })
     .catch(function () {});
+}
+
+
+// =====================================================================================
+// v3.0.973 -- TD-872. DID THE SERVER SAY THERE IS A SAVED BOOK?
+//
+// printInteriorCache.url is set only from a successful /print-interior answer, which the
+// server refuses unless a SAVED layout exists -- so a url here is the server's own yes.
+// It is cleared by orderResetForVersion on every version and campaign switch, so it can
+// never speak for a book that is no longer on screen.
+//
+// APPENDED, NOT INSERTED (TD-853): this file declares ninety functions twice and the later
+// declaration is the one that runs.
+// =====================================================================================
+function finalizeServerSavedBook() {
+  try { return !!(typeof printInteriorCache !== 'undefined' && printInteriorCache && printInteriorCache.url); }
+  catch (e) { return false; }
 }

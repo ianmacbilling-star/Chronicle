@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.0.973",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "A price that fails because of your address now says so, instead of blaming the book format.",
+        "detail": "If the printer refused a quote, we were telling you the binding, paper and colour did not work for a book that length — and asking you to try other formats. An incomplete address produced exactly that message, so there was no format to find. The printer now has to name the product code before we describe it as a format problem; everything else says to check the shipping address."
+      },
+      {
+        "summary": "The price check asks for a missing name, street or city before it asks the printer.",
+        "detail": "Country, state and postcode were already checked on the page. Name, street and city were not, so a half-filled form went to the print service to be refused. It now says which line is missing."
+      },
+      {
+        "summary": "\"Run Optimize first\" no longer appears on a book that has a saved layout.",
+        "detail": "On the Order & Publish screen the Publishing line could say nothing was ready while the line beneath it named the layout you saved and the time you saved it. The first was going by whether you had opened the Optimize screen in this browser session; it now asks the server, like its neighbour does."
+      },
+      {
+        "summary": "The version in the page footer is the version you are running.",
+        "detail": "It has read v3.0.0 since it was first typed there, which is the number a confused reader would quote to us. It now comes from the running build."
+      }
+    ]
+  },
+  {
     "version": "3.0.972",
     "date": "2026-09-22",
     "entries": [
