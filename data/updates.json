@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.969",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "969-story-remembers-itself",
+        "kind": "feature",
+        "public": true,
+        "summary": "Your story now remembers itself — when you Generate Story, the previous session’s Summary is carried forward into the new one.",
+        "detail": "v3.0.967 gave every session a Summary For Next Session. This is the half that reads it back. WHEN YOU GENERATE A STORY, the previous session’s Summary is handed to the writer as established fact — placed after your campaign’s Lore and before this session’s panels, so it bridges the world you set up and the scene being written now. The prose can lean on who these people are to each other and what was left hanging, without retelling it. AND IT KEEPS ROLLING. The new Summary does not start from scratch: it begins from the one carried forward, keeps what still matters, adds what this session changed, and drops what is now settled — one running memory of the whole campaign rather than a stack of session recaps. It is told to drop what matters LEAST rather than what is OLDEST, so a fact established in session three can still be there in session forty. WHICH SESSION, AND WHOSE: the box now tells you what it is carrying and where it came from. Each version keeps its own memory, so it uses yours if you have one for the previous session, and the Story Master’s if you do not — which is what happens for anyone who joined partway through. NOTHING BREAKS WHEN THERE IS NOTHING TO CARRY. The first session of a campaign, or one whose predecessor has no Summary yet, simply writes its own and says so. TO TEST: generate session one, read its Summary, then generate session two — the prose should be aware of session one without retelling it, and session two’s Summary should CARRY FORWARD what still matters rather than describing only itself. Then edit session one’s Summary by hand, regenerate session two, and confirm your edit is what got used.",
+        "td": [
+          "TD-854"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.968",
     "staged_on": "2026-09-22",
     "entries": [

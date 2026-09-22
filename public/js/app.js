@@ -30653,6 +30653,24 @@ function sbSummaryLoad() {
     .then(function (d) {
       if (!d) return;
       ta.value = d.summary || '';
+      // v3.0.969 -- TD-854. THREE DISTINCT STATES, AND THEY ARE NOT THE SAME THING:
+      //   no previous session      -> say nothing at all (the first session of a campaign)
+      //   previous, no summary yet -> say so, because it is fixable and worth knowing
+      //   previous with a summary  -> name it, and say WHOSE, since each version keeps its own
+      var inh = document.getElementById('sb-summary-inherit');
+      if (inh) {
+        if (!d.inherited) {
+          inh.style.display = 'none';
+          inh.textContent = '';
+        } else {
+          var who = (d.inherited.source === 'sm') ? "the Story Master\u2019s version" : 'your version';
+          var nm = d.inherited.session_name ? ('\u201c' + d.inherited.session_name + '\u201d') : 'the previous session';
+          inh.textContent = d.inherited.has_text
+            ? ('Carrying forward the memory from ' + nm + ' \u2014 ' + who + '.')
+            : (nm + ' has no summary yet, so this session starts with a blank memory.');
+          inh.style.display = '';
+        }
+      }
       state._sbSummaryEdited = !!d.summary_edited;
       state._sbSummaryLimit = d.summary_limit || 1500;
       // A reader may look at somebody else's version; only its owner may write it. The server
