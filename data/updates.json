@@ -1,5 +1,166 @@
 [
   {
+    "version": "3.0.965",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "965-token-tile-labels",
+        "kind": "change",
+        "public": true,
+        "summary": "The two token tiles on My Account now say in plain words what each kind of token is.",
+        "detail": "TD-845. The Usage panel showed UTOLT TOKENS and CARRY-OVER TOKENS with a number under each and nothing else. UTOLT is an acronym, and an acronym on a screen is a word only the people who built it can read. Each tile now carries a small line underneath saying what it means: Use Them or Lose Them, and Yours to Keep. NOTHING ABOUT THE NUMBERS CHANGED -- this is wording. The two tiles are the whole token model in miniature and they explain each other, which is why both got a line rather than only the confusing one. WHAT THE TWO ACTUALLY MEAN, since this is the first place it has been written down for a reader: the first tile is the tokens that come with your plan each month. They refresh on your billing date and they do not roll over, so it is worth spending them first -- and the app does spend them first, before it touches the other kind. The second tile is tokens you bought, or that came with a pass, a bonus or a plan upgrade. Those are yours and they never expire. Everything you pay for outright lands in the second tile; only the plan itself and an upgrade to it put tokens in the first. TO TEST: My Account -> Usage. Both token tiles have a small line under the label, dimmer and smaller than the label itself. The numbers are unchanged, and the five tiles beside them are untouched.",
+        "td": [
+          "TD-845",
+          "TD-814"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.964",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "964-order-number",
+        "kind": "change",
+        "public": true,
+        "summary": "Print orders now get a proper order number -- CMP-2026-00042 -- instead of the short internal po- tag.",
+        "detail": "TD-839. Every print order was labelled po- followed by its row number: po-7, po-42. That is a database id with a prefix on it, and it was what the confirmation email showed, what the printer was told, and what support had to ask a customer to read out. THE NEW NUMBER CARRIES THE YEAR AND SORTS PROPERLY: CMP-2026-00042. Five digits, so the ten-thousandth order of a year still lines up under the ones before it. The year is the year the order was placed and it is fixed at that moment -- an order placed in December still reads 2026 when you look at it in January. The digits are the order id itself, so they keep counting rather than restarting; the year says when, not how many. ORDERS PLACED BEFORE THIS KEEP THE NUMBER THEY WERE GIVEN. A number that has already gone out on a confirmation email, and that the printer already knows the job by, does not get quietly relabelled -- old orders stay po- and are still found by it. THE NUMBER IS DECIDED ONCE, WHERE THE ORDER IS CREATED, AND EVERYTHING ELSE READS IT. The printer, the confirmation email, the problem email and the support report all take the same value, so none of them can drift into naming the order something the others do not recognise. THE TWO ORDER EMAILS ALSO GOT THE TABLE FIX from v3.0.963: fixed column widths, so a long book title or a tracking number cannot push the details past the edge of the panel the way an internal key did to the purchase receipts. TO TEST: Dashboard -> Settings -> Email preview / test-send -> Print order confirmed, and Print order problem. The order number reads CMP- then a year then five digits, every label sits on one line, and nothing runs outside the panel. Then place a real order: the number on screen, the number in the email and the number the printer shows must all be the same one.",
+        "td": [
+          "TD-839"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.963",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "963-receipt-layout",
+        "kind": "fix",
+        "public": true,
+        "summary": "Purchase receipts now show a short Purchase ID instead of a long internal key, and the token pack and pass receipts no longer spill outside the panel.",
+        "detail": "TD-838. The token pack and Platinum Pass receipts came out broken — labels wrapping onto two lines, values shoved right, and the reference line running clean off the edge of the panel. The subscription one looked perfect. THE LAYOUT WAS THE SYMPTOM; THE FIELD WAS THE BUG. Every receipt carried a Reference, and that was the id STRIPE uses internally — not a purchase number, and no use to anybody reading it. A subscription invoice id is about 27 characters and fits; a checkout session id, which is what a pack and a pass produce, is about 55 with no space or hyphen anywhere in it. A table column cannot break a run with nothing to break on, so it grew until it fit and pushed everything else out of shape. That is why exactly two of the three were wrong, and why the third looked fine while being just as wrong in substance. NOW IT IS A PURCHASE ID, AND ONLY WHEN THERE IS ONE. A token pack and a pass each write a purchase record, so they show tp-00042 — short, ours, and the same shape as the po- numbers print orders already use. A subscription charge has no purchase record at all, so the line is simply not there rather than showing something only support could use. The detail table also has fixed column widths now, so no future value can push it around the way that id did. TO TEST: Dashboard → Settings → Email preview / test-send. Send the token pack and Platinum Pass receipts — every label on one line, every value inside the panel, and a Purchase ID line reading tp- followed by five digits. Send the subscription, renewal and plan-change ones — they should look exactly as they did before EXCEPT that the Reference line is gone.",
+        "td": [
+          "TD-838"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.962",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "962-receipt-previews",
+        "kind": "feature",
+        "public": false,
+        "summary": "The admin Email preview / test-send list now carries all five purchase receipts.",
+        "detail": "TD-837. v3.0.961 added a receipt for every purchase, and there was no way to look at one without spending money in the Stripe sandbox. The Dashboard’s Email preview / test-send dropdown now offers all five — token pack, Platinum Pass, subscription started, subscription renewal, and plan change — each filled with realistic sample figures and sent to your own admin address with [TEST] on the subject. THE PREVIEW IS THE REAL EMAIL, not a copy of it. The subject line and the opening sentence for each receipt kind used to be written in routes/tokens.js, right beside the code that sends it. A preview that restated them would have been a second copy, free to drift, and a preview that shows something a customer never receives is worse than no preview. Both now live in one place in routes/email.js, and the preview and the live send go through the SAME function — so what lands in your inbox is byte-for-byte what a customer gets. TO TEST: Dashboard → Settings → Email preview / test-send. Send each of the five receipt entries and check the amounts, the token counts and the pass expiry read sensibly, then confirm the subject lines match the ones on the real receipts from the previous release.",
+        "td": [
+          "TD-837"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.961",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "961-purchase-receipts",
+        "kind": "fix",
+        "public": true,
+        "summary": "Every purchase now sends a receipt by email — token packs, Platinum Passes, and every subscription charge including renewals.",
+        "detail": "TD-836, from the tester run: a Platinum Pass was bought twice and no email arrived either time. Print orders have always sent a confirmation; NOTHING ELSE DID. A token pack, a pass and a subscription all took money and sent silence, and a monthly renewal has never sent anything at all — so a customer charged in month seven had no record of it from us. THE RECEIPT NOW COMES FROM ONE PLACE. Every purchase lands in the same Stripe webhook, and each kind of purchase hands back a description of what was bought; one block at the end sends the receipt. That matters more than it sounds: the reason three of these were missing is that each fulfilment path was written separately and nobody could see the whole set at once. Now “did this purchase send a receipt” is one function to read. WHAT IS ON IT: what you bought, what you paid, the card it went on where Stripe tells us, the tokens added and your new balance, and for a pass the tier and the date it runs to. IT CANNOT SEND TWICE. Stripe retries webhooks routinely, and a duplicate receipt for a real charge is its own support conversation. Each receipt is recorded against the Stripe session or invoice id, and a retry finds the record and sends nothing — while a retry after a MAIL failure still tries again, because those are different questions and were deliberately not merged. A receipt that fails to send is logged as an error and raises an alert rather than disappearing. RENEWALS AND UPGRADES BOTH COUNT (Ian: every charge). A monthly renewal sends a receipt. Upgrading mid-cycle charges a prorated amount immediately, and that sends one too — but it does NOT grant a new month of tokens, which is the thing that made this branch delicate: the receipt and the token grant now ask different questions of the same invoice. TO TEST in the Stripe sandbox: buy a token pack, buy a pass, and start a subscription — each must produce one email, and the amounts on them must match what Stripe charged. Then check the print-order confirmation still arrives as it always did, because that path was deliberately left alone.",
+        "td": [
+          "TD-836"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.960",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "960-trial-pill-opens-plans",
+        "kind": "feature",
+        "public": true,
+        "summary": "The FREE TRIAL pill in the top bar is now a button — click it to go straight to plans and passes.",
+        "detail": "TD-835. The pill is the one thing on screen that tells you the account is limited, and until now it did nothing when you clicked it: a reader who wanted to do something about the trial had to know to open My Account and scroll down past several panels to find the plans. Now the pill takes you there in one click, landing on Plans & Subscription Info — which carries the subscription grid AND the passes block below it, so both ways of paying are on the screen you arrive at. It goes through the same goToPlans() that the tokens modal and the publish refusal already use, so there is one route to that panel rather than a second copy of the scroll logic. THE PILL IS A REAL CONTROL NOW, not a coloured label with a click handler: it carries a button role, it can be reached and fired from the keyboard with Tab then Enter or Space, and the tooltip says it can be clicked — a clickable thing whose tooltip never mentions clicking is a small lie, and that tooltip is also the only place the trial caps are spelled out. TO TEST on a Free Trial account: the gold star FREE TRIAL pill should be in the top bar with the days remaining beside it. Click it — you should land on My Account with Plans & Subscription Info in view, and the passes should be visible just below the plans. Then do it with the keyboard: press Tab until the pill is focused and press Enter, then try again with the space bar; both must work, and the space bar must NOT also scroll the page. Finally, on a paid account the pill is hidden entirely, exactly as before.",
+        "td": [
+          "TD-835"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.959",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "959-watermark-follows-effective-tier",
+        "kind": "fix",
+        "public": true,
+        "summary": "If you play in a campaign run by someone on a paid plan or a pass, your pages are no longer stamped TRIAL — on screen, in the PDF, and at the print order button.",
+        "detail": "TD-834, from the Erin Bot / Tamika Bot run. Tamika is on the Free Trial and plays in Erin’s campaign; Erin holds a Platinum Pass. Every one of the ten storyboard panels came up watermarked for Tamika and none did for Erin — THE SAME BOOK, the same campaign, the same pages. THE WATERMARK WAS READING THE WRONG ACCOUNT. It asked “is the person looking at this on the free trial” when the question is “is THIS BOOK a trial book”, and a book made inside a paid Story Master’s campaign is not. It now follows the EFFECTIVE tier for the campaign — the higher of your own plan and the Story Master’s — which is the same rule the art and narrative style pickers have used all along. A SECOND FAULT WAS FOUND IN THE SAME PLACE AND NOBODY HAD REPORTED IT: the PDF export read users.tier directly, and buying a pass does not change that column, so a customer who had paid for a Platinum Pass still got CAMPAIGNIA TRIAL tiled across every page of their exported book. That is fixed here too. AND THE PRINT ORDER BUTTON MOVES WITH IT: it refuses watermarked books, which is right, but it was deciding on your own account rather than the book — so a member of a paid campaign was refused a physical copy of a book that carries no watermark. Ordering is unchanged in every other way; whoever places the order still pays for it. TO TEST: as a Free Trial member of a campaign run by a paid Story Master, open the storyboard — no watermark on any panel. Export the session PDF and the graphic novel — no TRIAL across the pages. Open the order page — it must let you through to payment. Then check the other direction still works: in YOUR OWN trial campaign, with no paid Story Master above you, the watermark must still be on the panels and in the PDF, and the order button must still refuse.",
+        "td": [
+          "TD-834"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.958",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "958-pass-purchase-return",
+        "kind": "fix",
+        "public": true,
+        "summary": "Buying a Platinum Pass now confirms the purchase on screen and updates your account straight away, instead of returning you to a page that looks unchanged.",
+        "detail": "TD-830, from the Erin Bot run, filed as “the toast lasts a few seconds and I probably missed it”. It was not missed — NOTHING FIRED. The pass checkout returns to /app.html?pass=success, and handleBillingReturn() read only purchase, subscribe, portal and order, so its bail-out line returned before doing anything at all. THE MISSING TOAST WAS THE SMALLER HALF: there was also no account refresh, so the tier badge, the token counter and everything gated on the tier kept their pre-purchase answers until something else happened to reload. MODELLED ON SUBSCRIBE, NOT PURCHASE: a token pack moves one number and refreshes once; a pass moves the tier, the tokens, the art styles, the member limit and the trial watermark, so it refreshes the whole account twice — the Stripe webhook that grants the pass can land AFTER the browser does, and a single refresh would read the account as it was before the money was taken. TO TEST on a Copper or Free Trial account: buy a pass in Stripe sandbox and DO NOT RELOAD — a success toast must appear, and within about five seconds the header badge, the token count and the plan on My Account must all show Platinum. Then start a pass purchase and CANCEL in Stripe: you must get “no charge was made”, which was also silent before. In both cases the ?pass=... must be gone from the address bar afterwards — the line that strips it sat below the bail-out, so a refresh used to re-trigger the whole thing.",
+        "td": [
+          "TD-830"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.957",
+    "staged_on": "2026-09-21",
+    "entries": [
+      {
+        "id": "957-updates-landing-date",
+        "kind": "fix",
+        "public": true,
+        "summary": "Every update on this list now shows the date it went live, and the list no longer says a version is not running when it plainly is.",
+        "detail": "Found on the first production promote after this page shipped. Production went 3.0.948 straight to 3.0.955 in one deploy, so versions 949 to 954 never booted under their own number — their code arrived inside 955. The page read that absence as “not running here yet” and printed it directly beneath 955’s own live date, while 955 existed because of 954’s fix. THAT PHRASE IS GONE AND CANNOT COME BACK: this list ships inside the deployed code, so it can never describe a version newer than the one serving it — everything on the list is running. A version with no boot record of its own now shows the date of the deploy that carried it, which is the first recorded version above it, and that is the landing date rather than an estimate of it. The build date has also gone, from the payload and not just the screen: it answered “when was this compiled” beside the only question a reader has. TO TEST on production: 949, 950, 951, 953 and 954 must all read 19 Sep 2026, the same as 955; 948 and 947 keep 17 Sep 2026; no heading anywhere says “not running here yet” or “built”. THIS IS v3.0.952’S BUG HALF FIXED — that batch was about no-record not meaning not-yet, and it fixed the boundary at the oldest recorded version without looking at the newest.",
+        "td": [
+          "TD-833"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.956",
+    "staged_on": "2026-09-19",
+    "entries": [
+      {
+        "id": "956-pass-sweep-on-demand",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins can run the Platinum Pass expiry email sweep on demand from Settings → Maintenance, as a dry run or for real.",
+        "detail": "Settings → Maintenance → Pass expiry sweep. DRY RUN runs the real milestone queries and lists exactly who would be mailed, at which milestone, with their expiry date — and sends nothing and writes nothing. SEND FOR REAL is the red button; it runs the dry run FIRST, shows the list, and asks a confirmation that names the number of people, so nobody can send blind. TO TEST: on the Settings tab of your own account set a Platinum pass expiring in exactly 30 days, then press Dry run — that account must appear under pass_warn_30. Set it to 7 days and it must move to pass_warn_7. Set it to yesterday and it must appear under pass_expired instead. Press Dry run twice and nothing changes; the list is identical. BOTH BUTTONS IGNORE THE ONCE-A-DAY FLAG on purpose — duplicate mail is prevented per person per milestone per expiry date, which holds however the sweep is started, and a live button that respected the daily flag would do nothing after the scheduled run and look broken. A live run refuses outright where lifecycle email is switched off, rather than reporting success having sent nothing. ALSO IN THIS BATCH, all from one hour spent proving nothing was broken: the daily completion log now carries the counts, so \"mailed nobody\" and \"found nobody\" read differently; the daily job says so when it skips instead of returning in silence; and a pass_warn_days setting that parses to no valid offsets is now reported loudly, because it silently disables every advance warning while the expired notice keeps firing.",
+        "td": [
+          "TD-832"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.955",
     "staged_on": "2026-09-18",
     "entries": [

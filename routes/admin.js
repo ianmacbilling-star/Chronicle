@@ -738,6 +738,38 @@ router.post('/lifecycle/run-sweep', requireAuth, requireAdmin, async function (r
   } catch (e) { console.error('run-sweep error:', e.message); res.status(500).json({ error: friendlyError(e, 'The sweep failed. Please try again.') }); }
 });
 
+// v3.0.956 -- THE PASS-EXPIRY SWEEP, ON DEMAND. Dry run by default; live only when the body
+// says so in as many words.
+//
+// DRY RUN IS THE DEFAULT AND live MUST BE EXACTLY true. A missing body, a typo, a client that
+// forgets the flag -- all of those mail nobody. The dangerous value is the one you have to
+// type, which is the right way round for a button that emails real customers.
+//
+// THE LIVE PATH REFUSES WHEN LIFECYCLE_EMAILS_ENABLED IS OFF, rather than running a sweep that
+// sends nothing and reports success. The daily job returns silently in that case, which is
+// correct for a background job and useless for somebody standing at a button.
+//
+// Lazy require of the scheduler, matching the lifecycle sweep above: requiring it at module
+// load would start its timers inside a route file.
+router.post('/lifecycle/pass-sweep', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const live = !!(req.body && req.body.live === true);
+    if (live && process.env.LIFECYCLE_EMAILS_ENABLED !== 'true') {
+      return res.status(409).json({
+        error: 'Lifecycle email sending is switched off in this environment (LIFECYCLE_EMAILS_ENABLED ' +
+               'is not "true"), so a live run would send nothing. The dry run still works.'
+      });
+    }
+    const db = await getDb();
+    const { runPassSweep } = require('../scheduler');
+    const result = await runPassSweep(db, { dryRun: !live });
+    res.json({ ok: true, result: result });
+  } catch (e) {
+    console.error('pass-sweep error:', e.message);
+    res.status(500).json({ error: friendlyError(e, 'The pass sweep failed. Please try again.') });
+  }
+});
+
 // TEST TOOL: backdate a target user's lifecycle timestamps so the sweep can
 // move them through stages on demand. Column names come from a fixed allow-list
 // (never from the request), values are parameterized.

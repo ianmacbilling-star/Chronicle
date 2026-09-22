@@ -1366,7 +1366,11 @@ function handleBillingReturn() {
   var subscribe = params.get('subscribe');
   var portal = params.get('portal');
   var order = params.get('order');
-  if (!purchase && !subscribe && !portal && !order) return;
+  // v3.0.958 -- TD-830. THE PASS FLOW WAS NEVER ON THIS LIST, so the line below returned on
+  // every pass purchase and nothing after it ran: no toast, no refresh, and not even the
+  // history.replaceState at the bottom that clears the query string.
+  var pass = params.get('pass');
+  if (!purchase && !subscribe && !portal && !order && !pass) return;
   function refreshAccount() {
     if (typeof checkAuth === 'function') checkAuth();
     if (document.getElementById('account-plans')) loadAccount();
@@ -1382,6 +1386,22 @@ function handleBillingReturn() {
     setTimeout(refreshAccount, 4500);
   } else if (subscribe === 'cancel') {
     billingToast('Subscription checkout canceled - no charge was made.', 'info');
+  } else if (pass === 'success') {
+    // v3.0.958 -- TD-830. A PASS IS SUBSCRIBE-SHAPED, NOT PURCHASE-SHAPED.
+    //
+    // purchase refreshes the token balance once, because tokens are the only thing that moved.
+    // A pass moves the tier, the token balance, the art styles, the member limit and the
+    // free-trial watermark -- which is the whole account picture, so it refreshes the whole
+    // account, TWICE. The second pass is not belt-and-braces: the webhook that writes
+    // pass_tier and pass_expires_at can land AFTER this page has loaded, and a single refresh
+    // would then read the account exactly as it was before the money was taken.
+    billingToast('Your pass is active - welcome to Platinum!', 'success');
+    setTimeout(refreshAccount, 1500);
+    setTimeout(refreshAccount, 4500);
+  } else if (pass === 'cancel') {
+    // Every other flow says this. The pass flow said nothing at all, so a reader who backed
+    // out of Stripe could not tell whether they had been charged.
+    billingToast('Pass checkout canceled - no charge was made.', 'info');
   } else if (portal === 'return') {
     billingToast('Billing updated.', 'success');
     // loadAccount() reconciles from Stripe when it opens, so refreshing is enough;
@@ -2240,20 +2260,20 @@ function renderUpdates(data) {
     // v3.0.951 -- TD-804 batch B. THE DATE, AND THE HONEST WORD FOR IT.
     //
     // "here" rather than "on production", because the server cannot tell one environment about
-    // another and a page that says "released" on staging would be stating something it does not
-    // know. A privileged viewer gets the build date too, which is the pair that actually answers
-    // a tester's question: built then, running here since then.
-    // v3.0.952 -- three states, not two. A row means we saw it start here. No row and a
-    // version OLDER than anything we recorded means we were not watching, and the page says
-    // nothing rather than denying it. Only a version we should have caught gets "not yet".
-    var _when = '';
-    if (priv) {
-      _when = 'built ' + escapeHtml(v.staged_on || '?');
-      if (v.live_here && v.first_seen) _when += ' &middot; here since ' + updatesDate(v.first_seen);
-      else if (!v.no_record) _when += ' &middot; not running here yet';
-    } else if (v.live_here && v.first_seen) {
-      _when = updatesDate(v.first_seen);
-    }
+    // another and a page that says "released" on staging would be stating something it does
+    // not know.
+    //
+    // v3.0.957 -- ONE DATE, THE SAME ONE FOR EVERYBODY, AND NO DENIALS.
+    //
+    // The three states are gone. "Not running here yet" could not be true of anything on this
+    // list: data/updates.json ships inside the deployed commit, so the list cannot describe a
+    // version newer than the one serving it. Every version here is running here. It said
+    // otherwise for five versions on the first production promote, directly beneath the entry
+    // whose fix was the reason for the deploy that carried them.
+    //
+    // The build date is gone too. It answered "when was this compiled" next to "when did this
+    // reach me", and the second is the only one a reader wants.
+    var _when = v.first_seen ? updatesDate(v.first_seen) : '';
     h += '<div style="font-weight:600;">v' + escapeHtml(v.version) +
          (_when ? '<span class="form-hint" style="font-weight:400;margin-left:8px;">' + _when + '</span>' : '') +
          '</div>';
@@ -2439,12 +2459,22 @@ function renderAccountTier(me) {
 function renderAccountUsage(usage) {
   var el = document.getElementById('account-usage');
   if (!el) return;
-  function card(num, label) {
+  // v3.0.965 -- TD-845 (and the answer to TD-814). OPTIONAL THIRD ARGUMENT.
+  //
+  // Ian: "put in small letters under the UTOLT ... Use Them or Lose Them".
+  //
+  // The five tiles that pass no sub read exactly as they did -- the row is only emitted when
+  // there is something to put in it, so nothing else on the panel moves. Smaller and dimmer
+  // than the label, because it is a gloss on the label rather than a second label.
+  function card(num, label, sub) {
+    var subRow = sub
+      ? '<div style="font-size:10px;color:var(--text-light);opacity:0.75;letter-spacing:0.3px;margin-top:3px;">' + sub + '</div>'
+      : '';
     return '<div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.18);' +
       'border-radius:var(--radius);padding:16px;text-align:center;">' +
       '<div style="font-family:var(--font-display);font-size:28px;color:var(--gold);">' + num + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);letter-spacing:0.5px;margin-top:4px;">' +
-      label + '</div></div>';
+      label + '</div>' + subRow + '</div>';
   }
   el.innerHTML =
     card(usage.campaigns || 0, 'ACTIVE CAMPAIGNS') +
@@ -2452,8 +2482,8 @@ function renderAccountUsage(usage) {
     card(usage.storyboards || 0, 'STORYBOARDS') +
     card(usage.imagesThisMonth || 0, 'IMAGES THIS MONTH') +
     card(usage.imagesAllTime || 0, 'IMAGES ALL TIME') +
-    card('<span id="usage-utlt">&mdash;</span>', 'UTOLT TOKENS') +
-    card('<span id="usage-cot">&mdash;</span>', 'CARRY-OVER TOKENS');
+    card('<span id="usage-utlt">&mdash;</span>', 'UTOLT TOKENS', 'Use Them or Lose Them') +
+    card('<span id="usage-cot">&mdash;</span>', 'CARRY-OVER TOKENS', 'Yours to Keep');
   refreshUsageTokens();
 }
 
@@ -15485,7 +15515,19 @@ function renderStoryboard() {
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
   function buildPanel(m, i, pNum) {
-    var needsWatermark = !!state.inFreeTrial;
+    // v3.0.959 -- TD-834. THE WATERMARK FOLLOWS THE BOOK, NOT THE READER.
+    // state.inFreeTrial is an ACCOUNT flag set at login and cannot know which campaign is on
+    // screen, so a free-trial member of a PAID Story Master's campaign saw TRIAL on every
+    // panel of a book the Story Master is paying for. Erin Bot, 2026-09-21: ten panels
+    // watermarked for Tamika, zero for Erin, same campaign.
+    // state.tierInfo is served by /api/campaigns/:id/tier-info, which has answered with the
+    // EFFECTIVE tier since it was written -- the style pickers have read it all along.
+    // The fallback is the old flag and is COSMETIC: it covers the window before that fetch
+    // lands so a trial reader never sees a clean panel flash. The PDF and the order gate
+    // enforce on the server independently, so no entitlement rests on this line.
+    var needsWatermark = (state.tierInfo && typeof state.tierInfo.watermark === 'boolean')
+      ? state.tierInfo.watermark
+      : !!state.inFreeTrial;
     var imgHtml = m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
@@ -22928,6 +22970,116 @@ function _csApplySavedFields(data, saveId, vals) {
 }
 
 function saveCampaignSettings() { csDirty(true); }
+
+// ============================================================
+// v3.0.956 -- THE PASS-EXPIRY SWEEP BUTTONS.
+//
+// The live button asks first, AND IT ASKS WITH A NUMBER. A confirmation that says "are you
+// sure?" is answered yes by reflex; one that says "this will email 3 people" is read. So the
+// live path runs the DRY RUN first, shows what it found, and only then asks -- which also
+// means nobody can send blind, because the preview is not optional.
+//
+// And when the dry run finds nobody, there is nothing to confirm and nothing to send, so it
+// says so and stops rather than asking a question with one sensible answer.
+// ============================================================
+function _passSweepOut(text) {
+  var el = document.getElementById('pass-sweep-output');
+  if (!el) return;
+  el.style.display = text ? 'block' : 'none';
+  el.textContent = text || '';
+}
+function _passSweepMsg(t, bad) {
+  var el = document.getElementById('pass-sweep-msg');
+  if (el) { el.textContent = t || ''; el.style.color = bad ? 'var(--error)' : ''; }
+}
+function _passSweepBusy(on) {
+  ['pass-sweep-dry-btn', 'pass-sweep-live-btn'].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (b) b.disabled = !!on;
+  });
+}
+
+// Renders a result the same way for both runs, so a live run is read with the same eyes as
+// the preview that preceded it.
+function _passSweepRender(r) {
+  var lines = [];
+  lines.push(r.dryRun ? 'DRY RUN -- nothing was sent.' : 'LIVE RUN -- mail was sent.');
+  lines.push('Offsets: ' + r.offsetsRaw + '  (' + r.offsetsSource + ')');
+  if (r.offsetsInvalid) {
+    lines.push('!! pass_warn_days parses to NO valid offsets -- every advance warning is OFF.');
+    lines.push('   Only the expired notice still runs. Fix or clear that setting.');
+  }
+  lines.push('Sending enabled in this environment: ' + (r.emailsEnabled ? 'yes' : 'NO'));
+  if (!r.emailsEnabled) {
+    lines.push('   (LIFECYCLE_EMAILS_ENABLED is not "true", so the daily job sends nothing here.)');
+  }
+  lines.push('');
+  (r.milestones || []).forEach(function (m) {
+    var when = (m.offset > 0) ? (m.offset + ' days before expiry') : 'the day after expiry';
+    lines.push(m.prefix + '  (' + when + ') -- ' + m.matched + ' matched' +
+               (r.dryRun ? '' : ', ' + m.sent + ' sent, ' + m.failed + ' failed'));
+    (m.people || []).forEach(function (p) {
+      lines.push('    ' + (p.name || '(no name)') + '  <' + p.email + '>  ' +
+                 (p.pass_tier || '?') + ' pass, expires ' + p.expires +
+                 (p.sent === false ? '   FAILED: ' + (p.error || '') : ''));
+    });
+  });
+  lines.push('');
+  lines.push('Totals: ' + r.matched + ' matched' + (r.dryRun ? '' : ', ' + r.sent + ' sent, ' + r.failed + ' failed'));
+  _passSweepOut(lines.join('\n'));
+}
+
+function _passSweepCall(live) {
+  return fetch('/api/admin/lifecycle/pass-sweep', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ live: !!live })
+  }).then(function (r) {
+    return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+  });
+}
+
+function runPassSweepDry() {
+  _passSweepBusy(true); _passSweepMsg('Running...'); _passSweepOut('');
+  _passSweepCall(false).then(function (res) {
+    _passSweepBusy(false);
+    if (!res.ok || !res.j || !res.j.ok) { _passSweepMsg((res.j && res.j.error) || 'The dry run failed.', true); return; }
+    _passSweepMsg('');
+    _passSweepRender(res.j.result);
+  }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+}
+
+function runPassSweepLive() {
+  _passSweepBusy(true); _passSweepMsg('Checking who would be mailed...'); _passSweepOut('');
+  _passSweepCall(false).then(function (res) {
+    if (!res.ok || !res.j || !res.j.ok) {
+      _passSweepBusy(false);
+      _passSweepMsg((res.j && res.j.error) || 'Could not check first, so nothing was sent.', true);
+      return;
+    }
+    var r = res.j.result;
+    _passSweepRender(r);
+    if (!r.matched) {
+      _passSweepBusy(false);
+      _passSweepMsg('Nobody is due an email right now, so nothing was sent.');
+      return;
+    }
+    _passSweepMsg('');
+    var who = (r.matched === 1) ? '1 person' : (r.matched + ' people');
+    var ask = 'Send pass expiry emails to ' + who + ' now?\n\nThis sends REAL email. ' +
+              'The list is shown below the buttons -- read it first.';
+    Promise.resolve(uiConfirm(ask)).then(function (yes) {
+      if (!yes) { _passSweepBusy(false); _passSweepMsg('Cancelled. Nothing was sent.'); return; }
+      _passSweepMsg('Sending...');
+      _passSweepCall(true).then(function (res2) {
+        _passSweepBusy(false);
+        if (!res2.ok || !res2.j || !res2.j.ok) { _passSweepMsg((res2.j && res2.j.error) || 'The send failed.', true); return; }
+        var r2 = res2.j.result;
+        _passSweepRender(r2);
+        _passSweepMsg('Sent ' + r2.sent + ' of ' + r2.matched + (r2.failed ? ', ' + r2.failed + ' failed' : '') + '.', !!r2.failed);
+      }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+    });
+  }).catch(function () { _passSweepBusy(false); _passSweepMsg('Could not reach the server.', true); });
+}
 
 // ----- Admin: run the weekly metrics snapshot on demand -----
 function runSnapshotNow() {

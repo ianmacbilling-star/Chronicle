@@ -163,7 +163,15 @@ async function maybeDailyTrialPass(db) {
 // daily gate means one silent miss per person, forever.
 //
 // So the notice runs the day AFTER at offset -1, against a pass that is definitely OVER.
-async function runPassMilestone(db, prefix, offset) {
+// v3.0.956 -- opts.dryRun collects the people and skips exactly two statements: the send and
+// the lifecycle_emails insert. Everything before that -- the query, the exclusions, the
+// once-only check -- is identical, because a dry run that runs a different query is not a
+// dry run.
+//
+// RETURNS A RESULT OBJECT rather than a bare count. The count was already being computed and
+// thrown away by the only caller, which is why the completion log could never say whether it
+// had mailed anybody.
+async function runPassMilestone(db, prefix, offset, opts) {
   // WHO IS DELIBERATELY NOT MAILED:
   //  * anybody whose account status is not active -- a suspended account has other mail coming.
   //  * anybody with a live subscription that is NOT cancelling. Their access does not end when the
@@ -185,12 +193,18 @@ async function runPassMilestone(db, prefix, offset) {
     "AND NOT (u.tier IN ('silver','gold','platinum') AND COALESCE(u.cancel_at_period_end, false) = false) " +
     "AND NOT EXISTS (SELECT 1 FROM lifecycle_emails le WHERE le.user_id = u.id " +
     "                AND le.email_type = ?::text || ':' || to_char(u.pass_expires_at, 'YYYY-MM-DD'))";
+  const dryRun = !!(opts && opts.dryRun);
   const rows = await db.prepare(sql).all(offset, prefix);
-  let sent = 0;
+  const out = { prefix: prefix, offset: offset, matched: rows.length, sent: 0, failed: 0, people: [] };
   for (let i = 0; i < rows.length; i++) {
     const u = rows[i];
     const type = prefix + ':' + u.key_date;
     const tierName = (TIERS[u.pass_tier] && TIERS[u.pass_tier].name) || u.pass_tier || 'Platinum';
+    // WHAT THE DRY RUN SHOWS is the same identifying detail the send would use, so a reader can
+    // tell whether the right person matched for the right date.
+    const who = { id: u.id, name: u.name || '', email: u.email, pass_tier: u.pass_tier,
+                  expires: u.key_date, expires_nice: u.nice_date, email_type: type };
+    if (dryRun) { who.would_send = true; out.people.push(who); continue; }
     try {
       if (offset > 0) await sendPassEndingSoonEmail(u.name, u.email, tierName, u.nice_date, offset);
       else await sendPassExpiredEmail(u.name, u.email, tierName);
@@ -198,37 +212,103 @@ async function runPassMilestone(db, prefix, offset) {
       // mean this person is never warned about THIS pass again -- the unique index guarantees it.
       // The other way round, a send that succeeds and a row that does not costs one duplicate.
       await db.prepare("INSERT INTO lifecycle_emails (user_id, email_type) VALUES (?, ?) ON CONFLICT (user_id, email_type) DO NOTHING").run(u.id, type);
-      sent++;
+      out.sent++;
+      who.sent = true;
       console.log('[scheduler] ' + type + ' -> user ' + u.id);
     } catch (e) {
+      out.failed++;
+      who.sent = false;
+      who.error = (e && e.message) || 'unknown';
       console.error('[scheduler] ' + type + ' failed for user ' + u.id + ':', e && e.message);
     }
+    out.people.push(who);
   }
-  return sent;
+  return out;
 }
 
-async function maybeDailyPassPass(db) {
-  if (process.env.LIFECYCLE_EMAILS_ENABLED !== 'true') return;   // production-gated
-  const today = new Date().toISOString().slice(0, 10);
-  const last = await getSetting(db, 'scheduler_last_pass_email_pass');
-  if (last === today) return;                                    // already ran today
-
+// v3.0.956 -- THE WHOLE SWEEP, IN ONE PLACE, CALLED BY THE DAILY JOB AND BY THE ADMIN BUTTON.
+//
+// It deliberately does NOT look at the daily gate or at LIFECYCLE_EMAILS_ENABLED. Those are
+// the DAILY JOB's business -- one says "the hourly tick already did this today", the other says
+// "this environment does not send lifecycle mail at all". An operator pressing a button has
+// answered both questions by pressing it, and a dry run must work regardless of either.
+//
+// Duplicate mail is prevented by lifecycle_emails -- one row per person per milestone per
+// expiry date -- and that holds however the sweep is started. The gate is a scheduling
+// convenience, not the safety mechanism, and it is worth being clear about which is which.
+async function runPassSweep(db, opts) {
+  const dryRun = !!(opts && opts.dryRun);
   // Offsets are configurable the same way the purge warnings are, and for the same reason: the
   // right notice for a three-month pass is not obviously the right one for a twelve-month pass,
   // and that is a judgement to make from real behaviour rather than to guess at now.
-  const raw = (await getSetting(db, 'pass_warn_days')) || '30,7';
+  const stored = await getSetting(db, 'pass_warn_days');
+  // A WHITESPACE-ONLY VALUE IS AN ABSENT ONE. '   ' is truthy, so taking the stored value
+  // whenever it is merely truthy would accept it as the setting, parse it to no offsets, and
+  // -- because it also fails the "was anything really set" test below -- disable every advance
+  // warning while reporting nothing wrong. Found by the mutation harness, which is the only
+  // reason it is not shipping.
+  const raw = (stored && String(stored).trim()) ? stored : '30,7';
   const offsets = String(raw).split(',')
     .map(function (s) { return parseInt(s.trim(), 10); })
     .filter(function (n) { return Number.isFinite(n) && n > 0; });
+
+  // A SETTING THAT PARSES TO NOTHING IS NOT THE SAME AS AN ABSENT ONE, AND IT USED TO LOOK IT.
+  // '0', '-7', 'thirty', a stray semicolon -- each yields an empty array, every advance warning
+  // stops, and the expired notice below keeps firing because it is hardcoded. The feature then
+  // looks alive while the half that gives somebody time to renew is gone. TD-587: say so.
+  const offsetsInvalid = !!(stored && String(stored).trim() && offsets.length === 0);
+  if (offsetsInvalid) {
+    console.error('[scheduler] pass_warn_days is set to "' + stored + '" which parses to NO valid ' +
+                  'offsets -- every advance warning is disabled. The expired notice still runs.');
+  }
+
+  const result = {
+    dryRun: dryRun,
+    ranAt: new Date().toISOString(),
+    offsets: offsets,
+    offsetsRaw: String(raw),
+    offsetsSource: stored ? 'pass_warn_days setting' : 'default (no pass_warn_days row)',
+    offsetsInvalid: offsetsInvalid,
+    emailsEnabled: process.env.LIFECYCLE_EMAILS_ENABLED === 'true',
+    milestones: [],
+    matched: 0, sent: 0, failed: 0
+  };
+
   for (let i = 0; i < offsets.length; i++) {
-    await runPassMilestone(db, 'pass_warn_' + offsets[i], offsets[i]);
+    result.milestones.push(await runPassMilestone(db, 'pass_warn_' + offsets[i], offsets[i], { dryRun: dryRun }));
   }
   // THE DAY AFTER, NOT THE DAY OF. See the note on runPassMilestone: on the expiry day the pass is
   // still live until its own time of day, so a day-0 notice is either premature or never sent.
-  await runPassMilestone(db, 'pass_expired', -1);
+  result.milestones.push(await runPassMilestone(db, 'pass_expired', -1, { dryRun: dryRun }));
 
+  result.milestones.forEach(function (m) {
+    result.matched += m.matched; result.sent += m.sent; result.failed += m.failed;
+  });
+  return result;
+}
+
+async function maybeDailyPassPass(db) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (process.env.LIFECYCLE_EMAILS_ENABLED !== 'true') {         // production-gated
+    console.log('[scheduler] pass-expiry pass SKIPPED for ' + today + ': LIFECYCLE_EMAILS_ENABLED is not true');
+    return;
+  }
+  const last = await getSetting(db, 'scheduler_last_pass_email_pass');
+  if (last === today) {
+    // v3.0.956 -- SAY SO. This used to return in silence, so on a day with several deploys the
+    // completion line lived in an earlier deployment's log and the current one looked dead. That
+    // cost an hour on 2026-09-19 to establish that nothing was wrong.
+    console.log('[scheduler] pass-expiry pass already ran today (' + today + '); skipping');
+    return;
+  }
+
+  const r = await runPassSweep(db, { dryRun: false });
   await setSetting(db, 'scheduler_last_pass_email_pass', today);
-  console.log('[scheduler] daily pass-expiry pass complete for ' + today);
+  // v3.0.956 -- THE COUNTS. "Mailed nobody" and "found nobody" were indistinguishable from this
+  // line, which is the one thing you want it to tell you.
+  console.log('[scheduler] daily pass-expiry pass complete for ' + today +
+              ' -- matched ' + r.matched + ', sent ' + r.sent + ', failed ' + r.failed +
+              ' (offsets ' + r.offsetsRaw + ')');
 }
 
 // ---------------------------------------------------------------------------
@@ -437,4 +517,4 @@ function startScheduler() {
   console.log('[scheduler] started (hourly tick; weekly snapshot Sunday night UTC)');
 }
 
-module.exports = { startScheduler, runLifecycleSweep };
+module.exports = { startScheduler, runLifecycleSweep, runPassSweep };

@@ -548,10 +548,15 @@ function orderConfirmationHTML(name, order) {
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // v3.0.964 -- TD-839, carrying v3.0.963's receipt fix across to the two order emails.
+  // Fixed widths pair with the fixed table layout below: the columns are decided by these
+  // numbers rather than by the widest thing inside them. PREVENTIVE -- nothing rendered here is
+  // long and unbreakable today, but Tracking is wired to a real carrier number that print.js
+  // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
-      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var total = (order.total != null) ? ('$' + Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD')) : '';
@@ -600,7 +605,7 @@ function orderConfirmationHTML(name, order) {
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
       <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
-        <table>${rows}</table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
       ${trackBtn}
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can view this order any time on your My Orders page.</div>
@@ -609,6 +614,157 @@ function orderConfirmationHTML(name, order) {
   </div>
 </body>
 </html>`;
+}
+
+// ============================================================
+// v3.0.961 -- TD-836. THE RECEIPT FOR EVERYTHING THAT IS NOT A PRINT ORDER.
+//
+// ONE TEMPLATE FOR FOUR KINDS OF PURCHASE, because they differ only in which rows have a
+// value. A row with nothing in it is omitted, so a token pack does not carry an empty
+// "Pass runs until" line and a subscription does not carry an empty "Tokens added".
+//
+// AMOUNTS COME FROM STRIPE, IN CENTS, AND ARE FORMATTED HERE. The caller passes
+// amount_cents exactly as the Stripe session or invoice reported it -- never a price read
+// back out of our own catalog, because the catalog can be edited after a sale and a receipt
+// that disagrees with the card statement is worse than no receipt at all.
+// ============================================================
+function purchaseReceiptHTML(name, receipt) {
+  receipt = receipt || {};
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  // v3.0.963 -- TD-838. THE COLUMNS ARE NOT NEGOTIABLE BY THEIR CONTENTS.
+  //
+  // These widths pair with table-layout:fixed below. Together they mean the columns are decided
+  // by these numbers rather than by the widest thing inside them, so no value can push the table
+  // past the panel the way a 55-character Stripe id did.
+  //
+  // Belt and braces, not the fix: the fix is that the long opaque value is gone from this table
+  // altogether. This is here so the NEXT long value -- an itemName, say -- cannot do it again.
+  // vertical-align:top keeps a wrapped value level with its label rather than floating.
+  function row(label, value) {
+    if (value == null || value === '') return '';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
+  }
+  function money(cents, currency) {
+    if (cents == null || !isFinite(Number(cents))) return '';
+    return '$' + (Number(cents) / 100).toFixed(2) + ' ' + String(currency || 'USD').toUpperCase();
+  }
+  function when(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+    } catch (e) { return ''; }
+  }
+  var card = (receipt.cardBrand && receipt.cardLast4) ? (receipt.cardBrand + ' ****' + receipt.cardLast4) : '';
+  var rows = '';
+  rows += row('Purchase', receipt.itemName);
+  rows += row('Amount', money(receipt.amountCents, receipt.currency));
+  rows += row('Paid with', card);
+  rows += row('Date', when(receipt.paidAt));
+  rows += row('Tokens added', receipt.tokensGranted != null ? receipt.tokensGranted : '');
+  rows += row('Token balance', receipt.balanceAfter != null ? receipt.balanceAfter : '');
+  rows += row('Plan', receipt.tierLabel);
+  rows += row('Runs until', when(receipt.runsUntil));
+  // v3.0.963 -- TD-838. A NUMBER THE CUSTOMER CAN QUOTE, OR NOTHING AT ALL.
+  //
+  // This was receipt.reference -- the Stripe session or invoice id. Ian: "You've got reference
+  // keys in there... not Purchase IDs", and "hide the whole line if you don't have a legit
+  // purchase ID that's short."
+  //
+  // purchaseNo is set only where a token_purchases row exists, which is packs and passes. A
+  // subscription charge has no purchase record, so this renders nothing and row() drops the
+  // line -- which is the instruction, and better than showing a key only support can use.
+  //
+  // receipt.reference IS STILL CARRIED, and is still what the receipt ledger keys on so a
+  // Stripe retry cannot mail twice. It is simply not shown to anybody.
+  rows += row('Purchase ID', receipt.purchaseNo);
+  var lead = receipt.leadIn || 'Thank you for your purchase. Here are the details:';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
+  <style>
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .body { padding: 32px; }
+    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    table { width: 100%; border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div class="body">
+      <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
+      <div class="text">${esc(lead)}</div>
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
+      </div>
+      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can see your plan, your passes and your token balance any time on My Account.</div>
+    </div>
+    <div class="footer">Campaignia &middot; Receipt for your purchase.</div>
+  </div>
+</body>
+</html>`;
+}
+
+// v3.0.962 -- TD-837. THE WORDS FOR EACH KIND OF RECEIPT, IN ONE PLACE.
+//
+// These lived in routes/tokens.js, beside the code that sends them. They are here now for one
+// reason: the admin preview has to produce THE SAME EMAIL a customer gets, and the only way to
+// guarantee that is for there to be one copy of the words and one function that builds the
+// message. Every other preview in this file restates its subject by hand -- order_confirmation's
+// is a hand-typed copy of the one in sendOrderConfirmationEmail -- and those are free to drift
+// the day either side is edited. A preview that drifts answers a question nobody asked.
+//
+// tokens.js keeps the money and no longer carries the prose.
+var RECEIPT_COPY = {
+  pack:         { subject: 'Your Campaignia token purchase',
+                  leadIn: 'Thank you for your purchase. Here are the details:' },
+  pass:         { subject: 'Your Campaignia pass purchase',
+                  leadIn: 'Your pass is active. Here are the details:' },
+  subscription: { subject: 'Your Campaignia subscription',
+                  leadIn: 'Your subscription is active. Here are the details:' },
+  renewal:      { subject: 'Your Campaignia subscription renewal',
+                  leadIn: 'Your subscription payment has gone through. Here are the details:' },
+  proration:    { subject: 'Your Campaignia plan change',
+                  leadIn: 'Your plan change has been charged. Here are the details:' }
+};
+
+// THE ONE BUILDER. Both the live send and the admin preview call this, so what an admin sees
+// in their inbox is what a customer receives, to the byte. An unknown kind still produces a
+// usable receipt rather than throwing -- a purchase that took money must never fail to report
+// itself because a label was missing.
+// It returns the NORMALISED RECEIPT alongside the message -- the one with the lead-in filled
+// in -- purely so a caller can prove the preview and the live send agree by driving the sender
+// with exactly what the preview drew. The route reads subject and html and ignores it.
+function receiptEmail(name, receipt) {
+  var r = Object.assign({}, receipt || {});
+  var copy = RECEIPT_COPY[r.kind] || {};
+  if (!r.leadIn && copy.leadIn) r.leadIn = copy.leadIn;
+  return { subject: copy.subject || 'Your Campaignia receipt', html: purchaseReceiptHTML(name, r), receipt: r };
+}
+
+// THROWS ON FAILURE, unlike sendOrderConfirmationEmail beside it, and that is deliberate.
+// The caller records the receipt in the ledger only after this resolves, so a mail failure
+// leaves the slot unclaimed and a later Stripe retry can still deliver it. Swallowing here
+// would make every failure permanent and invisible -- which is the bug v3.0.961 was about.
+//
+// NO SUBJECT OVERRIDE. The caller passes the FACTS of the purchase and this decides the words,
+// because an override is how the two copies start disagreeing again.
+async function sendPurchaseReceiptEmail(opts) {
+  opts = opts || {};
+  if (!opts.to_email) throw new Error('purchase receipt: no address');
+  var built = receiptEmail(opts.name, opts.receipt || {});
+  await sendEmail(opts.to_email, built.subject, built.html);
 }
 
 async function sendOrderConfirmationEmail(opts) {
@@ -628,10 +784,15 @@ function orderProblemHTML(name, order) {
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // v3.0.964 -- TD-839, carrying v3.0.963's receipt fix across to the two order emails.
+  // Fixed widths pair with the fixed table layout below: the columns are decided by these
+  // numbers rather than by the widest thing inside them. PREVENTIVE -- nothing rendered here is
+  // long and unbreakable today, but Tracking is wired to a real carrier number that print.js
+  // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
-      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var bookTitle = order.bookTitle || order.orderName || order.campaignName || 'your book';
@@ -670,7 +831,7 @@ function orderProblemHTML(name, order) {
       <div class="title">There was a problem with your order</div>
       <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
       <div class="text">If your card was charged, that charge will be reversed. Our team has been notified and will look into it &mdash; you can also reply to this email and we&rsquo;ll help sort it out.</div>
-      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table>' + rows + '</table></div>' : ''}
+      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>' : ''}
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">Sorry for the inconvenience.</div>
     </div>
     <div class="footer">Campaignia &middot; Support@campaignia.com</div>
@@ -1027,7 +1188,8 @@ function buildEmailPreview(type, name) {
   var who = name || 'Ian';
   var app = _previewAppUrl();
   var sampleOrder = {
-    orderNo: 'CMP-2026-0042',
+    orderNo: 'CMP-2026-00042',
+    trackingNumber: '9400111899223197428490',
     bookTitle: 'The Sunless Citadel',
     campaignName: 'Curse of the Crimson Throne',
     binding: 'Perfect Bound', colorTier: 'Premium Color', coverFinish: 'Matte',
@@ -1051,6 +1213,36 @@ function buildEmailPreview(type, name) {
       return { subject: 'Your Campaignia order is confirmed (' + sampleOrder.orderNo + ')', html: orderConfirmationHTML(who, sampleOrder) };
     case 'order_problem':
       return { subject: 'There was a problem with your Campaignia order (' + sampleOrder.orderNo + ')', html: orderProblemHTML(who, sampleOrder) };
+    // v3.0.962 -- TD-837. THROUGH receiptEmail(), THE SAME FUNCTION THE LIVE SEND USES.
+    // Not a restatement of the subject and the lead-in: the same ones, from RECEIPT_COPY.
+    case 'receipt_pack':
+      return receiptEmail(who, { kind: 'pack', reference: 'cs_test_b1NKkHaBSFDLtc7EFM9on2damqTwxEXgBYTf4lU9EJdcGQY', purchaseNo: 'tp-00042',
+        itemName: 'Medium token pack', amountCents: 4000, currency: 'usd',
+        tokensGranted: 250, balanceAfter: 293,
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_pass':
+      return receiptEmail(who, { kind: 'pass', reference: 'cs_test_c2PLmQdXvRtYuIoPaSdFgHjKlZxCvBnM4qWeRtYuIoP7aSdF', purchaseNo: 'tp-00043',
+        itemName: '3 Month Platinum Pass', amountCents: 7900, currency: 'usd',
+        tokensGranted: 200, balanceAfter: 243, tierLabel: 'platinum',
+        runsUntil: '2026-12-21T00:00:00.000Z',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_subscription':
+      return receiptEmail(who, { kind: 'subscription', reference: 'in_1UIE4oFtFqbShreeDSZhnl3p',
+        itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
+        tokensGranted: 120, balanceAfter: 120, tierLabel: 'Gold',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
+    case 'receipt_renewal':
+      return receiptEmail(who, { kind: 'renewal', reference: 'in_1VJF5pGuGrcTissfETAimo4q',
+        itemName: 'Gold subscription', amountCents: 1900, currency: 'usd',
+        tokensGranted: 120, balanceAfter: 412, tierLabel: 'Gold',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-21T15:25:00.000Z' });
+    case 'receipt_proration':
+      // A mid-cycle upgrade charges the DIFFERENCE and grants no new month of tokens, so this
+      // sample deliberately carries no tokens row -- that is what the real one looks like.
+      return receiptEmail(who, { kind: 'proration', reference: 'in_1WKG6qHvHsdUjttgFUBjnp5r',
+        itemName: 'Platinum subscription', amountCents: 640, currency: 'usd',
+        balanceAfter: 412, tierLabel: 'Platinum',
+        cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-05T15:25:00.000Z' });
     case 'feedback':
       return { subject: '[Campaignia Feedback] Bug report - Storyboard not loading', html: feedbackHTML({ category: 'Bug report', subject: 'Storyboard not loading', from_name: who, from_email: 'player@example.com', tier: 'Gold', message: 'The storyboard spinner never finishes on my last session. I tried refreshing a few times with no luck.' }) };
     case 'trial_ending_soon':
@@ -1104,4 +1296,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
