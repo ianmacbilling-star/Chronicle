@@ -1,1 +1,7 @@
 node_modules/
+
+# v3.0.966 -- TD-846. Scratch this project produces and never tracks.
+Claude outputs/
+version_dates_*.txt
+version_promotes.txt
+apply_v3_0_*.sh

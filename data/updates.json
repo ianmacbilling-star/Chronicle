@@ -1,5 +1,186 @@
 [
   {
+    "version": "3.0.974",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "A phone number is now asked for before a price, because the printer requires one.",
+        "detail": "The print service will not accept an address without a phone number, and nothing on the page asked for one — so a form that looked complete was refused, and the refusal did not say why. The page and the server now both ask for it, on every address, whatever the country."
+      },
+      {
+        "summary": "One list decides what a shipping address needs.",
+        "detail": "The page was checking some of the required fields and the server was checking others, which is how a field neither of them knew about reached the printer. There is now a single list, and the page simply follows it."
+      },
+      {
+        "summary": "When the printer refuses an address, it says which part it refused.",
+        "detail": "The old message said the request had been refused and left you to work out what was wrong. The print service usually names the field it objected to, so where it does, we now say so — the phone number, the postal code, the city. Where it does not, you get the general advice as before, and nothing has been charged either way."
+      }
+    ]
+  },
+  {
+    "version": "3.0.973",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "A price that fails because of your address now says so, instead of blaming the book format.",
+        "detail": "If the printer refused a quote, we were telling you the binding, paper and colour did not work for a book that length — and asking you to try other formats. An incomplete address produced exactly that message, so there was no format to find. The printer now has to name the product code before we describe it as a format problem; everything else says to check the shipping address."
+      },
+      {
+        "summary": "The price check asks for a missing name, street or city before it asks the printer.",
+        "detail": "Country, state and postcode were already checked on the page. Name, street and city were not, so a half-filled form went to the print service to be refused. It now says which line is missing."
+      },
+      {
+        "summary": "\"Run Optimize first\" no longer appears on a book that has a saved layout.",
+        "detail": "On the Order & Publish screen the Publishing line could say nothing was ready while the line beneath it named the layout you saved and the time you saved it. The first was going by whether you had opened the Optimize screen in this browser session; it now asks the server, like its neighbour does."
+      },
+      {
+        "summary": "The version in the page footer is the version you are running.",
+        "detail": "It has read v3.0.0 since it was first typed there, which is the number a confused reader would quote to us. It now comes from the running build."
+      }
+    ]
+  },
+  {
+    "version": "3.0.972",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "Escape now backs out of the \"replace your Summary?\" question instead of starting the run.",
+        "detail": "The question about replacing a Summary you had edited by hand offered two answers and both of them started writing. Pressing Escape -- which is how most people back out of a button they did not mean to press -- counted as \"keep mine\" and generated anyway. It now offers three: Don’t generate, Keep mine, Replace it. Escape and a click outside the box both mean Don’t generate."
+      },
+      {
+        "summary": "Cancelling a narrative no longer leaves the button stuck reading \"Writing narrative...\".",
+        "detail": "After a cancel, the Generate Narrative button kept its busy label on every session in the campaign until the page was reloaded, which read as \"still working\" when nothing was running. The button now returns to its normal label the moment a run is cancelled, wherever you are."
+      },
+      {
+        "summary": "A narrative cancelled in its first moments really is cancelled.",
+        "detail": "There was a short window at the start of a run -- after the Cancel button appeared, before the run had been registered -- where pressing Cancel stopped the progress bar but never reached the server. The narrative finished writing minutes later, replaced the prose that was there, and spent the tokens. A cancel in that window is now held and delivered as soon as there is something to deliver it to, so nothing is written and nothing is charged."
+      },
+      {
+        "summary": "The empty Summary box named the wrong button.",
+        "detail": "The grey prompt inside an empty Summary For Next Session credited the wrong button, while the line directly above it, in the same box, named the right one. Both now say Generate Narrative."
+      },
+      {
+        "summary": "Summary For Next Session is now written as bullets, and stops filling the space.",
+        "detail": "The memory was reaching its limit after two sessions and paying for it in the wrong places — an exact count became \"higher than the tally\", and a detail that mattered dropped out. The fault was not the size of the box: it was being asked for a summary of a certain length, so it wrote one. It is now asked for short bullet lines of only what the next session cannot work out for itself — running counts with their actual figures, what has been established, what is promised or owed, what is still open, and who has what. The cast is no longer listed, because the character list is already sent with every run. Numbers are never blurred into comparisons; if something has to go, a whole line goes instead. The character limit is unchanged and is now a ceiling rather than a target."
+      }
+    ]
+  },
+  {
+    "version": "3.0.971",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "971-member-can-order-and-publish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Players in a paying Story Master’s campaign can order prints and publish again — the buttons were refusing them for a watermark their book does not have.",
+        "detail": "Found by the test bots. A Free Trial player in a campaign run by a Story Master on a paid plan gets a clean book — no watermark on the storyboard, the preview, the cover, the interior or the credits — and the server was perfectly willing to print it. The ORDER BUTTON refused anyway, greyed out, with a message about Free Trial books being watermarked. It was asking the wrong question: are YOU on a free trial, rather than is THIS BOOK watermarked. The two are different the moment you are playing in somebody else’s campaign. THE SAME WRONG QUESTION GUARDED PUBLISHING, one click later — which is why Publish to Library looked available and would have turned you away. Both now ask the server, which answers with exactly the test it enforces with, so the button you see and the decision you get can no longer disagree. NOTHING IS LOOSENED FOR ANYONE ELSE: your own book on a Free Trial is still watermarked and still cannot be printed, and the server still has the final say on every order and every publish. If it cannot tell, the button stays live and the server gives you an honest reason rather than the browser inventing one. TO TEST: as a Free Trial member of a campaign whose Story Master is on a paid plan, order a print and publish to the library — both should go through. Then in your OWN campaign on a Free Trial, both should still refuse.",
+        "td": [
+          "TD-848"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.970",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "970-summary-polish",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Summary box now fills in as soon as a narrative run finishes, its heading is readable again, and the help bot knows how the whole thing works.",
+        "detail": "Three things found by using v3.0.969 rather than by reading it. THE BOX DID NOT UPDATE UNTIL YOU RELOADED THE PAGE. The Summary was being written correctly — the box simply never re-read it, because it only refreshed when you ENTERED the Storyboard tab, and you are already there when you press the button. It now refreshes whenever any generation finishes, including a single panel Regen. THE HEADING WAS GREY ON BROWN. It is back to the same bold gold as the panel titles beside it. WE HAD BEEN NAMING THE WRONG BUTTON. Several notes and the panel itself credited the wrong one. It does not — Generate Story builds the panels from your transcript; GENERATE NARRATIVE writes the prose and the Summary. Every one of those lines is corrected, including in the earlier release notes, because a wrong instruction people are reading is worse than an edited record. AND THE HELP BOT NOW KNOWS THE FEATURE — ask it what the Summary For Next Session box is, how to stop a session inheriting the last one, or whose memory gets used, and it can answer. TO TEST: run Generate Narrative and watch the box fill without touching the page; check the heading reads as gold, not grey; and ask the help bot about the Summary For Next Session.",
+        "td": [
+          "TD-860"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.969",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "969-story-remembers-itself",
+        "kind": "feature",
+        "public": true,
+        "summary": "Your story now remembers itself — when you Generate Narrative, the previous session’s Summary is carried forward into the new one.",
+        "detail": "v3.0.967 gave every session a Summary For Next Session. This is the half that reads it back. WHEN YOU GENERATE A NARRATIVE, the previous session’s Summary is handed to the writer as established fact — placed after your campaign’s Lore and before this session’s panels, so it bridges the world you set up and the scene being written now. The prose can lean on who these people are to each other and what was left hanging, without retelling it. AND IT KEEPS ROLLING. The new Summary does not start from scratch: it begins from the one carried forward, keeps what still matters, adds what this session changed, and drops what is now settled — one running memory of the whole campaign rather than a stack of session recaps. It is told to drop what matters LEAST rather than what is OLDEST, so a fact established in session three can still be there in session forty. WHICH SESSION, AND WHOSE: the box now tells you what it is carrying and where it came from. Each version keeps its own memory, so it uses yours if you have one for the previous session, and the Story Master’s if you do not — which is what happens for anyone who joined partway through. NOTHING BREAKS WHEN THERE IS NOTHING TO CARRY. The first session of a campaign, or one whose predecessor has no Summary yet, simply writes its own and says so. TO TEST: generate session one, read its Summary, then generate session two — the prose should be aware of session one without retelling it, and session two’s Summary should CARRY FORWARD what still matters rather than describing only itself. Then edit session one’s Summary by hand, regenerate session two, and confirm your edit is what got used.",
+        "td": [
+          "TD-854"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.968",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "968-summary-autosaves",
+        "kind": "change",
+        "public": true,
+        "summary": "The Summary For Next Session box now saves on its own — the Save button is gone.",
+        "detail": "It works the way the campaign Lore and Story Instructions boxes already do: your typing is written a moment after you stop, and clicking away writes it immediately rather than waiting. A short Saving then Saved appears beside the box so you can see it happen. NOTHING IS WRITTEN UNLESS YOU ACTUALLY CHANGED SOMETHING — clicking into the box to read it and clicking out again does nothing at all, which matters because editing the Summary is what makes Generate Narrative ask before replacing it. Only one save is ever in the air at once; if you keep typing while one is being written, the next one goes out when it returns, so two saves can never land out of order and overwrite the newer text with the older. If a save fails the message stays on screen and says so rather than disappearing — an autosave that fails quietly is worse than a button, because nobody clicked anything and nobody is watching. TO TEST: type in the box, wait a moment, and watch Saved appear; switch tabs and come back to confirm it stuck. Then click into the box, change nothing, click away — nothing should save, and Generate Narrative should NOT ask you about replacing it.",
+        "td": [
+          "TD-855"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.967",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "967-summary-for-next-session",
+        "kind": "feature",
+        "public": true,
+        "summary": "A new Summary For Next Session box at the bottom of the Storyboard — a short, editable memory of what happened, written for you when you Generate Narrative.",
+        "detail": "Each session now keeps a short note of what happened in it, written for the NEXT session to read: who matters now, where they are, what they are trying to do, and what is still unresolved. It sits at the very bottom of the Storyboard tab and you can edit every word of it. IT COSTS NOTHING EXTRA. Generate Narrative already asks the model for a handful of short summaries while it writes the prose, and this is one more field in the same answer — no second run and no extra tokens. THE LENGTH IS CAPPED AND THE MODEL KNOWS THE CAP BEFORE IT WRITES, so it keeps what still matters and lets go of what does not, rather than a fifty-session campaign ending up with a wall of text. The limit is set on the Dashboard and starts at 1,500 characters. YOURS IS KEPT: once you have edited the Summary, generating the narrative again asks before replacing it, and saying keep mine changes nothing else about the run. Leaving it blank is perfectly fine and breaks nothing. Each version has its own, like every other per-version setting — you can read another version Summary but not write it. WHAT IS NOT HERE YET: nothing reads the Summary back. Feeding it to the next session, so the story remembers itself, is the next release. TO TEST: open a session with a storyboard, run Generate Narrative, and read what appears in the box at the bottom. (Generate Story builds the panels from the transcript; Generate Narrative writes the prose and the Summary.) Edit it, save, switch tabs and come back to confirm it stuck. Then run Generate Narrative again and check you are asked before it is replaced.",
+        "td": [
+          "TD-852"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.966",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "966-receipt-expired-line",
+        "kind": "fix",
+        "public": true,
+        "summary": "A renewal receipt now shows the tokens that expired, so the balance on your account and the number on the receipt add up.",
+        "detail": "TD-841, from a tester who could not make the two agree and was right not to be able to. Your monthly grant expires whatever use-it-or-lose-it tokens are left over and THEN grants the new period, so your balance moves by the grant minus the expiry — while the receipt quoted only the grant. 442 minus 2 expired plus 30 granted is 470, the receipt said 30, and both numbers were correct; nothing on the screen or in the email named the 2. The receipt now carries an Expired from last period line between Tokens added and Token balance, so the three read as arithmetic. TOKENS ADDED STILL MEANS THE GRANT and deliberately so — it is what your plan buys and what the charge is for; a net figure would be right for the header and wrong for an invoice. The line appears only when something actually expired, so a first subscription and an upgrade look exactly as they did. TO TEST: renew on an account holding leftover use-it-or-lose-it tokens and check the three numbers on the receipt reconcile against the header.",
+        "td": [
+          "TD-841"
+        ]
+      },
+      {
+        "id": "966-upgrade-email",
+        "kind": "fix",
+        "public": true,
+        "summary": "Upgrading your plan mid-month now sends an email explaining the tokens that just arrived and when the charge lands.",
+        "detail": "TD-842. An upgrade grants the difference in monthly tokens the moment it takes effect, but Stripe prorates the CHARGE onto your next invoice — so no payment happened that day, so the receipt every purchase gets (v3.0.961) never ran, and tokens simply appeared with nothing to explain them. Weeks later a proration receipt arrived for a plan change you had been using ever since. The upgrade now sends its own email when it happens, naming the new plan, the tokens added, and the fact that there is nothing to pay today because the charge follows on the next invoice. It cannot send twice on a Stripe retry, and it can never delay or block the tokens themselves. The v3.0.961 release note has also been corrected — it said the charge was taken immediately, which it is not (TD-843). TO TEST: upgrade a subscription mid-cycle and check one email arrives naming the new plan and the tokens, with no amount on it; then confirm the later proration receipt still arrives with the next invoice.",
+        "td": [
+          "TD-842",
+          "TD-843"
+        ]
+      },
+      {
+        "id": "966-book-title-follows-rename",
+        "kind": "fix",
+        "public": true,
+        "summary": "Renaming a campaign now carries the change onto the book, when the book title was never chosen by hand.",
+        "detail": "Reported from the tester list. A book whose title you have never typed is seeded with the campaign name so that something is always on the cover — and from that moment it was a stored value, so renaming the campaign left the OLD name on the book for good. A rename now carries onto any book title that is still exactly the old campaign name, which is the only case in which nobody chose it. A TITLE YOU TYPED IS NEVER TOUCHED, including one that merely resembles the campaign name. TO TEST: rename a campaign whose book title you have never edited and check the cover and the title page follow it; then set a title of your own, rename again, and check yours survives.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.965",
     "staged_on": "2026-09-21",
     "entries": [
@@ -73,7 +254,7 @@
         "kind": "fix",
         "public": true,
         "summary": "Every purchase now sends a receipt by email — token packs, Platinum Passes, and every subscription charge including renewals.",
-        "detail": "TD-836, from the tester run: a Platinum Pass was bought twice and no email arrived either time. Print orders have always sent a confirmation; NOTHING ELSE DID. A token pack, a pass and a subscription all took money and sent silence, and a monthly renewal has never sent anything at all — so a customer charged in month seven had no record of it from us. THE RECEIPT NOW COMES FROM ONE PLACE. Every purchase lands in the same Stripe webhook, and each kind of purchase hands back a description of what was bought; one block at the end sends the receipt. That matters more than it sounds: the reason three of these were missing is that each fulfilment path was written separately and nobody could see the whole set at once. Now “did this purchase send a receipt” is one function to read. WHAT IS ON IT: what you bought, what you paid, the card it went on where Stripe tells us, the tokens added and your new balance, and for a pass the tier and the date it runs to. IT CANNOT SEND TWICE. Stripe retries webhooks routinely, and a duplicate receipt for a real charge is its own support conversation. Each receipt is recorded against the Stripe session or invoice id, and a retry finds the record and sends nothing — while a retry after a MAIL failure still tries again, because those are different questions and were deliberately not merged. A receipt that fails to send is logged as an error and raises an alert rather than disappearing. RENEWALS AND UPGRADES BOTH COUNT (Ian: every charge). A monthly renewal sends a receipt. Upgrading mid-cycle charges a prorated amount immediately, and that sends one too — but it does NOT grant a new month of tokens, which is the thing that made this branch delicate: the receipt and the token grant now ask different questions of the same invoice. TO TEST in the Stripe sandbox: buy a token pack, buy a pass, and start a subscription — each must produce one email, and the amounts on them must match what Stripe charged. Then check the print-order confirmation still arrives as it always did, because that path was deliberately left alone.",
+        "detail": "TD-836, from the tester run: a Platinum Pass was bought twice and no email arrived either time. Print orders have always sent a confirmation; NOTHING ELSE DID. A token pack, a pass and a subscription all took money and sent silence, and a monthly renewal has never sent anything at all — so a customer charged in month seven had no record of it from us. THE RECEIPT NOW COMES FROM ONE PLACE. Every purchase lands in the same Stripe webhook, and each kind of purchase hands back a description of what was bought; one block at the end sends the receipt. That matters more than it sounds: the reason three of these were missing is that each fulfilment path was written separately and nobody could see the whole set at once. Now “did this purchase send a receipt” is one function to read. WHAT IS ON IT: what you bought, what you paid, the card it went on where Stripe tells us, the tokens added and your new balance, and for a pass the tier and the date it runs to. IT CANNOT SEND TWICE. Stripe retries webhooks routinely, and a duplicate receipt for a real charge is its own support conversation. Each receipt is recorded against the Stripe session or invoice id, and a retry finds the record and sends nothing — while a retry after a MAIL failure still tries again, because those are different questions and were deliberately not merged. A receipt that fails to send is logged as an error and raises an alert rather than disappearing. RENEWALS AND UPGRADES BOTH COUNT (Ian: every charge). A monthly renewal sends a receipt. AN UPGRADE IS TWO EVENTS, AND THIS NOTE ORIGINALLY DESCRIBED ONLY THE GAP BETWEEN THEM. What an upgrade DOES, the moment it takes effect: it grants the DIFFERENCE between the two plans’ monthly allotments, in full and straight away, in both buckets — and, unlike a renewal, it does NOT expire the use-it-or-lose-it tokens you already have. What it does not do is start a new month. THE CHARGE IS A SEPARATE EVENT: Stripe prorates it onto your NEXT invoice rather than taking it that day, so the receipt for the money arrives later, with that invoice. (Corrected in v3.0.966 — this note previously said the charge was taken immediately, and it is not. From v3.0.966 the upgrade also sends its own email when it happens, so the tokens no longer arrive with nothing to explain them.) TO TEST in the Stripe sandbox: buy a token pack, buy a pass, and start a subscription — each must produce one email, and the amounts on them must match what Stripe charged. Then check the print-order confirmation still arrives as it always did, because that path was deliberately left alone.",
         "td": [
           "TD-836"
         ]

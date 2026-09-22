@@ -466,6 +466,10 @@ router.get('/me', async function(req, res) {
       notifyFeatures: user.notify_features !== false,
       notifyActivity: user.notify_activity !== false,
       is_admin: isAdmin,
+      // v3.0.973 -- TD-873. The footer stamp, from the one file that knows it. Read through
+      // require(), which memoises, and defaulted to '' so a missing or malformed version-info
+      // can only ever leave the footer reading 'Campaignia' -- never a number that is a lie.
+      appVersion: (function () { try { return String((require('../version-info.json') || {}).version || ''); } catch (e) { return ''; } })(),
       allTiers: TIERS
     });
   } catch(e) {

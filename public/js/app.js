@@ -1815,6 +1815,12 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // v3.0.973 -- TD-873. The footer stamp. Left alone when the server sends nothing, so the
+      // worst case is the bare product name rather than a version that is not the one running.
+      try {
+        var _vl = document.getElementById('app-version-label');
+        if (_vl && data.appVersion) _vl.textContent = 'Campaignia v' + data.appVersion;
+      } catch (e) {}
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
@@ -5817,7 +5823,13 @@ function paintAllVersionLocks() {
   try { if (typeof paintVersionLock === 'function') paintVersionLock(); } catch (e) {}
 }
 function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintAllVersionLocks(); }
-function clearGenLock() { state.sessionGenLock = null; paintAllVersionLocks(); }
+function clearGenLock() {
+  state.sessionGenLock = null;
+  paintAllVersionLocks();
+  // v3.0.970 -- every generation path releases the lock here, so this is the one place that sees
+  // them all finish. Defensive: the panel does not exist on most screens.
+  try { if (typeof sbSummaryLoad === "function") sbSummaryLoad(); } catch (e) {}
+}
 
 // v3.0.476 -- THE SESSION VERSION DROPDOWN LOCKS WHILE WORK IS IN FLIGHT (TD-262b).
 //
@@ -5882,7 +5894,7 @@ function generateNarrativeAndImages() {
   if (!ensureGenFree()) return;
   setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
-  var origLabel = btn ? btn.innerHTML : '';
+  // v3.0.972 -- TD-865. No origLabel here either; narrButtonsIdle() reads data-idle.
   if (btn) { btn.disabled = true; btn.innerHTML = 'Generating\u2026'; }
 
   // PARALLEL: images don't depend on the narrative prose (the board renders
@@ -5927,6 +5939,8 @@ function generateNarrativeAndImages() {
   // creeps on for ever, so a fault that had always existed finally showed itself.
   var _nticker = creepBar(_nfill, _npct, 0.012, 750);
   state.narrTicker = _nticker;
+  // v3.0.972 -- TD-866. The twin takes the same token, for the same window.
+  var _run = narrRunBegin();
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -5934,7 +5948,7 @@ function generateNarrativeAndImages() {
     state.narrTicker = null;   // v3.0.716 -- one handle, cleared on every exit path
     state.narrJobActive = false;
     clearGenLock();
-    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    narrButtonsIdle();
     var _c = document.getElementById('narr-cancel-btn'); if (_c) _c.style.display = 'none';
     if (ok && _nfill) _nfill.style.width = '100%';
     setTimeout(function() { var b = document.getElementById('narr-bar-cell'); if (b) b.style.display = 'none'; }, ok ? 400 : 0);
@@ -5943,11 +5957,12 @@ function generateNarrativeAndImages() {
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ key: getApiKey() || 'platform' }),
-    signal: _nctl.signal
+    body: JSON.stringify({ key: getApiKey() || 'platform' })
+    // v3.0.972 -- TD-866. No signal on the submit; see the narrative-only path.
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
+    if (narrRunStale(_run)) { if (data && data.job_id) _narrCancelJob(data.job_id); return; }
     if (!data || !data.job_id) { _narrEnd(false); showError('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
     // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
@@ -5955,6 +5970,7 @@ function generateNarrativeAndImages() {
     state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
+      if (narrRunStale(_run)) return;
       if (!state.narrJobActive) return;
       if (tries++ > 100) { _narrEnd(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
       fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
@@ -5971,7 +5987,7 @@ function generateNarrativeAndImages() {
     };
     poll();
   })
-  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
+  .catch(function(e){ if (narrRunStale(_run)) return; _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -6006,17 +6022,47 @@ function cancelNarr() {
   _narrTellServerCancelled();
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
-  var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
+  // v3.0.972 -- TD-865. Same as its twin: the shared teardown owns the button.
 }
 
 // Generate the narrative ONLY (no images). Same narrative pass as the combined
 // button, but it stops after painting the prose into the panels. Lets you
 // rewrite the story without regenerating art / spending image tokens.
+// v3.0.967 -- TD-852. ASK BEFORE REPLACING A SUMMARY SOMEBODY WROTE.
+//
+// Ian chose "ask each time". The question is only worth asking when there is something to lose,
+// so an untouched Summary regenerates silently as it should. Answering no still generates the
+// narrative -- it declines only the Summary -- because refusing the whole run would make this a
+// confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  if (!state._sbSummaryAsked && state._sbSummaryEdited) {
+    // v3.0.972 -- TD-864. THREE ANSWERS, AND FALSE IS THE ONE THAT DOES NOT RUN.
+    //
+    // Button order in uiConfirm is cancel, middle, ok -- so this reads left to right as
+    // Don't generate | Keep mine | Replace it. Escape and a backdrop click both resolve
+    // false, which now lands on Don't generate: the key a reader reaches for to back out
+    // of a button they did not mean to press finally backs them out of it.
+    //
+    // There is no .catch here any more. uiConfirm NEVER rejects -- it resolves false --
+    // so the catch that used to sit here could not run, and reading it as the escape
+    // hatch is exactly why Escape started a generation.
+    uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?',
+              { okText: 'Replace it', middleText: 'Keep mine', cancelText: "Don't generate" })
+      .then(function (ans) {
+        if (ans === false) { state._sbSummaryAsked = false; return; }
+        state._sbSummaryReplace = (ans === true);
+        state._sbSummaryAsked = true;
+        generateNarrativeOnly();
+      });
+    return;
+  }
+  state._sbSummaryAsked = false;
   setGenLock('Generate Narrative');
+  // v3.0.972 -- TD-865. NO origLabel CAPTURE. The idle text is a data-idle attribute in
+  // app.html and narrButtonsIdle() is the only thing that writes it back, so a button left
+  // reading 'Writing narrative...' can no longer become its own idle label.
   var btn = document.getElementById('sb-generate-narr-btn');
-  var origLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
   // Narrative-only drives its OWN dedicated 'Narrative:' bar (narr-bar-cell),
   // not the shared 'Images:' bar -- so a solo narrative run is labeled correctly
@@ -6028,6 +6074,9 @@ function generateNarrativeOnly() {
   if (fill) fill.style.width = pct + '%';
   var _nctl = new AbortController();
   state.abortNarrOnly = _nctl;
+  // v3.0.972 -- TD-866. The token is taken BEFORE the submit, so a cancel arriving in the
+  // window where the Cancel button exists and the job does not still moves it.
+  var _run = narrRunBegin();
   var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'inline-block';
   // Gentle creep: slow ease from a low start on a 750ms tick, tiny 0.10 floor so each nudge is
   // small but always moving; crawls slowly toward 98 (never parks at 90), snaps 100 on done.
@@ -6046,8 +6095,13 @@ function generateNarrativeOnly() {
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: getApiKey() || 'platform' }),
-    signal: _nctl.signal
+    // v3.0.967 -- TD-852. replace_summary is the ONLY thing that lets a generation overwrite a
+    // hand-edited Summary; the server refuses without it, so the five other call sites for this
+    // route cannot destroy one even though none of them knows the field exists.
+    body: JSON.stringify({ key: getApiKey() || 'platform', replace_summary: !!state._sbSummaryReplace })
+    // v3.0.972 -- TD-866. NO SIGNAL ON THE SUBMIT, deliberately. Aborting it guaranteed the
+    // job id never arrived, which guaranteed the server was never told to stop. Only the
+    // POLLING is aborted now -- which is all the abort was ever able to stop anyway.
   })
   .then(function (r) { return r.json(); })
   .then(function (data) {
@@ -6055,20 +6109,23 @@ function generateNarrativeOnly() {
     // job until it is done, THEN render -- previously this read data.intro/
     // sections/outro straight off the job_id response (all undefined), rendering
     // an empty narrative while the background job quietly saved the real one.
-    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not generate narrative: ' + data.error); return; }
-    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not start narrative: no job id returned'); return; }
+    if (narrRunStale(_run)) { if (data && data.job_id) _narrCancelJob(data.job_id); return; }
+    if (data.error) { narrButtonsIdle(); endBar(false); showError('Could not generate narrative: ' + data.error); return; }
+    if (!data.job_id) { narrButtonsIdle(); endBar(false); showError('Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
     // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
     // closure, which is part of why cancel could never do anything but abort a finished fetch.
     state.narrJobId = jobId;
     var tries = 0;
     var poll = function () {
-      if (tries++ > 100) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      if (narrRunStale(_run)) return;
+      if (tries++ > 100) { narrButtonsIdle(); endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
       fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
         .then(function (r) { return r.json(); })
         .then(function (j) {
+          if (narrRunStale(_run)) return;
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+          narrButtonsIdle();
           if (j.status === 'error') { endBar(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           endBar(true);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -6076,12 +6133,13 @@ function generateNarrativeOnly() {
           state.narrativeStyleUsed = state.narrativeStyle || 'classic';
           if (typeof renderStoryboard === 'function') renderStoryboard();
         })
-        .catch(function (e) { if (e && e.name === 'AbortError') return; setTimeout(poll, 3000); });
+        .catch(function (e) { if (e && e.name === 'AbortError') return; if (narrRunStale(_run)) return; setTimeout(poll, 3000); });
     };
     poll();
   })
   .catch(function (e) {
-    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    if (narrRunStale(_run)) return;
+    narrButtonsIdle();
     endBar(false);
     if (e && e.name === 'AbortError') return;
     showError('Could not generate narrative: ' + e.message);
@@ -6107,6 +6165,14 @@ function generateNarrativeOnly() {
 // The completion paths keep their own teardown deliberately: they animate to 100% and fade after
 // a delay, which a cancel must NOT do -- a cancelled run showing a full bar would read as done.
 function _narrTellServerCancelled() {
+  // v3.0.972 -- TD-865 / TD-866. THE TWO PIECES THAT WERE STILL OUTSIDE THIS FUNCTION.
+  //
+  // The button label lived in each generate function's closure, so the cancel path could not
+  // reach it and left it reading 'Writing narrative...' on every session until a reload.
+  // The token bump makes every callback still in the air from the cancelled run stale, which
+  // is what lets the submit come back, be recognised as unwanted, and cancel its own job.
+  narrButtonsIdle();
+  narrRunBegin();
   // Hide everything the completion path hides, immediately and with no success animation.
   ['review-progress-wrap', 'narr-bar-cell', 'generate-progress'].forEach(function (id) {
     var el = document.getElementById(id); if (el) el.style.display = 'none';
@@ -6125,16 +6191,18 @@ function _narrTellServerCancelled() {
   // v3.0.716 -- TD-518. STOP THE BAR FIRST, and unconditionally: this runs before the job-id
   // check because a cancel with no job id still has a ticker running behind it.
   if (state.narrTicker) { try { clearInterval(state.narrTicker); } catch (e) {} state.narrTicker = null; }
+  // v3.0.972 -- TD-866. A MISSING JOB ID IS NO LONGER A SILENT GIVE-UP.
+  //
+  // It used to return here and tell nobody. The submit that would have produced the id had
+  // just been aborted by the caller, so the id was never coming -- the run went on to write
+  // its narrative over prose the reader had kept, and charged for it, because spendTokens
+  // runs after the write. The submit is no longer aborted, and the token bump above means it
+  // will cancel its own job the moment it lands. So returning here is now correct rather
+  // than merely quiet: the cancel is already guaranteed, just not yet sent.
   if (!state.narrJobId) return;
   var _jid = state.narrJobId;
   state.narrJobId = null;
-  fetch('/api/narrative/cancel/' + _jid, { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      if (d && d.already) return;
-      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
-    })
-    .catch(function () {});
+  _narrCancelJob(_jid);
 }
 function cancelNarrOnly() {
   clearGenLock();
@@ -6143,7 +6211,8 @@ function cancelNarrOnly() {
   if (typeof _narrTellServerCancelled === 'function') _narrTellServerCancelled();
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
-  var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
+  // v3.0.972 -- TD-865. The button is reset by _narrTellServerCancelled above, which both
+  // cancels call. Resetting it here as well is how the two teardowns drifted apart before.
 }
 
 // ============================================================
@@ -11997,7 +12066,18 @@ function refreshNovelPreview() {
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (state.user && state.user.tier === 'trial') {
+  // v3.0.971 -- TD-848. ASK THE SERVER, NOT THE VIEWER OWN TIER.
+  //
+  // This read `state.user.tier === 'trial'` and so refused every member of a paying Story
+  // Master campaign -- the same fault as the order button, one click later, which is why
+  // Publish LOOKED available to them and would have turned them away.
+  //
+  // `canPublish` is isPaidTier(getEffectiveTier(...)) computed server-side: the identical test
+  // publish-story refuses with. ONLY AN EXPLICIT false STOPS ANYTHING -- null or a failed
+  // lookup falls through and lets the server give its own accurate refusal.
+  var _gate = {};
+  try { _gate = await bookGate(state.currentCampaign.id); } catch (e) { _gate = {}; }
+  if (_gate && _gate.canPublish === false) {
     var _go = await uiConfirm('You need to sign up to publish to the library. Publishing is available once you are on a paid plan.', { okText: 'See plans', cancelText: 'Not now' });
     if (_go) goToPlans();
     return;
@@ -15766,6 +15846,12 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // v3.0.973 -- TD-873. The footer stamp. Left alone when the server sends nothing, so the
+      // worst case is the bare product name rather than a version that is not the one running.
+      try {
+        var _vl = document.getElementById('app-version-label');
+        if (_vl && data.appVersion) _vl.textContent = 'Campaignia v' + data.appVersion;
+      } catch (e) {}
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
@@ -16436,6 +16522,9 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  // v3.0.967 -- TD-852. Injected into the LAST of the two switchSessionTab declarations, because
+  // this file declares 90 functions twice and the later one is the one that runs (TD-853).
+  if (tab === 'storyboard') { try { sbSummaryLoad(); } catch (e) {} }
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
   // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
@@ -16876,6 +16965,8 @@ function regenNarrativeSection(type, panelIndex) {
   // its fix; this caller was missed, in both of its copies. Same fix, same shape.
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
+    // v3.0.970 -- a per-gap Regen re-runs the whole narrative job, so the Summary moved too.
+    try { if (typeof sbSummaryLoad === "function") sbSummaryLoad(); } catch (e) {}
     if (box) box.disabled = false;
     if (!ok && msg) showError(msg);
   };
@@ -23383,6 +23474,7 @@ function ensureInterior() {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
       }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}   // v3.0.973 -- TD-872, the twin path
       return { url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
     });
 }
@@ -23416,6 +23508,10 @@ function prepareInteriorCount() {
         updatePrintPageDisplay(-1, false); return;
       }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0), mismatch: res.j.mismatch || null };
+      // v3.0.973 -- TD-872. The server has just said a saved book exists; repaint the line that
+      // was claiming it did not. v3.0.473 records the same lesson: clearing the flag is not
+      // enough on its own, because nothing else repaints this until a tab change.
+      try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
       // v3.0.798 -- TD-608. print-interior builds the APPROVED book and now says when that is not
       // the book on screen. This is the tab-open path, so the notice is there before anything is
       // clicked; reviewPrintOrder re-renders it from the same field when Prepare runs.
@@ -23871,15 +23967,12 @@ function loadPrintTab() {
   showPrintMsg('', null);
   showPrintBtnMsg('', null);
   printProgressDone();
+  // v3.0.971 -- TD-848. Nothing is decided here any more. The order button and its notice
+  // are painted by applyBookGateToOrder from the server answer; a browser that has not asked
+  // yet must not announce a refusal, so the notice simply starts hidden.
   (function(){
-    var _trial = !!(state.user && state.user.tier === 'trial');
-    var _pb = document.getElementById('print-place-btn');
-    var _tn = document.getElementById('print-trial-notice');
-    if (_pb) _pb.disabled = _trial;
-    if (_tn) {
-      _tn.style.display = _trial ? 'block' : 'none';
-      if (_trial) _tn.innerHTML = "Free Trial books are watermarked, so they can't be ordered as physical prints. Upgrade to a paid plan to remove the watermark and order your book." + '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
-    }
+    var _tn0 = document.getElementById('print-trial-notice');
+    if (_tn0) _tn0.style.display = 'none';
   })();
   var q = document.getElementById('print-quote');
   if (q) q.textContent = '';
@@ -23888,6 +23981,15 @@ function loadPrintTab() {
     .then(function (res) {
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not load order options.', null); return; }
       printNovelInfo = res.j;
+      // v3.0.971 -- TD-848. THE ORDER BUTTON IS DECIDED HERE, by the server own answer.
+      //
+      // `watermarked` is derived on the server from getTier(getEffectiveTier(user, campaign))
+      // -- the very check the order route refuses with. A free-trial member of a paying Story
+      // Master campaign gets false here, exactly as her book has no watermark anywhere else.
+      //
+      // A MISSING ANSWER LEAVES THE BUTTON ALONE. Unknown is not no.
+      try { bookGateSeed(state.currentCampaign && state.currentCampaign.id, res.j); } catch (e) {}
+      applyBookGateToOrder(res.j);
       syncPrintVersionDisplay();
       printActualPages = 0;
       printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
@@ -24633,6 +24735,27 @@ function quotePrintOrder() {
   // v3.0.879 -- TD-756. The old test demanded a postcode from everyone, and the
   // probe measured that 116 of the served countries price without one. Ask for
   // what each country actually needs, and say which country we are asking for.
+  // v3.0.974 -- TD-878. A MIRROR OF shipToErrors' ALWAYS_REQUIRED, NOT A SECOND OPINION.
+  //
+  // v3.0.973 put three field names here and left three more on the server, so one question
+  // had two half-answers in two files -- and the phone number, which the printer requires on
+  // every address, was in neither. The server list is the authority; this exists only to
+  // save a round trip. THE BUILD GUARD EXTRACTS BOTH AND FAILS IF THEY NAME DIFFERENT
+  // FIELDS, so this cannot quietly fall behind the thing it mirrors.
+  var _needFields = [
+    ['name', 'a name'],
+    ['street1', 'a street address'],
+    ['city', 'a city'],
+    ['phone', 'a phone number']
+  ];
+  var _need = [];
+  _needFields.forEach(function (f) {
+    if (!String(body.shipTo[f[0]] || '').trim()) _need.push(f[1]);
+  });
+  if (_need.length) {
+    if (out) out.textContent = 'Shipping needs ' + _need.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' before it can be priced.';
+    return;
+  }
   if (!body.shipTo.countryCode) {
     if (out) out.textContent = 'Choose a country to price shipping.';
     return;
@@ -25531,6 +25654,7 @@ function loadGenerationSettings() {
       if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
+      if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
     })
     .catch(function () {});
 }
@@ -25548,6 +25672,7 @@ function saveGenerationSettings() {
       narrativePanelsPerToken: iv('gen-narr-ppt'),
       narrativeFloor: iv('gen-narr-floor'),
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
+      summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
       layoutLoopCostCents: (function () { var n = parseInt((g('layout-loop-cost') || {}).value, 10); return (isFinite(n) && n >= 1) ? n : 8; })()   // v3.0.356 -- never send 0
     })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -26756,7 +26881,8 @@ function finalizeUpdatePublishLink() {
   var a = document.getElementById('publish-book-link');
   var none = document.getElementById('publish-book-none');
   if (!a) return;
-  var ready = _finalizeSavedReady && !!(state && state.currentCampaign);   // v3.0.392 -- see above
+  // v3.0.973 -- TD-872. EITHER WITNESS WILL DO, and the server's is the better one.
+  var ready = (_finalizeSavedReady || finalizeServerSavedBook()) && !!(state && state.currentCampaign);   // v3.0.392 -- see above
   if (!ready) {
     a.style.display = 'none';
     if (none) none.style.display = '';
@@ -30608,4 +30734,300 @@ function resetPublishForCampaignSwitch(force) {
   try { var _pb = document.getElementById('prep-blurb'); if (_pb) _pb.value = ''; } catch (e) {}
   // Re-pull book meta + title/thumbs for the new campaign.
   if (typeof prepPanelSync === 'function') prepPanelSync();
+}
+
+// =================================================================================================
+// v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION.
+//
+// APPENDED AT THE END OF THE FILE ON PURPOSE. app.js declares 90 top-level functions twice and
+// the later declaration wins (TD-853), so anything added mid-file risks landing in the dead copy
+// while every grep-based check passes. At the end of the file a duplicate cannot exist.
+//
+// BLANK IS NORMAL. No Summary yet, an empty box, a cleared one -- all the same state, all fine,
+// and none of them an error worth showing anybody.
+// =================================================================================================
+function sbSummaryLoad() {
+  var ta = document.getElementById('sb-summary-text');
+  if (!ta || !state.currentCampaign || !state.currentSession) return;
+  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ())
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d) return;
+      ta.value = d.summary || '';
+      // v3.0.969 -- TD-854. THREE DISTINCT STATES, AND THEY ARE NOT THE SAME THING:
+      //   no previous session      -> say nothing at all (the first session of a campaign)
+      //   previous, no summary yet -> say so, because it is fixable and worth knowing
+      //   previous with a summary  -> name it, and say WHOSE, since each version keeps its own
+      var inh = document.getElementById('sb-summary-inherit');
+      if (inh) {
+        if (!d.inherited) {
+          inh.style.display = 'none';
+          inh.textContent = '';
+        } else {
+          var who = (d.inherited.source === 'sm') ? "the Story Master\u2019s version" : 'your version';
+          var nm = d.inherited.session_name ? ('\u201c' + d.inherited.session_name + '\u201d') : 'the previous session';
+          inh.textContent = d.inherited.has_text
+            ? ('Carrying forward the memory from ' + nm + ' \u2014 ' + who + '.')
+            : (nm + ' has no summary yet, so this session starts with a blank memory.');
+          inh.style.display = '';
+        }
+      }
+      state._sbSummaryEdited = !!d.summary_edited;
+      state._sbSummaryLimit = d.summary_limit || 1500;
+      // A reader may look at somebody else's version; only its owner may write it. The server
+      // decides that and says so -- the panel does not infer it.
+      var editable = (d.summary_can_edit !== false);
+      ta.readOnly = !editable;
+      // v3.0.968 -- TD-855. The Save button is gone; read-only is now carried by the box itself
+      // plus this line, and by sbSummaryDirty refusing to write a read-only field at all.
+      var msg = document.getElementById('sb-summary-msg');
+      if (msg) msg.textContent = editable ? '' : 'Read-only \u2014 this is another version\u2019s summary.';
+      sbSummaryCount();
+      // ARMED LAST, AND ONLY AFTER THE VALUE IS IN. Anything that ran before this point cannot
+      // trigger a write, so loading a Summary can never mark it edited.
+      _sbSumReady = editable;
+    })
+    .catch(function () {});
+}
+
+function sbSummaryCount() {
+  var ta = document.getElementById('sb-summary-text');
+  var el = document.getElementById('sb-summary-count');
+  if (!ta || !el) return;
+  var lim = state._sbSummaryLimit || 1500;
+  var n = (ta.value || '').length;
+  el.textContent = n + ' / ' + lim;
+  el.style.color = (n > lim) ? '#e08a6a' : 'rgba(201,168,76,0.35)';
+}
+
+// =================================================================================================
+// v3.0.968 -- TD-855. THE SUMMARY SAVES ITSELF, THE WAY THE LORE AND INSTRUCTION BOXES DO.
+//
+// Lifted from csDirty / csFlush / csCommitCampaignSettings rather than reinvented, because that
+// trio has already had the three problems knocked out of it.
+// =================================================================================================
+// Same 1200ms as the campaign fields: long enough not to write on every keystroke, short enough
+// to beat a tab switch. Its own constant rather than a reference to CS_AUTOSAVE_MS -- that one is
+// declared mid-file, which on this file means it may have a dead twin (TD-853), and a shared
+// mutable global between two unrelated panels is a coupling nobody asked for.
+var SB_SUMMARY_AUTOSAVE_MS = 1200;
+var _sbSumTimer = null, _sbSumSaving = false, _sbSumAgain = false, _sbSumReady = false;
+
+function sbSummaryState(msg, kind) {
+  var el = document.getElementById('sb-summary-msg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = (kind === 'error') ? '#e57373' : 'rgba(201,168,76,0.5)';
+}
+
+// now === true writes immediately (a flush); otherwise it debounces.
+//
+// _sbSumReady is what stops the LOAD from saving. sbSummaryLoad sets the textarea value
+// programmatically, which does not fire oninput -- but a stray call, or a future edit that starts
+// dispatching events, would otherwise write the server answer straight back and mark a Summary
+// edited that nobody touched.
+function sbSummaryDirty(now) {
+  if (!_sbSumReady || !state.currentCampaign || !state.currentSession) return;
+  var ta = document.getElementById('sb-summary-text');
+  if (!ta || ta.readOnly) return;
+  if (_sbSumTimer) { clearTimeout(_sbSumTimer); _sbSumTimer = null; }
+  sbSummaryState('Saving\u2026');
+  if (now) sbSummaryCommit();
+  else _sbSumTimer = setTimeout(function () { _sbSumTimer = null; sbSummaryCommit(); }, SB_SUMMARY_AUTOSAVE_MS);
+}
+
+// Write a pending edit NOW rather than waiting out the debounce -- this is the blur handler.
+//
+// THE `if (_sbSumTimer)` IS THE WHOLE GUARD, AND IT MATTERS MORE HERE THAN IT DOES ON THE CAMPAIGN
+// FIELDS. A write marks the Summary edited, and an edited Summary asks before every regenerate
+// from then on. Without this, clicking into the box and straight back out -- reading it, changing
+// nothing -- would mark it edited and earn the reader a confirm they never did anything to deserve.
+function sbSummaryFlush() {
+  if (_sbSumTimer) sbSummaryDirty(true);
+}
+
+function sbSummaryCommit() {
+  if (!_sbSumReady || !state.currentCampaign || !state.currentSession) return;
+  var ta = document.getElementById('sb-summary-text');
+  if (!ta || ta.readOnly) return;
+  // One write at a time. A second edit while a PUT is in flight is remembered and replayed when
+  // it returns, rather than racing it -- two overlapping PUTs can land out of order and the
+  // winner is whichever the server finished last, not whichever the reader typed last.
+  if (_sbSumSaving) { _sbSumAgain = true; return; }
+  _sbSumSaving = true;
+  var saveCamp = state.currentCampaign.id, saveSess = state.currentSession.id;
+  fetch('/api/narrative/summary/' + saveCamp + '/' + saveSess + forkQ(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    // An empty string is a deliberate save, not a no-op: it means start the memory again.
+    body: JSON.stringify({ text: ta.value || '' })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      _sbSumSaving = false;
+      if (d && d.error) { sbSummaryState(d.error, 'error'); return; }
+      state._sbSummaryEdited = true;
+      // THE BOX IS NOT REPAINTED FROM THE ANSWER. The old Save button did that, and it was safe
+      // only because nothing could be typed between the click and the reply. On a debounce the
+      // reader is still typing while the PUT is in the air, and writing the server copy back
+      // would swallow every character typed since. The server truncates at the cap and the
+      // counter already shows when that will bite.
+      // Still on the same session? A reply that lands after a switch must not talk about this one.
+      if (!state.currentSession || state.currentSession.id !== saveSess) return;
+      sbSummaryState('Saved');
+      if (_sbSumAgain) { _sbSumAgain = false; sbSummaryDirty(true); return; }
+      setTimeout(function () { var el = document.getElementById('sb-summary-msg'); if (el && el.textContent === 'Saved') el.textContent = ''; }, 2000);
+    })
+    .catch(function () {
+      _sbSumSaving = false;
+      // Loud, and it STAYS. An autosave that fails quietly is worse than a Save button, because
+      // nobody clicked anything and nobody is watching for a result.
+      sbSummaryState('Could not save \u2014 your text is still here, try again.', 'error');
+    });
+}
+
+// v3.0.968 -- TD-855. The listener that used to live here is gone. The textarea now carries
+// oninput="sbSummaryCount();sbSummaryDirty()" in the markup, which does the counting AND the
+// dirty marking in one place. Keeping the listener as well would have been two mechanisms on one
+// field, which is how they drift apart -- and the one in the markup is the one a reader editing
+// the panel will see.
+
+// =================================================================================================
+// v3.0.971 -- TD-848. WHAT WILL THE SERVER ACTUALLY ALLOW FOR THIS BOOK?
+//
+// The order button and the publish check used to answer this themselves, from the viewer own
+// tier, and they were wrong for every member of a paying Story Master campaign. They now ask
+// the server, which answers with the same booleans it refuses with.
+//
+// UNKNOWN IS NOT NO. A failed or refused lookup resolves to {} and both callers then let the
+// action through for the SERVER to refuse -- with an accurate, campaign-aware message. A
+// browser that cannot tell must not invent a refusal; that is exactly how TD-848 happened.
+// =================================================================================================
+var _bookGateCache = { campaignId: null, data: null, inflight: null };
+
+function bookGate(campaignId) {
+  var cid = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) return Promise.resolve({});
+  if (_bookGateCache.campaignId === cid && _bookGateCache.data) return Promise.resolve(_bookGateCache.data);
+  if (_bookGateCache.campaignId === cid && _bookGateCache.inflight) return _bookGateCache.inflight;
+  var p = fetch('/api/print/novel-info/' + cid)
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (j) {
+      var d = {
+        watermarked: (typeof j.watermarked === 'boolean') ? j.watermarked : null,
+        canPublish: (typeof j.canPublish === 'boolean') ? j.canPublish : null
+      };
+      _bookGateCache = { campaignId: cid, data: d, inflight: null };
+      return d;
+    })
+    .catch(function () { _bookGateCache = { campaignId: null, data: null, inflight: null }; return {}; });
+  _bookGateCache = { campaignId: cid, data: null, inflight: p };
+  return p;
+}
+
+// The order screen already fetches novel-info; this lets it fill the cache from that answer
+// rather than asking twice.
+function bookGateSeed(campaignId, j) {
+  if (!campaignId || !j) return;
+  _bookGateCache = { campaignId: campaignId, data: {
+    watermarked: (typeof j.watermarked === 'boolean') ? j.watermarked : null,
+    canPublish: (typeof j.canPublish === 'boolean') ? j.canPublish : null
+  }, inflight: null };
+}
+
+// v3.0.971 -- TD-848. Paint the order button from the server answer.
+//
+// The message is only shown when the server says the book IS watermarked, and it no longer
+// says "Free Trial books" -- the reason a book is watermarked is the effective tier of the
+// campaign it belongs to, which for a member is their Story Master plan, not their own.
+function applyBookGateToOrder(j) {
+  var pb = document.getElementById('print-place-btn');
+  var tn = document.getElementById('print-trial-notice');
+  var wm = (j && typeof j.watermarked === 'boolean') ? j.watermarked : null;
+  if (wm === null) {
+    // The server did not say. Leave the button alone and let the order route refuse if it must.
+    if (tn) tn.style.display = 'none';
+    return;
+  }
+  if (pb) pb.disabled = wm;
+  if (tn) {
+    tn.style.display = wm ? 'block' : 'none';
+    if (wm) tn.innerHTML = "This book is watermarked, so it can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order your book. <button class='btn btn-sm' style='margin-left:8px;' onclick='goToPlans()'>See plans</button>";
+  }
+}
+
+
+// =====================================================================================
+// v3.0.972 -- TD-865 / TD-866. THE NARRATIVE TEARDOWN'S MISSING PIECES.
+//
+// APPENDED, NOT INSERTED (TD-853): app.js declares ninety functions twice and the later
+// declaration is the one that runs. New functions go at the end, where nothing can shadow
+// them.
+// =====================================================================================
+
+// THE IDLE LABEL IS READ FROM THE MARKUP, NEVER CAPTURED AT RUN TIME.
+//
+// Both generate paths used to save `origLabel = btn.textContent` in a closure. The cancel
+// path could not reach that closure, so a cancelled run left the button reading 'Writing
+// narrative...' -- and because the button is one static element the whole campaign shares,
+// it followed the reader to every session until they reloaded. Worse, the next run then
+// captured 'Writing narrative...' AS the idle label, so no successful run could recover it
+// either. data-idle cannot be overwritten by a run, so neither failure has anywhere to live.
+function narrBtnIdle(id, fallback) {
+  try {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.disabled = false;
+    var lab = b.getAttribute('data-idle');
+    b.textContent = (lab !== null && lab !== '') ? lab : String(fallback || '');
+  } catch (e) {}
+}
+function narrButtonsIdle() {
+  narrBtnIdle('sb-generate-narr-btn', 'Generate Narrative');
+  narrBtnIdle('review-generate-btn', 'Generate Narrative & Images');
+}
+
+// THE RUN TOKEN.
+//
+// A narrative run shows its Cancel button before it has sent the request that creates the
+// job, so there is a window in which Cancel is on screen and there is nothing to cancel.
+// Cancelling in that window used to abort the submit, which guaranteed its response never
+// arrived, which guaranteed the job id was never learned, which guaranteed the server was
+// never told. The run finished, wrote its narrative over prose the reader had chosen to
+// keep, and charged for it.
+//
+// The token closes the window instead of hiding it: a cancel moves it, every callback still
+// in the air from that run sees the move and stands down, and the submit -- no longer
+// aborted -- comes back, finds itself unwanted, and cancels its own job.
+function narrRunBegin() { state.narrRun = (state.narrRun || 0) + 1; return state.narrRun; }
+function narrRunStale(tok) { return state.narrRun !== tok; }
+
+// ONE PLACE THAT TELLS THE SERVER. Both the immediate cancel and the late one reach the
+// server through here, so the reader is told exactly once however the timing fell.
+function _narrCancelJob(jid) {
+  if (!jid) return;
+  fetch('/api/narrative/cancel/' + jid, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.already) return;
+      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
+    })
+    .catch(function () {});
+}
+
+
+// =====================================================================================
+// v3.0.973 -- TD-872. DID THE SERVER SAY THERE IS A SAVED BOOK?
+//
+// printInteriorCache.url is set only from a successful /print-interior answer, which the
+// server refuses unless a SAVED layout exists -- so a url here is the server's own yes.
+// It is cleared by orderResetForVersion on every version and campaign switch, so it can
+// never speak for a book that is no longer on screen.
+//
+// APPENDED, NOT INSERTED (TD-853): this file declares ninety functions twice and the later
+// declaration is the one that runs.
+// =====================================================================================
+function finalizeServerSavedBook() {
+  try { return !!(typeof printInteriorCache !== 'undefined' && printInteriorCache && printInteriorCache.url); }
+  catch (e) { return false; }
 }

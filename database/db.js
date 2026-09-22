@@ -1413,6 +1413,19 @@ async function migrateForks(pool) {
   await pool.query("ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_verbosity TEXT");
   await pool.query("UPDATE session_forks SET narrative_verbosity = 'high' WHERE narrative_verbosity IS NULL");
   await pool.query("ALTER TABLE session_forks ALTER COLUMN narrative_verbosity SET DEFAULT 'med'");
+  // v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION: this version's memory of what happened here,
+  // written by Generate Story in the same AI response as the prose (no second call) and read by
+  // the NEXT session in stage 2. Per-fork, because Ian's rule is that each version is independent
+  // once it exists -- so the campaign's memory forks, deliberately.
+  //
+  // NULL AND EMPTY ARE BOTH FINE AND MEAN THE SAME THING: no memory yet. Every reader coalesces
+  // to the empty string and nothing anywhere treats blank as an error, so every fork that
+  // predates this column is simply a fork with no Summary.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_summary TEXT');
+  // TRUE the moment a human saves it. Generation clears it when it legitimately replaces the
+  // text, and REFUSES to overwrite while it is true unless the request explicitly asks -- which
+  // is what stops any of the six generate call sites in app.js destroying hand-written memory.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_summary_edited BOOLEAN DEFAULT FALSE');
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`

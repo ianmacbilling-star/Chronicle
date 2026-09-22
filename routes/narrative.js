@@ -1,7 +1,7 @@
 const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.486 -- TD-217/TD-189 steering
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
+const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf, getAppSettingInt } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -270,6 +270,63 @@ Example: "Soon it will be time to go to the dentist. Mum drives me there in the 
 // story on your own second version wrote it to the canonical. Delegates to the one shared resolver.
 // getOrCreateDmFork is kept for the no-request case so a Story Master who has somehow lost their
 // canonical still gets one made, which the shared resolver deliberately does not do.
+// ============================================================
+// v3.0.969 -- TD-854. THE MEMORY THIS SESSION INHERITS.
+//
+// Returns { sessionId, sessionName, text, source } for the session immediately before this
+// one, or null when there is nothing to inherit. `text` may be EMPTY and that is a normal
+// answer, not a failure -- the caller renders the descriptor and contributes nothing to the
+// prompt, so the panel can say which session it looked at while the model is told nothing.
+//
+// THE ORDER IS THE SESSIONS LIST ORDER, NOT A NEW ONE. Sessions sort by session_date, then
+// created_at, then id (routes/sessions.js:304), and the row-value comparison below is that
+// same ordering asked backwards. Inventing a second chronology for "previous" is the fault
+// this codebase keeps re-finding, so this one is borrowed rather than written.
+//
+// A SESSION WITH NO DATE INHERITS NOTHING, deliberately. It has no place in the chronology,
+// and a row comparison against NULL yields NULL rather than a sensible neighbour -- guessing
+// which session came before an undated one would be worse than saying nothing.
+//
+// WHOSE COPY: the caller own version of that session first, because Ian rule is that each
+// version is independent and carries its own memory. Falling back to the Story Master version
+// when they have no version there -- which is EVERY member who joined mid-campaign, so the
+// fallback is the common path rather than an edge case. `source` says which, and the panel
+// prints it, so nobody has to guess whose memory they are carrying.
+// ============================================================
+async function inheritedSummary(db, session, userId) {
+  try {
+    if (!session || !session.session_date) return null;
+    const prev = await db.prepare(
+      'SELECT id, name FROM sessions WHERE campaign_id = ? ' +
+      'AND (session_date, created_at, id) < (?, ?, ?) ' +
+      'ORDER BY session_date DESC, created_at DESC, id DESC LIMIT 1'
+    ).get(session.campaign_id, session.session_date, session.created_at, session.id);
+    if (!prev) return null;
+    // The caller own version of that session.
+    let fk = await db.prepare(
+      'SELECT narrative_summary FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC'
+    ).get(prev.id, userId);
+    let source = 'own';
+    if (!fk) {
+      fk = await db.prepare(
+        "SELECT narrative_summary FROM session_forks WHERE session_id = ? AND role = 'dm' ORDER BY id ASC"
+      ).get(prev.id);
+      source = 'sm';
+    }
+    return {
+      sessionId: prev.id,
+      sessionName: prev.name || '',
+      text: (fk && fk.narrative_summary) ? String(fk.narrative_summary).trim() : '',
+      source: fk ? source : null
+    };
+  } catch (e) {
+    // NEVER FATAL. A campaign that cannot look up its own past must still be able to write
+    // this session -- losing continuity is a disappointment, losing the generation is a bug.
+    try { console.error('[narrative] inherited summary lookup failed (non-fatal):', e && e.message); } catch (_e) {}
+    return null;
+  }
+}
+
 async function callerForkId(db, sessionId, userId, role, requested) {
   const id = await resolveActingFork(db, sessionId, userId, role, requested);
   if (id) return id;
@@ -410,6 +467,23 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // with panel count). Verified before the job starts; spent on job success.
   var _narrCharge = 0;
   try { _narrCharge = await computeGenCharge(moments.length, 'gen_narrative_panels_per_token', 'gen_narrative_floor'); } catch (e) { _narrCharge = 0; }
+
+  // v3.0.967 -- TD-852. THE SUMMARY CHARACTER CAP, READ LIVE.
+  //
+  // Ian: the model should know the cap ahead of time and write to comply with it. So this number
+  // goes INTO the prompt rather than being applied to the answer -- the model prunes what is no
+  // longer relevant to fit, which is the whole point: age is a bad proxy for relevance and a
+  // still-live fact from session 3 has to be able to survive to session 40.
+  //
+  // Admin-settable (Dashboard -> generation settings), floor 200, default 1500. A missing or
+  // nonsense value falls back rather than producing a cap of zero, which would ask the model for
+  // an empty string.
+  var _summaryCap = 1500;
+  try { var _sc = await getAppSettingInt('summary_char_limit', 1500); if (Number.isFinite(_sc) && _sc >= 200) _summaryCap = _sc; } catch (e) { _summaryCap = 1500; }
+
+  // v3.0.969 -- TD-854. What the previous session left for this one.
+  var _inherited = await inheritedSummary(db, session, req.session.userId);
+  var _prevText = (_inherited && _inherited.text) ? _inherited.text : '';
   if (_narrCharge > 0) {
     const _nbal = await getBalance(req.session.userId);
     if (_nbal.total < _narrCharge) {
@@ -494,6 +568,29 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Session: ' + session.name + '\n' +
     'Date: ' + session.session_date + '\n\n' +
     'Characters:\n' + charList + '\n\n' +
+    // v3.0.969 -- TD-854. THE BRIDGE: after all the background, immediately before the story.
+    //
+    // EMPTY STRING WHEN THERE IS NOTHING TO CARRY, which is the first session of every campaign
+    // and every session whose predecessor was never summarised. The model is told nothing at
+    // all in that case -- no heading, no placeholder, and specifically not a sentence saying
+    // there is no history, which reads as a fact about the story and gets written around.
+    //
+    // "TREAT AS TRUE" IS THE LOAD-BEARING INSTRUCTION. Without it a model hedges -- it writes
+    // "if the rumours were true" about events the players actually played. And "do not retell"
+    // is its twin: the intro is for THIS session opening, not a recap of the last one.
+    (_prevText
+      ? ('\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n' +
+         'THE STORY SO FAR (carried forward from the previous session' +
+           (_inherited.sessionName ? (', \u201c' + _inherited.sessionName + '\u201d') : '') + '):\n' +
+         '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n' +
+         _prevText + '\n\n' +
+         'This is what the table has already played. TREAT EVERY WORD OF IT AS TRUE and already ' +
+         'established \u2014 do not hedge it, question it, or present it as rumour or memory. ' +
+         'It is NOT part of this session: everything that happens now comes from the panel ' +
+         'sequence and the transcript below. Use it for CONTINUITY \u2014 who these people are to ' +
+         'each other, what they were already trying to do, what was left hanging \u2014 and do NOT ' +
+         'retell it. The intro opens THIS session; it is not a recap of the last one.\n\n')
+      : '') +
     '═══════════════════════════════════════════════════════════\n' +
     'THE PANEL SEQUENCE (in chronological order — do NOT reorder):\n' +
     '═══════════════════════════════════════════════════════════\n\n' +
@@ -632,7 +729,39 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '    }\n' +
     '  ],\n' +
     '  "outro": "Closing paragraph after the final panel (' + _vEnds + ')",\n' +
-    '  "outro_summary": "A terse outline of the closing. Maximum 25 words; aim shorter."\n' +
+    '  "outro_summary": "A terse outline of the closing. Maximum 25 words; aim shorter.",\n' +
+    // v3.0.967 -- TD-852. THE SUMMARY IS THE STORY\u2019S MEMORY, NOT A RECAP OF THE PROSE.
+    //
+    // Written for a READER WHO HAS NOT SEEN THIS SESSION -- the next session\u2019s generation. That is
+    // why it asks for standing facts and open threads rather than a retelling: a beat-by-beat
+    // recap of what just happened is useless to the session after next, and the four 25-word
+    // summaries above already cover the retelling.
+    //
+    // THE CAP IS STATED IN CHARACTERS AND IN THE INSTRUCTION, both, because a model told only a
+    // number tends to treat it as a target and pad to it. Stage 2 adds the previous Summary as
+    // the base to merge into; at stage 1 there is nothing to carry forward yet.
+    // v3.0.969 -- TD-854. ONE RUNNING MEMORY, NOT A STACK OF RECAPS.
+    //
+    // The merge clause only appears when there IS something to merge, so the first session of
+    // a campaign is asked for a plain summary and nothing confusing about carrying forward
+    // material that does not exist.
+    //
+    // "DO NOT SIMPLY APPEND" and "do not label or date entries" are both here on purpose: the
+    // obvious failure of a merge-under-a-cap is a model that tacks the new session onto the end
+    // until it hits the limit and then truncates the OLDEST material, which is age-as-relevance
+    // \u2014 exactly what asking the model to prune was meant to avoid.
+    '  "summary": "A compact memory for the NEXT session to read. BULLETS ONLY \u2014 one short line each, every line beginning with a hyphen and a space. No prose, no headings, no opening or closing sentence, no scene-by-scene recap.' +
+    ' PUT IN only what the next session cannot work out for itself: running numbers, tallies and counts, ALWAYS WITH THE FIGURE; what has been established as true; promises, debts and threats still outstanding; questions asked and not yet answered; objects that matter and who has them; who knows what, where that is not obvious.' +
+    ' LEAVE OUT who was present \u2014 the character list is supplied to you separately on every run, so naming the cast here wastes the space twice. Also leave out mood, weather and description; anything already in the campaign lore; anything resolved during this session; and any line whose only job is to join two facts together.' +
+    // NO DOUBLE QUOTES ANYWHERE IN THIS DESCRIPTION. It is the VALUE of a "summary" key inside
+    // the JSON template the model is shown and asked to fill, so a bare quote closes the string
+    // early and hands it a malformed example to copy. The first draft of this line carried four
+    // of them and only evaluating the assembled prompt showed it (§5a).
+    ' NEVER SOFTEN A NUMBER. \u201cLedger total 47, contacted 46\u201d and \u201cthe total is higher than the tally\u201d cost the same to write and are not worth the same. If something must go, drop a whole line rather than blur a figure.' +
+    (_prevText
+      ? ' START FROM THE STORY SO FAR GIVEN ABOVE and bring it up to date: KEEP every line in it that still matters, ADD what this session changed, and DROP whatever is now settled, answered or no longer relevant. It is ONE running memory of the whole campaign, not a list of sessions \u2014 do not date or label entries, and do NOT simply append this session to the end. When it will not all fit, cut in this order: the oldest RESOLVED thread first, then description, then detail. A figure is cut last, and never rewritten as a comparison.'
+      : ' This is the first session with a memory, so write it from this session alone.') +
+    ' AIM FOR AT MOST 12 BULLETS and stop when the facts run out \u2014 a short memory is a good memory, and there is no credit for filling the space. ' + _summaryCap + ' characters is a CEILING you must not cross, not a target to reach."\n' +
     '}';
 
   // Async: create a pending job, respond immediately, then run the (slow)
@@ -703,7 +832,13 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         // NON-ENGLISH PROSE MAKES IT WORSE: German and Spanish tokenize longer than English for the
         // same content, so the sessions most likely to overflow are the ones the language work just
         // made possible. 1500 floor + 1100 per panel, capped well inside the model's output limit.
-        max_tokens: Math.min(32000, 1500 + (moments.length * 1100)),
+        // v3.0.967 -- TD-852. THE FLOOR RISES WITH THE NEW FIELD, AND THIS IS NOT OPTIONAL.
+        // The Summary is up to _summaryCap CHARACTERS, which is roughly _summaryCap/3 tokens, plus
+        // its own key and quoting. Adding an output field without adding room makes the longest
+        // sessions overrun -- and an overrun is a truncation, which TD-514 turns into a REFUSED
+        // generation and a lost book, on exactly the sessions that most need a memory. The 400 is
+        // headroom on top of the arithmetic, not a guess at it.
+        max_tokens: Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 1100)),
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
         system: buildNarrativeSystem(styleBundle.system, campaign, directorNotes),
@@ -836,6 +971,44 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       narrStyleId, now, req.session.userId, targetForkId
     );
 
+    // =====================================================================================
+    // v3.0.967 -- TD-852. THE SUMMARY, WRITTEN SEPARATELY AND PROTECTIVELY.
+    //
+    // (a) OPTIONAL, ALWAYS. `parsed.summary` is read with `|| ''` exactly like intro_summary, and
+    //     its absence is never an error. It is deliberately NOT part of TD-514's completeness
+    //     gate above: adding it there would throw away an entire generated narrative -- and the
+    //     reader's tokens -- because a recap was missing. Blank is a valid Summary.
+    //
+    // (b) IT NEVER OVERWRITES A HAND-EDITED SUMMARY UNLESS ASKED. There are SIX call sites for
+    //     this route in app.js, several of them duplicated twins (TD-853), and teaching each one
+    //     to ask would be six chances to miss one. Refusing HERE makes every caller safe by
+    //     construction -- §5c's "make the twin impossible" -- and the storyboard's own button is
+    //     then the only place that needs to ask.
+    //
+    // (c) THE TRUNCATION IS A BACKSTOP, NOT THE MECHANISM. The model is told the cap and prunes
+    //     to fit; this only fires when it overruns anyway, and it cuts at a sentence boundary so
+    //     the memory never ends mid-word. If it fires routinely that is a prompt fault, which is
+    //     why it logs when it bites.
+    // =====================================================================================
+    try {
+      var _sumRaw = (parsed && typeof parsed.summary === 'string') ? parsed.summary.trim() : '';
+      if (_sumRaw.length > _summaryCap) {
+        var _cut = _sumRaw.slice(0, _summaryCap);
+        var _lastStop = Math.max(_cut.lastIndexOf('. '), _cut.lastIndexOf('! '), _cut.lastIndexOf('? '));
+        // Only honour a sentence break in the last quarter -- otherwise a single long opening
+        // sentence would cut the memory down to almost nothing.
+        _sumRaw = (_lastStop > (_summaryCap * 0.75)) ? _cut.slice(0, _lastStop + 1) : _cut;
+        try { console.warn('[narrative] summary overran the ' + _summaryCap + '-char cap and was truncated'); } catch (_we) {}
+      }
+      var _wantReplace = !!(req.body && req.body.replace_summary);
+      var _sfRow = await db.prepare('SELECT narrative_summary_edited FROM session_forks WHERE id = ?').get(targetForkId);
+      var _wasEdited = !!(_sfRow && _sfRow.narrative_summary_edited);
+      if (!_wasEdited || _wantReplace) {
+        await db.prepare('UPDATE session_forks SET narrative_summary = ?, narrative_summary_edited = FALSE WHERE id = ?')
+          .run(_sumRaw, targetForkId);
+      }
+    } catch (_se) { try { console.error('[narrative] summary save failed (non-fatal):', _se && _se.message); } catch (_e2) {} }
+
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
     if (_narrCharge > 0) {
@@ -959,13 +1132,43 @@ router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // a ?fork_id= the caller is allowed to see).
   const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Access denied' });
-  const fk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro, narrative_style FROM session_forks WHERE id = ?').get(viewForkId);
+  const fk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro, narrative_style, narrative_summary, narrative_summary_edited FROM session_forks WHERE id = ?').get(viewForkId);
+
+  // v3.0.967 -- TD-852. WHO MAY EDIT IS ANSWERED HERE, NOT GUESSED ON THE CLIENT.
+  //
+  // A reader may VIEW another version (that is what getViewableForkId is for) and may only WRITE
+  // their own. Rather than have the panel infer that from state it half knows, the server compares
+  // the viewed fork with the caller\u2019s own and says. Failing closed: if the role cannot be read,
+  // can_edit is false and the box is read-only, which is the harmless direction.
+  var _canEdit = false;
+  try {
+    const _role = await getCampaignRole(req.session.userId, req.params.campaignId);
+    if (_role) {
+      const _mine = await callerForkId(db, session.id, req.session.userId, _role, null);
+      _canEdit = !!(_mine && String(_mine) === String(viewForkId));
+    }
+  } catch (_ce) { _canEdit = false; }
+  var _sumCap = 1500;
+  try { var _sc2 = await getAppSettingInt('summary_char_limit', 1500); if (Number.isFinite(_sc2) && _sc2 >= 200) _sumCap = _sc2; } catch (_e3) { _sumCap = 1500; }
+  // v3.0.969 -- TD-854. Resolved with the SAME helper the generation uses, so the line in the
+  // panel and the text the model is handed can never describe different sessions.
+  var _inh = await inheritedSummary(db, session, req.session.userId);
 
   res.json({
     intro: fk && fk.narrative_intro ? fk.narrative_intro : '',
     sections: fk && fk.narrative_sections ? JSON.parse(fk.narrative_sections) : [],
     outro: fk && fk.narrative_outro ? fk.narrative_outro : '',
-    narrative_style: fk && fk.narrative_style ? fk.narrative_style : 'classic'
+    narrative_style: fk && fk.narrative_style ? fk.narrative_style : 'classic',
+    // Blank is a real and expected answer, not a missing one -- the panel renders an empty box
+    // and says nothing is remembered yet.
+    summary: (fk && fk.narrative_summary) ? fk.narrative_summary : '',
+    // v3.0.969 -- TD-854. What THIS session will inherit when it generates. Reported even when
+    // the previous summary is empty, because "Session 4 has no summary yet" is worth seeing and
+    // is a different thing from "there is no previous session".
+    inherited: _inh ? { session_name: _inh.sessionName, has_text: !!_inh.text, source: _inh.source } : null,
+    summary_edited: !!(fk && fk.narrative_summary_edited),
+    summary_limit: _sumCap,
+    summary_can_edit: _canEdit
   });
 });
 
@@ -1093,6 +1296,46 @@ router.put('/style/:campaignId/:sessionId', requireAuth, async function(req, res
 // Body: { verbosity: 'low' | 'med' | 'high' }. Owner-scoped exactly like /style, but with NO
 // tier gate -- verbosity is available on every plan. Remembered per-fork; applied at generation.
 // ============================================================
+// ============================================================
+// v3.0.967 -- TD-852. SAVE THIS VERSION'S SUMMARY FOR NEXT SESSION.
+//
+// The fifth of the same shape as /direction, /outline, /style and /verbosity: owner-scoped
+// through callerForkId, so the caller writes only their OWN version and a reader viewing
+// somebody else's cannot touch it whatever the client sends.
+//
+// AN EMPTY BODY IS A LEGITIMATE SAVE. Clearing the Summary is a thing a reader may deliberately
+// want -- it means "start the memory again" -- so empty is stored, not rejected, and the edited
+// flag is still set: a deliberately blank memory must not be silently refilled by the next
+// generation.
+//
+// THE CAP IS ENFORCED HERE TOO. The counter in the panel is a convenience; this is the authority.
+// ============================================================
+router.put('/summary/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  var _cap = 1500;
+  try { var _c = await getAppSettingInt('summary_char_limit', 1500); if (Number.isFinite(_c) && _c >= 200) _cap = _c; } catch (e) { _cap = 1500; }
+
+  var text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
+  if (text.length > _cap) text = text.slice(0, _cap);
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_summary = ?, narrative_summary_edited = TRUE, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(text, now, req.session.userId, targetForkId);
+
+  res.json({ success: true, summary: text, summary_edited: true, summary_limit: _cap });
+});
+
 router.put('/verbosity/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(

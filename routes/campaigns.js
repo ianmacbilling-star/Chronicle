@@ -151,6 +151,31 @@ router.put('/:id', requireAuth, async function(req, res) {
       _allowAssets,
       now, req.session.userId, campaign.id
     );
+  // v3.0.966 -- THE BOOK TITLE FOLLOWS A RENAME WHEN IT WAS NEVER CHOSEN.
+  // See the note above this batch: only a title byte-identical to the OLD campaign name is
+  // touched, because only a seeded one can be. Wrapped whole -- a rename that succeeded must
+  // not report failure because a downstream title could not be carried.
+  try {
+    const _oldName = String(campaign.name || "");
+    const _newName = String(req.body.name || campaign.name || "");
+    if (_oldName && _newName && _oldName !== _newName) {
+      const _rows = await db.prepare(
+        'SELECT chooser_user_id, fork_user_id, version_id, prefs FROM fork_book_prefs WHERE campaign_id = ?'
+      ).all(campaign.id);
+      for (const _r of (_rows || [])) {
+        let _p = null;
+        try { _p = JSON.parse(_r.prefs || "{}"); } catch (_pe) { _p = null; }
+        if (!_p || typeof _p !== "object") continue;
+        if (String(_p.book_title || "") !== _oldName) continue;
+        _p.book_title = _newName;
+        try {
+          await db.prepare(
+            'UPDATE fork_book_prefs SET prefs = ? WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ? AND version_id = ?'
+          ).run(JSON.stringify(_p), _r.chooser_user_id, _r.fork_user_id, campaign.id, _r.version_id);
+        } catch (_ue) { console.error("book title rename carry failed (non-fatal):", _ue && _ue.message); }
+      }
+    }
+  } catch (_bt) { console.error("book title rename sweep failed (non-fatal):", _bt && _bt.message); }
   const updated = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaign.id);
   // v3.0.954 -- TD-807. DECORATED, like the list route. Saving a genre change used to answer
   // with the raw row, so the client could mirror genres but had no new genre_defaults or

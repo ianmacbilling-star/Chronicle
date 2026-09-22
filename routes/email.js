@@ -664,6 +664,16 @@ function purchaseReceiptHTML(name, receipt) {
   rows += row('Paid with', card);
   rows += row('Date', when(receipt.paidAt));
   rows += row('Tokens added', receipt.tokensGranted != null ? receipt.tokensGranted : '');
+  // v3.0.966 -- TD-841. THE MISSING MIDDLE TERM.
+  //
+  // A renewal expires whatever use-it-or-lose-it tokens were left and THEN grants the new
+  // period, so the balance moves by grant minus expiry while this receipt quoted only the
+  // grant. Tamika: 442 - 2 + 30 = 470, receipt said 30, and both numbers were correct.
+  //
+  // SHOWN AS A NEGATIVE so the column reads as arithmetic rather than as a second credit.
+  // Only rendered when something actually expired -- tokens.js sends null otherwise and row()
+  // drops the line, so a first subscription and an upgrade are unchanged.
+  rows += row('Expired from last period', (receipt.tokensExpired != null && Number(receipt.tokensExpired) > 0) ? ('-' + receipt.tokensExpired) : '');
   rows += row('Token balance', receipt.balanceAfter != null ? receipt.balanceAfter : '');
   rows += row('Plan', receipt.tierLabel);
   rows += row('Runs until', when(receipt.runsUntil));
@@ -735,6 +745,18 @@ var RECEIPT_COPY = {
                   leadIn: 'Your subscription is active. Here are the details:' },
   renewal:      { subject: 'Your Campaignia subscription renewal',
                   leadIn: 'Your subscription payment has gone through. Here are the details:' },
+  // v3.0.966 -- TD-842. THE LEAD-IN CARRIES THE FACT THE TOKENS CANNOT.
+  //
+  // An upgrade grants the difference in allotment the moment it takes effect, but Stripe
+  // prorates the CHARGE onto the next invoice -- so the customer sees tokens appear on a day
+  // no money moved, and weeks later a proration receipt for a plan change they have been
+  // using ever since. Both halves are named here, because being told only one of them is
+  // what produced the question this entry exists to answer.
+  //
+  // DISTINCT FROM `proration`, which is that later charge. Same plan change, two events,
+  // two mails, and collapsing them would put the wrong date on one of them.
+  upgrade:      { subject: 'Your Campaignia plan upgrade',
+                  leadIn: 'Your new plan is active and the extra tokens are already on your account. There is nothing to pay today \u2014 the charge for the change will appear on your next invoice.' },
   proration:    { subject: 'Your Campaignia plan change',
                   leadIn: 'Your plan change has been charged. Here are the details:' }
 };
@@ -1243,6 +1265,14 @@ function buildEmailPreview(type, name) {
         itemName: 'Platinum subscription', amountCents: 640, currency: 'usd',
         balanceAfter: 412, tierLabel: 'Platinum',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-05T15:25:00.000Z' });
+    case 'receipt_upgrade':
+      // v3.0.966 -- TD-842. NO amountCents AND NO CARD, because nothing is charged on the day
+      // an upgrade takes effect. That absence is what this sample is for: it is what the real
+      // one looks like, and seeing it is how anyone checks the lead-in says so.
+      return receiptEmail(who, { kind: 'upgrade', reference: 'evt_1XLH7rIwItevUkuhGVCkoq6s',
+        itemName: 'Gold subscription', tierLabel: 'Gold',
+        tokensGranted: 15, balanceAfter: 457,
+        paidAt: '2026-10-05T15:25:00.000Z' });
     case 'feedback':
       return { subject: '[Campaignia Feedback] Bug report - Storyboard not loading', html: feedbackHTML({ category: 'Bug report', subject: 'Storyboard not loading', from_name: who, from_email: 'player@example.com', tier: 'Gold', message: 'The storyboard spinner never finishes on my last session. I tried refreshing a few times with no luck.' }) };
     case 'trial_ending_soon':

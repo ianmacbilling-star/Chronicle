@@ -646,9 +646,26 @@ class LuluProvider extends PrintProvider {
     var sku = '(unknown)';
     try { sku = this._packageId(spec); } catch (e) { sku = '(could not be built: ' + ((e && e.message) || e) + ')'; }
     var msg = (err && err.message) || String(err);
-    if (msg.indexOf('pod_package_id') !== -1 || /\b400\b/.test(msg)) {
+    // v3.0.973 -- TD-870. ONLY WHEN LULU NAMES THE FIELD.
+    //
+    // The `|| /\b400\b/` that used to sit here matched every 4xx Lulu returns, because
+    // _fetch writes the status into the message. An incomplete address is a 400. So the
+    // reader was told their book format was wrong and asked to report which format they
+    // had picked -- about a problem that was never in the format.
+    //
+    // Lulu names the offending field in its validation body, exactly as it does for
+    // interior_page_count and unit elsewhere in this file, so the field name IS the
+    // evidence and the status number never was. Anything else now passes through with
+    // its own flags, and _fetch has already marked a 4xx as refused -- which reaches the
+    // reader as "check the shipping address and the format", the honest answer.
+    if (msg.indexOf('pod_package_id') !== -1) {
       var e2 = new Error('lulu: the product code was not accepted -- pod_package_id ' + sku + '. ' + msg);
       e2.podPackageId = sku;
+      // The flags were being dropped: a fresh Error carried podPackageId and nothing else,
+      // so a real SKU rejection lost its status and its refused flag on the way out.
+      if (err && err.status) e2.status = err.status;
+      if (err && err.refused) e2.refused = true;
+      if (err && err.inconclusive) e2.inconclusive = true;
       return e2;
     }
     return err;

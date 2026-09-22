@@ -30,7 +30,7 @@ const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErr
 // failed price leaves a record naming the cause. routes/debug requires only the database
 // and the auth middleware, so there is no cycle.
 const { logDebug } = require('./debug');
-const { getTier, getEffectiveTier } = require('../middleware/tiers');
+const { getTier, getEffectiveTier, isPaidTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
@@ -441,14 +441,39 @@ const POSTCODE_REQUIRED_COUNTRIES = ('AF AR AS AT AU AX BE BH BL BR CA CH CL CN 
   'GL GP GR GU HT HU IE IM IN JE JP KY LB LI LT LU LV MF MH MP MQ MY NC NL NO ' +
   'NZ PF PG PL PN PR PT PW RE RO SE SG SJ SK SM SV TC TR US VE VI WF YT ZA').split(' ');
 
+// v3.0.974 -- TD-878. THE FIELDS EVERY ADDRESS NEEDS, WHATEVER THE COUNTRY.
+//
+// public/js/app.js holds a MIRROR of this list so the page can refuse without a round
+// trip. It is a mirror and not a second opinion: the build guard extracts both and fails
+// if they name different fields, because two lists that are allowed to drift is exactly
+// how the phone number came to be in neither of them.
+//
+// The order matters and matches the page: these first, then country, state, postcode.
+const ALWAYS_REQUIRED = [
+  ['name', 'A full name is required.'],
+  ['street1', 'A street address is required.'],
+  ['city', 'A city is required.'],
+  ['phone', 'A phone number is required. The printer asks for one on every address, whatever the country.']
+];
+
 function shipToErrors(body) {
   const s = (body && body.shipTo) || {};
   const errs = [];
+  // Checked BEFORE the country, and deliberately: unlike a state or a postcode, none of
+  // these means anything less without one, so there is no reason to withhold them while
+  // the reader sorts out a country code.
+  ALWAYS_REQUIRED.forEach(function (f) {
+    if (!String(s[f[0]] || '').trim()) errs.push(f[1]);
+  });
   const cc = String(s.countryCode || '').trim().toUpperCase();
   const st = String(s.stateCode || '').trim().toUpperCase();
   const pc = String(s.postcode || '').trim();
   if (!/^[A-Z]{2}$/.test(cc)) {
     errs.push('The country must be a two-letter code such as US, not a country name.');
+    // Returns the ALWAYS_REQUIRED findings too. Only the checks BELOW this line depend on
+    // the country; the ones above it do not, and dropping them would make a reader fix the
+    // country, press the button again, and be told about the phone they could have been
+    // told about the first time.
     return errs;   // nothing below can mean anything without a country
   }
   if (cc === 'US') {
@@ -624,7 +649,31 @@ router.get('/novel-info/:campaignId', requireSession, async function (req, res) 
     const moments = Number((cnt && cnt.c) || 0);
     const pageEstimate = Math.max(8, moments);
 
-    res.json({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true });
+    // =====================================================================================
+    // v3.0.971 -- TD-848. THE TWO ANSWERS THE BROWSER WAS GUESSING AT.
+    //
+    // Both come from ONE getEffectiveTier call, and both are derived with the SAME functions
+    // that actually refuse: `getTier(...).watermark` is what /quote and the order path check
+    // (routes/print.js ~725), and `isPaidTier(...)` is what publish-story checks
+    // (routes/pdf.js). The browser now renders what the server will decide instead of reading
+    // the viewer own tier -- which is the whole of TD-848: a free-trial member of a PAID
+    // Story Master campaign was refused by the browser for a watermark her book does not have.
+    //
+    // FAILS OPEN, DELIBERATELY. On a lookup error these are omitted rather than sent as true.
+    // The server still refuses authoritatively at the order and publish routes, so the worst
+    // case is a live button and an honest refusal on click -- never a button greyed out by a
+    // guess, which is the failure this batch exists to remove.
+    // =====================================================================================
+    var _gate = {};
+    try {
+      const _eff = await getEffectiveTier(userId, campaignId);
+      const _t = getTier(_eff);
+      _gate.watermarked = !!(_t && _t.watermark);
+      _gate.canPublish = !!isPaidTier(_eff);
+      _gate.effectiveTier = _eff;
+    } catch (e) { _gate = {}; }
+
+    res.json(Object.assign({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true }, _gate));
   } catch (e) {
     res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }

@@ -998,7 +998,7 @@
             <div id="review-action-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end;">
               <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="review-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
-              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
               <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">Cancel</button>
             </div>
           </div>
@@ -1025,7 +1025,7 @@
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <span style="flex:1 1 auto;"></span>
-              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" onclick="generateNarrativeOnly()">Generate Narrative</button>
+              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()">Generate Narrative</button>
               <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
               <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
@@ -1044,6 +1044,28 @@
             <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>
           <div id="moments-grid"></div>
+          <!-- v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION. Last thing in #sb-content, which is
+               the very bottom of the Storyboard. Styled like the "Select your style" panel at the
+               top of this same tab so the two read as a pair bracketing the grid. -->
+          <div id="sb-summary-panel" style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-top:14px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div class="moment-title" style="margin-bottom:0;">Summary For Next Session</div>
+              <div id="sb-summary-count" style="font-size:10px;color:rgba(201,168,76,0.35);"></div>
+            </div>
+            <!-- v3.0.969 -- TD-854. Hidden until there is something to say. A reader who has
+                 never seen the feature should not be shown an empty row about it. -->
+            <div id="sb-summary-inherit" style="display:none;margin:4px 0 0;font-size:11px;color:rgba(201,168,76,0.45);"></div>
+            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;color:rgba(201,168,76,0.55);">
+              What the next session will be told about this one &mdash; who matters, where they are, what is unresolved.
+              <b>Generate Narrative</b> writes it; you can edit it, and yours is kept. Your changes save on their own.
+            </div>
+            <!-- v3.0.968 -- TD-855. The same pair the campaign lore and instruction boxes use:
+                 oninput debounces a write, onblur flushes one that is already pending. -->
+            <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" oninput="sbSummaryCount();sbSummaryDirty()" onblur="sbSummaryFlush()" placeholder="Nothing remembered yet. Generate Narrative writes this, or type it yourself."></textarea>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+              <span id="sb-summary-msg" style="font-size:11px;color:rgba(201,168,76,0.5);"></span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1315,7 +1337,7 @@
 
       <!-- Version label (tap 7x to reveal the Developer panel) -->
       <div style="margin-top:10px;text-align:center;">
-        <span id="app-version-label" onclick="cmpVersionTap()" style="font-size:11px;color:rgba(240,232,208,0.35);cursor:default;user-select:none;-webkit-user-select:none;">Campaignia v3.0.0</span>
+        <span id="app-version-label" onclick="cmpVersionTap()" style="font-size:11px;color:rgba(240,232,208,0.35);cursor:default;user-select:none;-webkit-user-select:none;">Campaignia</span>
       </div>
 
       <!-- Developer / Debug panel (hidden until the version label is tapped 7x) -->
@@ -1534,6 +1556,7 @@
             <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
             <option value="receipt_subscription">Receipt &mdash; subscription started</option>
             <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
+            <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
             <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
             <option value="feedback">Feedback (to support)</option>
             <option value="trial_ending_soon">Trial &mdash; ending soon</option>
@@ -1572,6 +1595,9 @@
             <option value="5m">5 minutes</option>
             <option value="1h">1 hour</option>
           </select>
+          <!-- v3.0.967 -- TD-852. The model is told this number and writes to fit it. -->
+          <label style="color:var(--gold);font-size:13px;">Summary For Next Session &mdash; character limit</label>
+          <input type="number" min="200" step="50" id="gen-summary-limit" style="width:110px;" />
         </div>
         </div>
 
