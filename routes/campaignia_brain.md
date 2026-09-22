@@ -893,6 +893,42 @@ success — a failed retouch is never charged.
 
 ---
 
+### 10.8 Summary For Next Session — the story’s memory
+
+At the very bottom of the **Storyboard** there is a box called **Summary For Next Session**. It
+holds a short note of what happened in this session, written for the NEXT session to read — who
+matters now, where everyone is, what they are trying to do, and what is still unresolved.
+
+**Generate Narrative writes it.** Not Generate Story — that builds the panels from the transcript.
+The Summary comes out of the same AI answer that writes the prose, so it costs no extra tokens and
+takes no extra run. It appears in the box as soon as the run finishes.
+
+**The next session reads it.** When you generate a narrative, the previous session’s Summary is
+handed to the writer as established fact, sitting after your campaign Lore and before this
+session’s panels. The prose can lean on what came before without retelling it.
+
+**It rolls forward rather than restarting.** Each new Summary begins from the one carried in,
+keeps what still matters, adds what changed and drops what is settled — one running memory of the
+campaign rather than a stack of session recaps. It is kept under a character limit, and it is told
+to drop what matters LEAST rather than what is OLDEST, so something established early can still be
+there many sessions later.
+
+**You can edit every word of it**, and it saves itself as you type — there is no Save button.
+Once you have edited it, generating the narrative again ASKS before replacing it.
+
+**To stop a session inheriting anything, clear the PREVIOUS session’s Summary box** and leave it
+empty. An empty Summary is carried as nothing at all — which is what you want when two sessions
+have nothing to do with each other: a one-shot, a flashback, or a jump to a different part of the
+world. Blank never causes an error anywhere.
+
+**Each version keeps its own.** If you have your own version of the previous session it uses yours;
+otherwise it uses the Story Master’s, which is what happens for anyone who joined partway through.
+The line under the box says which one it is carrying.
+
+**The first session of a campaign inherits nothing** and simply writes its own.
+
+---
+
 ## 11. Versions — your own edition of the book
 
 A **version** is your own edition of a campaign's book. It holds a complete set of

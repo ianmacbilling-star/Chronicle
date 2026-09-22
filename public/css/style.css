@@ -1041,6 +1041,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .storyboard-panel-meta .moment-title {
   color: var(--gold-light) !important;
 }
+/* v3.0.970 -- the Summary For Next Session heading, in the SAME gold as the panel titles
+   above. It needs its own rule: `.moment-title` on its own computes to var(--text) because
+   the rule setting that comes after the gold one earlier in this file, and the panel titles
+   get their gold from the PARENT-SCOPED rule above rather than from the class. Kept adjacent
+   on purpose -- restyle one and you are looking straight at the other. */
+#sb-summary-panel .moment-title {
+  color: var(--gold-light) !important;
+}
 .moment-prompt-text {
   color: rgba(201,168,76,0.35) !important;
 }

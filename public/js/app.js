@@ -5817,7 +5817,13 @@ function paintAllVersionLocks() {
   try { if (typeof paintVersionLock === 'function') paintVersionLock(); } catch (e) {}
 }
 function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintAllVersionLocks(); }
-function clearGenLock() { state.sessionGenLock = null; paintAllVersionLocks(); }
+function clearGenLock() {
+  state.sessionGenLock = null;
+  paintAllVersionLocks();
+  // v3.0.970 -- every generation path releases the lock here, so this is the one place that sees
+  // them all finish. Defensive: the panel does not exist on most screens.
+  try { if (typeof sbSummaryLoad === "function") sbSummaryLoad(); } catch (e) {}
+}
 
 // v3.0.476 -- THE SESSION VERSION DROPDOWN LOCKS WHILE WORK IS IN FLIGHT (TD-262b).
 //
@@ -16899,6 +16905,8 @@ function regenNarrativeSection(type, panelIndex) {
   // its fix; this caller was missed, in both of its copies. Same fix, same shape.
   var _regenEnd = function(ok, msg) {
     hideBusyOverlay(panelId);
+    // v3.0.970 -- a per-gap Regen re-runs the whole narrative job, so the Summary moved too.
+    try { if (typeof sbSummaryLoad === "function") sbSummaryLoad(); } catch (e) {}
     if (box) box.disabled = false;
     if (!ok && msg) showError(msg);
   };
