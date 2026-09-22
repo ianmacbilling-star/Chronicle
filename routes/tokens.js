@@ -126,7 +126,11 @@ async function ensureMonthlyGrant(userId, cycleKey) {
       "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, ?, 'cot', 'monthly_cot_grant', ?)"
     ).run(userId, allotCot, cycle);
   }
-  return { skipped: false, cycle: cycle, utlt: allotUtlt, cot: allotCot };
+  // v3.0.966 -- TD-841. `expired` is the leftover UTOLT this call just zeroed (0 when there
+  // was none). It is REPORTED, not computed here: the figure is `bal.utlt`, read above and
+  // already written to the ledger as utlt_expire. The receipt renders it so that grant minus
+  // expiry -- which is what the header moves by -- can be seen rather than inferred.
+  return { skipped: false, cycle: cycle, utlt: allotUtlt, cot: allotCot, expired: (bal.utlt > 0 ? bal.utlt : 0) };
 }
 
 async function canAfford(userId, cost) {
@@ -1474,6 +1478,10 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
            // silently vanishes from the receipt, which is the exact shape of bug this batch
            // is about: a thing that looks sent and is not there.
            tokensGranted: (_granted && !_granted.skipped) ? ((_granted.utlt || 0) + (_granted.cot || 0)) : null,
+           // v3.0.966 -- TD-841. NULL WHEN THERE WAS NOTHING TO EXPIRE, so row() drops the line
+           // entirely rather than printing a meaningless "0". Only a renewal can expire anything;
+           // a first subscription has no prior period and an upgrade does not expire at all.
+           tokensExpired: (_granted && !_granted.skipped && _granted.expired > 0) ? _granted.expired : null,
            tierLabel: _tierName || null };
 }
 
@@ -1531,12 +1539,29 @@ async function fulfillSubscriptionUpdate(subscription, previousAttributes, event
   const newTier = stripeProvider.tierForPrice(newPriceId);
   if (!newTier) return; // price not mapped to a tier yet -> nothing to do
   const db = await getDb();
-  const user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subscription.id);
+  // v3.0.966 -- TD-842. email and name are selected because this path now SENDS something.
+  const user = await db.prepare('SELECT id, tier, email, name FROM users WHERE stripe_subscription_id = ?').get(subscription.id);
   if (!user) return;
   let oldTier = oldPriceId ? stripeProvider.tierForPrice(oldPriceId) : null;
   if (!oldTier) oldTier = user.tier || null;
   if (!oldTier || oldTier === newTier) return; // no actionable change
-  await applyUpgradeProration(user.id, oldTier, newTier, { key: eventId, eventId: eventId });
+  const _up = await applyUpgradeProration(user.id, oldTier, newTier, { key: eventId, eventId: eventId });
+  // v3.0.966 -- TD-842. Tokens moved on a day when no charge happened, so the TD-836 receipt
+  // path (which hangs off invoice.paid) never ran and the customer was told nothing.
+  if (_up && !_up.skipped) {
+    const _upLabel = String(newTier || "").charAt(0).toUpperCase() + String(newTier || "").slice(1);
+    await sendPurchaseReceipt({
+      kind: 'upgrade',
+      userId: user.id,
+      // The Stripe event id: unique per upgrade, and what makes the send idempotent.
+      reference: eventId,
+      itemName: (_upLabel ? (_upLabel + ' subscription') : 'Subscription'),
+      tierLabel: _upLabel || null,
+      // The difference granted immediately, both buckets, which is what applyUpgradeProration
+      // just credited. Never a new month -- an upgrade tops up, it does not renew.
+      tokensGranted: ((_up.utlt || 0) + (_up.cot || 0))
+    });
+  }
 }
 
 // ------------------------------------------------------------

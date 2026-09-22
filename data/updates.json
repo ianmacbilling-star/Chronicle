@@ -1,5 +1,40 @@
 [
   {
+    "version": "3.0.966",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "966-receipt-expired-line",
+        "kind": "fix",
+        "public": true,
+        "summary": "A renewal receipt now shows the tokens that expired, so the balance on your account and the number on the receipt add up.",
+        "detail": "TD-841, from a tester who could not make the two agree and was right not to be able to. Your monthly grant expires whatever use-it-or-lose-it tokens are left over and THEN grants the new period, so your balance moves by the grant minus the expiry — while the receipt quoted only the grant. 442 minus 2 expired plus 30 granted is 470, the receipt said 30, and both numbers were correct; nothing on the screen or in the email named the 2. The receipt now carries an Expired from last period line between Tokens added and Token balance, so the three read as arithmetic. TOKENS ADDED STILL MEANS THE GRANT and deliberately so — it is what your plan buys and what the charge is for; a net figure would be right for the header and wrong for an invoice. The line appears only when something actually expired, so a first subscription and an upgrade look exactly as they did. TO TEST: renew on an account holding leftover use-it-or-lose-it tokens and check the three numbers on the receipt reconcile against the header.",
+        "td": [
+          "TD-841"
+        ]
+      },
+      {
+        "id": "966-upgrade-email",
+        "kind": "fix",
+        "public": true,
+        "summary": "Upgrading your plan mid-month now sends an email explaining the tokens that just arrived and when the charge lands.",
+        "detail": "TD-842. An upgrade grants the difference in monthly tokens the moment it takes effect, but Stripe prorates the CHARGE onto your next invoice — so no payment happened that day, so the receipt every purchase gets (v3.0.961) never ran, and tokens simply appeared with nothing to explain them. Weeks later a proration receipt arrived for a plan change you had been using ever since. The upgrade now sends its own email when it happens, naming the new plan, the tokens added, and the fact that there is nothing to pay today because the charge follows on the next invoice. It cannot send twice on a Stripe retry, and it can never delay or block the tokens themselves. The v3.0.961 release note has also been corrected — it said the charge was taken immediately, which it is not (TD-843). TO TEST: upgrade a subscription mid-cycle and check one email arrives naming the new plan and the tokens, with no amount on it; then confirm the later proration receipt still arrives with the next invoice.",
+        "td": [
+          "TD-842",
+          "TD-843"
+        ]
+      },
+      {
+        "id": "966-book-title-follows-rename",
+        "kind": "fix",
+        "public": true,
+        "summary": "Renaming a campaign now carries the change onto the book, when the book title was never chosen by hand.",
+        "detail": "Reported from the tester list. A book whose title you have never typed is seeded with the campaign name so that something is always on the cover — and from that moment it was a stored value, so renaming the campaign left the OLD name on the book for good. A rename now carries onto any book title that is still exactly the old campaign name, which is the only case in which nobody chose it. A TITLE YOU TYPED IS NEVER TOUCHED, including one that merely resembles the campaign name. TO TEST: rename a campaign whose book title you have never edited and check the cover and the title page follow it; then set a title of your own, rename again, and check yours survives.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.965",
     "staged_on": "2026-09-21",
     "entries": [
@@ -73,7 +108,7 @@
         "kind": "fix",
         "public": true,
         "summary": "Every purchase now sends a receipt by email — token packs, Platinum Passes, and every subscription charge including renewals.",
-        "detail": "TD-836, from the tester run: a Platinum Pass was bought twice and no email arrived either time. Print orders have always sent a confirmation; NOTHING ELSE DID. A token pack, a pass and a subscription all took money and sent silence, and a monthly renewal has never sent anything at all — so a customer charged in month seven had no record of it from us. THE RECEIPT NOW COMES FROM ONE PLACE. Every purchase lands in the same Stripe webhook, and each kind of purchase hands back a description of what was bought; one block at the end sends the receipt. That matters more than it sounds: the reason three of these were missing is that each fulfilment path was written separately and nobody could see the whole set at once. Now “did this purchase send a receipt” is one function to read. WHAT IS ON IT: what you bought, what you paid, the card it went on where Stripe tells us, the tokens added and your new balance, and for a pass the tier and the date it runs to. IT CANNOT SEND TWICE. Stripe retries webhooks routinely, and a duplicate receipt for a real charge is its own support conversation. Each receipt is recorded against the Stripe session or invoice id, and a retry finds the record and sends nothing — while a retry after a MAIL failure still tries again, because those are different questions and were deliberately not merged. A receipt that fails to send is logged as an error and raises an alert rather than disappearing. RENEWALS AND UPGRADES BOTH COUNT (Ian: every charge). A monthly renewal sends a receipt. Upgrading mid-cycle charges a prorated amount immediately, and that sends one too — but it does NOT grant a new month of tokens, which is the thing that made this branch delicate: the receipt and the token grant now ask different questions of the same invoice. TO TEST in the Stripe sandbox: buy a token pack, buy a pass, and start a subscription — each must produce one email, and the amounts on them must match what Stripe charged. Then check the print-order confirmation still arrives as it always did, because that path was deliberately left alone.",
+        "detail": "TD-836, from the tester run: a Platinum Pass was bought twice and no email arrived either time. Print orders have always sent a confirmation; NOTHING ELSE DID. A token pack, a pass and a subscription all took money and sent silence, and a monthly renewal has never sent anything at all — so a customer charged in month seven had no record of it from us. THE RECEIPT NOW COMES FROM ONE PLACE. Every purchase lands in the same Stripe webhook, and each kind of purchase hands back a description of what was bought; one block at the end sends the receipt. That matters more than it sounds: the reason three of these were missing is that each fulfilment path was written separately and nobody could see the whole set at once. Now “did this purchase send a receipt” is one function to read. WHAT IS ON IT: what you bought, what you paid, the card it went on where Stripe tells us, the tokens added and your new balance, and for a pass the tier and the date it runs to. IT CANNOT SEND TWICE. Stripe retries webhooks routinely, and a duplicate receipt for a real charge is its own support conversation. Each receipt is recorded against the Stripe session or invoice id, and a retry finds the record and sends nothing — while a retry after a MAIL failure still tries again, because those are different questions and were deliberately not merged. A receipt that fails to send is logged as an error and raises an alert rather than disappearing. RENEWALS AND UPGRADES BOTH COUNT (Ian: every charge). A monthly renewal sends a receipt. AN UPGRADE IS TWO EVENTS, AND THIS NOTE ORIGINALLY DESCRIBED ONLY THE GAP BETWEEN THEM. What an upgrade DOES, the moment it takes effect: it grants the DIFFERENCE between the two plans’ monthly allotments, in full and straight away, in both buckets — and, unlike a renewal, it does NOT expire the use-it-or-lose-it tokens you already have. What it does not do is start a new month. THE CHARGE IS A SEPARATE EVENT: Stripe prorates it onto your NEXT invoice rather than taking it that day, so the receipt for the money arrives later, with that invoice. (Corrected in v3.0.966 — this note previously said the charge was taken immediately, and it is not. From v3.0.966 the upgrade also sends its own email when it happens, so the tokens no longer arrive with nothing to explain them.) TO TEST in the Stripe sandbox: buy a token pack, buy a pass, and start a subscription — each must produce one email, and the amounts on them must match what Stripe charged. Then check the print-order confirmation still arrives as it always did, because that path was deliberately left alone.",
         "td": [
           "TD-836"
         ]
