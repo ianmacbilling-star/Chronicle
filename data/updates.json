@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.975",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "A refused address now tells you what the printer said about it.",
+        "detail": "The last release promised to name the part of your address the print service objected to, and it never did — we were reading the wrong shape of answer, so every refusal fell back to the general advice. It now reads the real one, and passes on the print service’s own explanation: which field, and what is wrong with it — for example, that a postal code does not match the city and state, and what range it should be in."
+      },
+      {
+        "summary": "The refusal message no longer starts mid-sentence.",
+        "detail": "Removing a sentence that said nothing left the message opening with \"Nothing has been charged\", which never said a refusal had happened. It now says the printer would not accept the order, and — when the print service did not say which part — that too."
+      }
+    ]
+  },
+  {
     "version": "3.0.974",
     "date": "2026-09-22",
     "entries": [

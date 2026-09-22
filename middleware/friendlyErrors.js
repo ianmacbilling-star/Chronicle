@@ -121,7 +121,7 @@ var PR_BUSY = 'The print service is busy right now. Nothing has been charged. Pl
 // v3.0.974 -- TD-879. The opening sentence is gone. The reader is already looking at a
 // failure, so a sentence whose whole content is that it failed carries nothing -- and it
 // crowded out the part that could have told them what to fix.
-var PR_REFUSED = 'Nothing has been charged. Please check the shipping address and the format, then try again.';
+var PR_REFUSED = 'The printer would not accept this order and did not say which part. Nothing has been charged. Please check the shipping address and the format, then try again.';
 
 // The fields Lulu names in a validation body, in words a reader can act on. WHITELIST:
 // anything not in here is not shown, so no vendor jargon can reach a customer and an
@@ -142,31 +142,66 @@ var PR_FIELD_WORDS = {
 // shipping_address, and _fetch keeps that body in the message. Depth-limited and
 // whitelisted; ANY failure to understand it returns '' and the caller says the general
 // thing instead. A parse that throws must never cost a reader their error message.
+// v3.0.975 -- TD-880. THE VENDOR'S OWN SENTENCE, WHEN IT IS FIT TO SHOW.
+//
+// Ian: "those messages look fine to give to the user. That way we don't have to
+// interpret it." They are better than ours -- Lulu says which range a postcode should
+// fall in, which we have no way of knowing. But a vendor string is not ours to promise,
+// so it passes only if it is short, printable ASCII and carries nothing that reads as
+// internals. Anything else is dropped and the field name goes out on its own.
+function usableReason(msg) {
+  var t = String(msg || '').trim();
+  if (t.length < 4 || t.length > 200) return '';
+  if (/[<>{}]|https?:|pod_package|_id\b|null|undefined|Traceback|Exception/i.test(t)) return '';
+  if (!/^[\x20-\x7E]+$/.test(t)) return '';
+  return t.replace(/\s+$/, '').replace(/\.$/, '');
+}
+
+// v3.0.975 -- TD-880. BOTH SHAPES, BECAUSE ONLY ONE OF THEM WAS EVER MEASURED.
+//
+// SHAPE A is what the cost endpoint really sends, from Ian's log:
+//   {"shipping_address":{"detail":{"errors":[{"code":"INVALID","path":"postcode",
+//    "message":"Postal code entered does not match the city or state..."}]}}}
+// an errors[] of OBJECTS with a `path` and a human `message`.
+//
+// SHAPE B is {"field":["reason"]}, which the cover-dimensions endpoint uses. v3.0.974
+// implemented ONLY shape B -- copied from a comment about that other endpoint -- so the
+// whole feature was dead on arrival and every refusal fell back. Shape B is kept rather
+// than replaced: swapping one unverified assumption for another is the same mistake.
+//
+// Returns an array of { word, why } or null. Never throws: a body we cannot read must
+// cost the reader their diagnosis, never their error message.
 function refusedFields(e) {
   try {
     var m = String((e && e.message) || '');
     var i = m.indexOf('{');
-    if (i < 0) return '';
+    if (i < 0) return null;
     var body = JSON.parse(m.slice(i));
-    var out = [];
+    var found = [];
     (function walk(o, depth) {
-      if (!o || typeof o !== 'object' || depth > 3) return;
+      if (!o || typeof o !== 'object' || depth > 6) return;
+      // No special case for arrays: Object.keys yields their indices and the generic
+      // recursion below already descends into each element. An explicit Array.isArray
+      // branch was written here first and deleted -- the mutation harness could not make
+      // its removal fail a single check, which is what redundant means.
+      if (typeof o.path === 'string' && PR_FIELD_WORDS[o.path]) {          // shape A
+        found.push({ word: PR_FIELD_WORDS[o.path], why: usableReason(o.message) });
+        return;
+      }
       Object.keys(o).forEach(function (k) {
         var v = o[k];
-        var isReason = Array.isArray(v) && v.length && typeof v[0] === 'string';
-        if (isReason && PR_FIELD_WORDS[k] && out.indexOf(PR_FIELD_WORDS[k]) < 0) out.push(PR_FIELD_WORDS[k]);
-        else if (v && typeof v === 'object') walk(v, depth + 1);
+        if (Array.isArray(v) && v.length && typeof v[0] === 'string') {    // shape B
+          // The container is never an answer on its own -- the general sentence says
+          // that better -- so it is skipped rather than filtered out afterwards.
+          if (PR_FIELD_WORDS[k] && k !== 'shipping_address') found.push({ word: PR_FIELD_WORDS[k], why: usableReason(v[0]) });
+        } else if (v && typeof v === 'object') walk(v, depth + 1);
       });
     })(body, 0);
-    // THE CONTAINER ON ITS OWN IS NOT AN ANSWER. If the only thing Lulu named is
-    // shipping_address, the general sentence already says that better, so it is
-    // filtered out and an empty list falls back. (A separate early return for the
-    // container-only case was written here first and deleted: the filter below already
-    // covered it, and the mutation harness proved it by failing to make it matter.)
-    var named = out.filter(function (w) { return w !== PR_FIELD_WORDS.shipping_address; });
-    if (!named.length) return '';
-    return named.join(', ').replace(/, ([^,]*)$/, ' and $1');
-  } catch (x) { return ''; }
+    if (!found.length) return null;
+    var seen = {}, uniq = [];
+    found.forEach(function (f) { if (!seen[f.word]) { seen[f.word] = 1; uniq.push(f); } });
+    return uniq;
+  } catch (x) { return null; }
 }
 
 function friendlyPrintError(e, what) {
@@ -180,9 +215,14 @@ function friendlyPrintError(e, what) {
   if (e.inconclusive) return PR_NOANSWER;
   if (e.refused || (s >= 400 && s < 500)) {
     var f = refusedFields(e);
-    return f
-      ? ('The printer would not accept ' + f + '. Nothing has been charged. Please correct that and try again.')
-      : PR_REFUSED;
+    if (!f) return PR_REFUSED;
+    var words = f.map(function (x) { return x.word; }).join(', ').replace(/, ([^,]*)$/, ' and $1');
+    // ONE reason, not every reason: two vendor sentences in a row stop being read.
+    // The first is the one attached to the first field named, which is the one the
+    // reader will look at first.
+    var why = f.filter(function (x) { return x.why; }).map(function (x) { return x.why; })[0];
+    return 'The printer would not accept ' + words + '.' + (why ? ' It says: ' + why + '.' : '') +
+           ' Nothing has been charged. Please correct that and try again.';
   }
   if (s >= 500) return PR_NOANSWER;
   return generic;
