@@ -118,7 +118,56 @@ var PR_AUTH = 'We could not sign in to the print service. That is on our end, no
 var PR_SKU = 'The print service did not accept this combination of binding, paper and colour for a book this long. Nothing has been charged. Please try a different format -- and tell us which one you picked, because that is the part we need.';
 var PR_NOANSWER = 'The print service did not answer in time. Nothing has been charged. Please wait a minute and try again.';
 var PR_BUSY = 'The print service is busy right now. Nothing has been charged. Please wait a moment and try again.';
-var PR_REFUSED = 'The print service refused this request. Nothing has been charged. Please check the shipping address and the format, then try again.';
+// v3.0.974 -- TD-879. The opening sentence is gone. The reader is already looking at a
+// failure, so a sentence whose whole content is that it failed carries nothing -- and it
+// crowded out the part that could have told them what to fix.
+var PR_REFUSED = 'Nothing has been charged. Please check the shipping address and the format, then try again.';
+
+// The fields Lulu names in a validation body, in words a reader can act on. WHITELIST:
+// anything not in here is not shown, so no vendor jargon can reach a customer and an
+// unrecognised body falls back to the general sentence rather than to a guess.
+var PR_FIELD_WORDS = {
+  name: 'the full name',
+  street1: 'the street address',
+  street2: 'the second address line',
+  city: 'the city',
+  postcode: 'the postal code',
+  state_code: 'the state or province',
+  country_code: 'the country',
+  phone_number: 'the phone number',
+  shipping_address: 'the shipping address'
+};
+
+// Lulu answers a bad request with {"field":["why"]}, sometimes nested one level under
+// shipping_address, and _fetch keeps that body in the message. Depth-limited and
+// whitelisted; ANY failure to understand it returns '' and the caller says the general
+// thing instead. A parse that throws must never cost a reader their error message.
+function refusedFields(e) {
+  try {
+    var m = String((e && e.message) || '');
+    var i = m.indexOf('{');
+    if (i < 0) return '';
+    var body = JSON.parse(m.slice(i));
+    var out = [];
+    (function walk(o, depth) {
+      if (!o || typeof o !== 'object' || depth > 3) return;
+      Object.keys(o).forEach(function (k) {
+        var v = o[k];
+        var isReason = Array.isArray(v) && v.length && typeof v[0] === 'string';
+        if (isReason && PR_FIELD_WORDS[k] && out.indexOf(PR_FIELD_WORDS[k]) < 0) out.push(PR_FIELD_WORDS[k]);
+        else if (v && typeof v === 'object') walk(v, depth + 1);
+      });
+    })(body, 0);
+    // THE CONTAINER ON ITS OWN IS NOT AN ANSWER. If the only thing Lulu named is
+    // shipping_address, the general sentence already says that better, so it is
+    // filtered out and an empty list falls back. (A separate early return for the
+    // container-only case was written here first and deleted: the filter below already
+    // covered it, and the mutation harness proved it by failing to make it matter.)
+    var named = out.filter(function (w) { return w !== PR_FIELD_WORDS.shipping_address; });
+    if (!named.length) return '';
+    return named.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  } catch (x) { return ''; }
+}
 
 function friendlyPrintError(e, what) {
   var noun = (what === 'order') ? 'start your order' : 'get a price from the print service';
@@ -129,7 +178,12 @@ function friendlyPrintError(e, what) {
   var s = Number(e.status) || 0;
   if (s === 429) return PR_BUSY;
   if (e.inconclusive) return PR_NOANSWER;
-  if (e.refused || (s >= 400 && s < 500)) return PR_REFUSED;
+  if (e.refused || (s >= 400 && s < 500)) {
+    var f = refusedFields(e);
+    return f
+      ? ('The printer would not accept ' + f + '. Nothing has been charged. Please correct that and try again.')
+      : PR_REFUSED;
+  }
   if (s >= 500) return PR_NOANSWER;
   return generic;
 }

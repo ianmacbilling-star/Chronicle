@@ -24735,16 +24735,23 @@ function quotePrintOrder() {
   // v3.0.879 -- TD-756. The old test demanded a postcode from everyone, and the
   // probe measured that 116 of the served countries price without one. Ask for
   // what each country actually needs, and say which country we are asking for.
-  // v3.0.973 -- TD-871. THE THREE FIELDS THIS FUNCTION NEVER LOOKED AT.
+  // v3.0.974 -- TD-878. A MIRROR OF shipToErrors' ALWAYS_REQUIRED, NOT A SECOND OPINION.
   //
-  // Country, state and postcode have been checked since v3.0.879; name, street and city
-  // were not, so a form with only the bottom half filled in passed every gate here and
-  // was refused by the printer instead -- which, before TD-870, reported it as a problem
-  // with the book's format. Asked and answered here, it never leaves the page.
+  // v3.0.973 put three field names here and left three more on the server, so one question
+  // had two half-answers in two files -- and the phone number, which the printer requires on
+  // every address, was in neither. The server list is the authority; this exists only to
+  // save a round trip. THE BUILD GUARD EXTRACTS BOTH AND FAILS IF THEY NAME DIFFERENT
+  // FIELDS, so this cannot quietly fall behind the thing it mirrors.
+  var _needFields = [
+    ['name', 'a name'],
+    ['street1', 'a street address'],
+    ['city', 'a city'],
+    ['phone', 'a phone number']
+  ];
   var _need = [];
-  if (!String(body.shipTo.name || '').trim()) _need.push('a name');
-  if (!String(body.shipTo.street1 || '').trim()) _need.push('a street address');
-  if (!String(body.shipTo.city || '').trim()) _need.push('a city');
+  _needFields.forEach(function (f) {
+    if (!String(body.shipTo[f[0]] || '').trim()) _need.push(f[1]);
+  });
   if (_need.length) {
     if (out) out.textContent = 'Shipping needs ' + _need.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' before it can be priced.';
     return;

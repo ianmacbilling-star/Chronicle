@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.0.974",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "A phone number is now asked for before a price, because the printer requires one.",
+        "detail": "The print service will not accept an address without a phone number, and nothing on the page asked for one — so a form that looked complete was refused, and the refusal did not say why. The page and the server now both ask for it, on every address, whatever the country."
+      },
+      {
+        "summary": "One list decides what a shipping address needs.",
+        "detail": "The page was checking some of the required fields and the server was checking others, which is how a field neither of them knew about reached the printer. There is now a single list, and the page simply follows it."
+      },
+      {
+        "summary": "When the printer refuses an address, it says which part it refused.",
+        "detail": "The old message said the request had been refused and left you to work out what was wrong. The print service usually names the field it objected to, so where it does, we now say so — the phone number, the postal code, the city. Where it does not, you get the general advice as before, and nothing has been charged either way."
+      }
+    ]
+  },
+  {
     "version": "3.0.973",
     "date": "2026-09-22",
     "entries": [
