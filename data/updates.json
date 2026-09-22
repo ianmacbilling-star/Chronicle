@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.971",
+    "staged_on": "2026-09-22",
+    "entries": [
+      {
+        "id": "971-member-can-order-and-publish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Players in a paying Story Master’s campaign can order prints and publish again — the buttons were refusing them for a watermark their book does not have.",
+        "detail": "Found by the test bots. A Free Trial player in a campaign run by a Story Master on a paid plan gets a clean book — no watermark on the storyboard, the preview, the cover, the interior or the credits — and the server was perfectly willing to print it. The ORDER BUTTON refused anyway, greyed out, with a message about Free Trial books being watermarked. It was asking the wrong question: are YOU on a free trial, rather than is THIS BOOK watermarked. The two are different the moment you are playing in somebody else’s campaign. THE SAME WRONG QUESTION GUARDED PUBLISHING, one click later — which is why Publish to Library looked available and would have turned you away. Both now ask the server, which answers with exactly the test it enforces with, so the button you see and the decision you get can no longer disagree. NOTHING IS LOOSENED FOR ANYONE ELSE: your own book on a Free Trial is still watermarked and still cannot be printed, and the server still has the final say on every order and every publish. If it cannot tell, the button stays live and the server gives you an honest reason rather than the browser inventing one. TO TEST: as a Free Trial member of a campaign whose Story Master is on a paid plan, order a print and publish to the library — both should go through. Then in your OWN campaign on a Free Trial, both should still refuse.",
+        "td": [
+          "TD-848"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.970",
     "staged_on": "2026-09-22",
     "entries": [

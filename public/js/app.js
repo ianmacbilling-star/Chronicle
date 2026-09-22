@@ -12023,7 +12023,18 @@ function refreshNovelPreview() {
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (state.user && state.user.tier === 'trial') {
+  // v3.0.971 -- TD-848. ASK THE SERVER, NOT THE VIEWER OWN TIER.
+  //
+  // This read `state.user.tier === 'trial'` and so refused every member of a paying Story
+  // Master campaign -- the same fault as the order button, one click later, which is why
+  // Publish LOOKED available to them and would have turned them away.
+  //
+  // `canPublish` is isPaidTier(getEffectiveTier(...)) computed server-side: the identical test
+  // publish-story refuses with. ONLY AN EXPLICIT false STOPS ANYTHING -- null or a failed
+  // lookup falls through and lets the server give its own accurate refusal.
+  var _gate = {};
+  try { _gate = await bookGate(state.currentCampaign.id); } catch (e) { _gate = {}; }
+  if (_gate && _gate.canPublish === false) {
     var _go = await uiConfirm('You need to sign up to publish to the library. Publishing is available once you are on a paid plan.', { okText: 'See plans', cancelText: 'Not now' });
     if (_go) goToPlans();
     return;
@@ -23902,15 +23913,12 @@ function loadPrintTab() {
   showPrintMsg('', null);
   showPrintBtnMsg('', null);
   printProgressDone();
+  // v3.0.971 -- TD-848. Nothing is decided here any more. The order button and its notice
+  // are painted by applyBookGateToOrder from the server answer; a browser that has not asked
+  // yet must not announce a refusal, so the notice simply starts hidden.
   (function(){
-    var _trial = !!(state.user && state.user.tier === 'trial');
-    var _pb = document.getElementById('print-place-btn');
-    var _tn = document.getElementById('print-trial-notice');
-    if (_pb) _pb.disabled = _trial;
-    if (_tn) {
-      _tn.style.display = _trial ? 'block' : 'none';
-      if (_trial) _tn.innerHTML = "Free Trial books are watermarked, so they can't be ordered as physical prints. Upgrade to a paid plan to remove the watermark and order your book." + '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
-    }
+    var _tn0 = document.getElementById('print-trial-notice');
+    if (_tn0) _tn0.style.display = 'none';
   })();
   var q = document.getElementById('print-quote');
   if (q) q.textContent = '';
@@ -23919,6 +23927,15 @@ function loadPrintTab() {
     .then(function (res) {
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not load order options.', null); return; }
       printNovelInfo = res.j;
+      // v3.0.971 -- TD-848. THE ORDER BUTTON IS DECIDED HERE, by the server own answer.
+      //
+      // `watermarked` is derived on the server from getTier(getEffectiveTier(user, campaign))
+      // -- the very check the order route refuses with. A free-trial member of a paying Story
+      // Master campaign gets false here, exactly as her book has no watermark anywhere else.
+      //
+      // A MISSING ANSWER LEAVES THE BUTTON ALONE. Unknown is not no.
+      try { bookGateSeed(state.currentCampaign && state.currentCampaign.id, res.j); } catch (e) {}
+      applyBookGateToOrder(res.j);
       syncPrintVersionDisplay();
       printActualPages = 0;
       printInteriorCache = { key: '', url: '', pages: 0, mismatch: null };
@@ -30798,3 +30815,67 @@ function sbSummaryCommit() {
 // dirty marking in one place. Keeping the listener as well would have been two mechanisms on one
 // field, which is how they drift apart -- and the one in the markup is the one a reader editing
 // the panel will see.
+
+// =================================================================================================
+// v3.0.971 -- TD-848. WHAT WILL THE SERVER ACTUALLY ALLOW FOR THIS BOOK?
+//
+// The order button and the publish check used to answer this themselves, from the viewer own
+// tier, and they were wrong for every member of a paying Story Master campaign. They now ask
+// the server, which answers with the same booleans it refuses with.
+//
+// UNKNOWN IS NOT NO. A failed or refused lookup resolves to {} and both callers then let the
+// action through for the SERVER to refuse -- with an accurate, campaign-aware message. A
+// browser that cannot tell must not invent a refusal; that is exactly how TD-848 happened.
+// =================================================================================================
+var _bookGateCache = { campaignId: null, data: null, inflight: null };
+
+function bookGate(campaignId) {
+  var cid = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) return Promise.resolve({});
+  if (_bookGateCache.campaignId === cid && _bookGateCache.data) return Promise.resolve(_bookGateCache.data);
+  if (_bookGateCache.campaignId === cid && _bookGateCache.inflight) return _bookGateCache.inflight;
+  var p = fetch('/api/print/novel-info/' + cid)
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (j) {
+      var d = {
+        watermarked: (typeof j.watermarked === 'boolean') ? j.watermarked : null,
+        canPublish: (typeof j.canPublish === 'boolean') ? j.canPublish : null
+      };
+      _bookGateCache = { campaignId: cid, data: d, inflight: null };
+      return d;
+    })
+    .catch(function () { _bookGateCache = { campaignId: null, data: null, inflight: null }; return {}; });
+  _bookGateCache = { campaignId: cid, data: null, inflight: p };
+  return p;
+}
+
+// The order screen already fetches novel-info; this lets it fill the cache from that answer
+// rather than asking twice.
+function bookGateSeed(campaignId, j) {
+  if (!campaignId || !j) return;
+  _bookGateCache = { campaignId: campaignId, data: {
+    watermarked: (typeof j.watermarked === 'boolean') ? j.watermarked : null,
+    canPublish: (typeof j.canPublish === 'boolean') ? j.canPublish : null
+  }, inflight: null };
+}
+
+// v3.0.971 -- TD-848. Paint the order button from the server answer.
+//
+// The message is only shown when the server says the book IS watermarked, and it no longer
+// says "Free Trial books" -- the reason a book is watermarked is the effective tier of the
+// campaign it belongs to, which for a member is their Story Master plan, not their own.
+function applyBookGateToOrder(j) {
+  var pb = document.getElementById('print-place-btn');
+  var tn = document.getElementById('print-trial-notice');
+  var wm = (j && typeof j.watermarked === 'boolean') ? j.watermarked : null;
+  if (wm === null) {
+    // The server did not say. Leave the button alone and let the order route refuse if it must.
+    if (tn) tn.style.display = 'none';
+    return;
+  }
+  if (pb) pb.disabled = wm;
+  if (tn) {
+    tn.style.display = wm ? 'block' : 'none';
+    if (wm) tn.innerHTML = "This book is watermarked, so it can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order your book. <button class='btn btn-sm' style='margin-left:8px;' onclick='goToPlans()'>See plans</button>";
+  }
+}

@@ -30,7 +30,7 @@ const { friendlyError, friendlyPrintError } = require('../middleware/friendlyErr
 // failed price leaves a record naming the cause. routes/debug requires only the database
 // and the auth middleware, so there is no cycle.
 const { logDebug } = require('./debug');
-const { getTier, getEffectiveTier } = require('../middleware/tiers');
+const { getTier, getEffectiveTier, isPaidTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail, sendOrderFailureReport } = require('./email');
@@ -624,7 +624,31 @@ router.get('/novel-info/:campaignId', requireSession, async function (req, res) 
     const moments = Number((cnt && cnt.c) || 0);
     const pageEstimate = Math.max(8, moments);
 
-    res.json({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true });
+    // =====================================================================================
+    // v3.0.971 -- TD-848. THE TWO ANSWERS THE BROWSER WAS GUESSING AT.
+    //
+    // Both come from ONE getEffectiveTier call, and both are derived with the SAME functions
+    // that actually refuse: `getTier(...).watermark` is what /quote and the order path check
+    // (routes/print.js ~725), and `isPaidTier(...)` is what publish-story checks
+    // (routes/pdf.js). The browser now renders what the server will decide instead of reading
+    // the viewer own tier -- which is the whole of TD-848: a free-trial member of a PAID
+    // Story Master campaign was refused by the browser for a watermark her book does not have.
+    //
+    // FAILS OPEN, DELIBERATELY. On a lookup error these are omitted rather than sent as true.
+    // The server still refuses authoritatively at the order and publish routes, so the worst
+    // case is a live button and an honest refusal on click -- never a button greyed out by a
+    // guess, which is the failure this batch exists to remove.
+    // =====================================================================================
+    var _gate = {};
+    try {
+      const _eff = await getEffectiveTier(userId, campaignId);
+      const _t = getTier(_eff);
+      _gate.watermarked = !!(_t && _t.watermark);
+      _gate.canPublish = !!isPaidTier(_eff);
+      _gate.effectiveTier = _eff;
+    } catch (e) { _gate = {}; }
+
+    res.json(Object.assign({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true }, _gate));
   } catch (e) {
     res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
