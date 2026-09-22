@@ -5888,7 +5888,7 @@ function generateNarrativeAndImages() {
   if (!ensureGenFree()) return;
   setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
-  var origLabel = btn ? btn.innerHTML : '';
+  // v3.0.972 -- TD-865. No origLabel here either; narrButtonsIdle() reads data-idle.
   if (btn) { btn.disabled = true; btn.innerHTML = 'Generating\u2026'; }
 
   // PARALLEL: images don't depend on the narrative prose (the board renders
@@ -5933,6 +5933,8 @@ function generateNarrativeAndImages() {
   // creeps on for ever, so a fault that had always existed finally showed itself.
   var _nticker = creepBar(_nfill, _npct, 0.012, 750);
   state.narrTicker = _nticker;
+  // v3.0.972 -- TD-866. The twin takes the same token, for the same window.
+  var _run = narrRunBegin();
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -5940,7 +5942,7 @@ function generateNarrativeAndImages() {
     state.narrTicker = null;   // v3.0.716 -- one handle, cleared on every exit path
     state.narrJobActive = false;
     clearGenLock();
-    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    narrButtonsIdle();
     var _c = document.getElementById('narr-cancel-btn'); if (_c) _c.style.display = 'none';
     if (ok && _nfill) _nfill.style.width = '100%';
     setTimeout(function() { var b = document.getElementById('narr-bar-cell'); if (b) b.style.display = 'none'; }, ok ? 400 : 0);
@@ -5949,11 +5951,12 @@ function generateNarrativeAndImages() {
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ key: getApiKey() || 'platform' }),
-    signal: _nctl.signal
+    body: JSON.stringify({ key: getApiKey() || 'platform' })
+    // v3.0.972 -- TD-866. No signal on the submit; see the narrative-only path.
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
+    if (narrRunStale(_run)) { if (data && data.job_id) _narrCancelJob(data.job_id); return; }
     if (!data || !data.job_id) { _narrEnd(false); showError('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
     // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
@@ -5961,6 +5964,7 @@ function generateNarrativeAndImages() {
     state.narrJobId = jobId;
     var tries = 0;
     var poll = function() {
+      if (narrRunStale(_run)) return;
       if (!state.narrJobActive) return;
       if (tries++ > 100) { _narrEnd(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
       fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
@@ -5977,7 +5981,7 @@ function generateNarrativeAndImages() {
     };
     poll();
   })
-  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
+  .catch(function(e){ if (narrRunStale(_run)) return; _narrEnd(false); if (e && e.name === 'AbortError') return; showError('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -6012,7 +6016,7 @@ function cancelNarr() {
   _narrTellServerCancelled();
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
-  var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
+  // v3.0.972 -- TD-865. Same as its twin: the shared teardown owns the button.
 }
 
 // Generate the narrative ONLY (no images). Same narrative pass as the combined
@@ -6027,19 +6031,32 @@ function cancelNarr() {
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
   if (!state._sbSummaryAsked && state._sbSummaryEdited) {
-    state._sbSummaryAsked = true;
-    uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?', { okText: 'Replace it', cancelText: 'Keep mine' })
-      .then(function (yes) {
-        state._sbSummaryReplace = !!yes;
+    // v3.0.972 -- TD-864. THREE ANSWERS, AND FALSE IS THE ONE THAT DOES NOT RUN.
+    //
+    // Button order in uiConfirm is cancel, middle, ok -- so this reads left to right as
+    // Don't generate | Keep mine | Replace it. Escape and a backdrop click both resolve
+    // false, which now lands on Don't generate: the key a reader reaches for to back out
+    // of a button they did not mean to press finally backs them out of it.
+    //
+    // There is no .catch here any more. uiConfirm NEVER rejects -- it resolves false --
+    // so the catch that used to sit here could not run, and reading it as the escape
+    // hatch is exactly why Escape started a generation.
+    uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?',
+              { okText: 'Replace it', middleText: 'Keep mine', cancelText: "Don't generate" })
+      .then(function (ans) {
+        if (ans === false) { state._sbSummaryAsked = false; return; }
+        state._sbSummaryReplace = (ans === true);
+        state._sbSummaryAsked = true;
         generateNarrativeOnly();
-      })
-      .catch(function () { state._sbSummaryReplace = false; generateNarrativeOnly(); });
+      });
     return;
   }
   state._sbSummaryAsked = false;
   setGenLock('Generate Narrative');
+  // v3.0.972 -- TD-865. NO origLabel CAPTURE. The idle text is a data-idle attribute in
+  // app.html and narrButtonsIdle() is the only thing that writes it back, so a button left
+  // reading 'Writing narrative...' can no longer become its own idle label.
   var btn = document.getElementById('sb-generate-narr-btn');
-  var origLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
   // Narrative-only drives its OWN dedicated 'Narrative:' bar (narr-bar-cell),
   // not the shared 'Images:' bar -- so a solo narrative run is labeled correctly
@@ -6051,6 +6068,9 @@ function generateNarrativeOnly() {
   if (fill) fill.style.width = pct + '%';
   var _nctl = new AbortController();
   state.abortNarrOnly = _nctl;
+  // v3.0.972 -- TD-866. The token is taken BEFORE the submit, so a cancel arriving in the
+  // window where the Cancel button exists and the job does not still moves it.
+  var _run = narrRunBegin();
   var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'inline-block';
   // Gentle creep: slow ease from a low start on a 750ms tick, tiny 0.10 floor so each nudge is
   // small but always moving; crawls slowly toward 98 (never parks at 90), snaps 100 on done.
@@ -6072,8 +6092,10 @@ function generateNarrativeOnly() {
     // v3.0.967 -- TD-852. replace_summary is the ONLY thing that lets a generation overwrite a
     // hand-edited Summary; the server refuses without it, so the five other call sites for this
     // route cannot destroy one even though none of them knows the field exists.
-    body: JSON.stringify({ key: getApiKey() || 'platform', replace_summary: !!state._sbSummaryReplace }),
-    signal: _nctl.signal
+    body: JSON.stringify({ key: getApiKey() || 'platform', replace_summary: !!state._sbSummaryReplace })
+    // v3.0.972 -- TD-866. NO SIGNAL ON THE SUBMIT, deliberately. Aborting it guaranteed the
+    // job id never arrived, which guaranteed the server was never told to stop. Only the
+    // POLLING is aborted now -- which is all the abort was ever able to stop anyway.
   })
   .then(function (r) { return r.json(); })
   .then(function (data) {
@@ -6081,20 +6103,23 @@ function generateNarrativeOnly() {
     // job until it is done, THEN render -- previously this read data.intro/
     // sections/outro straight off the job_id response (all undefined), rendering
     // an empty narrative while the background job quietly saved the real one.
-    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not generate narrative: ' + data.error); return; }
-    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showError('Could not start narrative: no job id returned'); return; }
+    if (narrRunStale(_run)) { if (data && data.job_id) _narrCancelJob(data.job_id); return; }
+    if (data.error) { narrButtonsIdle(); endBar(false); showError('Could not generate narrative: ' + data.error); return; }
+    if (!data.job_id) { narrButtonsIdle(); endBar(false); showError('Could not start narrative: no job id returned'); return; }
     var jobId = data.job_id;
     // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
     // closure, which is part of why cancel could never do anything but abort a finished fetch.
     state.narrJobId = jobId;
     var tries = 0;
     var poll = function () {
-      if (tries++ > 100) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      if (narrRunStale(_run)) return;
+      if (tries++ > 100) { narrButtonsIdle(); endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
       fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
         .then(function (r) { return r.json(); })
         .then(function (j) {
+          if (narrRunStale(_run)) return;
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+          narrButtonsIdle();
           if (j.status === 'error') { endBar(false); showError('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           endBar(true);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -6102,12 +6127,13 @@ function generateNarrativeOnly() {
           state.narrativeStyleUsed = state.narrativeStyle || 'classic';
           if (typeof renderStoryboard === 'function') renderStoryboard();
         })
-        .catch(function (e) { if (e && e.name === 'AbortError') return; setTimeout(poll, 3000); });
+        .catch(function (e) { if (e && e.name === 'AbortError') return; if (narrRunStale(_run)) return; setTimeout(poll, 3000); });
     };
     poll();
   })
   .catch(function (e) {
-    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    if (narrRunStale(_run)) return;
+    narrButtonsIdle();
     endBar(false);
     if (e && e.name === 'AbortError') return;
     showError('Could not generate narrative: ' + e.message);
@@ -6133,6 +6159,14 @@ function generateNarrativeOnly() {
 // The completion paths keep their own teardown deliberately: they animate to 100% and fade after
 // a delay, which a cancel must NOT do -- a cancelled run showing a full bar would read as done.
 function _narrTellServerCancelled() {
+  // v3.0.972 -- TD-865 / TD-866. THE TWO PIECES THAT WERE STILL OUTSIDE THIS FUNCTION.
+  //
+  // The button label lived in each generate function's closure, so the cancel path could not
+  // reach it and left it reading 'Writing narrative...' on every session until a reload.
+  // The token bump makes every callback still in the air from the cancelled run stale, which
+  // is what lets the submit come back, be recognised as unwanted, and cancel its own job.
+  narrButtonsIdle();
+  narrRunBegin();
   // Hide everything the completion path hides, immediately and with no success animation.
   ['review-progress-wrap', 'narr-bar-cell', 'generate-progress'].forEach(function (id) {
     var el = document.getElementById(id); if (el) el.style.display = 'none';
@@ -6151,16 +6185,18 @@ function _narrTellServerCancelled() {
   // v3.0.716 -- TD-518. STOP THE BAR FIRST, and unconditionally: this runs before the job-id
   // check because a cancel with no job id still has a ticker running behind it.
   if (state.narrTicker) { try { clearInterval(state.narrTicker); } catch (e) {} state.narrTicker = null; }
+  // v3.0.972 -- TD-866. A MISSING JOB ID IS NO LONGER A SILENT GIVE-UP.
+  //
+  // It used to return here and tell nobody. The submit that would have produced the id had
+  // just been aborted by the caller, so the id was never coming -- the run went on to write
+  // its narrative over prose the reader had kept, and charged for it, because spendTokens
+  // runs after the write. The submit is no longer aborted, and the token bump above means it
+  // will cancel its own job the moment it lands. So returning here is now correct rather
+  // than merely quiet: the cancel is already guaranteed, just not yet sent.
   if (!state.narrJobId) return;
   var _jid = state.narrJobId;
   state.narrJobId = null;
-  fetch('/api/narrative/cancel/' + _jid, { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      if (d && d.already) return;
-      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
-    })
-    .catch(function () {});
+  _narrCancelJob(_jid);
 }
 function cancelNarrOnly() {
   clearGenLock();
@@ -6169,7 +6205,8 @@ function cancelNarrOnly() {
   if (typeof _narrTellServerCancelled === 'function') _narrTellServerCancelled();
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
-  var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
+  // v3.0.972 -- TD-865. The button is reset by _narrTellServerCancelled above, which both
+  // cancels call. Resetting it here as well is how the two teardowns drifted apart before.
 }
 
 // ============================================================
@@ -30878,4 +30915,63 @@ function applyBookGateToOrder(j) {
     tn.style.display = wm ? 'block' : 'none';
     if (wm) tn.innerHTML = "This book is watermarked, so it can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order your book. <button class='btn btn-sm' style='margin-left:8px;' onclick='goToPlans()'>See plans</button>";
   }
+}
+
+
+// =====================================================================================
+// v3.0.972 -- TD-865 / TD-866. THE NARRATIVE TEARDOWN'S MISSING PIECES.
+//
+// APPENDED, NOT INSERTED (TD-853): app.js declares ninety functions twice and the later
+// declaration is the one that runs. New functions go at the end, where nothing can shadow
+// them.
+// =====================================================================================
+
+// THE IDLE LABEL IS READ FROM THE MARKUP, NEVER CAPTURED AT RUN TIME.
+//
+// Both generate paths used to save `origLabel = btn.textContent` in a closure. The cancel
+// path could not reach that closure, so a cancelled run left the button reading 'Writing
+// narrative...' -- and because the button is one static element the whole campaign shares,
+// it followed the reader to every session until they reloaded. Worse, the next run then
+// captured 'Writing narrative...' AS the idle label, so no successful run could recover it
+// either. data-idle cannot be overwritten by a run, so neither failure has anywhere to live.
+function narrBtnIdle(id, fallback) {
+  try {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.disabled = false;
+    var lab = b.getAttribute('data-idle');
+    b.textContent = (lab !== null && lab !== '') ? lab : String(fallback || '');
+  } catch (e) {}
+}
+function narrButtonsIdle() {
+  narrBtnIdle('sb-generate-narr-btn', 'Generate Narrative');
+  narrBtnIdle('review-generate-btn', 'Generate Narrative & Images');
+}
+
+// THE RUN TOKEN.
+//
+// A narrative run shows its Cancel button before it has sent the request that creates the
+// job, so there is a window in which Cancel is on screen and there is nothing to cancel.
+// Cancelling in that window used to abort the submit, which guaranteed its response never
+// arrived, which guaranteed the job id was never learned, which guaranteed the server was
+// never told. The run finished, wrote its narrative over prose the reader had chosen to
+// keep, and charged for it.
+//
+// The token closes the window instead of hiding it: a cancel moves it, every callback still
+// in the air from that run sees the move and stands down, and the submit -- no longer
+// aborted -- comes back, finds itself unwanted, and cancels its own job.
+function narrRunBegin() { state.narrRun = (state.narrRun || 0) + 1; return state.narrRun; }
+function narrRunStale(tok) { return state.narrRun !== tok; }
+
+// ONE PLACE THAT TELLS THE SERVER. Both the immediate cancel and the late one reach the
+// server through here, so the reader is told exactly once however the timing fell.
+function _narrCancelJob(jid) {
+  if (!jid) return;
+  fetch('/api/narrative/cancel/' + jid, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.already) return;
+      if (typeof showAlert === 'function') showAlert('Narrative cancelled. Nothing was saved and no tokens were spent.');
+    })
+    .catch(function () {});
 }

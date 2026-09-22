@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.0.972",
+    "date": "2026-09-22",
+    "entries": [
+      {
+        "summary": "Escape now backs out of the \"replace your Summary?\" question instead of starting the run.",
+        "detail": "The question about replacing a Summary you had edited by hand offered two answers and both of them started writing. Pressing Escape -- which is how most people back out of a button they did not mean to press -- counted as \"keep mine\" and generated anyway. It now offers three: Don’t generate, Keep mine, Replace it. Escape and a click outside the box both mean Don’t generate."
+      },
+      {
+        "summary": "Cancelling a narrative no longer leaves the button stuck reading \"Writing narrative...\".",
+        "detail": "After a cancel, the Generate Narrative button kept its busy label on every session in the campaign until the page was reloaded, which read as \"still working\" when nothing was running. The button now returns to its normal label the moment a run is cancelled, wherever you are."
+      },
+      {
+        "summary": "A narrative cancelled in its first moments really is cancelled.",
+        "detail": "There was a short window at the start of a run -- after the Cancel button appeared, before the run had been registered -- where pressing Cancel stopped the progress bar but never reached the server. The narrative finished writing minutes later, replaced the prose that was there, and spent the tokens. A cancel in that window is now held and delivered as soon as there is something to deliver it to, so nothing is written and nothing is charged."
+      },
+      {
+        "summary": "The empty Summary box named the wrong button.",
+        "detail": "The grey prompt inside an empty Summary For Next Session credited the wrong button, while the line directly above it, in the same box, named the right one. Both now say Generate Narrative."
+      },
+      {
+        "summary": "Summary For Next Session is now written as bullets, and stops filling the space.",
+        "detail": "The memory was reaching its limit after two sessions and paying for it in the wrong places — an exact count became \"higher than the tally\", and a detail that mattered dropped out. The fault was not the size of the box: it was being asked for a summary of a certain length, so it wrote one. It is now asked for short bullet lines of only what the next session cannot work out for itself — running counts with their actual figures, what has been established, what is promised or owed, what is still open, and who has what. The cast is no longer listed, because the character list is already sent with every run. Numbers are never blurred into comparisons; if something has to go, a whole line goes instead. The character limit is unchanged and is now a ceiling rather than a target."
+      }
+    ]
+  },
+  {
     "version": "3.0.971",
     "staged_on": "2026-09-22",
     "entries": [

@@ -998,7 +998,7 @@
             <div id="review-action-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end;">
               <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="review-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
-              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
               <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">Cancel</button>
             </div>
           </div>
@@ -1025,7 +1025,7 @@
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <span style="flex:1 1 auto;"></span>
-              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" onclick="generateNarrativeOnly()">Generate Narrative</button>
+              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()">Generate Narrative</button>
               <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
               <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
@@ -1061,7 +1061,7 @@
             </div>
             <!-- v3.0.968 -- TD-855. The same pair the campaign lore and instruction boxes use:
                  oninput debounces a write, onblur flushes one that is already pending. -->
-            <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" oninput="sbSummaryCount();sbSummaryDirty()" onblur="sbSummaryFlush()" placeholder="Nothing remembered yet. Generate Story writes this, or type it yourself."></textarea>
+            <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" oninput="sbSummaryCount();sbSummaryDirty()" onblur="sbSummaryFlush()" placeholder="Nothing remembered yet. Generate Narrative writes this, or type it yourself."></textarea>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
               <span id="sb-summary-msg" style="font-size:11px;color:rgba(201,168,76,0.5);"></span>
             </div>

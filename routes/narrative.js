@@ -750,11 +750,18 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     // obvious failure of a merge-under-a-cap is a model that tacks the new session onto the end
     // until it hits the limit and then truncates the OLDEST material, which is age-as-relevance
     // \u2014 exactly what asking the model to prune was meant to avoid.
-    '  "summary": "A compact memory for the NEXT session to read \u2014 who matters now, where they are, what they are trying to do, what is unresolved, and any standing fact that will still matter later. Facts, not narration; no scene-by-scene recap. Write it as notes, not prose.' +
+    '  "summary": "A compact memory for the NEXT session to read. BULLETS ONLY \u2014 one short line each, every line beginning with a hyphen and a space. No prose, no headings, no opening or closing sentence, no scene-by-scene recap.' +
+    ' PUT IN only what the next session cannot work out for itself: running numbers, tallies and counts, ALWAYS WITH THE FIGURE; what has been established as true; promises, debts and threats still outstanding; questions asked and not yet answered; objects that matter and who has them; who knows what, where that is not obvious.' +
+    ' LEAVE OUT who was present \u2014 the character list is supplied to you separately on every run, so naming the cast here wastes the space twice. Also leave out mood, weather and description; anything already in the campaign lore; anything resolved during this session; and any line whose only job is to join two facts together.' +
+    // NO DOUBLE QUOTES ANYWHERE IN THIS DESCRIPTION. It is the VALUE of a "summary" key inside
+    // the JSON template the model is shown and asked to fill, so a bare quote closes the string
+    // early and hands it a malformed example to copy. The first draft of this line carried four
+    // of them and only evaluating the assembled prompt showed it (§5a).
+    ' NEVER SOFTEN A NUMBER. \u201cLedger total 47, contacted 46\u201d and \u201cthe total is higher than the tally\u201d cost the same to write and are not worth the same. If something must go, drop a whole line rather than blur a figure.' +
     (_prevText
-      ? ' START FROM THE STORY SO FAR GIVEN ABOVE and bring it up to date: KEEP every fact in it that still matters, ADD what this session changed, and DROP whatever is now settled, answered or no longer relevant. It is ONE running memory of the whole campaign, not a list of sessions \u2014 do not date or label entries, and do NOT simply append this session to the end. If it will not all fit, drop what matters LEAST, which is not the same as what is OLDEST.'
+      ? ' START FROM THE STORY SO FAR GIVEN ABOVE and bring it up to date: KEEP every line in it that still matters, ADD what this session changed, and DROP whatever is now settled, answered or no longer relevant. It is ONE running memory of the whole campaign, not a list of sessions \u2014 do not date or label entries, and do NOT simply append this session to the end. When it will not all fit, cut in this order: the oldest RESOLVED thread first, then description, then detail. A figure is cut last, and never rewritten as a comparison.'
       : ' This is the first session with a memory, so write it from this session alone.') +
-    ' HARD LIMIT ' + _summaryCap + ' characters \u2014 be as short as you can while staying complete, and do NOT pad toward the limit."\n' +
+    ' AIM FOR AT MOST 12 BULLETS and stop when the facts run out \u2014 a short memory is a good memory, and there is no credit for filling the space. ' + _summaryCap + ' characters is a CEILING you must not cross, not a target to reach."\n' +
     '}';
 
   // Async: create a pending job, respond immediately, then run the (slow)
