@@ -9402,6 +9402,12 @@ function loadNovelPeople() {
     // whole feature exists to stop.
     var own = rows.filter(function(v) { return v.is_mine; });
     var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+    // v3.0.982 -- TD-901. A book brought back from the Bookshelf opens on ITS version, not the default.
+    var _shelfT = state._shelfOpen;
+    if (_shelfT && _shelfT.versionId && state.currentCampaign && String(_shelfT.campaignId) === String(state.currentCampaign.id)) {
+      var _shelfV = rows.filter(function(v) { return String(v.version_id) === String(_shelfT.versionId); })[0];
+      if (_shelfV) pick = _shelfV;
+    }
     // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
     // drew. Compared on the wire query rather than on the id, because that is the thing the
     // tiles were actually fetched with -- an id that changes without changing the query needs
@@ -12328,10 +12334,33 @@ function shelfDate(v) {
   var d = new Date(v);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
+// ============================================================================
+// v3.0.982 -- TD-901, Bookshelf release 3. THE SHELVES.
+// One wooden shelf per campaign, the books standing on it as spines, and a "From the Library" shelf
+// for pointers. A spine's height and thickness follow the page count; its face is the campaign
+// cover where there is one (under a dark wash so the title reads), and a leather colour picked from
+// the title where there is not. Clicking a spine opens its card below the shelves.
+// Styles: the .bshelf rules in app.html, beside #bookshelf-section.
+// ============================================================================
+var BSHELF_LEATHER = ['#5a2a1c', '#2f3f2a', '#23324a', '#4a2a44', '#5a4320', '#3a2418', '#1f3a3a', '#4b1f24'];
+function bshelfLeather(s) {
+  var h = 0, str = String(s || '');
+  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return BSHELF_LEATHER[h % BSHELF_LEATHER.length];
+}
+// Only our own http(s) or root-relative image urls reach a CSS url(); anything with a quote, a
+// bracket or whitespace is dropped rather than escaped.
+function bshelfSafeUrl(u) {
+  u = String(u || '');
+  if (u.indexOf(String.fromCharCode(92)) !== -1) return '';   // no backslash, without writing one here
+  return (/^(https?:\/\/|\/)[^"'()\s]+$/.test(u)) ? u : '';
+}
 function paintBookshelf(body, data) {
   body.innerHTML = '';
   var limit = Number(data.limit) || 0;
-  var books = (data.books || []).filter(function (b) { return b && b.kind === 'book'; });
+  var all = (data.books || []).filter(function (b) { return b && (b.kind === 'book' || b.kind === 'library'); });
+  var books = all.filter(function (b) { return b.kind === 'book'; });
+  var links = all.filter(function (b) { return b.kind === 'library'; });
   var used = books.length;
   function line(id, text, css) {
     var d = document.createElement('div');
@@ -12347,24 +12376,26 @@ function paintBookshelf(body, data) {
     up.onclick = function () { if (typeof goToPlans === 'function') goToPlans(); };
     body.appendChild(up);
   }
-  if (!limit && !used) {
+  if (!limit && !all.length) {
     line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
       'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
     nudgeButton();
     return;
   }
   line('bookshelf-count', used + ' of ' + limit + ' books', 'color:#c9a84c;font-weight:600;');
-  // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download and remove, not add.
-  if (used > limit) {
+  // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download, bring back and
+  // remove -- not add.
+  if (used > limit || (!limit && links.length)) {
     line('bookshelf-over', limit
-      ? 'Your plan keeps ' + limit + ' books, so you can view, download and remove these but cannot add more until you are under that.'
-      : 'Your plan no longer includes the Bookshelf. Your books are kept: you can view, download and remove them, and upgrading lets you add more.',
+      ? 'Your plan keeps ' + limit + ' books, so you can view, download, bring back and remove these but cannot add more until you are under that.'
+      : 'Your plan no longer includes the Bookshelf. Your books are kept: you can view, download, bring back and remove them, and upgrading lets you add more.',
       'margin-top:6px;');
     if (!limit) nudgeButton();
   }
-  if (!used) {
+  if (!all.length) {
     line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
-      'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it.', 'margin-top:8px;');
+      'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it. ' +
+      'You can also add other people\'s books from their Library page.', 'margin-top:8px;');
     return;
   }
   var groups = {}, order = [];
@@ -12374,63 +12405,240 @@ function paintBookshelf(body, data) {
     groups[k].push(b);
   });
   var wrap = document.createElement('div');
-  wrap.id = 'bookshelf-list'; wrap.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:14px;';
+  wrap.id = 'bookshelf-list';
   body.appendChild(wrap);
-  order.forEach(function (k) {
-    var g = document.createElement('div');
+  function shelf(name, list, isLib) {
+    var s = document.createElement('div');
+    s.className = 'bshelf';
     var h = document.createElement('div');
-    h.className = 'bookshelf-campaign';
-    h.textContent = groups[k][0].campaignName || 'Campaign';
-    h.style.cssText = 'color:#c9a84c;font-family:var(--font-display);font-size:14px;border-bottom:1px solid rgba(201,168,76,0.25);padding-bottom:4px;margin-bottom:6px;';
-    g.appendChild(h);
-    groups[k].forEach(function (b) { g.appendChild(bookshelfRow(b)); });
-    wrap.appendChild(g);
-  });
+    h.className = 'bookshelf-campaign bshelf-name';
+    h.textContent = name;
+    s.appendChild(h);
+    var row = document.createElement('div');
+    row.className = 'bshelf-row';
+    list.forEach(function (b) { row.appendChild(bookshelfSpine(b, isLib)); });
+    s.appendChild(row);
+    var board = document.createElement('div');
+    board.className = 'bshelf-board';
+    s.appendChild(board);
+    wrap.appendChild(s);
+  }
+  order.forEach(function (k) { shelf(groups[k][0].campaignName || 'Campaign', groups[k], false); });
+  if (links.length) shelf('From the Library', links, true);
+  var card = document.createElement('div');
+  card.id = 'bookshelf-card';
+  card.className = 'bshelf-card';
+  card.style.display = 'none';
+  body.appendChild(card);
 }
-function bookshelfRow(b) {
-  var row = document.createElement('div');
-  row.className = 'bookshelf-book';
-  row.id = 'bookshelf-book-' + b.id;
-  row.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;background:rgba(12,8,4,0.4);';
+function bookshelfSpine(b, isLib) {
+  var sp = document.createElement('button');
+  sp.type = 'button';
+  sp.className = 'bspine bookshelf-book' + (isLib ? ' bspine-lib' : '');
+  sp.id = 'bookshelf-book-' + b.id;
+  sp.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
+  var pages = Number(b.pages) || 0;
+  var hgt = isLib ? 150 : Math.max(120, Math.min(190, 110 + Math.round(pages * 0.9)));
+  var wid = isLib ? 30 : Math.max(22, Math.min(48, 16 + Math.round(pages * 0.35)));
+  sp.style.height = hgt + 'px';
+  sp.style.width = wid + 'px';
+  sp.style.backgroundColor = bshelfLeather(b.bookTitle || b.id);
+  var img = bshelfSafeUrl(b.coverUrl);
+  if (img) sp.style.backgroundImage = 'url("' + img + '")';
+  var t = document.createElement('span');
+  t.className = 'bspine-t';
+  t.textContent = b.bookTitle || 'Untitled';
+  sp.appendChild(t);
+  sp.onclick = function () { bookshelfShowCard(b, isLib); };
+  return sp;
+}
+function bookshelfShowCard(b, isLib) {
+  var card = document.getElementById('bookshelf-card');
+  if (!card) return;
+  var list = document.getElementById('bookshelf-list');
+  var sel = list ? list.querySelectorAll('.bspine.sel') : [];
+  for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
+  var sp = document.getElementById('bookshelf-book-' + b.id);
+  if (sp) sp.classList.add('sel');
+  card.innerHTML = '';
+  card.style.display = '';
+  card.setAttribute('data-book', String(b.id));
+  var img = bshelfSafeUrl(b.coverUrl);
+  if (img) {
+    var im = document.createElement('img');
+    im.className = 'bshelf-card-cover'; im.src = img; im.alt = '';
+    im.onerror = function () { im.style.display = 'none'; };
+    card.appendChild(im);
+  }
   var info = document.createElement('div');
-  info.style.cssText = 'min-width:0;flex:1 1 220px;';
+  info.className = 'bshelf-card-info';
   var t = document.createElement('div');
-  t.textContent = b.bookTitle || b.campaignName || 'Untitled book';
-  t.style.cssText = 'color:var(--gold);font-weight:600;';
-  var m = document.createElement('div');
-  var bits = [];
-  if (b.versionLabel) bits.push(b.versionLabel);
-  if (b.arrange) bits.push(b.arrange.charAt(0).toUpperCase() + b.arrange.slice(1) + ' layout');
-  if (b.pages) bits.push(b.pages + ' pages');
-  var od = shelfDate(b.savedAt), sd = shelfDate(b.createdAt);
-  if (od) bits.push('optimized ' + od);
-  if (sd) bits.push('shelved ' + sd);
-  m.textContent = bits.join(' \u00b7 ');
-  m.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.6);';
-  info.appendChild(t); info.appendChild(m);
+  t.className = 'bshelf-card-title'; t.textContent = b.bookTitle || 'Untitled book';
+  info.appendChild(t);
+  function meta(text) { if (!text) return; var m = document.createElement('div'); m.className = 'bshelf-card-meta'; m.textContent = text; info.appendChild(m); }
+  if (isLib) {
+    meta(b.campaignName ? 'By ' + b.campaignName : '');
+    meta('From the Library' + (shelfDate(b.createdAt) ? ', added ' + shelfDate(b.createdAt) : ''));
+    if (b.gone) meta('This story is no longer in the Library.');
+  } else {
+    meta(b.campaignName + (b.versionLabel ? ' \u00b7 ' + b.versionLabel : ''));
+    var bits = [];
+    if (b.arrange) bits.push(bshelfLayoutName(b.arrange) + ' layout');
+    if (b.pages) bits.push(b.pages + ' pages');
+    meta(bits.join(' \u00b7 '));
+    meta((shelfDate(b.savedAt) ? 'Optimized ' + shelfDate(b.savedAt) : '') + (shelfDate(b.createdAt) ? (shelfDate(b.savedAt) ? ' \u00b7 ' : '') + 'shelved ' + shelfDate(b.createdAt) : ''));
+    if (!b.editable) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');
+  }
   var acts = document.createElement('div');
-  acts.style.cssText = 'display:flex;gap:6px;flex:0 0 auto;';
-  function btn(label, fn, cls) {
+  acts.className = 'bshelf-card-acts';
+  acts.id = 'bookshelf-card-acts';
+  function btn(label, fn, cls, id) {
     var x = document.createElement('button');
     x.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); x.textContent = label; x.onclick = fn;
+    if (id) x.id = id;
     acts.appendChild(x); return x;
   }
-  btn('View', function () { window.open('/api/bookshelf/' + b.id + '/pdf', '_blank', 'noopener'); });
-  btn('Download', function () {
-    var a = document.createElement('a');
-    a.href = '/api/bookshelf/' + b.id + '/pdf?download=1'; a.rel = 'noopener';
-    document.body.appendChild(a);
-    try { a.click(); } finally { document.body.removeChild(a); }
-  });
+  if (isLib) {
+    if (!b.gone && b.storyUrl) btn('Open in the Library', function () { window.open(b.storyUrl, '_blank', 'noopener'); }, 'btn-primary', 'bookshelf-open-lib');
+  } else {
+    btn('View', function () { window.open('/api/bookshelf/' + b.id + '/pdf', '_blank', 'noopener'); });
+    btn('Download', function () {
+      var a = document.createElement('a');
+      a.href = '/api/bookshelf/' + b.id + '/pdf?download=1'; a.rel = 'noopener';
+      document.body.appendChild(a);
+      try { a.click(); } finally { document.body.removeChild(a); }
+    });
+    btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');
+  }
   btn('Remove', function () { bookshelfRemove(b); });
-  row.appendChild(info); row.appendChild(acts);
-  return row;
+  info.appendChild(acts);
+  var ask = document.createElement('div');
+  ask.id = 'bookshelf-card-ask';
+  ask.className = 'bshelf-card-ask';
+  ask.style.display = 'none';
+  info.appendChild(ask);
+  card.appendChild(info);
+  try { if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+}
+function bshelfLayoutName(a) {
+  a = String(a || '');
+  if (a === 'paired') return 'Picture Book';
+  return a.charAt(0).toUpperCase() + a.slice(1);
+}
+// v3.0.982 -- BRING BACK. The server makes the shelf book the version's saved book again (a fresh
+// copy, with the layout settings it was made with), then this opens that campaign on the Optimize
+// tab, on that version, and loads it -- the same as pressing Load Last Optimized File.
+// Refused here while an order is in review or a run is going on this page: both are tied to the
+// saved book this is about to replace.
+var _shelfBringing = false;
+function bookshelfBringBack(b, choice) {
+  if (_shelfBringing) return;
+  if (typeof orderInProgress === 'function' && orderInProgress()) {
+    appNotice('An order is in review.', 'You have a print order in review, and bringing a book back would change the book it is printing.', 'Open the Order tab and click Back to cancel the order, then bring the book back.');
+    return;
+  }
+  var busy = (typeof workInFlightLabel === 'function') ? workInFlightLabel() : '';
+  if (busy) {
+    appNotice('Something is still running.', busy + ' is still running. Let it finish before bringing a book back -- it would save over the book you bring back.', '');
+    return;
+  }
+  var ask = document.getElementById('bookshelf-card-ask');
+  var bb = document.getElementById('bookshelf-bring-back');
+  _shelfBringing = true;
+  if (bb) { bb.disabled = true; bb.textContent = 'Bringing it back...'; }
+  if (ask) { ask.style.display = 'none'; ask.innerHTML = ''; }
+  var payload = {};
+  if (choice === 'shelve') payload.shelveFirst = true;
+  if (choice === 'replace') payload.replace = true;
+  function done() { _shelfBringing = false; if (bb) { bb.disabled = false; bb.textContent = 'Bring back to Publish'; } }
+  return fetch('/api/bookshelf/' + b.id + '/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      done();
+      if (res.ok && res.j.ok) {
+        billingToast(res.j.layoutRestored
+          ? 'Brought back. It is a ' + bshelfLayoutName(res.j.arrange) + ' book, so this version\'s layout settings were switched to the ones it was made with. Opening it...'
+          : 'Brought back. Opening it on the Optimize tab...', 'success');
+        bookshelfOpenBook(b, res.j);
+        return;
+      }
+      if (res.j.code === 'needs_shelve_first' && ask) {
+        ask.style.display = '';
+        var p = document.createElement('div');
+        p.className = 'bshelf-card-meta';
+        p.textContent = 'This version already has an optimized book' + (shelfDate(res.j.currentAt) ? ' (saved ' + shelfDate(res.j.currentAt) + ')' : '') +
+          ' that is not on your Bookshelf. Bringing this one back replaces it.';
+        ask.appendChild(p);
+        var row = document.createElement('div');
+        row.className = 'bshelf-card-acts';
+        function opt(label, fn, cls, id) { var x = document.createElement('button'); x.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); x.textContent = label; x.id = id; x.onclick = fn; row.appendChild(x); }
+        opt('Shelve it first', function () { bookshelfBringBack(b, 'shelve'); }, 'btn-primary', 'bookshelf-ask-shelve');
+        opt('Replace it', function () { bookshelfBringBack(b, 'replace'); }, '', 'bookshelf-ask-replace');
+        opt('Cancel', function () { ask.style.display = 'none'; ask.innerHTML = ''; }, '', 'bookshelf-ask-cancel');
+        ask.appendChild(row);
+        return;
+      }
+      billingToast(res.j.error || 'The book could not be brought back. Please try again.', 'error');
+    })
+    .catch(function () { done(); billingToast('The book could not be brought back. Please try again.', 'error'); });
+}
+// Open the campaign's Publish page on the Optimize tab, on the book's version, and load it.
+// The version is chosen by loadNovelPeople (it reads state._shelfOpen); the load waits until the
+// version has settled and the layout settings the server just restored have arrived, so Load Last
+// Optimized File asks for the right book. If that takes too long it says what to press instead.
+function bookshelfOpenBook(b, r) {
+  var target = { campaignId: String(b.campaignId), versionId: (r && r.versionId) ? String(r.versionId) : null, arrange: (r && r.arrange) || b.arrange || '', at: Date.now(), nudged: false };
+  state._shelfOpen = target;
+  function have() { return (state.campaigns || []).filter(function (c) { return String(c.id) === target.campaignId; })[0]; }
+  function go() {
+    var c = have();
+    if (!c) { state._shelfOpen = null; showError('Could not open that campaign.'); return; }
+    state.currentCampaign = c;
+    if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
+    setCampaignElements();
+    showCampaignSection('novel');
+    switchNovelTab('finalize');
+    bookshelfAwaitAndLoad(target, 0);
+  }
+  if (have()) { go(); return; }
+  fetch('/api/campaigns')
+    .then(function (x) { return x.json(); })
+    .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
+    .catch(function () { state._shelfOpen = null; showError('Could not open that campaign.'); });
+}
+var BSHELF_WAIT_STEP_MS = 400, BSHELF_WAIT_TRIES = 40, BSHELF_WAIT_MIN_MS = 1200;
+function bookshelfAwaitAndLoad(target, n) {
+  if (state._shelfOpen !== target) return;   // a newer Bring back, or it was abandoned
+  var c = state.currentCampaign;
+  if (!c || String(c.id) !== target.campaignId) { state._shelfOpen = null; return; }   // they went elsewhere
+  var settled = !!state.novelVersionSettled;
+  var verOk = !target.versionId || String(state.novelVersionId || '') === target.versionId;
+  var layOk = !target.arrange || (typeof customOpts !== 'undefined' && customOpts && customOpts.arrange === target.arrange);
+  // loadNovelPeople normally picks the version; if the list had already loaded, ask for it once.
+  if (settled && !verOk && !target.nudged) {
+    target.nudged = true;
+    var sel = document.getElementById('novel-version-select');
+    var hasOpt = false;
+    if (sel && sel.options) { for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === target.versionId) hasOpt = true; }
+    if (hasOpt && typeof onNovelVersionChange === 'function') { sel.value = target.versionId; onNovelVersionChange(target.versionId); }
+  }
+  if (settled && verOk && layOk && (Date.now() - target.at) >= BSHELF_WAIT_MIN_MS) {
+    state._shelfOpen = null;
+    finalizeLoadLastOptimized(true);
+    return;
+  }
+  if (n >= BSHELF_WAIT_TRIES) {
+    state._shelfOpen = null;
+    billingToast('Your book is back on this version. Press Load Last Optimized File to open it.', 'info');
+    return;
+  }
+  setTimeout(function () { bookshelfAwaitAndLoad(target, n + 1); }, BSHELF_WAIT_STEP_MS);
 }
 function bookshelfRemove(b) {
   appConfirm({
     title: 'Remove this book from your Bookshelf?',
-    body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf and its saved copy deleted.',
-    note: 'The book in the campaign itself is not touched.',
+    body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf' + (b.kind === 'library' ? '.' : ' and its saved copy deleted.'),
+    note: b.kind === 'library' ? 'The story stays in the Library.' : 'The book in the campaign itself is not touched.',
     okLabel: 'Remove', cancelLabel: 'Keep it', danger: true,
     onOk: function () {
       fetch('/api/bookshelf/' + b.id, { method: 'DELETE' })
@@ -12444,6 +12652,7 @@ function bookshelfRemove(b) {
     }
   });
 }
+
 
 function refreshStoryStatus() {
   var btn = document.getElementById('novel-publish-btn');

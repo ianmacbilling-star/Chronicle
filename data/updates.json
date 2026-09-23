@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.982",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "982-bookshelf-shelves-bring-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Bookshelf gets its shelves: your books stand on a wooden shelf per campaign, Bring back to Publish opens one on its Optimize tab ready to edit, order or publish, and you can add other people's books from the Library.",
+        "detail": "TD-901, Bookshelf release 3 of 3. My Stuff, Bookshelf now draws one wooden shelf per campaign with your books standing on it as spines (taller and thicker for longer books, the campaign cover on the spine). Click a spine for its card: View, Download, Bring back to Publish and Remove. Bring back makes that book the saved book of the version it came from again, then opens the campaign on the Optimize tab on that version and loads it, so it can be edited, ordered or published. Your layout settings are left as they are, and the Optimize tab says if they differ from the book's; only when the book was made in the other layout (Picture Book or Magazine) are they switched to the book's, because the saved book is kept under its layout. If the version already holds an optimized book that is not on your Bookshelf, it asks first: Shelve it first, Replace it, or Cancel. On a story's Library page, a signed-in Gold or Platinum reader who is not the author sees Add to Bookshelf; those stand on a From the Library shelf, open their Library page, and do not count toward your 10 or 50. TO TEST: as a Gold account with two shelved books from one campaign, open My Stuff, Bookshelf: one shelf, two spines; click one: its card. Optimize that book again and save WITHOUT shelving, then Bring back the shelved one: the Shelve it first / Replace it / Cancel choice appears. Shelve it first: a third spine appears and the old book opens on the Optimize tab on the right version; press Edit and change something (it is editable). Try Replace it on another pass: no new spine. Go to Order & Publish: the Printing line shows the book's original optimize date. Change a border setting, then Bring back: the book loads and the settings-changed note names the border; the setting is unchanged. Switch the layout to Magazine, then Bring back a Picture Book book: the message says the layout settings were switched, and Layout shows Picture Book. On someone else's Library story page, Add to Bookshelf, then My Stuff: it stands on From the Library and opens the story page; on your own story's page the button does not appear; signed out it does not appear. As Silver: no Add to Bookshelf on Library pages.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.981",
     "staged_on": "2026-09-23",
     "entries": [

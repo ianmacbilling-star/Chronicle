@@ -1200,6 +1200,39 @@
       <div id="mystuff-panel-shelf" style="display:none;">
         <div id="bookshelf-section" class="settings-section">
           <div class="settings-section-title">Bookshelf</div>
+          <!-- v3.0.982 -- TD-901. The shelves: one wooden shelf per campaign, books as spines. -->
+          <style>
+            #bookshelf-list { margin-top:14px; }
+            .bshelf { margin:0 0 26px; }
+            .bshelf-name { color:#c9a84c; font-family:var(--font-display); font-size:14px; margin:0 0 6px 4px; }
+            .bshelf-row { display:flex; align-items:flex-end; gap:5px; min-height:206px; padding:14px 14px 0; overflow-x:auto; overflow-y:hidden;
+              background:linear-gradient(to bottom, rgba(18,10,4,0.85), rgba(40,24,12,0.55));
+              border-left:9px solid #4a2c14; border-right:9px solid #4a2c14; box-shadow:inset 0 10px 18px rgba(0,0,0,0.55); }
+            .bshelf-board { height:16px; border-radius:0 0 3px 3px; box-shadow:0 7px 12px rgba(0,0,0,0.55);
+              background:repeating-linear-gradient(90deg, rgba(0,0,0,0.07) 0 3px, rgba(255,255,255,0.03) 3px 9px),
+                         linear-gradient(to bottom, #9a6a38 0%, #7a4c24 35%, #573416 100%); }
+            .bspine { position:relative; flex:0 0 auto; padding:0; border:none; cursor:pointer; border-radius:3px 3px 1px 1px;
+              background-size:cover; background-position:center; overflow:hidden; transition:transform .15s ease;
+              box-shadow:inset -4px 0 7px rgba(0,0,0,0.5), inset 3px 0 4px rgba(255,255,255,0.1), 2px 0 3px rgba(0,0,0,0.45); }
+            .bspine::before, .bspine::after { content:''; position:absolute; left:0; right:0; height:2px; background:rgba(201,168,76,0.75); z-index:1; }
+            .bspine::before { top:12px; } .bspine::after { bottom:14px; }
+            .bspine:hover, .bspine.sel, .bspine:focus-visible { transform:translateY(-10px); outline:none; }
+            .bspine.sel { box-shadow:inset -4px 0 7px rgba(0,0,0,0.5), 0 0 0 2px #c9a84c; }
+            .bspine-lib { border-radius:2px; }
+            .bspine-lib::before { top:auto; bottom:0; height:22px; left:30%; right:30%; background:#a8322a; }
+            .bspine-t { position:absolute; inset:18px 0 20px; display:flex; align-items:center; justify-content:center;
+              writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#f5e6c0; font-family:var(--font-display);
+              font-size:11px; letter-spacing:0.03em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 2px #000;
+              background:linear-gradient(to right, rgba(0,0,0,0.6), rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.6)); }
+            .bshelf-card { display:flex; flex-wrap:wrap; gap:16px; margin-top:6px; padding:14px; border:1px solid rgba(201,168,76,0.3);
+              border-radius:8px; background:rgba(12,8,4,0.55); }
+            .bshelf-card-cover { width:120px; aspect-ratio:17/22; object-fit:cover; border-radius:3px; flex:0 0 auto; background:#160e06; }
+            .bshelf-card-info { flex:1 1 220px; min-width:0; }
+            .bshelf-card-title { color:var(--gold); font-family:var(--font-display); font-size:16px; margin-bottom:6px; }
+            .bshelf-card-meta { font-size:12px; color:rgba(240,232,208,0.7); margin-bottom:3px; }
+            .bshelf-card-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+            .bshelf-card-ask { margin-top:12px; padding-top:10px; border-top:1px solid rgba(201,168,76,0.2); }
+          </style>
           <div id="bookshelf-body" style="margin-top:10px;"></div>
         </div>
       </div>
