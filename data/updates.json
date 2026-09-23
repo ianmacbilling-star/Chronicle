@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.983",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "983-library-card-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Add to Bookshelf now appears on the story cards in the Library too, not only on a story's own page.",
+        "detail": "TD-901. On the Library's Stories tab, a signed-in Gold or Platinum reader sees a small + Bookshelf button in the top corner of each story card that is not their own. Clicking it adds the story to the From the Library shelf on My Stuff without opening the story; the button then reads On your shelf. Stories already on your shelf show On your shelf when the page loads. The Library asks about a whole page of cards at once. TO TEST: signed in as Gold, open the Library, Stories tab: + Bookshelf on other people's cards, none on your own. Click one: it turns to On your shelf and the story does not open; clicking the rest of the card still opens the story. Scroll so more stories load: the new cards get the button too. My Stuff, Bookshelf: the story stands on From the Library. Reload the Library: that card shows On your shelf. As Silver, or signed out: no buttons.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.982",
     "staged_on": "2026-09-23",
     "entries": [

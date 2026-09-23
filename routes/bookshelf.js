@@ -17,6 +17,7 @@
 //                                                body { shelveFirst } or { replace } -- see restore()
 //   POST   /api/bookshelf/library             -> body { storyId, token }: a pointer to a Library story
 //   GET    /api/bookshelf/library-status/:id  -> may I add this Library story, and is it already there
+//   GET    /api/bookshelf/library-status?ids= -> the same for a page of Library cards (v3.0.983)
 //   DELETE /api/bookshelf/:id                 -> remove one of your own books, and its files
 //   GET    /api/bookshelf/:id/pdf             -> the shelf PDF from our own origin; ?download=1
 //
@@ -358,6 +359,31 @@ function makeHandlers(d) {
     }
   }
 
+  // v3.0.983 -- the same question for a page of Library cards at once: ?ids=1,2,3 (at most 60).
+  // Only browsable stories are answered -- the grid lists nothing else -- and a story that is not
+  // in the Library is simply absent from items.
+  async function libraryStatusMany(req, res) {
+    try {
+      var uid = req.session.userId;
+      var db = await d.getDb();
+      var t = tierOf(req);
+      var ids = String(req.query.ids || '').split(',').map(function (x) { return Number(x); })
+        .filter(function (n, i, a) { return Number.isInteger(n) && n > 0 && a.indexOf(n) === i; }).slice(0, 60);
+      var items = {};
+      if (!t.limit || !ids.length) return res.json({ canAdd: t.limit > 0, items: items });
+      var marks = ids.map(function () { return '?'; }).join(', ');
+      var stories = await db.prepare("SELECT id, user_id FROM public_stories WHERE public = TRUE AND visibility = 'public' AND id IN (" + marks + ')').all(ids);
+      var mine = await db.prepare("SELECT public_story_id FROM bookshelf_books WHERE user_id = ? AND kind = 'library' AND public_story_id IN (" + marks + ')').all([uid].concat(ids));
+      var on = {};
+      mine.forEach(function (m) { on[String(m.public_story_id)] = true; });
+      stories.forEach(function (st) { items[String(st.id)] = { own: String(st.user_id) === String(uid), onShelf: !!on[String(st.id)] }; });
+      return res.json({ canAdd: true, items: items });
+    } catch (e) {
+      d.log('library-status-many', e);
+      return res.json({ canAdd: false, items: {} });
+    }
+  }
+
   async function remove(req, res) {
     try {
       var uid = req.session.userId;
@@ -397,7 +423,7 @@ function makeHandlers(d) {
     }
   }
 
-  return { list: list, save: save, restore: restore, addLibrary: addLibrary, libraryStatus: libraryStatus, remove: remove, pdf: pdf, tierOf: tierOf };
+  return { list: list, save: save, restore: restore, addLibrary: addLibrary, libraryStatus: libraryStatus, libraryStatusMany: libraryStatusMany, remove: remove, pdf: pdf, tierOf: tierOf };
 }
 
 var _h = null;
@@ -423,6 +449,7 @@ const { requireAuth } = require('../middleware/auth');
 router.get('/', requireAuth, function (req, res) { return H().list(req, res); });
 router.post('/save', requireAuth, function (req, res) { return H().save(req, res); });
 router.post('/library', requireAuth, function (req, res) { return H().addLibrary(req, res); });
+router.get('/library-status', requireAuth, function (req, res) { return H().libraryStatusMany(req, res); });   // v3.0.983
 router.get('/library-status/:storyId', requireAuth, function (req, res) { return H().libraryStatus(req, res); });
 router.post('/:id/restore', requireAuth, function (req, res) { return H().restore(req, res); });
 router.delete('/:id', requireAuth, function (req, res) { return H().remove(req, res); });
