@@ -28,6 +28,13 @@
 // Everything lives under the existing 'optimized/' prefix, so storage.keyFromUrl needs no new entry
 // (the TD-469 drift trap).
 //
+// WHOSE VERSION. v3.0.984 -- Ian, 2026-09-23: "Even if you can't publish I think we let you save to
+// your bookshelf." Optimizing someone else's version already saves the book under YOUR prefs row for
+// that version (chooser = you, fork = the owner), never over theirs, so shelving it copies your own
+// file. Save and Bring back therefore need only campaign membership (and, for a player, the Story
+// Master's novel switch) -- not ownership. Ownership still decides one thing: whether Bring back may
+// change the version's layout type (see restore()).
+//
 // WHO SEES WHAT. Every query here is WHERE user_id = the session user. Nobody sees, opens, brings
 // back or removes another member's shelf, and an id that is not yours answers 404, not 403, so a
 // guess cannot tell a real id from a missing one.
@@ -51,6 +58,8 @@ function shelfDownloadName(title) {
   var nm = String(title || '').replace(/[^A-Za-z0-9 ._-]+/g, ' ').replace(/\.{2,}/g, '.').replace(/\s+/g, ' ').trim().slice(0, 80);
   return nm || 'campaignia-book';
 }
+
+function layoutName(a) { return a === 'paired' ? 'Picture Book' : (a === 'magazine' ? 'Magazine' : String(a || 'other')); }
 
 function isTruthyFlag(v) { return v === true || v === 1 || v === 't' || v === 'true'; }
 
@@ -80,7 +89,7 @@ function storyLink(st) {
 }
 
 function makeHandlers(d) {
-  // d: { getDb, bookPrefsScope, getForkBookPrefs, setForkBookPrefs, ownsBookVersion, getTier, ownTier,
+  // d: { getDb, bookPrefsScope, getForkBookPrefs, setForkBookPrefs, ownsBookVersion, coverFromPrefs, getTier, ownTier,
   //      copyObject, deleteFile, fetchFile, parseCustomOpts, now, log }
   function tierOf(req) {
     var name = (req.user) ? d.ownTier(req.user) : 'copper';
@@ -103,21 +112,24 @@ function makeHandlers(d) {
   }
   function refuse(status, body) { return { ok: false, status: status, body: body }; }
 
-  // May this person act on this book? The same question as novelOwnView: their own prefs row
-  // (fork) AND a version they own. Answers { campaign, sc } or a refusal.
+  // May this person shelve or bring back a book of this campaign? A member who can open the book.
+  // v3.0.984 -- no longer requires owning the version (Ian); `own` is reported for restore().
+  // Answers { campaign, sc, own } or a refusal.
   async function bookAccess(db, uid, campaignId, scopeReq) {
     var campaign = await db.prepare(
       'SELECT c.id, c.name, c.cover_image_url, c.campaign_image_url, c.allow_player_novel_access, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
     ).get(campaignId, uid);
     if (!campaign) return refuse(404, { code: 'not_found', error: 'That campaign could not be found, or you are no longer in it.' });
     if (campaign.my_role !== 'dm' && !isTruthyFlag(campaign.allow_player_novel_access)) {
-      return refuse(403, { code: 'not_your_version', error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+      return refuse(403, { code: 'novel_not_enabled', error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
     }
     var sc = await d.bookPrefsScope(db, scopeReq, campaignId);
+    // The saved book is read from, and brought back to, the (chooser, fork) row. chooser is always
+    // the session user; anything else would be someone else's row, which is never touched.
+    if (String(sc.chooser) !== String(uid)) return refuse(403, { code: 'not_your_book', error: 'That saved book is not yours.' });
     var owns = false;
     try { owns = String(sc.fork) === String(uid) && await d.ownsBookVersion(db, uid, sc.bookVersionId); } catch (e) { owns = false; }
-    if (!owns) return refuse(403, { code: 'not_your_version', error: 'This version is not yours, so it cannot go on or come off your Bookshelf. Switch to your own version first.' });
-    return { ok: true, campaign: campaign, sc: sc };
+    return { ok: true, campaign: campaign, sc: sc, own: owns };
   }
   async function findShelved(db, uid, campaignId, prefsVid, arrange, at) {
     return await db.prepare(
@@ -152,12 +164,20 @@ function makeHandlers(d) {
         bodyUrl = await d.copyObject(lo.bodyUrl, base + '-layout.json.gz', 'optimized');
         made.push(bodyUrl);
       }
+      // v3.0.984 -- THE VERSION'S OWN FRONT COVER, not the campaign picture (Ian: two versions with
+      // different covers showed the same one). Read the way the book reads it -- inherit on -- and
+      // through the one rule for "no cover chosen" (db.coverFromPrefs).
+      var coverUrl = campaign.cover_image_url || campaign.campaign_image_url || '';
+      try {
+        var bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
+        coverUrl = d.coverFromPrefs(bp, campaign.cover_image_url || campaign.campaign_image_url || '') || '';
+      } catch (e) { /* keep the campaign picture */ }
       var ins = await db.prepare(
         'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at) ' +
         "VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(uid, campaign.id, campaign.name || '', sc.bookVersionId || null, Number(sc.versionId) || 0, vLabel,
         arrange, lo.layout || '', lo.co || '', (lo.inc == null ? null : String(lo.inc)), lo.bookTitle || campaign.name || '',
-        campaign.cover_image_url || campaign.campaign_image_url || '', pdfUrl, bodyUrl, Number(lo.pages) || 0,
+        coverUrl, pdfUrl, bodyUrl, Number(lo.pages) || 0,
         (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''));
       made = [];
       return { ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit };
@@ -246,6 +266,31 @@ function makeHandlers(d) {
         return res.status(409).json({ code: 'version_changed', error: 'The version this book came from is not there any more, so it cannot be brought back. You can still view and download it.' });
       }
       var arrange = row.arrange || 'magazine';
+      // THE LAYOUT SETTINGS ARE LEFT ALONE UNLESS THEY HAVE TO MOVE. Ian, 2026-09-23: "If we need
+      // to load the layout settings then do so... but if we don't, load the book without touching
+      // the existing layout settings" -- the Optimize tab's own "settings don't match" message
+      // then says what differs. They HAVE to move only when the version's layout (arrange) is not
+      // the book's: saved books are kept per layout, so Load Last Optimized File would look under
+      // the other one and find nothing. Read the way the Layout panel reads them (my-book-meta:
+      // inherit on); nothing saved means the panel's default, Picture Book.
+      var nowArr = 'paired';
+      try {
+        var _lp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: true, versionId: sc.versionId });
+        var _lo = (_lp && _lp.layout_opts) ? (typeof _lp.layout_opts === 'string' ? JSON.parse(_lp.layout_opts) : _lp.layout_opts) : null;
+        var _lop = _lo && _lo.opts;
+        if (_lop && (_lop.novel || _lop.session)) _lop = _lop.novel || _lop.session;   // the legacy two-slot shape
+        if (_lop && _lop.arrange) nowArr = String(_lop.arrange);
+      } catch (e) { nowArr = 'paired'; }
+      // v3.0.984 -- SOMEONE ELSE'S VERSION: its layout settings are the owner's, and nobody else may
+      // change them. So if the owner has switched the layout type since, the book cannot be put
+      // back there -- said plainly, before anything is copied. It stays on the shelf to view,
+      // download or order. (Ian: "not sure I love that if it changes you can't load it" -- a
+      // candidate for the next round.)
+      if (nowArr !== arrange && !acc.own) {
+        return res.status(409).json({ code: 'layout_differs',
+          error: 'This book was made as a ' + layoutName(arrange) + ' book, and the owner of that version has since switched it to ' + layoutName(nowArr) +
+            '. Only they can change it back, so it cannot be brought back there. You can still view and download it from your Bookshelf.' });
+      }
       var prefs = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: false, versionId: sc.versionId });
       var lastOpt = (prefs && prefs.lastOptimized && typeof prefs.lastOptimized === 'object') ? Object.assign({}, prefs.lastOptimized) : {};
       var cur = lastOpt[arrange];
@@ -282,22 +327,8 @@ function makeHandlers(d) {
         frontCovers: (row.front_covers == null ? null : Number(row.front_covers)), backCovers: (row.back_covers == null ? null : Number(row.back_covers)),
         inc: (row.inc == null ? null : row.inc), flattened: true, fromShelf: row.id };
       var patch = { lastOptimized: lastOpt };
-      // THE LAYOUT SETTINGS ARE LEFT ALONE UNLESS THEY HAVE TO MOVE. Ian, 2026-09-23: "If we need
-      // to load the layout settings then do so... but if we don't, load the book without touching
-      // the existing layout settings" -- the Optimize tab's own "settings don't match" message
-      // then says what differs. They HAVE to move only when the version's layout (arrange) is not
-      // the book's: saved books are kept per layout, so Load Last Optimized File would look under
-      // the other one and find nothing. Read the way the Layout panel reads them (my-book-meta:
-      // inherit on); nothing saved means the panel's default, Picture Book.
-      var nowArr = 'paired';
-      try {
-        var _lp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: true, versionId: sc.versionId });
-        var _lo = (_lp && _lp.layout_opts) ? (typeof _lp.layout_opts === 'string' ? JSON.parse(_lp.layout_opts) : _lp.layout_opts) : null;
-        var _lop = _lo && _lo.opts;
-        if (_lop && (_lop.novel || _lop.session)) _lop = _lop.novel || _lop.session;   // the legacy two-slot shape
-        if (_lop && _lop.arrange) nowArr = String(_lop.arrange);
-      } catch (e) { nowArr = 'paired'; }
-      var lay = (nowArr !== arrange) ? coToLayoutOpts(row.co) : null;
+      // Only your own version reaches here with a different layout type (see above).
+      var lay = (nowArr !== arrange && acc.own) ? coToLayoutOpts(row.co) : null;
       if (lay) patch.layout_opts = lay;
       await d.setForkBookPrefs(db, sc.chooser, sc.fork, campaignId, patch, sc.versionId);
       made = [];
@@ -434,7 +465,7 @@ function H() {
   var storage = require('../storage/storage');
   _h = makeHandlers({
     getDb: db.getDb, bookPrefsScope: db.bookPrefsScope, getForkBookPrefs: db.getForkBookPrefs, setForkBookPrefs: db.setForkBookPrefs,
-    ownsBookVersion: db.ownsBookVersion, getTier: tiers.getTier, ownTier: tiers.ownTier,
+    ownsBookVersion: db.ownsBookVersion, coverFromPrefs: db.coverFromPrefs, getTier: tiers.getTier, ownTier: tiers.ownTier,
     copyObject: storage.copyObject, deleteFile: storage.deleteFile, fetchFile: storage.fetchFile,
     // Loaded late: pdf.js is the one parser of the co string, and a second copy would drift.
     parseCustomOpts: function (s) { return require('./pdf').parseCustomOpts(s); },

@@ -29495,9 +29495,13 @@ function finalizeSyncPublishBtn() {
   // the fault the comment below this one records.
   var dl = document.getElementById('layoutai-download-btn');
   if (dl) { dl.style.display = show ? '' : 'none'; if (show) dl.disabled = false; }
-  // v3.0.981 -- TD-901. Save to Bookshelf rides the same `show`, and is left alone while a save is in flight.
+  // v3.0.981 -- TD-901. Save to Bookshelf, left alone while a save is in flight.
+  // v3.0.984 -- ANY VERSION YOU CAN OPEN, not only one you may publish. Ian: "Even if you can't
+  // publish I think we let you save to your bookshelf." Optimizing someone else's version saves the
+  // book as your own copy, so the only conditions left are a saved book and no run in progress.
+  var showShelf = _finalizeSavedReady && !window._aiLoopRunning;
   var sh = document.getElementById('layoutai-shelf-btn');
-  if (sh) { sh.style.display = show ? '' : 'none'; if (show && !_shelfSaving) { sh.disabled = false; sh.textContent = 'Save to Bookshelf'; } }
+  if (sh) { sh.style.display = showShelf ? '' : 'none'; if (showShelf && !_shelfSaving) { sh.disabled = false; sh.textContent = 'Save to Bookshelf'; } }
   // v3.0.397 -- the two buttons share a slot and are mutually exclusive by construction:
   // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
   // is not. Driving both from one function is what stops them ever being shown together, or a fix

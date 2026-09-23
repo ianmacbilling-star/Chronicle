@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.984",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "984-shelve-any-version-version-cover",
+        "kind": "fix",
+        "public": true,
+        "summary": "Save to Bookshelf now appears after optimizing any version you can open, not only your own, and a shelved book now shows its version's own cover.",
+        "detail": "TD-901. Ian optimized someone else's version and the book saved, but no Save to Bookshelf button appeared: the button followed Go to Publish, which is hidden on a version you cannot publish. It now appears whenever a finished optimized book is saved, on any version you can open; Go to Publish and Download PDF are unchanged. Optimizing someone else's version saves the book as your own copy, so shelving it copies only your file, and Bring back puts it back as your copy of that version without touching the owner's settings. If the owner has since switched that version between Picture Book and Magazine, Bring back says so and the book stays on the shelf to view and download. Separately, shelved books took the campaign's picture as their cover, so two versions with different covers looked the same; a book now takes its version's own front cover (books shelved before this keep the cover they were saved with). TO TEST: as Tamika, open another member's version of Lily's First Day of School, Optimize, let it save: Save to Bookshelf appears (Go to Publish does not); save it. Save your own version too. My Stuff, Bookshelf: two spines with their own covers. Bring back the other member's one: it opens on their version and loads.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.983",
     "staged_on": "2026-09-23",
     "entries": [
