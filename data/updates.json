@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.979",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "979-version-switch-clears-order-lines",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching versions no longer leaves the previous version’s saved-book lines on screen, and a version you cannot publish no longer offers Go to Publish.",
+        "detail": "TD-900. Switching to a version with no saved layout left “Printing the version you saved at…” and “Publishing: … optimized, with covers” from the version you had just left, beside the correct “There is no saved layout” message. Both now go with the version. And when the version on screen is one you cannot publish, the Publishing line and the Go to Publish button (with Download PDF beside it) are hidden — the note telling you to switch back to your own version is all that shows. TO TEST: as Tamika on Lily’s First Day of School, Order & Publish, switch the version selector to Story Master — Canonical: only the no-saved-layout line, no Printing line, no Publishing line; on the Optimize tab no Go to Publish or Download PDF button. Switch back to your own version: all of them return, with the right date. Repeat three times.",
+        "td": [
+          "TD-900"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.978",
     "staged_on": "2026-09-23",
     "entries": [

@@ -9321,6 +9321,9 @@ function updateNovelPublishGuard() {
     btn.disabled = true;
     if (st) { st.style.display = 'block'; st.textContent = 'You can only publish your own version. Switch the version selector back to your own version to publish to the Library.'; if (st.dataset) st.dataset.guard = '1'; }
   }
+  // v3.0.979 -- TD-900. The Go to Publish button and the Publishing line follow the same answer.
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
 }
 // v3.0.457 -- THE PICKER NOW LISTS CAMPAIGN VERSIONS (TD-242 stage 3b).
 //
@@ -9611,6 +9614,13 @@ function orderResetForVersion() {
   try { if (typeof printInteriorCache !== 'undefined') printInteriorCache = { key: '', url: '', pages: 0 }; } catch (e) {}
   try { if (typeof printActualPages !== 'undefined') printActualPages = 0; } catch (e) {}
   try { if (typeof showPrintMsg === 'function') showPrintMsg('', null); } catch (e) {}
+  // v3.0.979 -- TD-900. THE OLD VERSION'S LINES GO WITH IT. "Printing the version you saved at..." was
+  // removed by nothing, and the Publishing line was repainted by optimizeResetForVersion BEFORE this
+  // cleared the cache it counts as proof of a saved book -- so it stayed armed for the version just
+  // left. Removed here, and repainted AFTER the cache is gone.
+  try { var _pa = document.getElementById('print-approved-at'); if (_pa && _pa.parentNode) _pa.parentNode.removeChild(_pa); } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
 }
 
 function novelVersionApplied() {
@@ -23552,6 +23562,9 @@ function prepareInteriorCount() {
         // someone fill in the whole order form before finding out, so the reason goes on screen the
         // moment the tab opens.
         var _why = res.j && (res.j.message || res.j.error);
+        // v3.0.979 -- TD-900. A refusal is about THIS book; a "Printing the version you saved at" line
+        // left by another one must not sit beside it.
+        try { var _paR = document.getElementById('print-approved-at'); if (_paR && _paR.parentNode) _paR.parentNode.removeChild(_paR); } catch (e) {}
         var _pe = document.getElementById('print-page-est');
         if (_why && _pe) { _pe.textContent = _why; return; }
         updatePrintPageDisplay(-1, false); return;
@@ -27041,6 +27054,11 @@ function finalizeUpdatePublishLink() {
   var a = document.getElementById('publish-book-link');
   var none = document.getElementById('publish-book-none');
   if (!a) return;
+  // v3.0.979 -- TD-900. A VERSION THIS READER CANNOT PUBLISH NAMES NO BOOK HERE. Bots: the card read
+  // "You can only publish your own version" directly above "Publishing: Lily's First Day of School --
+  // optimized, with covers". The guard line already says what to do; the Publishing row is hidden.
+  var _own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+  if (a.parentNode && a.parentNode.style) a.parentNode.style.display = _own ? '' : 'none';
   // v3.0.973 -- TD-872. EITHER WITNESS WILL DO, and the server's is the better one.
   var ready = (_finalizeSavedReady || finalizeServerSavedBook()) && !!(state && state.currentCampaign);   // v3.0.392 -- see above
   if (!ready) {
@@ -29070,7 +29088,9 @@ function finalizeSyncPublishBtn() {
   // v3.0.392 -- a SAVED book, not a composed cache. Also means the button now appears only once
   // the save has landed, which closes the race it always had: it links to the saved file, and
   // before v3.0.392 it could be clicked ~43 seconds before that file existed.
-  var show = _finalizeSavedReady && !window._aiLoopRunning;
+  // v3.0.979 -- TD-900. Ian: "If there is a version that can't be published sitting there hide the
+  // go to publish button." Download PDF rides the same `show`, as v3.0.893 decided it should.
+  var show = _finalizeSavedReady && !window._aiLoopRunning && (typeof novelOwnView !== 'function' || novelOwnView());
   b.style.display = show ? '' : 'none';
   if (show) b.disabled = false;
   // v3.0.893 -- TD-768. DOWNLOAD PDF RIDES THE SAME VARIABLE.
