@@ -2008,6 +2008,8 @@ async function migrateBookshelf(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_bookshelf_user ON bookshelf_books(user_id, created_at DESC)');
+  // v3.0.986 -- the book's first page as a picture, drawn on first view (routes/bookshelf.js cover()).
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS thumb_url TEXT');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

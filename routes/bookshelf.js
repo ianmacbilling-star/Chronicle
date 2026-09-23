@@ -20,6 +20,7 @@
 //   GET    /api/bookshelf/library-status?ids= -> the same for a page of Library cards (v3.0.983)
 //   DELETE /api/bookshelf/:id                 -> remove one of your own books, and its files
 //   GET    /api/bookshelf/:id/pdf             -> the shelf PDF from our own origin; ?download=1
+//   GET    /api/bookshelf/:id/cover           -> the book's first page as a picture (v3.0.986)
 //
 // THE STORAGE TRAP (spec section 3). save-optimized DELETES the previous saved book's pdfUrl and
 // bodyUrl when a version is optimized again. So a shelf book never shares a file with a version's
@@ -427,11 +428,53 @@ function makeHandlers(d) {
       if (row.kind === 'book') {
         try { if (row.pdf_url) await d.deleteFile(row.pdf_url); } catch (e) {}
         try { if (row.body_url) await d.deleteFile(row.body_url); } catch (e) {}
+        try { if (row.thumb_url) await d.deleteFile(row.thumb_url); } catch (e) {}   // v3.0.986
       }
       return res.json({ ok: true });
     } catch (e) {
       d.log('remove', e);
       return res.status(500).json({ error: 'Could not remove the book right now.' });
+    }
+  }
+
+  // v3.0.986 -- THE BOOK'S REAL COVER. Ian: "on the book facing the viewer... put the actual cover
+  // page from the book on the cover with the title as it is." That is page 1 of the shelved PDF, as
+  // printed. It is drawn once, the first time anyone asks, by Ghostscript (already on the server
+  // for the flatten), stored beside the book as the row's thumb_url, and served from our own origin
+  // like the PDF. Two requests for the same book while it is being drawn share one job. Anything
+  // that goes wrong answers 404 and the page falls back to the campaign picture, then to leather.
+  var _thumbJobs = {};
+  async function cover(req, res) {
+    try {
+      var uid = req.session.userId;
+      var db = await d.getDb();
+      var row = await db.prepare("SELECT * FROM bookshelf_books WHERE id = ? AND user_id = ? AND kind = 'book'").get(Number(req.params.id) || 0, uid);
+      if (!row || !row.pdf_url) return res.status(404).json({ error: 'That book is not on your Bookshelf.' });
+      var img = null;
+      if (row.thumb_url) { try { img = await d.fetchFile(row.thumb_url); } catch (e) { img = null; } }
+      if (!img || !img.length) {
+        var key = String(row.id), oldThumb = row.thumb_url || null;
+        if (!_thumbJobs[key]) {
+          _thumbJobs[key] = (async function () {
+            var pdfBuf = await d.fetchFile(row.pdf_url);
+            if (!pdfBuf || !pdfBuf.length) throw new Error('the book could not be read back');
+            var jpg = await d.renderFirstPage(pdfBuf);
+            if (!jpg || !jpg.length) throw new Error('nothing was drawn');
+            var url = await d.uploadFile(jpg, 'shelf-u' + uid + '-b' + row.id + '-cover-' + d.now() + '.jpg', 'image/jpeg', 'optimized');
+            await db.prepare('UPDATE bookshelf_books SET thumb_url = ? WHERE id = ? AND user_id = ?').run(url, row.id, uid);
+            if (oldThumb && oldThumb !== url) { try { await d.deleteFile(oldThumb); } catch (e) {} }   // the stored one that could not be read
+            return jpg;
+          })().then(function (v) { delete _thumbJobs[key]; return v; }, function (e) { delete _thumbJobs[key]; throw e; });
+        }
+        img = await _thumbJobs[key];
+      }
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Content-Length', String(img.length));
+      res.set('Cache-Control', 'private, max-age=86400');
+      return res.send(img);
+    } catch (e) {
+      d.log('cover', e);
+      return res.status(404).json({ error: 'The cover could not be drawn.' });
     }
   }
 
@@ -454,7 +497,30 @@ function makeHandlers(d) {
     }
   }
 
-  return { list: list, save: save, restore: restore, addLibrary: addLibrary, libraryStatus: libraryStatus, libraryStatusMany: libraryStatusMany, remove: remove, pdf: pdf, tierOf: tierOf };
+  return { list: list, save: save, restore: restore, addLibrary: addLibrary, libraryStatus: libraryStatus, libraryStatusMany: libraryStatusMany, remove: remove, pdf: pdf, cover: cover, tierOf: tierOf };
+}
+
+// v3.0.986 -- page 1 of a PDF as a JPEG, by Ghostscript -- the same binary the flatten uses
+// (services/printing/flattenPdf.js, GHOSTSCRIPT_PATH or gs). 72 dpi: a letter page comes out about
+// 612 by 792, sharp enough for the shelf and the open book without being heavy. Works in a private
+// temp folder that is always removed.
+function renderFirstPageJpeg(buf) {
+  var fs = require('fs'), os = require('os'), path = require('path'), cp = require('child_process');
+  return new Promise(function (resolve, reject) {
+    var dir = null;
+    function done(err, v) { try { if (dir) fs.rmSync(dir, { recursive: true, force: true }); } catch (x) {} if (err) reject(err); else resolve(v); }
+    try {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shelf-cover-'));
+      fs.writeFileSync(path.join(dir, 'in.pdf'), buf);
+    } catch (e) { return done(e); }
+    var out = path.join(dir, 'p1.jpg');
+    cp.execFile(process.env.GHOSTSCRIPT_PATH || 'gs', ['-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=jpeg', '-dJPEGQ=85', '-r72',
+      '-dFirstPage=1', '-dLastPage=1', '-dTextAlphaBits=4', '-dGraphicsAlphaBits=4', '-sOutputFile=' + out, path.join(dir, 'in.pdf')],
+      { timeout: 90000, maxBuffer: 4 * 1024 * 1024 }, function (err) {
+        if (err) return done(err);
+        try { done(null, fs.readFileSync(out)); } catch (e) { done(e); }
+      });
+  });
 }
 
 var _h = null;
@@ -466,7 +532,8 @@ function H() {
   _h = makeHandlers({
     getDb: db.getDb, bookPrefsScope: db.bookPrefsScope, getForkBookPrefs: db.getForkBookPrefs, setForkBookPrefs: db.setForkBookPrefs,
     ownsBookVersion: db.ownsBookVersion, coverFromPrefs: db.coverFromPrefs, getTier: tiers.getTier, ownTier: tiers.ownTier,
-    copyObject: storage.copyObject, deleteFile: storage.deleteFile, fetchFile: storage.fetchFile,
+    copyObject: storage.copyObject, deleteFile: storage.deleteFile, fetchFile: storage.fetchFile, uploadFile: storage.uploadFile,
+    renderFirstPage: renderFirstPageJpeg,
     // Loaded late: pdf.js is the one parser of the co string, and a second copy would drift.
     parseCustomOpts: function (s) { return require('./pdf').parseCustomOpts(s); },
     now: function () { return Date.now(); },
@@ -485,8 +552,10 @@ router.get('/library-status/:storyId', requireAuth, function (req, res) { return
 router.post('/:id/restore', requireAuth, function (req, res) { return H().restore(req, res); });
 router.delete('/:id', requireAuth, function (req, res) { return H().remove(req, res); });
 router.get('/:id/pdf', requireAuth, function (req, res) { return H().pdf(req, res); });
+router.get('/:id/cover', requireAuth, function (req, res) { return H().cover(req, res); });   // v3.0.986
 
 module.exports = router;
 module.exports.makeHandlers = makeHandlers;
 module.exports.shelfDownloadName = shelfDownloadName;
 module.exports.coToLayoutOpts = coToLayoutOpts;
+module.exports.renderFirstPageJpeg = renderFirstPageJpeg;

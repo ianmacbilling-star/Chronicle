@@ -12337,19 +12337,21 @@ function shelfDate(v) {
 // ============================================================================
 // v3.0.982 -- TD-901, Bookshelf release 3. THE SHELVES.
 // v3.0.985 -- ONE BOOKCASE. Ian, 2026-09-23, with two pictures: "darker wood" like a panelled
-// library bookcase, and "we can have multiple campaigns on the same shelf... the first book of a
-// series of books from the same campaign to have the cover facing the viewer... the rest of the
-// books for the campaign the viewer can be looking at the spine."
-//   * One walnut case: moulded top, side posts, plinth, dark panelled back. The shelf boards are
-//     drawn by the case's own background every BSHELF_ROW_PX, and the books flow into rows of
-//     exactly that height, so a board always sits under a row however many rows there are. At
-//     least two shelves always show.
-//   * A campaign's books stand together, oldest shelved first. The first faces out, showing its
-//     cover, with the campaign's name on a brass plate on the shelf; the rest stand as spines.
-//   * Spines are leather, ONE COLOUR PER CAMPAIGN (a set, as in the picture), each book a shade
-//     apart, with gilt bands and a gilt title. Height and thickness follow the page count.
-//   * Library pointers stand last, as spines with a red ribbon.
-// Clicking any book opens its card below the case. Styles: .bcase / .bface / .bspine in app.html.
+// library bookcase, and "the first book of a series of books from the same campaign to have the
+// cover facing the viewer... the rest... the viewer can be looking at the spine."
+// v3.0.986 -- Ian, the same day:
+//   * the count sits on the title line, and the case and books are bigger -- the books reach near
+//     the top of each shelf;
+//   * a facing book shows the book's REAL first page -- its cover as printed, title and all --
+//     drawn by the server from the saved PDF (/api/bookshelf/:id/cover); the campaign picture is
+//     only the fallback while that is not available;
+//   * Library books stand on their own bottom shelf, and a random one of them faces out;
+//   * clicking a book opens it ON TOP of the case, as an open book: the cover on the left page,
+//     the details and buttons on the right.
+// How the rows land on boards: .bcase-inner paints a board every BSHELF_ROW (row + board) from the
+// same 14px start its first row uses, and every book stands in a .bslot of exactly the row height.
+// The Library shelf is a second .bcase-inner, so it always starts on a new shelf.
+// Styles: .bcase / .bface / .bspine / .bopen in app.html.
 // ============================================================================
 var BSHELF_LEATHER = ['#4a1c14', '#1f3325', '#1c2a40', '#3d1f36', '#4d3a17', '#40181d', '#17302f', '#2f1c12', '#2b2b30'];
 function bshelfLeather(s) {
@@ -12365,6 +12367,11 @@ function bshelfSafeUrl(u) {
   return (/^(https?:\/\/|\/)[^"'()\s]+$/.test(u)) ? u : '';
 }
 function bshelfTime(v) { var t = Date.parse(v || ''); return isNaN(t) ? 0 : t; }
+// The picture for a book's face: a shelf book's own first page, a Library book's story cover.
+function bshelfFaceUrl(b) {
+  if (b && b.kind === 'book' && b.id != null) return '/api/bookshelf/' + encodeURIComponent(b.id) + '/cover';
+  return bshelfSafeUrl(b && b.coverUrl);
+}
 function paintBookshelf(body, data) {
   body.innerHTML = '';
   var limit = Number(data.limit) || 0;
@@ -12372,6 +12379,8 @@ function paintBookshelf(body, data) {
   var books = all.filter(function (b) { return b.kind === 'book'; });
   var links = all.filter(function (b) { return b.kind === 'library'; });
   var used = books.length;
+  var count = document.getElementById('bookshelf-count');
+  if (count) count.textContent = '';
   function line(id, text, css) {
     var d = document.createElement('div');
     d.id = id; d.className = 'settings-section-desc'; d.textContent = text;
@@ -12392,7 +12401,8 @@ function paintBookshelf(body, data) {
     nudgeButton();
     return;
   }
-  line('bookshelf-count', used + ' of ' + limit + ' books', 'color:#c9a84c;font-weight:600;');
+  // v3.0.986 -- on the title line (app.html #bookshelf-count), not a line of its own.
+  if (count) count.textContent = used + ' of ' + limit + ' books';
   // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download, bring back and
   // remove -- not add.
   if (used > limit || (!limit && links.length)) {
@@ -12419,11 +12429,9 @@ function paintBookshelf(body, data) {
   wrap.id = 'bookshelf-list';
   wrap.className = 'bcase';
   var crown = document.createElement('div'); crown.className = 'bcase-crown';
-  var inner = document.createElement('div'); inner.className = 'bcase-inner';
-  var base = document.createElement('div'); base.className = 'bcase-base';
-  wrap.appendChild(crown); wrap.appendChild(inner); wrap.appendChild(base);
-  body.appendChild(wrap);
-  function slot(el, plate) {
+  var inner = document.createElement('div'); inner.className = 'bcase-inner' + (links.length ? ' bcase-one' : '');
+  wrap.appendChild(crown); wrap.appendChild(inner);
+  function slot(into, el, plate) {
     var s = document.createElement('div');
     s.className = 'bslot';
     s.appendChild(el);
@@ -12433,42 +12441,64 @@ function paintBookshelf(body, data) {
       p.textContent = plate;
       s.appendChild(p);
     }
-    inner.appendChild(s);
+    into.appendChild(s);
   }
   order.forEach(function (k) {
     var list = groups[k].slice().sort(function (a, b) { return (bshelfTime(a.createdAt) - bshelfTime(b.createdAt)) || ((a.id || 0) - (b.id || 0)); });
     var leather = bshelfLeather(k);
     list.forEach(function (b, i) {
-      if (i === 0) slot(bookshelfFace(b, leather), b.campaignName || 'Campaign');
-      else slot(bookshelfSpine(b, false, leather, i));
+      if (i === 0) slot(inner, bookshelfFace(b, leather), b.campaignName || 'Campaign');
+      else slot(inner, bookshelfSpine(b, false, leather, i));
     });
   });
-  links.forEach(function (b, i) { slot(bookshelfSpine(b, true, '#3a2418', i)); });
+  // v3.0.986 -- THE LIBRARY SHELF, at the bottom. Ian: "have it randomly choose which library
+  // book's cover is facing the viewer." A new pick on every visit to the tab.
+  if (links.length) {
+    var lib = document.createElement('div');
+    lib.className = 'bcase-inner bcase-lib';
+    lib.id = 'bookshelf-library-shelf';
+    var pick = Math.floor(Math.random() * links.length);
+    if (!(pick >= 0 && pick < links.length)) pick = 0;
+    var faceBook = links[pick];
+    slot(lib, bookshelfFace(faceBook, '#3a2418', true), 'From the Library');
+    links.forEach(function (b, i) { if (b !== faceBook) slot(lib, bookshelfSpine(b, true, '#3a2418', i)); });
+    wrap.appendChild(lib);
+  }
+  var base = document.createElement('div'); base.className = 'bcase-base';
+  wrap.appendChild(base);
+  body.appendChild(wrap);
   var card = document.createElement('div');
   card.id = 'bookshelf-card';
-  card.className = 'bshelf-card';
+  card.className = 'bopen-overlay';
   card.style.display = 'none';
+  card.onclick = function (e) { if (e && e.target === card) bookshelfCloseCard(); };
   body.appendChild(card);
 }
-function bookshelfFace(b, leather) {
+function bookshelfFace(b, leather, isLib) {
   var f = document.createElement('button');
   f.type = 'button';
-  f.className = 'bface bookshelf-book';
+  f.className = 'bface bookshelf-book' + (isLib ? ' bface-lib' : '');
   f.id = 'bookshelf-book-' + b.id;
-  f.title = (b.bookTitle || 'Untitled book') + (b.pages ? ' -- ' + b.pages + ' pages' : '');
-  if (leather) f.style.backgroundColor = leather;   // a book with no cover is bound in its set's leather
-  var img = bshelfSafeUrl(b.coverUrl);
+  f.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
+  if (leather) f.style.backgroundColor = leather;   // shown until (or unless) the cover picture arrives
   var ph = document.createElement('span');
   ph.className = 'bface-t';
   ph.textContent = b.bookTitle || 'Untitled';
   f.appendChild(ph);
-  if (img) {
+  var src = bshelfFaceUrl(b);
+  if (src) {
     var im = document.createElement('img');
-    im.src = img; im.alt = '';
-    im.onerror = function () { im.style.display = 'none'; };
+    im.alt = '';
+    // The real first page first; if the server cannot draw it, the campaign picture; then leather.
+    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    im.onerror = function () {
+      if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
+      im.style.display = 'none';
+    };
+    im.src = src;
     f.appendChild(im);
   }
-  f.onclick = function () { bookshelfShowCard(b, false); };
+  f.onclick = function () { bookshelfShowCard(b, !!isLib); };
   return f;
 }
 function bookshelfSpine(b, isLib, leather, i) {
@@ -12478,8 +12508,8 @@ function bookshelfSpine(b, isLib, leather, i) {
   sp.id = 'bookshelf-book-' + b.id;
   sp.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
   var pages = Number(b.pages) || 0;
-  var hgt = isLib ? 170 : Math.max(150, Math.min(196, 140 + Math.round(pages * 0.6)));
-  var wid = isLib ? 30 : Math.max(24, Math.min(46, 18 + Math.round(pages * 0.3)));
+  var hgt = isLib ? 214 : Math.max(196, Math.min(238, 184 + Math.round(pages * 0.6)));
+  var wid = isLib ? 34 : Math.max(28, Math.min(54, 22 + Math.round(pages * 0.3)));
   sp.style.height = hgt + 'px';
   sp.style.width = wid + 'px';
   sp.style.backgroundColor = leather || bshelfLeather(b.bookTitle || b.id);
@@ -12493,26 +12523,64 @@ function bookshelfSpine(b, isLib, leather, i) {
   sp.onclick = function () { bookshelfShowCard(b, isLib); };
   return sp;
 }
+function bookshelfCloseCard() {
+  var card = document.getElementById('bookshelf-card');
+  if (card) { card.style.display = 'none'; card.innerHTML = ''; }
+  var list = document.getElementById('bookshelf-list');
+  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];
+  for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
+  if (typeof document.removeEventListener === 'function') document.removeEventListener('keydown', bookshelfCardKey);
+}
+function bookshelfCardKey(e) { if (e && (e.key === 'Escape' || e.key === 'Esc')) bookshelfCloseCard(); }
+// v3.0.986 -- THE BOOK OPENS ON TOP OF THE CASE. Ian: "a modal that opens on top of the shelf...
+// resemble an open book... with the cover on left side and the buttons on the page to the right."
+// The ids inside are the ones the card always had (bookshelf-card-ask, bookshelf-bring-back,
+// bookshelf-open-lib), so Bring back and Remove work unchanged. Closed by the X, a click outside
+// the book, or Escape; it sits below the app's own confirm dialogs, so Remove can still ask.
 function bookshelfShowCard(b, isLib) {
   var card = document.getElementById('bookshelf-card');
   if (!card) return;
   var list = document.getElementById('bookshelf-list');
-  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];   // v3.0.985 -- covers and spines alike
+  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];
   for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
   var sp = document.getElementById('bookshelf-book-' + b.id);
   if (sp) sp.classList.add('sel');
   card.innerHTML = '';
   card.style.display = '';
   card.setAttribute('data-book', String(b.id));
-  var img = bshelfSafeUrl(b.coverUrl);
-  if (img) {
+  var book = document.createElement('div');
+  book.className = 'bopen';
+  book.setAttribute('role', 'dialog');
+  book.setAttribute('aria-label', b.bookTitle || 'Book');
+  var x = document.createElement('button');
+  x.type = 'button'; x.className = 'bopen-x'; x.id = 'bookshelf-card-close'; x.title = 'Close'; x.textContent = '\u00d7';
+  x.onclick = function () { bookshelfCloseCard(); };
+  book.appendChild(x);
+  var left = document.createElement('div');
+  left.className = 'bopen-page bopen-left';
+  var src = bshelfFaceUrl(b);
+  var ph = document.createElement('div');
+  ph.className = 'bopen-cover-ph';
+  ph.textContent = b.bookTitle || 'Untitled book';
+  ph.style.backgroundColor = isLib ? '#3a2418' : bshelfLeather(String(b.campaignId || 0) + '|' + (b.campaignName || ''));
+  left.appendChild(ph);
+  if (src) {
     var im = document.createElement('img');
-    im.className = 'bshelf-card-cover'; im.src = img; im.alt = '';
-    im.onerror = function () { im.style.display = 'none'; };
-    card.appendChild(im);
+    im.className = 'bshelf-card-cover bopen-cover'; im.alt = '';
+    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    im.onerror = function () {
+      if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
+      im.style.display = 'none';
+    };
+    im.src = src;
+    left.appendChild(im);
   }
+  book.appendChild(left);
+  var gutter = document.createElement('div');
+  gutter.className = 'bopen-gutter';
+  book.appendChild(gutter);
   var info = document.createElement('div');
-  info.className = 'bshelf-card-info';
+  info.className = 'bopen-page bopen-right bshelf-card-info';
   var t = document.createElement('div');
   t.className = 'bshelf-card-title'; t.textContent = b.bookTitle || 'Untitled book';
   info.appendChild(t);
@@ -12534,10 +12602,10 @@ function bookshelfShowCard(b, isLib) {
   acts.className = 'bshelf-card-acts';
   acts.id = 'bookshelf-card-acts';
   function btn(label, fn, cls, id) {
-    var x = document.createElement('button');
-    x.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); x.textContent = label; x.onclick = fn;
-    if (id) x.id = id;
-    acts.appendChild(x); return x;
+    var y = document.createElement('button');
+    y.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); y.textContent = label; y.onclick = fn;
+    if (id) y.id = id;
+    acts.appendChild(y); return y;
   }
   if (isLib) {
     if (!b.gone && b.storyUrl) btn('Open in the Library', function () { window.open(b.storyUrl, '_blank', 'noopener'); }, 'btn-primary', 'bookshelf-open-lib');
@@ -12558,8 +12626,9 @@ function bookshelfShowCard(b, isLib) {
   ask.className = 'bshelf-card-ask';
   ask.style.display = 'none';
   info.appendChild(ask);
-  card.appendChild(info);
-  try { if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+  book.appendChild(info);
+  card.appendChild(book);
+  if (typeof document.addEventListener === 'function') { document.removeEventListener('keydown', bookshelfCardKey); document.addEventListener('keydown', bookshelfCardKey); }
 }
 function bshelfLayoutName(a) {
   a = String(a || '');
@@ -12628,6 +12697,7 @@ function bookshelfBringBack(b, choice) {
 // version has settled and the layout settings the server just restored have arrived, so Load Last
 // Optimized File asks for the right book. If that takes too long it says what to press instead.
 function bookshelfOpenBook(b, r) {
+  try { bookshelfCloseCard(); } catch (e) {}   // v3.0.986 -- the open book closes as the campaign opens
   var target = { campaignId: String(b.campaignId), versionId: (r && r.versionId) ? String(r.versionId) : null, arrange: (r && r.arrange) || b.arrange || '', at: Date.now(), nudged: false };
   state._shelfOpen = target;
   function have() { return (state.campaigns || []).filter(function (c) { return String(c.id) === target.campaignId; })[0]; }

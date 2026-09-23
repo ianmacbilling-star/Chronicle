@@ -1199,66 +1199,88 @@
       </div>
       <div id="mystuff-panel-shelf" style="display:none;">
         <div id="bookshelf-section" class="settings-section">
-          <div class="settings-section-title">Bookshelf</div>
+          <!-- v3.0.986 -- the count on the title line (Ian); paintBookshelf fills #bookshelf-count. -->
+          <div class="settings-section-title" style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;"><span>Bookshelf</span><span id="bookshelf-count" style="font-size:13px;color:#c9a84c;font-weight:600;"></span></div>
           <!-- v3.0.982 -- TD-901. The shelves. v3.0.985 -- one dark walnut bookcase (Ian's picture):
                campaigns share the shelves, each series' first book faces out, the rest are spines.
-               The boards are painted by .bcase-inner's background every 230px (208px row + 22px
-               board), and every book sits in a 208px .bslot, so each row lands on a board. -->
+               v3.0.986 -- bigger: each row is 250px and each board 22px, so a board is painted every
+               272px from the same 14px start the first row uses, and every book stands in a 250px
+               .bslot, so each row lands on a board. The Library shelf is its own .bcase-inner at
+               the bottom. Clicking a book opens it on top of the case as an open book (.bopen). -->
           <style>
-            .bcase { position:relative; margin-top:14px; max-width:1000px; padding:0 22px; background:#1d0f07; border-radius:3px;
+            .bcase { position:relative; margin-top:10px; max-width:1180px; padding:0 22px; background:#1d0f07; border-radius:3px;
               box-shadow:0 16px 34px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.04) inset; }
             .bcase::before, .bcase::after { content:''; position:absolute; top:0; bottom:0; width:22px; z-index:1;
               background:repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 2px, rgba(255,255,255,0.03) 2px 5px),
                          linear-gradient(90deg, #321a0a 0%, #6a3e1c 35%, #7d4c24 50%, #573115 70%, #2a150a 100%); }
             .bcase::before { left:0; box-shadow:4px 0 8px rgba(0,0,0,0.55); }
             .bcase::after { right:0; box-shadow:-4px 0 8px rgba(0,0,0,0.55); }
-            .bcase-crown { position:relative; z-index:2; height:34px; margin:0 -30px; border-radius:3px 3px 0 0;
+            .bcase-crown { position:relative; z-index:2; height:36px; margin:0 -30px; border-radius:3px 3px 0 0;
               background:linear-gradient(to bottom, #8d5a2c 0%, #6a3e1c 22%, #45260f 45%, #7a4c24 58%, #573115 72%, #2e170a 100%);
               box-shadow:0 6px 10px rgba(0,0,0,0.6); border-bottom:2px solid #140a04; }
-            .bcase-inner { display:flex; flex-wrap:wrap; align-items:flex-end; align-content:flex-start; gap:22px 5px;
-              min-height:474px; padding:14px 16px 22px; box-sizing:border-box;
+            .bcase-inner { display:flex; flex-wrap:wrap; align-items:flex-end; align-content:flex-start; gap:22px 6px;
+              min-height:558px; padding:14px 18px 22px; box-sizing:border-box;
               background:
-                repeating-linear-gradient(to bottom, rgba(0,0,0,0.55) 0, rgba(0,0,0,0) 20px, rgba(0,0,0,0) 206px, rgba(0,0,0,0.35) 208px,
-                  #94602f 208px, #74461f 210px, #5a3417 222px, #3a200d 228px, #170b04 230px),
+                repeating-linear-gradient(to bottom, rgba(0,0,0,0.55) 0, rgba(0,0,0,0) 20px, rgba(0,0,0,0) 248px, rgba(0,0,0,0.35) 250px,
+                  #94602f 250px, #74461f 252px, #5a3417 264px, #3a200d 270px, #170b04 272px),
                 repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 118px, rgba(0,0,0,0.35) 118px 120px, rgba(255,255,255,0.025) 120px 122px),
                 linear-gradient(to bottom, #36190b, #2a1308 60%, #1f0e06);
               background-position:0 14px, 0 0, 0 0; background-repeat:repeat-y, repeat, no-repeat; }
-            .bcase-base { position:relative; z-index:2; height:30px; margin:0 -30px; border-radius:0 0 3px 3px;
+            .bcase-inner.bcase-one, .bcase-inner.bcase-lib { min-height:286px; }
+            .bcase-base { position:relative; z-index:2; height:32px; margin:0 -30px; border-radius:0 0 3px 3px;
               background:linear-gradient(to bottom, #170b04 0%, #7a4c24 8%, #573115 45%, #321a0a 100%); box-shadow:0 8px 12px rgba(0,0,0,0.6); }
-            .bslot { position:relative; height:208px; display:flex; align-items:flex-end; flex:0 0 auto; }
+            .bslot { position:relative; height:250px; display:flex; align-items:flex-end; flex:0 0 auto; }
             .bookshelf-book { transition:transform .15s ease; cursor:pointer; }
             .bookshelf-book:hover, .bookshelf-book:focus-visible { transform:translateY(-8px); outline:none; }
             .bookshelf-book.sel { transform:translateY(-8px); box-shadow:0 0 0 2px #c9a84c, 4px 6px 10px rgba(0,0,0,0.6); }
-            .bface { position:relative; width:122px; height:158px; padding:0; border:none; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 6px;
-              background:#3a2010; box-shadow:4px 5px 10px rgba(0,0,0,0.65); }
+            .bface { position:relative; width:180px; height:233px; padding:0; border:none; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 8px;
+              background:#3a2010; box-shadow:5px 6px 12px rgba(0,0,0,0.7); }
             .bface img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
-            .bface::after { content:''; position:absolute; top:0; bottom:0; left:0; width:9px; z-index:1;
+            .bface::after { content:''; position:absolute; top:0; bottom:0; left:0; width:10px; z-index:1;
               background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.18) 55%, rgba(0,0,0,0.15)); }
-            .bface-t { position:absolute; inset:10px 8px 10px 14px; display:flex; align-items:center; justify-content:center; text-align:center;
-              color:#e8cf7a; font-family:var(--font-display); font-size:13px; line-height:1.25; }
-            .bplaque { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); max-width:124px; z-index:3; padding:1px 8px;
-              font-family:var(--font-display); font-size:9px; letter-spacing:0.04em; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            .bface-t { position:absolute; inset:12px 10px 12px 16px; display:flex; align-items:center; justify-content:center; text-align:center;
+              color:#e8cf7a; font-family:var(--font-display); font-size:15px; line-height:1.25; }
+            .bplaque { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); max-width:180px; z-index:3; padding:1px 9px;
+              font-family:var(--font-display); font-size:10px; letter-spacing:0.04em; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
               background:linear-gradient(to bottom, #f0d88a, #c9a84c 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
             .bspine { position:relative; flex:0 0 auto; padding:0; border:none; overflow:hidden; border-radius:2px 2px 1px 1px;
               background-image:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.22) 78%, rgba(0,0,0,0.55));
               box-shadow:2px 0 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
             .bspine::before, .bspine::after { content:''; position:absolute; left:0; right:0; height:5px; z-index:1;
               border-top:1px solid rgba(222,190,100,0.9); border-bottom:1px solid rgba(222,190,100,0.9); }
-            .bspine::before { top:12px; } .bspine::after { bottom:14px; }
-            .bspine-t { position:absolute; inset:26px 0 28px; display:flex; align-items:center; justify-content:center;
+            .bspine::before { top:14px; } .bspine::after { bottom:16px; }
+            .bspine-t { position:absolute; inset:30px 0 32px; display:flex; align-items:center; justify-content:center;
               writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:var(--font-display);
-              font-size:10px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
-            .bspine-ribbon { position:absolute; bottom:-4px; left:50%; width:8px; margin-left:-4px; height:26px; z-index:2; background:#a8322a;
+              font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
+            .bspine-ribbon { position:absolute; bottom:-4px; left:50%; width:8px; margin-left:-4px; height:28px; z-index:2; background:#a8322a;
               clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
-            .bshelf-card { display:flex; flex-wrap:wrap; gap:16px; margin-top:14px; padding:14px; border:1px solid rgba(201,168,76,0.3);
-              border-radius:8px; background:rgba(12,8,4,0.55); }
-            .bshelf-card-cover { width:120px; aspect-ratio:17/22; object-fit:cover; border-radius:3px; flex:0 0 auto; background:#160e06; }
-            .bshelf-card-info { flex:1 1 220px; min-width:0; }
-            .bshelf-card-title { color:var(--gold); font-family:var(--font-display); font-size:16px; margin-bottom:6px; }
-            .bshelf-card-meta { font-size:12px; color:rgba(240,232,208,0.7); margin-bottom:3px; }
-            .bshelf-card-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-            .bshelf-card-ask { margin-top:12px; padding-top:10px; border-top:1px solid rgba(201,168,76,0.2); }
-            @media (max-width:520px) { .bcase { padding:0 12px; } .bcase::before, .bcase::after { width:12px; } .bcase-crown, .bcase-base { margin:0 -16px; } .bcase-inner { padding:14px 8px 22px; } }
+            /* The open book. Below the app's own dialogs (z-index 100), so Remove can still ask first. */
+            .bopen-overlay { position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:20px;
+              background:rgba(8,4,2,0.72); }
+            .bopen { position:relative; display:flex; align-items:stretch; width:min(900px, 94vw); min-height:440px; max-height:90vh; padding:12px;
+              background:linear-gradient(to bottom, #4a2612, #2e170a); border-radius:6px; box-shadow:0 24px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(201,168,76,0.25); }
+            .bopen-page { position:relative; flex:1 1 0; min-width:0; overflow:auto; padding:26px 28px;
+              background:linear-gradient(to bottom, #f5e9cc, #ead8b0); color:#3a2210; }
+            .bopen-left { display:flex; align-items:center; justify-content:center; border-radius:3px 0 0 3px;
+              box-shadow:inset -18px 0 22px -12px rgba(60,35,10,0.45); }
+            .bopen-right { border-radius:0 3px 3px 0; box-shadow:inset 18px 0 22px -12px rgba(60,35,10,0.45); }
+            .bopen-gutter { flex:0 0 14px; background:linear-gradient(90deg, #d8c290, #9c8050 45%, #7a6038 50%, #9c8050 55%, #d8c290); }
+            .bopen-cover { max-width:100%; max-height:calc(90vh - 90px); width:auto; height:auto; aspect-ratio:auto; object-fit:contain; border-radius:2px;
+              box-shadow:4px 6px 14px rgba(40,20,5,0.55); position:relative; z-index:1; background:transparent; }
+            .bopen-cover-ph { position:absolute; inset:26px 28px; display:flex; align-items:center; justify-content:center; text-align:center; padding:16px;
+              color:#e8cf7a; font-family:var(--font-display); font-size:18px; border-radius:2px; }
+            .bopen .bshelf-card-title { color:#3a2210; font-family:var(--font-display); font-size:22px; margin:6px 0 12px; line-height:1.2; }
+            .bopen .bshelf-card-meta { font-size:13px; color:#5a4228; margin-bottom:5px; }
+            .bopen .bshelf-card-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+            .bopen .bshelf-card-ask { margin-top:16px; padding-top:12px; border-top:1px solid rgba(90,66,40,0.3); }
+            .bopen-x { position:absolute; top:-14px; right:-14px; z-index:3; width:32px; height:32px; border-radius:50%; border:1px solid #c9a84c;
+              background:#2e170a; color:#e8cf7a; font-size:20px; line-height:28px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
+            @media (max-width:640px) {
+              .bcase { padding:0 12px; } .bcase::before, .bcase::after { width:12px; } .bcase-crown, .bcase-base { margin:0 -16px; } .bcase-inner { padding:14px 8px 22px; }
+              .bopen { flex-direction:column; overflow-y:auto; } .bopen-gutter { display:none; }
+              .bopen-page { flex:0 0 auto; overflow:visible; padding:18px; } .bopen-left { min-height:0; } .bopen-cover { max-height:50vh; }
+              .bopen-cover-ph { inset:18px; } .bopen-x { top:4px; right:4px; }
+            }
           </style>
           <div id="bookshelf-body" style="margin-top:10px;"></div>
         </div>

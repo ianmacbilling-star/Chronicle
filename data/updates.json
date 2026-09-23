@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.986",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "986-bookcase-open-book",
+        "kind": "change",
+        "public": true,
+        "summary": "The Bookshelf is bigger, the facing books show their real printed cover, Library books have their own bottom shelf, and a book you click opens on top of the shelf as an open book.",
+        "detail": "TD-901. Ian's notes on the first bookcase. The book count now sits on the Bookshelf title line, and the case is wider with taller shelves, so the books stand nearly to the top of each shelf. A campaign's facing book now shows the book's actual first page, the cover exactly as printed with its title, drawn once from the saved book the first time it is shown (the campaign picture shows while that is not available). Library books stand on their own shelf at the bottom, and a different one of them may face out each time you open the tab. Clicking any book opens it on top of the bookcase as an open book: its cover on the left page, its details and View, Download, Bring back to Publish and Remove on the right. Close it with the X, by clicking outside it, or with Escape. TO TEST: open My Stuff, Bookshelf. The count is on the title line. The facing books show their printed covers with titles (the first time can take a few seconds per book). Library books are on the bottom shelf; reopen the tab a few times and the facing one changes when there are several. Click a cover and a spine: the open book appears over the shelf; every button works; Remove asks first, over the open book; Bring back closes it and opens the campaign. On a phone the open book stacks the cover above the details.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.985",
     "staged_on": "2026-09-23",
     "entries": [
