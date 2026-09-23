@@ -199,8 +199,8 @@ async function serveStoryPage(req, res) {
                   '<line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line>' +
                   '<line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line>' +
                 '</svg>Share</button>' +
-              // v3.0.982 -- TD-901. ADD TO BOOKSHELF, for a signed-in Gold or Platinum reader who is not the
-              // author. Hidden until /api/bookshelf/library-status says so; a signed-out visitor gets a 401
+              // v3.0.982 -- TD-901. ADD TO BOOKSHELF, for a signed-in Gold or Platinum reader (v3.0.988: the
+              // author too -- Ian wants their own stories on their shelf). Hidden until /api/bookshelf/library-status says so; a signed-out visitor gets a 401
               // there and never sees it. The shelf holds a POINTER to this page, never a copy of the book.
               '<button type="button" id="cmpShelf" data-story="' + esc(String(row.id)) + '" data-token="' + esc(shareToken || '') + '" style="display:none;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;">Add to Bookshelf</button>' +
               '<span id="cmpShareMsg" style="font-size:12px;color:rgba(240,232,208,0.75);" role="status" aria-live="polite"></span>' +
@@ -212,7 +212,7 @@ async function serveStoryPage(req, res) {
       '<script>(function(){var b=document.getElementById("cmpShelf");if(!b)return;var id=b.getAttribute("data-story"),tk=b.getAttribute("data-token")||"";'+
       'function on(){b.textContent="On your Bookshelf";b.disabled=true;b.style.cursor="default";b.style.opacity="0.75";}'+
       'function off(){b.disabled=false;b.textContent="Add to Bookshelf";}'+
-      'fetch("/api/bookshelf/library-status/"+encodeURIComponent(id)+"?t="+encodeURIComponent(tk),{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null;}).then(function(s){if(!s||!s.found||s.own||!s.canAdd)return;b.style.display="inline-flex";if(s.onShelf)on();}).catch(function(){});'+
+      'fetch("/api/bookshelf/library-status/"+encodeURIComponent(id)+"?t="+encodeURIComponent(tk),{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null;}).then(function(s){if(!s||!s.found||!s.canAdd)return;b.style.display="inline-flex";if(s.onShelf)on();}).catch(function(){});'+
       'b.addEventListener("click",function(){if(b.disabled)return;b.disabled=true;b.textContent="Adding...";'+
       'fetch("/api/bookshelf/library",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({storyId:Number(id),token:tk})})'+
       '.then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j||{}};},function(){return{ok:r.ok,j:{}};});})'+

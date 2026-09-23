@@ -349,6 +349,9 @@ function makeHandlers(d) {
   // v3.0.982 -- LIBRARY POINTERS. Ian: "if they aren't your books they are only pointers to the
   // public library page", and they do not count toward the limit. A link-only story can be added
   // only by someone holding its link (the token), which is the same rule the page itself keeps.
+  // v3.0.988 -- AND YOUR OWN STORIES TOO. Ian: "allow someone to add their own stories from the
+  // library to their shelf. That might be how people want to do it. And then it's quick access to the
+  // library to find it." `own` is still reported by the status routes; nothing refuses on it.
   async function libraryStory(db, storyId, token) {
     var st = await db.prepare('SELECT id, user_id, title, author_name, cover_url, slug, share_token, visibility FROM public_stories WHERE id = ? AND public = TRUE').get(Number(storyId) || 0);
     if (!st) return null;
@@ -364,7 +367,6 @@ function makeHandlers(d) {
       var b = req.body || {};
       var st = await libraryStory(db, b.storyId, b.token);
       if (!st) return res.status(404).json({ code: 'not_found', error: 'That story is not in the Library.' });
-      if (String(st.user_id) === String(uid)) return res.status(409).json({ code: 'own_story', error: 'This is your own story. It is on the Published Stories tab of My Stuff.' });
       var dup = await db.prepare("SELECT id FROM bookshelf_books WHERE user_id = ? AND kind = 'library' AND public_story_id = ?").get(uid, st.id);
       if (dup) return res.status(409).json({ code: 'already_shelved', id: dup.id, error: 'This story is already on your Bookshelf.' });
       var ins = await db.prepare(

@@ -111,7 +111,7 @@
     .author-name { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--gold); border-bottom:1px solid rgba(201,168,76,0.25); padding-bottom:6px; margin-bottom:14px; letter-spacing:1px; }
     .author-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
     .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
-    /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in, not the author). */
+    /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     .story-card { position:relative; }
     .sc-shelf { position:absolute; top:6px; right:6px; z-index:2; font-family:'Crimson Text',serif; font-size:11px; font-weight:700; letter-spacing:0.02em;
       color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:10px; padding:2px 9px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
@@ -742,7 +742,7 @@ function cmpShelfDecorate(cards) {
       cards.forEach(function (c) {
         var id = c.getAttribute('data-story');
         var it = items[id];
-        if (!it || it.own) return;
+        if (!it) return;   // v3.0.988 -- your own stories get the button too (Ian)
         cmpShelfButton(c, id, !!it.onShelf);
       });
     })

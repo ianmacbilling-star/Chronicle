@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.988",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "988-own-library-stories-on-shelf",
+        "kind": "change",
+        "public": true,
+        "summary": "You can now add your own published stories from the Library to your Bookshelf, for quick access back to them.",
+        "detail": "TD-901. Until now Add to Bookshelf was hidden on your own stories in the Library and the server refused them. Ian: \"allow someone to add their own stories from the library to their shelf. That might be how people want to do it. And then it's quick access to the library to find it.\" The button now appears on your own story's Library page and on your own story cards, and the story stands on the From the Library shelf like any other, opening its Library page. Like every Library book it does not count toward your 10 or 50. TO TEST: as Gold, open one of your own stories in the Library: Add to Bookshelf appears; add it. On the Library's Stories tab your own cards show + Bookshelf (or On your shelf). My Stuff, Bookshelf: it stands on the From the Library shelf and opens your story's page.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.987",
     "staged_on": "2026-09-23",
     "entries": [
