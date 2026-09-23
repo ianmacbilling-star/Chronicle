@@ -23996,6 +23996,29 @@ function reorderNoteInReview(R, quote) {
   sum.insertAdjacentHTML('beforeend', html);
 }
 
+// v3.0.978 -- TD-899. THE ORDER NAME BELONGS TO ONE BOOK.
+// Bots, 2026-09-23: an Order name typed for Lily's First Day of School was still in the box after
+// opening The Lamplight Census, and again in Going to the Dentist -- and it would have been saved
+// with whichever book was bought, because printSelectionBody sends it and /order writes it to
+// print_orders.order_name, where it names the order in history and titles the Lulu job when there
+// is no book title. Only resetPrintForm, after a SUCCESSFUL order, ever emptied it.
+// The label says "your label for this order", so it is cleared whenever the Order tab opens on a
+// different book -- another campaign or another version. SHIP TO IS DELIBERATELY KEPT: nobody wants
+// to retype an address for every book. Decided at ONE site, the Order tab's own loader, rather than
+// at every path that can change the book (rules 5c). Two things never clear it: a book that is not
+// known yet (TD-895's unsettled window, where the key would be a guess), and a reorder, which fills
+// the name from the order being repeated.
+var _orderNameBookKey = null;
+function orderClearNameIfOtherBook() {
+  try {
+    if (!state.currentCampaign || state.novelVersionSettled === false) return;
+    if (state._reorder) return;
+    var key = String(state.currentCampaign.id) + ':' + String(state.novelVersionId || state.novelAsUser || '');
+    var el = document.getElementById('print-order-name');
+    if (el && _orderNameBookKey !== null && _orderNameBookKey !== key && el.value) el.value = '';
+    _orderNameBookKey = key;
+  } catch (e) {}
+}
 function loadPrintTab() {
   // The book title is set on the Preview & Export tab and is read-only here.
   // v3.0.575 -- READ THE STORED TITLE FIRST, not the other tab's input box.
@@ -24012,6 +24035,7 @@ function loadPrintTab() {
     if (_v) _pbt.value = _v;
   }
   if (!state.currentCampaign) return;
+  orderClearNameIfOtherBook();   // v3.0.978 -- TD-899
   wirePrintOrderLock();
   showPrintMsg('', null);
   showPrintBtnMsg('', null);

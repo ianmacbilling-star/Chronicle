@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.978",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "978-order-name-per-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Order name no longer follows you to a different book.",
+        "detail": "TD-899. An Order name typed on one campaign’s Order & Publish tab stayed in the box after opening another campaign, and would have been saved with whichever book was actually bought. It is now cleared whenever the Order tab opens on a different book — another campaign, or another version of the same one. Your Ship to details are kept on purpose, so you do not have to retype your address. A reorder still fills in the name of the order it repeats. TO TEST: as Erin, type an Order name and a Ship to on Lily’s First Day of School and Get price; open The Lamplight Census → Publish → Order & Publish: Order name empty, Ship to still filled. Go back to Lily: still empty (it was left behind, not kept). Type a name, switch versions within one campaign: cleared. Type a name, go to another tab and come back to Order on the same book: kept. Reorder a past book from My Orders: its name is filled in.",
+        "td": [
+          "TD-899"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.977",
     "staged_on": "2026-09-23",
     "entries": [
