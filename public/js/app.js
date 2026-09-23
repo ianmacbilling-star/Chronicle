@@ -26125,7 +26125,9 @@ function renderOrders(orders) {
   // v3.0.665 -- TD-464. The Reorder button needs the ROW, not the card. Kept here so the button
   // does not have to re-fetch, and so it reads exactly what was rendered.
   state._orders = orders;
-  list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
+  // v3.0.992 -- at most THREE across (Ian), never narrower than 300px: on a wide screen each card
+  // takes a third of the row, and a narrow one drops to two, then one.
+  list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(300px, calc((100% - 24px) / 3)),1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
 }
 
 // v3.0.788 -- TD-589. ONE LABEL MAP FOR THE INTERIOR TIER.
@@ -26184,7 +26186,10 @@ function orderCardHtml(o) {
   // v3.0.989 -- the front of the cover that went to the printer, drawn by /api/order-covers (Ian). A
   // picture that cannot be drawn simply goes, and the card is as it was.
   var _coverThumb = !!o.cover_pdf_url;
-  if (_coverThumb) html += '<div style="display:flex;gap:12px;align-items:flex-start;"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="flex:0 0 auto;width:72px;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:#2a1a0c;"><div style="flex:1;min-width:0;">';
+  // v3.0.992 -- Ian: the cover about the width of a button, and Check with the printer / Reorder
+  // UNDER it, so the card is wider and shorter. The buttons move into the cover's column; with no
+  // cover they stay under the details, as they always were.
+  if (_coverThumb) html += '<div class="ord-with-thumb" style="display:flex;gap:14px;align-items:flex-start;"><div class="ord-thumb-col"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="display:block;width:100%;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:#2a1a0c;">' + checkBtn + reorderBtn + deleteBtn + '</div><div style="flex:1;min-width:0;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
   html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
@@ -26208,9 +26213,11 @@ function orderCardHtml(o) {
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   // v3.0.786 -- TD-587. Before Reorder, deliberately: on an unconfirmed order, checking is the
   // safe act and reordering is the one that can produce a second book.
-  if (checkBtn) html += checkBtn;
-  if (reorderBtn) html += reorderBtn;
-  if (deleteBtn) html += deleteBtn;
+  if (!_coverThumb) {   // v3.0.992 -- with a cover, the buttons are already under it
+    if (checkBtn) html += checkBtn;
+    if (reorderBtn) html += reorderBtn;
+    if (deleteBtn) html += deleteBtn;
+  }
   if (_coverThumb) html += '</div></div>';   // v3.0.989
   html += '</div>';
   return html;

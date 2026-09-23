@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.992",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "992-my-orders-three-across",
+        "kind": "change",
+        "public": true,
+        "summary": "My Orders shows three orders across instead of four, with a bigger cover and the order's buttons beneath it, so each card is wider and shorter.",
+        "detail": "Ian: three across, the Check with the printer and Reorder buttons under the thumbnail, and the thumbnail a little bigger, about the width of a button. On My Orders the cards now sit at most three to a row (fewer on a narrow screen). An order with a cover shows it at about button width at the left, with its buttons stacked under it; the details take the rest of the card, so lines wrap far less. An order with no cover keeps its buttons under the details, as before. TO TEST: My Stuff, My Orders on a wide screen: three cards per row; each cover about 140px wide with Check with the printer, Reorder this book (and Delete on an unpaid order) stacked beneath it at the same width; the Format and Tracking lines fit on one line. Narrow the window: two, then one per row. Every button still works.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.991",
     "staged_on": "2026-09-23",
     "entries": [

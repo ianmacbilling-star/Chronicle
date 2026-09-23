@@ -1224,7 +1224,7 @@
               background:rgba(12,7,3,0.78); border:1px solid rgba(201,168,76,0.3); color:#e8cf7a; }
             .bshelf-head #bookshelf-count { font-size:13px; color:#e8cf7a; font-weight:600; }
             #bookshelf-body > .settings-section-desc { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
-            #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }
+            #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }   /* 8px keeps the overhanging top and base inside the page */
             /* v3.0.990 -- MY ORDERS, DARK. Ian: "Reverse the style sheet... change the panels from white to
                our dark color and our text from black to our lighter golds." Every colour on an order
                card comes from the site's variables (orderCardHtml writes var(--surface), var(--text) and
@@ -1239,7 +1239,12 @@
               --crimson: #e8cf7a;
               --shadow: 0 6px 16px rgba(0,0,0,0.45);
             }
-            #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }   /* 8px keeps the overhanging top and base inside the page */
+            #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            /* v3.0.992 -- the cover column on an order card: the picture, then the order's buttons at the
+               same width (their inline margins were for sitting in a row under the details). */
+            .ord-thumb-col { flex:0 0 140px; width:140px; display:flex; flex-direction:column; gap:6px; }
+            .ord-thumb-col .btn { width:100%; margin:0 !important; justify-content:center; }
+            .ord-thumb-col .ord-cover-thumb + .btn { margin-top:4px !important; }
             .bcase { position:relative; margin-top:10px; max-width:1180px; padding:0 22px; background:#1d0f07; border-radius:3px;
               box-shadow:0 16px 34px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.04) inset; }
             .bcase::before, .bcase::after { content:''; position:absolute; top:0; bottom:0; width:22px; z-index:1;
