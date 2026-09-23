@@ -93,7 +93,7 @@
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">My Account</div>
-        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Orders</div>
+        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
         <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
@@ -753,7 +753,7 @@
             <div class="ord-col ord-col-side">
               <section class="ord-card" id="ord-card-publish" style="margin-bottom:0;">
             <div class="ord-card-title">Publish to the Library</div>
-            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
+            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from My Stuff.</div>
             <!-- v3.0.495 -- the hint at the foot of this card is now a real link to the
                  My Published Stories section of the Account page (goToMyStories). Two
                  destinations live in this card on purpose and they are different things:
@@ -784,7 +784,7 @@
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
             <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
-            <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">your Account page</a>.</div>
+            <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">My Stuff &rarr; Published Stories</a>.</div>
               </section>
             </div>
           </div>
@@ -1168,11 +1168,14 @@
       </div>
     </div>
 
+    <!-- v3.0.980 -- TD-901. MY STUFF. The view id stays 'orders' (see mystuffShowTab in app.js):
+         this page was My Print Orders, and is now three tabs -- My Orders exactly as it was,
+         the Bookshelf, and My Published Stories moved here from My Account. -->
     <div id="view-orders" class="view" style="display:none;">
       <div class="page-header">
         <div>
-          <div class="page-title">My Print Orders</div>
-          <div class="page-subtitle">Your physical book orders and their status</div>
+          <div class="page-title">My Stuff</div>
+          <div class="page-subtitle">Your print orders, your Bookshelf and your published stories</div>
         </div>
         <!-- v3.0.803 -- TD-613. Ian: a Back button "like we have on the Archive page, to take you
              back wherever you were." Identical markup and the identical handler -- sectionBack()
@@ -1182,8 +1185,31 @@
           <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
         </div>
       </div>
-      <div id="orders-list" style="margin-top:8px;">
-        <div class="settings-section-desc">Loading...</div>
+      <div class="sess-tabs" style="margin-bottom:8px;overflow-x:auto;">
+        <div class="sess-tab active" id="mystuff-tab-orders" onclick="mystuffShowTab('orders')">My Orders</div>
+        <div class="sess-tab" id="mystuff-tab-shelf" onclick="mystuffShowTab('shelf')">Bookshelf</div>
+        <div class="sess-tab" id="mystuff-tab-stories" onclick="mystuffShowTab('stories')">Published Stories</div>
+      </div>
+      <div id="mystuff-panel-orders">
+        <div id="orders-list" style="margin-top:8px;">
+          <div class="settings-section-desc">Loading...</div>
+        </div>
+      </div>
+      <div id="mystuff-panel-shelf" style="display:none;">
+        <div id="bookshelf-section" class="settings-section">
+          <div class="settings-section-title">Bookshelf</div>
+          <div id="bookshelf-body" style="margin-top:10px;"></div>
+        </div>
+      </div>
+      <div id="mystuff-panel-stories" style="display:none;">
+      <!-- My Published Stories (Public Library). v3.0.980 -- moved here from My Account, unchanged
+           apart from the empty-state line, which still named the retired Preview & Export tab (TD-876). -->
+      <div id="my-stories-section" class="settings-section">
+        <div class="settings-section-title">My Published Stories</div>
+        <div class="settings-section-desc">Books you have shared to the public Library. Remove any you no longer want public &mdash; this is the place to manage them, since you may not always have access to the original campaign. (Shared images are managed from each campaign&#39;s Archive.)</div>
+        <div id="my-stories-list" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
+        <div id="my-stories-empty" class="settings-section-desc" style="display:none;margin-top:8px;">You have not published any stories yet. Open a campaign&#39;s book, go to Order &amp; Publish, and choose Publish to Library.</div>
+      </div>
       </div>
     </div>
 
@@ -1320,13 +1346,7 @@
         <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Show guided tours again</button>
       </div>
 
-      <!-- My Published Stories (Public Library) -->
-      <div id="my-stories-section" class="settings-section">
-        <div class="settings-section-title">My Published Stories</div>
-        <div class="settings-section-desc">Books you have shared to the public Library. Remove any you no longer want public &mdash; this is the place to manage them, since you may not always have access to the original campaign. (Shared images are managed from each campaign&#39;s Archive.)</div>
-        <div id="my-stories-list" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
-        <div id="my-stories-empty" class="settings-section-desc" style="display:none;margin-top:8px;">You have not published any stories yet. Open a campaign, go to Preview &amp; Export, and choose Publish to Library.</div>
-      </div>
+      <!-- v3.0.980 -- TD-901. My Published Stories moved to its own tab on My Stuff. -->
 
       <!-- Legal links -->
       <div style="margin-top:18px;text-align:center;font-size:12px;color:rgba(240,232,208,0.6);">

@@ -1318,7 +1318,7 @@ function uiPublishPrompt(message, opts) {
     var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'Publish';
     row.appendChild(cancel); row.appendChild(ok);
     var hint = document.createElement('div');
-    hint.textContent = 'You can manage your published content on your Account page.';
+    hint.textContent = 'You can manage your published content under My Stuff.';
     hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
     var attestWrap = document.createElement('label');
     attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbb994;line-height:1.4;margin:0 0 14px;cursor:pointer;';
@@ -2122,7 +2122,7 @@ function removeMyStory(storyId, card, btn) {
     .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } billingToast('Could not remove.', 'error'); });
 }
 function loadAccount() {
-  if (typeof loadMyStories === 'function') loadMyStories();
+  // v3.0.980 -- TD-901. My Published Stories is no longer on this page; it loads with its tab on My Stuff.
   // Profile fields moved here from Settings — populate name/email from state.
   var _pn = document.getElementById('settings-name');
   if (_pn) _pn.value = (state.user && state.user.name) || '';
@@ -2976,9 +2976,9 @@ function showView(view) {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
       {label:'My Campaigns', action:"showView('campaigns')"},
-      {label:'My Print Orders'}
+      {label:'My Stuff'}
     ]);
-    loadOrders();
+    mystuffOpen();   // v3.0.980 -- TD-901: loadOrders runs from here when the My Orders tab is the one open
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
@@ -12245,21 +12245,82 @@ function novelPublishShowLibraryCta(storyUrl) {
 }
 
 // v3.0.495 -- "on your Account page" is where you go to unpublish or edit a listing, so
-// make it somewhere you can actually GO. Mirrors goToPlans, including its settle-scroll:
-// the account view fills several panels in asynchronously, so one fixed delay can scroll
-// before the layout settles and land short.
+// make it somewhere you can actually GO.
+// v3.0.980 -- TD-901. AND IT IS NO LONGER ON THE ACCOUNT PAGE. My Published Stories moved to its
+// own tab on My Stuff, so this opens My Stuff on that tab. No settle-scroll any more: the tab is
+// the whole page, there is nothing above it to wait for.
 function goToMyStories() {
-  if (typeof showView === 'function') showView('account');
-  var tries = 0;
-  function settleScrollToStories() {
-    var sec = document.getElementById('my-stories-section');
-    if (sec && sec.scrollIntoView) {
-      sec.scrollIntoView({ behavior: (tries === 0 ? 'smooth' : 'auto'), block: 'start' });
-    }
-    if (++tries < 5) setTimeout(settleScrollToStories, 220);
-  }
-  setTimeout(settleScrollToStories, 120);
+  state.mystuffTab = 'stories';
+  if (typeof showView === 'function') showView('orders');
   return false;
+}
+
+// ============================================================================
+// v3.0.980 -- TD-901, Bookshelf release 1 of 3. MY STUFF.
+//
+// Ian, 2026-09-23: the My Orders menu becomes My Stuff, a page with three tabs -- My Orders (the
+// screen that was there, unchanged), Bookshelf (new) and Published Stories (moved here from My
+// Account). Spec: claude/BOOKSHELF_SPEC.md.
+//
+// THE VIEW ID STAYS 'orders'. It sits in five routing lists (showView twice, _navRestore, and the
+// two hide-everything lists), and the admin Orders tab is a different thing entirely. Only the
+// label and the page changed, so none of those lists had to move.
+//
+// The last tab opened is remembered for this page load, so the Back button and the browser's Back
+// return to it. goToMyStories sets it to 'stories' before opening the page.
+//
+// Release 1 has no shelf data yet. The Bookshelf tab shows its empty state, and Silver, Copper and
+// Free Trial see the upgrade nudge Ian asked for. v3.0.981 adds saving, and from then the server's
+// GET /api/bookshelf answers the limit; BOOKSHELF_LIMITS below is only the first paint.
+// ============================================================================
+var MYSTUFF_TABS = ['orders', 'shelf', 'stories'];
+var BOOKSHELF_LIMITS = { gold: 10, platinum: 50 };
+function bookshelfLimitFor(tier) {
+  return Object.prototype.hasOwnProperty.call(BOOKSHELF_LIMITS, tier) ? BOOKSHELF_LIMITS[tier] : 0;
+}
+function mystuffOpen() {
+  mystuffShowTab(MYSTUFF_TABS.indexOf(state.mystuffTab) !== -1 ? state.mystuffTab : 'orders');
+}
+function mystuffShowTab(tab) {
+  if (MYSTUFF_TABS.indexOf(tab) === -1) tab = 'orders';
+  state.mystuffTab = tab;
+  MYSTUFF_TABS.forEach(function (t) {
+    var b = document.getElementById('mystuff-tab-' + t);
+    if (b) b.classList.toggle('active', t === tab);
+    var p = document.getElementById('mystuff-panel-' + t);
+    if (p) p.style.display = (t === tab) ? '' : 'none';
+  });
+  if (tab === 'orders') { if (typeof loadOrders === 'function') loadOrders(); }
+  else if (tab === 'stories') { if (typeof loadMyStories === 'function') loadMyStories(); }
+  else renderBookshelfTab();
+}
+function renderBookshelfTab() {
+  var body = document.getElementById('bookshelf-body');
+  if (!body) return;
+  var tier = (state.user && state.user.tier) || '';
+  var limit = bookshelfLimitFor(tier);
+  body.innerHTML = '';
+  function line(id, text, css) {
+    var d = document.createElement('div');
+    d.id = id; d.className = 'settings-section-desc'; d.textContent = text;
+    if (css) d.style.cssText = css;
+    body.appendChild(d);
+    return d;
+  }
+  if (!limit) {
+    line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
+      'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
+    var up = document.createElement('button');
+    up.id = 'bookshelf-upgrade-btn'; up.className = 'btn btn-primary btn-sm'; up.style.marginTop = '12px';
+    up.textContent = 'See the plans';
+    up.onclick = function () { if (typeof goToPlans === 'function') goToPlans(); };
+    body.appendChild(up);
+    return;
+  }
+  line('bookshelf-count', '0 of ' + limit + ' books', 'color:#c9a84c;font-weight:600;');
+  line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
+    'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it.', 'margin-top:8px;');
+  line('bookshelf-soon', 'Saving to the shelf arrives in the next update.', 'margin-top:8px;font-style:italic;');
 }
 
 function refreshStoryStatus() {
@@ -12270,7 +12331,7 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries on your Account page.'; } })
+    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
     .catch(function(){});
 }
 
@@ -16030,9 +16091,9 @@ function showView(view) {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
       {label:'My Campaigns', action:"showView('campaigns')"},
-      {label:'My Print Orders'}
+      {label:'My Stuff'}
     ]);
-    loadOrders();
+    mystuffOpen();   // v3.0.980 -- TD-901: loadOrders runs from here when the My Orders tab is the one open
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';

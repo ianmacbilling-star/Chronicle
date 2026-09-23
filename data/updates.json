@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.980",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "980-my-stuff",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Orders is now My Stuff: your print orders, a new Bookshelf, and your published stories, each on its own tab.",
+        "detail": "TD-901, Bookshelf release 1 of 3. The My Orders menu item is now My Stuff, a page with three tabs. My Orders is the orders screen exactly as it was. Published Stories is the list that used to sit at the bottom of My Account, moved here, and the links that pointed to it (the Publish to Library card and the publish dialog) now say My Stuff. Bookshelf is new: on Gold and Platinum it shows how many books your shelf holds (10 and 50) and is empty for now, because saving to it arrives in the next update; on Silver, Copper and the Free Trial it explains the Bookshelf and offers See the plans. TO TEST: open the menu, choose My Stuff; My Orders shows your orders as before. Click Bookshelf as a Gold or Platinum account (0 of 10 or 0 of 50) and as a Silver or Copper account (the upgrade note, and See the plans lands on the plans). Click Published Stories: your published books, with Remove still working. On a book's Order & Publish tab, the link under Publish to Library opens My Stuff on Published Stories. My Account no longer shows the published stories list. Back returns to where you came from.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.979",
     "staged_on": "2026-09-23",
     "entries": [
