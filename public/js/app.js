@@ -26181,6 +26181,10 @@ function orderCardHtml(o) {
     : '';
   var html = '';
   html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
+  // v3.0.989 -- the front of the cover that went to the printer, drawn by /api/order-covers (Ian). A
+  // picture that cannot be drawn simply goes, and the card is as it was.
+  var _coverThumb = !!o.cover_pdf_url;
+  if (_coverThumb) html += '<div style="display:flex;gap:12px;align-items:flex-start;"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="flex:0 0 auto;width:72px;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:#2a1a0c;"><div style="flex:1;min-width:0;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
   html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
@@ -26207,6 +26211,7 @@ function orderCardHtml(o) {
   if (checkBtn) html += checkBtn;
   if (reorderBtn) html += reorderBtn;
   if (deleteBtn) html += deleteBtn;
+  if (_coverThumb) html += '</div></div>';   // v3.0.989
   html += '</div>';
   return html;
 }

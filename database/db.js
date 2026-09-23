@@ -2010,6 +2010,17 @@ async function migrateBookshelf(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_bookshelf_user ON bookshelf_books(user_id, created_at DESC)');
   // v3.0.986 -- the book's first page as a picture, drawn on first view (routes/bookshelf.js cover()).
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS thumb_url TEXT');
+  // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
+  // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
+  // into anything that touches an order.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS order_cover_thumbs (
+      order_id INTEGER PRIMARY KEY,
+      user_id INTEGER,
+      thumb_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

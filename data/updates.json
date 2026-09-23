@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.989",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "989-order-cover-thumbnails",
+        "kind": "feature",
+        "public": true,
+        "summary": "Each order on My Orders now shows a small picture of its front cover, taken from the exact cover file that went to the printer.",
+        "detail": "TD-901 follow-on. Ian asked for covers on the orders like the Bookshelf has. Every order keeps the cover PDF that was sent to the printer, back cover, spine and front on one wide page; the server now draws just the front panel of it, once, the first time the order is shown, and keeps the picture for next time. It appears at the left of each order card. Nothing about the orders themselves changed: the picture is stored on its own, and if one cannot be drawn the card looks exactly as before. TO TEST: open My Stuff, My Orders: each order with a cover shows its front cover at the left (the first visit can take a few seconds per order); it is the front only, no spine or back. Reload: the pictures come straight back. An order with no cover file shows no picture and nothing else changes.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.988",
     "staged_on": "2026-09-23",
     "entries": [
