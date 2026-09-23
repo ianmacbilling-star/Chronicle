@@ -1,5 +1,29 @@
 [
   {
+    "version": "3.0.976",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "976-printer-checks-files",
+        "kind": "feature",
+        "public": true,
+        "summary": "Before you pay for a printed book, the printer now checks your files.",
+        "detail": "TD-602. When you press Prepare Your Order, the print service is now asked to check the interior file as soon as it is built, and the cover file as soon as that is built — two separate checks. The note under the button says what is happening: “Confirming your interior with the printer…”, then “Confirming your cover with the printer…”, counting up in seconds, then “Getting your price…”. IF THE PRINTER SAYS A FILE CANNOT BE PRINTED, the order stops there, before the price and before any payment, and the note shows the printer’s own explanation. IF THE PRINTER DOES NOT ANSWER (about 90 seconds for the interior, 60 for the cover), the order carries on exactly as it did before this release — the printer still checks the files when the order reaches it. Every check is written to the server log as a [file-check] line with the printer’s raw answer. TO TEST on staging: Prepare an order for a normal book and watch the note — both confirming lines should appear and the price should arrive as usual. Then read the [file-check] lines in the Railway log: each should say start, then result ok. If a line says unknown, copy it into the thread — that is the printer’s answer arriving in a shape this code did not expect, and it is the thing to fix next.",
+        "td": [
+          "TD-602"
+        ]
+      },
+      {
+        "id": "976-brain-layouts",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant no longer offers layouts that are not available.",
+        "detail": "It listed Comic and Gazette among the book layouts in two answers. Both are withheld from customers, so it now says Picture Book or Magazine. TO TEST: ask the help assistant how to change the book’s layout — the answer should name Picture Book and Magazine only.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.975",
     "date": "2026-09-22",
     "entries": [

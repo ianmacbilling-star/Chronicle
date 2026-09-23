@@ -24941,6 +24941,73 @@ function printCoverUrl(selOverride) {
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
+// v3.0.976 -- TD-602. ASK THE PRINTER ABOUT EACH FILE BEFORE ANY MONEY MOVES.
+// Right after the interior is built, and again right after the cover is built, the printer is
+// asked whether it can print the file (POST /api/print/file-check, then polled). Four answers:
+//   ok        carry on.
+//   rejected  stop here, before the price, with the printer's own words. Nothing is charged.
+//   pending   ask again in a few seconds, with the status line counting up.
+//   unknown   no usable answer in time. Ian, 2026-09-23: carry on, exactly as before this check
+//             existed -- the printer still checks the files when the order reaches it.
+// A file the printer has passed is remembered for this page, so Preparing again does not re-ask.
+var printFileChecked = {};
+var PRINT_FILE_CHECK_LIMIT_MS = { interior: 90000, cover: 60000 };
+var PRINT_FILE_CHECK_POLL_MS = 3000;
+function checkFileWithPrinter(kind, url, body) {
+  if (!url) return Promise.resolve({ state: 'unknown', reason: 'no-url' });
+  if (printFileChecked[url] === 'ok') return Promise.resolve({ state: 'ok', cached: true });
+  var label = (kind === 'cover') ? 'Confirming your cover with the printer\u2026 ' : 'Confirming your interior with the printer\u2026 ';
+  var started = Date.now();
+  var limit = PRINT_FILE_CHECK_LIMIT_MS[kind] || 60000;
+  function tick() {
+    try { showPrintBtnMsg(label + Math.round((Date.now() - started) / 1000) + 's', 'info'); } catch (e) {}
+  }
+  function readJson(r) {
+    return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: null }; });
+  }
+  function unknown(why) { return { state: 'unknown', reason: why }; }
+  function poll(id) {
+    if (Date.now() - started >= limit) return Promise.resolve(unknown('timeout'));
+    return new Promise(function (resolve) { setTimeout(resolve, PRINT_FILE_CHECK_POLL_MS); })
+      .then(function () {
+        tick();
+        return fetch('/api/print/file-check/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id)).then(readJson);
+      })
+      .then(function (pr) {
+        if (!pr.ok || !pr.j || !pr.j.state) return unknown('poll');
+        if (pr.j.state === 'pending') return poll(id);
+        return pr.j;
+      });
+  }
+  tick();
+  return fetch('/api/print/file-check', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: kind, url: url, selection: body && body.selection, pageCount: body && body.pageCount })
+  })
+    .then(readJson)
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.state) return unknown('start');
+      if (res.j.state === 'pending') return res.j.id ? poll(res.j.id) : unknown('no-id');
+      return res.j;
+    })
+    .catch(function () { return unknown('network'); })
+    .then(function (v) {
+      if (v && v.state === 'ok') printFileChecked[url] = 'ok';
+      if (v && v.state === 'unknown') {
+        try { console.warn('[file-check] ' + kind + ': no answer from the printer (' + v.reason + '), carrying on'); } catch (e) {}
+      }
+      return v;
+    });
+}
+function printerRefusalText(kind, v) {
+  var what = (kind === 'cover') ? 'cover' : 'interior';
+  var msg = 'The printer checked your ' + what + ' file and cannot print it as it is, so we stopped before taking any payment.';
+  if (v && v.errors && v.errors.length) msg += ' The printer said: ' + v.errors.join(' ');
+  else msg += ' The printer did not say what was wrong.';
+  msg += ' Please let us know so we can fix the file.';
+  return msg;
+}
+
 function reviewPrintOrder() {
   // v3.0.665 -- TD-464. A REORDER PRICES THE FILES IT ALREADY HAS. One delegating line rather than a
   // reuse branch threaded through the render, the cover build and the dimension check below: this
@@ -24976,8 +25043,18 @@ function reviewPrintOrder() {
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
-      return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
-        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
+      // v3.0.976 -- TD-602. The printer checks the interior before the cover is built, so a
+      // refusal stops here with nothing charged and no cover render spent. Anything short of an
+      // explicit refusal carries on -- see checkFileWithPrinter.
+      return checkFileWithPrinter('interior', intr.url, body).then(function (v) {
+        if (v && v.state === 'rejected') {
+          preparedInteriorUrl = '';
+          throw new Error(printerRefusalText('interior', v));
+        }
+        printProgress(52);
+        return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
+          try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
+        });
       });
     })
     .then(function (res) {
@@ -25002,8 +25079,18 @@ function reviewPrintOrder() {
         throw new Error('We could not confirm the exact cover size with the printer for this binding, and the spine width has to be right or the book will not line up. Please try again in a few minutes, or choose Comic (saddle stitch), which needs no spine.');
       }
       preparedCoverUrl = res.j.url;
-      return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      // v3.0.976 -- TD-602. Right after the cover is built, the printer is asked about it. A refusal
+      // clears the prepared cover so nothing can be ordered with it, and stops before the price.
+      return checkFileWithPrinter('cover', res.j.url, body).then(function (v) {
+        if (v && v.state === 'rejected') {
+          preparedCoverUrl = '';
+          throw new Error(printerRefusalText('cover', v));
+        }
+        printProgress(80);
+        try { showPrintBtnMsg('Getting your price\u2026', 'info'); } catch (e) {}
+        return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      });
     })
     .then(function (res) {
       if (btn) { btn.disabled = false; btn.textContent = 'Prepare Your Order'; }

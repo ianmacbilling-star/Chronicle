@@ -724,6 +724,41 @@ class LuluProvider extends PrintProvider {
   async getCoverValidation(id) {
     return this._fetch('/validate-cover/' + encodeURIComponent(id) + '/');
   }
+  // v3.0.976 -- TD-602. ASK THE PRINTER ABOUT THE FILES BEFORE ANY MONEY MOVES.
+  //
+  // validateCover sat above with no callers from v3.0.376 until this version, and the interior
+  // check was not written at all. Both are now asked from the Order tab's Prepare step, right
+  // after each file is built -- see /api/print/file-check in routes/print.js. Lulu answers with a
+  // record carrying an id and a status (VALIDATING / NORMALIZING while it works, VALIDATED /
+  // NORMALIZED when the file is good, ERROR with an errors list when it is not) and the caller
+  // polls by id.
+  //
+  // NEITHER REQUEST HAD BEEN SEEN TO SUCCEED AGAINST THE LIVE API WHEN THIS WAS WRITTEN. The route
+  // logs the raw record it gets back, and treats any shape it does not recognise as "no answer" --
+  // which lets the order carry on exactly as it did before this existed. Only an explicit ERROR
+  // stops an order. If a field here turns out to be wrong, the [file-check] server log line will
+  // carry Lulu's own complaint about it: read that before changing anything (see v3.0.429 above).
+  async validateInterior(spec, interiorUrl) {
+    const body = { source_url: interiorUrl };
+    // With a product code Lulu also checks the file against that trim and binding. A code we
+    // cannot build is left off rather than failing the check -- the file itself is still checked.
+    try { body.pod_package_id = this._packageId(spec); } catch (e) { /* checked without it */ }
+    return this._fetch('/validate-interior/', { method: 'POST', body });
+  }
+  async getInteriorValidation(id) {
+    return this._fetch('/validate-interior/' + encodeURIComponent(id) + '/');
+  }
+  // One entry point per step, so the route never branches on which vendor call is which.
+  async startFileCheck(kind, spec, pageCount, url) {
+    if (kind === 'cover') return this.validateCover(spec, pageCount, url);
+    if (kind === 'interior') return this.validateInterior(spec, url);
+    throw new Error('lulu: unknown file check kind: ' + kind);
+  }
+  async getFileCheck(kind, id) {
+    if (kind === 'cover') return this.getCoverValidation(id);
+    if (kind === 'interior') return this.getInteriorValidation(id);
+    throw new Error('lulu: unknown file check kind: ' + kind);
+  }
 
   async createOrder(req) {
     // v3.0.781 -- TD-575. DO NOT ASK LULU WHETHER WE FORGOT THE FILES.
