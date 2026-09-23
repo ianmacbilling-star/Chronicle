@@ -1200,8 +1200,8 @@
       </div>
       <div id="mystuff-panel-shelf" style="display:none;">
         <div id="bookshelf-section" class="settings-section">
-          <!-- v3.0.986 -- the count on the title line (Ian); paintBookshelf fills #bookshelf-count. -->
-          <div class="settings-section-title bshelf-head"><span>Bookshelf</span><span id="bookshelf-count"></span></div>
+          <!-- v3.0.993 -- no title bar (Ian): the tab already says Bookshelf. The count is lettered on
+               the case's base board (.bcase-count, written by paintBookshelf). -->
           <!-- v3.0.982 -- TD-901. The shelves. v3.0.985 -- one dark walnut bookcase (Ian's picture):
                campaigns share the shelves, each series' first book faces out, the rest are spines.
                v3.0.986 -- bigger: each row is 250px and each board 22px, so a board is painted every
@@ -1220,11 +1220,14 @@
             .mystuff-head .page-title { color:#e8cf7a; font-family:var(--font-display); font-size:19px; margin:0; }
             .mystuff-head .page-subtitle { color:rgba(240,232,208,0.85); font-size:13px; margin:0; }
             #bookshelf-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
-            .bshelf-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0; padding:7px 14px; border-radius:6px;
-              background:rgba(12,7,3,0.78); border:1px solid rgba(201,168,76,0.3); color:#e8cf7a; }
-            .bshelf-head #bookshelf-count { font-size:13px; color:#e8cf7a; font-weight:600; }
+            /* v3.0.993 -- the count, lettered in gold on the base board. */
+            .bcase-count { font-size:14px; font-weight:600; letter-spacing:0.06em; color:#e8cf7a; font-family:var(--font-display);
+              text-shadow:0 1px 0 rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.5); white-space:nowrap; }
             #bookshelf-body > .settings-section-desc { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
             #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }   /* 8px keeps the overhanging top and base inside the page */
+            /* v3.0.993 -- Ian: the case "RIGHT UP UNDER the line separating the tab headers". The tabs
+               keep their 6px below the rule on the other panels; the case takes it back here. */
+            #bookshelf-body > .bcase:first-child { margin-top:-6px; }
             /* v3.0.990 -- MY ORDERS, DARK. Ian: "Reverse the style sheet... change the panels from white to
                our dark color and our text from black to our lighter golds." Every colour on an order
                card comes from the site's variables (orderCardHtml writes var(--surface), var(--text) and
@@ -1264,7 +1267,7 @@
                 linear-gradient(to bottom, #36190b, #2a1308 60%, #1f0e06);
               background-position:0 14px, 0 0, 0 0; background-repeat:repeat-y, repeat, no-repeat; }
             .bcase-inner.bcase-one, .bcase-inner.bcase-lib { min-height:286px; }
-            .bcase-base { position:relative; z-index:2; height:32px; margin:0 -30px; border-radius:0 0 3px 3px;
+            .bcase-base { position:relative; z-index:2; height:32px; margin:0 -30px; border-radius:0 0 3px 3px; display:flex; align-items:center; justify-content:center;
               background:linear-gradient(to bottom, #170b04 0%, #7a4c24 8%, #573115 45%, #321a0a 100%); box-shadow:0 8px 12px rgba(0,0,0,0.6); }
             .bslot { position:relative; height:250px; display:flex; align-items:flex-end; flex:0 0 auto; }
             .bookshelf-book { transition:transform .15s ease; cursor:pointer; }
@@ -1319,7 +1322,7 @@
               .bopen-cover-ph { inset:18px; } .bopen-x { top:4px; right:4px; }
             }
           </style>
-          <div id="bookshelf-body" style="margin-top:10px;"></div>
+          <div id="bookshelf-body"></div>
         </div>
       </div>
       <div id="mystuff-panel-stories" style="display:none;">

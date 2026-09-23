@@ -12379,8 +12379,7 @@ function paintBookshelf(body, data) {
   var books = all.filter(function (b) { return b.kind === 'book'; });
   var links = all.filter(function (b) { return b.kind === 'library'; });
   var used = books.length;
-  var count = document.getElementById('bookshelf-count');
-  if (count) count.textContent = '';
+  var countText = '';   // v3.0.993 -- written on the case's base board, below
   function line(id, text, css) {
     var d = document.createElement('div');
     d.id = id; d.className = 'settings-section-desc'; d.textContent = text;
@@ -12401,8 +12400,9 @@ function paintBookshelf(body, data) {
     nudgeButton();
     return;
   }
-  // v3.0.986 -- on the title line (app.html #bookshelf-count), not a line of its own.
-  if (count) count.textContent = used + ' of ' + limit + ' books';
+  // v3.0.986 put the count on the title line; v3.0.993 (Ian) drops that bar and letters the count on
+  // the bookcase's base board instead.
+  countText = used + ' of ' + limit + ' books';
   // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download, bring back and
   // remove -- not add.
   if (used > limit || (!limit && links.length)) {
@@ -12465,6 +12465,11 @@ function paintBookshelf(body, data) {
     wrap.appendChild(lib);
   }
   var base = document.createElement('div'); base.className = 'bcase-base';
+  if (countText) {
+    var bc = document.createElement('span');
+    bc.id = 'bookshelf-count'; bc.className = 'bcase-count'; bc.textContent = countText;
+    base.appendChild(bc);
+  }
   wrap.appendChild(base);
   body.appendChild(wrap);
   var card = document.createElement('div');

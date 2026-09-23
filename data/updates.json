@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.993",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "993-bookshelf-count-on-base",
+        "kind": "change",
+        "public": true,
+        "summary": "The Bookshelf loses its title bar: the bookcase now starts right under the tabs, and the book count is lettered in gold on its base.",
+        "detail": "Ian: remove the dark Bookshelf bar above the case, put the count on the bookcase's bottom board, and bring the case right up under the line under the tabs. The tab already says Bookshelf, so the bar is gone; the case starts directly under the tab rule and so is taller on the screen; the count (for example 5 of 50 books) is lettered in gold on the wooden base. The case still grows a shelf for each new row of books. TO TEST: My Stuff, Bookshelf: no dark title bar; the top of the case sits right under the tab line; the count reads in gold on the bottom board; on a plan without the Bookshelf the invitation and See the plans still show. With a message above the case (over the limit), the message sits under the tabs and the case below it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.992",
     "staged_on": "2026-09-23",
     "entries": [
