@@ -12336,25 +12336,35 @@ function shelfDate(v) {
 }
 // ============================================================================
 // v3.0.982 -- TD-901, Bookshelf release 3. THE SHELVES.
-// One wooden shelf per campaign, the books standing on it as spines, and a "From the Library" shelf
-// for pointers. A spine's height and thickness follow the page count; its face is the campaign
-// cover where there is one (under a dark wash so the title reads), and a leather colour picked from
-// the title where there is not. Clicking a spine opens its card below the shelves.
-// Styles: the .bshelf rules in app.html, beside #bookshelf-section.
+// v3.0.985 -- ONE BOOKCASE. Ian, 2026-09-23, with two pictures: "darker wood" like a panelled
+// library bookcase, and "we can have multiple campaigns on the same shelf... the first book of a
+// series of books from the same campaign to have the cover facing the viewer... the rest of the
+// books for the campaign the viewer can be looking at the spine."
+//   * One walnut case: moulded top, side posts, plinth, dark panelled back. The shelf boards are
+//     drawn by the case's own background every BSHELF_ROW_PX, and the books flow into rows of
+//     exactly that height, so a board always sits under a row however many rows there are. At
+//     least two shelves always show.
+//   * A campaign's books stand together, oldest shelved first. The first faces out, showing its
+//     cover, with the campaign's name on a brass plate on the shelf; the rest stand as spines.
+//   * Spines are leather, ONE COLOUR PER CAMPAIGN (a set, as in the picture), each book a shade
+//     apart, with gilt bands and a gilt title. Height and thickness follow the page count.
+//   * Library pointers stand last, as spines with a red ribbon.
+// Clicking any book opens its card below the case. Styles: .bcase / .bface / .bspine in app.html.
 // ============================================================================
-var BSHELF_LEATHER = ['#5a2a1c', '#2f3f2a', '#23324a', '#4a2a44', '#5a4320', '#3a2418', '#1f3a3a', '#4b1f24'];
+var BSHELF_LEATHER = ['#4a1c14', '#1f3325', '#1c2a40', '#3d1f36', '#4d3a17', '#40181d', '#17302f', '#2f1c12', '#2b2b30'];
 function bshelfLeather(s) {
   var h = 0, str = String(s || '');
   for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
   return BSHELF_LEATHER[h % BSHELF_LEATHER.length];
 }
-// Only our own http(s) or root-relative image urls reach a CSS url(); anything with a quote, a
-// bracket or whitespace is dropped rather than escaped.
+// Only our own http(s) or root-relative image urls reach a CSS url() or an img; anything with a
+// quote, a bracket or whitespace is dropped rather than escaped.
 function bshelfSafeUrl(u) {
   u = String(u || '');
   if (u.indexOf(String.fromCharCode(92)) !== -1) return '';   // no backslash, without writing one here
   return (/^(https?:\/\/|\/)[^"'()\s]+$/.test(u)) ? u : '';
 }
+function bshelfTime(v) { var t = Date.parse(v || ''); return isNaN(t) ? 0 : t; }
 function paintBookshelf(body, data) {
   body.innerHTML = '';
   var limit = Number(data.limit) || 0;
@@ -12396,8 +12406,9 @@ function paintBookshelf(body, data) {
     line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
       'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it. ' +
       'You can also add other people\'s books from their Library page.', 'margin-top:8px;');
-    return;
   }
+  // Campaigns in the order the server lists them (the most recently shelved first); inside one,
+  // oldest shelved first, so the book facing out is the first of the series.
   var groups = {}, order = [];
   books.forEach(function (b) {
     var k = String(b.campaignId || 0) + '|' + (b.campaignName || '');
@@ -12406,49 +12417,79 @@ function paintBookshelf(body, data) {
   });
   var wrap = document.createElement('div');
   wrap.id = 'bookshelf-list';
+  wrap.className = 'bcase';
+  var crown = document.createElement('div'); crown.className = 'bcase-crown';
+  var inner = document.createElement('div'); inner.className = 'bcase-inner';
+  var base = document.createElement('div'); base.className = 'bcase-base';
+  wrap.appendChild(crown); wrap.appendChild(inner); wrap.appendChild(base);
   body.appendChild(wrap);
-  function shelf(name, list, isLib) {
+  function slot(el, plate) {
     var s = document.createElement('div');
-    s.className = 'bshelf';
-    var h = document.createElement('div');
-    h.className = 'bookshelf-campaign bshelf-name';
-    h.textContent = name;
-    s.appendChild(h);
-    var row = document.createElement('div');
-    row.className = 'bshelf-row';
-    list.forEach(function (b) { row.appendChild(bookshelfSpine(b, isLib)); });
-    s.appendChild(row);
-    var board = document.createElement('div');
-    board.className = 'bshelf-board';
-    s.appendChild(board);
-    wrap.appendChild(s);
+    s.className = 'bslot';
+    s.appendChild(el);
+    if (plate) {
+      var p = document.createElement('div');
+      p.className = 'bplaque bookshelf-campaign';
+      p.textContent = plate;
+      s.appendChild(p);
+    }
+    inner.appendChild(s);
   }
-  order.forEach(function (k) { shelf(groups[k][0].campaignName || 'Campaign', groups[k], false); });
-  if (links.length) shelf('From the Library', links, true);
+  order.forEach(function (k) {
+    var list = groups[k].slice().sort(function (a, b) { return (bshelfTime(a.createdAt) - bshelfTime(b.createdAt)) || ((a.id || 0) - (b.id || 0)); });
+    var leather = bshelfLeather(k);
+    list.forEach(function (b, i) {
+      if (i === 0) slot(bookshelfFace(b, leather), b.campaignName || 'Campaign');
+      else slot(bookshelfSpine(b, false, leather, i));
+    });
+  });
+  links.forEach(function (b, i) { slot(bookshelfSpine(b, true, '#3a2418', i)); });
   var card = document.createElement('div');
   card.id = 'bookshelf-card';
   card.className = 'bshelf-card';
   card.style.display = 'none';
   body.appendChild(card);
 }
-function bookshelfSpine(b, isLib) {
+function bookshelfFace(b, leather) {
+  var f = document.createElement('button');
+  f.type = 'button';
+  f.className = 'bface bookshelf-book';
+  f.id = 'bookshelf-book-' + b.id;
+  f.title = (b.bookTitle || 'Untitled book') + (b.pages ? ' -- ' + b.pages + ' pages' : '');
+  if (leather) f.style.backgroundColor = leather;   // a book with no cover is bound in its set's leather
+  var img = bshelfSafeUrl(b.coverUrl);
+  var ph = document.createElement('span');
+  ph.className = 'bface-t';
+  ph.textContent = b.bookTitle || 'Untitled';
+  f.appendChild(ph);
+  if (img) {
+    var im = document.createElement('img');
+    im.src = img; im.alt = '';
+    im.onerror = function () { im.style.display = 'none'; };
+    f.appendChild(im);
+  }
+  f.onclick = function () { bookshelfShowCard(b, false); };
+  return f;
+}
+function bookshelfSpine(b, isLib, leather, i) {
   var sp = document.createElement('button');
   sp.type = 'button';
   sp.className = 'bspine bookshelf-book' + (isLib ? ' bspine-lib' : '');
   sp.id = 'bookshelf-book-' + b.id;
   sp.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
   var pages = Number(b.pages) || 0;
-  var hgt = isLib ? 150 : Math.max(120, Math.min(190, 110 + Math.round(pages * 0.9)));
-  var wid = isLib ? 30 : Math.max(22, Math.min(48, 16 + Math.round(pages * 0.35)));
+  var hgt = isLib ? 170 : Math.max(150, Math.min(196, 140 + Math.round(pages * 0.6)));
+  var wid = isLib ? 30 : Math.max(24, Math.min(46, 18 + Math.round(pages * 0.3)));
   sp.style.height = hgt + 'px';
   sp.style.width = wid + 'px';
-  sp.style.backgroundColor = bshelfLeather(b.bookTitle || b.id);
-  var img = bshelfSafeUrl(b.coverUrl);
-  if (img) sp.style.backgroundImage = 'url("' + img + '")';
+  sp.style.backgroundColor = leather || bshelfLeather(b.bookTitle || b.id);
+  // Each book of a set a shade apart, as real volumes fade differently.
+  sp.style.filter = 'brightness(' + (0.85 + ((Number(i) || 0) % 3) * 0.1).toFixed(2) + ')';
   var t = document.createElement('span');
   t.className = 'bspine-t';
   t.textContent = b.bookTitle || 'Untitled';
   sp.appendChild(t);
+  if (isLib) { var rb = document.createElement('span'); rb.className = 'bspine-ribbon'; sp.appendChild(rb); }
   sp.onclick = function () { bookshelfShowCard(b, isLib); };
   return sp;
 }
@@ -12456,7 +12497,7 @@ function bookshelfShowCard(b, isLib) {
   var card = document.getElementById('bookshelf-card');
   if (!card) return;
   var list = document.getElementById('bookshelf-list');
-  var sel = list ? list.querySelectorAll('.bspine.sel') : [];
+  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];   // v3.0.985 -- covers and spines alike
   for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
   var sp = document.getElementById('bookshelf-book-' + b.id);
   if (sp) sp.classList.add('sel');
