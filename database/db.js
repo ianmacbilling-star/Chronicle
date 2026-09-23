@@ -2015,12 +2015,18 @@ async function migrateBookshelf(pool) {
   // into anything that touches an order.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS order_cover_thumbs (
+      id SERIAL,
       order_id INTEGER PRIMARY KEY,
       user_id INTEGER,
       thumb_url TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // v3.0.991 -- THE id THE WRAPPER ASKS FOR. The db wrapper appends RETURNING id to every INSERT
+  // (see the note at the top of this file), and 989 made this table without one, so every insert
+  // failed ("column id does not exist") after the picture had already been drawn and uploaded. Added
+  // here for the table staging already has; the CREATE above carries it for a fresh database.
+  await pool.query('ALTER TABLE order_cover_thumbs ADD COLUMN IF NOT EXISTS id SERIAL');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
