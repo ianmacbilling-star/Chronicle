@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.0.994",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "994-published-stories-dark",
+        "kind": "change",
+        "public": true,
+        "summary": "My Published Stories goes dark to match My Orders: the tiles are dark panels with gold lettering, and the white card behind them is gone.",
+        "detail": "Ian: reverse the colours on the Published Stories tab the way My Orders was done, keeping the tiles' size and look. The white card behind the tiles is gone, as on the Bookshelf tab; the heading and its description sit on a dark strip in gold and cream; each tile is a dark panel with a gold edge, and its title, date, blurb and buttons keep their light colours, which now read clearly. Nothing about what the tiles do has changed. TO TEST: My Stuff, Published Stories: no white card; the heading reads gold on dark; every tile is dark with a gold edge, the cover on top as before; Edit, Make link only / Make public, Copy link and Remove from Library all still work; with no stories, the empty line reads on a dark strip.",
+        "td": []
+      },
+      {
+        "id": "994-my-stuff-back",
+        "kind": "fix",
+        "public": true,
+        "summary": "My Stuff's Back button goes to My Campaigns whenever it cannot tell where you came from.",
+        "detail": "Ian: if Back on My Stuff does not know exactly where you were, go to My Campaigns. Back still returns to the page you opened My Stuff from when it knows it (a campaign's Sessions, Characters, the book, My Campaigns, My Account). When it does not, or you came from a campaign page but no campaign is open any more, it now goes to My Campaigns instead of trying to show a campaign's Sessions. It also no longer borrows a return point left behind by an earlier Asset Library or Archives visit. TO TEST: open My Stuff from My Campaigns, from inside a campaign, and from My Account: Back returns to each. Reload the page and open My Stuff straight away: Back goes to My Campaigns.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.993",
     "staged_on": "2026-09-23",
     "entries": [

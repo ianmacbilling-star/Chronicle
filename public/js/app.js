@@ -1966,7 +1966,9 @@ function storyShareUrl(it) {
 
 function myStoryCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
+  // v3.0.994 -- Ian: the Published Stories tiles dark like the order cards. Same size and layout; the
+  // panel, edge and shadow now come from the colours #mystuff-panel-stories defines (app.html).
+  card.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;';
   var a = document.createElement('a');
   a.href = storyShareUrl(it); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
@@ -2928,9 +2930,11 @@ function showView(view) {
   // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
   // display:block, so one line later the answer is always 'orders' and the button would go home to
   // Sessions from wherever you actually were.
+  // v3.0.994 -- My Stuff keeps its OWN note (ordersBack), and an unknown start is recorded as
+  // unknown rather than left holding whatever an earlier Asset Library or Archives visit wrote.
   if (view === 'orders') {
     var _curV = _visibleViewId();
-    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+    if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
@@ -16490,9 +16494,11 @@ function showView(view) {
   // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
   // display:block, so one line later the answer is always 'orders' and the button would go home to
   // Sessions from wherever you actually were.
+  // v3.0.994 -- My Stuff keeps its OWN note (ordersBack), and an unknown start is recorded as
+  // unknown rather than left holding whatever an earlier Asset Library or Archives visit wrote.
   if (view === 'orders') {
     var _curV = _visibleViewId();
-    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+    if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
@@ -26577,6 +26583,21 @@ function sectionBack() {
     return;
   }
   showCampaignSection(t);
+}
+
+// v3.0.994 -- MY STUFF'S BACK BUTTON. Ian: "if you don't know exactly where they were before then
+// just go to the My Campaigns." Back returns to the view My Stuff was opened from when that is
+// known and can still be shown; otherwise -- opened from a page this cannot name, or a campaign page
+// with no campaign loaded any more -- it goes to My Campaigns. sectionBack() always assumed a
+// campaign (its fallback was Sessions), which is wrong for a start outside one.
+var _ordersBackFrom = null;
+var ORDERS_BACK_PLAIN = ['campaigns', 'account', 'settings'];
+function ordersBack() {
+  var t = _ordersBackFrom;
+  if (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
 }
 
 // Copper (free) plan cannot create campaigns or sessions -- prompt to upgrade.

@@ -1185,7 +1185,7 @@
              already knew about 'orders' in both of its view lists; only the button and the
              remembering were missing. -->
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
+          <button class="btn btn-sm" onclick="ordersBack()">&larr; Back</button>
         </div>
       </div>
       <div class="sess-tabs" style="margin-bottom:6px;overflow-x:auto;overflow-y:hidden;">
@@ -1243,6 +1243,23 @@
               --shadow: 0 6px 16px rgba(0,0,0,0.45);
             }
             #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            /* v3.0.994 -- PUBLISHED STORIES, DARK, the same way (Ian: "reverse the css like we did the
+               order tiles"). The white card goes, as on the Bookshelf tab; the heading sits on a dark
+               strip; each tile is a dark panel with a gold edge. Scoped to this panel only. */
+            #mystuff-panel-stories {
+              --surface: rgba(16,10,5,0.86);
+              --border: rgba(201,168,76,0.3);
+              --text: #ecd9a8;
+              --text-muted: rgba(232,207,122,0.68);
+              --text-light: rgba(232,207,122,0.5);
+              --crimson: #e8cf7a;
+              --shadow: 0 6px 16px rgba(0,0,0,0.45);
+            }
+            #mystuff-panel-stories #my-stories-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
+            #mystuff-panel-stories .mystories-head { padding:8px 12px; border-radius:8px; background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
+            #mystuff-panel-stories .mystories-head .settings-section-title { color:#e8cf7a; }
+            #mystuff-panel-stories .mystories-head .settings-section-desc { color:rgba(240,232,208,0.85); margin-bottom:0; }
+            #mystuff-panel-stories #my-stories-empty { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
             /* v3.0.992 -- the cover column on an order card: the picture, then the order's buttons at the
                same width (their inline margins were for sitting in a row under the details). */
             .ord-thumb-col { flex:0 0 140px; width:140px; display:flex; flex-direction:column; gap:6px; }
@@ -1329,9 +1346,12 @@
       <!-- My Published Stories (Public Library). v3.0.980 -- moved here from My Account, unchanged
            apart from the empty-state line, which still named the retired Preview & Export tab (TD-876). -->
       <div id="my-stories-section" class="settings-section">
+        <!-- v3.0.994 -- the heading and its line on one dark strip, as on the other two tabs (Ian). -->
+        <div class="mystories-head">
         <div class="settings-section-title">My Published Stories</div>
         <div class="settings-section-desc">Books you have shared to the public Library. Remove any you no longer want public &mdash; this is the place to manage them, since you may not always have access to the original campaign. (Shared images are managed from each campaign&#39;s Archive.)</div>
-        <div id="my-stories-list" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
+        </div>
+        <div id="my-stories-list" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
         <div id="my-stories-empty" class="settings-section-desc" style="display:none;margin-top:8px;">You have not published any stories yet. Open a campaign&#39;s book, go to Order &amp; Publish, and choose Publish to Library.</div>
       </div>
       </div>
