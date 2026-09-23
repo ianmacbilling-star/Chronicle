@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.987",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "987-my-stuff-header-dark-shelf",
+        "kind": "change",
+        "public": true,
+        "summary": "My Stuff's heading is one readable line, and the Bookshelf tab drops its white card: gold lettering on a dark bar, and a bookcase nearly as wide as the page with the background showing around it.",
+        "detail": "TD-901. Ian: the text at the top was very hard to read, a small vertical scroll bar sat beside the tabs, and the Bookshelf should be dark with gold lettering and the shelf as large as the page allows. My Stuff's title and description are now one line in gold and cream on a dark strip, with the tabs close beneath it. The stray scroll bar beside the tabs is gone. On the Bookshelf tab the white card is gone: Bookshelf and the book count sit in gold on a dark bar, the bookcase fills nearly the whole width, and the page background shows around it. My Orders and Published Stories are unchanged for now. TO TEST: open My Stuff: the heading reads clearly on one line (it wraps on a phone), no scroll bar beside the tabs. Bookshelf tab: gold Bookshelf and count on a dark bar, the case nearly full width, no white panel behind it. An account with an empty shelf or on Silver: the message reads clearly on its dark strip. My Orders and Published Stories look as they did.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.986",
     "staged_on": "2026-09-23",
     "entries": [

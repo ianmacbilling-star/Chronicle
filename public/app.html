@@ -1174,10 +1174,11 @@
          this page was My Print Orders, and is now three tabs -- My Orders exactly as it was,
          the Bookshelf, and My Published Stories moved here from My Account. -->
     <div id="view-orders" class="view" style="display:none;">
-      <div class="page-header">
-        <div>
-          <div class="page-title">My Stuff</div>
-          <div class="page-subtitle">Your print orders, your Bookshelf and your published stories</div>
+      <!-- v3.0.987 -- one line, readable on the page picture (Ian). Styles: .mystuff-head, beside the bookcase styles. -->
+      <div class="page-header mystuff-head">
+        <div class="mystuff-titleline">
+          <span class="page-title">My Stuff</span>
+          <span class="page-subtitle">Your print orders, your Bookshelf and your published stories</span>
         </div>
         <!-- v3.0.803 -- TD-613. Ian: a Back button "like we have on the Archive page, to take you
              back wherever you were." Identical markup and the identical handler -- sectionBack()
@@ -1187,7 +1188,7 @@
           <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
         </div>
       </div>
-      <div class="sess-tabs" style="margin-bottom:8px;overflow-x:auto;">
+      <div class="sess-tabs" style="margin-bottom:6px;overflow-x:auto;overflow-y:hidden;">
         <div class="sess-tab active" id="mystuff-tab-orders" onclick="mystuffShowTab('orders')">My Orders</div>
         <div class="sess-tab" id="mystuff-tab-shelf" onclick="mystuffShowTab('shelf')">Bookshelf</div>
         <div class="sess-tab" id="mystuff-tab-stories" onclick="mystuffShowTab('stories')">Published Stories</div>
@@ -1200,7 +1201,7 @@
       <div id="mystuff-panel-shelf" style="display:none;">
         <div id="bookshelf-section" class="settings-section">
           <!-- v3.0.986 -- the count on the title line (Ian); paintBookshelf fills #bookshelf-count. -->
-          <div class="settings-section-title" style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;"><span>Bookshelf</span><span id="bookshelf-count" style="font-size:13px;color:#c9a84c;font-weight:600;"></span></div>
+          <div class="settings-section-title bshelf-head"><span>Bookshelf</span><span id="bookshelf-count"></span></div>
           <!-- v3.0.982 -- TD-901. The shelves. v3.0.985 -- one dark walnut bookcase (Ian's picture):
                campaigns share the shelves, each series' first book faces out, the rest are spines.
                v3.0.986 -- bigger: each row is 250px and each board 22px, so a board is painted every
@@ -1208,6 +1209,22 @@
                .bslot, so each row lands on a board. The Library shelf is its own .bcase-inner at
                the bottom. Clicking a book opens it on top of the case as an open book (.bopen). -->
           <style>
+            /* v3.0.987 -- Ian: "The text at the top is very hard to read"; "condense the My Stuff lines to
+               one line and bring everything up under it tighter allowing for the shelf to be bigger";
+               the Bookshelf tab loses its white card -- gold lettering on a dark bar, the case nearly
+               full width, and the page's own picture showing around it. The other two tabs keep their
+               cards for now (Ian). */
+            #view-orders > .page-header.mystuff-head { align-items:center; margin-bottom:6px; padding:6px 12px; border-radius:8px;
+              background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
+            .mystuff-titleline { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 14px; min-width:0; }
+            .mystuff-head .page-title { color:#e8cf7a; font-family:var(--font-display); font-size:19px; margin:0; }
+            .mystuff-head .page-subtitle { color:rgba(240,232,208,0.85); font-size:13px; margin:0; }
+            #bookshelf-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
+            .bshelf-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0; padding:7px 14px; border-radius:6px;
+              background:rgba(12,7,3,0.78); border:1px solid rgba(201,168,76,0.3); color:#e8cf7a; }
+            .bshelf-head #bookshelf-count { font-size:13px; color:#e8cf7a; font-weight:600; }
+            #bookshelf-body > .settings-section-desc { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }   /* 8px keeps the overhanging top and base inside the page */
             .bcase { position:relative; margin-top:10px; max-width:1180px; padding:0 22px; background:#1d0f07; border-radius:3px;
               box-shadow:0 16px 34px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.04) inset; }
             .bcase::before, .bcase::after { content:''; position:absolute; top:0; bottom:0; width:22px; z-index:1;
