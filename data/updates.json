@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.990",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "990-my-orders-dark",
+        "kind": "change",
+        "public": true,
+        "summary": "My Orders is now dark to match the Bookshelf: dark order cards with light gold lettering.",
+        "detail": "Ian: reverse the look on the order page, dark panels and light gold text instead of white panels and black text. On My Stuff, My Orders, each order card is now a dark panel with a gold edge; the book title and details are light gold, the labels a softer gold, and the Interior PDF, Cover PDF and Track shipment links gold. The \"no orders yet\" and loading messages match. Only My Orders changes: the admin order list, the Order & Publish tab and every other page are as they were. TO TEST: My Stuff, My Orders: dark cards, every line readable, the cover thumbnail still at the left, the links and the Check with the printer / Reorder / Delete buttons all visible and working. Settings, Orders (admin): unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.989",
     "staged_on": "2026-09-23",
     "entries": [
