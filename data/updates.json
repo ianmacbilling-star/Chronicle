@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.0.981",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "981-save-to-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Save to Bookshelf: keep a finished, optimized book on your Bookshelf (Gold 10 books, Platinum 50), and view, download or remove it from My Stuff.",
+        "detail": "TD-901, Bookshelf release 2 of 3. On a book's Optimize tab, beside Go to Publish and Download PDF, Save to Bookshelf keeps a copy of the saved optimized book together with its layout, so it can be brought back and edited in the next update. It shows exactly when Go to Publish shows. The Bookshelf tab on My Stuff now lists your books by campaign, with View, Download and Remove, and counts them against your plan: Gold 10, Platinum 50. Silver, Copper and the Free Trial get the upgrade note. After a downgrade nothing is deleted: you can still view, download and remove, but not add. Only you see your shelf. TO TEST: as a Gold account, optimize and save a book, press Save to Bookshelf: Saved (1 of 10). Press it again: already on your Bookshelf. My Stuff, Bookshelf: the book under its campaign; View opens it, Download downloads it. Optimize the same book again and save: the shelf copy still opens (it is a copy, not the same file). Remove it: gone, count back to 0. As Silver: the button shows the upgrade note. As a player looking at someone else's version: no Save to Bookshelf button. The 10-book limit is checked by the build's own tests; filling a shelf to 10 is optional (the 11th is refused with the reason).",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.980",
     "staged_on": "2026-09-23",
     "entries": [

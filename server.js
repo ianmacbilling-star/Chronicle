@@ -378,6 +378,7 @@ app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/frameprobe', require('./routes/frameprobe'));   // TD-351 dev probe -- admin-gated, remove with TF-02 / GL-11
 app.use('/api/layout-ai', require('./routes/layoutAI'));  // AI layout-optimization dry run (admin + flag gated; rollback = remove this line)
 app.use('/api/print', require('./routes/print'));
+app.use('/api/bookshelf', require('./routes/bookshelf'));   // v3.0.981 -- TD-901
 // Phase 3 — invite endpoints. Mounted at /api so the router can serve
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
 app.use('/api', require('./routes/invites'));

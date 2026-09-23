@@ -14788,3 +14788,4 @@ module.exports.assembleNovelHtml = assembleNovelHtml;
 // question nobody asked.
 module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
 module.exports.formatDateRange = formatDateRange;   // v3.0.552 -- campaigns.js seeds the subtitle field from this, so the two cannot drift
+module.exports.parseCustomOpts = parseCustomOpts;   // v3.0.981 -- TD-901. routes/bookshelf.js reads the arrange the same way last-optimized-file does

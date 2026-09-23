@@ -12294,12 +12294,45 @@ function mystuffShowTab(tab) {
   else if (tab === 'stories') { if (typeof loadMyStories === 'function') loadMyStories(); }
   else renderBookshelfTab();
 }
+// v3.0.981 -- TD-901 release 2. THE SHELF IS READ FROM THE SERVER, which answers the limit as well as
+// the books; BOOKSHELF_LIMITS above is only the first paint and the Save button's shortcut.
+// A plain list, grouped by campaign, for this release; release 3 draws the shelves.
+// Only one answer is painted: a slow reply that lands after a newer one is dropped (_shelfSeq).
+var _shelfSeq = 0;
 function renderBookshelfTab() {
   var body = document.getElementById('bookshelf-body');
   if (!body) return;
-  var tier = (state.user && state.user.tier) || '';
-  var limit = bookshelfLimitFor(tier);
+  var seq = ++_shelfSeq;
   body.innerHTML = '';
+  var wait = document.createElement('div');
+  wait.className = 'settings-section-desc'; wait.textContent = 'Loading your Bookshelf...';
+  body.appendChild(wait);
+  return fetch('/api/bookshelf')
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (seq !== _shelfSeq) return;
+      if (!res.ok || !res.j) throw new Error('load');
+      paintBookshelf(body, res.j);
+    })
+    .catch(function () {
+      if (seq !== _shelfSeq) return;
+      body.innerHTML = '';
+      var d = document.createElement('div');
+      d.id = 'bookshelf-error'; d.className = 'settings-section-desc';
+      d.textContent = 'Could not load your Bookshelf right now. Please try again in a moment.';
+      body.appendChild(d);
+    });
+}
+function shelfDate(v) {
+  if (!v) return '';
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+}
+function paintBookshelf(body, data) {
+  body.innerHTML = '';
+  var limit = Number(data.limit) || 0;
+  var books = (data.books || []).filter(function (b) { return b && b.kind === 'book'; });
+  var used = books.length;
   function line(id, text, css) {
     var d = document.createElement('div');
     d.id = id; d.className = 'settings-section-desc'; d.textContent = text;
@@ -12307,20 +12340,109 @@ function renderBookshelfTab() {
     body.appendChild(d);
     return d;
   }
-  if (!limit) {
-    line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
-      'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
+  function nudgeButton() {
     var up = document.createElement('button');
     up.id = 'bookshelf-upgrade-btn'; up.className = 'btn btn-primary btn-sm'; up.style.marginTop = '12px';
     up.textContent = 'See the plans';
     up.onclick = function () { if (typeof goToPlans === 'function') goToPlans(); };
     body.appendChild(up);
+  }
+  if (!limit && !used) {
+    line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
+      'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
+    nudgeButton();
     return;
   }
-  line('bookshelf-count', '0 of ' + limit + ' books', 'color:#c9a84c;font-weight:600;');
-  line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
-    'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it.', 'margin-top:8px;');
-  line('bookshelf-soon', 'Saving to the shelf arrives in the next update.', 'margin-top:8px;font-style:italic;');
+  line('bookshelf-count', used + ' of ' + limit + ' books', 'color:#c9a84c;font-weight:600;');
+  // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download and remove, not add.
+  if (used > limit) {
+    line('bookshelf-over', limit
+      ? 'Your plan keeps ' + limit + ' books, so you can view, download and remove these but cannot add more until you are under that.'
+      : 'Your plan no longer includes the Bookshelf. Your books are kept: you can view, download and remove them, and upgrading lets you add more.',
+      'margin-top:6px;');
+    if (!limit) nudgeButton();
+  }
+  if (!used) {
+    line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
+      'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it.', 'margin-top:8px;');
+    return;
+  }
+  var groups = {}, order = [];
+  books.forEach(function (b) {
+    var k = String(b.campaignId || 0) + '|' + (b.campaignName || '');
+    if (!groups[k]) { groups[k] = []; order.push(k); }
+    groups[k].push(b);
+  });
+  var wrap = document.createElement('div');
+  wrap.id = 'bookshelf-list'; wrap.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:14px;';
+  body.appendChild(wrap);
+  order.forEach(function (k) {
+    var g = document.createElement('div');
+    var h = document.createElement('div');
+    h.className = 'bookshelf-campaign';
+    h.textContent = groups[k][0].campaignName || 'Campaign';
+    h.style.cssText = 'color:#c9a84c;font-family:var(--font-display);font-size:14px;border-bottom:1px solid rgba(201,168,76,0.25);padding-bottom:4px;margin-bottom:6px;';
+    g.appendChild(h);
+    groups[k].forEach(function (b) { g.appendChild(bookshelfRow(b)); });
+    wrap.appendChild(g);
+  });
+}
+function bookshelfRow(b) {
+  var row = document.createElement('div');
+  row.className = 'bookshelf-book';
+  row.id = 'bookshelf-book-' + b.id;
+  row.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;background:rgba(12,8,4,0.4);';
+  var info = document.createElement('div');
+  info.style.cssText = 'min-width:0;flex:1 1 220px;';
+  var t = document.createElement('div');
+  t.textContent = b.bookTitle || b.campaignName || 'Untitled book';
+  t.style.cssText = 'color:var(--gold);font-weight:600;';
+  var m = document.createElement('div');
+  var bits = [];
+  if (b.versionLabel) bits.push(b.versionLabel);
+  if (b.arrange) bits.push(b.arrange.charAt(0).toUpperCase() + b.arrange.slice(1) + ' layout');
+  if (b.pages) bits.push(b.pages + ' pages');
+  var od = shelfDate(b.savedAt), sd = shelfDate(b.createdAt);
+  if (od) bits.push('optimized ' + od);
+  if (sd) bits.push('shelved ' + sd);
+  m.textContent = bits.join(' \u00b7 ');
+  m.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.6);';
+  info.appendChild(t); info.appendChild(m);
+  var acts = document.createElement('div');
+  acts.style.cssText = 'display:flex;gap:6px;flex:0 0 auto;';
+  function btn(label, fn, cls) {
+    var x = document.createElement('button');
+    x.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); x.textContent = label; x.onclick = fn;
+    acts.appendChild(x); return x;
+  }
+  btn('View', function () { window.open('/api/bookshelf/' + b.id + '/pdf', '_blank', 'noopener'); });
+  btn('Download', function () {
+    var a = document.createElement('a');
+    a.href = '/api/bookshelf/' + b.id + '/pdf?download=1'; a.rel = 'noopener';
+    document.body.appendChild(a);
+    try { a.click(); } finally { document.body.removeChild(a); }
+  });
+  btn('Remove', function () { bookshelfRemove(b); });
+  row.appendChild(info); row.appendChild(acts);
+  return row;
+}
+function bookshelfRemove(b) {
+  appConfirm({
+    title: 'Remove this book from your Bookshelf?',
+    body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf and its saved copy deleted.',
+    note: 'The book in the campaign itself is not touched.',
+    okLabel: 'Remove', cancelLabel: 'Keep it', danger: true,
+    onOk: function () {
+      fetch('/api/bookshelf/' + b.id, { method: 'DELETE' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error((res.j && res.j.error) || 'Could not remove the book.');
+          billingToast('Removed from your Bookshelf.', 'success');
+          renderBookshelfTab();
+        })
+        .catch(function (e) { billingToast((e && e.message) || 'Could not remove the book.', 'error'); });
+    }
+  });
 }
 
 function refreshStoryStatus() {
@@ -29164,6 +29286,9 @@ function finalizeSyncPublishBtn() {
   // the fault the comment below this one records.
   var dl = document.getElementById('layoutai-download-btn');
   if (dl) { dl.style.display = show ? '' : 'none'; if (show) dl.disabled = false; }
+  // v3.0.981 -- TD-901. Save to Bookshelf rides the same `show`, and is left alone while a save is in flight.
+  var sh = document.getElementById('layoutai-shelf-btn');
+  if (sh) { sh.style.display = show ? '' : 'none'; if (show && !_shelfSaving) { sh.disabled = false; sh.textContent = 'Save to Bookshelf'; } }
   // v3.0.397 -- the two buttons share a slot and are mutually exclusive by construction:
   // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
   // is not. Driving both from one function is what stops them ever being shown together, or a fix
@@ -29175,6 +29300,58 @@ function finalizeSyncPublishBtn() {
     sv.style.display = showSave ? '' : 'none';
     if (showSave) { sv.disabled = false; sv.textContent = 'Save this Version'; }
   }
+}
+// v3.0.981 -- TD-901 release 2. SAVE TO BOOKSHELF, from the Optimize tab.
+// It rides finalizeSyncPublishBtn's one `show` -- a saved book, your own version, no run in flight --
+// so it appears and disappears with Go to Publish and Download PDF, never on its own rule.
+// A plan without a shelf gets the upgrade note without a round trip; everything else the server
+// decides and answers in words (full, already shelved, not your version, still saving).
+var _shelfSaving = false;
+function finalizeSaveToShelf() {
+  if (_shelfSaving || !state || !state.currentCampaign) return;
+  var tier = (state.user && state.user.tier) || '';
+  if (!bookshelfLimitFor(tier)) {
+    appConfirm({
+      title: 'The Bookshelf is on Gold and Platinum',
+      body: 'Gold keeps 10 books on your Bookshelf and Platinum keeps 50. A shelved book keeps its layout, so you can bring it back to order, publish or keep editing.',
+      okLabel: 'See the plans', cancelLabel: 'Not now',
+      onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+    });
+    return;
+  }
+  var b = document.getElementById('layoutai-shelf-btn');
+  _shelfSaving = true;
+  if (b) { b.disabled = true; b.textContent = 'Saving to shelf...'; }
+  function done() {
+    _shelfSaving = false;
+    if (b) { b.disabled = false; b.textContent = 'Save to Bookshelf'; }
+  }
+  fetch('/api/bookshelf/save' + finalizeBookQuery(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId: state.currentCampaign.id })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      done();
+      if (res.ok && res.j.ok) {
+        billingToast('Saved to your Bookshelf (' + res.j.used + ' of ' + res.j.limit + ').', 'success');
+        return;
+      }
+      var code = res.j.code || '';
+      if (code === 'already_shelved') { billingToast('This book is already on your Bookshelf.', 'info'); return; }
+      if (code === 'bookshelf_tier') {
+        appConfirm({ title: 'The Bookshelf is on Gold and Platinum', body: res.j.error || '', okLabel: 'See the plans', cancelLabel: 'Not now',
+          onOk: function () { if (typeof goToPlans === 'function') goToPlans(); } });
+        return;
+      }
+      if (code === 'bookshelf_full') {
+        appConfirm({ title: 'Your Bookshelf is full', body: res.j.error || 'Remove a book to make room.', okLabel: 'Open my Bookshelf', cancelLabel: 'Close',
+          onOk: function () { state.mystuffTab = 'shelf'; showView('orders'); } });
+        return;
+      }
+      billingToast(res.j.error || 'The book could not be put on your Bookshelf. Please try again.', 'error');
+    })
+    .catch(function () { done(); billingToast('The book could not be put on your Bookshelf. Please try again.', 'error'); });
 }
 // v3.0.397 -- save the book as it stands, fixes included.
 // Reuses the ordinary save path, so the fixed book is flattened (v3.0.388) and stored exactly like

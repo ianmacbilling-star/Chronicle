@@ -1096,6 +1096,9 @@ async function initPostgres() {
   // Pass 2 — explicit per-panel casting tables. After moments exist.
   await migrateCasting(pool);
 
+  // v3.0.981 -- TD-901. The Bookshelf table.
+  await migrateBookshelf(pool);
+
   // Scaling hardening — performance indexes on hot-path FK / filter
   // columns and the releaseImage() URL lookups. Runs LAST so every
   // referenced column already exists.
@@ -1966,6 +1969,45 @@ async function migrateCasting(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_billing_failures_user ON billing_failures(user_id, created_at DESC)');
+}
+
+// v3.0.981 -- TD-901. THE BOOKSHELF (spec: claude/BOOKSHELF_SPEC.md). Idempotent, runs every boot.
+// One row per book a member put on their shelf. kind 'book' is a COPY -- pdf_url and body_url are
+// the shelf's own objects, never the version's saved book, because save-optimized deletes those
+// when the version is optimized again. kind 'library' (release 3) is a pointer to a public story
+// and holds no files. Names and labels are snapshotted so a renamed or deleted campaign still
+// labels its shelf, which is also why campaign_id carries no foreign key.
+// prefs_version_id is the prefs scope the book came from (bookPrefsScope's versionId: canonical 0),
+// kept so release 3 can put a book back exactly where it was taken from.
+async function migrateBookshelf(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bookshelf_books (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'book',
+      campaign_id INTEGER,
+      campaign_name TEXT,
+      version_id INTEGER,
+      prefs_version_id INTEGER,
+      version_label TEXT,
+      arrange TEXT,
+      layout TEXT,
+      co TEXT,
+      inc TEXT,
+      book_title TEXT,
+      cover_url TEXT,
+      pdf_url TEXT,
+      body_url TEXT,
+      pages INTEGER,
+      front_covers INTEGER,
+      back_covers INTEGER,
+      saved_at TEXT,
+      public_story_id INTEGER,
+      story_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_bookshelf_user ON bookshelf_books(user_id, created_at DESC)');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
