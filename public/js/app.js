@@ -9389,8 +9389,11 @@ function loadNovelPeople() {
   state.novelAsUser = isSM ? null : (myId != null ? String(myId) : null);
   updateNovelPublishGuard();
   if (!sel) return;
+  // v3.0.977 -- TD-895. Until the list lands, the Order tab does not know which book it is.
+  state.novelVersionSettled = false;
   refreshNovelVersionOptions(function (rows) {
-    if (!rows) { updateNovelPublishGuard(); return; }
+    state.novelVersionSettled = true;
+    if (!rows) { updateNovelPublishGuard(); orderRecheckIfOpen(); return; }
     // DEFAULT: your own version if you have exactly one, otherwise the canonical. A reader with
     // several is NOT guessed at -- landing on an arbitrary one of their books is the mistake this
     // whole feature exists to stop.
@@ -9403,6 +9406,7 @@ function loadNovelPeople() {
     if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
     if (novelAsUserQ('&') !== _entryQ) { novelVersionApplied(); return; }
     updateNovelPublishGuard();
+    orderRecheckIfOpen();   // v3.0.977 -- TD-895: the version is known now
   });
 }
 
@@ -9615,6 +9619,7 @@ function novelVersionApplied() {
   optimizeResetForVersion();
   orderResetForVersion();
   updateNovelPublishGuard();
+  orderMarkLayoutPending();   // v3.0.977 -- TD-895: this version's layout settings are on their way
   if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this version's saved look before rendering its book.
@@ -20735,6 +20740,9 @@ function applyCampaignLayoutOpts(meta){
   // Custom Layout panel if it happens to be open. Without this the values change but the UI lies.
   try { if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader(); } catch (e) {}
   try { _syncLayoutPanels(); } catch (e) {}   // re-sync BOTH the inline pcl-* panel and the modal to this campaign
+  // v3.0.977 -- TD-895. The settings the Order tab asks with have just changed, so it asks again.
+  _orderLayoutPendingAt = 0;
+  try { orderRecheckIfOpen(); } catch (e) {}
   return !!saved;
 }
 // Pull this campaign's layout options straight from the DB on every switch. Deliberately no cache
@@ -23482,8 +23490,49 @@ function ensureInterior() {
 // Fired when the Order tab opens: render the interior once to learn the true
 // page count, then update the displayed length and format options. Optional --
 // if it fails the form still works off the estimate.
+// v3.0.977 -- TD-895. THE ORDER TAB ASKS FOR THE SAVED LAYOUT ONLY ONCE IT KNOWS WHICH BOOK IT IS.
+// Bots, 2026-09-23: after a hard refresh the Order tab said "There is no saved layout for this book
+// in this style" and priced the UNOPTIMIZED book, until Load Last Optimized File was pressed. What
+// print-interior answers depends on two things this page learns late: WHICH VERSION is on screen
+// (loadNovelPeople assumes "my own book, no version" until the version list arrives) and that
+// version's LAYOUT SETTINGS (applyCampaignLayoutOpts, after prepLoadBookMeta). Asked before either
+// had settled, the server looked in the wrong place and said, truthfully, that nothing was there --
+// and when the right answers arrived, orderResetForVersion cleared the cache and NOTHING ASKED AGAIN.
+// So the Order tab now waits for both, says so while it waits, and asks again when either lands.
+// The layout mark expires after ORDER_SCOPE_WAIT_MS, so a lost reply can never leave it waiting.
+var ORDER_SCOPE_WAIT_MS = 8000;
+var _orderLayoutPendingAt = 0;
+function orderScopeReady() {
+  if (state.novelVersionSettled === false) return false;
+  if (_orderLayoutPendingAt && (Date.now() - _orderLayoutPendingAt) < ORDER_SCOPE_WAIT_MS) return false;
+  return true;
+}
+function orderMarkLayoutPending() {
+  _orderLayoutPendingAt = Date.now();
+  setTimeout(function () {
+    if (_orderLayoutPendingAt && (Date.now() - _orderLayoutPendingAt) >= ORDER_SCOPE_WAIT_MS) {
+      _orderLayoutPendingAt = 0;
+      orderRecheckIfOpen();
+    }
+  }, ORDER_SCOPE_WAIT_MS + 50);
+}
+// Ask again -- but only when the Order tab is the one on screen, and never while Prepare is running.
+function orderRecheckIfOpen() {
+  try {
+    var t = document.getElementById('novel-tab-order');
+    if (!t || t.style.display === 'none' || !state.currentCampaign) return;
+    var b = document.getElementById('print-place-btn');
+    if (b && b.disabled && /Preparing/.test(b.textContent || '')) return;
+    loadPrintTab();
+  } catch (e) {}
+}
 function prepareInteriorCount() {
   if (!state.currentCampaign) return;
+  if (!orderScopeReady()) {   // v3.0.977 -- TD-895
+    var _peW = document.getElementById('print-page-est');
+    if (_peW) _peW.textContent = 'Checking for your saved layout\u2026';
+    return;
+  }
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
@@ -27438,6 +27487,7 @@ function _coPruneArrangeSelects() {
     if (!sel) return;
     Array.prototype.slice.call(sel.options).forEach(function (opt) {
       if (_coLayoutsEnabled.indexOf(opt.value) < 0) opt.parentNode.removeChild(opt);
+      else { opt.hidden = false; opt.disabled = false; }   // v3.0.977 -- TD-896: withheld layouts ship hidden
     });
     if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
   });
@@ -28789,7 +28839,9 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing and printing will both use the saved version you just pulled up, not these settings. Run Optimize again and Save if you want the new settings applied.', 'stop');
+          // v3.0.977 -- TD-897. Only a REAL change reaches here now, and it says which setting.
+          var _chg = (j.changes && j.changes.length) ? ' (' + j.changes.map(function (c) { return escapeHtml(String(c)); }).join('; ') + ')' : '';
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved' + _chg + '. Publishing and printing will both use the saved version you just pulled up, not these settings. Run Optimize again and Save if you want the new settings applied.', 'stop');
         } else {
           optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }

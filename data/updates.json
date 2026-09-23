@@ -1,5 +1,41 @@
 [
   {
+    "version": "3.0.977",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "977-order-finds-saved-layout",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Order tab finds your saved layout straight away, and prices the book you will actually receive.",
+        "detail": "TD-895. After a fresh page load the Order & Publish tab could say “There is no saved layout for this book in this style” and quote the price of the unoptimized book, until Load Last Optimized File was pressed. It was asking before the page knew which version was on screen and which layout settings it had, and never asked again once it did. It now waits for both — showing “Checking for your saved layout…” for a moment — and asks again whenever either arrives. If the server ever does answer “no saved layout”, the Railway log now carries a [print-interior] no saved layout line naming the version, the layout style it looked in and the saved layouts that do exist. TO TEST: as Tamika, hard refresh, open Lily’s First Day of School → Publish, and go straight to Order & Publish WITHOUT pressing Load. Expected: a brief “Checking for your saved layout…”, then “Printing the version you saved at 9/22/2026, 9:04:07 AM”, 15 pages, and the $16.26 quote. Try it fast (before the version finishes loading) and slow. Then switch versions and back: the Order tab should follow the version.",
+        "td": [
+          "TD-895"
+        ]
+      },
+      {
+        "id": "977-settings-changed-only-when-true",
+        "kind": "fix",
+        "public": true,
+        "summary": "“Your Layout Settings have changed” now appears only when they have — and says which one.",
+        "detail": "TD-897. Loading a saved optimized book could warn that the Layout Settings had changed when nobody had touched them. The saved settings and the current ones were compared as text, so the same settings written in a different order, or an older save that did not list a few internal defaults, counted as a change. They are now compared setting by setting, and only the settings you can actually change count. When something really did change the message names it, for example “Picture border: keyline to frame”. TO TEST: Load Last Optimized File on a book whose Layout you have not touched — no warning. Then change the picture border on the Layout panel and load again — the warning appears and names the border.",
+        "td": [
+          "TD-897"
+        ]
+      },
+      {
+        "id": "977-withheld-layouts-hidden",
+        "kind": "fix",
+        "public": false,
+        "summary": "The layout list no longer flashes Comic and Gazette while the page loads.",
+        "detail": "TD-896. Both are withheld from customers, but the page shipped all four and removed two once the server replied, so a fast click showed them briefly. They now ship hidden and are revealed only where they are enabled for testing. TO TEST: hard refresh and open Order & Publish as fast as possible, then read Panel arrangement — only Picture Book and Magazine, at every moment.",
+        "td": [
+          "TD-896"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.0.976",
     "staged_on": "2026-09-23",
     "entries": [

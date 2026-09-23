@@ -4206,6 +4206,60 @@ function bookMismatch(approvedInc, nowInc, approvedCo, nowCo, opts) {
   m.any = m.categories.length > 0;
   return m;
 }
+// v3.0.977 -- TD-897. THE FOUR OLDER SETTINGS CHECKS NOW ASK THE SAME QUESTION AS bookMismatch.
+//
+// Ian, 2026-09-23, on production: "Your Layout Settings have changed since this version was saved"
+// on a book whose settings he had not touched. MEASURED from his log line: the saved co and the
+// current co held IDENTICAL values for every key they shared. They differed only in key ORDER and
+// in six keys the saved string predates -- pano, aside, companion, emphasis, watermark, hidelogo --
+// every one at its default and none with a control. restore-optimized, ensureApprovedLayoutForFix,
+// print-interior's log and last-optimized's layoutStale all compared the two as RAW STRINGS, so an
+// older and shorter string could never match a newer one, and "the same settings" read as "changed".
+//
+// bookMismatch already had the right comparison -- parsed through parseCustomOpts, so order is
+// irrelevant and a missing key reads as its default, and limited to CO_COMPARABLE, the keys a reader
+// can actually change. This is that comparison with a reader-facing description of each difference,
+// and every check that used to compare strings now calls it (rules 5c: one site, no twins).
+//
+// NOT TOLD IS NOT CHANGED (TD-610): a request with no co compares as the same.
+var CO_CHANGE_LABELS = {
+  arrange: 'Layout', border: 'Picture border', caption: 'Caption style', font: 'Font', dropcap: 'Drop cap',
+  cover: 'Cover page', cast: 'Character page', castnpc: 'NPCs on the character page', castimg: 'Character portrait',
+  toc: 'Contents page', header: 'Running header', markers: 'Session markers', markerbreak: 'Session page breaks',
+  titleStyle: 'Title style', titlePlace: 'Title placement', titleSize: 'Title size'
+};
+function coSettingsDiff(savedCo, nowCo) {
+  var out = { same: true, keys: [], changes: [] };
+  try {
+    var m = bookMismatch(null, null, savedCo || '', nowCo || '');
+    if (!(m.layout || m.titlecover)) return out;
+    out.same = false;
+    out.keys = m.keys.slice();
+    var a = parseCustomOpts(savedCo || ''), b = parseCustomOpts(nowCo || '');
+    var toggle = function (k, v) { return (typeof CO_DEFAULTS[k] === 'number') ? (Number(v) ? 'on' : 'off') : String(v); };
+    for (var k in CO_COMPARABLE) {
+      if (String(a[k]) === String(b[k])) continue;
+      out.changes.push((CO_CHANGE_LABELS[k] || k) + ': ' + toggle(k, a[k]) + ' to ' + toggle(k, b[k]));
+    }
+  } catch (e) { out.same = true; out.keys = []; out.changes = []; }
+  return out;
+}
+// v3.0.977 -- TD-895. WHEN THE ORDER TAB IS TOLD "NO SAVED LAYOUT", SAY WHERE WE LOOKED.
+// The refusal answered with no record of which version, which fork and which layout bucket it
+// searched, so a false refusal could only be reasoned about. This names all three and lists the
+// buckets that DO hold a saved layout, for this scope and for the base book, in one server line.
+async function savedLayoutScopeNote(req, campaignId, arrange) {
+  try {
+    var db = await getDb();
+    var sc = await bookPrefsScope(db, req, campaignId);
+    var here = await getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: false, versionId: sc.versionId });
+    var base = sc.versionId ? await getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: false, versionId: 0 }) : null;
+    var keysOf = function (p) { return Object.keys((p && p.lastOptimized) || {}).join('/') || 'none'; };
+    return 'asked for ' + arrange + ' | as_version=' + ((req.query && req.query.as_version) || '(none)') +
+      ' as_user=' + ((req.query && req.query.as_user) || '(none)') + ' -> fork ' + sc.fork + ' version ' + sc.versionId +
+      ' | saved here: ' + keysOf(here) + (base ? ' | saved on the base book: ' + keysOf(base) : '');
+  } catch (e) { return 'scope could not be read: ' + ((e && e.message) || e); }
+}
 // v3.0.800 -- TD-610. ONE RESOLVER. THREE SURFACES CANNOT DISAGREE IF THERE IS ONLY ONE ANSWER.
 //
 // v3.0.798 wrote this comparison at THREE call sites -- print-interior, publish-story and the
@@ -4545,7 +4599,7 @@ async function ensureApprovedLayoutForFix(req, campaignId, arrange) {
     if (optimizeRunGet(req.session && req.session.userId)) { out.reason = 'run_in_flight'; return out; }
     var st = await approvedStateFor(req, campaignId, arrange);
     if (!st) { out.reason = 'no_saved_layout'; return out; }
-    if ((st.co || '') !== ((req.query && req.query.co) || '')) { out.reason = 'settings_changed'; return out; }
+    if (!coSettingsDiff(st.co, req.query && req.query.co).same) { out.reason = 'settings_changed'; return out; }   // v3.0.977 -- TD-897
     composedCachePut(campaignId, req, st.arrange || arrange, st.body, st.campaignName || '', st.planText || null);
     runMovesSet(k, st.moves || []);
     runGrowsSetMap(k, st.grows || {});
@@ -6950,6 +7004,8 @@ async function printInteriorHandler(req, res) {
     req.query.nocover = '1';
     var _appr = await approvedStateFor(req, req.params.campaignId, co.arrange);
     if (!_appr || !_appr.body) {
+      // v3.0.977 -- TD-895. Say where we looked, so a false refusal names its own cause.
+      try { console.warn('[print-interior] no saved layout for campaign ' + req.params.campaignId + ': ' + (await savedLayoutScopeNote(req, req.params.campaignId, co.arrange))); } catch (e) {}
       return res.status(409).json({ error: 'optimize_required',
         message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then order.' });
     }
@@ -6991,8 +7047,10 @@ async function printInteriorHandler(req, res) {
     //
     // Still LOGGED, because which of two layouts shipped is the first question asked when
     // a printed book comes back wrong, and that answer must not disappear with the refusal.
-    if ((_appr.co || '') !== (req.query.co || '')) {
-      try { console.log('[print-interior] building the SAVED layout; current settings differ. saved co: ' + (_appr.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
+    // v3.0.977 -- TD-897. Compared as settings, not as strings; the log names the keys that differ.
+    var _coDiffP = coSettingsDiff(_appr.co, req.query.co);
+    if (!_coDiffP.same) {
+      try { console.log('[print-interior] building the SAVED layout; current settings differ: ' + _coDiffP.keys.join(', ') + ' | saved co: ' + (_appr.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
     }
     // v3.0.424 -- FIRST, TRY SUBTRACTION. The saved PDF is the approved book with covers on it; if
     // we know exactly how many cover pages it carries, the interior is that file minus those pages,
@@ -14291,7 +14349,8 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last
     // Optimized File can pull both and say plainly when a pre-v3.0.422 save has only the PDF.
     return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null,
-      hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && (lastOpt.co || '') !== (req.query.co || '')),
+      hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && !coSettingsDiff(lastOpt.co, req.query.co).same),   // v3.0.977 -- TD-897
+
       // v3.0.430 -- THE INTERIOR PAGE COUNT, EXACTLY, WITHOUT RENDERING ANYTHING.
       // The Order tab used to open on printNovelInfo.pageEstimate -- a guess -- and only learned the
       // real number once the interior had been generated, several seconds later. That is why the
@@ -14319,9 +14378,12 @@ router.post('/restore-optimized/:campaignId', requireAuth, async function (req, 
     var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
     var st = await approvedStateFor(req, campaignId, arrange);
     if (!st) return res.json({ ok: false, restored: false, reason: 'no_saved_layout' });
-    if ((st.co || '') !== (req.query.co || '')) {
-      try { console.warn('[restore-optimized] settings differ from the approved layout. approved co: ' + (st.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
-      return res.json({ ok: false, restored: false, reason: 'settings_changed' });
+    // v3.0.977 -- TD-897. Compared as settings, not as strings: the same settings in a different order,
+    // or an older save without the internal default keys, is NOT a change. A real change is named.
+    var _coDiffR = coSettingsDiff(st.co, req.query.co);
+    if (!_coDiffR.same) {
+      try { console.warn('[restore-optimized] settings differ from the approved layout: ' + _coDiffR.keys.join(', ') + ' | approved co: ' + (st.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
+      return res.json({ ok: false, restored: false, reason: 'settings_changed', changes: _coDiffR.changes });
     }
     var _k = composedCacheKey(campaignId, req);
     composedCachePut(campaignId, req, st.arrange || arrange, st.body, st.campaignName || '', st.planText || null);
