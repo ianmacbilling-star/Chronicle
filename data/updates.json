@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.7",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "317-halo-not-on-white-cards",
+        "kind": "fix",
+        "public": true,
+        "summary": "Field labels on the Feedback and My Account pages are sharp again, and every page title now reads in gold on the darker background.",
+        "detail": "Ian: the Feedback page's labels (Type, Subject, Message) looked blurry. 3.1.6 gave every field label a dark edge so it would read over the background's candles, but on white cards that edge blurred dark lettering. The edge now applies to field labels only on the session page, where they sit straight on the background; everywhere else labels are as crisp as before. Titles, subtitles, dates and tab names keep their edge. Ian also spotted that the My Account heading had become almost invisible: some pages still drew their title in the old dark lettering, which the darker background swallowed. Every page title is now gold and the line under it cream. TO TEST: My Account and Feedback: the page title reads gold and the line under it cream; Feedback and My Account: the field labels are crisp. A session page: Story / Session Transcript still has its dark edge and reads clearly over the candles.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.6",
     "staged_on": "2026-09-23",
     "entries": [
