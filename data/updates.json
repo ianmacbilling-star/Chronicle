@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.1",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "311-session-menu-dots",
+        "kind": "fix",
+        "public": true,
+        "summary": "The ... menu button on each session book is now gold and easy to see.",
+        "detail": "Ian: the dots on the session tile's menu button could not be seen. The button shared the app's standard dark colour, which disappeared on the dark book cover. On the session books it is now gold with a gold edge, brightening when you point at it. TO TEST: a campaign's Sessions page: every book's ... button shows gold dots; it opens the menu and Delete session still asks first.",
+        "td": ["TD-813"]
+      }
+    ]
+  },
+  {
     "version": "3.1.0",
     "staged_on": "2026-09-23",
     "entries": [
