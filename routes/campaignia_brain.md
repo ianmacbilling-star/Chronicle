@@ -1170,6 +1170,18 @@ Up to **50 files** at a time, **JPG, PNG or WebP**. They arrive as ordinary asse
 any of them afterwards to add a description or change anything. Whoever is allowed to add assets in
 that campaign can use it.
 
+- **Suggested assets:** after **Generate Story**, when you land on the **Review** tab,
+  Campaignia may list up to 8 people, places or things it found in **two or more panels**
+  that aren't assets or characters yet. Tick the ones you want and choose **Yes, generate**:
+  each costs the usual token for an asset picture, and the total is shown before you agree.
+  They attach to the panels that mention them on their own. Choose **No** (or untick one)
+  and Campaignia instead writes that item's description into those panels' image prompts,
+  so it's still drawn the same way each time. Anything that looks like a main character is
+  only suggested for the Characters tab, never built. The **Suggested assets** button in the
+  Review bar reopens the list. Members can generate them when the Story Master has turned on
+  **Allow Members to Add Assets**. Running Generate Story again uses the assets you already
+  made and suggests only what's still missing.
+
 **Asset vs. character:** a *minor or one-off* recurring figure (the tavern barkeep)
 belongs here as a Supporting Character / NPC asset; a *major, important* recurring
 character (a main villain, a key ally) belongs on the **Characters tab** with the

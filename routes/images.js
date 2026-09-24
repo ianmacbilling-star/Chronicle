@@ -1,5 +1,6 @@
 const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campaign prompt at GENERATION time
+const assetSuggest = require('../services/assetSuggestions');   // v3.1.9 -- TD-908 recurring-element notes
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -490,6 +491,21 @@ async function loadMomentDirections(db, forkId) {
   });
   return byMomentId;
 }
+// v3.1.9 -- TD-908. THE "NO" HALF OF SUGGESTED ASSETS. Ian: "on a No... add the description of the
+// item to the prompt for the panel. It just uses the panel's prompt text from there." Generate Story
+// stores its suggestions on the version; any suggestion WITHOUT a live asset is described in words on
+// the panels that name it, so it is drawn the same way every time. Two call sites, both below:
+// single Regenerate and Generate Images. Retouch is deliberately NOT one of them, for the reason the
+// campaign prompt is not (buildPanelInput): a retouch changes one thing and keeps the rest.
+// A read fault returns no suggestions, which is exactly the behaviour before this feature.
+async function loadAssetSuggestions(db, forkId) {
+  try {
+    const r = await db.prepare('SELECT asset_suggestions FROM session_forks WHERE id = ?').get(forkId);
+    return assetSuggest.parseStored(r && r.asset_suggestions);
+  } catch (e) { return assetSuggest.parseStored(null); }
+}
+var ASSET_SUGGEST_MATCHERS = { assetNameMatches: assetNameMatches, characterNameMatches: characterNameMatches };
+
 function applyMomentDirection(basePrompt, dirText) {
   if (!dirText) return basePrompt || '';
   return (basePrompt || '') + '\n\nDIRECTOR STEERING (you MUST follow this): ' + dirText;
@@ -1468,7 +1484,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
         console.log('[DEBUG_PROMPT] body prompt (first 160): ' + (prompt || '').slice(0, 160));
       } catch (_e) {}
     }
-    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade, _campPromptS);
+    const _recNotesS = assetSuggest.notesForPanel(await loadAssetSuggestions(db, moment.fork_id), assets, chars, panelText, ASSET_SUGGEST_MATCHERS, { castExplicit: !!moment.cast_explicit });   // v3.1.9 -- TD-908
+    const sub = await submitPanelGen(applyMomentDirection(assetSuggest.applyRecurringNotes(prompt, _recNotesS), momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade, _campPromptS);
 
     await logDebug(req.session.userId, {
       level: 'info', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment',
@@ -1977,6 +1994,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
 
   const momentDirs = await loadMomentDirections(db, targetForkId);
+  const _recStoredAll = await loadAssetSuggestions(db, targetForkId);   // v3.1.9 -- TD-908, read once per batch
   const _campPromptAll = await loadCampaignPrompt(db, campaign_id);
   // Whole batch shares one art style: resolve + lapse-check once, before the
   // concurrent map (a return inside the map would not abort the batch).
@@ -2001,7 +2019,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castNames: castNames
       };
       const _rs = _rsAll;
-      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade, _campPromptAll);
+      const _recNotes = assetSuggest.notesForPanel(_recStoredAll, assets, chars, panelText, ASSET_SUGGEST_MATCHERS, { castExplicit: !!m.cast_explicit });   // v3.1.9 -- TD-908
+      const sub = await submitPanelGen(applyMomentDirection(assetSuggest.applyRecurringNotes(m.prompt, _recNotes), momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade, _campPromptAll);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -2859,6 +2878,7 @@ module.exports.characterTokens = characterTokens;
 module.exports.characterCanonicalName = characterCanonicalName;
 module.exports.characterNameMatches = characterNameMatches;
 module.exports.assetTokens = assetTokens;
+module.exports.assetNameMatches = assetNameMatches;   // v3.1.9 -- TD-908: suggestions are counted with the SAME matcher the image step uses
 module.exports.buildAssetBlock = buildAssetBlock;
 module.exports.combineRefs = combineRefs;
 module.exports.attachPriorReferences = attachPriorReferences;

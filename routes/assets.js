@@ -10,6 +10,10 @@ const path = require('path');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, recordGeneration } = require('./tokens');
 const { HELP_MODEL } = require('../config/models');
+const { getBalance } = require('./tokens');   // v3.1.9 -- TD-908 (a second destructure; the line above is untouched)
+const { resolveActingFork, requestedForkIdOf } = require('../database/db');
+const { getCampaignRole } = require('../middleware/auth');
+const assetSuggest = require('../services/assetSuggestions');
 
 // Memory storage — we push to the R2 storage layer ourselves.
 const upload = multer({
@@ -53,21 +57,49 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 // Tier gate: cap assets per campaign by the creating DM's EFFECTIVE tier (max of
 // their own tier and the campaign SM's). Returns an error string to send back, or
 // null to allow. max_assets === null means unlimited; 0 blocks new assets entirely.
-async function assetCapBlock(db, userId, campaignId) {
+// v3.1.9 -- TD-908. THE CAP IS READ IN ONE PLACE. assetCapBlock kept its exact message and verdict;
+// it now asks assetCapInfo, which the suggestions route also asks for "how much room is left".
+// cap null = unlimited. A read fault returns cap null, which is what assetCapBlock always did.
+async function assetCapInfo(db, userId, campaignId) {
   try {
     const effName = await getEffectiveTier(userId, campaignId);
     const effTier = getTier(effName);
     const cap = effTier ? effTier.max_assets : null;
     if (cap !== null && cap !== undefined) {
       const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_assets WHERE campaign_id = ?').get(campaignId);
-      if (cnt && cnt.c >= cap) {
-        return 'This campaign has hit its asset limit of ' + cap + ' on the ' + effTier.name + ' tier. Upgrade for more.';
-      }
+      return { cap: cap, used: Number(cnt && cnt.c) || 0, tierName: effTier.name };
     }
   } catch (e) {
     console.error('asset cap check error:', e.message);
   }
+  return { cap: null, used: 0, tierName: null };
+}
+async function assetCapBlock(db, userId, campaignId) {
+  const info = await assetCapInfo(db, userId, campaignId);
+  if (info.cap !== null && info.used >= info.cap) {
+    return 'This campaign has hit its asset limit of ' + info.cap + ' on the ' + info.tierName + ' tier. Upgrade for more.';
+  }
   return null;
+}
+
+// v3.1.9 -- TD-908. QUEUE ONE GENERATED ASSET: submit to fal, then create the row and its job. Was
+// written inline in POST /generate; the suggestions route needs the identical three steps, and two
+// copies of a generate path is how this project's twins are born (section 5c). Same order as before:
+// the asset row is created only after the submit succeeds, so fal being down leaves no orphan.
+async function queueAssetGeneration(db, o) {
+  const sub = await imageHelpers.submitAssetReference(o.falKey, o.description, o.category, o.modelKey, o.webhookUrl);
+  const now = new Date().toISOString();
+  const result = await db.prepare(
+    'INSERT INTO campaign_assets (campaign_id, name, category, image_url, description, created_at, created_by) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(o.campaignId, o.name, o.category, null, o.description, now, o.userId);
+  const assetId = result.lastInsertRowid;
+  const jobIns = await db.prepare(
+    'INSERT INTO image_jobs (request_id, user_id, campaign_id, asset_id, kind, status, model, cost, created_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(sub.request_id, o.userId, parseInt(o.campaignId, 10), assetId, 'asset_ref', 'queued', sub.model, o.cost, now, now);
+  const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(assetId);
+  return { asset: asset, request_id: sub.request_id, image_job_id: jobIns.lastInsertRowid };
 }
 
 // POST create a new asset (with image upload).
@@ -256,25 +288,187 @@ router.post('/generate', requireAuth, verifyCampaignAssetCreator, async function
 
     // Queue the generation first; only create the asset if the submit succeeds
     // (avoids leaving an image-less orphan asset when fal is unavailable).
-    const sub = await imageHelpers.submitAssetReference(falKey, description, category, modelKey, webhookUrl);
-
-    const now = new Date().toISOString();
-    const result = await db.prepare(
-      'INSERT INTO campaign_assets (campaign_id, name, category, image_url, description, created_at, created_by) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.params.campaignId, name, category, null, description, now, req.session.userId);
-    const assetId = result.lastInsertRowid;
-
-    const jobIns = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, asset_id, kind, status, model, cost, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), assetId, 'asset_ref', 'queued', sub.model, cost, now, now);
-
-    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(assetId);
-    res.json({ success: true, queued: true, asset: asset, request_id: sub.request_id, image_job_id: jobIns.lastInsertRowid });
+    // v3.1.9 -- the three steps now live in queueAssetGeneration, shared with the suggestions route.
+    const q = await queueAssetGeneration(db, { falKey: falKey, description: description, category: category, modelKey: modelKey, webhookUrl: webhookUrl,
+      campaignId: req.params.campaignId, name: name, userId: req.session.userId, cost: cost });
+    res.json({ success: true, queued: true, asset: q.asset, request_id: q.request_id, image_job_id: q.image_job_id });
   } catch (e) {
     console.error('generate asset error:', e.message);
     res.json({ error: 'Could not generate the asset image.' });
+  }
+});
+
+// =============================================================================================
+// v3.1.9 -- TD-908. SUGGESTED ASSETS. Spec: claude/ASSET_SUGGESTIONS_SPEC.md.
+//
+// Generate Story leaves up to eight suggestions on the version it built (session_forks.
+// asset_suggestions). These three routes read them, turn the ticked ones into assets, and record
+// a No. Ian: "Do you want Campaignia to generate these for you? It will cost x tokens. Yes or no."
+//
+// WHO: reading is any member (the list is harmless and a member can see the panels anyway);
+// generating goes through verifyCampaignAssetCreator, which is the Story Master, or a member when
+// "Allow Members to Add Assets" is on -- Ian's rule, and the rule every other asset route uses.
+// WHICH VERSION: resolveActingFork, the one place that answers that. A version that is not yours
+// to act on reads as an empty list rather than an error.
+// =============================================================================================
+async function suggestionFork(db, req, role) {
+  const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(req.params.sessionId, req.params.campaignId);
+  if (!sess) return null;
+  return await resolveActingFork(db, sess.id, req.session.userId, role, requestedForkIdOf(req));
+}
+async function readSuggestions(db, forkId) {
+  const row = await db.prepare('SELECT asset_suggestions FROM session_forks WHERE id = ?').get(forkId);
+  return assetSuggest.parseStored(row && row.asset_suggestions);
+}
+async function writeSuggestions(db, forkId, stored) {
+  await db.prepare('UPDATE session_forks SET asset_suggestions = ? WHERE id = ?').run(JSON.stringify(stored), forkId);
+}
+// A created suggestion whose asset has since been deleted is offered again.
+function refreshCreated(stored, assets) {
+  const live = {};
+  (assets || []).forEach(function (a) { live[String(a.id)] = a; });
+  stored.items.forEach(function (it) {
+    if (it.status === 'created' && (it.asset_id == null || !live[String(it.asset_id)])) { it.status = 'declined'; it.asset_id = null; }
+  });
+  return stored;
+}
+function memberMayCreate(campaign, role) {
+  if (role === 'dm') return true;
+  const v = campaign && campaign.allow_member_assets;
+  return v === true || v === 1 || v === 't' || v === 'true';
+}
+const _suggestBusy = {};   // one accept per version at a time, so a double click cannot create twins
+
+router.get('/suggestions/:sessionId', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const role = await getCampaignRole(req.session.userId, req.params.campaignId);
+    const forkId = await suggestionFork(db, req, role);
+    if (!forkId) return res.json({ items: [], can_create: false });
+    const assets = await db.prepare('SELECT id, name, image_url FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+    const stored = refreshCreated(await readSuggestions(db, forkId), assets);
+    const campaign = await db.prepare('SELECT allow_member_assets FROM campaigns WHERE id = ?').get(req.params.campaignId);
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    let balance = null;
+    try { balance = (await getBalance(req.session.userId)).total; } catch (e) { balance = null; }
+    const cap = await assetCapInfo(db, req.session.userId, req.params.campaignId);
+    const imgById = {};
+    assets.forEach(function (a) { imgById[String(a.id)] = !!a.image_url; });
+    res.json({
+      fork_id: forkId,
+      items: stored.items.map(function (it) {
+        return { key: it.key, name: it.name, aliases: it.aliases || [], category: it.category, description: it.description,
+          panels: (it.panels || []).length, mentions: it.mentions || 0, status: it.status, asset_id: it.asset_id,
+          asset_ready: it.asset_id != null ? !!imgById[String(it.asset_id)] : false };
+      }),
+      can_create: memberMayCreate(campaign, role),
+      cost_per_asset: cost,
+      balance: balance,
+      cap: cap.cap, cap_used: cap.used
+    });
+  } catch (e) {
+    console.error('asset suggestions read error:', e.message);
+    res.json({ items: [], can_create: false });
+  }
+});
+
+router.post('/suggestions/:sessionId/decline', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const role = await getCampaignRole(req.session.userId, req.params.campaignId);
+    const forkId = await suggestionFork(db, req, role);
+    if (!forkId) return res.status(403).json({ error: 'That version is not yours to change.' });
+    const stored = await readSuggestions(db, forkId);
+    stored.items.forEach(function (it) { if (it.status === 'open') it.status = 'declined'; });
+    await writeSuggestions(db, forkId, stored);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('asset suggestions decline error:', e.message);
+    res.json({ error: 'Could not save that choice.' });
+  }
+});
+
+router.post('/suggestions/:sessionId/accept', requireAuth, verifyCampaignAssetCreator, async function (req, res) {
+  const db = await getDb();
+  const forkId = await suggestionFork(db, req, req.campaignRole);
+  if (!forkId) return res.status(403).json({ error: 'That version is not yours to change.' });
+  if (_suggestBusy[forkId]) return res.json({ error: 'BUSY', message: 'Those assets are already being created.' });
+  _suggestBusy[forkId] = 1;
+  try {
+    const keys = {};
+    ((req.body && Array.isArray(req.body.keys)) ? req.body.keys : []).forEach(function (k) { keys[String(k)] = 1; });
+    const assetsNow = await db.prepare('SELECT id, name FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+    const stored = refreshCreated(await readSuggestions(db, forkId), assetsNow);
+    // Characters are never built here (Ian: "we won't automatically build characters").
+    const chosen = stored.items.filter(function (it) { return it.category !== 'character' && it.status !== 'created' && keys[it.key]; });
+    // Unticked is a No for that item: its description goes into the panel prompts instead.
+    stored.items.forEach(function (it) { if (it.status === 'open' && it.category !== 'character' && !keys[it.key]) it.status = 'declined'; });
+    if (!chosen.length) { await writeSuggestions(db, forkId, stored); return res.json({ success: true, created: [], failed: [] }); }
+
+    // EVERY CHECK BEFORE THE FIRST SUBMIT (Ian: "check the tokens ahead of time"), all or nothing,
+    // like Generate Images: a partial set would leave the reader guessing which ones happened.
+    const cap = await assetCapInfo(db, req.session.userId, req.params.campaignId);
+    if (cap.cap !== null && cap.used + chosen.length > cap.cap) {
+      const room = Math.max(0, cap.cap - cap.used);
+      return res.json({ error: 'ASSET_LIMIT', room: room, message: 'This campaign has room for ' + room + ' more asset' + (room === 1 ? '' : 's') + ' on the ' + cap.tierName + ' tier. Untick some, or upgrade for more.' });
+    }
+    const falKey = process.env.FAL_API_KEY;
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!falKey || !webhookUrl) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    const total = cost * chosen.length;
+    if (!(await canAfford(req.session.userId, total))) {
+      let bal = null;
+      try { bal = (await getBalance(req.session.userId)).total; } catch (e) {}
+      return res.json({ error: 'INSUFFICIENT_TOKENS', needed: total, balance: bal,
+        message: 'Creating ' + chosen.length + ' asset' + (chosen.length === 1 ? '' : 's') + ' costs ' + total + ' token' + (total === 1 ? '' : 's') + (bal != null ? (', and you have ' + bal) : '') + '. Untick some, or add tokens.' });
+    }
+
+    const created = [], failed = [];
+    for (let i = 0; i < chosen.length; i++) {
+      const it = chosen[i];
+      try {
+        const q = await queueAssetGeneration(db, { falKey: falKey, description: it.description || it.name, category: it.category, modelKey: modelKey,
+          webhookUrl: webhookUrl, campaignId: req.params.campaignId, name: assetSuggest.assetNameFor(it), userId: req.session.userId, cost: cost });
+        it.status = 'created'; it.asset_id = q.asset.id;
+        created.push(q.asset);
+      } catch (e) {
+        console.error('suggested asset submit failed (' + it.key + '):', e.message);
+        failed.push(it.name);
+      }
+    }
+    await writeSuggestions(db, forkId, stored);
+
+    // ATTACH. Panels on automatic casting pick the new assets up by name -- the suggestion was only
+    // offered because the matcher found it there. A panel whose cast was chosen by hand ignores
+    // name-matching, so the asset is added to its explicit list, which is what Ian's "auto attach
+    // them to the scenes where they were needed" means for those panels.
+    let attached = 0;
+    if (created.length) {
+      const explicit = await db.prepare('SELECT id, prompt, description, title FROM moments WHERE fork_id = ? AND cast_explicit IS TRUE').all(forkId);
+      for (let j = 0; j < explicit.length; j++) {
+        const mo = explicit[j];
+        const text = ((mo.prompt || '') + ' ' + (mo.description || '') + ' ' + (mo.title || '')).toLowerCase();
+        for (let k = 0; k < created.length; k++) {
+          if (imageHelpers.assetNameMatches(created[k].name, text)) {
+            await db.prepare('INSERT INTO moment_assets (moment_id, asset_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(mo.id, created[k].id);
+            attached++;
+          }
+        }
+      }
+    }
+    try {
+      await recordGeneration(req.session.userId, { event_type: 'asset_suggestions_accept', tokens_redeemed: 0, quantity: created.length,
+        unit: 'assets', model: modelKey, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId });
+    } catch (e) {}
+    res.json({ success: true, created: created, failed: failed, attached_explicit: attached, cost_each: cost });
+  } catch (e) {
+    console.error('asset suggestions accept error:', e.message);
+    res.json({ error: 'Could not create those assets.' });
+  } finally {
+    delete _suggestBusy[forkId];
   }
 });
 

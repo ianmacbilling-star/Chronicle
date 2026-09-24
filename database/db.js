@@ -1429,6 +1429,11 @@ async function migrateForks(pool) {
   // text, and REFUSES to overwrite while it is true unless the request explicitly asks -- which
   // is what stops any of the six generate call sites in app.js destroying hand-written memory.
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_summary_edited BOOLEAN DEFAULT FALSE');
+  // v3.1.9 -- TD-908. SUGGESTED ASSETS, per version, written by Generate Story in the call it already
+  // makes. JSON { version, generated_at, items:[{ key, name, aliases, category, description, panels,
+  // mentions, status: open|declined|created, asset_id }] }. NULL means none, and every reader treats it
+  // as an empty list. A column, not a table: it is read and written whole, always with its version.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS asset_suggestions TEXT');
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`

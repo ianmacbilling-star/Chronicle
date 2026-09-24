@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.9",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "319-suggested-assets",
+        "kind": "feature",
+        "public": true,
+        "summary": "After Generate Story, Campaignia suggests the people, places and things that appear in more than one panel, and can create them as assets for you so they look the same every time.",
+        "detail": "Run Generate Story on a session where something recurs (a named place, a supporting character, an item) in two or more panels. On landing on Review a modal lists up to 8, ranked by how often the transcript mentions them, each with a checkbox, its category, its panel count and a description. The token total updates as you untick; it refuses up front if the total is more than your balance or more than the tier's asset room. Yes creates the ticked ones (1 token each on success) and waits for the pictures; they then show as asset pills on the Review panels that name them. No, or unticking, keeps the description and adds it to those panels' image prompts (see the finalPrompt in the Generate Images debug log: RECURRING ELEMENTS). Things that look like main characters are listed as a Characters-tab suggestion only. Re-run Generate Story: already-made assets are not suggested again. As a member: without Allow Members to Add Assets you see the list and an OK only. Existing assets and Generate Story otherwise behave as before.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.8",
     "staged_on": "2026-09-24",
     "entries": [
