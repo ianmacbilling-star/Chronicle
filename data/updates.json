@@ -1,5 +1,61 @@
 [
   {
+    "version": "3.1.7",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "317-halo-not-on-white-cards",
+        "kind": "fix",
+        "public": true,
+        "summary": "Field labels on the Feedback and My Account pages are sharp again, and every page title now reads in gold on the darker background.",
+        "detail": "Ian: the Feedback page's labels (Type, Subject, Message) looked blurry. 3.1.6 gave every field label a dark edge so it would read over the background's candles, but on white cards that edge blurred dark lettering. The edge now applies to field labels only on the session page, where they sit straight on the background; everywhere else labels are as crisp as before. Titles, subtitles, dates and tab names keep their edge. Ian also spotted that the My Account heading had become almost invisible: some pages still drew their title in the old dark lettering, which the darker background swallowed. Every page title is now gold and the line under it cream. TO TEST: My Account and Feedback: the page title reads gold and the line under it cream; Feedback and My Account: the field labels are crisp. A session page: Story / Session Transcript still has its dark edge and reads clearly over the candles.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.6",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "316-background-dimmed",
+        "kind": "change",
+        "public": true,
+        "summary": "The background picture is darker on every page, and page titles, tabs and labels have a soft dark edge, so the gold lettering no longer disappears into the candlelight.",
+        "detail": "Ian: with the dark panels gone, the candle flames in the background picture were the same gold as the page's lettering, and words crossing them were lost. Ian chose 70% from previews at 30, 40, 50 and 70. The background is now 70% darker on every page, the same picture in the same place, and the words that sit straight on it (page titles and subtitles, dates, tab names and field labels) have a soft dark edge that keeps them readable even over a flame. Panels, cards, buttons and the book previews are unchanged. TO TEST: a session page, a campaign's Sessions page, My Campaigns, My Stuff, Publish and the Dashboard: the background is dim but still visible, and every title, tab name and label reads clearly, including where it crosses a candle.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.5",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "315-pages-plain-background",
+        "kind": "change",
+        "public": true,
+        "summary": "The dark panel behind the Sessions, session, Characters, Publish, Asset Library and Dashboard pages is gone, so every page shows the same background.",
+        "detail": "Ian: remove the dark panel from the sessions page and the session page, and everywhere else it appears. Six pages drew a dark, blurred panel over the background picture: a campaign's Sessions page, a session's own page, Characters, Publish, the Asset Library and the Dashboard. That panel is now off on all of them, as it already is on My Campaigns and My Stuff, so the whole app sits on one background. The panels and cards inside those pages keep their own dark backgrounds. TO TEST: open each of those six pages and check the words directly on the background (page titles, subtitles, tab names, hints) are still easy to read; if any are not, the panel can be switched back or the background darkened for every page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.4",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "314-campaigns-plain-background",
+        "kind": "change",
+        "public": true,
+        "summary": "My Campaigns now sits on the same background as the rest of the app, without the dark panel behind the campaign books.",
+        "detail": "Ian: My Campaigns looked darker than My Stuff, as if a dark panel sat behind it. It did: the page drew its own copy of the background picture with a dark layer over it. That layer and the extra copy are gone, so My Campaigns shows the same background as every other page, and the line under the title is a little brighter with a shadow so it stays readable. TO TEST: My Campaigns: no dark box behind the books; the background matches My Stuff; the title, subtitle, book names and New campaign are all easy to read. If they are not, it can be switched back.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.3",
     "staged_on": "2026-09-23",
     "entries": [

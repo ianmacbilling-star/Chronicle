@@ -3062,6 +3062,9 @@ function renderCampaigns() {
   // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
   // false puts back the cards exactly as they were (their markup below is untouched).
   if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
+  // v3.1.4 -- the page's own dark panel off (Ian); CAMPAIGNS_PAGE_PLAIN_BG is its switch.
+  var _vc = document.getElementById('view-campaigns');
+  if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
@@ -16641,6 +16644,9 @@ function renderCampaigns() {
   // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
   // false puts back the cards exactly as they were (their markup below is untouched).
   if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
+  // v3.1.4 -- the page's own dark panel off (Ian); CAMPAIGNS_PAGE_PLAIN_BG is its switch.
+  var _vc = document.getElementById('view-campaigns');
+  if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
@@ -19306,6 +19312,22 @@ function campDescTrunc(desc) {
 // date and Details on it. 8.5 x 11 in proportion. Styles: .camp-books in app.html.
 // THE WAY BACK: set this to false. Nothing of the old card was removed, so false is exactly v3.0.994.
 var CAMPAIGN_CARDS_AS_BOOKS = true;
+// v3.1.4 -- MY CAMPAIGNS ON THE APP'S OWN BACKGROUND. Ian asked why My Campaigns looked darker than
+// My Stuff: style.css gives #view-campaigns its own copy of the background picture (scrolling with
+// the page, so it does not line up with the body's fixed one) and a 55% black ::before over the whole
+// box. With the campaigns drawn as dark books that panel is not needed for reading. The class
+// .camp-plain-bg (app.html) drops both, so the page shows the same background as every other page.
+// THE WAY BACK, if the words are hard to read: set this to false (and, for the very first paint,
+// take camp-plain-bg off <div id="view-campaigns"> in app.html).
+var CAMPAIGNS_PAGE_PLAIN_BG = true;
+// v3.1.5 -- AND THE SAME FOR EVERY OTHER PAGE. Ian: "remove the same dark panel from the sessions tile
+// page and the session page... Remove that everywhere." style.css ("Glass dark panels for all views
+// except campaigns") gives #view-sessions, #view-characters, #view-novel, #view-session-detail,
+// #view-settings and #view-assets a 72% dark fill and a 10px blur. body.views-plain-bg (app.html)
+// takes both off, so every page sits on the one fixed background picture.
+// THE WAY BACK: set this to false (and, for the very first paint, take views-plain-bg off <body>).
+var VIEWS_PLAIN_BG = true;
+try { if (document.body && document.body.classList) document.body.classList.toggle('views-plain-bg', !!VIEWS_PLAIN_BG); } catch (e) {}
 function campaignBookHtml(c) {
   var pic = c.campaign_image_url || c.cover_image_url;
   return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
