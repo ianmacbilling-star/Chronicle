@@ -129,8 +129,53 @@ function makeHandlers(d) {
       versionId: r.version_id, versionLabel: r.version_label || '', arrange: r.arrange || '', layout: r.layout || '',
       bookTitle: r.book_title || '', coverUrl: r.cover_url || '', pages: Number(r.pages) || 0,
       savedAt: r.saved_at || null, createdAt: r.created_at || null, editable: !!r.body_url,
-      storyUrl: r.story_url || '', gone: !!r._gone
+      storyUrl: r.story_url || '', gone: !!r._gone,
+      // v3.1.8 -- what is in the book (Ian). Library books carry their story's genres and styles.
+      subtitle: r.subtitle || '', sessionCount: (r.session_count == null ? null : Number(r.session_count)),
+      artStyles: r._art || jsonList(r.art_styles), narrativeStyles: jsonList(r.narrative_styles), genres: r._genres || jsonList(r.genres)
     };
+  }
+  function jsonList(v) {
+    if (!v) return [];
+    try { var a = JSON.parse(v); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
+  }
+  // v3.1.8 -- WHAT IS IN THE BOOK. Ian: on the open book, the subtitle, how many sessions, the art and
+  // narrative style ("whatever is stored with that version") and the campaign's genres. Read from the
+  // version the book came from, for the sessions the book was made from (inc, the ids its layout was
+  // approved on). Each session's styles come from its fork in that version, else the canonical
+  // version's fork, else the session itself -- the fallthrough the book itself uses. Styles are listed
+  // once each, in session order; a book that mixes them lists them all.
+  async function bookMeta(db, campaignId, bookVersionId, prefs, inc) {
+    var out = { subtitle: '', sessionCount: null, art: [], narr: [], genres: [] };
+    if (prefs && prefs.subtitle != null) out.subtitle = String(prefs.subtitle).trim();
+    var ids = null;
+    if (inc != null && String(inc).trim() !== '') ids = String(inc).split(',').map(function (x) { return String(x).trim(); }).filter(Boolean);
+    if (ids) out.sessionCount = ids.length;
+    var camp = await db.prepare('SELECT genres FROM campaigns WHERE id = ?').get(campaignId);
+    if (camp) { try { out.genres = (d.genreLabels(camp.genres) || []).map(String); } catch (e) { out.genres = []; } }
+    var canon = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND is_canonical').get(campaignId);
+    async function forks(vid) {
+      var m = {};
+      if (!vid) return m;
+      var fr = await db.prepare('SELECT session_id, art_style_override, narrative_style, narrative_style_used FROM session_forks WHERE version_id = ?').all(vid);
+      (fr || []).forEach(function (f) { if (!m[f.session_id]) m[f.session_id] = f; });
+      return m;
+    }
+    var vmap = await forks(bookVersionId), cmap = await forks(canon && canon.id);
+    var sess = await db.prepare('SELECT id, art_style FROM sessions WHERE campaign_id = ? ORDER BY session_date, id').all(campaignId);
+    (sess || []).forEach(function (s) {
+      if (ids && ids.indexOf(String(s.id)) === -1) return;
+      var f = vmap[s.id] || cmap[s.id] || {};
+      var art = String(f.art_style_override || s.art_style || '').trim();
+      var narr = String(f.narrative_style_used || f.narrative_style || '').trim();
+      if (art && out.art.indexOf(art) === -1) out.art.push(art);
+      if (narr && out.narr.indexOf(narr) === -1) out.narr.push(narr);
+    });
+    return out;
+  }
+  async function storeMeta(db, id, m) {
+    await db.prepare('UPDATE bookshelf_books SET subtitle = ?, session_count = ?, art_styles = ?, narrative_styles = ?, genres = ?, meta_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(m.subtitle || '', (m.sessionCount == null ? null : m.sessionCount), JSON.stringify(m.art), JSON.stringify(m.narr), JSON.stringify(m.genres), id);
   }
   function refuse(status, body) { return { ok: false, status: status, body: body }; }
 
@@ -190,8 +235,9 @@ function makeHandlers(d) {
       // different covers showed the same one). Read the way the book reads it -- inherit on -- and
       // through the one rule for "no cover chosen" (db.coverFromPrefs).
       var coverUrl = campaign.cover_image_url || campaign.campaign_image_url || '';
+      var bp = null;
       try {
-        var bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
+        bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
         coverUrl = d.coverFromPrefs(bp, campaign.cover_image_url || campaign.campaign_image_url || '') || '';
       } catch (e) { /* keep the campaign picture */ }
       var ins = await db.prepare(
@@ -202,6 +248,9 @@ function makeHandlers(d) {
         coverUrl, pdfUrl, bodyUrl, Number(lo.pages) || 0,
         (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''));
       made = [];
+      // v3.1.8 -- what is in the book, read now: the shelf keeps a snapshot, so it describes what the
+      // book holds even if the version changes later. Best effort: the book is already shelved.
+      try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, bp, lo.inc)); } catch (e) { d.log('meta', e); }
       return { ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit };
     } catch (e) {
       for (var i = 0; i < made.length; i++) { try { await d.deleteFile(made[i]); } catch (e2) {} }
@@ -222,6 +271,32 @@ function makeHandlers(d) {
           var st = await db.prepare('SELECT id FROM public_stories WHERE id = ? AND public = TRUE').get(rows[i].public_story_id || 0);
           rows[i]._gone = !st;
         } catch (e) { rows[i]._gone = false; }
+        // v3.1.8 -- a Library book's genres and art styles, as its story recorded them when published.
+        try {
+          var sm = await db.prepare('SELECT genres, art_styles FROM public_stories WHERE id = ?').get(rows[i].public_story_id || 0);
+          if (sm) {
+            rows[i]._genres = (d.genreLabels(sm.genres || []) || []).map(String);
+            rows[i]._art = (sm.art_styles || []).map(function (sl) { return (sl === 'custom') ? 'Custom style' : (d.artNameForSlug(sl) || ''); }).filter(Boolean);
+          }
+        } catch (e) { /* the lines are simply left off */ }
+      }
+      // v3.1.8 -- BOOKS SHELVED BEFORE THIS: filled once, from their version as it is now (Ian chose
+      // this over leaving them blank). meta_at is set even when the version is gone, so a missing
+      // version is looked up once, not on every visit.
+      for (var j = 0; j < rows.length; j++) {
+        var rb = rows[j];
+        if (rb.kind !== 'book' || rb.meta_at || !rb.campaign_id) continue;
+        try {
+          var bpj = null;
+          try {
+            var scj = await d.bookPrefsScope(db, { session: req.session, query: { as_version: rb.version_id ? String(rb.version_id) : '' }, body: {} }, rb.campaign_id);
+            if (scj && String(scj.chooser) === String(uid)) bpj = await d.getForkBookPrefs(db, scj.chooser, scj.fork, rb.campaign_id, { inherit: true, versionId: scj.versionId });
+          } catch (e) { bpj = null; }
+          var mj = await bookMeta(db, rb.campaign_id, rb.version_id, bpj, rb.inc);
+          await storeMeta(db, rb.id, mj);
+          rb.subtitle = mj.subtitle; rb.session_count = mj.sessionCount;
+          rb.art_styles = JSON.stringify(mj.art); rb.narrative_styles = JSON.stringify(mj.narr); rb.genres = JSON.stringify(mj.genres);
+        } catch (e) { d.log('meta-fill', e); }
       }
       var used = rows.filter(function (r) { return r.kind === 'book'; }).length;
       return res.json({ limit: t.limit, used: used, tier: t.key, tierName: t.name, plansText: shelfPlansText(), books: rows.map(shape) });
@@ -555,6 +630,8 @@ function H() {
   _h = makeHandlers({
     getDb: db.getDb, bookPrefsScope: db.bookPrefsScope, getForkBookPrefs: db.getForkBookPrefs, setForkBookPrefs: db.setForkBookPrefs,
     ownsBookVersion: db.ownsBookVersion, coverFromPrefs: db.coverFromPrefs, getTier: tiers.getTier, ownTier: tiers.ownTier,
+    genreLabels: require('../services/genres').genreLabels,                 // v3.1.8
+    artNameForSlug: require('../services/artStyleCatalog').nameForSlug,     // v3.1.8
     copyObject: storage.copyObject, deleteFile: storage.deleteFile, fetchFile: storage.fetchFile, uploadFile: storage.uploadFile,
     renderFirstPage: renderFirstPageJpeg,
     // Loaded late: pdf.js is the one parser of the co string, and a second copy would drift.

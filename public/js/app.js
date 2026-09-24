@@ -12610,16 +12610,28 @@ function bookshelfShowCard(b, isLib) {
   t.className = 'bshelf-card-title'; t.textContent = b.bookTitle || 'Untitled book';
   info.appendChild(t);
   function meta(text) { if (!text) return; var m = document.createElement('div'); m.className = 'bshelf-card-meta'; m.textContent = text; info.appendChild(m); }
+  // v3.1.8 -- the subtitle under the title, and the book's art, narrative and genres (Ian).
+  if (b.subtitle) { var st = document.createElement('div'); st.className = 'bshelf-card-sub'; st.textContent = b.subtitle; info.appendChild(st); }
+  function styleLines() {
+    var art = (b.artStyles || []).map(bshelfArtName).filter(Boolean);
+    var narr = (b.narrativeStyles || []).map(bshelfNarrName).filter(Boolean);
+    if (art.length) meta('Art: ' + art.join(', '));
+    if (narr.length) meta('Narrative: ' + narr.join(', '));
+    if ((b.genres || []).length) meta(((b.genres.length === 1) ? 'Genre: ' : 'Genres: ') + b.genres.join(', '));
+  }
   if (isLib) {
     meta(b.campaignName ? 'By ' + b.campaignName : '');
     meta('From the Library' + (shelfDate(b.createdAt) ? ', added ' + shelfDate(b.createdAt) : ''));
     if (b.gone) meta('This story is no longer in the Library.');
+    styleLines();
   } else {
     meta(b.campaignName + (b.versionLabel ? ' \u00b7 ' + b.versionLabel : ''));
     var bits = [];
     if (b.arrange) bits.push(bshelfLayoutName(b.arrange) + ' layout');
     if (b.pages) bits.push(b.pages + ' pages');
+    if (b.sessionCount) bits.push(b.sessionCount + (b.sessionCount === 1 ? ' session' : ' sessions'));   // v3.1.8
     meta(bits.join(' \u00b7 '));
+    styleLines();
     meta((shelfDate(b.savedAt) ? 'Optimized ' + shelfDate(b.savedAt) : '') + (shelfDate(b.createdAt) ? (shelfDate(b.savedAt) ? ' \u00b7 ' : '') + 'shelved ' + shelfDate(b.createdAt) : ''));
     if (!b.editable) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');
   }
@@ -12654,6 +12666,19 @@ function bookshelfShowCard(b, isLib) {
   book.appendChild(info);
   card.appendChild(book);
   if (typeof document.addEventListener === 'function') { document.removeEventListener('keydown', bookshelfCardKey); document.addEventListener('keydown', bookshelfCardKey); }
+}
+// v3.1.8 -- display names for the open book. Art styles are stored by their display name already,
+// except a custom style ('custom:<id>'); narrative styles by id, named from NARR_STYLE_META.
+function bshelfArtName(v) {
+  v = String(v || '').trim();
+  if (!v) return '';
+  return /^custom:/i.test(v) ? 'Custom style' : v;
+}
+function bshelfNarrName(id) {
+  id = String(id || '').trim();
+  if (!id) return '';
+  for (var i = 0; i < NARR_STYLE_META.length; i++) if (NARR_STYLE_META[i].id === id) return NARR_STYLE_META[i].name;
+  return id.charAt(0).toUpperCase() + id.slice(1);
 }
 function bshelfLayoutName(a) {
   a = String(a || '');

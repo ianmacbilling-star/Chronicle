@@ -2010,6 +2010,16 @@ async function migrateBookshelf(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_bookshelf_user ON bookshelf_books(user_id, created_at DESC)');
   // v3.0.986 -- the book's first page as a picture, drawn on first view (routes/bookshelf.js cover()).
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS thumb_url TEXT');
+  // v3.1.8 -- what is in the book, for the open book's page (Ian): subtitle, how many sessions, the
+  // art and narrative styles its sessions carry, the campaign's genres. JSON arrays of names in the
+  // three list columns. meta_at is when they were read; NULL = not yet (older books are filled once,
+  // from their version as it is, the first time the shelf is listed -- Ian chose that).
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS subtitle TEXT');
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS session_count INTEGER');
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS art_styles TEXT');
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS narrative_styles TEXT');
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS genres TEXT');
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS meta_at TIMESTAMP');
   // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
   // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
   // into anything that touches an order.
