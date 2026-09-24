@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.11",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "3111-suggested-assets-tune",
+        "kind": "change",
+        "public": true,
+        "summary": "Suggested assets now describe how things look rather than what they do, and things you mention in your Story Instructions count when they are ranked.",
+        "detail": "Three follow-ups from Ian's mirror test. (1) Descriptions: Generate Story is told to describe appearance at rest only -- no powers, uses, glowing or activated states -- so an asset picture does not bake one scene's effect into every panel. Check a magic item's suggested description reads as a plain object. (2) Ranking counts mentions in the Story Instructions as well as the transcript; the 2-panel rule is unchanged. (3) Diagnostics: every Generate Story writes one [asset-suggest] line to the Railway log listing each candidate the model offered, whether it was kept, and why not (already an asset or character, matched only N panels, past the top 8, and so on), with panel numbers and mention counts. With debug mode on, the same list is in the Debug panel under Generate Story.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.10",
     "staged_on": "2026-09-24",
     "entries": [

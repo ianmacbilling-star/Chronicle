@@ -7,6 +7,7 @@ const charHeight = require('./images');
 const imageHelpers = require('./images');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4 steering
 const assetSuggest = require('../services/assetSuggestions');   // v3.1.9 -- TD-908 suggested assets
+const { logDebug } = require('./debug');   // v3.1.11 -- TD-908: why each suggestion was kept or dropped
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
@@ -405,7 +406,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '      "name": "Spelled EXACTLY as the transcript spells it, never translated. A specific place, supporting person or creature, or physical item that appears in TWO OR MORE of the panels above and is NOT one of the KNOWN CHARACTERS or KNOWN ASSETS. Use the exact name you used for it in the description and prompt of EVERY panel it appears in -- use one name consistently across panels. If the transcript never names it, give it a short descriptive name (e.g. \\"the Old Mill\\", \\"the ferryman\\") and use that same name in every panel. At most 8 entries; list the ones that matter most to how the book looks. Use an empty array if nothing qualifies.",\n' +
     '      "aliases": ["Other names the transcript uses for the SAME thing, spelled as written. May be empty."],\n' +
     '      "category": "Exactly one of: location (a place, building, room or setting), npc (a supporting person, creature or animal), item (an object someone carries, wears, wields or uses), character (someone who seems important enough to be a main character rather than a supporting figure).",\n' +
-    '      "description": "IN ENGLISH ALWAYS. Its fixed visual appearance only -- what would let an illustrator draw it the same way every time: build, colours, materials, clothing, distinctive features. If the transcript or the director instructions describe its appearance in detail, use that description as given. Otherwise keep it to 25 words or fewer. Style-neutral (do NOT name an art style or medium). The COPYRIGHT rule applies."\n' +
+        // v3.1.11 -- TD-908. HOW IT LOOKS, NOT WHAT IT DOES. 3.1.9 got "a hand mirror... its surface
+    // shimmering like liquid when active as a magical portal", and the asset picture drew the portal
+    // swirl permanently into the glass -- so every panel inherits a state that belongs to one scene.
+    '      "description": "IN ENGLISH ALWAYS. How it LOOKS at rest, as an illustrator would need to draw it the same way every time: shape, size, build, colours, materials, clothing, distinctive markings. Describe ONLY its appearance -- NOT what it does, its powers or uses, and NOT temporary states such as glowing, shimmering, burning, activated or in use; those belong to the panels where they happen. If the transcript or the director instructions describe its appearance in detail, use that description of its appearance as given. Otherwise keep it to 25 words or fewer. Style-neutral (do NOT name an art style or medium). The COPYRIGHT rule applies."\n' +
     '    }\n' +
     '  ]\n' +
     '}';
@@ -576,7 +580,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // here costs the suggestions and nothing else -- the story is already saved.
       try {
         const _savedPanels = await db.prepare('SELECT panel_order, prompt, description, title FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
-        const _sugg = assetSuggest.filterSuggestions(parsed.recurring_elements, _savedPanels, session.transcript, campaignAssets, characters, imageHelpers);
+        // v3.1.11 -- the Story Instructions count toward the ranking too (Ian's mirror was only in them).
+        const _sugg = assetSuggest.filterSuggestions(parsed.recurring_elements, _savedPanels, session.transcript, campaignAssets, characters, imageHelpers, { instructions: session.session_notes || '' });
+        // v3.1.11 -- WHY, IN THE LOG. One Railway line per Generate Story, plus the Debug panel for a
+        // user with debug mode on. `considered` is diagnostics only and is not stored on the version.
+        const _considered = _sugg.considered || [];
+        delete _sugg.considered;
+        try { console.log('[asset-suggest] session ' + session.id + ' version ' + dmForkId + ': kept ' + _sugg.items.length + ' of ' + _considered.length + ' -- ' + assetSuggest.describeConsidered(_considered)); } catch (_le) {}
+        try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate Story', fn: 'POST /api/extract', message: 'Suggested assets: kept ' + _sugg.items.length + ' of ' + _considered.length, detail: _considered }); } catch (_le2) {}
         await db.prepare('UPDATE session_forks SET asset_suggestions = ? WHERE id = ?').run(JSON.stringify(_sugg), dmForkId);
         parsed.assetSuggestionCount = _sugg.items.length;
       } catch (_se) {
