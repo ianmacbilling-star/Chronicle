@@ -111,7 +111,7 @@ const TIERS = {
   },
   gold: {
     name: 'Gold',
-    bookshelf_limit: 10,   // v3.0.981 -- TD-901. Books kept on the Bookshelf (own plan; a live pass counts). Code-only, not a dial.
+    bookshelf_limit: 10,   // v3.0.981 -- TD-901. Books kept on the Bookshelf (own plan; a live pass counts). v3.1.3: Dashboard-editable; this is the default.
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 3,
     price: 15,
@@ -204,7 +204,10 @@ const EDITABLE_TIER_FIELDS = [
   'max_moments_medium',
   'max_moments_long',
   'max_moments_epic',
-  'signup_bonus'
+  'signup_bonus',
+  // v3.1.3 -- Ian: the Bookshelf size per tier from the Tiers and Passes tab. 0 = no Bookshelf. Not
+  // nullable: an empty box falls back to the code default above, never to "unlimited".
+  'bookshelf_limit'
 ];
 
 // Fields where an empty value means "unlimited" (stored as null). Every

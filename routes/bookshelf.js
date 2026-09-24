@@ -46,7 +46,9 @@
 //
 // The limit is the member's OWN plan (a live pass counts at the pass's tier, which is what ownTier
 // answers), not the campaign's effective tier: the shelf belongs to the person, not the campaign.
-// Gold 10, Platinum 50; Copper, Silver and the Free Trial 0. Library pointers do not count. Over the
+// How many each tier keeps is the tier's bookshelf_limit -- a Dashboard field since v3.1.3 (defaults
+// Gold 10, Platinum 50, the rest 0), read through getTier so an edit is live at once. Every sentence
+// that names the plans is built from it (shelfPlansText). Library pointers do not count. Over the
 // limit after a downgrade nothing is deleted -- view, download, bring back and remove still work;
 // only adding is refused (Ian, 2026-09-23).
 // ============================================================
@@ -97,6 +99,25 @@ function makeHandlers(d) {
     var t = d.getTier(name) || {};
     var lim = Number(t.bookshelf_limit);
     return { key: name, name: t.name || name, limit: (Number.isFinite(lim) && lim > 0) ? Math.floor(lim) : 0 };
+  }
+  // v3.1.3 -- the plans that include a Bookshelf and how many each keeps, from the live tier config,
+  // so no message has to be edited when Ian changes a number on the Dashboard.
+  var SHELF_TIER_ORDER = ['copper', 'silver', 'gold', 'platinum', 'trial'];
+  function shelfPlans() {
+    var out = [];
+    SHELF_TIER_ORDER.forEach(function (k) {
+      var t = d.getTier(k) || {};
+      var n = Number(t.bookshelf_limit);
+      if (Number.isFinite(n) && n > 0) out.push({ key: k, name: t.name || k, limit: Math.floor(n) });
+    });
+    return out;
+  }
+  function shelfPlansText() {
+    var p = shelfPlans();
+    if (!p.length) return 'The Bookshelf is not part of any plan right now.';
+    var bits = p.map(function (x, i) { return x.name + ', which keeps ' + x.limit + (i === 0 ? (x.limit === 1 ? ' book' : ' books') : ''); });
+    var list = bits.length === 1 ? bits[0] : bits.slice(0, -1).join(', ') + ', and ' + bits[bits.length - 1];
+    return 'The Bookshelf is part of ' + list + '.';
   }
   async function countBooks(db, uid) {
     var r = await db.prepare("SELECT COUNT(*) AS n FROM bookshelf_books WHERE user_id = ? AND kind = 'book'").get(uid);
@@ -203,7 +224,7 @@ function makeHandlers(d) {
         } catch (e) { rows[i]._gone = false; }
       }
       var used = rows.filter(function (r) { return r.kind === 'book'; }).length;
-      return res.json({ limit: t.limit, used: used, tier: t.key, tierName: t.name, books: rows.map(shape) });
+      return res.json({ limit: t.limit, used: used, tier: t.key, tierName: t.name, plansText: shelfPlansText(), books: rows.map(shape) });
     } catch (e) {
       d.log('list', e);
       return res.status(500).json({ error: 'Could not load your Bookshelf right now.' });
@@ -216,7 +237,7 @@ function makeHandlers(d) {
       var db = await d.getDb();
       var t = tierOf(req);
       if (!t.limit) {
-        return res.status(403).json({ code: 'bookshelf_tier', error: 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50.' });
+        return res.status(403).json({ code: 'bookshelf_tier', error: shelfPlansText() });
       }
       var campaignId = Number((req.body && req.body.campaignId) || 0);
       if (!campaignId) return res.status(400).json({ code: 'bad_request', error: 'Which book? No campaign was named.' });
@@ -363,7 +384,7 @@ function makeHandlers(d) {
       var uid = req.session.userId;
       var db = await d.getDb();
       var t = tierOf(req);
-      if (!t.limit) return res.status(403).json({ code: 'bookshelf_tier', error: 'The Bookshelf is part of Gold and Platinum.' });
+      if (!t.limit) return res.status(403).json({ code: 'bookshelf_tier', error: shelfPlansText() });
       var b = req.body || {};
       var st = await libraryStory(db, b.storyId, b.token);
       if (!st) return res.status(404).json({ code: 'not_found', error: 'That story is not in the Library.' });

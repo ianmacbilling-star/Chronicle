@@ -274,13 +274,15 @@ router.post('/ask', requireAuth, async function(req, res) {
   // Live tier matrix -- getTier() merges dashboard overrides, so these are the
   // current authoritative numbers for EVERY tier (not just the user's own).
   function _n(v){ return (v === null || v === undefined) ? 'unlimited' : v; }
+  // v3.1.3 -- the Bookshelf size, from the same live tier config (Dashboard, Tiers and Passes).
+  function _shelf(t){ var n = Number(t && t.bookshelf_limit); return (Number.isFinite(n) && n > 0) ? ('Bookshelf ' + Math.floor(n) + ' books') : 'no Bookshelf'; }
   const _tierMatrix = ['trial','copper','silver','gold','platinum'].map(function (nm) {
     const t = getTier(nm) || {};
     if (nm === 'copper') {
-      return '- Copper (free floor): 0 free tokens/month (token packs only); cannot create its own campaigns or sessions; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '. A Copper member works inside a paid Story Master\'s campaign and inherits that campaign\'s creative options.';
+      return '- Copper (free floor): 0 free tokens/month (token packs only); cannot create its own campaigns or sessions; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '; ' + _shelf(t) + '. A Copper member works inside a paid Story Master\'s campaign and inherits that campaign\'s creative options.';
     }
     const mom = Math.max(t.max_moments_short || 0, t.max_moments_medium || 0, t.max_moments_long || 0, t.max_moments_epic || 0);
-    return '- ' + (t.name || nm) + ': ' + _n(t.monthly_utlt) + ' monthly use-it-or-lose-it + ' + _n(t.monthly_cot) + ' carry-over tokens/month; campaigns ' + _n(t.max_campaigns) + '; sessions/campaign ' + _n(t.max_sessions) + '; characters ' + _n(t.max_characters) + '; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '; up to ' + mom + ' moments/session.';
+    return '- ' + (t.name || nm) + ': ' + _n(t.monthly_utlt) + ' monthly use-it-or-lose-it + ' + _n(t.monthly_cot) + ' carry-over tokens/month; campaigns ' + _n(t.max_campaigns) + '; sessions/campaign ' + _n(t.max_sessions) + '; characters ' + _n(t.max_characters) + '; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '; up to ' + mom + ' moments/session; ' + _shelf(t) + '.';
   }).join('\n');
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 

@@ -23,7 +23,8 @@ here — don't rebuild.
 - **You are read-only.** You answer and guide; you can't change settings, spend
   tokens, or take actions.
 - **Tier- and token-specific numbers are injected live** from the user's account and
-  the dashboard (campaign counts, token grants, moment caps, asset/archive limits).
+  the dashboard (campaign counts, token grants, moment caps, asset/archive limits, Bookshelf
+  size).
   This document stays qualitative on those numbers; use the live values when present.
 
 **How to answer — reason from the user's goal, don't pattern-match:**
@@ -289,10 +290,11 @@ cover:
 - **Delete** — only on a checkout that was never paid for (an abandoned order). A paid or
   refunded order is a financial record and cannot be deleted.
 
-**Bookshelf** (Gold and Platinum) — a place to **keep finished books without ordering or
-publishing them**. **Gold keeps 10 books and Platinum keeps 50**; the count is lettered on
-the bottom of the bookcase. Free Trial, Copper and Silver see the Bookshelf with an
-invitation to upgrade.
+**Bookshelf** — a place to **keep finished books without ordering or publishing them**.
+**Which plans include it, and how many books each keeps, is set on the dashboard**: use the
+**Bookshelf** figure in the live tier numbers ("no Bookshelf" means that plan does not have
+one) and never a number from memory. The count is lettered on the bottom of the bookcase.
+Plans without a Bookshelf see the tab with an invitation to upgrade.
 
 - **Putting a book on it:** finish a book on Publish → **Optimize**, then press **Save to
   Bookshelf** beside Go to Publish. It keeps a full copy of that optimized book — the PDF
@@ -301,7 +303,7 @@ invitation to upgrade.
   change the copy on the shelf.
 - **Library books:** **Add to Bookshelf** on a story's Library page or Library card puts
   that story on your shelf as well — anyone's, including your own. These are links to the
-  Library, not copies, and **do not count** toward your 10 or 50.
+  Library, not copies, and **do not count** toward your plan's limit.
 - **The bookcase:** each campaign's books stand together, the **first book of the series
   facing out** with its real first page and a brass name plate, the rest as spines. Library
   books stand on the bottom shelf, one of them facing out. The case grows a shelf as books
@@ -344,8 +346,8 @@ distinct:
 - **Publish** — publish your finished story to the public **Library** as a shareable
   web page. You can only publish your *own* version; each Publish creates a new Library
   entry, managed on **My Stuff → Published Stories**.
-- **Keep** — Gold and Platinum can also keep a finished book on their **Bookshelf** without
-  ordering or publishing it. See 5a.
+- **Keep** — on plans with a **Bookshelf** (see the live tier numbers) you can also keep a
+  finished book there without ordering or publishing it. See 5a.
 - **Order** — order a physical print-on-demand (POD) book through our print partner.
 
 **Seeing the finished book** is open to everyone — including a lone Copper member — for a
@@ -1269,8 +1271,8 @@ changes. **An optimized book is saved automatically — but you will need to sav
 after your own individual edits.** **Load Last Optimized File** brings a finished book
 straight back if you have navigated away.
 
-Beside **Go to Publish** you will also find **Download PDF**, and on Gold and Platinum **Save
-to Bookshelf**, which keeps a copy of this finished book, layout and all, on your Bookshelf
+Beside **Go to Publish** you will also find **Download PDF**, and on plans with a Bookshelf
+**Save to Bookshelf**, which keeps a copy of this finished book, layout and all, on your Bookshelf
 (see 5a) — handy when you are not ready to order or publish yet.
 
 **Tab 4 — Order & Publish**
@@ -1509,8 +1511,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   campaign, so **Replace from Archive** can pull another member's image into your version.
 - **"Can I publish just part of my campaign?"** Yes — on the Publish page tick only the
   sessions you want under **Include in Print** (good for episodes or smaller volumes).
-- **"I want to keep my finished book without ordering or publishing it."** On Gold or
-  Platinum: finish it on Publish → **Optimize**, then **Save to Bookshelf**. It is kept on
+- **"I want to keep my finished book without ordering or publishing it."** On a plan with a
+  Bookshelf (the live tier numbers say which): finish it on Publish → **Optimize**, then **Save
+  to Bookshelf**. It is kept on
   **My Stuff → Bookshelf**, where you can view or download it any time, or **Bring back to
   Publish** to order, publish or keep editing it. See 5a.
 - **"Where are my orders / my published stories?"** Profile menu → **My Stuff** — the
@@ -1603,9 +1606,9 @@ Friction points and what's actually going on.
   **Supporting Character / NPC** or **Item** for each of them and the button comes to life. It works
   that way on purpose: a category nobody chose would file assets you never looked at.
 
-- **"Why can't I save to my Bookshelf?"** Usually one of these: the Bookshelf is **Gold and
-  Platinum** only; your shelf is **full** (10 on Gold, 50 on Platinum — remove a book to make
-  room); the book has **not been optimized and saved** yet for that version and layout; the
+- **"Why can't I save to my Bookshelf?"** Usually one of these: **your plan has no
+  Bookshelf** (the live tier numbers show which plans do); your shelf is **full** (the live
+  numbers give your plan's limit — remove a book to make room); the book has **not been optimized and saved** yet for that version and layout; the
   save is **still finishing** (try again in a moment); or it is **already on your shelf**.
   Library books you add do not count toward the limit.
 - **"I can't bring a book back from my Bookshelf."** Either the version it came from has been
@@ -1675,7 +1678,7 @@ Friction points and what's actually going on.
 - **If I change my campaign's genre, does my published book change?** No. Genres are
   frozen onto a book when it is published.
 - **Does my Bookshelf count Library books?** No. Only books you saved from Optimize count
-  toward the 10 (Gold) or 50 (Platinum); Library stories you add are links and are free.
+  toward your plan's limit; Library stories you add are links and are free.
 - **If I downgrade, do I lose my Bookshelf?** No. Nothing is deleted; you can still view,
   download, bring back and remove your books, but not add new ones while over your limit.
 - **Can other people see my Bookshelf?** No. Only you see it.
