@@ -26,7 +26,7 @@
   <meta name="apple-mobile-web-app-title" content="Campaignia" />
   <script src="/js/pwa.js" defer></script>
 </head>
-<body class="views-plain-bg">
+<body class="views-plain-bg bg-dimmed text-halo">
 <!-- ================================================================================================
      IMPERSONATION BANNER -- TD-179 stage 4, v3.0.590. Spec section 6.
      "Non-negotiable, and it is the control that makes the rest safe."
@@ -144,6 +144,18 @@
         body.views-plain-bg #view-sessions, body.views-plain-bg #view-characters, body.views-plain-bg #view-novel,
         body.views-plain-bg #view-session-detail, body.views-plain-bg #view-settings, body.views-plain-bg #view-assets {
           background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
+        /* v3.1.6 -- THE BACKGROUND, DARKER ON EVERY PAGE. Ian picked 70% from previews: the candle flames
+           in the picture are the same gold as the page's lettering. --bg-dim IS THE DIAL (0 = the picture
+           as it was, 1 = black); the way back is 0, or taking bg-dimmed off the body tag. The picture stays
+           fixed, exactly as style.css sets it; only a black layer is laid over it. */
+        :root { --bg-dim: 0.7; }
+        body.bg-dimmed { background-image:linear-gradient(rgba(0,0,0,var(--bg-dim)), rgba(0,0,0,var(--bg-dim))), url('/images/Campaignia_background.png'); }
+        /* v3.1.6 -- A DARK HALO on the words that sit straight on the background (titles, subtitles,
+           dates, tab names, field labels), so none of them is lost where it crosses a flame. Not on
+           panels' contents, buttons or inputs. The way back: take text-halo off the body tag. */
+        body.text-halo .view .page-title, body.text-halo .view .page-subtitle, body.text-halo .view .sdh-date-display,
+        body.text-halo .view .sess-tab, body.text-halo .view .form-label {
+          text-shadow:0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9); }
         #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(232,207,122,0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
         .camp-books .campaign-book { position:relative; display:block; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
           border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;
