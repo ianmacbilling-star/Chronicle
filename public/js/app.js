@@ -32009,7 +32009,7 @@ function openAssetSuggestModal(data) {
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
         ' <span style="font-size:12px;color:rgba(201,168,76,0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
         (it.description ? '<span style="display:block;font-size:13px;line-height:1.4;color:rgba(240,232,208,0.72);margin-top:3px;">' + escapeHtmlReview(it.description) + '</span>' : '') +
-        '</span></label>';
+        '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
   }
@@ -32095,7 +32095,7 @@ function openAssetSuggestModal(data) {
           return;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-        _assetSuggestWait(res.created || [], res.failed || [], msgEl, rowEl, close);
+        _assetSuggestWait(res.created || [], res.failed || [], msgEl, rowEl, close, box, assetsOffer);
       })
       .catch(function () {
         msgEl.textContent = 'Connection error. Nothing was charged; try again.';
@@ -32107,21 +32107,76 @@ function openAssetSuggestModal(data) {
 
 // The pictures arrive by webhook, so wait for them here: a panel only uses an asset once it has a
 // picture, and the reader should not press Generate Narrative & Images before they exist.
-function _assetSuggestWait(created, failed, msgEl, rowEl, close) {
+//
+// v3.1.10 -- TD-908. Ian, testing 3.1.9: "As it's drawing them I need some kind of progress bar or
+// spinning thing like we have on the panels when we regenerate them. Something to indicate it's
+// working." So each ticked row gets the SAME spinner the panels use (.moment-img-busy-spinner), which
+// turns into the picture itself the moment it lands; a gold bar above the message shows how many
+// are done (with the sheen every .progress-fill has, so it looks alive between steps). Unticked rows
+// dim and every checkbox locks, because the choice has been made.
+function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
   rowEl.innerHTML = '';
-  var ids = {};
-  created.forEach(function (a) { ids[String(a.id)] = 1; });
+  var ids = {}, slotById = {};
+  function slotFor(key) { return box ? box.querySelector('.asset-suggest-status[data-key="' + key + '"]') : null; }
+  created.forEach(function (a) {
+    ids[String(a.id)] = 1;
+    var nm = String(a.name || '');
+    (offered || []).forEach(function (it) {
+      if (nm === it.name || nm.indexOf(it.name + ' / ') === 0) { var s = slotFor(it.key); if (s) slotById[String(a.id)] = s; }
+    });
+  });
+  if (box) {
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-cb'), function (cb) {
+      cb.disabled = true;
+      var row = cb.closest('label');
+      if (row) { row.style.cursor = 'default'; if (!cb.checked) row.style.opacity = '0.45'; }
+    });
+  }
+  Object.keys(slotById).forEach(function (id) {
+    slotById[id].innerHTML = '<div class="moment-img-busy-spinner asset-suggest-spin" style="width:22px;height:22px;"></div>';
+  });
+  (offered || []).forEach(function (it) {
+    if (failed.indexOf(it.name) === -1) return;
+    var s = slotFor(it.key);
+    if (s) s.innerHTML = '<span style="font-size:12px;color:#f0a090;">Could not start</span>';
+  });
+  var bar = document.createElement('div');
+  bar.className = 'progress-bar asset-suggest-bar';
+  bar.style.margin = '14px 0 0';
+  bar.style.height = '6px';
+  bar.style.background = 'rgba(201,168,76,0.18)';
+  var fill = document.createElement('div');
+  fill.className = 'progress-fill';
+  fill.style.background = '#c9a84c';
+  fill.style.width = '6%';
+  bar.appendChild(fill);
+  if (msgEl.parentNode) msgEl.parentNode.insertBefore(bar, msgEl);
+  function showPicture(id, url) {
+    var s = slotById[String(id)];
+    if (!s || s.getAttribute('data-done')) return;
+    s.setAttribute('data-done', '1');
+    s.innerHTML = '';
+    var img = document.createElement('img');
+    img.src = url; img.alt = '';
+    img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid rgba(201,168,76,0.55);display:block;';
+    s.appendChild(img);
+  }
   var n = created.length, started = Date.now(), campId = state.currentCampaign.id;
   var failNote = failed.length ? (' Could not start: ' + failed.join(', ') + '.') : '';
   var b = document.createElement('button'); b.className = 'btn btn-sm'; b.textContent = 'Close';
   b.onclick = function () { stop = true; close(); try { loadReview(); } catch (e) {} };
   rowEl.appendChild(b);
   var stop = false;
-  if (!n) { msgEl.textContent = 'Nothing was created.' + failNote; return; }
+  if (!n) { fill.style.width = '0%'; msgEl.textContent = 'Nothing was created.' + failNote; return; }
+  msgEl.textContent = 'Drawing your assets\u2026 0 of ' + n + ' ready.' + failNote;
   (function poll() {
     if (stop) return;
     fetch('/api/campaigns/' + campId + '/assets').then(function (r) { return r.json(); }).then(function (list) {
-      var done = (Array.isArray(list) ? list : []).filter(function (a) { return ids[String(a.id)] && a.image_url; }).length;
+      var done = 0;
+      (Array.isArray(list) ? list : []).forEach(function (a) {
+        if (ids[String(a.id)] && a.image_url) { done++; showPicture(a.id, a.image_url); }
+      });
+      fill.style.width = Math.max(6, Math.round(done / n * 100)) + '%';
       if (done >= n) {
         msgEl.textContent = 'Done \u2014 ' + n + ' asset' + (n === 1 ? ' is' : 's are') + ' ready and attached to the panels that use ' + (n === 1 ? 'it' : 'them') + '.' + failNote;
         b.textContent = 'OK'; b.className = 'btn btn-sm btn-primary';
@@ -32129,6 +32184,10 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close) {
         return;
       }
       if (Date.now() - started > 240000) {
+        Object.keys(slotById).forEach(function (id) {
+          var s = slotById[id];
+          if (!s.getAttribute('data-done')) s.innerHTML = '<span style="font-size:12px;color:rgba(240,232,208,0.7);">Still drawing</span>';
+        });
         msgEl.textContent = done + ' of ' + n + ' ready so far. The rest are still drawing; they will attach on their own, and you can check them in the Asset Library.' + failNote;
         return;
       }

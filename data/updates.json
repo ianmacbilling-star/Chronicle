@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.10",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "3110-suggested-assets-progress",
+        "kind": "change",
+        "public": true,
+        "summary": "While Campaignia draws your suggested assets, each one shows a spinner that turns into its picture, with a progress bar for the set.",
+        "detail": "Ian, testing 3.1.9: the modal gave no sign it was working. Generate Story on a session with suggestions, tick two or more, click Yes: every ticked row shows the same gold spinner the panels use, each turns into its thumbnail as it lands, and the gold bar above the message fills as they finish. Unticked rows dim and the checkboxes lock. A suggestion that failed to start says so on its row.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.9",
     "staged_on": "2026-09-24",
     "entries": [
