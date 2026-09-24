@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.998",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "998-session-books-centred",
+        "kind": "change",
+        "public": true,
+        "summary": "Session books now match the campaign books more closely: the picture is larger and centred, the gold border runs all the way round, and New campaign has a binding too.",
+        "detail": "Ian, from the first look at the session books: the pictures sat at the top leaving a gap, and the gold line faded out along the bottom. Each session's picture is now a little larger, centred in the upper part of the cover, with its foot under the dark fade that carries the words. The gold line is drawn above everything, so it runs unbroken round all four sides. The New campaign blank book gains the same shaded binding as the others. TO TEST: a campaign's Sessions page and Publish > Session: pictures centred and filling more of the cover; the gold line unbroken along the bottom; controls still work. My Campaigns: the New campaign book has the binding down its left edge.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.997",
     "staged_on": "2026-09-23",
     "entries": [
