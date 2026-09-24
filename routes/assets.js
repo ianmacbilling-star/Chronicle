@@ -380,6 +380,7 @@ router.post('/suggestions/:sessionId/decline', requireAuth, verifyCampaignMember
     const forkId = await suggestionFork(db, req, role);
     if (!forkId) return res.status(403).json({ error: 'That version is not yours to change.' });
     const stored = await readSuggestions(db, forkId);
+    assetSuggest.applyDescriptionEdits(stored, req.body && req.body.descriptions);   // v3.1.12 -- edited in the modal
     stored.items.forEach(function (it) { if (it.status === 'open') it.status = 'declined'; });
     await writeSuggestions(db, forkId, stored);
     res.json({ success: true });
@@ -400,6 +401,8 @@ router.post('/suggestions/:sessionId/accept', requireAuth, verifyCampaignAssetCr
     ((req.body && Array.isArray(req.body.keys)) ? req.body.keys : []).forEach(function (k) { keys[String(k)] = 1; });
     const assetsNow = await db.prepare('SELECT id, name FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
     const stored = refreshCreated(await readSuggestions(db, forkId), assetsNow);
+    // v3.1.12 -- descriptions edited in the modal, applied BEFORE anything is drawn from them.
+    assetSuggest.applyDescriptionEdits(stored, req.body && req.body.descriptions);
     // Characters are never built here (Ian: "we won't automatically build characters").
     const chosen = stored.items.filter(function (it) { return it.category !== 'character' && it.status !== 'created' && keys[it.key]; });
     // Unticked is a No for that item: its description goes into the panel prompts instead.

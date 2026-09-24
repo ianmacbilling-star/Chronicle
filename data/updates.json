@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.12",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "3112-suggested-assets-edit",
+        "kind": "change",
+        "public": true,
+        "summary": "You can edit the description of each suggested asset before choosing Yes or No.",
+        "detail": "Each suggestion in the modal now has an editable description. Yes draws the asset from the edited text (check the new asset's description in the Asset Library); No, or unticking, puts the edited text into those panels' image prompts (the RECURRING ELEMENTS line in the Generate Images debug log). A blank box keeps the original. Members who cannot create assets can still edit, and OK saves their edits for their own version's panels. The boxes lock once Yes is clicked.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.11",
     "staged_on": "2026-09-24",
     "entries": [

@@ -162,6 +162,26 @@ function describeConsidered(considered) {
   }).join(' | ') || 'the model offered nothing';
 }
 
+// v3.1.12 -- TD-908. Ian: "On the Modal... allow them to edit the descriptions of the items."
+// edits = { key: text } from the modal. The edited text is what Yes draws the asset from, and what
+// No writes into the panel prompts. Blank keeps the original rather than storing an empty
+// description; a created item is left alone (its asset owns the description now -- edit it in the
+// Asset Library). Returns how many changed.
+function applyDescriptionEdits(stored, edits) {
+  if (!stored || !Array.isArray(stored.items) || !edits || typeof edits !== 'object') return 0;
+  var n = 0;
+  stored.items.forEach(function (it) {
+    if (!Object.prototype.hasOwnProperty.call(edits, it.key)) return;
+    if (it.status === 'created') return;
+    var v = clean(edits[it.key], MAX_DESC_CHARS);
+    if (!v || v === it.description) return;
+    it.description = v;
+    it.description_edited = true;
+    n++;
+  });
+  return n;
+}
+
 function parseStored(text) {
   if (!text) return { version: 1, items: [] };
   try {
@@ -218,5 +238,6 @@ module.exports = {
   namesOf: namesOf, assetNameFor: assetNameFor, countMentions: countMentions,
   filterSuggestions: filterSuggestions, parseStored: parseStored,
   notesForPanel: notesForPanel, applyRecurringNotes: applyRecurringNotes,
-  describeConsidered: describeConsidered
+  describeConsidered: describeConsidered,
+  applyDescriptionEdits: applyDescriptionEdits
 };

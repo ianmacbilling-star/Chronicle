@@ -32000,7 +32000,7 @@ function openAssetSuggestModal(data) {
   box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:#f0e8d0;';
   var h = '';
   h += '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
-  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears.</div>';
+  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears. You can change any description before you choose.</div>';
   if (assetsOffer.length) {
     h += '<div id="asset-suggest-list">';
     assetsOffer.forEach(function (it) {
@@ -32008,7 +32008,8 @@ function openAssetSuggestModal(data) {
         (canCreate ? '<input type="checkbox" class="asset-suggest-cb" data-key="' + escapeHtmlReview(it.key) + '" checked style="margin-top:3px;">' : '') +
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
         ' <span style="font-size:12px;color:rgba(201,168,76,0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
-        (it.description ? '<span style="display:block;font-size:13px;line-height:1.4;color:rgba(240,232,208,0.72);margin-top:3px;">' + escapeHtmlReview(it.description) + '</span>' : '') +
+        // v3.1.12 -- TD-908. Ian: "allow them to edit the descriptions of the items." What Yes draws from, and what No writes into the panels.
+        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:#f0e8d0;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
         '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
@@ -32046,6 +32047,12 @@ function openAssetSuggestModal(data) {
     return out;
   }
   var noteNo = 'Otherwise Campaignia will keep them consistent using the descriptions above.';
+  // v3.1.12 -- the descriptions as the reader left them, sent with Yes, No and OK.
+  function descEdits() {
+    var out = {};
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-desc'), function (t) { out[t.getAttribute('data-key')] = t.value; });
+    return out;
+  }
 
   if (!assetsOffer.length) {
     msgEl.textContent = '';
@@ -32054,7 +32061,12 @@ function openAssetSuggestModal(data) {
   }
   if (!canCreate) {
     msgEl.textContent = 'Only the Story Master can create assets in this campaign, unless they turn on Allow Members to Add Assets. ' + noteNo;
-    mkBtn('OK', 'btn-primary', close);
+    // v3.1.12 -- a member who cannot create still steers the panel prompts with their edits.
+    mkBtn('OK', 'btn-primary', function () {
+      fetch(_assetSuggestUrl('/decline'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fork_id: state.currentForkId || undefined, descriptions: descEdits() }) }).catch(function () {});
+      close();
+    });
     return;
   }
 
@@ -32075,7 +32087,7 @@ function openAssetSuggestModal(data) {
 
   mkBtn('No', '', function () {
     fetch(_assetSuggestUrl('/decline'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fork_id: state.currentForkId || undefined }) }).catch(function () {});
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined, descriptions: descEdits() }) }).catch(function () {});
     close();
   });
   yes = mkBtn('Yes, generate', 'btn-primary', function () {
@@ -32085,7 +32097,7 @@ function openAssetSuggestModal(data) {
     Array.prototype.forEach.call(rowEl.querySelectorAll('button'), function (b) { b.disabled = true; });
     msgEl.textContent = 'Starting\u2026';
     fetch(_assetSuggestUrl('/accept'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fork_id: state.currentForkId || undefined, keys: keys }) })
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined, keys: keys, descriptions: descEdits() }) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res || res.error) {
@@ -32131,6 +32143,7 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
       var row = cb.closest('label');
       if (row) { row.style.cursor = 'default'; if (!cb.checked) row.style.opacity = '0.45'; }
     });
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-desc'), function (t) { t.disabled = true; });   // v3.1.12
   }
   Object.keys(slotById).forEach(function (id) {
     slotById[id].innerHTML = '<div class="moment-img-busy-spinner asset-suggest-spin" style="width:22px;height:22px;"></div>';
