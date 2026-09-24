@@ -122,6 +122,19 @@ class PrintProvider {
   }
 
   /**
+   * v3.0.976 -- TD-602. Ask the vendor whether a print file is acceptable, before an order exists.
+   * A provider without the capability answers null, which the route reports as "no answer" -- and
+   * the order then proceeds exactly as it would have without the check.
+   * @param {'cover'|'interior'} _kind
+   */
+  async startFileCheck(_kind, _spec, _pageCount, _url) {
+    return null;
+  }
+  async getFileCheck(_kind, _id) {
+    return null;
+  }
+
+  /**
    * Map a vendor-specific status string to a neutral lifecycle value so the
    * rest of the app never branches on vendor vocabulary.
    * @param {string} _vendorStatus

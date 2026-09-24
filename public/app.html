@@ -93,7 +93,7 @@
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">My Account</div>
-        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Orders</div>
+        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
         <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
@@ -129,6 +129,74 @@
         <button class="btn btn-primary" onclick="openCampaignModal()">+ New campaign</button>
       </div>
       <div class="campaigns-grid" id="campaigns-grid"></div>
+      <style>
+        /* v3.0.995 -- MY CAMPAIGNS AS BOOKS (Ian). Everything here hangs off .camp-books, which
+           renderCampaigns puts on the grid only while CAMPAIGN_CARDS_AS_BOOKS is true -- so with it
+           false none of this applies and the cards are exactly as before. */
+        .camp-books { gap:22px 18px; }
+        .camp-books .campaign-book { position:relative; display:block; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
+          border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;
+          background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
+          box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
+        .camp-books .campaign-book:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
+        .camp-books .campaign-book::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
+          background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
+        .cbook-amb { position:absolute; inset:-24px; z-index:0; background-size:cover; background-position:center; filter:blur(18px) saturate(0.9); opacity:0.34; }
+        .cbook-art { position:absolute; top:14px; right:12px; bottom:24%; left:18px; z-index:1; display:flex; align-items:flex-start; justify-content:center; }   /* Ian: always at the top, the words on the dark below */
+        .cbook-art img { display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
+          -webkit-mask-composite:source-in; mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
+          mask-composite:intersect; }
+        .cbook-art img.cbook-logo { width:34%; max-width:96px; opacity:0.55; -webkit-mask-image:none; mask-image:none; align-self:center; }
+        .cbook-fade { position:absolute; inset:0; z-index:2; pointer-events:none;
+          background:linear-gradient(to bottom, rgba(12,7,3,0) 42%, rgba(12,7,3,0.72) 60%, rgba(12,7,3,0.94) 74%, #0c0703 100%); }
+        .cbook-frame { position:absolute; inset:8px 8px 8px 12px; z-index:3; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+          box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
+        .cbook-text { position:absolute; left:22px; right:16px; bottom:16px; z-index:4; display:flex; flex-direction:column; gap:4px; }
+        .camp-books .campaign-book .campaign-card-name { color:#e8cf7a; font-size:15px; line-height:1.25; margin:0; text-shadow:0 1px 2px rgba(0,0,0,0.9); }
+        .camp-books .campaign-book .campaign-card-desc { color:rgba(240,232,208,0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .camp-books .campaign-book .campaign-card-meta { color:rgba(232,207,122,0.6); }
+        .camp-books .campaign-book .campaign-card-footer { margin-top:4px; }
+        .camp-books .add-campaign-book { aspect-ratio:17/22; min-height:0; border:none; border-radius:3px 6px 6px 3px; position:relative;
+          background:radial-gradient(ellipse at 55% 40%, rgba(43,26,13,0.75), rgba(14,8,4,0.85)); box-shadow:6px 8px 16px rgba(0,0,0,0.55); color:rgba(232,207,122,0.7); }
+        .camp-books .add-campaign-book::after { content:''; position:absolute; inset:8px 8px 8px 12px; border:1px dashed rgba(214,180,90,0.55); border-radius:2px; pointer-events:none; }
+        .camp-books .add-campaign-book:hover { color:#e8cf7a; transform:translateY(-4px); }
+        /* v3.0.998 -- the blank book gets its binding too (Ian). */
+        .camp-books .add-campaign-book::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; pointer-events:none;
+          background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
+        /* v3.0.997 -- THE SESSION TILES AS BOOKS, both the Sessions list and the Session tab under
+           Publish. Same cover, binding, gold line, picture at the top and dark fade as the campaign
+           books; the tile's own words sit on the fade. Only under .sess-books (SESSION_CARDS_AS_BOOKS). */
+        .sess-books { gap:22px 18px; }
+        .sess-books .session-card { position:relative; display:block; aspect-ratio:17/22; overflow:hidden; border:none; border-radius:3px 6px 6px 3px;
+          background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
+          box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
+        .sess-books .session-card:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
+        .sess-books .session-card.session-card-publish:hover { transform:none; box-shadow:6px 8px 16px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,168,76,0.3); }
+        .sess-books .session-card::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
+          background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
+        .sess-books .session-card::after { content:''; position:absolute; inset:8px 8px 8px 12px; z-index:6; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+          box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
+        /* v3.0.998 -- Ian: centred, and a little oversized so it fills more of the cover: a touch wider
+           than the cover (its faded edges run past the gold line), centred in the upper part, its foot
+           under the dark fade that carries the words. */
+        /* v3.1.0 -- Ian: "keep the pictures blown up like you did originally... just trim the sides off
+           a little to make sure they don't go outside the gold lines." 998's size again (36px wider than
+           the cover, centred), with the overhang CUT at the line rather than shrunk: the picture runs
+           from 18px outside the left edge, the line sits 12px in, so 31px comes off the left; it runs
+           18px past the right edge, the line sits 8px in, so 27px comes off the right. The top and
+           bottom still fade. */
+        .sess-books .session-card .session-card-img { position:absolute; z-index:1; top:38%; left:50%; transform:translate(-50%, -50%); width:calc(100% + 36px); height:auto; aspect-ratio:auto;
+          max-width:none; max-height:68%; object-fit:contain; padding:0; background:none; clip-path:inset(0 27px 0 31px);
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%);
+          mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%); }
+        .sess-books .session-card .session-card-img-empty { top:34%; width:auto; clip-path:none; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
+        .sess-books .session-card .session-card-body { position:absolute; left:0; right:0; bottom:0; z-index:4; padding:70px 16px 16px 22px; gap:4px;
+          background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 55px, rgba(12,7,3,0.96) 90px, #0c0703 100%); }
+        .sess-books .session-card .session-card-title { color:#e8cf7a; font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
+        .sess-books .session-card .session-card-date { color:rgba(232,207,122,0.62); }
+        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(240,232,208,0.72); }
+      </style>
     </div>
 
     <!-- ==================== CAMPAIGN SECTION: SESSIONS ==================== -->
@@ -407,9 +475,9 @@
                 <label class="cl-field" title="How the panels are arranged on the page"><span>Panel arrangement</span>
                   <select id="pcl-arrange">
                     <option value="paired">Picture Book &mdash; big pictures that fill the page</option>
-                    <option value="comicpage">Comic page &mdash; connected bordered panels</option>
+                    <option hidden disabled value="comicpage">Comic page &mdash; connected bordered panels</option>
                     <option value="magazine">Magazine &mdash; text wraps around images</option>
-                    <option value="gazette">Gazette &mdash; text wraps around images, in panels</option>
+                    <option hidden disabled value="gazette">Gazette &mdash; text wraps around images, in panels</option>
                   </select>
                 </label>
                 <label class="cl-field" title="The frame or treatment drawn around each image"><span>Picture border</span>
@@ -519,6 +587,8 @@
                    variable as Go to Publish, so the two cannot disagree. Outlined rather than
                    filled: Go to Publish stays the primary action in this slot. -->
               <button id="layoutai-download-btn" onclick="finalizeDownloadPdf()" title="Download the saved optimized book as a PDF" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Download PDF</button>
+              <!-- v3.0.981 -- TD-901. Save to Bookshelf: same visibility as Download PDF (finalizeSyncPublishBtn). -->
+              <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
               <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
               <span id="layoutai-est-note" style="font-size:11px;color:rgba(245,232,200,0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
               <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(245,232,200,0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
@@ -753,7 +823,7 @@
             <div class="ord-col ord-col-side">
               <section class="ord-card" id="ord-card-publish" style="margin-bottom:0;">
             <div class="ord-card-title">Publish to the Library</div>
-            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
+            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from My Stuff.</div>
             <!-- v3.0.495 -- the hint at the foot of this card is now a real link to the
                  My Published Stories section of the Account page (goToMyStories). Two
                  destinations live in this card on purpose and they are different things:
@@ -784,7 +854,7 @@
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
             <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
-            <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">your Account page</a>.</div>
+            <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">My Stuff &rarr; Published Stories</a>.</div>
               </section>
             </div>
           </div>
@@ -1168,22 +1238,190 @@
       </div>
     </div>
 
+    <!-- v3.0.980 -- TD-901. MY STUFF. The view id stays 'orders' (see mystuffShowTab in app.js):
+         this page was My Print Orders, and is now three tabs -- My Orders exactly as it was,
+         the Bookshelf, and My Published Stories moved here from My Account. -->
     <div id="view-orders" class="view" style="display:none;">
-      <div class="page-header">
-        <div>
-          <div class="page-title">My Print Orders</div>
-          <div class="page-subtitle">Your physical book orders and their status</div>
+      <!-- v3.0.987 -- one line, readable on the page picture (Ian). Styles: .mystuff-head, beside the bookcase styles. -->
+      <div class="page-header mystuff-head">
+        <div class="mystuff-titleline">
+          <span class="page-title">My Stuff</span>
+          <span class="page-subtitle">Your print orders, your Bookshelf and your published stories</span>
         </div>
         <!-- v3.0.803 -- TD-613. Ian: a Back button "like we have on the Archive page, to take you
              back wherever you were." Identical markup and the identical handler -- sectionBack()
              already knew about 'orders' in both of its view lists; only the button and the
              remembering were missing. -->
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
+          <button class="btn btn-sm" onclick="ordersBack()">&larr; Back</button>
         </div>
       </div>
-      <div id="orders-list" style="margin-top:8px;">
-        <div class="settings-section-desc">Loading...</div>
+      <div class="sess-tabs" style="margin-bottom:6px;overflow-x:auto;overflow-y:hidden;">
+        <div class="sess-tab active" id="mystuff-tab-orders" onclick="mystuffShowTab('orders')">My Orders</div>
+        <div class="sess-tab" id="mystuff-tab-shelf" onclick="mystuffShowTab('shelf')">Bookshelf</div>
+        <div class="sess-tab" id="mystuff-tab-stories" onclick="mystuffShowTab('stories')">Published Stories</div>
+      </div>
+      <div id="mystuff-panel-orders">
+        <div id="orders-list" style="margin-top:8px;">
+          <div class="settings-section-desc">Loading...</div>
+        </div>
+      </div>
+      <div id="mystuff-panel-shelf" style="display:none;">
+        <div id="bookshelf-section" class="settings-section">
+          <!-- v3.0.993 -- no title bar (Ian): the tab already says Bookshelf. The count is lettered on
+               the case's base board (.bcase-count, written by paintBookshelf). -->
+          <!-- v3.0.982 -- TD-901. The shelves. v3.0.985 -- one dark walnut bookcase (Ian's picture):
+               campaigns share the shelves, each series' first book faces out, the rest are spines.
+               v3.0.986 -- bigger: each row is 250px and each board 22px, so a board is painted every
+               272px from the same 14px start the first row uses, and every book stands in a 250px
+               .bslot, so each row lands on a board. The Library shelf is its own .bcase-inner at
+               the bottom. Clicking a book opens it on top of the case as an open book (.bopen). -->
+          <style>
+            /* v3.0.987 -- Ian: "The text at the top is very hard to read"; "condense the My Stuff lines to
+               one line and bring everything up under it tighter allowing for the shelf to be bigger";
+               the Bookshelf tab loses its white card -- gold lettering on a dark bar, the case nearly
+               full width, and the page's own picture showing around it. The other two tabs keep their
+               cards for now (Ian). */
+            #view-orders > .page-header.mystuff-head { align-items:center; margin-bottom:6px; padding:6px 12px; border-radius:8px;
+              background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
+            .mystuff-titleline { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 14px; min-width:0; }
+            .mystuff-head .page-title { color:#e8cf7a; font-family:var(--font-display); font-size:19px; margin:0; }
+            .mystuff-head .page-subtitle { color:rgba(240,232,208,0.85); font-size:13px; margin:0; }
+            #bookshelf-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
+            /* v3.0.993 -- the count, lettered in gold on the base board. */
+            .bcase-count { font-size:14px; font-weight:600; letter-spacing:0.06em; color:#e8cf7a; font-family:var(--font-display);
+              text-shadow:0 1px 0 rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.5); white-space:nowrap; }
+            #bookshelf-body > .settings-section-desc { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }   /* 8px keeps the overhanging top and base inside the page */
+            /* v3.0.993 -- Ian: the case "RIGHT UP UNDER the line separating the tab headers". The tabs
+               keep their 6px below the rule on the other panels; the case takes it back here. */
+            #bookshelf-body > .bcase:first-child { margin-top:-6px; }
+            /* v3.0.990 -- MY ORDERS, DARK. Ian: "Reverse the style sheet... change the panels from white to
+               our dark color and our text from black to our lighter golds." Every colour on an order
+               card comes from the site's variables (orderCardHtml writes var(--surface), var(--text) and
+               so on inline), so redefining them for this one panel turns the cards dark without touching
+               the order code -- and nothing outside #mystuff-panel-orders changes. */
+            #mystuff-panel-orders {
+              --surface: rgba(16,10,5,0.86);
+              --border: rgba(201,168,76,0.3);
+              --text: #ecd9a8;
+              --text-muted: rgba(232,207,122,0.68);
+              --text-light: rgba(232,207,122,0.5);
+              --crimson: #e8cf7a;
+              --shadow: 0 6px 16px rgba(0,0,0,0.45);
+            }
+            #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            /* v3.0.994 -- PUBLISHED STORIES, DARK, the same way (Ian: "reverse the css like we did the
+               order tiles"). The white card goes, as on the Bookshelf tab; the heading sits on a dark
+               strip; each tile is a dark panel with a gold edge. Scoped to this panel only. */
+            #mystuff-panel-stories {
+              --surface: rgba(16,10,5,0.86);
+              --border: rgba(201,168,76,0.3);
+              --text: #ecd9a8;
+              --text-muted: rgba(232,207,122,0.68);
+              --text-light: rgba(232,207,122,0.5);
+              --crimson: #e8cf7a;
+              --shadow: 0 6px 16px rgba(0,0,0,0.45);
+            }
+            #mystuff-panel-stories #my-stories-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
+            #mystuff-panel-stories .mystories-head { padding:8px 12px; border-radius:8px; background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
+            #mystuff-panel-stories .mystories-head .settings-section-title { color:#e8cf7a; }
+            #mystuff-panel-stories .mystories-head .settings-section-desc { color:rgba(240,232,208,0.85); margin-bottom:0; }
+            #mystuff-panel-stories #my-stories-empty { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            /* v3.0.992 -- the cover column on an order card: the picture, then the order's buttons at the
+               same width (their inline margins were for sitting in a row under the details). */
+            .ord-thumb-col { flex:0 0 140px; width:140px; display:flex; flex-direction:column; gap:6px; }
+            .ord-thumb-col .btn { width:100%; margin:0 !important; justify-content:center; }
+            .ord-thumb-col .ord-cover-thumb + .btn { margin-top:4px !important; }
+            .bcase { position:relative; margin-top:10px; max-width:1180px; padding:0 22px; background:#1d0f07; border-radius:3px;
+              box-shadow:0 16px 34px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.04) inset; }
+            .bcase::before, .bcase::after { content:''; position:absolute; top:0; bottom:0; width:22px; z-index:1;
+              background:repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0 2px, rgba(255,255,255,0.03) 2px 5px),
+                         linear-gradient(90deg, #321a0a 0%, #6a3e1c 35%, #7d4c24 50%, #573115 70%, #2a150a 100%); }
+            .bcase::before { left:0; box-shadow:4px 0 8px rgba(0,0,0,0.55); }
+            .bcase::after { right:0; box-shadow:-4px 0 8px rgba(0,0,0,0.55); }
+            .bcase-crown { position:relative; z-index:2; height:36px; margin:0 -30px; border-radius:3px 3px 0 0;
+              background:linear-gradient(to bottom, #8d5a2c 0%, #6a3e1c 22%, #45260f 45%, #7a4c24 58%, #573115 72%, #2e170a 100%);
+              box-shadow:0 6px 10px rgba(0,0,0,0.6); border-bottom:2px solid #140a04; }
+            .bcase-inner { display:flex; flex-wrap:wrap; align-items:flex-end; align-content:flex-start; gap:22px 6px;
+              min-height:558px; padding:14px 18px 22px; box-sizing:border-box;
+              background:
+                repeating-linear-gradient(to bottom, rgba(0,0,0,0.55) 0, rgba(0,0,0,0) 20px, rgba(0,0,0,0) 248px, rgba(0,0,0,0.35) 250px,
+                  #94602f 250px, #74461f 252px, #5a3417 264px, #3a200d 270px, #170b04 272px),
+                repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 118px, rgba(0,0,0,0.35) 118px 120px, rgba(255,255,255,0.025) 120px 122px),
+                linear-gradient(to bottom, #36190b, #2a1308 60%, #1f0e06);
+              background-position:0 14px, 0 0, 0 0; background-repeat:repeat-y, repeat, no-repeat; }
+            .bcase-inner.bcase-one, .bcase-inner.bcase-lib { min-height:286px; }
+            .bcase-base { position:relative; z-index:2; height:32px; margin:0 -30px; border-radius:0 0 3px 3px; display:flex; align-items:center; justify-content:center;
+              background:linear-gradient(to bottom, #170b04 0%, #7a4c24 8%, #573115 45%, #321a0a 100%); box-shadow:0 8px 12px rgba(0,0,0,0.6); }
+            .bslot { position:relative; height:250px; display:flex; align-items:flex-end; flex:0 0 auto; }
+            .bookshelf-book { transition:transform .15s ease; cursor:pointer; }
+            .bookshelf-book:hover, .bookshelf-book:focus-visible { transform:translateY(-8px); outline:none; }
+            .bookshelf-book.sel { transform:translateY(-8px); box-shadow:0 0 0 2px #c9a84c, 4px 6px 10px rgba(0,0,0,0.6); }
+            .bface { position:relative; width:180px; height:233px; padding:0; border:none; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 8px;
+              background:#3a2010; box-shadow:5px 6px 12px rgba(0,0,0,0.7); }
+            .bface img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+            .bface::after { content:''; position:absolute; top:0; bottom:0; left:0; width:10px; z-index:1;
+              background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.18) 55%, rgba(0,0,0,0.15)); }
+            .bface-t { position:absolute; inset:12px 10px 12px 16px; display:flex; align-items:center; justify-content:center; text-align:center;
+              color:#e8cf7a; font-family:var(--font-display); font-size:15px; line-height:1.25; }
+            .bplaque { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); max-width:180px; z-index:3; padding:1px 9px;
+              font-family:var(--font-display); font-size:10px; letter-spacing:0.04em; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+              background:linear-gradient(to bottom, #f0d88a, #c9a84c 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
+            .bspine { position:relative; flex:0 0 auto; padding:0; border:none; overflow:hidden; border-radius:2px 2px 1px 1px;
+              background-image:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.22) 78%, rgba(0,0,0,0.55));
+              box-shadow:2px 0 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
+            .bspine::before, .bspine::after { content:''; position:absolute; left:0; right:0; height:5px; z-index:1;
+              border-top:1px solid rgba(222,190,100,0.9); border-bottom:1px solid rgba(222,190,100,0.9); }
+            .bspine::before { top:14px; } .bspine::after { bottom:16px; }
+            .bspine-t { position:absolute; inset:30px 0 32px; display:flex; align-items:center; justify-content:center;
+              writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:var(--font-display);
+              font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
+            .bspine-ribbon { position:absolute; bottom:-4px; left:50%; width:8px; margin-left:-4px; height:28px; z-index:2; background:#a8322a;
+              clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
+            /* The open book. Below the app's own dialogs (z-index 100), so Remove can still ask first. */
+            .bopen-overlay { position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:20px;
+              background:rgba(8,4,2,0.72); }
+            .bopen { position:relative; display:flex; align-items:stretch; width:min(900px, 94vw); min-height:440px; max-height:90vh; padding:12px;
+              background:linear-gradient(to bottom, #4a2612, #2e170a); border-radius:6px; box-shadow:0 24px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(201,168,76,0.25); }
+            .bopen-page { position:relative; flex:1 1 0; min-width:0; overflow:auto; padding:26px 28px;
+              background:linear-gradient(to bottom, #f5e9cc, #ead8b0); color:#3a2210; }
+            .bopen-left { display:flex; align-items:center; justify-content:center; border-radius:3px 0 0 3px;
+              box-shadow:inset -18px 0 22px -12px rgba(60,35,10,0.45); }
+            .bopen-right { border-radius:0 3px 3px 0; box-shadow:inset 18px 0 22px -12px rgba(60,35,10,0.45); }
+            .bopen-gutter { flex:0 0 14px; background:linear-gradient(90deg, #d8c290, #9c8050 45%, #7a6038 50%, #9c8050 55%, #d8c290); }
+            .bopen-cover { max-width:100%; max-height:calc(90vh - 90px); width:auto; height:auto; aspect-ratio:auto; object-fit:contain; border-radius:2px;
+              box-shadow:4px 6px 14px rgba(40,20,5,0.55); position:relative; z-index:1; background:transparent; }
+            .bopen-cover-ph { position:absolute; inset:26px 28px; display:flex; align-items:center; justify-content:center; text-align:center; padding:16px;
+              color:#e8cf7a; font-family:var(--font-display); font-size:18px; border-radius:2px; }
+            .bopen .bshelf-card-title { color:#3a2210; font-family:var(--font-display); font-size:22px; margin:6px 0 12px; line-height:1.2; }
+            .bopen .bshelf-card-meta { font-size:13px; color:#5a4228; margin-bottom:5px; }
+            .bopen .bshelf-card-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+            .bopen .bshelf-card-ask { margin-top:16px; padding-top:12px; border-top:1px solid rgba(90,66,40,0.3); }
+            .bopen-x { position:absolute; top:-14px; right:-14px; z-index:3; width:32px; height:32px; border-radius:50%; border:1px solid #c9a84c;
+              background:#2e170a; color:#e8cf7a; font-size:20px; line-height:28px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
+            @media (max-width:640px) {
+              .bcase { padding:0 12px; } .bcase::before, .bcase::after { width:12px; } .bcase-crown, .bcase-base { margin:0 -16px; } .bcase-inner { padding:14px 8px 22px; }
+              .bopen { flex-direction:column; overflow-y:auto; } .bopen-gutter { display:none; }
+              .bopen-page { flex:0 0 auto; overflow:visible; padding:18px; } .bopen-left { min-height:0; } .bopen-cover { max-height:50vh; }
+              .bopen-cover-ph { inset:18px; } .bopen-x { top:4px; right:4px; }
+            }
+          </style>
+          <div id="bookshelf-body"></div>
+        </div>
+      </div>
+      <div id="mystuff-panel-stories" style="display:none;">
+      <!-- My Published Stories (Public Library). v3.0.980 -- moved here from My Account, unchanged
+           apart from the empty-state line, which still named the retired Preview & Export tab (TD-876). -->
+      <div id="my-stories-section" class="settings-section">
+        <!-- v3.0.994 -- the heading and its line on one dark strip, as on the other two tabs (Ian). -->
+        <div class="mystories-head">
+        <div class="settings-section-title">My Published Stories</div>
+        <div class="settings-section-desc">Books you have shared to the public Library. Remove any you no longer want public &mdash; this is the place to manage them, since you may not always have access to the original campaign. (Shared images are managed from each campaign&#39;s Archive.)</div>
+        </div>
+        <div id="my-stories-list" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
+        <div id="my-stories-empty" class="settings-section-desc" style="display:none;margin-top:8px;">You have not published any stories yet. Open a campaign&#39;s book, go to Order &amp; Publish, and choose Publish to Library.</div>
+      </div>
       </div>
     </div>
 
@@ -1320,13 +1558,7 @@
         <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Show guided tours again</button>
       </div>
 
-      <!-- My Published Stories (Public Library) -->
-      <div id="my-stories-section" class="settings-section">
-        <div class="settings-section-title">My Published Stories</div>
-        <div class="settings-section-desc">Books you have shared to the public Library. Remove any you no longer want public &mdash; this is the place to manage them, since you may not always have access to the original campaign. (Shared images are managed from each campaign&#39;s Archive.)</div>
-        <div id="my-stories-list" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;"></div>
-        <div id="my-stories-empty" class="settings-section-desc" style="display:none;margin-top:8px;">You have not published any stories yet. Open a campaign, go to Preview &amp; Export, and choose Publish to Library.</div>
-      </div>
+      <!-- v3.0.980 -- TD-901. My Published Stories moved to its own tab on My Stuff. -->
 
       <!-- Legal links -->
       <div style="margin-top:18px;text-align:center;font-size:12px;color:rgba(240,232,208,0.6);">
@@ -3105,9 +3337,9 @@
       <label class="cl-field" title="How the panels are arranged on the page"><span>Panel arrangement</span>
         <select id="cl-arrange">
           <option value="paired">Picture Book &mdash; big pictures that fill the page</option>
-          <option value="comicpage">Comic page &mdash; connected bordered panels</option>
+          <option hidden disabled value="comicpage">Comic page &mdash; connected bordered panels</option>
           <option value="magazine">Magazine &mdash; text wraps around images</option>
-          <option value="gazette">Gazette &mdash; text wraps around images, in panels</option>
+          <option hidden disabled value="gazette">Gazette &mdash; text wraps around images, in panels</option>
         </select>
       </label>
       <label class="cl-field" title="The frame or treatment drawn around each image"><span>Picture border</span>

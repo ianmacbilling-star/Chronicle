@@ -1,5 +1,419 @@
 [
   {
+    "version": "3.1.0",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "310-session-books-full-size-trimmed",
+        "kind": "change",
+        "public": true,
+        "summary": "Session book pictures are back to their larger size, trimmed neatly at the gold border instead of shrunk to fit inside it.",
+        "detail": "Ian: keep the pictures blown up as they were, and just trim the sides so they do not go outside the gold lines. Each session's picture is its larger size again, centred in the upper part of the cover; its sides are now cut cleanly at the gold line, so nothing crosses it, and its top and bottom still fade into the cover. TO TEST: a campaign's Sessions page and Publish > Session: pictures as large as in 3.0.998; their left and right edges stop exactly at the gold line on every book; controls still work.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.999",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "999-session-books-inside-the-line",
+        "kind": "change",
+        "public": true,
+        "summary": "Session book pictures now stay inside the gold border instead of running over it.",
+        "detail": "Ian: keep the picture on a session book from bleeding over the gold trim line. Each session's picture now spans exactly the inside of the gold line, still centred in the upper part of the cover with its edges faded, and a tall picture stops short of the line at the top as well. TO TEST: a campaign's Sessions page and Publish > Session: no picture crosses the gold line on any side; pictures still centred and faded; controls still work.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.998",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "998-session-books-centred",
+        "kind": "change",
+        "public": true,
+        "summary": "Session books now match the campaign books more closely: the picture is larger and centred, the gold border runs all the way round, and New campaign has a binding too.",
+        "detail": "Ian, from the first look at the session books: the pictures sat at the top leaving a gap, and the gold line faded out along the bottom. Each session's picture is now a little larger, centred in the upper part of the cover, with its foot under the dark fade that carries the words. The gold line is drawn above everything, so it runs unbroken round all four sides. The New campaign blank book gains the same shaded binding as the others. TO TEST: a campaign's Sessions page and Publish > Session: pictures centred and filling more of the cover; the gold line unbroken along the bottom; controls still work. My Campaigns: the New campaign book has the binding down its left edge.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.997",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "997-sessions-as-books",
+        "kind": "change",
+        "public": true,
+        "summary": "Session tiles are hardback books too, on a campaign's Sessions page and on the Session tab under Publish, to match the campaign books.",
+        "detail": "Ian: do the same for the session tiles as the campaign books. On a campaign's Sessions page and on the Session tab under Publish, each session is now a dark 8.5 x 11 cover with the binding shaded down the left and a thin gold line inside its edge; its picture sits at the top, faded into a soft wash of itself, and a dark fade at the foot carries the tile's words and controls: the name and date, Ready or Draft and the menu on the Sessions page; the version, panel count, Ready or Draft, Include in Print and Open on the Session tab. Nothing a tile does has changed. TO TEST: a campaign's Sessions page: every session is a book; clicking one opens it; the ... menu still opens and Delete session still asks; a session with no picture shows the plain cover. Publish, Session tab: every session is a book; Include in Print still ticks and saves; Open still opens the session; a drawn chapter title shows whole. Narrow the window and both reflow. The previous tiles come back by setting SESSION_CARDS_AS_BOOKS to false in app.js.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.996",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "996-session-description-snippet",
+        "kind": "fix",
+        "public": true,
+        "summary": "A long session description now shows as a short snippet on the session page, with the full text when you hover over it, the same as campaign descriptions.",
+        "detail": "Ian: some people paste whole books into a session's description, which pushed the rest of the session page down. The session page now shows the first part of a long description, cut at a word and ending in an ellipsis, and hovering over it shows all of it, exactly as the campaign description does on the Sessions page. Short descriptions are unchanged, and editing a session still opens the whole description. TO TEST: give a session a very long description: the session page shows about two lines ending in an ellipsis; hover to read all of it; click the edit pencil: the full text is in the box; save a short one: it shows in full with no hover text.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.995",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "995-campaigns-as-books",
+        "kind": "change",
+        "public": true,
+        "summary": "My Campaigns shows each campaign as a hardback book: its picture faded into a dark cover with a gold border, and the name and details along the bottom.",
+        "detail": "Ian: make the campaign cards look like hardback book covers, like the books facing out on the Bookshelf. Each campaign is now a dark cover in the proportions of our 8.5 x 11 books, shaded down the left edge like a binding, with a thin gold line inside its edge. The campaign's picture, whatever its shape, is faded into the cover, and a dark fade over its foot carries the campaign name, description, date and the Details button. A campaign with no picture shows the logo faded in. New campaign is a blank book with a dashed gold border. Clicking a book opens the campaign as before. TO TEST: My Campaigns: every campaign is a book; wide, square and tall pictures all sit inside the cover without hard edges; the text reads on the dark fade; Details still opens the campaign's details and does not open the campaign; New campaign still opens the form; narrow the window and the books reflow. The previous cards come back by setting CAMPAIGN_CARDS_AS_BOOKS to false in app.js.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.994",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "994-published-stories-dark",
+        "kind": "change",
+        "public": true,
+        "summary": "My Published Stories goes dark to match My Orders: the tiles are dark panels with gold lettering, and the white card behind them is gone.",
+        "detail": "Ian: reverse the colours on the Published Stories tab the way My Orders was done, keeping the tiles' size and look. The white card behind the tiles is gone, as on the Bookshelf tab; the heading and its description sit on a dark strip in gold and cream; each tile is a dark panel with a gold edge, and its title, date, blurb and buttons keep their light colours, which now read clearly. Nothing about what the tiles do has changed. TO TEST: My Stuff, Published Stories: no white card; the heading reads gold on dark; every tile is dark with a gold edge, the cover on top as before; Edit, Make link only / Make public, Copy link and Remove from Library all still work; with no stories, the empty line reads on a dark strip.",
+        "td": []
+      },
+      {
+        "id": "994-my-stuff-back",
+        "kind": "fix",
+        "public": true,
+        "summary": "My Stuff's Back button goes to My Campaigns whenever it cannot tell where you came from.",
+        "detail": "Ian: if Back on My Stuff does not know exactly where you were, go to My Campaigns. Back still returns to the page you opened My Stuff from when it knows it (a campaign's Sessions, Characters, the book, My Campaigns, My Account). When it does not, or you came from a campaign page but no campaign is open any more, it now goes to My Campaigns instead of trying to show a campaign's Sessions. It also no longer borrows a return point left behind by an earlier Asset Library or Archives visit. TO TEST: open My Stuff from My Campaigns, from inside a campaign, and from My Account: Back returns to each. Reload the page and open My Stuff straight away: Back goes to My Campaigns.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.993",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "993-bookshelf-count-on-base",
+        "kind": "change",
+        "public": true,
+        "summary": "The Bookshelf loses its title bar: the bookcase now starts right under the tabs, and the book count is lettered in gold on its base.",
+        "detail": "Ian: remove the dark Bookshelf bar above the case, put the count on the bookcase's bottom board, and bring the case right up under the line under the tabs. The tab already says Bookshelf, so the bar is gone; the case starts directly under the tab rule and so is taller on the screen; the count (for example 5 of 50 books) is lettered in gold on the wooden base. The case still grows a shelf for each new row of books. TO TEST: My Stuff, Bookshelf: no dark title bar; the top of the case sits right under the tab line; the count reads in gold on the bottom board; on a plan without the Bookshelf the invitation and See the plans still show. With a message above the case (over the limit), the message sits under the tabs and the case below it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.992",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "992-my-orders-three-across",
+        "kind": "change",
+        "public": true,
+        "summary": "My Orders shows three orders across instead of four, with a bigger cover and the order's buttons beneath it, so each card is wider and shorter.",
+        "detail": "Ian: three across, the Check with the printer and Reorder buttons under the thumbnail, and the thumbnail a little bigger, about the width of a button. On My Orders the cards now sit at most three to a row (fewer on a narrow screen). An order with a cover shows it at about button width at the left, with its buttons stacked under it; the details take the rest of the card, so lines wrap far less. An order with no cover keeps its buttons under the details, as before. TO TEST: My Stuff, My Orders on a wide screen: three cards per row; each cover about 140px wide with Check with the printer, Reorder this book (and Delete on an unpaid order) stacked beneath it at the same width; the Format and Tracking lines fit on one line. Narrow the window: two, then one per row. Every button still works.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.991",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "991-order-cover-thumbnails-fix",
+        "kind": "fix",
+        "public": true,
+        "summary": "Order cover thumbnails now appear on My Orders; they were being drawn but not saved, so the card dropped them.",
+        "detail": "v3.0.989 drew each order's front cover correctly but could not record it: the app's database layer asks every new row for its id, and the new order_cover_thumbs table had none (Railway: column \"id\" does not exist). The failure made the card remove the picture, and the cover was drawn again on every visit. The table now has an id, added on the next boot to the table that already exists. TO TEST: open My Stuff, My Orders: each order shows its front cover at the left (the first visit draws them, a few seconds each); reload: they come straight back, and the Railway log shows no new [order-covers] cover failed lines and no fresh order-N-front uploads.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.990",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "990-my-orders-dark",
+        "kind": "change",
+        "public": true,
+        "summary": "My Orders is now dark to match the Bookshelf: dark order cards with light gold lettering.",
+        "detail": "Ian: reverse the look on the order page, dark panels and light gold text instead of white panels and black text. On My Stuff, My Orders, each order card is now a dark panel with a gold edge; the book title and details are light gold, the labels a softer gold, and the Interior PDF, Cover PDF and Track shipment links gold. The \"no orders yet\" and loading messages match. Only My Orders changes: the admin order list, the Order & Publish tab and every other page are as they were. TO TEST: My Stuff, My Orders: dark cards, every line readable, the cover thumbnail still at the left, the links and the Check with the printer / Reorder / Delete buttons all visible and working. Settings, Orders (admin): unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.0.989",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "989-order-cover-thumbnails",
+        "kind": "feature",
+        "public": true,
+        "summary": "Each order on My Orders now shows a small picture of its front cover, taken from the exact cover file that went to the printer.",
+        "detail": "TD-901 follow-on. Ian asked for covers on the orders like the Bookshelf has. Every order keeps the cover PDF that was sent to the printer, back cover, spine and front on one wide page; the server now draws just the front panel of it, once, the first time the order is shown, and keeps the picture for next time. It appears at the left of each order card. Nothing about the orders themselves changed: the picture is stored on its own, and if one cannot be drawn the card looks exactly as before. TO TEST: open My Stuff, My Orders: each order with a cover shows its front cover at the left (the first visit can take a few seconds per order); it is the front only, no spine or back. Reload: the pictures come straight back. An order with no cover file shows no picture and nothing else changes.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.988",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "988-own-library-stories-on-shelf",
+        "kind": "change",
+        "public": true,
+        "summary": "You can now add your own published stories from the Library to your Bookshelf, for quick access back to them.",
+        "detail": "TD-901. Until now Add to Bookshelf was hidden on your own stories in the Library and the server refused them. Ian: \"allow someone to add their own stories from the library to their shelf. That might be how people want to do it. And then it's quick access to the library to find it.\" The button now appears on your own story's Library page and on your own story cards, and the story stands on the From the Library shelf like any other, opening its Library page. Like every Library book it does not count toward your 10 or 50. TO TEST: as Gold, open one of your own stories in the Library: Add to Bookshelf appears; add it. On the Library's Stories tab your own cards show + Bookshelf (or On your shelf). My Stuff, Bookshelf: it stands on the From the Library shelf and opens your story's page.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.987",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "987-my-stuff-header-dark-shelf",
+        "kind": "change",
+        "public": true,
+        "summary": "My Stuff's heading is one readable line, and the Bookshelf tab drops its white card: gold lettering on a dark bar, and a bookcase nearly as wide as the page with the background showing around it.",
+        "detail": "TD-901. Ian: the text at the top was very hard to read, a small vertical scroll bar sat beside the tabs, and the Bookshelf should be dark with gold lettering and the shelf as large as the page allows. My Stuff's title and description are now one line in gold and cream on a dark strip, with the tabs close beneath it. The stray scroll bar beside the tabs is gone. On the Bookshelf tab the white card is gone: Bookshelf and the book count sit in gold on a dark bar, the bookcase fills nearly the whole width, and the page background shows around it. My Orders and Published Stories are unchanged for now. TO TEST: open My Stuff: the heading reads clearly on one line (it wraps on a phone), no scroll bar beside the tabs. Bookshelf tab: gold Bookshelf and count on a dark bar, the case nearly full width, no white panel behind it. An account with an empty shelf or on Silver: the message reads clearly on its dark strip. My Orders and Published Stories look as they did.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.986",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "986-bookcase-open-book",
+        "kind": "change",
+        "public": true,
+        "summary": "The Bookshelf is bigger, the facing books show their real printed cover, Library books have their own bottom shelf, and a book you click opens on top of the shelf as an open book.",
+        "detail": "TD-901. Ian's notes on the first bookcase. The book count now sits on the Bookshelf title line, and the case is wider with taller shelves, so the books stand nearly to the top of each shelf. A campaign's facing book now shows the book's actual first page, the cover exactly as printed with its title, drawn once from the saved book the first time it is shown (the campaign picture shows while that is not available). Library books stand on their own shelf at the bottom, and a different one of them may face out each time you open the tab. Clicking any book opens it on top of the bookcase as an open book: its cover on the left page, its details and View, Download, Bring back to Publish and Remove on the right. Close it with the X, by clicking outside it, or with Escape. TO TEST: open My Stuff, Bookshelf. The count is on the title line. The facing books show their printed covers with titles (the first time can take a few seconds per book). Library books are on the bottom shelf; reopen the tab a few times and the facing one changes when there are several. Click a cover and a spine: the open book appears over the shelf; every button works; Remove asks first, over the open book; Bring back closes it and opens the campaign. On a phone the open book stacks the cover above the details.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.985",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "985-bookcase",
+        "kind": "change",
+        "public": true,
+        "summary": "The Bookshelf is now one dark walnut bookcase: campaigns share the shelves, each campaign's first book faces out showing its cover, and the rest of that campaign's books stand beside it as leather spines.",
+        "detail": "TD-901. Ian asked for the look of a panelled library bookcase, darker wood, and for campaigns to share shelves with the first book of each series facing out. My Stuff, Bookshelf is now a single walnut case with a moulded top, side posts, a base, a dark panelled back and thick shelf boards; there are always at least two shelves, and more appear as books are added. Each campaign's books stand together, oldest shelved first: the first faces out with its cover and a brass plate on the shelf naming the campaign, the rest stand as spines in that campaign's leather colour with gilt bands and title, taller and thicker for longer books. Library books stand at the end with a red ribbon. Clicking any book lifts it and opens its card below, as before. TO TEST: with books from two campaigns and a Library book, open My Stuff, Bookshelf: one bookcase; each campaign's first book shows its cover and a brass name plate; its other books are spines of one colour; the Library book is last with a ribbon. Add enough books to fill a shelf: they wrap onto the next shelf and sit on its board. Narrow the window: still a bookcase, books wrap. Click a cover and a spine: each lifts and opens its card.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.984",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "984-shelve-any-version-version-cover",
+        "kind": "fix",
+        "public": true,
+        "summary": "Save to Bookshelf now appears after optimizing any version you can open, not only your own, and a shelved book now shows its version's own cover.",
+        "detail": "TD-901. Ian optimized someone else's version and the book saved, but no Save to Bookshelf button appeared: the button followed Go to Publish, which is hidden on a version you cannot publish. It now appears whenever a finished optimized book is saved, on any version you can open; Go to Publish and Download PDF are unchanged. Optimizing someone else's version saves the book as your own copy, so shelving it copies only your file, and Bring back puts it back as your copy of that version without touching the owner's settings. If the owner has since switched that version between Picture Book and Magazine, Bring back says so and the book stays on the shelf to view and download. Separately, shelved books took the campaign's picture as their cover, so two versions with different covers looked the same; a book now takes its version's own front cover (books shelved before this keep the cover they were saved with). TO TEST: as Tamika, open another member's version of Lily's First Day of School, Optimize, let it save: Save to Bookshelf appears (Go to Publish does not); save it. Save your own version too. My Stuff, Bookshelf: two spines with their own covers. Bring back the other member's one: it opens on their version and loads.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.983",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "983-library-card-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Add to Bookshelf now appears on the story cards in the Library too, not only on a story's own page.",
+        "detail": "TD-901. On the Library's Stories tab, a signed-in Gold or Platinum reader sees a small + Bookshelf button in the top corner of each story card that is not their own. Clicking it adds the story to the From the Library shelf on My Stuff without opening the story; the button then reads On your shelf. Stories already on your shelf show On your shelf when the page loads. The Library asks about a whole page of cards at once. TO TEST: signed in as Gold, open the Library, Stories tab: + Bookshelf on other people's cards, none on your own. Click one: it turns to On your shelf and the story does not open; clicking the rest of the card still opens the story. Scroll so more stories load: the new cards get the button too. My Stuff, Bookshelf: the story stands on From the Library. Reload the Library: that card shows On your shelf. As Silver, or signed out: no buttons.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.982",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "982-bookshelf-shelves-bring-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Bookshelf gets its shelves: your books stand on a wooden shelf per campaign, Bring back to Publish opens one on its Optimize tab ready to edit, order or publish, and you can add other people's books from the Library.",
+        "detail": "TD-901, Bookshelf release 3 of 3. My Stuff, Bookshelf now draws one wooden shelf per campaign with your books standing on it as spines (taller and thicker for longer books, the campaign cover on the spine). Click a spine for its card: View, Download, Bring back to Publish and Remove. Bring back makes that book the saved book of the version it came from again, then opens the campaign on the Optimize tab on that version and loads it, so it can be edited, ordered or published. Your layout settings are left as they are, and the Optimize tab says if they differ from the book's; only when the book was made in the other layout (Picture Book or Magazine) are they switched to the book's, because the saved book is kept under its layout. If the version already holds an optimized book that is not on your Bookshelf, it asks first: Shelve it first, Replace it, or Cancel. On a story's Library page, a signed-in Gold or Platinum reader who is not the author sees Add to Bookshelf; those stand on a From the Library shelf, open their Library page, and do not count toward your 10 or 50. TO TEST: as a Gold account with two shelved books from one campaign, open My Stuff, Bookshelf: one shelf, two spines; click one: its card. Optimize that book again and save WITHOUT shelving, then Bring back the shelved one: the Shelve it first / Replace it / Cancel choice appears. Shelve it first: a third spine appears and the old book opens on the Optimize tab on the right version; press Edit and change something (it is editable). Try Replace it on another pass: no new spine. Go to Order & Publish: the Printing line shows the book's original optimize date. Change a border setting, then Bring back: the book loads and the settings-changed note names the border; the setting is unchanged. Switch the layout to Magazine, then Bring back a Picture Book book: the message says the layout settings were switched, and Layout shows Picture Book. On someone else's Library story page, Add to Bookshelf, then My Stuff: it stands on From the Library and opens the story page; on your own story's page the button does not appear; signed out it does not appear. As Silver: no Add to Bookshelf on Library pages.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.981",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "981-save-to-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Save to Bookshelf: keep a finished, optimized book on your Bookshelf (Gold 10 books, Platinum 50), and view, download or remove it from My Stuff.",
+        "detail": "TD-901, Bookshelf release 2 of 3. On a book's Optimize tab, beside Go to Publish and Download PDF, Save to Bookshelf keeps a copy of the saved optimized book together with its layout, so it can be brought back and edited in the next update. It shows exactly when Go to Publish shows. The Bookshelf tab on My Stuff now lists your books by campaign, with View, Download and Remove, and counts them against your plan: Gold 10, Platinum 50. Silver, Copper and the Free Trial get the upgrade note. After a downgrade nothing is deleted: you can still view, download and remove, but not add. Only you see your shelf. TO TEST: as a Gold account, optimize and save a book, press Save to Bookshelf: Saved (1 of 10). Press it again: already on your Bookshelf. My Stuff, Bookshelf: the book under its campaign; View opens it, Download downloads it. Optimize the same book again and save: the shelf copy still opens (it is a copy, not the same file). Remove it: gone, count back to 0. As Silver: the button shows the upgrade note. As a player looking at someone else's version: no Save to Bookshelf button. The 10-book limit is checked by the build's own tests; filling a shelf to 10 is optional (the 11th is refused with the reason).",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.980",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "980-my-stuff",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Orders is now My Stuff: your print orders, a new Bookshelf, and your published stories, each on its own tab.",
+        "detail": "TD-901, Bookshelf release 1 of 3. The My Orders menu item is now My Stuff, a page with three tabs. My Orders is the orders screen exactly as it was. Published Stories is the list that used to sit at the bottom of My Account, moved here, and the links that pointed to it (the Publish to Library card and the publish dialog) now say My Stuff. Bookshelf is new: on Gold and Platinum it shows how many books your shelf holds (10 and 50) and is empty for now, because saving to it arrives in the next update; on Silver, Copper and the Free Trial it explains the Bookshelf and offers See the plans. TO TEST: open the menu, choose My Stuff; My Orders shows your orders as before. Click Bookshelf as a Gold or Platinum account (0 of 10 or 0 of 50) and as a Silver or Copper account (the upgrade note, and See the plans lands on the plans). Click Published Stories: your published books, with Remove still working. On a book's Order & Publish tab, the link under Publish to Library opens My Stuff on Published Stories. My Account no longer shows the published stories list. Back returns to where you came from.",
+        "td": [
+          "TD-901"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.979",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "979-version-switch-clears-order-lines",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching versions no longer leaves the previous version’s saved-book lines on screen, and a version you cannot publish no longer offers Go to Publish.",
+        "detail": "TD-900. Switching to a version with no saved layout left “Printing the version you saved at…” and “Publishing: … optimized, with covers” from the version you had just left, beside the correct “There is no saved layout” message. Both now go with the version. And when the version on screen is one you cannot publish, the Publishing line and the Go to Publish button (with Download PDF beside it) are hidden — the note telling you to switch back to your own version is all that shows. TO TEST: as Tamika on Lily’s First Day of School, Order & Publish, switch the version selector to Story Master — Canonical: only the no-saved-layout line, no Printing line, no Publishing line; on the Optimize tab no Go to Publish or Download PDF button. Switch back to your own version: all of them return, with the right date. Repeat three times.",
+        "td": [
+          "TD-900"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.978",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "978-order-name-per-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Order name no longer follows you to a different book.",
+        "detail": "TD-899. An Order name typed on one campaign’s Order & Publish tab stayed in the box after opening another campaign, and would have been saved with whichever book was actually bought. It is now cleared whenever the Order tab opens on a different book — another campaign, or another version of the same one. Your Ship to details are kept on purpose, so you do not have to retype your address. A reorder still fills in the name of the order it repeats. TO TEST: as Erin, type an Order name and a Ship to on Lily’s First Day of School and Get price; open The Lamplight Census → Publish → Order & Publish: Order name empty, Ship to still filled. Go back to Lily: still empty (it was left behind, not kept). Type a name, switch versions within one campaign: cleared. Type a name, go to another tab and come back to Order on the same book: kept. Reorder a past book from My Orders: its name is filled in.",
+        "td": [
+          "TD-899"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.977",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "977-order-finds-saved-layout",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Order tab finds your saved layout straight away, and prices the book you will actually receive.",
+        "detail": "TD-895. After a fresh page load the Order & Publish tab could say “There is no saved layout for this book in this style” and quote the price of the unoptimized book, until Load Last Optimized File was pressed. It was asking before the page knew which version was on screen and which layout settings it had, and never asked again once it did. It now waits for both — showing “Checking for your saved layout…” for a moment — and asks again whenever either arrives. If the server ever does answer “no saved layout”, the Railway log now carries a [print-interior] no saved layout line naming the version, the layout style it looked in and the saved layouts that do exist. TO TEST: as Tamika, hard refresh, open Lily’s First Day of School → Publish, and go straight to Order & Publish WITHOUT pressing Load. Expected: a brief “Checking for your saved layout…”, then “Printing the version you saved at 9/22/2026, 9:04:07 AM”, 15 pages, and the $16.26 quote. Try it fast (before the version finishes loading) and slow. Then switch versions and back: the Order tab should follow the version.",
+        "td": [
+          "TD-895"
+        ]
+      },
+      {
+        "id": "977-settings-changed-only-when-true",
+        "kind": "fix",
+        "public": true,
+        "summary": "“Your Layout Settings have changed” now appears only when they have — and says which one.",
+        "detail": "TD-897. Loading a saved optimized book could warn that the Layout Settings had changed when nobody had touched them. The saved settings and the current ones were compared as text, so the same settings written in a different order, or an older save that did not list a few internal defaults, counted as a change. They are now compared setting by setting, and only the settings you can actually change count. When something really did change the message names it, for example “Picture border: keyline to frame”. TO TEST: Load Last Optimized File on a book whose Layout you have not touched — no warning. Then change the picture border on the Layout panel and load again — the warning appears and names the border.",
+        "td": [
+          "TD-897"
+        ]
+      },
+      {
+        "id": "977-withheld-layouts-hidden",
+        "kind": "fix",
+        "public": false,
+        "summary": "The layout list no longer flashes Comic and Gazette while the page loads.",
+        "detail": "TD-896. Both are withheld from customers, but the page shipped all four and removed two once the server replied, so a fast click showed them briefly. They now ship hidden and are revealed only where they are enabled for testing. TO TEST: hard refresh and open Order & Publish as fast as possible, then read Panel arrangement — only Picture Book and Magazine, at every moment.",
+        "td": [
+          "TD-896"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.0.976",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "976-printer-checks-files",
+        "kind": "feature",
+        "public": true,
+        "summary": "Before you pay for a printed book, the printer now checks your files.",
+        "detail": "TD-602. When you press Prepare Your Order, the print service is now asked to check the interior file as soon as it is built, and the cover file as soon as that is built — two separate checks. The note under the button says what is happening: “Confirming your interior with the printer…”, then “Confirming your cover with the printer…”, counting up in seconds, then “Getting your price…”. IF THE PRINTER SAYS A FILE CANNOT BE PRINTED, the order stops there, before the price and before any payment, and the note shows the printer’s own explanation. IF THE PRINTER DOES NOT ANSWER (about 90 seconds for the interior, 60 for the cover), the order carries on exactly as it did before this release — the printer still checks the files when the order reaches it. Every check is written to the server log as a [file-check] line with the printer’s raw answer. TO TEST on staging: Prepare an order for a normal book and watch the note — both confirming lines should appear and the price should arrive as usual. Then read the [file-check] lines in the Railway log: each should say start, then result ok. If a line says unknown, copy it into the thread — that is the printer’s answer arriving in a shape this code did not expect, and it is the thing to fix next.",
+        "td": [
+          "TD-602"
+        ]
+      },
+      {
+        "id": "976-brain-layouts",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant no longer offers layouts that are not available.",
+        "detail": "It listed Comic and Gazette among the book layouts in two answers. Both are withheld from customers, so it now says Picture Book or Magazine. TO TEST: ask the help assistant how to change the book’s layout — the answer should name Picture Book and Magazine only.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.975",
     "date": "2026-09-22",
     "entries": [

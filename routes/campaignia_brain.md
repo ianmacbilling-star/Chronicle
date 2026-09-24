@@ -812,7 +812,7 @@ Where the story comes together as alternating image panels and narrative.
 
 ### 10.5 Preview tab
 See how it looks on the printed page.
-- **Layout** — Comic, Picture Book, Magazine, or Gazette (the button shows the pick).
+- **Layout** — Picture Book or Magazine (the button shows the pick).
 - **The preview panel** — a fast on-screen look at the {session} as you work. For exactly how
   it will print, with page breaks, gutters and margins, run **Optimize** on the Publish page.
 - **Open in New Tab** — full-size PDF in the browser (save/print via the browser).
@@ -1428,8 +1428,8 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   first (recommended) → create a **Session** → paste the transcript and notes →
   **Generate Story** → review on the **Review** tab → **Generate Narrative & Images** →
   fine-tune the **Storyboard** → check **Preview** → **Publish** or **Order**.
-- **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Comic,
-  Picture Book, Magazine, or Gazette. Run **Optimize** on the Publish page to see the real
+- **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Picture
+  Book or Magazine. Run **Optimize** on the Publish page to see the real
   printed result.
 - **"How do I hand off running the campaign?"** **Members** → the member's **⋯** →
   **Make Story Master**. The incoming Story Master needs a paid subscription; everyone

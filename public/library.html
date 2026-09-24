@@ -111,6 +111,12 @@
     .author-name { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--gold); border-bottom:1px solid rgba(201,168,76,0.25); padding-bottom:6px; margin-bottom:14px; letter-spacing:1px; }
     .author-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
     .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
+    /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
+    .story-card { position:relative; }
+    .sc-shelf { position:absolute; top:6px; right:6px; z-index:2; font-family:'Crimson Text',serif; font-size:11px; font-weight:700; letter-spacing:0.02em;
+      color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:10px; padding:2px 9px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
+    .sc-shelf:hover { background:#e2c270; }
+    .sc-shelf[disabled] { cursor:default; color:#f7ecd2; background:rgba(40,70,40,0.92); border-color:#1f3a1f; }
     .story-card .sc-cover { width:100%; aspect-ratio:17/22; object-fit:cover; background:#160e06; display:block; }
     .story-card .sc-ph { width:100%; aspect-ratio:17/22; background:#160e06; display:flex; align-items:center; justify-content:center; color:rgba(201,168,76,0.45); font-family:'Cinzel',serif; font-size:13px; text-align:center; padding:10px; }
     .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:8px 10px 11px; line-height:1.3; }
@@ -463,6 +469,7 @@
     function renderStoryCard(item) {
       var row = storyAuthorRow(item.author);
       var a = document.createElement('a'); a.className = 'story-card';
+      a.setAttribute('data-story', String(item.id));   // v3.0.983 -- TD-901, for the Bookshelf button
       // v3.0.830 -- TD-675. Link the canonical token url. An internal link pointing at
       // a url that only 301s wastes the hop and disagrees with the sitemap.
       a.href = item.share_token
@@ -493,6 +500,7 @@
         a.appendChild(gw);
       }
       row.appendChild(a);
+      return a;
     }
 
     function loadStories() {
@@ -502,7 +510,9 @@
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];
-        items.forEach(function (it) { sstate.any = true; renderStoryCard(it); });
+        var _shelfCards = [];   // v3.0.983 -- TD-901: one Bookshelf question per page of cards
+        items.forEach(function (it) { sstate.any = true; _shelfCards.push(renderStoryCard(it)); });
+        try { if (typeof cmpShelfDecorate === 'function') cmpShelfDecorate(_shelfCards.filter(Boolean)); } catch (e) {}
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
@@ -689,6 +699,55 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLb(); });
 
     if (location.hash === '#stories') { switchTab('stories'); } else { load(); }
+  </script>
+  <!-- v3.0.983 -- TD-901. ADD TO BOOKSHELF ON THE STORY CARDS.
+       One question per page of cards (/api/bookshelf/library-status?ids=...), not one per card. A
+       signed-out visitor gets a 401 on the first page and is never asked again. Only a Gold or
+       Platinum reader who is not the author sees the button; a story already on the shelf shows
+       "On your shelf". The button sits inside the card's link, so it stops the click from opening
+       the story. Kept in its own block so the build's guard can run it as it ships. -->
+  <script>
+var cmpShelfOff = false;
+function cmpShelfMark(btn) { btn.textContent = 'On your shelf'; btn.disabled = true; btn.title = 'This story is on your Bookshelf (My Stuff)'; }
+function cmpShelfButton(card, id, onShelf) {
+  if (card.querySelector('.sc-shelf')) return;
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'sc-shelf'; b.textContent = '+ Bookshelf'; b.title = 'Add this story to your Bookshelf';
+  if (onShelf) cmpShelfMark(b);
+  b.addEventListener('click', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    if (b.disabled) return;
+    b.disabled = true; b.textContent = 'Adding...';
+    fetch('/api/bookshelf/library', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storyId: Number(id) }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+      .then(function (x) {
+        if (x.ok || x.j.code === 'already_shelved') { cmpShelfMark(b); return; }
+        b.disabled = false; b.textContent = '+ Bookshelf'; b.title = x.j.error || 'Could not add it right now.';
+      })
+      .catch(function () { b.disabled = false; b.textContent = '+ Bookshelf'; });
+  });
+  card.appendChild(b);
+}
+function cmpShelfDecorate(cards) {
+  if (cmpShelfOff || !cards || !cards.length) return;
+  var ids = [];
+  cards.forEach(function (c) { var id = c.getAttribute('data-story'); if (id && ids.indexOf(id) === -1) ids.push(id); });
+  if (!ids.length) return;
+  fetch('/api/bookshelf/library-status?ids=' + encodeURIComponent(ids.join(',')), { credentials: 'same-origin' })
+    .then(function (r) { if (!r.ok) { cmpShelfOff = true; return null; } return r.json(); })
+    .then(function (s) {
+      if (!s) return;
+      if (!s.canAdd) { cmpShelfOff = true; return; }
+      var items = s.items || {};
+      cards.forEach(function (c) {
+        var id = c.getAttribute('data-story');
+        var it = items[id];
+        if (!it) return;   // v3.0.988 -- your own stories get the button too (Ian)
+        cmpShelfButton(c, id, !!it.onShelf);
+      });
+    })
+    .catch(function () {});
+}
   </script>
 </body>
 </html>

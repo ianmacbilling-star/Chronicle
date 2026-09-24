@@ -1096,6 +1096,9 @@ async function initPostgres() {
   // Pass 2 — explicit per-panel casting tables. After moments exist.
   await migrateCasting(pool);
 
+  // v3.0.981 -- TD-901. The Bookshelf table.
+  await migrateBookshelf(pool);
+
   // Scaling hardening — performance indexes on hot-path FK / filter
   // columns and the releaseImage() URL lookups. Runs LAST so every
   // referenced column already exists.
@@ -1966,6 +1969,64 @@ async function migrateCasting(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_billing_failures_user ON billing_failures(user_id, created_at DESC)');
+}
+
+// v3.0.981 -- TD-901. THE BOOKSHELF (spec: claude/BOOKSHELF_SPEC.md). Idempotent, runs every boot.
+// One row per book a member put on their shelf. kind 'book' is a COPY -- pdf_url and body_url are
+// the shelf's own objects, never the version's saved book, because save-optimized deletes those
+// when the version is optimized again. kind 'library' (release 3) is a pointer to a public story
+// and holds no files. Names and labels are snapshotted so a renamed or deleted campaign still
+// labels its shelf, which is also why campaign_id carries no foreign key.
+// prefs_version_id is the prefs scope the book came from (bookPrefsScope's versionId: canonical 0),
+// kept so release 3 can put a book back exactly where it was taken from.
+async function migrateBookshelf(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bookshelf_books (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'book',
+      campaign_id INTEGER,
+      campaign_name TEXT,
+      version_id INTEGER,
+      prefs_version_id INTEGER,
+      version_label TEXT,
+      arrange TEXT,
+      layout TEXT,
+      co TEXT,
+      inc TEXT,
+      book_title TEXT,
+      cover_url TEXT,
+      pdf_url TEXT,
+      body_url TEXT,
+      pages INTEGER,
+      front_covers INTEGER,
+      back_covers INTEGER,
+      saved_at TEXT,
+      public_story_id INTEGER,
+      story_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_bookshelf_user ON bookshelf_books(user_id, created_at DESC)');
+  // v3.0.986 -- the book's first page as a picture, drawn on first view (routes/bookshelf.js cover()).
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS thumb_url TEXT');
+  // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
+  // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
+  // into anything that touches an order.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS order_cover_thumbs (
+      id SERIAL,
+      order_id INTEGER PRIMARY KEY,
+      user_id INTEGER,
+      thumb_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // v3.0.991 -- THE id THE WRAPPER ASKS FOR. The db wrapper appends RETURNING id to every INSERT
+  // (see the note at the top of this file), and 989 made this table without one, so every insert
+  // failed ("column id does not exist") after the picture had already been drawn and uploaded. Added
+  // here for the table staging already has; the CREATE above carries it for a fresh database.
+  await pool.query('ALTER TABLE order_cover_thumbs ADD COLUMN IF NOT EXISTS id SERIAL');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

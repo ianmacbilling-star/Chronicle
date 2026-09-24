@@ -1318,7 +1318,7 @@ function uiPublishPrompt(message, opts) {
     var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'Publish';
     row.appendChild(cancel); row.appendChild(ok);
     var hint = document.createElement('div');
-    hint.textContent = 'You can manage your published content on your Account page.';
+    hint.textContent = 'You can manage your published content under My Stuff.';
     hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
     var attestWrap = document.createElement('label');
     attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbb994;line-height:1.4;margin:0 0 14px;cursor:pointer;';
@@ -1966,7 +1966,9 @@ function storyShareUrl(it) {
 
 function myStoryCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
+  // v3.0.994 -- Ian: the Published Stories tiles dark like the order cards. Same size and layout; the
+  // panel, edge and shadow now come from the colours #mystuff-panel-stories defines (app.html).
+  card.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;';
   var a = document.createElement('a');
   a.href = storyShareUrl(it); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
@@ -2122,7 +2124,7 @@ function removeMyStory(storyId, card, btn) {
     .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } billingToast('Could not remove.', 'error'); });
 }
 function loadAccount() {
-  if (typeof loadMyStories === 'function') loadMyStories();
+  // v3.0.980 -- TD-901. My Published Stories is no longer on this page; it loads with its tab on My Stuff.
   // Profile fields moved here from Settings — populate name/email from state.
   var _pn = document.getElementById('settings-name');
   if (_pn) _pn.value = (state.user && state.user.name) || '';
@@ -2928,9 +2930,11 @@ function showView(view) {
   // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
   // display:block, so one line later the answer is always 'orders' and the button would go home to
   // Sessions from wherever you actually were.
+  // v3.0.994 -- My Stuff keeps its OWN note (ordersBack), and an unknown start is recorded as
+  // unknown rather than left holding whatever an earlier Asset Library or Archives visit wrote.
   if (view === 'orders') {
     var _curV = _visibleViewId();
-    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+    if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
@@ -2976,9 +2980,9 @@ function showView(view) {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
       {label:'My Campaigns', action:"showView('campaigns')"},
-      {label:'My Print Orders'}
+      {label:'My Stuff'}
     ]);
-    loadOrders();
+    mystuffOpen();   // v3.0.980 -- TD-901: loadOrders runs from here when the My Orders tab is the one open
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
@@ -3055,7 +3059,11 @@ function loadCampaigns() {
 
 function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
+  // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
+  // false puts back the cards exactly as they were (their markup below is untouched).
+  if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
   var html = state.campaigns.map(function(c) {
+    if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
@@ -3070,7 +3078,7 @@ function renderCampaigns() {
       '</div>' +
     '</div>';
   }).join('');
-  html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
+  html += '<div class="add-campaign-card' + (CAMPAIGN_CARDS_AS_BOOKS ? ' add-campaign-book' : '') + '" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
   grid.innerHTML = html;
 }
 
@@ -3228,7 +3236,8 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+  // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -3251,6 +3260,7 @@ function renderSessions() {
         '</div>' +
       '</div>';
     return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">' + s.name + '</div>' +
@@ -3376,7 +3386,15 @@ function renderSessionHeaderDisplay() {
   var descEl = document.getElementById('session-detail-desc');
   if (nameEl) nameEl.textContent = (s && s.name) ? s.name : 'Session';
   if (dateEl) dateEl.textContent = (s && s.session_date) ? fmtSessionDateShort(s.session_date) : '';
-  if (descEl) descEl.textContent = (s && s.description) ? s.description : '';
+  // v3.0.996 -- Ian: "People sometimes put books in there and it pushes everything down." A long
+  // description shows a snippet with an ellipsis and the whole text on hover, exactly as the
+  // campaign description does (campDescTrunc, and renderSessionsHeader below). Editing still
+  // opens the full text.
+  if (descEl) {
+    var _sd = campDescTrunc((s && s.description) ? s.description : '');
+    descEl.textContent = _sd.visible;
+    if (_sd.truncated) descEl.title = _sd.title; else descEl.removeAttribute('title');
+  }
 }
 function startSessionEdit() {
   var s = state.currentSession;
@@ -9321,6 +9339,9 @@ function updateNovelPublishGuard() {
     btn.disabled = true;
     if (st) { st.style.display = 'block'; st.textContent = 'You can only publish your own version. Switch the version selector back to your own version to publish to the Library.'; if (st.dataset) st.dataset.guard = '1'; }
   }
+  // v3.0.979 -- TD-900. The Go to Publish button and the Publishing line follow the same answer.
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
 }
 // v3.0.457 -- THE PICKER NOW LISTS CAMPAIGN VERSIONS (TD-242 stage 3b).
 //
@@ -9389,13 +9410,22 @@ function loadNovelPeople() {
   state.novelAsUser = isSM ? null : (myId != null ? String(myId) : null);
   updateNovelPublishGuard();
   if (!sel) return;
+  // v3.0.977 -- TD-895. Until the list lands, the Order tab does not know which book it is.
+  state.novelVersionSettled = false;
   refreshNovelVersionOptions(function (rows) {
-    if (!rows) { updateNovelPublishGuard(); return; }
+    state.novelVersionSettled = true;
+    if (!rows) { updateNovelPublishGuard(); orderRecheckIfOpen(); return; }
     // DEFAULT: your own version if you have exactly one, otherwise the canonical. A reader with
     // several is NOT guessed at -- landing on an arbitrary one of their books is the mistake this
     // whole feature exists to stop.
     var own = rows.filter(function(v) { return v.is_mine; });
     var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+    // v3.0.982 -- TD-901. A book brought back from the Bookshelf opens on ITS version, not the default.
+    var _shelfT = state._shelfOpen;
+    if (_shelfT && _shelfT.versionId && state.currentCampaign && String(_shelfT.campaignId) === String(state.currentCampaign.id)) {
+      var _shelfV = rows.filter(function(v) { return String(v.version_id) === String(_shelfT.versionId); })[0];
+      if (_shelfV) pick = _shelfV;
+    }
     // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
     // drew. Compared on the wire query rather than on the id, because that is the thing the
     // tiles were actually fetched with -- an id that changes without changing the query needs
@@ -9403,6 +9433,7 @@ function loadNovelPeople() {
     if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
     if (novelAsUserQ('&') !== _entryQ) { novelVersionApplied(); return; }
     updateNovelPublishGuard();
+    orderRecheckIfOpen();   // v3.0.977 -- TD-895: the version is known now
   });
 }
 
@@ -9607,6 +9638,13 @@ function orderResetForVersion() {
   try { if (typeof printInteriorCache !== 'undefined') printInteriorCache = { key: '', url: '', pages: 0 }; } catch (e) {}
   try { if (typeof printActualPages !== 'undefined') printActualPages = 0; } catch (e) {}
   try { if (typeof showPrintMsg === 'function') showPrintMsg('', null); } catch (e) {}
+  // v3.0.979 -- TD-900. THE OLD VERSION'S LINES GO WITH IT. "Printing the version you saved at..." was
+  // removed by nothing, and the Publishing line was repainted by optimizeResetForVersion BEFORE this
+  // cleared the cache it counts as proof of a saved book -- so it stayed armed for the version just
+  // left. Removed here, and repainted AFTER the cache is gone.
+  try { var _pa = document.getElementById('print-approved-at'); if (_pa && _pa.parentNode) _pa.parentNode.removeChild(_pa); } catch (e) {}
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
+  try { if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn(); } catch (e) {}
 }
 
 function novelVersionApplied() {
@@ -9615,6 +9653,7 @@ function novelVersionApplied() {
   optimizeResetForVersion();
   orderResetForVersion();
   updateNovelPublishGuard();
+  orderMarkLayoutPending();   // v3.0.977 -- TD-895: this version's layout settings are on their way
   if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this version's saved look before rendering its book.
@@ -12230,22 +12269,524 @@ function novelPublishShowLibraryCta(storyUrl) {
 }
 
 // v3.0.495 -- "on your Account page" is where you go to unpublish or edit a listing, so
-// make it somewhere you can actually GO. Mirrors goToPlans, including its settle-scroll:
-// the account view fills several panels in asynchronously, so one fixed delay can scroll
-// before the layout settles and land short.
+// make it somewhere you can actually GO.
+// v3.0.980 -- TD-901. AND IT IS NO LONGER ON THE ACCOUNT PAGE. My Published Stories moved to its
+// own tab on My Stuff, so this opens My Stuff on that tab. No settle-scroll any more: the tab is
+// the whole page, there is nothing above it to wait for.
 function goToMyStories() {
-  if (typeof showView === 'function') showView('account');
-  var tries = 0;
-  function settleScrollToStories() {
-    var sec = document.getElementById('my-stories-section');
-    if (sec && sec.scrollIntoView) {
-      sec.scrollIntoView({ behavior: (tries === 0 ? 'smooth' : 'auto'), block: 'start' });
-    }
-    if (++tries < 5) setTimeout(settleScrollToStories, 220);
-  }
-  setTimeout(settleScrollToStories, 120);
+  state.mystuffTab = 'stories';
+  if (typeof showView === 'function') showView('orders');
   return false;
 }
+
+// ============================================================================
+// v3.0.980 -- TD-901, Bookshelf release 1 of 3. MY STUFF.
+//
+// Ian, 2026-09-23: the My Orders menu becomes My Stuff, a page with three tabs -- My Orders (the
+// screen that was there, unchanged), Bookshelf (new) and Published Stories (moved here from My
+// Account). Spec: claude/BOOKSHELF_SPEC.md.
+//
+// THE VIEW ID STAYS 'orders'. It sits in five routing lists (showView twice, _navRestore, and the
+// two hide-everything lists), and the admin Orders tab is a different thing entirely. Only the
+// label and the page changed, so none of those lists had to move.
+//
+// The last tab opened is remembered for this page load, so the Back button and the browser's Back
+// return to it. goToMyStories sets it to 'stories' before opening the page.
+//
+// Release 1 has no shelf data yet. The Bookshelf tab shows its empty state, and Silver, Copper and
+// Free Trial see the upgrade nudge Ian asked for. v3.0.981 adds saving, and from then the server's
+// GET /api/bookshelf answers the limit; BOOKSHELF_LIMITS below is only the first paint.
+// ============================================================================
+var MYSTUFF_TABS = ['orders', 'shelf', 'stories'];
+var BOOKSHELF_LIMITS = { gold: 10, platinum: 50 };
+function bookshelfLimitFor(tier) {
+  return Object.prototype.hasOwnProperty.call(BOOKSHELF_LIMITS, tier) ? BOOKSHELF_LIMITS[tier] : 0;
+}
+function mystuffOpen() {
+  mystuffShowTab(MYSTUFF_TABS.indexOf(state.mystuffTab) !== -1 ? state.mystuffTab : 'orders');
+}
+function mystuffShowTab(tab) {
+  if (MYSTUFF_TABS.indexOf(tab) === -1) tab = 'orders';
+  state.mystuffTab = tab;
+  MYSTUFF_TABS.forEach(function (t) {
+    var b = document.getElementById('mystuff-tab-' + t);
+    if (b) b.classList.toggle('active', t === tab);
+    var p = document.getElementById('mystuff-panel-' + t);
+    if (p) p.style.display = (t === tab) ? '' : 'none';
+  });
+  if (tab === 'orders') { if (typeof loadOrders === 'function') loadOrders(); }
+  else if (tab === 'stories') { if (typeof loadMyStories === 'function') loadMyStories(); }
+  else renderBookshelfTab();
+}
+// v3.0.981 -- TD-901 release 2. THE SHELF IS READ FROM THE SERVER, which answers the limit as well as
+// the books; BOOKSHELF_LIMITS above is only the first paint and the Save button's shortcut.
+// A plain list, grouped by campaign, for this release; release 3 draws the shelves.
+// Only one answer is painted: a slow reply that lands after a newer one is dropped (_shelfSeq).
+var _shelfSeq = 0;
+function renderBookshelfTab() {
+  var body = document.getElementById('bookshelf-body');
+  if (!body) return;
+  var seq = ++_shelfSeq;
+  body.innerHTML = '';
+  var wait = document.createElement('div');
+  wait.className = 'settings-section-desc'; wait.textContent = 'Loading your Bookshelf...';
+  body.appendChild(wait);
+  return fetch('/api/bookshelf')
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (seq !== _shelfSeq) return;
+      if (!res.ok || !res.j) throw new Error('load');
+      paintBookshelf(body, res.j);
+    })
+    .catch(function () {
+      if (seq !== _shelfSeq) return;
+      body.innerHTML = '';
+      var d = document.createElement('div');
+      d.id = 'bookshelf-error'; d.className = 'settings-section-desc';
+      d.textContent = 'Could not load your Bookshelf right now. Please try again in a moment.';
+      body.appendChild(d);
+    });
+}
+function shelfDate(v) {
+  if (!v) return '';
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+}
+// ============================================================================
+// v3.0.982 -- TD-901, Bookshelf release 3. THE SHELVES.
+// v3.0.985 -- ONE BOOKCASE. Ian, 2026-09-23, with two pictures: "darker wood" like a panelled
+// library bookcase, and "the first book of a series of books from the same campaign to have the
+// cover facing the viewer... the rest... the viewer can be looking at the spine."
+// v3.0.986 -- Ian, the same day:
+//   * the count sits on the title line, and the case and books are bigger -- the books reach near
+//     the top of each shelf;
+//   * a facing book shows the book's REAL first page -- its cover as printed, title and all --
+//     drawn by the server from the saved PDF (/api/bookshelf/:id/cover); the campaign picture is
+//     only the fallback while that is not available;
+//   * Library books stand on their own bottom shelf, and a random one of them faces out;
+//   * clicking a book opens it ON TOP of the case, as an open book: the cover on the left page,
+//     the details and buttons on the right.
+// How the rows land on boards: .bcase-inner paints a board every BSHELF_ROW (row + board) from the
+// same 14px start its first row uses, and every book stands in a .bslot of exactly the row height.
+// The Library shelf is a second .bcase-inner, so it always starts on a new shelf.
+// Styles: .bcase / .bface / .bspine / .bopen in app.html.
+// ============================================================================
+var BSHELF_LEATHER = ['#4a1c14', '#1f3325', '#1c2a40', '#3d1f36', '#4d3a17', '#40181d', '#17302f', '#2f1c12', '#2b2b30'];
+function bshelfLeather(s) {
+  var h = 0, str = String(s || '');
+  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return BSHELF_LEATHER[h % BSHELF_LEATHER.length];
+}
+// Only our own http(s) or root-relative image urls reach a CSS url() or an img; anything with a
+// quote, a bracket or whitespace is dropped rather than escaped.
+function bshelfSafeUrl(u) {
+  u = String(u || '');
+  if (u.indexOf(String.fromCharCode(92)) !== -1) return '';   // no backslash, without writing one here
+  return (/^(https?:\/\/|\/)[^"'()\s]+$/.test(u)) ? u : '';
+}
+function bshelfTime(v) { var t = Date.parse(v || ''); return isNaN(t) ? 0 : t; }
+// The picture for a book's face: a shelf book's own first page, a Library book's story cover.
+function bshelfFaceUrl(b) {
+  if (b && b.kind === 'book' && b.id != null) return '/api/bookshelf/' + encodeURIComponent(b.id) + '/cover';
+  return bshelfSafeUrl(b && b.coverUrl);
+}
+function paintBookshelf(body, data) {
+  body.innerHTML = '';
+  var limit = Number(data.limit) || 0;
+  var all = (data.books || []).filter(function (b) { return b && (b.kind === 'book' || b.kind === 'library'); });
+  var books = all.filter(function (b) { return b.kind === 'book'; });
+  var links = all.filter(function (b) { return b.kind === 'library'; });
+  var used = books.length;
+  var countText = '';   // v3.0.993 -- written on the case's base board, below
+  function line(id, text, css) {
+    var d = document.createElement('div');
+    d.id = id; d.className = 'settings-section-desc'; d.textContent = text;
+    if (css) d.style.cssText = css;
+    body.appendChild(d);
+    return d;
+  }
+  function nudgeButton() {
+    var up = document.createElement('button');
+    up.id = 'bookshelf-upgrade-btn'; up.className = 'btn btn-primary btn-sm'; up.style.marginTop = '12px';
+    up.textContent = 'See the plans';
+    up.onclick = function () { if (typeof goToPlans === 'function') goToPlans(); };
+    body.appendChild(up);
+  }
+  if (!limit && !all.length) {
+    line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
+      'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
+    nudgeButton();
+    return;
+  }
+  // v3.0.986 put the count on the title line; v3.0.993 (Ian) drops that bar and letters the count on
+  // the bookcase's base board instead.
+  countText = used + ' of ' + limit + ' books';
+  // A downgrade keeps every book (Ian, 2026-09-23). Over the limit: view, download, bring back and
+  // remove -- not add.
+  if (used > limit || (!limit && links.length)) {
+    line('bookshelf-over', limit
+      ? 'Your plan keeps ' + limit + ' books, so you can view, download, bring back and remove these but cannot add more until you are under that.'
+      : 'Your plan no longer includes the Bookshelf. Your books are kept: you can view, download, bring back and remove them, and upgrading lets you add more.',
+      'margin-top:6px;');
+    if (!limit) nudgeButton();
+  }
+  if (!all.length) {
+    line('bookshelf-empty', 'Your shelf is empty. From a book\'s Optimize tab, Save to Bookshelf keeps a copy of the optimized book, ' +
+      'layout and all, and you can bring it back here whenever you want to order it, publish it or keep working on it. ' +
+      'You can also add other people\'s books from their Library page.', 'margin-top:8px;');
+  }
+  // Campaigns in the order the server lists them (the most recently shelved first); inside one,
+  // oldest shelved first, so the book facing out is the first of the series.
+  var groups = {}, order = [];
+  books.forEach(function (b) {
+    var k = String(b.campaignId || 0) + '|' + (b.campaignName || '');
+    if (!groups[k]) { groups[k] = []; order.push(k); }
+    groups[k].push(b);
+  });
+  var wrap = document.createElement('div');
+  wrap.id = 'bookshelf-list';
+  wrap.className = 'bcase';
+  var crown = document.createElement('div'); crown.className = 'bcase-crown';
+  var inner = document.createElement('div'); inner.className = 'bcase-inner' + (links.length ? ' bcase-one' : '');
+  wrap.appendChild(crown); wrap.appendChild(inner);
+  function slot(into, el, plate) {
+    var s = document.createElement('div');
+    s.className = 'bslot';
+    s.appendChild(el);
+    if (plate) {
+      var p = document.createElement('div');
+      p.className = 'bplaque bookshelf-campaign';
+      p.textContent = plate;
+      s.appendChild(p);
+    }
+    into.appendChild(s);
+  }
+  order.forEach(function (k) {
+    var list = groups[k].slice().sort(function (a, b) { return (bshelfTime(a.createdAt) - bshelfTime(b.createdAt)) || ((a.id || 0) - (b.id || 0)); });
+    var leather = bshelfLeather(k);
+    list.forEach(function (b, i) {
+      if (i === 0) slot(inner, bookshelfFace(b, leather), b.campaignName || 'Campaign');
+      else slot(inner, bookshelfSpine(b, false, leather, i));
+    });
+  });
+  // v3.0.986 -- THE LIBRARY SHELF, at the bottom. Ian: "have it randomly choose which library
+  // book's cover is facing the viewer." A new pick on every visit to the tab.
+  if (links.length) {
+    var lib = document.createElement('div');
+    lib.className = 'bcase-inner bcase-lib';
+    lib.id = 'bookshelf-library-shelf';
+    var pick = Math.floor(Math.random() * links.length);
+    if (!(pick >= 0 && pick < links.length)) pick = 0;
+    var faceBook = links[pick];
+    slot(lib, bookshelfFace(faceBook, '#3a2418', true), 'From the Library');
+    links.forEach(function (b, i) { if (b !== faceBook) slot(lib, bookshelfSpine(b, true, '#3a2418', i)); });
+    wrap.appendChild(lib);
+  }
+  var base = document.createElement('div'); base.className = 'bcase-base';
+  if (countText) {
+    var bc = document.createElement('span');
+    bc.id = 'bookshelf-count'; bc.className = 'bcase-count'; bc.textContent = countText;
+    base.appendChild(bc);
+  }
+  wrap.appendChild(base);
+  body.appendChild(wrap);
+  var card = document.createElement('div');
+  card.id = 'bookshelf-card';
+  card.className = 'bopen-overlay';
+  card.style.display = 'none';
+  card.onclick = function (e) { if (e && e.target === card) bookshelfCloseCard(); };
+  body.appendChild(card);
+}
+function bookshelfFace(b, leather, isLib) {
+  var f = document.createElement('button');
+  f.type = 'button';
+  f.className = 'bface bookshelf-book' + (isLib ? ' bface-lib' : '');
+  f.id = 'bookshelf-book-' + b.id;
+  f.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
+  if (leather) f.style.backgroundColor = leather;   // shown until (or unless) the cover picture arrives
+  var ph = document.createElement('span');
+  ph.className = 'bface-t';
+  ph.textContent = b.bookTitle || 'Untitled';
+  f.appendChild(ph);
+  var src = bshelfFaceUrl(b);
+  if (src) {
+    var im = document.createElement('img');
+    im.alt = '';
+    // The real first page first; if the server cannot draw it, the campaign picture; then leather.
+    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    im.onerror = function () {
+      if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
+      im.style.display = 'none';
+    };
+    im.src = src;
+    f.appendChild(im);
+  }
+  f.onclick = function () { bookshelfShowCard(b, !!isLib); };
+  return f;
+}
+function bookshelfSpine(b, isLib, leather, i) {
+  var sp = document.createElement('button');
+  sp.type = 'button';
+  sp.className = 'bspine bookshelf-book' + (isLib ? ' bspine-lib' : '');
+  sp.id = 'bookshelf-book-' + b.id;
+  sp.title = (b.bookTitle || 'Untitled book') + (isLib ? (b.campaignName ? ' -- by ' + b.campaignName : '') : (b.pages ? ' -- ' + b.pages + ' pages' : ''));
+  var pages = Number(b.pages) || 0;
+  var hgt = isLib ? 214 : Math.max(196, Math.min(238, 184 + Math.round(pages * 0.6)));
+  var wid = isLib ? 34 : Math.max(28, Math.min(54, 22 + Math.round(pages * 0.3)));
+  sp.style.height = hgt + 'px';
+  sp.style.width = wid + 'px';
+  sp.style.backgroundColor = leather || bshelfLeather(b.bookTitle || b.id);
+  // Each book of a set a shade apart, as real volumes fade differently.
+  sp.style.filter = 'brightness(' + (0.85 + ((Number(i) || 0) % 3) * 0.1).toFixed(2) + ')';
+  var t = document.createElement('span');
+  t.className = 'bspine-t';
+  t.textContent = b.bookTitle || 'Untitled';
+  sp.appendChild(t);
+  if (isLib) { var rb = document.createElement('span'); rb.className = 'bspine-ribbon'; sp.appendChild(rb); }
+  sp.onclick = function () { bookshelfShowCard(b, isLib); };
+  return sp;
+}
+function bookshelfCloseCard() {
+  var card = document.getElementById('bookshelf-card');
+  if (card) { card.style.display = 'none'; card.innerHTML = ''; }
+  var list = document.getElementById('bookshelf-list');
+  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];
+  for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
+  if (typeof document.removeEventListener === 'function') document.removeEventListener('keydown', bookshelfCardKey);
+}
+function bookshelfCardKey(e) { if (e && (e.key === 'Escape' || e.key === 'Esc')) bookshelfCloseCard(); }
+// v3.0.986 -- THE BOOK OPENS ON TOP OF THE CASE. Ian: "a modal that opens on top of the shelf...
+// resemble an open book... with the cover on left side and the buttons on the page to the right."
+// The ids inside are the ones the card always had (bookshelf-card-ask, bookshelf-bring-back,
+// bookshelf-open-lib), so Bring back and Remove work unchanged. Closed by the X, a click outside
+// the book, or Escape; it sits below the app's own confirm dialogs, so Remove can still ask.
+function bookshelfShowCard(b, isLib) {
+  var card = document.getElementById('bookshelf-card');
+  if (!card) return;
+  var list = document.getElementById('bookshelf-list');
+  var sel = list ? list.querySelectorAll('.bookshelf-book.sel') : [];
+  for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
+  var sp = document.getElementById('bookshelf-book-' + b.id);
+  if (sp) sp.classList.add('sel');
+  card.innerHTML = '';
+  card.style.display = '';
+  card.setAttribute('data-book', String(b.id));
+  var book = document.createElement('div');
+  book.className = 'bopen';
+  book.setAttribute('role', 'dialog');
+  book.setAttribute('aria-label', b.bookTitle || 'Book');
+  var x = document.createElement('button');
+  x.type = 'button'; x.className = 'bopen-x'; x.id = 'bookshelf-card-close'; x.title = 'Close'; x.textContent = '\u00d7';
+  x.onclick = function () { bookshelfCloseCard(); };
+  book.appendChild(x);
+  var left = document.createElement('div');
+  left.className = 'bopen-page bopen-left';
+  var src = bshelfFaceUrl(b);
+  var ph = document.createElement('div');
+  ph.className = 'bopen-cover-ph';
+  ph.textContent = b.bookTitle || 'Untitled book';
+  ph.style.backgroundColor = isLib ? '#3a2418' : bshelfLeather(String(b.campaignId || 0) + '|' + (b.campaignName || ''));
+  left.appendChild(ph);
+  if (src) {
+    var im = document.createElement('img');
+    im.className = 'bshelf-card-cover bopen-cover'; im.alt = '';
+    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    im.onerror = function () {
+      if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
+      im.style.display = 'none';
+    };
+    im.src = src;
+    left.appendChild(im);
+  }
+  book.appendChild(left);
+  var gutter = document.createElement('div');
+  gutter.className = 'bopen-gutter';
+  book.appendChild(gutter);
+  var info = document.createElement('div');
+  info.className = 'bopen-page bopen-right bshelf-card-info';
+  var t = document.createElement('div');
+  t.className = 'bshelf-card-title'; t.textContent = b.bookTitle || 'Untitled book';
+  info.appendChild(t);
+  function meta(text) { if (!text) return; var m = document.createElement('div'); m.className = 'bshelf-card-meta'; m.textContent = text; info.appendChild(m); }
+  if (isLib) {
+    meta(b.campaignName ? 'By ' + b.campaignName : '');
+    meta('From the Library' + (shelfDate(b.createdAt) ? ', added ' + shelfDate(b.createdAt) : ''));
+    if (b.gone) meta('This story is no longer in the Library.');
+  } else {
+    meta(b.campaignName + (b.versionLabel ? ' \u00b7 ' + b.versionLabel : ''));
+    var bits = [];
+    if (b.arrange) bits.push(bshelfLayoutName(b.arrange) + ' layout');
+    if (b.pages) bits.push(b.pages + ' pages');
+    meta(bits.join(' \u00b7 '));
+    meta((shelfDate(b.savedAt) ? 'Optimized ' + shelfDate(b.savedAt) : '') + (shelfDate(b.createdAt) ? (shelfDate(b.savedAt) ? ' \u00b7 ' : '') + 'shelved ' + shelfDate(b.createdAt) : ''));
+    if (!b.editable) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');
+  }
+  var acts = document.createElement('div');
+  acts.className = 'bshelf-card-acts';
+  acts.id = 'bookshelf-card-acts';
+  function btn(label, fn, cls, id) {
+    var y = document.createElement('button');
+    y.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); y.textContent = label; y.onclick = fn;
+    if (id) y.id = id;
+    acts.appendChild(y); return y;
+  }
+  if (isLib) {
+    if (!b.gone && b.storyUrl) btn('Open in the Library', function () { window.open(b.storyUrl, '_blank', 'noopener'); }, 'btn-primary', 'bookshelf-open-lib');
+  } else {
+    btn('View', function () { window.open('/api/bookshelf/' + b.id + '/pdf', '_blank', 'noopener'); });
+    btn('Download', function () {
+      var a = document.createElement('a');
+      a.href = '/api/bookshelf/' + b.id + '/pdf?download=1'; a.rel = 'noopener';
+      document.body.appendChild(a);
+      try { a.click(); } finally { document.body.removeChild(a); }
+    });
+    btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');
+  }
+  btn('Remove', function () { bookshelfRemove(b); });
+  info.appendChild(acts);
+  var ask = document.createElement('div');
+  ask.id = 'bookshelf-card-ask';
+  ask.className = 'bshelf-card-ask';
+  ask.style.display = 'none';
+  info.appendChild(ask);
+  book.appendChild(info);
+  card.appendChild(book);
+  if (typeof document.addEventListener === 'function') { document.removeEventListener('keydown', bookshelfCardKey); document.addEventListener('keydown', bookshelfCardKey); }
+}
+function bshelfLayoutName(a) {
+  a = String(a || '');
+  if (a === 'paired') return 'Picture Book';
+  return a.charAt(0).toUpperCase() + a.slice(1);
+}
+// v3.0.982 -- BRING BACK. The server makes the shelf book the version's saved book again (a fresh
+// copy, with the layout settings it was made with), then this opens that campaign on the Optimize
+// tab, on that version, and loads it -- the same as pressing Load Last Optimized File.
+// Refused here while an order is in review or a run is going on this page: both are tied to the
+// saved book this is about to replace.
+var _shelfBringing = false;
+function bookshelfBringBack(b, choice) {
+  if (_shelfBringing) return;
+  if (typeof orderInProgress === 'function' && orderInProgress()) {
+    appNotice('An order is in review.', 'You have a print order in review, and bringing a book back would change the book it is printing.', 'Open the Order tab and click Back to cancel the order, then bring the book back.');
+    return;
+  }
+  var busy = (typeof workInFlightLabel === 'function') ? workInFlightLabel() : '';
+  if (busy) {
+    appNotice('Something is still running.', busy + ' is still running. Let it finish before bringing a book back -- it would save over the book you bring back.', '');
+    return;
+  }
+  var ask = document.getElementById('bookshelf-card-ask');
+  var bb = document.getElementById('bookshelf-bring-back');
+  _shelfBringing = true;
+  if (bb) { bb.disabled = true; bb.textContent = 'Bringing it back...'; }
+  if (ask) { ask.style.display = 'none'; ask.innerHTML = ''; }
+  var payload = {};
+  if (choice === 'shelve') payload.shelveFirst = true;
+  if (choice === 'replace') payload.replace = true;
+  function done() { _shelfBringing = false; if (bb) { bb.disabled = false; bb.textContent = 'Bring back to Publish'; } }
+  return fetch('/api/bookshelf/' + b.id + '/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      done();
+      if (res.ok && res.j.ok) {
+        billingToast(res.j.layoutRestored
+          ? 'Brought back. It is a ' + bshelfLayoutName(res.j.arrange) + ' book, so this version\'s layout settings were switched to the ones it was made with. Opening it...'
+          : 'Brought back. Opening it on the Optimize tab...', 'success');
+        bookshelfOpenBook(b, res.j);
+        return;
+      }
+      if (res.j.code === 'needs_shelve_first' && ask) {
+        ask.style.display = '';
+        var p = document.createElement('div');
+        p.className = 'bshelf-card-meta';
+        p.textContent = 'This version already has an optimized book' + (shelfDate(res.j.currentAt) ? ' (saved ' + shelfDate(res.j.currentAt) + ')' : '') +
+          ' that is not on your Bookshelf. Bringing this one back replaces it.';
+        ask.appendChild(p);
+        var row = document.createElement('div');
+        row.className = 'bshelf-card-acts';
+        function opt(label, fn, cls, id) { var x = document.createElement('button'); x.className = 'btn btn-sm' + (cls ? ' ' + cls : ''); x.textContent = label; x.id = id; x.onclick = fn; row.appendChild(x); }
+        opt('Shelve it first', function () { bookshelfBringBack(b, 'shelve'); }, 'btn-primary', 'bookshelf-ask-shelve');
+        opt('Replace it', function () { bookshelfBringBack(b, 'replace'); }, '', 'bookshelf-ask-replace');
+        opt('Cancel', function () { ask.style.display = 'none'; ask.innerHTML = ''; }, '', 'bookshelf-ask-cancel');
+        ask.appendChild(row);
+        return;
+      }
+      billingToast(res.j.error || 'The book could not be brought back. Please try again.', 'error');
+    })
+    .catch(function () { done(); billingToast('The book could not be brought back. Please try again.', 'error'); });
+}
+// Open the campaign's Publish page on the Optimize tab, on the book's version, and load it.
+// The version is chosen by loadNovelPeople (it reads state._shelfOpen); the load waits until the
+// version has settled and the layout settings the server just restored have arrived, so Load Last
+// Optimized File asks for the right book. If that takes too long it says what to press instead.
+function bookshelfOpenBook(b, r) {
+  try { bookshelfCloseCard(); } catch (e) {}   // v3.0.986 -- the open book closes as the campaign opens
+  var target = { campaignId: String(b.campaignId), versionId: (r && r.versionId) ? String(r.versionId) : null, arrange: (r && r.arrange) || b.arrange || '', at: Date.now(), nudged: false };
+  state._shelfOpen = target;
+  function have() { return (state.campaigns || []).filter(function (c) { return String(c.id) === target.campaignId; })[0]; }
+  function go() {
+    var c = have();
+    if (!c) { state._shelfOpen = null; showError('Could not open that campaign.'); return; }
+    state.currentCampaign = c;
+    if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
+    setCampaignElements();
+    showCampaignSection('novel');
+    switchNovelTab('finalize');
+    bookshelfAwaitAndLoad(target, 0);
+  }
+  if (have()) { go(); return; }
+  fetch('/api/campaigns')
+    .then(function (x) { return x.json(); })
+    .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
+    .catch(function () { state._shelfOpen = null; showError('Could not open that campaign.'); });
+}
+var BSHELF_WAIT_STEP_MS = 400, BSHELF_WAIT_TRIES = 40, BSHELF_WAIT_MIN_MS = 1200;
+function bookshelfAwaitAndLoad(target, n) {
+  if (state._shelfOpen !== target) return;   // a newer Bring back, or it was abandoned
+  var c = state.currentCampaign;
+  if (!c || String(c.id) !== target.campaignId) { state._shelfOpen = null; return; }   // they went elsewhere
+  var settled = !!state.novelVersionSettled;
+  var verOk = !target.versionId || String(state.novelVersionId || '') === target.versionId;
+  var layOk = !target.arrange || (typeof customOpts !== 'undefined' && customOpts && customOpts.arrange === target.arrange);
+  // loadNovelPeople normally picks the version; if the list had already loaded, ask for it once.
+  if (settled && !verOk && !target.nudged) {
+    target.nudged = true;
+    var sel = document.getElementById('novel-version-select');
+    var hasOpt = false;
+    if (sel && sel.options) { for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === target.versionId) hasOpt = true; }
+    if (hasOpt && typeof onNovelVersionChange === 'function') { sel.value = target.versionId; onNovelVersionChange(target.versionId); }
+  }
+  if (settled && verOk && layOk && (Date.now() - target.at) >= BSHELF_WAIT_MIN_MS) {
+    state._shelfOpen = null;
+    finalizeLoadLastOptimized(true);
+    return;
+  }
+  if (n >= BSHELF_WAIT_TRIES) {
+    state._shelfOpen = null;
+    billingToast('Your book is back on this version. Press Load Last Optimized File to open it.', 'info');
+    return;
+  }
+  setTimeout(function () { bookshelfAwaitAndLoad(target, n + 1); }, BSHELF_WAIT_STEP_MS);
+}
+function bookshelfRemove(b) {
+  appConfirm({
+    title: 'Remove this book from your Bookshelf?',
+    body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf' + (b.kind === 'library' ? '.' : ' and its saved copy deleted.'),
+    note: b.kind === 'library' ? 'The story stays in the Library.' : 'The book in the campaign itself is not touched.',
+    okLabel: 'Remove', cancelLabel: 'Keep it', danger: true,
+    onOk: function () {
+      fetch('/api/bookshelf/' + b.id, { method: 'DELETE' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error((res.j && res.j.error) || 'Could not remove the book.');
+          billingToast('Removed from your Bookshelf.', 'success');
+          renderBookshelfTab();
+        })
+        .catch(function (e) { billingToast((e && e.message) || 'Could not remove the book.', 'error'); });
+    }
+  });
+}
+
 
 function refreshStoryStatus() {
   var btn = document.getElementById('novel-publish-btn');
@@ -12255,7 +12796,7 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries on your Account page.'; } })
+    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
     .catch(function(){});
 }
 
@@ -12292,7 +12833,8 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
+  // v3.0.997 -- the Session tab's tiles as books too (Ian); same switch as the Sessions list.
+  var html = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
@@ -12317,6 +12859,7 @@ function renderNovelSummary(sessions) {
                         : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
@@ -15967,9 +16510,11 @@ function showView(view) {
   // CAPTURED HERE, BEFORE THE LOOP BELOW HIDES EVERYTHING: _visibleViewId() reads which view is
   // display:block, so one line later the answer is always 'orders' and the button would go home to
   // Sessions from wherever you actually were.
+  // v3.0.994 -- My Stuff keeps its OWN note (ordersBack), and an unknown start is recorded as
+  // unknown rather than left holding whatever an earlier Asset Library or Archives visit wrote.
   if (view === 'orders') {
     var _curV = _visibleViewId();
-    if (_curV && _curV !== 'orders') _sectionBackFrom = _curV;
+    if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
@@ -16015,9 +16560,9 @@ function showView(view) {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
       {label:'My Campaigns', action:"showView('campaigns')"},
-      {label:'My Print Orders'}
+      {label:'My Stuff'}
     ]);
-    loadOrders();
+    mystuffOpen();   // v3.0.980 -- TD-901: loadOrders runs from here when the My Orders tab is the one open
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
@@ -16094,7 +16639,11 @@ function loadCampaigns() {
 
 function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
+  // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
+  // false puts back the cards exactly as they were (their markup below is untouched).
+  if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
   var html = state.campaigns.map(function(c) {
+    if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
@@ -16109,7 +16658,7 @@ function renderCampaigns() {
       '</div>' +
     '</div>';
   }).join('');
-  html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
+  html += '<div class="add-campaign-card' + (CAMPAIGN_CARDS_AS_BOOKS ? ' add-campaign-book' : '') + '" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
   grid.innerHTML = html;
 }
 
@@ -16267,7 +16816,8 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+  // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -16290,6 +16840,7 @@ function renderSessions() {
         '</div>' +
       '</div>';
     return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">' + s.name + '</div>' +
@@ -17490,7 +18041,8 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
+  // v3.0.997 -- the Session tab's tiles as books too (Ian); same switch as the Sessions list.
+  var html = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
@@ -17515,6 +18067,7 @@ function renderNovelSummary(sessions) {
                         : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
@@ -18745,6 +19298,45 @@ function campDescTrunc(desc) {
     cut = cut.slice(0, cut.length - 1);
   }
   return { visible: cut + '\u2026', title: full, truncated: true };
+}
+
+// v3.0.995 -- MY CAMPAIGNS AS BOOKS. Ian: make the campaign cards "look like you are looking at a
+// hardback book cover", like the books facing out on the Bookshelf: the binding shaded down the left,
+// a thin gold line inside the edge (there is no real cover to carry one), the campaign picture faded
+// into the dark cover whatever its shape, and a dark fade over its foot with the name, description,
+// date and Details on it. 8.5 x 11 in proportion. Styles: .camp-books in app.html.
+// THE WAY BACK: set this to false. Nothing of the old card was removed, so false is exactly v3.0.994.
+var CAMPAIGN_CARDS_AS_BOOKS = true;
+function campaignBookHtml(c) {
+  var pic = c.campaign_image_url || c.cover_image_url;
+  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
+    (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
+    '<div class="cbook-art">' +
+      (pic ? '<img src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
+           : '<img class="cbook-logo" src="/images/Campaignia_Logo.png" alt="" />') +
+    '</div>' +
+    '<div class="cbook-fade"></div>' +
+    '<div class="cbook-frame"></div>' +
+    '<div class="cbook-text">' +
+      '<div class="campaign-card-name">' + c.name + '</div>' +
+      campCardDescHtml(c.description) +
+      '<div class="campaign-card-footer">' +
+        '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// v3.0.997 -- SESSION TILES AS BOOKS. Ian: "The Campaign Books look perfect. Can we do the same thing
+// for the Session Tiles, both on the Session list page and the session tab under the publish page."
+// The tiles keep their markup; .sess-books on the grid turns each into a cover the way .camp-books
+// does (app.html), and this adds the soft wash of the picture behind it.
+// THE WAY BACK: set this to false. The tiles are then exactly as in v3.0.996.
+var SESSION_CARDS_AS_BOOKS = true;
+function sessionBookWash(src) {
+  if (!SESSION_CARDS_AS_BOOKS || !src) return '';
+  return '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(src) + '&quot;)"></div>';
 }
 
 function campCardDescHtml(desc) {
@@ -20735,6 +21327,9 @@ function applyCampaignLayoutOpts(meta){
   // Custom Layout panel if it happens to be open. Without this the values change but the UI lies.
   try { if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader(); } catch (e) {}
   try { _syncLayoutPanels(); } catch (e) {}   // re-sync BOTH the inline pcl-* panel and the modal to this campaign
+  // v3.0.977 -- TD-895. The settings the Order tab asks with have just changed, so it asks again.
+  _orderLayoutPendingAt = 0;
+  try { orderRecheckIfOpen(); } catch (e) {}
   return !!saved;
 }
 // Pull this campaign's layout options straight from the DB on every switch. Deliberately no cache
@@ -23482,8 +24077,49 @@ function ensureInterior() {
 // Fired when the Order tab opens: render the interior once to learn the true
 // page count, then update the displayed length and format options. Optional --
 // if it fails the form still works off the estimate.
+// v3.0.977 -- TD-895. THE ORDER TAB ASKS FOR THE SAVED LAYOUT ONLY ONCE IT KNOWS WHICH BOOK IT IS.
+// Bots, 2026-09-23: after a hard refresh the Order tab said "There is no saved layout for this book
+// in this style" and priced the UNOPTIMIZED book, until Load Last Optimized File was pressed. What
+// print-interior answers depends on two things this page learns late: WHICH VERSION is on screen
+// (loadNovelPeople assumes "my own book, no version" until the version list arrives) and that
+// version's LAYOUT SETTINGS (applyCampaignLayoutOpts, after prepLoadBookMeta). Asked before either
+// had settled, the server looked in the wrong place and said, truthfully, that nothing was there --
+// and when the right answers arrived, orderResetForVersion cleared the cache and NOTHING ASKED AGAIN.
+// So the Order tab now waits for both, says so while it waits, and asks again when either lands.
+// The layout mark expires after ORDER_SCOPE_WAIT_MS, so a lost reply can never leave it waiting.
+var ORDER_SCOPE_WAIT_MS = 8000;
+var _orderLayoutPendingAt = 0;
+function orderScopeReady() {
+  if (state.novelVersionSettled === false) return false;
+  if (_orderLayoutPendingAt && (Date.now() - _orderLayoutPendingAt) < ORDER_SCOPE_WAIT_MS) return false;
+  return true;
+}
+function orderMarkLayoutPending() {
+  _orderLayoutPendingAt = Date.now();
+  setTimeout(function () {
+    if (_orderLayoutPendingAt && (Date.now() - _orderLayoutPendingAt) >= ORDER_SCOPE_WAIT_MS) {
+      _orderLayoutPendingAt = 0;
+      orderRecheckIfOpen();
+    }
+  }, ORDER_SCOPE_WAIT_MS + 50);
+}
+// Ask again -- but only when the Order tab is the one on screen, and never while Prepare is running.
+function orderRecheckIfOpen() {
+  try {
+    var t = document.getElementById('novel-tab-order');
+    if (!t || t.style.display === 'none' || !state.currentCampaign) return;
+    var b = document.getElementById('print-place-btn');
+    if (b && b.disabled && /Preparing/.test(b.textContent || '')) return;
+    loadPrintTab();
+  } catch (e) {}
+}
 function prepareInteriorCount() {
   if (!state.currentCampaign) return;
+  if (!orderScopeReady()) {   // v3.0.977 -- TD-895
+    var _peW = document.getElementById('print-page-est');
+    if (_peW) _peW.textContent = 'Checking for your saved layout\u2026';
+    return;
+  }
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
@@ -23503,6 +24139,9 @@ function prepareInteriorCount() {
         // someone fill in the whole order form before finding out, so the reason goes on screen the
         // moment the tab opens.
         var _why = res.j && (res.j.message || res.j.error);
+        // v3.0.979 -- TD-900. A refusal is about THIS book; a "Printing the version you saved at" line
+        // left by another one must not sit beside it.
+        try { var _paR = document.getElementById('print-approved-at'); if (_paR && _paR.parentNode) _paR.parentNode.removeChild(_paR); } catch (e) {}
         var _pe = document.getElementById('print-page-est');
         if (_why && _pe) { _pe.textContent = _why; return; }
         updatePrintPageDisplay(-1, false); return;
@@ -23947,6 +24586,29 @@ function reorderNoteInReview(R, quote) {
   sum.insertAdjacentHTML('beforeend', html);
 }
 
+// v3.0.978 -- TD-899. THE ORDER NAME BELONGS TO ONE BOOK.
+// Bots, 2026-09-23: an Order name typed for Lily's First Day of School was still in the box after
+// opening The Lamplight Census, and again in Going to the Dentist -- and it would have been saved
+// with whichever book was bought, because printSelectionBody sends it and /order writes it to
+// print_orders.order_name, where it names the order in history and titles the Lulu job when there
+// is no book title. Only resetPrintForm, after a SUCCESSFUL order, ever emptied it.
+// The label says "your label for this order", so it is cleared whenever the Order tab opens on a
+// different book -- another campaign or another version. SHIP TO IS DELIBERATELY KEPT: nobody wants
+// to retype an address for every book. Decided at ONE site, the Order tab's own loader, rather than
+// at every path that can change the book (rules 5c). Two things never clear it: a book that is not
+// known yet (TD-895's unsettled window, where the key would be a guess), and a reorder, which fills
+// the name from the order being repeated.
+var _orderNameBookKey = null;
+function orderClearNameIfOtherBook() {
+  try {
+    if (!state.currentCampaign || state.novelVersionSettled === false) return;
+    if (state._reorder) return;
+    var key = String(state.currentCampaign.id) + ':' + String(state.novelVersionId || state.novelAsUser || '');
+    var el = document.getElementById('print-order-name');
+    if (el && _orderNameBookKey !== null && _orderNameBookKey !== key && el.value) el.value = '';
+    _orderNameBookKey = key;
+  } catch (e) {}
+}
 function loadPrintTab() {
   // The book title is set on the Preview & Export tab and is read-only here.
   // v3.0.575 -- READ THE STORED TITLE FIRST, not the other tab's input box.
@@ -23963,6 +24625,7 @@ function loadPrintTab() {
     if (_v) _pbt.value = _v;
   }
   if (!state.currentCampaign) return;
+  orderClearNameIfOtherBook();   // v3.0.978 -- TD-899
   wirePrintOrderLock();
   showPrintMsg('', null);
   showPrintBtnMsg('', null);
@@ -24941,6 +25604,73 @@ function printCoverUrl(selOverride) {
     novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
+// v3.0.976 -- TD-602. ASK THE PRINTER ABOUT EACH FILE BEFORE ANY MONEY MOVES.
+// Right after the interior is built, and again right after the cover is built, the printer is
+// asked whether it can print the file (POST /api/print/file-check, then polled). Four answers:
+//   ok        carry on.
+//   rejected  stop here, before the price, with the printer's own words. Nothing is charged.
+//   pending   ask again in a few seconds, with the status line counting up.
+//   unknown   no usable answer in time. Ian, 2026-09-23: carry on, exactly as before this check
+//             existed -- the printer still checks the files when the order reaches it.
+// A file the printer has passed is remembered for this page, so Preparing again does not re-ask.
+var printFileChecked = {};
+var PRINT_FILE_CHECK_LIMIT_MS = { interior: 90000, cover: 60000 };
+var PRINT_FILE_CHECK_POLL_MS = 3000;
+function checkFileWithPrinter(kind, url, body) {
+  if (!url) return Promise.resolve({ state: 'unknown', reason: 'no-url' });
+  if (printFileChecked[url] === 'ok') return Promise.resolve({ state: 'ok', cached: true });
+  var label = (kind === 'cover') ? 'Confirming your cover with the printer\u2026 ' : 'Confirming your interior with the printer\u2026 ';
+  var started = Date.now();
+  var limit = PRINT_FILE_CHECK_LIMIT_MS[kind] || 60000;
+  function tick() {
+    try { showPrintBtnMsg(label + Math.round((Date.now() - started) / 1000) + 's', 'info'); } catch (e) {}
+  }
+  function readJson(r) {
+    return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: null }; });
+  }
+  function unknown(why) { return { state: 'unknown', reason: why }; }
+  function poll(id) {
+    if (Date.now() - started >= limit) return Promise.resolve(unknown('timeout'));
+    return new Promise(function (resolve) { setTimeout(resolve, PRINT_FILE_CHECK_POLL_MS); })
+      .then(function () {
+        tick();
+        return fetch('/api/print/file-check/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id)).then(readJson);
+      })
+      .then(function (pr) {
+        if (!pr.ok || !pr.j || !pr.j.state) return unknown('poll');
+        if (pr.j.state === 'pending') return poll(id);
+        return pr.j;
+      });
+  }
+  tick();
+  return fetch('/api/print/file-check', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: kind, url: url, selection: body && body.selection, pageCount: body && body.pageCount })
+  })
+    .then(readJson)
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.state) return unknown('start');
+      if (res.j.state === 'pending') return res.j.id ? poll(res.j.id) : unknown('no-id');
+      return res.j;
+    })
+    .catch(function () { return unknown('network'); })
+    .then(function (v) {
+      if (v && v.state === 'ok') printFileChecked[url] = 'ok';
+      if (v && v.state === 'unknown') {
+        try { console.warn('[file-check] ' + kind + ': no answer from the printer (' + v.reason + '), carrying on'); } catch (e) {}
+      }
+      return v;
+    });
+}
+function printerRefusalText(kind, v) {
+  var what = (kind === 'cover') ? 'cover' : 'interior';
+  var msg = 'The printer checked your ' + what + ' file and cannot print it as it is, so we stopped before taking any payment.';
+  if (v && v.errors && v.errors.length) msg += ' The printer said: ' + v.errors.join(' ');
+  else msg += ' The printer did not say what was wrong.';
+  msg += ' Please let us know so we can fix the file.';
+  return msg;
+}
+
 function reviewPrintOrder() {
   // v3.0.665 -- TD-464. A REORDER PRICES THE FILES IT ALREADY HAS. One delegating line rather than a
   // reuse branch threaded through the render, the cover build and the dimension check below: this
@@ -24976,8 +25706,18 @@ function reviewPrintOrder() {
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
-      return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
-        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
+      // v3.0.976 -- TD-602. The printer checks the interior before the cover is built, so a
+      // refusal stops here with nothing charged and no cover render spent. Anything short of an
+      // explicit refusal carries on -- see checkFileWithPrinter.
+      return checkFileWithPrinter('interior', intr.url, body).then(function (v) {
+        if (v && v.state === 'rejected') {
+          preparedInteriorUrl = '';
+          throw new Error(printerRefusalText('interior', v));
+        }
+        printProgress(52);
+        return runRenderJob(printCoverUrl(body), 'print-cover', function (secs) {
+          try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', 'info'); } catch (e) {}
+        });
       });
     })
     .then(function (res) {
@@ -25002,8 +25742,18 @@ function reviewPrintOrder() {
         throw new Error('We could not confirm the exact cover size with the printer for this binding, and the spine width has to be right or the book will not line up. Please try again in a few minutes, or choose Comic (saddle stitch), which needs no spine.');
       }
       preparedCoverUrl = res.j.url;
-      return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      // v3.0.976 -- TD-602. Right after the cover is built, the printer is asked about it. A refusal
+      // clears the prepared cover so nothing can be ordered with it, and stops before the price.
+      return checkFileWithPrinter('cover', res.j.url, body).then(function (v) {
+        if (v && v.state === 'rejected') {
+          preparedCoverUrl = '';
+          throw new Error(printerRefusalText('cover', v));
+        }
+        printProgress(80);
+        try { showPrintBtnMsg('Getting your price\u2026', 'info'); } catch (e) {}
+        return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      });
     })
     .then(function (res) {
       if (btn) { btn.disabled = false; btn.textContent = 'Prepare Your Order'; }
@@ -25449,7 +26199,9 @@ function renderOrders(orders) {
   // v3.0.665 -- TD-464. The Reorder button needs the ROW, not the card. Kept here so the button
   // does not have to re-fetch, and so it reads exactly what was rendered.
   state._orders = orders;
-  list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
+  // v3.0.992 -- at most THREE across (Ian), never narrower than 300px: on a wide screen each card
+  // takes a third of the row, and a narrow one drops to two, then one.
+  list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(300px, calc((100% - 24px) / 3)),1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
 }
 
 // v3.0.788 -- TD-589. ONE LABEL MAP FOR THE INTERIOR TIER.
@@ -25505,6 +26257,13 @@ function orderCardHtml(o) {
     : '';
   var html = '';
   html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
+  // v3.0.989 -- the front of the cover that went to the printer, drawn by /api/order-covers (Ian). A
+  // picture that cannot be drawn simply goes, and the card is as it was.
+  var _coverThumb = !!o.cover_pdf_url;
+  // v3.0.992 -- Ian: the cover about the width of a button, and Check with the printer / Reorder
+  // UNDER it, so the card is wider and shorter. The buttons move into the cover's column; with no
+  // cover they stay under the details, as they always were.
+  if (_coverThumb) html += '<div class="ord-with-thumb" style="display:flex;gap:14px;align-items:flex-start;"><div class="ord-thumb-col"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="display:block;width:100%;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:#2a1a0c;">' + checkBtn + reorderBtn + deleteBtn + '</div><div style="flex:1;min-width:0;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
   html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
@@ -25528,9 +26287,12 @@ function orderCardHtml(o) {
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   // v3.0.786 -- TD-587. Before Reorder, deliberately: on an unconfirmed order, checking is the
   // safe act and reordering is the one that can produce a second book.
-  if (checkBtn) html += checkBtn;
-  if (reorderBtn) html += reorderBtn;
-  if (deleteBtn) html += deleteBtn;
+  if (!_coverThumb) {   // v3.0.992 -- with a cover, the buttons are already under it
+    if (checkBtn) html += checkBtn;
+    if (reorderBtn) html += reorderBtn;
+    if (deleteBtn) html += deleteBtn;
+  }
+  if (_coverThumb) html += '</div></div>';   // v3.0.989
   html += '</div>';
   return html;
 }
@@ -25884,6 +26646,21 @@ function sectionBack() {
     return;
   }
   showCampaignSection(t);
+}
+
+// v3.0.994 -- MY STUFF'S BACK BUTTON. Ian: "if you don't know exactly where they were before then
+// just go to the My Campaigns." Back returns to the view My Stuff was opened from when that is
+// known and can still be shown; otherwise -- opened from a page this cannot name, or a campaign page
+// with no campaign loaded any more -- it goes to My Campaigns. sectionBack() always assumed a
+// campaign (its fallback was Sessions), which is wrong for a start outside one.
+var _ordersBackFrom = null;
+var ORDERS_BACK_PLAIN = ['campaigns', 'account', 'settings'];
+function ordersBack() {
+  var t = _ordersBackFrom;
+  if (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
 }
 
 // Copper (free) plan cannot create campaigns or sessions -- prompt to upgrade.
@@ -26881,6 +27658,11 @@ function finalizeUpdatePublishLink() {
   var a = document.getElementById('publish-book-link');
   var none = document.getElementById('publish-book-none');
   if (!a) return;
+  // v3.0.979 -- TD-900. A VERSION THIS READER CANNOT PUBLISH NAMES NO BOOK HERE. Bots: the card read
+  // "You can only publish your own version" directly above "Publishing: Lily's First Day of School --
+  // optimized, with covers". The guard line already says what to do; the Publishing row is hidden.
+  var _own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+  if (a.parentNode && a.parentNode.style) a.parentNode.style.display = _own ? '' : 'none';
   // v3.0.973 -- TD-872. EITHER WITNESS WILL DO, and the server's is the better one.
   var ready = (_finalizeSavedReady || finalizeServerSavedBook()) && !!(state && state.currentCampaign);   // v3.0.392 -- see above
   if (!ready) {
@@ -27351,6 +28133,7 @@ function _coPruneArrangeSelects() {
     if (!sel) return;
     Array.prototype.slice.call(sel.options).forEach(function (opt) {
       if (_coLayoutsEnabled.indexOf(opt.value) < 0) opt.parentNode.removeChild(opt);
+      else { opt.hidden = false; opt.disabled = false; }   // v3.0.977 -- TD-896: withheld layouts ship hidden
     });
     if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
   });
@@ -28702,7 +29485,9 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing and printing will both use the saved version you just pulled up, not these settings. Run Optimize again and Save if you want the new settings applied.', 'stop');
+          // v3.0.977 -- TD-897. Only a REAL change reaches here now, and it says which setting.
+          var _chg = (j.changes && j.changes.length) ? ' (' + j.changes.map(function (c) { return escapeHtml(String(c)); }).join('; ') + ')' : '';
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved' + _chg + '. Publishing and printing will both use the saved version you just pulled up, not these settings. Run Optimize again and Save if you want the new settings applied.', 'stop');
         } else {
           optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
@@ -28907,7 +29692,9 @@ function finalizeSyncPublishBtn() {
   // v3.0.392 -- a SAVED book, not a composed cache. Also means the button now appears only once
   // the save has landed, which closes the race it always had: it links to the saved file, and
   // before v3.0.392 it could be clicked ~43 seconds before that file existed.
-  var show = _finalizeSavedReady && !window._aiLoopRunning;
+  // v3.0.979 -- TD-900. Ian: "If there is a version that can't be published sitting there hide the
+  // go to publish button." Download PDF rides the same `show`, as v3.0.893 decided it should.
+  var show = _finalizeSavedReady && !window._aiLoopRunning && (typeof novelOwnView !== 'function' || novelOwnView());
   b.style.display = show ? '' : 'none';
   if (show) b.disabled = false;
   // v3.0.893 -- TD-768. DOWNLOAD PDF RIDES THE SAME VARIABLE.
@@ -28920,6 +29707,13 @@ function finalizeSyncPublishBtn() {
   // the fault the comment below this one records.
   var dl = document.getElementById('layoutai-download-btn');
   if (dl) { dl.style.display = show ? '' : 'none'; if (show) dl.disabled = false; }
+  // v3.0.981 -- TD-901. Save to Bookshelf, left alone while a save is in flight.
+  // v3.0.984 -- ANY VERSION YOU CAN OPEN, not only one you may publish. Ian: "Even if you can't
+  // publish I think we let you save to your bookshelf." Optimizing someone else's version saves the
+  // book as your own copy, so the only conditions left are a saved book and no run in progress.
+  var showShelf = _finalizeSavedReady && !window._aiLoopRunning;
+  var sh = document.getElementById('layoutai-shelf-btn');
+  if (sh) { sh.style.display = showShelf ? '' : 'none'; if (showShelf && !_shelfSaving) { sh.disabled = false; sh.textContent = 'Save to Bookshelf'; } }
   // v3.0.397 -- the two buttons share a slot and are mutually exclusive by construction:
   // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
   // is not. Driving both from one function is what stops them ever being shown together, or a fix
@@ -28931,6 +29725,58 @@ function finalizeSyncPublishBtn() {
     sv.style.display = showSave ? '' : 'none';
     if (showSave) { sv.disabled = false; sv.textContent = 'Save this Version'; }
   }
+}
+// v3.0.981 -- TD-901 release 2. SAVE TO BOOKSHELF, from the Optimize tab.
+// It rides finalizeSyncPublishBtn's one `show` -- a saved book, your own version, no run in flight --
+// so it appears and disappears with Go to Publish and Download PDF, never on its own rule.
+// A plan without a shelf gets the upgrade note without a round trip; everything else the server
+// decides and answers in words (full, already shelved, not your version, still saving).
+var _shelfSaving = false;
+function finalizeSaveToShelf() {
+  if (_shelfSaving || !state || !state.currentCampaign) return;
+  var tier = (state.user && state.user.tier) || '';
+  if (!bookshelfLimitFor(tier)) {
+    appConfirm({
+      title: 'The Bookshelf is on Gold and Platinum',
+      body: 'Gold keeps 10 books on your Bookshelf and Platinum keeps 50. A shelved book keeps its layout, so you can bring it back to order, publish or keep editing.',
+      okLabel: 'See the plans', cancelLabel: 'Not now',
+      onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+    });
+    return;
+  }
+  var b = document.getElementById('layoutai-shelf-btn');
+  _shelfSaving = true;
+  if (b) { b.disabled = true; b.textContent = 'Saving to shelf...'; }
+  function done() {
+    _shelfSaving = false;
+    if (b) { b.disabled = false; b.textContent = 'Save to Bookshelf'; }
+  }
+  fetch('/api/bookshelf/save' + finalizeBookQuery(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId: state.currentCampaign.id })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      done();
+      if (res.ok && res.j.ok) {
+        billingToast('Saved to your Bookshelf (' + res.j.used + ' of ' + res.j.limit + ').', 'success');
+        return;
+      }
+      var code = res.j.code || '';
+      if (code === 'already_shelved') { billingToast('This book is already on your Bookshelf.', 'info'); return; }
+      if (code === 'bookshelf_tier') {
+        appConfirm({ title: 'The Bookshelf is on Gold and Platinum', body: res.j.error || '', okLabel: 'See the plans', cancelLabel: 'Not now',
+          onOk: function () { if (typeof goToPlans === 'function') goToPlans(); } });
+        return;
+      }
+      if (code === 'bookshelf_full') {
+        appConfirm({ title: 'Your Bookshelf is full', body: res.j.error || 'Remove a book to make room.', okLabel: 'Open my Bookshelf', cancelLabel: 'Close',
+          onOk: function () { state.mystuffTab = 'shelf'; showView('orders'); } });
+        return;
+      }
+      billingToast(res.j.error || 'The book could not be put on your Bookshelf. Please try again.', 'error');
+    })
+    .catch(function () { done(); billingToast('The book could not be put on your Bookshelf. Please try again.', 'error'); });
 }
 // v3.0.397 -- save the book as it stands, fixes included.
 // Reuses the ordinary save path, so the fixed book is flattened (v3.0.388) and stored exactly like

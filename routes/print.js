@@ -587,6 +587,141 @@ function buildOrderRequestFromRow(row, spec, externalId, contactEmail) {
   };
 }
 
+// ============================================================
+// v3.0.976 -- TD-602. ASK THE PRINTER ABOUT EACH FILE BEFORE ANY MONEY MOVES.
+// ============================================================
+// Lulu will say whether a cover or an interior PDF is printable before an order exists, and until
+// now nothing asked: a bad file was found after the customer had paid (2026-08-26, a cover that
+// did not match its book). The Order tab's Prepare step now asks right after each file is built --
+// interior first, then cover, as two separate checks -- and stops before the price if the printer
+// says no.
+//
+//   POST /api/print/file-check              { kind, url, selection, pageCount } -> starts a check
+//   GET  /api/print/file-check/:kind/:id    -> that check's current answer
+//
+// EVERY ANSWER IS ONE OF FOUR STATES, and the client stops on exactly one of them:
+//   ok        the printer accepted the file.
+//   rejected  the printer said ERROR. The ONLY state that stops an order, with Lulu's own words.
+//   pending   still checking -- ask again.
+//   unknown   no usable answer: a refusal of the request itself, a timeout, a 5xx, or a record
+//             whose shape is not recognised. Ian, 2026-09-23: if Lulu does not answer, carry on.
+//             So unknown behaves exactly as the order did before this check existed, and is
+//             logged -- a failure that does not know whether it knows must read as neither a pass
+//             nor a fail (TD-587).
+//
+// THE LIVE SHAPE WAS UNCONFIRMED WHEN THIS SHIPPED. Every start and every final answer is written to
+// the server log as a [file-check] line carrying Lulu's raw record, so the first real Prepare after
+// deploy settles it. Read those lines before changing the parser.
+var FILE_CHECK_KINDS = { cover: true, interior: true };
+
+// Lulu's errors arrive as strings, as objects naming a path and a message (the TD-880 shape), or
+// as a field -> [messages] map. Flattened to at most six readable sentences, never raw JSON.
+function fileCheckMessages(errs) {
+  var out = [];
+  function add(s) {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    if (s && out.length < 6 && out.indexOf(s.slice(0, 300)) === -1) out.push(s.slice(0, 300));
+  }
+  function walk(v, field, depth) {
+    if (v == null || depth > 4) return;
+    if (typeof v === 'string' || typeof v === 'number') { add(field ? field + ': ' + v : v); return; }
+    if (Array.isArray(v)) { v.forEach(function (x) { walk(x, field, depth + 1); }); return; }
+    if (typeof v === 'object') {
+      var msg = v.message || v.detail || v.msg || v.error || v.description;
+      if (typeof msg === 'string' && msg) {
+        var where = v.path || v.field || field;
+        add(where ? String(where) + ': ' + msg : msg);
+        return;
+      }
+      Object.keys(v).forEach(function (k) { walk(v[k], k, depth + 1); });
+    }
+  }
+  walk(errs, '', 0);
+  return out;
+}
+
+// idHint is the id the caller already holds, for a poll answer that does not repeat it.
+function normalizeFileCheck(raw, idHint) {
+  var out = { state: 'unknown', id: null, vendorStatus: '', errors: [] };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  if (raw.id != null && String(raw.id) !== '') out.id = String(raw.id);
+  else if (idHint) out.id = String(idHint);
+  var s = raw.status == null ? 'NULL' : String(raw.status).toUpperCase();
+  out.vendorStatus = s;
+  out.errors = fileCheckMessages(raw.errors);
+  if (s === 'VALIDATED' || s === 'NORMALIZED') out.state = 'ok';
+  else if (s === 'ERROR') out.state = 'rejected';
+  else if ((s === 'NULL' || s === 'VALIDATING' || s === 'NORMALIZING') && out.id) out.state = 'pending';
+  return out;
+}
+
+// Only our own uploaded files are sent to the printer from here. A url that fails this is not
+// refused with an error -- it is answered "unknown", so a misconfigured base can never stop a sale.
+function fileCheckUrlOk(url) {
+  if (!(typeof url === 'string' && /^https:\/\//i.test(url))) return false;
+  var base = String(process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+  return !base || url.indexOf(base + '/') === 0;
+}
+
+function logFileCheck(req, kind, phase, norm, raw) {
+  var rawText = '';
+  try { rawText = JSON.stringify(raw == null ? null : raw).slice(0, 1500); } catch (_e) { rawText = '(unserialisable)'; }
+  try {
+    console.log('[file-check] ' + kind + ' ' + phase + ': ' + norm.state + ' (' + norm.vendorStatus + ')' +
+      (norm.id ? ' id=' + norm.id : '') + ' raw=' + rawText);
+  } catch (_e) {}
+  try {
+    logDebug(req && req.session ? req.session.userId : 0, {
+      level: norm.state === 'rejected' ? 'warn' : 'info',
+      source: 'print',
+      page: '/api/print/file-check',
+      fn: phase,
+      message: 'file-check ' + kind + ' ' + phase + ': ' + norm.state + ' (' + norm.vendorStatus + ')',
+      detail: { kind: kind, state: norm.state, vendorStatus: norm.vendorStatus, id: norm.id, errors: norm.errors, raw: rawText }
+    });
+  } catch (_e) {}
+}
+
+router.post('/file-check', requireSession, async function (req, res) {
+  var b = req.body || {};
+  var kind = String(b.kind || '');
+  if (!FILE_CHECK_KINDS[kind]) return res.status(400).json({ error: 'Unknown file kind' });
+  if (!fileCheckUrlOk(b.url)) return res.json({ state: 'unknown', reason: 'url' });
+  var built = catalog.buildSpec(b.selection, parseInt(b.pageCount, 10));
+  if (!built.ok) return res.json({ state: 'unknown', reason: 'selection' });
+  try {
+    var provider = getPrintProvider();
+    var raw = (provider && typeof provider.startFileCheck === 'function')
+      ? await provider.startFileCheck(kind, built.spec, built.spec.pageCount, b.url)
+      : null;
+    var norm = normalizeFileCheck(raw, null);
+    logFileCheck(req, kind, 'start', norm, raw);
+    return res.json(norm);
+  } catch (e) {
+    logPrintFailure(req, 'file-check-' + kind, e);
+    return res.json({ state: 'unknown', reason: 'vendor' });
+  }
+});
+
+router.get('/file-check/:kind/:id', requireSession, async function (req, res) {
+  var kind = String(req.params.kind || '');
+  if (!FILE_CHECK_KINDS[kind]) return res.status(400).json({ error: 'Unknown file kind' });
+  var id = String(req.params.id || '');
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) return res.json({ state: 'unknown', reason: 'id' });
+  try {
+    var provider = getPrintProvider();
+    var raw = (provider && typeof provider.getFileCheck === 'function')
+      ? await provider.getFileCheck(kind, id)
+      : null;
+    var norm = normalizeFileCheck(raw, id);
+    if (norm.state !== 'pending') logFileCheck(req, kind, 'result', norm, raw);
+    return res.json(norm);
+  } catch (e) {
+    logPrintFailure(req, 'file-check-' + kind, e);
+    return res.json({ state: 'unknown', reason: 'vendor' });
+  }
+});
+
 // ------------------------------------------------------------
 // GET /options?pageCount=76  -> bindings that fit + color/finish axes.
 // ------------------------------------------------------------

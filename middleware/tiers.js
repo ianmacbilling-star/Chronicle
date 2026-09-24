@@ -6,6 +6,7 @@
 const TIERS = {
   trial: {
     name: 'Free Trial',
+    bookshelf_limit: 0,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 0,
     access_rank: 4,    // bottom of hierarchy (lapses to copper) but TOP of creative access -- Platinum-equivalent art/narrative/layout
@@ -41,6 +42,7 @@ const TIERS = {
   },
   copper: {
     name: 'Copper',
+    bookshelf_limit: 0,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 1,
     price: 0,
@@ -75,6 +77,7 @@ const TIERS = {
   },
   silver: {
     name: 'Silver',
+    bookshelf_limit: 0,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 2,
     price: 10,
@@ -108,6 +111,7 @@ const TIERS = {
   },
   gold: {
     name: 'Gold',
+    bookshelf_limit: 10,   // v3.0.981 -- TD-901. Books kept on the Bookshelf (own plan; a live pass counts). Code-only, not a dial.
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 3,
     price: 15,
@@ -141,6 +145,7 @@ const TIERS = {
   },
   platinum: {
     name: 'Platinum',
+    bookshelf_limit: 50,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 4,
     price: 22,
