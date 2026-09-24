@@ -26,7 +26,7 @@
   <meta name="apple-mobile-web-app-title" content="Campaignia" />
   <script src="/js/pwa.js" defer></script>
 </head>
-<body>
+<body class="views-plain-bg">
 <!-- ================================================================================================
      IMPERSONATION BANNER -- TD-179 stage 4, v3.0.590. Spec section 6.
      "Non-negotiable, and it is the control that makes the rest safe."
@@ -139,6 +139,11 @@
            readable on the picture. */
         #view-campaigns.camp-plain-bg { background:transparent; background-image:none; }
         #view-campaigns.camp-plain-bg::before { display:none; }
+        /* v3.1.5 -- the other pages' glass panel off too (Ian: "Remove that everywhere"). Switch:
+           VIEWS_PLAIN_BG in app.js. */
+        body.views-plain-bg #view-sessions, body.views-plain-bg #view-characters, body.views-plain-bg #view-novel,
+        body.views-plain-bg #view-session-detail, body.views-plain-bg #view-settings, body.views-plain-bg #view-assets {
+          background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
         #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(232,207,122,0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
         .camp-books .campaign-book { position:relative; display:block; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
           border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;

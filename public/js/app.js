@@ -19320,6 +19320,14 @@ var CAMPAIGN_CARDS_AS_BOOKS = true;
 // THE WAY BACK, if the words are hard to read: set this to false (and, for the very first paint,
 // take camp-plain-bg off <div id="view-campaigns"> in app.html).
 var CAMPAIGNS_PAGE_PLAIN_BG = true;
+// v3.1.5 -- AND THE SAME FOR EVERY OTHER PAGE. Ian: "remove the same dark panel from the sessions tile
+// page and the session page... Remove that everywhere." style.css ("Glass dark panels for all views
+// except campaigns") gives #view-sessions, #view-characters, #view-novel, #view-session-detail,
+// #view-settings and #view-assets a 72% dark fill and a 10px blur. body.views-plain-bg (app.html)
+// takes both off, so every page sits on the one fixed background picture.
+// THE WAY BACK: set this to false (and, for the very first paint, take views-plain-bg off <body>).
+var VIEWS_PLAIN_BG = true;
+try { if (document.body && document.body.classList) document.body.classList.toggle('views-plain-bg', !!VIEWS_PLAIN_BG); } catch (e) {}
 function campaignBookHtml(c) {
   var pic = c.campaign_image_url || c.cover_image_url;
   return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
