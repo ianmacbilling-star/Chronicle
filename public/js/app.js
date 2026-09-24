@@ -4513,6 +4513,7 @@ function loadReview() {
       if (empty) empty.style.display = 'none';
       if (content) content.style.display = 'block';
       renderReview(data);
+      try { assetSuggestAfterReview(); } catch (e) {}   // v3.1.9 -- TD-908
     })
     .catch(function() {
       if (list) list.innerHTML = '<div class="alert alert-error">Could not load the review.</div>';
@@ -8731,6 +8732,8 @@ async function extractMoments() {
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
     state.narrativeData = { intro: '', sections: [], outro: '' };
+    // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
+    state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -17402,6 +17405,8 @@ async function extractMoments() {
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
     state.narrativeData = { intro: '', sections: [], outro: '' };
+    // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
+    state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -31914,4 +31919,280 @@ function _narrCancelJob(jid) {
 function finalizeServerSavedBook() {
   try { return !!(typeof printInteriorCache !== 'undefined' && printInteriorCache && printInteriorCache.url); }
   catch (e) { return false; }
+}
+
+// =====================================================================================
+// v3.1.9 -- TD-908. SUGGESTED ASSETS ON THE REVIEW TAB. Spec: claude/ASSET_SUGGESTIONS_SPEC.md.
+//
+// Ian: after Generate Story, when they land on Review, a modal lists what "would help continuity"
+// -- things in two or more panels -- and asks "Do you want Campaignia to generate these for you?
+// It will cost x tokens." They tick what they want; No keeps each description in the panel prompts.
+//
+// WHEN IT OPENS ON ITS OWN: once, the first time Review loads after a Generate Story that left
+// suggestions (extractMoments sets state.assetSuggestPending; loadReview calls in here). That also
+// covers the route through the Characters tab when a character change needs review first -- the
+// modal waits for Review. After that, a "Suggested assets" button in the Review bar reopens it.
+//
+// APPENDED, NOT INSERTED (TD-853): the later declaration of a function is the one that runs, and
+// none of these names exist anywhere else in this file.
+// =====================================================================================
+var ASSET_SUGGEST_CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item', character: 'Character' };
+
+function _assetSuggestUrl(tail) {
+  return '/api/campaigns/' + state.currentCampaign.id + '/assets/suggestions/' + state.currentSession.id + (tail || '');
+}
+
+function assetSuggestAfterReview() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var ctx = _reviewCtxKey();
+  fetch(_assetSuggestUrl('') + forkQ())
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (_reviewCtxKey() !== ctx) return;   // the reader moved on while this was in flight
+      var items = (data && data.items) || [];
+      var offer = items.filter(function (it) { return it.status !== 'created'; });
+      _assetSuggestButton(offer.length, data);
+      if (state.assetSuggestPending && state.assetSuggestPending === ctx) {
+        state.assetSuggestPending = null;
+        if (offer.length) openAssetSuggestModal(data);
+      }
+    })
+    .catch(function () { /* no suggestions is the behaviour before this feature */ });
+}
+
+function _assetSuggestButton(n, data) {
+  var row = document.getElementById('review-action-row');
+  if (!row) return;
+  var btn = document.getElementById('review-asset-suggest-btn');
+  if (!n) { if (btn) btn.style.display = 'none'; return; }
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'review-asset-suggest-btn';
+    btn.className = 'btn btn-sm';
+    btn.title = 'People, places and things Generate Story found in more than one panel';
+    row.insertBefore(btn, row.firstChild);
+  }
+  btn.textContent = 'Suggested assets (' + n + ')';
+  btn.style.display = '';
+  btn.onclick = function () {
+    fetch(_assetSuggestUrl('') + forkQ()).then(function (r) { return r.json(); })
+      .then(function (d) { openAssetSuggestModal(d); })
+      .catch(function () { openAssetSuggestModal(data); });
+  };
+}
+
+function openAssetSuggestModal(data) {
+  var old = document.getElementById('asset-suggest-overlay');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  var items = (data && data.items) || [];
+  var assetsOffer = items.filter(function (it) { return it.category !== 'character' && it.status !== 'created'; });
+  var madeAlready = items.filter(function (it) { return it.category !== 'character' && it.status === 'created'; });
+  var chars = items.filter(function (it) { return it.category === 'character'; });
+  var canCreate = !!(data && data.can_create);
+  var costEach = Number(data && data.cost_per_asset) || 1;
+  var balance = (data && data.balance != null) ? Number(data.balance) : null;
+  var room = (data && data.cap != null) ? Math.max(0, Number(data.cap) - Number(data.cap_used || 0)) : null;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'asset-suggest-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:#f0e8d0;';
+  var h = '';
+  h += '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
+  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears.</div>';
+  if (assetsOffer.length) {
+    h += '<div id="asset-suggest-list">';
+    assetsOffer.forEach(function (it) {
+      h += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin-bottom:6px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;cursor:' + (canCreate ? 'pointer' : 'default') + ';">' +
+        (canCreate ? '<input type="checkbox" class="asset-suggest-cb" data-key="' + escapeHtmlReview(it.key) + '" checked style="margin-top:3px;">' : '') +
+        '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
+        ' <span style="font-size:12px;color:rgba(201,168,76,0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
+        (it.description ? '<span style="display:block;font-size:13px;line-height:1.4;color:rgba(240,232,208,0.72);margin-top:3px;">' + escapeHtmlReview(it.description) + '</span>' : '') +
+        '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
+    });
+    h += '</div>';
+  }
+  if (madeAlready.length) {
+    h += '<div style="font-size:13px;color:rgba(240,232,208,0.7);margin:8px 0;">Already assets: ' +
+      madeAlready.map(function (it) { return escapeHtmlReview(it.name) + (it.asset_ready ? '' : ' (still drawing)'); }).join(', ') + '</div>';
+  }
+  if (chars.length) {
+    h += '<div style="font-size:13px;line-height:1.45;margin:12px 0 4px;padding:9px 10px;border-left:3px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.06);">' +
+      'These look like main characters. Campaignia will not build them for you; consider adding them on the Characters tab:<br>' +
+      chars.map(function (it) { return '<b>' + escapeHtmlReview(it.name) + '</b>' + (it.description ? ' &mdash; ' + escapeHtmlReview(it.description) : ''); }).join('<br>') + '</div>';
+  }
+  h += '<div id="asset-suggest-msg" style="font-size:14px;line-height:1.5;margin:14px 0 12px;"></div>';
+  h += '<div id="asset-suggest-row" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;"></div>';
+  box.innerHTML = h;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  var msgEl = document.getElementById('asset-suggest-msg');
+  var rowEl = document.getElementById('asset-suggest-row');
+  function close() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKey);
+  overlay.onclick = function (e) { if (e.target === overlay) close(); };
+  function mkBtn(label, cls, fn) {
+    var b = document.createElement('button'); b.className = 'btn btn-sm ' + (cls || ''); b.textContent = label; b.onclick = fn; rowEl.appendChild(b); return b;
+  }
+  function ticked() {
+    var out = [];
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-cb'), function (cb) { if (cb.checked) out.push(cb.getAttribute('data-key')); });
+    return out;
+  }
+  var noteNo = 'Otherwise Campaignia will keep them consistent using the descriptions above.';
+
+  if (!assetsOffer.length) {
+    msgEl.textContent = '';
+    mkBtn('Close', 'btn-primary', close);
+    return;
+  }
+  if (!canCreate) {
+    msgEl.textContent = 'Only the Story Master can create assets in this campaign, unless they turn on Allow Members to Add Assets. ' + noteNo;
+    mkBtn('OK', 'btn-primary', close);
+    return;
+  }
+
+  var yes;
+  function refreshCost() {
+    var n = ticked().length;
+    var total = n * costEach;
+    var s = 'Do you want Campaignia to generate ' + (n === 1 ? 'this' : 'these') + ' for you? It will cost ' + total + ' token' + (total === 1 ? '' : 's') + '.';
+    if (balance != null) s += ' You have ' + balance + '.';
+    var blocked = !n;
+    if (n && balance != null && total > balance) { s += ' That is more than you have \u2014 untick some, or add tokens.'; blocked = true; }
+    if (n && room != null && n > room) { s += ' This campaign has room for ' + room + ' more asset' + (room === 1 ? '' : 's') + ' on its tier \u2014 untick some.'; blocked = true; }
+    s += ' ' + noteNo;
+    msgEl.textContent = s;
+    if (yes) yes.disabled = blocked;
+  }
+  Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-cb'), function (cb) { cb.onchange = refreshCost; });
+
+  mkBtn('No', '', function () {
+    fetch(_assetSuggestUrl('/decline'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined }) }).catch(function () {});
+    close();
+  });
+  yes = mkBtn('Yes, generate', 'btn-primary', function () {
+    var keys = ticked();
+    if (!keys.length) return;
+    yes.disabled = true;
+    Array.prototype.forEach.call(rowEl.querySelectorAll('button'), function (b) { b.disabled = true; });
+    msgEl.textContent = 'Starting\u2026';
+    fetch(_assetSuggestUrl('/accept'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined, keys: keys }) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || res.error) {
+          msgEl.textContent = (res && (res.message || res.error)) || 'Could not create those assets.';
+          Array.prototype.forEach.call(rowEl.querySelectorAll('button'), function (b) { b.disabled = false; });
+          refreshCost();
+          return;
+        }
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        _assetSuggestWait(res.created || [], res.failed || [], msgEl, rowEl, close, box, assetsOffer);
+      })
+      .catch(function () {
+        msgEl.textContent = 'Connection error. Nothing was charged; try again.';
+        Array.prototype.forEach.call(rowEl.querySelectorAll('button'), function (b) { b.disabled = false; });
+      });
+  });
+  refreshCost();
+}
+
+// The pictures arrive by webhook, so wait for them here: a panel only uses an asset once it has a
+// picture, and the reader should not press Generate Narrative & Images before they exist.
+//
+// v3.1.10 -- TD-908. Ian, testing 3.1.9: "As it's drawing them I need some kind of progress bar or
+// spinning thing like we have on the panels when we regenerate them. Something to indicate it's
+// working." So each ticked row gets the SAME spinner the panels use (.moment-img-busy-spinner), which
+// turns into the picture itself the moment it lands; a gold bar above the message shows how many
+// are done (with the sheen every .progress-fill has, so it looks alive between steps). Unticked rows
+// dim and every checkbox locks, because the choice has been made.
+function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
+  rowEl.innerHTML = '';
+  var ids = {}, slotById = {};
+  function slotFor(key) { return box ? box.querySelector('.asset-suggest-status[data-key="' + key + '"]') : null; }
+  created.forEach(function (a) {
+    ids[String(a.id)] = 1;
+    var nm = String(a.name || '');
+    (offered || []).forEach(function (it) {
+      if (nm === it.name || nm.indexOf(it.name + ' / ') === 0) { var s = slotFor(it.key); if (s) slotById[String(a.id)] = s; }
+    });
+  });
+  if (box) {
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-cb'), function (cb) {
+      cb.disabled = true;
+      var row = cb.closest('label');
+      if (row) { row.style.cursor = 'default'; if (!cb.checked) row.style.opacity = '0.45'; }
+    });
+  }
+  Object.keys(slotById).forEach(function (id) {
+    slotById[id].innerHTML = '<div class="moment-img-busy-spinner asset-suggest-spin" style="width:22px;height:22px;"></div>';
+  });
+  (offered || []).forEach(function (it) {
+    if (failed.indexOf(it.name) === -1) return;
+    var s = slotFor(it.key);
+    if (s) s.innerHTML = '<span style="font-size:12px;color:#f0a090;">Could not start</span>';
+  });
+  var bar = document.createElement('div');
+  bar.className = 'progress-bar asset-suggest-bar';
+  bar.style.margin = '14px 0 0';
+  bar.style.height = '6px';
+  bar.style.background = 'rgba(201,168,76,0.18)';
+  var fill = document.createElement('div');
+  fill.className = 'progress-fill';
+  fill.style.background = '#c9a84c';
+  fill.style.width = '6%';
+  bar.appendChild(fill);
+  if (msgEl.parentNode) msgEl.parentNode.insertBefore(bar, msgEl);
+  function showPicture(id, url) {
+    var s = slotById[String(id)];
+    if (!s || s.getAttribute('data-done')) return;
+    s.setAttribute('data-done', '1');
+    s.innerHTML = '';
+    var img = document.createElement('img');
+    img.src = url; img.alt = '';
+    img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid rgba(201,168,76,0.55);display:block;';
+    s.appendChild(img);
+  }
+  var n = created.length, started = Date.now(), campId = state.currentCampaign.id;
+  var failNote = failed.length ? (' Could not start: ' + failed.join(', ') + '.') : '';
+  var b = document.createElement('button'); b.className = 'btn btn-sm'; b.textContent = 'Close';
+  b.onclick = function () { stop = true; close(); try { loadReview(); } catch (e) {} };
+  rowEl.appendChild(b);
+  var stop = false;
+  if (!n) { fill.style.width = '0%'; msgEl.textContent = 'Nothing was created.' + failNote; return; }
+  msgEl.textContent = 'Drawing your assets\u2026 0 of ' + n + ' ready.' + failNote;
+  (function poll() {
+    if (stop) return;
+    fetch('/api/campaigns/' + campId + '/assets').then(function (r) { return r.json(); }).then(function (list) {
+      var done = 0;
+      (Array.isArray(list) ? list : []).forEach(function (a) {
+        if (ids[String(a.id)] && a.image_url) { done++; showPicture(a.id, a.image_url); }
+      });
+      fill.style.width = Math.max(6, Math.round(done / n * 100)) + '%';
+      if (done >= n) {
+        msgEl.textContent = 'Done \u2014 ' + n + ' asset' + (n === 1 ? ' is' : 's are') + ' ready and attached to the panels that use ' + (n === 1 ? 'it' : 'them') + '.' + failNote;
+        b.textContent = 'OK'; b.className = 'btn btn-sm btn-primary';
+        try { loadReview(); } catch (e) {}
+        return;
+      }
+      if (Date.now() - started > 240000) {
+        Object.keys(slotById).forEach(function (id) {
+          var s = slotById[id];
+          if (!s.getAttribute('data-done')) s.innerHTML = '<span style="font-size:12px;color:rgba(240,232,208,0.7);">Still drawing</span>';
+        });
+        msgEl.textContent = done + ' of ' + n + ' ready so far. The rest are still drawing; they will attach on their own, and you can check them in the Asset Library.' + failNote;
+        return;
+      }
+      msgEl.textContent = 'Drawing your assets\u2026 ' + done + ' of ' + n + ' ready. Wait for these before Generate Narrative & Images, so the panels use them.' + failNote;
+      setTimeout(poll, 3000);
+    }).catch(function () { if (!stop) setTimeout(poll, 5000); });
+  })();
 }

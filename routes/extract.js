@@ -6,6 +6,7 @@ const charHeight = require('./images');
 // first imported for (TD-345d) and is left alone; require caches, so this is free.
 const imageHelpers = require('./images');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4 steering
+const assetSuggest = require('../services/assetSuggestions');   // v3.1.9 -- TD-908 suggested assets
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
@@ -247,6 +248,15 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     return c.name + playerInfo + clsInfo + ': ' + c.description;
   }).join('\n');
 
+  // v3.1.9 -- TD-908. THE CAMPAIGN'S ASSETS, BY NAME. Until now this call was told the characters
+  // and never the assets, while the schema below asked it to "preserve the EXACT names of any known
+  // characters or assets" -- a list it never saw. Names and categories only: the pictures are
+  // attached later by the matcher, so the descriptions would only cost input tokens.
+  const campaignAssets = await db.prepare('SELECT id, name, category FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+  const assetList = campaignAssets.filter(function (a) { return a && a.name; }).map(function (a) {
+    return a.name + ' (' + (a.category || 'location') + ')';
+  }).join('\n');
+
   const style = artStyle || session.campaign_style || 'High fantasy illustration';
 
   // Scale moment count to transcript length based on user tier
@@ -340,6 +350,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'in the transcript below. Do NOT add a character to a scene just because ' +
     'they are on this list — many of them are not in this session. If a ' +
     'character is not present in the transcript, they must not appear in any panel.\n' +
+    (assetList ? ('## KNOWN ASSETS (the campaign\'s recurring places, supporting characters and items; slash-separated names are aliases of ONE asset)\n' + assetList + '\n' +
+      'When one of these appears in a panel, refer to it in that panel\'s "description" and "prompt" by one of these exact names, so its reference picture attaches.\n\n') : '') +
     notesSection + '\n\n' +
     ((session.campaign_lore && session.campaign_lore.trim()) ? ('## WORLD / LORE (background for consistency and continuity \u2014 NOT events of this session; the transcript below is the sole source of what actually happened)\n' + session.campaign_lore.trim() + '\n\n') : '') +
     '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
@@ -385,7 +397,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '      }\n' +
     '    ],\n' +
     '    "outro": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the key beats the CLOSING narration (after the final panel) will cover."\n' +
-    '  }\n' +
+    '  },\n' +
+    // v3.1.9 -- TD-908. LAST, AND OPTIONAL, ON PURPOSE. It is the least important thing in the reply,
+    // so a reply that runs long loses this and not the story -- the parse below knows how to drop it.
+    '  "recurring_elements": [\n' +
+    '    {\n' +
+    '      "name": "Spelled EXACTLY as the transcript spells it, never translated. A specific place, supporting person or creature, or physical item that appears in TWO OR MORE of the panels above and is NOT one of the KNOWN CHARACTERS or KNOWN ASSETS. Use the exact name you used for it in the description and prompt of EVERY panel it appears in -- use one name consistently across panels. If the transcript never names it, give it a short descriptive name (e.g. \\"the Old Mill\\", \\"the ferryman\\") and use that same name in every panel. At most 8 entries; list the ones that matter most to how the book looks. Use an empty array if nothing qualifies.",\n' +
+    '      "aliases": ["Other names the transcript uses for the SAME thing, spelled as written. May be empty."],\n' +
+    '      "category": "Exactly one of: location (a place, building, room or setting), npc (a supporting person, creature or animal), item (an object someone carries, wears, wields or uses), character (someone who seems important enough to be a main character rather than a supporting figure).",\n' +
+    '      "description": "IN ENGLISH ALWAYS. Its fixed visual appearance only -- what would let an illustrator draw it the same way every time: build, colours, materials, clothing, distinctive features. If the transcript or the director instructions describe its appearance in detail, use that description as given. Otherwise keep it to 25 words or fewer. Style-neutral (do NOT name an art style or medium). The COPYRIGHT rule applies."\n' +
+    '    }\n' +
+    '  ]\n' +
     '}';
 
   // Async: create a pending job, respond immediately, then run the slow Claude
@@ -408,7 +430,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       },
       body: JSON.stringify({
         model: TEXT_MODEL,
-        max_tokens: 8000,
+        max_tokens: 10000,   // v3.1.9 -- TD-908: was 8000; headroom for recurring_elements
         system: systemPrompt,
         messages: [{
           role: 'user',
@@ -431,6 +453,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // it has the expected shape (a moments array).
       let recovered = null;
       try { const lb = clean.lastIndexOf('}'); if (lb > 0) { const cand = JSON.parse(clean.slice(0, lb + 1)); if (cand && Array.isArray(cand.moments)) recovered = cand; } } catch (e2) { recovered = null; }
+      // v3.1.9 -- TD-908. A REPLY CUT OFF INSIDE recurring_elements LOSES THE SUGGESTIONS, NOT THE STORY.
+      // That field is last in the schema, so everything before it is complete: drop it and close.
+      if (!recovered) {
+        try {
+          var _ri = clean.lastIndexOf('"recurring_elements"');
+          if (_ri > 0) {
+            var _cand2 = JSON.parse(clean.slice(0, _ri).replace(/[\s,]+$/, '') + '}');
+            if (_cand2 && Array.isArray(_cand2.moments)) { recovered = _cand2; console.error('[extract] reply cut off inside recurring_elements; story kept, suggestions dropped'); }
+          }
+        } catch (e3) { recovered = null; }
+      }
       if (recovered) { parsed = recovered; }
       else {
         try { console.error('[extract] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
@@ -535,6 +568,20 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
       // Stage 3: scan for major permanent changes and flag them for review.
       await detectCharacterChanges(db, session, req.params.campaignId, key, now, targetForkId);
+
+      // v3.1.9 -- TD-908. SUGGESTED ASSETS, FROM THE REPLY WE ALREADY PAID FOR. The model proposes;
+      // services/assetSuggestions.js keeps only what the real matcher finds in two or more of the
+      // panels as SAVED (read back, so the counts are what the image step will see), drops anything
+      // an existing asset or character already covers, ranks by mentions and keeps eight. A fault
+      // here costs the suggestions and nothing else -- the story is already saved.
+      try {
+        const _savedPanels = await db.prepare('SELECT panel_order, prompt, description, title FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
+        const _sugg = assetSuggest.filterSuggestions(parsed.recurring_elements, _savedPanels, session.transcript, campaignAssets, characters, imageHelpers);
+        await db.prepare('UPDATE session_forks SET asset_suggestions = ? WHERE id = ?').run(JSON.stringify(_sugg), dmForkId);
+        parsed.assetSuggestionCount = _sugg.items.length;
+      } catch (_se) {
+        console.error('[extract] asset suggestions skipped: ' + ((_se && _se.message) || _se));
+      }
     }
 
     // Tell the frontend whether any character changes need review, so it
@@ -548,6 +595,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       pendingChanges = pc ? pc.c : 0;
     } catch(pcErr) { pendingChanges = 0; }
 
+    delete parsed.recurring_elements;   // v3.1.9 -- stored on the fork; the job result need not carry it
     parsed.pendingChanges = pendingChanges;
     if (_storyCharge > 0) {
       try { await spendTokens(req.session.userId, _storyCharge, { source: 'generate_story', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_story spend failed:', e.message); }
