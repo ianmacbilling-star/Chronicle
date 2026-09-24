@@ -1,5 +1,47 @@
 [
   {
+    "version": "3.1.3",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "313-bookshelf-limit-dial",
+        "kind": "change",
+        "public": false,
+        "summary": "Admin: the number of Bookshelf books each tier keeps is now a field on the Dashboard's Tiers and Passes tab.",
+        "detail": "Ian: a field on each tier panel to control how many Bookshelf entries that tier gets, with the help Brain reading from it. Every tier panel on Dashboard, Tiers and Passes now has Bookshelf books (0 = no Bookshelf); it starts at today's numbers (Gold 10, Platinum 50, the others 0) and a change takes effect straight away, as the other tier fields do. Everything that named the plans and numbers now reads the setting: the Bookshelf tab's upgrade note, the message when a plan without a Bookshelf tries to save or add a Library book, and the help assistant, whose live tier numbers now include each tier's Bookshelf size and whose Brain no longer states fixed numbers. Books already on a shelf are never removed by lowering a number: over the limit, people can view, download, bring back and remove, but not add. TO TEST: Dashboard, Tiers and Passes: every tier panel shows Bookshelf books; Gold reads 10 and Platinum 50. Set Silver to 3 and save: a Silver account's Bookshelf tab shows 0 of 3 books and Save to Bookshelf works; the upgrade note on a Copper account now names Silver too; ask the help assistant how many books Silver can keep: 3. Put Silver back to 0.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.2",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "312-brain-my-stuff-bookshelf",
+        "kind": "change",
+        "public": true,
+        "summary": "The help assistant now knows about My Stuff, the Bookshelf and the new order cards, and sends people to the right place for their orders and published stories.",
+        "detail": "Ian: update the Brain for My Stuff, My Orders and the Bookshelf. The help assistant's knowledge now covers My Stuff and its three tabs: My Orders (the cover, details, Check with the printer, Reorder this book, and Delete on unpaid checkouts), the Bookshelf (Save to Bookshelf from Optimize, Gold 10 / Platinum 50, Library books that do not count, Bring back to Publish and when it cannot, what happens on a downgrade) and Published Stories. Everywhere it used to send people to My Stories on the Account page now points to My Stuff, Published Stories. New answers: how to keep a finished book without ordering or publishing it, where orders and published stories are, what to do when a paid order seems stuck, and why a book cannot be saved or brought back. TO TEST: ask the help assistant: where are my orders; how do I keep my book without ordering it; why can't I save to my Bookshelf; where do I change my published story to public. Each answer should name My Stuff and the right tab.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.1",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "311-session-menu-dots",
+        "kind": "fix",
+        "public": true,
+        "summary": "The ... menu button on each session book is now gold and easy to see.",
+        "detail": "Ian: the dots on the session tile's menu button could not be seen. The button shared the app's standard dark colour, which disappeared on the dark book cover. On the session books it is now gold with a gold edge, brightening when you point at it. TO TEST: a campaign's Sessions page: every book's ... button shows gold dots; it opens the menu and Delete session still asks first.",
+        "td": ["TD-813"]
+      }
+    ]
+  },
+  {
     "version": "3.1.0",
     "staged_on": "2026-09-23",
     "entries": [

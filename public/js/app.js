@@ -12295,13 +12295,11 @@ function goToMyStories() {
 //
 // Release 1 has no shelf data yet. The Bookshelf tab shows its empty state, and Silver, Copper and
 // Free Trial see the upgrade nudge Ian asked for. v3.0.981 adds saving, and from then the server's
-// GET /api/bookshelf answers the limit; BOOKSHELF_LIMITS below is only the first paint.
+// GET /api/bookshelf answers the limit (and, since v3.1.3, the only place the numbers live).
 // ============================================================================
 var MYSTUFF_TABS = ['orders', 'shelf', 'stories'];
-var BOOKSHELF_LIMITS = { gold: 10, platinum: 50 };
-function bookshelfLimitFor(tier) {
-  return Object.prototype.hasOwnProperty.call(BOOKSHELF_LIMITS, tier) ? BOOKSHELF_LIMITS[tier] : 0;
-}
+// v3.1.3 -- BOOKSHELF_LIMITS (a hard-coded Gold 10 / Platinum 50) is gone: the limits are a Dashboard
+// setting now, and only the server knows them. Save to Bookshelf asks it and shows its answer.
 function mystuffOpen() {
   mystuffShowTab(MYSTUFF_TABS.indexOf(state.mystuffTab) !== -1 ? state.mystuffTab : 'orders');
 }
@@ -12319,7 +12317,7 @@ function mystuffShowTab(tab) {
   else renderBookshelfTab();
 }
 // v3.0.981 -- TD-901 release 2. THE SHELF IS READ FROM THE SERVER, which answers the limit as well as
-// the books; BOOKSHELF_LIMITS above is only the first paint and the Save button's shortcut.
+// the books. (v3.1.3: the client holds no limits of its own any more.)
 // A plain list, grouped by campaign, for this release; release 3 draws the shelves.
 // Only one answer is painted: a slow reply that lands after a newer one is dropped (_shelfSeq).
 var _shelfSeq = 0;
@@ -12413,7 +12411,8 @@ function paintBookshelf(body, data) {
     body.appendChild(up);
   }
   if (!limit && !all.length) {
-    line('bookshelf-nudge', 'The Bookshelf is part of Gold, which keeps 10 books, and Platinum, which keeps 50. ' +
+    // v3.1.3 -- which plans, and how many, come from the server (the Dashboard's tier settings).
+    line('bookshelf-nudge', (data.plansText || 'The Bookshelf is part of some plans.') + ' ' +
       'Save a finished, optimized book here and bring it back whenever you want to order it, publish it or keep working on it.');
     nudgeButton();
     return;
@@ -20352,6 +20351,7 @@ var TIER_FIELD_LABELS = {
   monthly_utlt: 'Monthly UTOLT tokens',
   monthly_cot: 'Monthly CO tokens',
   signup_bonus: 'Sign-up bonus (one-time CO tokens, per tier)',
+  bookshelf_limit: 'Bookshelf books (0 = no Bookshelf)',   // v3.1.3
   max_campaigns: 'Max campaigns (blank/-1 = unlimited)',
   max_sessions: 'Max sessions / campaign (blank/-1 = unlimited)',
   max_characters: 'Max characters / campaign (blank/-1 = unlimited)',
@@ -29734,16 +29734,6 @@ function finalizeSyncPublishBtn() {
 var _shelfSaving = false;
 function finalizeSaveToShelf() {
   if (_shelfSaving || !state || !state.currentCampaign) return;
-  var tier = (state.user && state.user.tier) || '';
-  if (!bookshelfLimitFor(tier)) {
-    appConfirm({
-      title: 'The Bookshelf is on Gold and Platinum',
-      body: 'Gold keeps 10 books on your Bookshelf and Platinum keeps 50. A shelved book keeps its layout, so you can bring it back to order, publish or keep editing.',
-      okLabel: 'See the plans', cancelLabel: 'Not now',
-      onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
-    });
-    return;
-  }
   var b = document.getElementById('layoutai-shelf-btn');
   _shelfSaving = true;
   if (b) { b.disabled = true; b.textContent = 'Saving to shelf...'; }
@@ -29765,7 +29755,8 @@ function finalizeSaveToShelf() {
       var code = res.j.code || '';
       if (code === 'already_shelved') { billingToast('This book is already on your Bookshelf.', 'info'); return; }
       if (code === 'bookshelf_tier') {
-        appConfirm({ title: 'The Bookshelf is on Gold and Platinum', body: res.j.error || '', okLabel: 'See the plans', cancelLabel: 'Not now',
+        // v3.1.3 -- the plans and numbers are the server's (the Dashboard's), so the words are too.
+        appConfirm({ title: 'Your plan does not include the Bookshelf', body: (res.j.error || '') + ' A shelved book keeps its layout, so you can bring it back to order, publish or keep editing.', okLabel: 'See the plans', cancelLabel: 'Not now',
           onOk: function () { if (typeof goToPlans === 'function') goToPlans(); } });
         return;
       }
