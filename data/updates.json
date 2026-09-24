@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.999",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "999-session-books-inside-the-line",
+        "kind": "change",
+        "public": true,
+        "summary": "Session book pictures now stay inside the gold border instead of running over it.",
+        "detail": "Ian: keep the picture on a session book from bleeding over the gold trim line. Each session's picture now spans exactly the inside of the gold line, still centred in the upper part of the cover with its edges faded, and a tall picture stops short of the line at the top as well. TO TEST: a campaign's Sessions page and Publish > Session: no picture crosses the gold line on any side; pictures still centred and faded; controls still work.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.998",
     "staged_on": "2026-09-23",
     "entries": [
