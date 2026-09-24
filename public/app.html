@@ -180,15 +180,17 @@
         /* v3.0.998 -- Ian: centred, and a little oversized so it fills more of the cover: a touch wider
            than the cover (its faded edges run past the gold line), centred in the upper part, its foot
            under the dark fade that carries the words. */
-        /* v3.0.999 -- Ian: not over the gold line. The picture now spans exactly the inside of the line
-           (inset 8px right, 12px left, so 20px narrower and centred 2px right of the middle); tall
-           pictures are capped below it too. */
-        .sess-books .session-card .session-card-img { position:absolute; z-index:1; top:38%; left:calc(50% + 2px); transform:translate(-50%, -50%); width:calc(100% - 22px); height:auto; aspect-ratio:auto;
-          max-width:none; max-height:calc(76% - 20px); object-fit:contain; padding:0; background:none;
-          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
-          -webkit-mask-composite:source-in; mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
-          mask-composite:intersect; }
-        .sess-books .session-card .session-card-img-empty { top:34%; width:auto; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
+        /* v3.1.0 -- Ian: "keep the pictures blown up like you did originally... just trim the sides off
+           a little to make sure they don't go outside the gold lines." 998's size again (36px wider than
+           the cover, centred), with the overhang CUT at the line rather than shrunk: the picture runs
+           from 18px outside the left edge, the line sits 12px in, so 31px comes off the left; it runs
+           18px past the right edge, the line sits 8px in, so 27px comes off the right. The top and
+           bottom still fade. */
+        .sess-books .session-card .session-card-img { position:absolute; z-index:1; top:38%; left:50%; transform:translate(-50%, -50%); width:calc(100% + 36px); height:auto; aspect-ratio:auto;
+          max-width:none; max-height:68%; object-fit:contain; padding:0; background:none; clip-path:inset(0 27px 0 31px);
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%);
+          mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%); }
+        .sess-books .session-card .session-card-img-empty { top:34%; width:auto; clip-path:none; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
         .sess-books .session-card .session-card-body { position:absolute; left:0; right:0; bottom:0; z-index:4; padding:70px 16px 16px 22px; gap:4px;
           background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 55px, rgba(12,7,3,0.96) 90px, #0c0703 100%); }
         .sess-books .session-card .session-card-title { color:#e8cf7a; font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }

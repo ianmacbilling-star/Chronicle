@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.0",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "310-session-books-full-size-trimmed",
+        "kind": "change",
+        "public": true,
+        "summary": "Session book pictures are back to their larger size, trimmed neatly at the gold border instead of shrunk to fit inside it.",
+        "detail": "Ian: keep the pictures blown up as they were, and just trim the sides so they do not go outside the gold lines. Each session's picture is its larger size again, centred in the upper part of the cover; its sides are now cut cleanly at the gold line, so nothing crosses it, and its top and bottom still fade into the cover. TO TEST: a campaign's Sessions page and Publish > Session: pictures as large as in 3.0.998; their left and right edges stop exactly at the gold line on every book; controls still work.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.999",
     "staged_on": "2026-09-23",
     "entries": [
