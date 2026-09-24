@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.8",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "318-bookshelf-book-details",
+        "kind": "change",
+        "public": true,
+        "summary": "An open book on the Bookshelf now shows its subtitle, how many sessions it holds, its art and narrative styles, and its campaign's genres.",
+        "detail": "Ian: on the inside of a book opened from the Bookshelf, show the subtitle, how many sessions it is, the art and narrative style stored with that version, and the campaign's genres. A book saved from now on records these when you press Save to Bookshelf, so it keeps describing what it holds even if the version changes later. Books already on shelves are filled in once, from their version as it is now, the first time you open the Bookshelf. When a book's sessions use more than one style, all of them are listed. A Library book shows the genres and art styles its story was published with. TO TEST: open a book on the Bookshelf: the subtitle sits under the title in italics; the layout line ends with the number of sessions; Art, Narrative and Genre lines follow. A book whose sessions mix styles lists each style once. A Library book shows its Genre and Art lines. Save a new book and check the same lines appear.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.7",
     "staged_on": "2026-09-23",
     "entries": [
