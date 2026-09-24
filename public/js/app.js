@@ -3236,7 +3236,8 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+  // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -3259,6 +3260,7 @@ function renderSessions() {
         '</div>' +
       '</div>';
     return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">' + s.name + '</div>' +
@@ -12831,7 +12833,8 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
+  // v3.0.997 -- the Session tab's tiles as books too (Ian); same switch as the Sessions list.
+  var html = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
@@ -12856,6 +12859,7 @@ function renderNovelSummary(sessions) {
                         : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
@@ -16812,7 +16816,8 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+  // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -16835,6 +16840,7 @@ function renderSessions() {
         '</div>' +
       '</div>';
     return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">' + s.name + '</div>' +
@@ -18035,7 +18041,8 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
+  // v3.0.997 -- the Session tab's tiles as books too (Ian); same switch as the Sessions list.
+  var html = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
@@ -18060,6 +18067,7 @@ function renderNovelSummary(sessions) {
                         : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
+      sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
         '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
@@ -19318,6 +19326,17 @@ function campaignBookHtml(c) {
       '</div>' +
     '</div>' +
   '</div>';
+}
+
+// v3.0.997 -- SESSION TILES AS BOOKS. Ian: "The Campaign Books look perfect. Can we do the same thing
+// for the Session Tiles, both on the Session list page and the session tab under the publish page."
+// The tiles keep their markup; .sess-books on the grid turns each into a cover the way .camp-books
+// does (app.html), and this adds the soft wash of the picture behind it.
+// THE WAY BACK: set this to false. The tiles are then exactly as in v3.0.996.
+var SESSION_CARDS_AS_BOOKS = true;
+function sessionBookWash(src) {
+  if (!SESSION_CARDS_AS_BOOKS || !src) return '';
+  return '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(src) + '&quot;)"></div>';
 }
 
 function campCardDescHtml(desc) {

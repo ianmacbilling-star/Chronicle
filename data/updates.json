@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.997",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "997-sessions-as-books",
+        "kind": "change",
+        "public": true,
+        "summary": "Session tiles are hardback books too, on a campaign's Sessions page and on the Session tab under Publish, to match the campaign books.",
+        "detail": "Ian: do the same for the session tiles as the campaign books. On a campaign's Sessions page and on the Session tab under Publish, each session is now a dark 8.5 x 11 cover with the binding shaded down the left and a thin gold line inside its edge; its picture sits at the top, faded into a soft wash of itself, and a dark fade at the foot carries the tile's words and controls: the name and date, Ready or Draft and the menu on the Sessions page; the version, panel count, Ready or Draft, Include in Print and Open on the Session tab. Nothing a tile does has changed. TO TEST: a campaign's Sessions page: every session is a book; clicking one opens it; the ... menu still opens and Delete session still asks; a session with no picture shows the plain cover. Publish, Session tab: every session is a book; Include in Print still ticks and saves; Open still opens the session; a drawn chapter title shows whole. Narrow the window and both reflow. The previous tiles come back by setting SESSION_CARDS_AS_BOOKS to false in app.js.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.996",
     "staged_on": "2026-09-23",
     "entries": [

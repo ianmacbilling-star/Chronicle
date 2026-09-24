@@ -161,6 +161,30 @@
           background:radial-gradient(ellipse at 55% 40%, rgba(43,26,13,0.75), rgba(14,8,4,0.85)); box-shadow:6px 8px 16px rgba(0,0,0,0.55); color:rgba(232,207,122,0.7); }
         .camp-books .add-campaign-book::after { content:''; position:absolute; inset:8px 8px 8px 12px; border:1px dashed rgba(214,180,90,0.55); border-radius:2px; pointer-events:none; }
         .camp-books .add-campaign-book:hover { color:#e8cf7a; transform:translateY(-4px); }
+        /* v3.0.997 -- THE SESSION TILES AS BOOKS, both the Sessions list and the Session tab under
+           Publish. Same cover, binding, gold line, picture at the top and dark fade as the campaign
+           books; the tile's own words sit on the fade. Only under .sess-books (SESSION_CARDS_AS_BOOKS). */
+        .sess-books { gap:22px 18px; }
+        .sess-books .session-card { position:relative; display:block; aspect-ratio:17/22; overflow:hidden; border:none; border-radius:3px 6px 6px 3px;
+          background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
+          box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
+        .sess-books .session-card:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
+        .sess-books .session-card.session-card-publish:hover { transform:none; box-shadow:6px 8px 16px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,168,76,0.3); }
+        .sess-books .session-card::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
+          background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
+        .sess-books .session-card::after { content:''; position:absolute; inset:8px 8px 8px 12px; z-index:3; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+          box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
+        .sess-books .session-card .session-card-img { position:absolute; z-index:1; top:14px; left:50%; transform:translateX(-50%); width:auto; height:auto; aspect-ratio:auto;
+          max-width:calc(100% - 30px); max-height:calc(76% - 14px); object-fit:contain; padding:0; background:none;
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
+          -webkit-mask-composite:source-in; mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
+          mask-composite:intersect; }
+        .sess-books .session-card .session-card-img-empty { top:30%; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
+        .sess-books .session-card .session-card-body { position:absolute; left:0; right:0; bottom:0; z-index:4; padding:70px 16px 16px 22px; gap:4px;
+          background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 55px, rgba(12,7,3,0.96) 90px, #0c0703 100%); }
+        .sess-books .session-card .session-card-title { color:#e8cf7a; font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
+        .sess-books .session-card .session-card-date { color:rgba(232,207,122,0.62); }
+        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(240,232,208,0.72); }
       </style>
     </div>
 
