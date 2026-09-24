@@ -3384,7 +3384,15 @@ function renderSessionHeaderDisplay() {
   var descEl = document.getElementById('session-detail-desc');
   if (nameEl) nameEl.textContent = (s && s.name) ? s.name : 'Session';
   if (dateEl) dateEl.textContent = (s && s.session_date) ? fmtSessionDateShort(s.session_date) : '';
-  if (descEl) descEl.textContent = (s && s.description) ? s.description : '';
+  // v3.0.996 -- Ian: "People sometimes put books in there and it pushes everything down." A long
+  // description shows a snippet with an ellipsis and the whole text on hover, exactly as the
+  // campaign description does (campDescTrunc, and renderSessionsHeader below). Editing still
+  // opens the full text.
+  if (descEl) {
+    var _sd = campDescTrunc((s && s.description) ? s.description : '');
+    descEl.textContent = _sd.visible;
+    if (_sd.truncated) descEl.title = _sd.title; else descEl.removeAttribute('title');
+  }
 }
 function startSessionEdit() {
   var s = state.currentSession;

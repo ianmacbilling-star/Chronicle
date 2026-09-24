@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.996",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "996-session-description-snippet",
+        "kind": "fix",
+        "public": true,
+        "summary": "A long session description now shows as a short snippet on the session page, with the full text when you hover over it, the same as campaign descriptions.",
+        "detail": "Ian: some people paste whole books into a session's description, which pushed the rest of the session page down. The session page now shows the first part of a long description, cut at a word and ending in an ellipsis, and hovering over it shows all of it, exactly as the campaign description does on the Sessions page. Short descriptions are unchanged, and editing a session still opens the whole description. TO TEST: give a session a very long description: the session page shows about two lines ending in an ellipsis; hover to read all of it; click the edit pencil: the full text is in the box; save a short one: it shows in full with no hover text.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.995",
     "staged_on": "2026-09-23",
     "entries": [
