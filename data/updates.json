@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.2",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "312-brain-my-stuff-bookshelf",
+        "kind": "change",
+        "public": true,
+        "summary": "The help assistant now knows about My Stuff, the Bookshelf and the new order cards, and sends people to the right place for their orders and published stories.",
+        "detail": "Ian: update the Brain for My Stuff, My Orders and the Bookshelf. The help assistant's knowledge now covers My Stuff and its three tabs: My Orders (the cover, details, Check with the printer, Reorder this book, and Delete on unpaid checkouts), the Bookshelf (Save to Bookshelf from Optimize, Gold 10 / Platinum 50, Library books that do not count, Bring back to Publish and when it cannot, what happens on a downgrade) and Published Stories. Everywhere it used to send people to My Stories on the Account page now points to My Stuff, Published Stories. New answers: how to keep a finished book without ordering or publishing it, where orders and published stories are, what to do when a paid order seems stuck, and why a book cannot be saved or brought back. TO TEST: ask the help assistant: where are my orders; how do I keep my book without ordering it; why can't I save to my Bookshelf; where do I change my published story to public. Each answer should name My Stuff and the right tab.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.1",
     "staged_on": "2026-09-23",
     "entries": [

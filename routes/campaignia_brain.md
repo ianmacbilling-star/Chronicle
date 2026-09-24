@@ -264,12 +264,70 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 - **Account actions:** Sign out, or Suspend account.
 - **Feedback** (from the profile menu): send a typed message — pick a type, optional
   subject, and your message; it reaches support, who can reply directly.
-- **My Orders:** your past print orders, with details and tracking.
-- **My Stories:** every book you have published, across all your campaigns. Each one
-  shows whether it is **Public** or **Link only**, with a button to switch between them
-  and **Copy link** to get its address. You can edit its **title** and **blurb** here
-  without republishing, and remove it from the Library entirely. Switching a **Family
-  Story** or **Skill Story** from link only to public asks you to confirm first. See 15a.
+- **Your orders, your Bookshelf and your published stories are not on this page any
+  more.** They live together on **My Stuff** — see 5a.
+
+## 5a. My Stuff — My Orders, Bookshelf and Published Stories
+
+**My Stuff** is in the profile menu (it used to say My Orders). It is one page with three
+tabs, and its **Back** button returns you to where you opened it from — or to **My
+Campaigns** if it cannot tell.
+
+**My Orders** — every printed book you have ordered, newest first, up to three to a row.
+Each card shows the **front cover of the book that went to the printer**, the book and
+campaign names, the version, format, pages, quantity, what you paid and with which card,
+who it ships to, tracking, and a status. Links open the **Interior PDF** and **Cover PDF**
+that were printed, and **Track shipment** once there is tracking. Buttons sit under the
+cover:
+
+- **Check with the printer** — shown on a paid order the printer has not confirmed yet.
+  It asks the printer whether the order arrived. Use this *before* ordering again, so you
+  do not end up with two books.
+- **Reorder this book** — orders another copy printed from the same files that went to
+  the printer the first time, and you pay for it as usual. It needs the campaign to still
+  exist; otherwise build a fresh order from the Publish page.
+- **Delete** — only on a checkout that was never paid for (an abandoned order). A paid or
+  refunded order is a financial record and cannot be deleted.
+
+**Bookshelf** (Gold and Platinum) — a place to **keep finished books without ordering or
+publishing them**. **Gold keeps 10 books and Platinum keeps 50**; the count is lettered on
+the bottom of the bookcase. Free Trial, Copper and Silver see the Bookshelf with an
+invitation to upgrade.
+
+- **Putting a book on it:** finish a book on Publish → **Optimize**, then press **Save to
+  Bookshelf** beside Go to Publish. It keeps a full copy of that optimized book — the PDF
+  *and* its layout — so you can keep working on it later. It works on any version you can
+  open, including someone else's you are allowed to read. Re-optimizing afterwards does not
+  change the copy on the shelf.
+- **Library books:** **Add to Bookshelf** on a story's Library page or Library card puts
+  that story on your shelf as well — anyone's, including your own. These are links to the
+  Library, not copies, and **do not count** toward your 10 or 50.
+- **The bookcase:** each campaign's books stand together, the **first book of the series
+  facing out** with its real first page and a brass name plate, the rest as spines. Library
+  books stand on the bottom shelf, one of them facing out. The case grows a shelf as books
+  are added. **Only you** see your Bookshelf.
+- **Opening a book:** click it and it opens like a book. A saved book offers **View**,
+  **Download**, **Bring back to Publish** and **Remove**. A Library book offers **Open in
+  the Library** and **Remove**.
+- **Bring back to Publish** makes the shelf copy that version's saved book again and opens
+  it on the Optimize tab, ready to order, publish or edit. If that version already has an
+  optimized book that is *not* on your shelf, you are asked first: **Shelve it first** (keep
+  both), **Replace it**, or cancel. A book is a snapshot: if the {sessions} have changed
+  since, the Order tab's usual notice says so.
+- **When it cannot come back:** if the version it came from has been deleted, or if it came
+  from **someone else's version** and they have since switched that version to a different
+  layout type, it cannot be brought back there — it stays on your shelf to view and
+  download.
+- **If a Library story is taken down** after you shelved it, it stays on your shelf; opening
+  it says it is no longer in the Library, and you can remove it.
+- **Downgrading or lapsing deletes nothing.** Over your limit, you can still view, download,
+  bring back and remove books; you just cannot add more until you are under it.
+
+**Published Stories** — every book you have published, across all your campaigns. Each one
+shows whether it is **Public** or **Link only**, with a button to switch between them and
+**Copy link** to get its address. You can edit its **title** and **blurb** here without
+republishing, and **Remove from Library** takes it out entirely. Switching a **Family
+Story** or **Skill Story** from link only to public asks you to confirm first. See 15a.
 
 ---
 
@@ -285,7 +343,9 @@ distinct:
   requirement beyond being able to Export.
 - **Publish** — publish your finished story to the public **Library** as a shareable
   web page. You can only publish your *own* version; each Publish creates a new Library
-  entry, managed on your Account page.
+  entry, managed on **My Stuff → Published Stories**.
+- **Keep** — Gold and Platinum can also keep a finished book on their **Bookshelf** without
+  ordering or publishing it. See 5a.
 - **Order** — order a physical print-on-demand (POD) book through our print partner.
 
 **Seeing the finished book** is open to everyone — including a lone Copper member — for a
@@ -536,7 +596,7 @@ remembering to be careful.
 - **Publishing to the Library goes out as LINK ONLY by default.** You do not have to ask
   for it. The story gets a private link that works for anyone you send it to, and it does
   **not** appear in the public Stories directory and is **not** offered to search engines.
-- **Making one public asks you first.** From your Account page you can list it publicly,
+- **Making one public asks you first.** From **My Stuff → Published Stories** you can list it publicly,
   and when you do, Campaignia warns you plainly that the story may show a real person and
   asks you to confirm. Decline and it stays link only.
 - **Putting a single image from one of these campaigns into the public image gallery is
@@ -1209,6 +1269,10 @@ changes. **An optimized book is saved automatically — but you will need to sav
 after your own individual edits.** **Load Last Optimized File** brings a finished book
 straight back if you have navigated away.
 
+Beside **Go to Publish** you will also find **Download PDF**, and on Gold and Platinum **Save
+to Bookshelf**, which keeps a copy of this finished book, layout and all, on your Bookshelf
+(see 5a) — handy when you are not ready to order or publish yet.
+
 **Tab 4 — Order & Publish**
 
 *Order a printed copy* — binding (softcover, hardcover, comic), colour (premium
@@ -1230,13 +1294,13 @@ listed publicly or as a private link. See **15a** for the choice.
 - **Publish as link only** — see 15a. **Family Stories and Skill Stories are published
   this way automatically**, whether or not you tick the box.
 - **Each Publish creates a NEW entry.** Publishing again does not update the last one — it
-  makes a second book in the Library. Remove the old one from **My Stories** on your
-  Account page if you do not want both.
+  makes a second book in the Library. Remove the old one from **My Stuff → Published
+  Stories** if you do not want both.
 - **What gets published is frozen.** The pages, the pictures, the prose and the cast are
   captured at the moment you publish. Editing the campaign afterwards does not change a
   book that is already out; publish again if you want the changes public. The **title**
-  and the **blurb** are the exceptions — those you can fix from your Account page without
-  republishing.
+  and the **blurb** are the exceptions — those you can fix from **My Stuff → Published
+  Stories** without republishing.
 
 **A page limit applies to both publishing and ordering.** It is an adjustable setting
 rather than a fixed number, so quote the current value from your context rather than a
@@ -1267,7 +1331,7 @@ link the way you would treat the book itself. For a family book you are sending 
 relatives, that is exactly right; for something you would be upset to see forwarded, do
 not publish it at all.
 
-**Changing your mind.** Both directions work, from **My Stories** on your Account page:
+**Changing your mind.** Both directions work, from **My Stuff → Published Stories**:
 
 - **Link only → Public** lists it. If it is a **Family Story** or **Skill Story**,
   Campaignia warns you that the book may show a real person and asks you to confirm first,
@@ -1280,11 +1344,11 @@ not publish it at all.
 **The link never changes.** This is the part worth remembering: a story's address is the
 same whether it is public or link only, and switching between them does not break it. A
 link you sent someone last month still works after you change your mind, in either
-direction. Use **Copy link** on your Account page, or **Share** on the story's own page,
+direction. Use **Copy link** on My Stuff → Published Stories, or **Share** on the story's own page,
 to get it.
 
 **The only thing that breaks a link is removing the story from the Library**, which you
-can also do from My Stories. That stops it working for everyone, permanently.
+can also do from My Stuff → Published Stories. That stops it working for everyone, permanently.
 
 ---
 ## 16. The public Library
@@ -1297,7 +1361,7 @@ It's also where your own published stories and public images appear to the world
 
 **Story links.** Every published story has its own permanent address, and **it is the same
 link whether the story is public or link only** — so a link you send someone keeps working
-if you change your mind later. **Copy link** under My Stories on your Account page gives
+if you change your mind later. **Copy link** on My Stuff → Published Stories gives
 you that address, and so does the **Share** button on the story's own page.
 
 **What you will not find here.** The Stories directory lists only stories published
@@ -1445,6 +1509,14 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   campaign, so **Replace from Archive** can pull another member's image into your version.
 - **"Can I publish just part of my campaign?"** Yes — on the Publish page tick only the
   sessions you want under **Include in Print** (good for episodes or smaller volumes).
+- **"I want to keep my finished book without ordering or publishing it."** On Gold or
+  Platinum: finish it on Publish → **Optimize**, then **Save to Bookshelf**. It is kept on
+  **My Stuff → Bookshelf**, where you can view or download it any time, or **Bring back to
+  Publish** to order, publish or keep editing it. See 5a.
+- **"Where are my orders / my published stories?"** Profile menu → **My Stuff** — the
+  **My Orders** and **Published Stories** tabs.
+- **"My order says paid but nothing has happened."** My Stuff → My Orders → **Check with the
+  printer** on that order. Do that before ordering again, so you do not get two books.
 
 ---
 
@@ -1497,13 +1569,13 @@ Friction points and what's actually going on.
   keeps failing, simplify the prompt or check your connection.
 - **"I published my Family Story but I can't find it in the Library."** That is working as
   intended — Family Stories and Skill Stories publish as **link only**, so they are
-  deliberately not listed. It is on your **Account page** under My Stories, with a **Copy
+  deliberately not listed. It is on **My Stuff → Published Stories**, with a **Copy
   link** button. If you do want it listed publicly, switch it there and confirm the
   warning.
 - **"I sent someone a link to my story and it does not work."** Check whether the story is
   still published — removing it from the Library makes its link stop working for everyone.
   Switching between public and link only does **not** break a link, so that is not the
-  cause. If it is still published, use **Copy link** on the Account page to get the current
+  cause. If it is still published, use **Copy link** on My Stuff → Published Stories to get the current
   address rather than an older one you may have saved.
 - **"Why is my published book different from my campaign now?"** A published book is frozen
   at the moment you published it. Edits made afterwards live in your campaign, not in the
@@ -1530,6 +1602,15 @@ Friction points and what's actually going on.
   or more rows still have no category, and the line under the list says how many. Pick **Location**,
   **Supporting Character / NPC** or **Item** for each of them and the button comes to life. It works
   that way on purpose: a category nobody chose would file assets you never looked at.
+
+- **"Why can't I save to my Bookshelf?"** Usually one of these: the Bookshelf is **Gold and
+  Platinum** only; your shelf is **full** (10 on Gold, 50 on Platinum — remove a book to make
+  room); the book has **not been optimized and saved** yet for that version and layout; the
+  save is **still finishing** (try again in a moment); or it is **already on your shelf**.
+  Library books you add do not count toward the limit.
+- **"I can't bring a book back from my Bookshelf."** Either the version it came from has been
+  deleted, or it came from someone else's version and they have since changed that version's
+  layout type. It stays on your shelf to view and download.
 
 ---
 
@@ -1593,6 +1674,11 @@ Friction points and what's actually going on.
   and keeps working when you switch. Only removing the story from the Library stops it.
 - **If I change my campaign's genre, does my published book change?** No. Genres are
   frozen onto a book when it is published.
+- **Does my Bookshelf count Library books?** No. Only books you saved from Optimize count
+  toward the 10 (Gold) or 50 (Platinum); Library stories you add are links and are free.
+- **If I downgrade, do I lose my Bookshelf?** No. Nothing is deleted; you can still view,
+  download, bring back and remove your books, but not add new ones while over your limit.
+- **Can other people see my Bookshelf?** No. Only you see it.
 - **Why does my non-fantasy story look like fantasy?** The style every account starts with
   is a fantasy style. Change it to **Everyday life illustration**. See 8d.
 
