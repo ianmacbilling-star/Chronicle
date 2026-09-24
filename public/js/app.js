@@ -3059,7 +3059,11 @@ function loadCampaigns() {
 
 function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
+  // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
+  // false puts back the cards exactly as they were (their markup below is untouched).
+  if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
   var html = state.campaigns.map(function(c) {
+    if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
@@ -3074,7 +3078,7 @@ function renderCampaigns() {
       '</div>' +
     '</div>';
   }).join('');
-  html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
+  html += '<div class="add-campaign-card' + (CAMPAIGN_CARDS_AS_BOOKS ? ' add-campaign-book' : '') + '" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
   grid.innerHTML = html;
 }
 
@@ -16623,7 +16627,11 @@ function loadCampaigns() {
 
 function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
+  // v3.0.995 -- the campaign cards as hardback books (Ian). CAMPAIGN_CARDS_AS_BOOKS is the one switch:
+  // false puts back the cards exactly as they were (their markup below is untouched).
+  if (grid && grid.classList) grid.classList.toggle('camp-books', !!CAMPAIGN_CARDS_AS_BOOKS);
   var html = state.campaigns.map(function(c) {
+    if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
@@ -16638,7 +16646,7 @@ function renderCampaigns() {
       '</div>' +
     '</div>';
   }).join('');
-  html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
+  html += '<div class="add-campaign-card' + (CAMPAIGN_CARDS_AS_BOOKS ? ' add-campaign-book' : '') + '" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
   grid.innerHTML = html;
 }
 
@@ -19274,6 +19282,34 @@ function campDescTrunc(desc) {
     cut = cut.slice(0, cut.length - 1);
   }
   return { visible: cut + '\u2026', title: full, truncated: true };
+}
+
+// v3.0.995 -- MY CAMPAIGNS AS BOOKS. Ian: make the campaign cards "look like you are looking at a
+// hardback book cover", like the books facing out on the Bookshelf: the binding shaded down the left,
+// a thin gold line inside the edge (there is no real cover to carry one), the campaign picture faded
+// into the dark cover whatever its shape, and a dark fade over its foot with the name, description,
+// date and Details on it. 8.5 x 11 in proportion. Styles: .camp-books in app.html.
+// THE WAY BACK: set this to false. Nothing of the old card was removed, so false is exactly v3.0.994.
+var CAMPAIGN_CARDS_AS_BOOKS = true;
+function campaignBookHtml(c) {
+  var pic = c.campaign_image_url || c.cover_image_url;
+  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
+    (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
+    '<div class="cbook-art">' +
+      (pic ? '<img src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
+           : '<img class="cbook-logo" src="/images/Campaignia_Logo.png" alt="" />') +
+    '</div>' +
+    '<div class="cbook-fade"></div>' +
+    '<div class="cbook-frame"></div>' +
+    '<div class="cbook-text">' +
+      '<div class="campaign-card-name">' + c.name + '</div>' +
+      campCardDescHtml(c.description) +
+      '<div class="campaign-card-footer">' +
+        '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 function campCardDescHtml(desc) {

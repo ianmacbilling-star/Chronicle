@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.0.995",
+    "staged_on": "2026-09-23",
+    "entries": [
+      {
+        "id": "995-campaigns-as-books",
+        "kind": "change",
+        "public": true,
+        "summary": "My Campaigns shows each campaign as a hardback book: its picture faded into a dark cover with a gold border, and the name and details along the bottom.",
+        "detail": "Ian: make the campaign cards look like hardback book covers, like the books facing out on the Bookshelf. Each campaign is now a dark cover in the proportions of our 8.5 x 11 books, shaded down the left edge like a binding, with a thin gold line inside its edge. The campaign's picture, whatever its shape, is faded into the cover, and a dark fade over its foot carries the campaign name, description, date and the Details button. A campaign with no picture shows the logo faded in. New campaign is a blank book with a dashed gold border. Clicking a book opens the campaign as before. TO TEST: My Campaigns: every campaign is a book; wide, square and tall pictures all sit inside the cover without hard edges; the text reads on the dark fade; Details still opens the campaign's details and does not open the campaign; New campaign still opens the form; narrow the window and the books reflow. The previous cards come back by setting CAMPAIGN_CARDS_AS_BOOKS to false in app.js.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.0.994",
     "staged_on": "2026-09-23",
     "entries": [
