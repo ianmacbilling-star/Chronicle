@@ -15936,12 +15936,14 @@ function openCopyToAssetModal(archiveId) {
   if (catEl) catEl.value = 'location';
   var m = document.getElementById('copy-asset-modal');
   if (m) m.classList.remove('hidden');
+  try { _caCropStart(a); } catch (e) {}   // v3.1.17 -- TD-911: frame the part to keep
   if (nameEl) setTimeout(function(){ nameEl.focus(); nameEl.select(); }, 0);
 }
 function closeCopyToAssetModal() {
   var m = document.getElementById('copy-asset-modal');
   if (m) m.classList.add('hidden');
   _caArchiveId = null;
+  _caCrop = null; var _cah = document.getElementById('ca-crop'); if (_cah) _cah.innerHTML = '';   // v3.1.17
 }
 function submitCopyToAsset() {
   var nameEl = document.getElementById('ca-name');
@@ -15958,7 +15960,8 @@ function submitCopyToAsset() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/from-archive', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ archive_id: _caArchiveId, name: name, category: catEl ? catEl.value : 'location' })
+    // v3.1.17 -- TD-911: the frame, or nothing when it is the whole picture (then the copy is untouched).
+    body: JSON.stringify({ archive_id: _caArchiveId, name: name, category: catEl ? catEl.value : 'location', crop: _caCropFrac() || undefined })
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -32537,71 +32540,13 @@ function _rpRender() {
   var stage = document.getElementById('rp-stage'), acts = document.getElementById('rp-actions');
   if (!stage) return;
   stage.style.display = 'block'; if (acts) acts.style.display = 'flex';
-  var maxW = Math.min(stage.clientWidth || 520, 640), maxH = 360;
-  var s = Math.min(maxW / u.W, maxH / u.H, 1);
-  u.scale = s;
-  var dw = Math.round(u.W * s), dh = Math.round(u.H * s);
-  var H = function (pos, cur, css) {
-    return '<div class="rp-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:#e8d49a;border:2px solid #241810;border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
-  };
-  stage.innerHTML =
-    // A 10px margin around the picture, inside the clip, so the corner handles are whole even when
-    // the frame fills the picture; the darkening fills that margin too and stops at its edge.
-    '<div id="rp-wrap" style="position:relative;width:' + (dw + 20) + 'px;margin:0 auto;padding:10px;box-sizing:border-box;overflow:hidden;border-radius:6px;background:#000;">' +
-    '<div id="rp-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;touch-action:none;">' +
-      '<img src="' + u.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;pointer-events:none;">' +
-      '<div id="rp-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:move;touch-action:none;">' +
-        H('nw', 'nwse-resize', 'left:0;top:0;') + H('ne', 'nesw-resize', 'left:100%;top:0;') +
-        H('sw', 'nesw-resize', 'left:0;top:100%;') + H('se', 'nwse-resize', 'left:100%;top:100%;') +
-      '</div>' +
-    '</div></div>' +
-    '<div style="text-align:center;font-size:12px;color:rgba(240,232,208,0.6);margin-top:6px;">Drag the frame to move it. Drag a corner to zoom in or out.</div>';
-  _rpPlaceFrame(u);
-  _rpShowSize(u);
-  var frame = document.getElementById('rp-frame');
-  var drag = null;
-  function start(ev, mode) {
-    var r = _rpRectOf(u);
-    drag = { mode: mode, x0: ev.clientX, y0: ev.clientY, r0: r };
-    try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
-    ev.preventDefault(); ev.stopPropagation();
-  }
-  function move(ev) {
-    if (!drag) return;
-    var dx = (ev.clientX - drag.x0) / s, dy = (ev.clientY - drag.y0) / s, r0 = drag.r0;
-    var sh = _rpShapeByKey(u.shape), ratio = sh.w / sh.h, prop;
-    if (drag.mode === 'move') {
-      prop = { left: r0.left + dx, top: r0.top + dy, width: r0.width, height: r0.height };
-    } else {
-      // Keep the opposite corner still; the width follows whichever way the pointer moved further.
-      var sx = (drag.mode === 'ne' || drag.mode === 'se') ? 1 : -1, sy = (drag.mode === 'sw' || drag.mode === 'se') ? 1 : -1;
-      var wx = r0.width + sx * dx, wy = (r0.height + sy * dy) * ratio;
-      var w = Math.abs(wx - r0.width) >= Math.abs(wy - r0.width) ? wx : wy;
-      var ax = sx > 0 ? r0.left : r0.left + r0.width, ay = sy > 0 ? r0.top : r0.top + r0.height;
-      // Never past the picture's edge on the side that is growing.
-      var room = Math.min(sx > 0 ? u.W - ax : ax, (sy > 0 ? u.H - ay : ay) * ratio);
-      w = Math.min(w, room);
-      var h = w / ratio;
-      prop = { left: sx > 0 ? ax : ax - w, top: sy > 0 ? ay : ay - h, width: w, height: h };
-    }
-    var f = _rpFracFromRect(u.W, u.H, prop);
-    if (drag.mode !== 'move') {
-      // A corner clamped at the minimum size must not wander: pin it back to the fixed corner.
-      var t = _rpRectFromFrac(u.W, u.H, u.shape, f.x, f.y, f.w);
-      if (drag.mode === 'nw' || drag.mode === 'sw') f.x = (r0.left + r0.width - t.width) / u.W;
-      if (drag.mode === 'nw' || drag.mode === 'ne') f.y = (r0.top + r0.height - t.height) / u.H;
-    }
-    u.frac = f;
-    _rpPlaceFrame(u);
-    _rpShowSize(u);
-  }
-  function end() { if (drag) { u.frac = _rpFracFromRect(u.W, u.H, _rpRectOf(u)); drag = null; } }
-  frame.onpointerdown = function (ev) { if (ev.target === frame) start(ev, 'move'); };
-  Array.prototype.forEach.call(frame.querySelectorAll('.rp-handle'), function (hd) {
-    hd.onpointerdown = function (ev) { start(ev, hd.getAttribute('data-h')); };
-    hd.onpointermove = move; hd.onpointerup = hd.onpointercancel = end;
-  });
-  frame.onpointermove = move; frame.onpointerup = frame.onpointercancel = end;
+  // v3.1.17 -- TD-911. The frame is the shared crop view (cropMount, appended below), in ratio mode
+  // with this shape's ratio. What it draws and what the server stores are unchanged from v3.1.16:
+  // cropRectFromFrac with a ratio is _rpRectFromFrac, and the guard proves it.
+  var sh = _rpShapeByKey(u.shape);
+  u.view = cropMount(stage, { url: u.url, W: u.W, H: u.H, ratio: sh.w / sh.h, minSide: RP_MIN_SIDE,
+    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360,
+    onChange: function (r) { u.frac = _rpFracFromRect(u.W, u.H, r); _rpShowSize(u); } });
 }
 
 function _rpUse() {
@@ -32626,4 +32571,166 @@ function _rpUse() {
       billingToast('Your image is on the panel and locked, so Generate Images will leave it alone. Unlock it if you want to retouch it.', 'info');
     })
     .catch(function () { if (btn) btn.disabled = false; _rpMsg('Connection error. Please try again.', 'error'); });
+}
+
+// =====================================================================================
+// v3.1.17 -- TD-911. ONE CROP VIEW FOR EVERY PLACE A PICTURE IS FRAMED. Spec: claude/CROP_VIEW_SPEC.md.
+//
+// Ian, after the panel upload: "Now that I know we can do this picture editing i want to add this
+// feature to a couple places" -- the cover picks and Copy to Assets. Three copies of a drag-and-zoom
+// frame would be the section 5c twin fault three times over, so the frame lives HERE once and each
+// place mounts it in its own mode:
+//   ratio = a number  -> the frame keeps that shape (panels: the chosen shape; covers: the cover)
+//   ratio = null      -> FREE: the corners change width and height independently (assets -- Ian:
+//                        "a person can upload any size / shape picture to be an asset so I would let
+//                        the asset pictures be free form shape")
+// The frame is kept as FRACTIONS of the picture (x, y, w, h) and turned into pixels by
+// cropRectFromFrac, whose twin on the server is services/cropMath.js rectFromFrac. The guard proves
+// the two agree, so the frame on the screen is exactly what gets stored, in every mode.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function cropRectFromFrac(W, H, ratio, minSide, x, y, w, h) {
+  var width, height;
+  if (ratio) {
+    var maxW = Math.min(W, Math.floor(H * ratio));
+    var minW = Math.min(maxW, Math.max(1, ratio >= 1 ? minSide : Math.round(minSide * ratio)));
+    width = Math.max(minW, Math.min(maxW, Math.round(w * W)));
+    height = Math.max(1, Math.min(H, Math.round(width / ratio)));
+  } else {
+    width = Math.max(Math.min(minSide, W), Math.min(W, Math.round(w * W)));
+    height = Math.max(Math.min(minSide, H), Math.min(H, Math.round(h * H)));
+  }
+  var left = Math.max(0, Math.min(W - width, Math.round(x * W)));
+  var top = Math.max(0, Math.min(H - height, Math.round(y * H)));
+  return { left: left, top: top, width: width, height: height };
+}
+function cropFracFromRect(W, H, rect) { return { x: rect.left / W, y: rect.top / H, w: rect.width / W, h: rect.height / H }; }
+
+// Mount the frame into `host`. o = { url, W, H, ratio (number or null), minSide, frac, onChange(rect) }.
+// Returns { rect(), frac() }. The picture is shown whole, scaled to fit; the frame darkens the rest.
+function cropMount(host, o) {
+  var st = { frac: o.frac };
+  var rectOf = function () { return cropRectFromFrac(o.W, o.H, o.ratio, o.minSide, st.frac.x, st.frac.y, st.frac.w, st.frac.h); };
+  var maxW = Math.min(host.clientWidth || 520, o.maxW || 640), maxH = o.maxH || 360;
+  var s = Math.min((maxW - 20) / o.W, maxH / o.H, 1);
+  var dw = Math.round(o.W * s), dh = Math.round(o.H * s);
+  var Hd = function (pos, cur, css) {
+    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:#e8d49a;border:2px solid #241810;border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
+  };
+  // A 10px margin round the picture inside the clip, so the handles stay whole at the picture's edge.
+  host.innerHTML =
+    '<div class="crop-wrap" style="position:relative;width:' + (dw + 20) + 'px;margin:0 auto;padding:10px;box-sizing:border-box;overflow:hidden;border-radius:6px;background:#000;">' +
+    '<div class="crop-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;touch-action:none;">' +
+      '<img src="' + o.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;pointer-events:none;">' +
+      '<div class="crop-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:move;touch-action:none;">' +
+        Hd('nw', 'nwse-resize', 'left:0;top:0;') + Hd('ne', 'nesw-resize', 'left:100%;top:0;') +
+        Hd('sw', 'nesw-resize', 'left:0;top:100%;') + Hd('se', 'nwse-resize', 'left:100%;top:100%;') +
+      '</div>' +
+    '</div></div>' +
+    '<div style="text-align:center;font-size:12px;color:inherit;opacity:0.6;margin-top:6px;">Drag the frame to move it. Drag a corner to ' + (o.ratio ? 'zoom in or out' : 'change its size and shape') + '.</div>';
+  var frame = host.querySelector('.crop-frame');
+  function place() {
+    var r = rectOf();
+    frame.style.left = Math.round(r.left * s) + 'px'; frame.style.top = Math.round(r.top * s) + 'px';
+    frame.style.width = Math.round(r.width * s) + 'px'; frame.style.height = Math.round(r.height * s) + 'px';
+    if (o.onChange) o.onChange(r);
+  }
+  var drag = null;
+  function start(ev, mode) {
+    drag = { mode: mode, x0: ev.clientX, y0: ev.clientY, r0: rectOf() };
+    try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+    ev.preventDefault(); ev.stopPropagation();
+  }
+  function move(ev) {
+    if (!drag) return;
+    var dx = (ev.clientX - drag.x0) / s, dy = (ev.clientY - drag.y0) / s, r0 = drag.r0, prop;
+    if (drag.mode === 'move') {
+      prop = { left: r0.left + dx, top: r0.top + dy, width: r0.width, height: r0.height };
+    } else {
+      // The opposite corner stays still; never past the picture's edge on the side that grows.
+      var sx = (drag.mode === 'ne' || drag.mode === 'se') ? 1 : -1, sy = (drag.mode === 'sw' || drag.mode === 'se') ? 1 : -1;
+      var ax = sx > 0 ? r0.left : r0.left + r0.width, ay = sy > 0 ? r0.top : r0.top + r0.height;
+      var roomX = sx > 0 ? o.W - ax : ax, roomY = sy > 0 ? o.H - ay : ay;
+      var w, h;
+      if (o.ratio) {
+        var wx = r0.width + sx * dx, wy = (r0.height + sy * dy) * o.ratio;
+        w = Math.abs(wx - r0.width) >= Math.abs(wy - r0.width) ? wx : wy;
+        w = Math.min(w, roomX, roomY * o.ratio);
+        h = w / o.ratio;
+      } else {
+        w = Math.min(r0.width + sx * dx, roomX);
+        h = Math.min(r0.height + sy * dy, roomY);
+      }
+      prop = { left: sx > 0 ? ax : ax - w, top: sy > 0 ? ay : ay - h, width: w, height: h };
+    }
+    var f = cropFracFromRect(o.W, o.H, prop);
+    if (drag.mode !== 'move') {
+      // A corner held at the minimum size must not wander: pin it to the fixed corner.
+      var t = cropRectFromFrac(o.W, o.H, o.ratio, o.minSide, f.x, f.y, f.w, f.h);
+      if (drag.mode === 'nw' || drag.mode === 'sw') f.x = (r0.left + r0.width - t.width) / o.W;
+      if (drag.mode === 'nw' || drag.mode === 'ne') f.y = (r0.top + r0.height - t.height) / o.H;
+    }
+    st.frac = f;
+    place();
+  }
+  function end() { if (drag) { st.frac = cropFracFromRect(o.W, o.H, rectOf()); drag = null; } }
+  frame.onpointerdown = function (ev) { if (ev.target === frame) start(ev, 'move'); };
+  Array.prototype.forEach.call(frame.querySelectorAll('.crop-handle'), function (hd) {
+    hd.onpointerdown = function (ev) { start(ev, hd.getAttribute('data-h')); };
+    hd.onpointermove = move; hd.onpointerup = hd.onpointercancel = end;
+  });
+  frame.onpointermove = move; frame.onpointerup = frame.onpointercancel = end;
+  place();
+  return { rect: rectOf, frac: function () { return st.frac; } };
+}
+
+// =====================================================================================
+// v3.1.17 -- TD-911. COPY TO ASSETS, WITH A FRAME. Ian: "They might want to focus on one small piece
+// of the larger picture for the asset." The modal shows the archived picture with a FREE frame that
+// starts round the whole picture; only the framed part becomes the asset, and the archived picture
+// is untouched. Left at the whole picture, nothing changes from before: the server copies the file
+// as it always has. No size warning -- an asset picture is a reference for drawing, never printed.
+// =====================================================================================
+var CA_MIN_SIDE = 64;   // matches routes/assets.js CA_MIN_SIDE
+var _caCrop = null;
+
+function _caCropHost() {
+  var m = document.getElementById('copy-asset-modal'); if (!m) return null;
+  var host = document.getElementById('ca-crop');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ca-crop';
+    host.style.cssText = 'margin:4px 0 6px;';
+    var footer = m.querySelector('.modal-footer');
+    if (footer) footer.parentNode.insertBefore(host, footer); else m.querySelector('.modal').appendChild(host);
+  }
+  return host;
+}
+
+function _caCropStart(archive) {
+  _caCrop = null;
+  var host = _caCropHost(); if (!host) return;
+  host.innerHTML = '';
+  if (!archive || !archive.image_url) return;
+  host.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px;">Loading the picture\u2026</div>';
+  var img = new Image();
+  img.onload = function () {
+    if (!_caArchiveId || String(_caArchiveId) !== String(archive.id)) return;   // closed or switched meanwhile
+    var W = img.naturalWidth, H = img.naturalHeight;
+    host.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Frame the part of the picture you want as the asset.</div><div id="ca-crop-stage"></div><div id="ca-crop-size" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:4px;"></div>';
+    var stage = document.getElementById('ca-crop-stage');
+    var sizeEl = document.getElementById('ca-crop-size');
+    _caCrop = { W: W, H: H, view: cropMount(stage, { url: archive.image_url, W: W, H: H, ratio: null, minSide: CA_MIN_SIDE, frac: { x: 0, y: 0, w: 1, h: 1 }, maxW: 460, maxH: Math.min(300, Math.round((window.innerHeight || 800) * 0.35)),
+      onChange: function (r) { if (sizeEl) sizeEl.textContent = (r.width === W && r.height === H) ? ('The whole picture \u00b7 ' + W + ' \u00d7 ' + H + ' pixels') : (r.width + ' \u00d7 ' + r.height + ' pixels'); } }) };
+  };
+  img.onerror = function () { host.innerHTML = ''; _caCrop = null; };
+  img.src = archive.image_url;
+}
+
+// The frame to send, or null when it is the whole picture (then the server copies the file untouched).
+function _caCropFrac() {
+  if (!_caCrop || !_caCrop.view) return null;
+  var r = _caCrop.view.rect();
+  if (r.left === 0 && r.top === 0 && r.width === _caCrop.W && r.height === _caCrop.H) return null;
+  return _caCrop.view.frac();
 }

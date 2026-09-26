@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.17",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3117-copy-asset-frame",
+        "kind": "change",
+        "public": true,
+        "summary": "Copy to Assets from the Archive now lets you frame just the part of the picture you want as the asset.",
+        "detail": "Archive, Copy to Assets: the picture appears with a frame round the whole of it. Drag a corner to change the frame's size and shape freely, drag the frame to move it; only the framed part becomes the asset (the archived picture is not changed). Leave the frame round the whole picture to copy it as before. The upload-your-own crop on a panel now uses the same frame and should behave exactly as in 3.1.16.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.16",
     "staged_on": "2026-09-25",
     "entries": [
