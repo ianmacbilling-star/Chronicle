@@ -2590,7 +2590,7 @@
     <div class="form-group">
       <label class="form-label">Image</label>
       <div id="asset-modal-image-body"></div>
-      <input type="file" id="asset-image" accept="image/*" style="display:none;" onchange="handleAssetFileSelect(event)" />
+      <input type="file" id="asset-image" accept="image/*,.heic,.heif" style="display:none;" onchange="handleAssetFileSelect(event)" />
       <div class="form-hint" style="margin-top:4px;">Generate an image from the description, or upload your own. Generating costs 1 token.</div>
     </div>
     <div class="modal-footer">
@@ -2611,7 +2611,7 @@
       <button class="modal-close" onclick="closeAssetImport()">&times;</button>
     </div>
     <div class="form-group">
-      <input type="file" id="assetimport-input" accept="image/jpeg,image/png,image/webp" multiple
+      <input type="file" id="assetimport-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple
              onchange="aimpFilesChosen(event)" />
     </div>
     <div id="assetimport-body" style="max-height:46vh;overflow-y:auto;"></div>
@@ -2713,7 +2713,7 @@
               <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-image_portrait" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_portrait')" />
+          <input type="file" id="input-image_portrait" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_portrait')" />
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_portrait" onclick="clearSlot('image_portrait')">&#10005; Remove</button>
         </div>
 
@@ -2732,7 +2732,7 @@
               <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-image_fullbody" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_fullbody')" />
+          <input type="file" id="input-image_fullbody" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_fullbody')" />
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_fullbody" onclick="clearSlot('image_fullbody')">&#10005; Remove</button>
         </div>
 
@@ -2751,7 +2751,7 @@
               <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-image_action" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_action')" />
+          <input type="file" id="input-image_action" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_action')" />
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_action" onclick="clearSlot('image_action')">&#10005; Remove</button>
         </div>
 
@@ -2770,7 +2770,7 @@
               <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-image_other" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_other')" />
+          <input type="file" id="input-image_other" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_other')" />
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_other" onclick="clearSlot('image_other')">&#10005; Remove</button>
         </div>
 

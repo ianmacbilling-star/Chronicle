@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.14",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3114-heic-uploads",
+        "kind": "feature",
+        "public": true,
+        "summary": "iPhone photos (HEIC) can now be uploaded for characters and assets; Campaignia converts them to JPG for you.",
+        "detail": "Upload a .heic from an iPhone as a character portrait (any of the four slots), as an asset picture, and in the bulk asset import. In Chrome or Edge the preview should appear after a moment (it is converted on the server first; Chrome cannot show HEIC itself), and the saved image is a JPG. Railway log: one [heic] converted line per file. A file named .heic that is not really one is refused with a clear message. NEW DEPENDENCY heic-convert (WebAssembly, no native build): if the staging deploy fails to build, that is the cause, and the previous version keeps running.",
+        "td": [
+          "TD-909"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.13",
     "staged_on": "2026-09-25",
     "entries": [

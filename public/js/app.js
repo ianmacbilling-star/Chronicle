@@ -6784,6 +6784,11 @@ async function aimpFilesChosen(ev) {
     });
   }
 
+  // v3.1.14 -- TD-909. iPhone photos become JPEGs before the thumbnails are drawn. One that cannot be
+  // converted is kept as it is; the server converts or refuses it with a clear reason.
+  if (files.some(isHeicFile)) {
+    files = await Promise.all(files.map(function (f) { return isHeicFile(f) ? heicToJpegFile(f).catch(function () { return f; }) : f; }));
+  }
   var seen = {};
   files.forEach(function (f) {
     if (!isSupportedUploadImage(f)) { aimpRejects.push({ filename: f.name, reason: UPLOAD_TYPE_MSG }); return; }
@@ -7091,9 +7096,32 @@ function setAssetPreview(src) {
 // Client-side image-type gate -- mirror of the server whitelist so users are
 // stopped at pick/drop time with the SAME message, right by the control used.
 function isSupportedUploadImage(file) {
-  return !!file && ['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1;
+  return !!file && (['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1 || isHeicFile(file));   // v3.1.14 -- HEIC too
 }
-var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
+var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, WebP or HEIC (iPhone) image.';
+// v3.1.14 -- TD-909. iPhone photos. Chrome on Windows often gives a .heic file NO type, so the name
+// counts too. The server checks the bytes; this only decides whether to convert before previewing.
+function isHeicFile(file) {
+  if (!file) return false;
+  var t = String(file.type || '').toLowerCase();
+  if (t === 'image/heic' || t === 'image/heif' || t === 'image/heic-sequence' || t === 'image/heif-sequence') return true;
+  return /\.(heic|heif)$/i.test(String(file.name || ''));
+}
+// Send a HEIC to the server and get a JPEG File back (same name, .jpg). Chrome cannot show a HEIC,
+// so this runs BEFORE any preview; the JPEG is then what gets uploaded as well.
+function heicToJpegFile(file) {
+  var fd = new FormData();
+  fd.append('image', file);
+  return fetch('/api/images/heic-to-jpeg', { method: 'POST', body: fd }).then(function (r) {
+    if (!r.ok) {
+      return r.json().then(function (j) { throw new Error((j && j.error) || 'We could not read that iPhone photo.'); },
+        function () { throw new Error('We could not read that iPhone photo.'); });
+    }
+    return r.blob();
+  }).then(function (b) {
+    return new File([b], String(file.name || 'photo').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+  });
+}
 
 // Show a small inline error directly beneath an upload slot (drop-<slot>) rather
 // than a corner toast. Reused by character portraits AND custom art-style slots.
@@ -7126,6 +7154,14 @@ function acceptAssetFile(file) {
   if (!isSupportedUploadImage(file)) {
     var errEl = document.getElementById('asset-modal-error');
     if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); }
+    return;
+  }
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview can show it.
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { acceptAssetFile(jpg); }, function (err) {
+      var errEl2 = document.getElementById('asset-modal-error');
+      if (errEl2) { errEl2.textContent = (err && err.message) || UPLOAD_TYPE_MSG; errEl2.classList.remove('hidden'); }
+    });
     return;
   }
   state.assetPickedFile = file;
@@ -13152,6 +13188,11 @@ function handleSlotFileSelect(e, slot) {
 }
 
 function setSlotFile(slot, file) {
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview shows and the upload is a JPEG (both copies patched).
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { setSlotFile(slot, jpg); }, function (err) { showSlotError(slot, (err && err.message) || UPLOAD_TYPE_MSG); });
+    return;
+  }
   slotFiles[slot] = file;
   clearSlotError(slot);
   var reader = new FileReader();
@@ -18365,6 +18406,11 @@ function handleSlotFileSelect(e, slot) {
 }
 
 function setSlotFile(slot, file) {
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview shows and the upload is a JPEG (both copies patched).
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { setSlotFile(slot, jpg); }, function (err) { showSlotError(slot, (err && err.message) || UPLOAD_TYPE_MSG); });
+    return;
+  }
   slotFiles[slot] = file;
   clearSlotError(slot);
   var reader = new FileReader();

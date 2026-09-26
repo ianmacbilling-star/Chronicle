@@ -25,6 +25,10 @@ const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileS
 // v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
 // on it, used by the image model as a LOCATION diagram only. Same multer shape.
 const markedUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
+// v3.1.14 -- TD-909. HEIC to JPEG for the BROWSER. Chrome and Edge cannot display a HEIC, so a
+// picked iPhone photo would preview as a broken image. The page sends it here first and swaps in the
+// JPEG, so the preview and the later upload are both the JPEG. guardUpload does the conversion.
+const heicUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 
 // Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
 // public origin for THIS environment (set in Railway), e.g. https://campaignia.com
@@ -2788,6 +2792,18 @@ router.get('/proxy', requireAuth, async function (req, res) {
   } catch (e) {
     return res.status(500).send('proxy failed');
   }
+});
+
+// POST /api/images/heic-to-jpeg -- v3.1.14, TD-909. Nothing is stored and no token is spent: the
+// converted bytes go straight back. A file that is not HEIC is refused rather than echoed.
+router.post('/heic-to-jpeg', requireAuth, guardUpload(heicUpload, 'heic-to-jpeg', 25), function (req, res) {
+  if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'No image received.' });
+  if (!req.file.heicConverted) {
+    return res.status(400).json({ error: 'That is not an iPhone (HEIC) photo.' });
+  }
+  res.set('Content-Type', 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  return res.send(req.file.buffer);
 });
 
 // POST /api/images/marked -- store a marked overlay and return its URL. No
