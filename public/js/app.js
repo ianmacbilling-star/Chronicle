@@ -15304,6 +15304,7 @@ function clearPickerFilters() {
 }
 
 function renderPicker() {
+  try { _cvClear(); } catch (e) {}   // v3.1.18 -- the Archive grid again: filters back, no cover frame (before _rpSync, which has the last word on the filters)
   try { _rpSync(); } catch (e) {}   // v3.1.15
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
@@ -15320,7 +15321,7 @@ function renderPickerGrid() {
   // v3.0.671 -- TD-474. Say what the line means, once, rather than hoping it is self-evident.
   var _pkNote = (state.pickerCtx || {}).prepKind;
   if (_pkNote === 'cover' || _pkNote === 'back') {
-    note = '<div class="archive-pick-note">The faint outline shows the part of each picture that will appear on the cover. Anything outside it is trimmed off.</div>' + note;
+    note = '<div class="archive-pick-note">The faint outline shows the part of each picture that will appear on the cover. Anything outside it is trimmed off. After you choose a picture you can move the frame to pick the part you want.</div>' + note;   // v3.1.18
   }
   grid.innerHTML = note + rows.map(function(a){
     // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
@@ -15390,6 +15391,7 @@ function applyArchiveToTarget(archiveId) {
   // v3.0.670 -- TD-474. The cover, back and title-page picks leave here: they are campaign/book-meta
   // fields, not an image on a row, so /apply does not fit them any more than it fits a built title.
   if (ctx.prepKind) {
+    if (_cvMaybeCrop(ctx.prepKind, archiveId)) return;   // v3.1.18 -- TD-911: frame the front or back cover first
     closeReplacePicker();
     selectPrepImage(ctx.prepKind, archiveId);
     return;
@@ -32545,7 +32547,7 @@ function _rpRender() {
   // cropRectFromFrac with a ratio is _rpRectFromFrac, and the guard proves it.
   var sh = _rpShapeByKey(u.shape);
   u.view = cropMount(stage, { url: u.url, W: u.W, H: u.H, ratio: sh.w / sh.h, minSide: RP_MIN_SIDE,
-    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360,
+    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360, hintColor: 'rgba(240,232,208,0.6)',   // v3.1.18: light, as in v3.1.16
     onChange: function (r) { u.frac = _rpFracFromRect(u.W, u.H, r); _rpShowSize(u); } });
 }
 
@@ -32627,7 +32629,7 @@ function cropMount(host, o) {
         Hd('sw', 'nesw-resize', 'left:0;top:100%;') + Hd('se', 'nwse-resize', 'left:100%;top:100%;') +
       '</div>' +
     '</div></div>' +
-    '<div style="text-align:center;font-size:12px;color:inherit;opacity:0.6;margin-top:6px;">Drag the frame to move it. Drag a corner to ' + (o.ratio ? 'zoom in or out' : 'change its size and shape') + '.</div>';
+    '<div style="text-align:center;font-size:12px;color:' + (o.hintColor || 'var(--text-muted)') + ';margin-top:6px;">Drag the frame to move it. Drag a corner to ' + (o.ratio ? 'zoom in or out' : 'change its size and shape') + '.</div>';
   var frame = host.querySelector('.crop-frame');
   function place() {
     var r = rectOf();
@@ -32733,4 +32735,135 @@ function _caCropFrac() {
   var r = _caCrop.view.rect();
   if (r.left === 0 && r.top === 0 && r.width === _caCrop.W && r.height === _caCrop.H) return null;
   return _caCrop.view.frac();
+}
+
+// =====================================================================================
+// v3.1.18 -- TD-911. FRAME THE FRONT AND BACK COVER. Spec: claude/CROP_VIEW_SPEC.md.
+//
+// Ian: "Allow the user to drag the shape over the archived image so they can pick which part of the
+// image becomes the cover." Front and back covers only -- "not the title picture".
+//
+// Choosing a picture for either cover in the Archive picker now shows it in the shared crop view,
+// with the frame locked to the cover's own shape (COVER_CROP_ASPECT, measured from routes/pdf.js).
+// The frame starts exactly where the cover would cut the picture today (centred across, top or
+// bottom kept according to the title placement), so pressing Use this framing without moving it
+// changes nothing but the file. The server cuts that part out at the cover's exact shape, and the
+// book's cover field points at the cut picture, so the renderer (untouched) has nothing left to trim.
+//
+// A picture that is already the cover's shape (within COVER_FIT_TOL) skips the frame and is applied
+// exactly as before -- Ian: "Let's keep it simpler for now." So does picking the picture already on
+// the cover, which still removes it. A frame shorter than COVER_SMALL_SIDE is warned, never refused.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var COVER_SMALL_SIDE = 750;   // frame height in picture pixels; below it, warn (Ian: "set it at 750")
+var COVER_MIN_SIDE = 128;     // matches routes/archives.js COVER_MIN_SIDE
+var COVER_FIT_TOL = 0.02;     // within 2% of the cover's shape: no frame, applied as before
+var _cvCrop = null;
+
+// Still showing? Closing the picker mid-way must not apply anything afterwards.
+function _cvLive(c) { var pm = document.getElementById('replace-picker-modal'); return !!c && _cvCrop === c && !(pm && pm.classList.contains('hidden')); }
+
+function _cvFitsCover(W, H) { return Math.abs((W / H) / COVER_CROP_ASPECT - 1) <= COVER_FIT_TOL; }
+
+// Where the cover cuts the picture today: the largest cover-shaped frame, centred across, and kept
+// at the top, middle or bottom exactly as pickCropOverlay draws it for the title placement.
+function _cvDefaultFrac(W, H) {
+  var r = cropRectFromFrac(W, H, COVER_CROP_ASPECT, COVER_MIN_SIDE, 0, 0, 1, 1);
+  var anchor = coverCropAnchor();
+  var top = anchor === 'top' ? H - r.height : (anchor === 'middle' ? Math.round((H - r.height) / 2) : 0);
+  return cropFracFromRect(W, H, { left: Math.round((W - r.width) / 2), top: top, width: r.width, height: r.height });
+}
+
+// Called from applyArchiveToTarget for a prep pick. True means the frame has taken the pick over;
+// false means carry on exactly as before.
+function _cvMaybeCrop(kind, archiveId) {
+  if (kind !== 'cover' && kind !== 'back') return false;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return false;
+  var a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
+  if (!a || !a.image_url) return false;
+  if (pickerCurrentUrl() === a.image_url) return false;   // the current cover: Remove, as before
+  var grid = document.getElementById('replace-picker-grid'); if (!grid) return false;
+  var mine = { kind: kind, archive: a, view: null };
+  _cvCrop = mine;
+  grid.innerHTML = '<div style="grid-column:1/-1;font-size:13px;opacity:0.7;text-align:center;padding:20px;">Loading the picture\u2026</div>';
+  var asBefore = function () { _cvCrop = null; closeReplacePicker(); selectPrepImage(kind, archiveId); };
+  var img = new Image();
+  img.onload = function () {
+    if (!_cvLive(mine)) return;   // Back, or closed, meanwhile
+    var W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H || _cvFitsCover(W, H)) { asBefore(); return; }
+    _cvShow(W, H);
+  };
+  img.onerror = function () { if (_cvLive(mine)) asBefore(); };
+  img.src = a.image_url;
+  return true;
+}
+
+function _cvShow(W, H) {
+  var c = _cvCrop; if (!c) return;
+  var grid = document.getElementById('replace-picker-grid'); if (!grid) return;
+  var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = 'none';
+  var which = c.kind === 'cover' ? 'front cover' : 'back cover';
+  grid.innerHTML =
+    '<div id="cv-wrap" style="grid-column:1/-1;">' +
+      '<div style="font-size:14px;line-height:1.45;margin-bottom:8px;color:rgba(240,232,208,0.9);">Frame the part of this picture you want on the ' + which + '. The frame is the cover\u2019s shape.</div>' +
+      '<div id="cv-stage"></div>' +
+      '<div id="cv-msg"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;">' +
+        '<button class="btn" onclick="_cvBack()">Back to the Archive</button>' +
+        '<button class="btn btn-primary" id="cv-use" onclick="_cvUse()">Use this framing</button>' +
+      '</div>' +
+    '</div>';
+  c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
+    frac: _cvDefaultFrac(W, H), maxW: 640, maxH: Math.min(420, Math.round((window.innerHeight || 800) * 0.45)), onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+}
+
+function _cvMsg(text, kind) {
+  var m = document.getElementById('cv-msg'); if (!m) return;
+  m.textContent = text || '';
+  m.className = kind === 'warn' ? 'cv-msg-warn' : '';
+  if (kind === 'warn') {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
+  } else {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+  }
+}
+
+function _cvShowSize(r) {
+  var line = 'Cover frame: ' + r.width + ' \u00d7 ' + r.height + ' pixels.';
+  if (r.height < COVER_SMALL_SIDE) {
+    _cvMsg(line + ' This is small for a printed cover: Campaignia\u2019s own cover pictures are about 1,000 pixels or more tall, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
+  } else {
+    _cvMsg(line);
+  }
+}
+
+function _cvBack() { _cvCrop = null; renderPicker(); }
+
+// From renderPicker: every redraw of the Archive grid puts the filters back and forgets the frame.
+function _cvClear() {
+  _cvCrop = null;
+  var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = '';
+}
+
+function _cvUse() {
+  var c = _cvCrop; if (!c || !c.view) return;
+  var cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) return;
+  var btn = document.getElementById('cv-use'); if (btn) btn.disabled = true;
+  _cvMsg('Cutting out your cover\u2026');
+  var f = c.view.frac();
+  fetch('/api/campaigns/' + cid + '/archives/' + c.archive.id + '/cover-crop', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ crop: { x: f.x, y: f.y, w: f.w } })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!_cvLive(c)) return;   // closed or went back meanwhile
+      if (!d || d.error || !d.url) { if (btn) btn.disabled = false; _cvMsg((d && d.error) || 'Could not cut out the cover.', 'error'); return; }
+      _cvCrop = null;
+      closePrepImagePicker();
+      _prepMemberSetImage(c.kind, d.url);
+    })
+    .catch(function () { if (_cvLive(c)) { if (btn) btn.disabled = false; _cvMsg('Connection error. Please try again.', 'error'); } });
 }

@@ -14,8 +14,7 @@ const { getBalance } = require('./tokens');   // v3.1.9 -- TD-908 (a second dest
 const { resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { getCampaignRole } = require('../middleware/auth');
 const assetSuggest = require('../services/assetSuggestions');
-const sharp = require('sharp');                                   // v3.1.17 -- TD-911
-const { fetchFile } = require('../storage/storage');              // v3.1.17 (a second destructure; line 6 is untouched)
+const cropImage = require('../services/cropImage');               // v3.1.18 -- TD-911: the cut is shared with the cover picks
 const cropMath = require('../services/cropMath');                 // v3.1.17
 const CA_MIN_SIDE = 64;     // smallest framed area, in picture pixels (matches CA_MIN_SIDE in app.js)
 const CA_MAX_SIDE = 2048;   // stored no larger than this on the long side, like an uploaded panel
@@ -233,30 +232,9 @@ router.post('/classify-names', requireAuth, verifyCampaignAssetCreator, async fu
 // app.js); the pixels are worked out HERE by cropMath.rectFromFrac, the twin of the page's arithmetic,
 // from the real EXIF-oriented size. The archived picture is only read, never changed. PNG stays PNG
 // (a transparent asset keeps its transparency); anything else is stored as JPEG.
-async function loadArchiveBytes(url) {
-  const fromBucket = await fetchFile(url);                        // null in local disk mode
-  if (fromBucket) return fromBucket;
-  if (/^https?:\/\//i.test(url)) {
-    const axios = require('axios');
-    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000, maxContentLength: Infinity });
-    return Buffer.from(resp.data);
-  }
-  const fs = require('fs');
-  return fs.readFileSync(path.join(__dirname, '../uploads', String(url).replace(/^.*\//, '')));
-}
 async function cropArchiveImage(url, frac) {
-  const buf = await loadArchiveBytes(url);
-  const meta = await sharp(buf, { failOn: 'none' }).metadata();
-  const swap = (meta.orientation || 1) >= 5;
-  const W = swap ? meta.height : meta.width, H = swap ? meta.width : meta.height;
-  if (!W || !H) throw new Error('unreadable image');
-  const rect = cropMath.rectFromFrac(W, H, null, CA_MIN_SIDE, frac.x, frac.y, frac.w, frac.h);
-  let pipe = sharp(buf, { failOn: 'none' }).rotate().extract(rect);
-  if (Math.max(rect.width, rect.height) > CA_MAX_SIDE) pipe = pipe.resize({ width: CA_MAX_SIDE, height: CA_MAX_SIDE, fit: 'inside' });
-  const png = meta.format === 'png';
-  const out = png ? await pipe.png().toBuffer() : await pipe.flatten({ background: '#ffffff' }).jpeg({ quality: 92 }).toBuffer();
-  const name = 'asset-crop-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + (png ? '.png' : '.jpg');
-  return await uploadFile(out, name, png ? 'image/png' : 'image/jpeg');
+  // v3.1.18 -- the same cut as v3.1.17, now in services/cropImage.js so the cover picks share it.
+  return (await cropImage.cutAndStore(url, { ratio: null, minSide: CA_MIN_SIDE, frac: frac, maxSide: CA_MAX_SIDE, name: 'asset-crop' })).url;
 }
 
 router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async function(req, res) {

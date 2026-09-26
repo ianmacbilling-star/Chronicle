@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.18",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3118-cover-frame",
+        "kind": "change",
+        "public": true,
+        "summary": "Choosing a front or back cover picture from the Archive now lets you frame exactly which part of the picture goes on the cover.",
+        "detail": "Publish, Cover or Back Cover, choose a picture: unless it is already the cover's shape, it opens with a cover-shaped frame, placed where the cover would have cut it before. Drag the frame to move it, drag a corner to zoom in, then Use this framing. A frame under 750 pixels tall shows the orange small-picture warning (you can still use it). Pictures that are already cover-shaped, and picking the current cover to remove it, work exactly as before. The title-page picture is unchanged.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.17",
     "staged_on": "2026-09-26",
     "entries": [
