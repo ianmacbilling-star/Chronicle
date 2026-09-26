@@ -8139,6 +8139,8 @@ function renderCharacters() {
     '</div>';
   }).join('');
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
+  // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
+  html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -17252,6 +17254,8 @@ function renderCharacters() {
     '</div>';
   }).join('');
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
+  // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
+  html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -33063,4 +33067,203 @@ function _impPick(email) {
   em.value = email || '';
   var rs = document.getElementById('imp-reason');
   try { (rs || em).focus(); } catch (e) {}
+}
+
+// =====================================================================================
+// v3.1.23 -- TD-918. IMPORT A CHARACTER FROM ANOTHER CAMPAIGN. Spec: claude/CHARACTER_IMPORT_SPEC.md.
+//
+// Ian: "Add a Import from Another Campaign tile after the Add Character tile. Then give them a list of
+// all the campaigns that Storymaster is associate with. As a SM or as a Member. After they select that
+// give them a list of characters. Then After they select the character give them a lazy loading list by
+// version of pictures of the character they want grouped by version from oldest to newest."
+//
+// One dark modal, three steps, built here (no app.html change). The looks step lists the Original,
+// then one group per version the reader may see; each group's pictures are fetched only when the group
+// scrolls into view, and the pictures themselves load lazily. Import copies the chosen look.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var _ci = null;   // { step, source, sourceName, charId, charName, look, observer }
+
+function _ciBase() { return '/api/campaigns/' + state.currentCampaign.id + '/characters/import'; }
+
+function _ciModal() {
+  var m = document.getElementById('char-import-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'char-import-modal';
+    m.className = 'modal-overlay hidden';
+    m.innerHTML =
+      '<div class="modal archive-picker" style="max-width:760px;">' +
+        '<div class="modal-header"><div class="modal-title" id="ci-title">Import a character</div>' +
+        '<button class="modal-close" onclick="closeCharImport()">&times;</button></div>' +
+        '<div id="ci-sub" style="font-size:13px;color:rgba(240,232,208,0.75);margin:-4px 0 10px;"></div>' +
+        '<div id="ci-body" style="max-height:62vh;overflow-y:auto;"></div>' +
+        '<div id="ci-msg" style="font-size:13px;margin-top:8px;color:#f0a090;"></div>' +
+        '<div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px;">' +
+          '<button class="btn" id="ci-back" onclick="_ciBack()">Back</button>' +
+          '<button class="btn btn-primary" id="ci-go" onclick="_ciImport()" disabled>Import this picture</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(m);
+  }
+  return m;
+}
+
+function openCharImport() {
+  if (!state.currentCampaign) return;
+  _ci = { step: 'campaigns' };
+  var m = _ciModal();
+  m.classList.remove('hidden');
+  try { if (typeof pickerRaise === 'function') m.style.zIndex = '100002'; } catch (e) {}
+  _ciCampaigns();
+}
+
+function closeCharImport() {
+  if (_ci && _ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} }
+  _ci = null;
+  var m = document.getElementById('char-import-modal');
+  if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
+}
+
+function _ciSet(title, sub, html) {
+  var t = document.getElementById('ci-title'); if (t) t.textContent = title;
+  var s = document.getElementById('ci-sub'); if (s) s.textContent = sub || '';
+  var b = document.getElementById('ci-body'); if (b) { b.innerHTML = html; b.scrollTop = 0; }
+  var msg = document.getElementById('ci-msg'); if (msg) msg.textContent = '';
+  var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns') ? '' : 'none';
+  var go = document.getElementById('ci-go'); if (go) { go.style.display = (_ci && _ci.step === 'looks') ? '' : 'none'; go.disabled = true; }
+}
+
+function _ciErr(text) { var m = document.getElementById('ci-msg'); if (m) m.textContent = text || ''; }
+
+function _ciGet(url, cb) {
+  fetch(url, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (!d || d.error) { _ciErr((d && d.error) || 'Something went wrong. Please try again.'); return; } cb(d); })
+    .catch(function () { _ciErr('Connection error. Please try again.'); });
+}
+
+var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(201,168,76,0.25);border-radius:8px;background:rgba(0,0,0,0.25);color:#f0e8d0;cursor:pointer;font:inherit;';
+
+function _ciCampaigns() {
+  _ci.step = 'campaigns';
+  _ciSet('Import a character', 'Choose the campaign the character comes from. These are the campaigns you run or belong to.', '<div style="padding:16px;opacity:0.7;">Loading your campaigns\u2026</div>');
+  _ciGet(_ciBase() + '/campaigns', function (d) {
+    if (!_ci || _ci.step !== 'campaigns') return;
+    var list = d.campaigns || [];
+    if (!list.length) { _ciSet('Import a character', '', '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
+    var b = document.getElementById('ci-body');
+    b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
+      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' +
+        '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
+        '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
+    }).join('') + '</div>';
+    Array.prototype.forEach.call(b.querySelectorAll('.ci-camp'), function (el) {
+      el.onclick = function () { _ciCharacters(el.getAttribute('data-id'), el.getAttribute('data-name')); };
+    });
+  });
+}
+
+function _ciCharacters(sourceId, sourceName) {
+  _ci.step = 'characters'; _ci.source = sourceId; _ci.sourceName = sourceName;
+  _ciSet('Choose a character', 'From ' + sourceName + '.', '<div style="padding:16px;opacity:0.7;">Loading characters\u2026</div>');
+  _ciGet(_ciBase() + '/campaigns/' + encodeURIComponent(sourceId) + '/characters', function (d) {
+    if (!_ci || _ci.step !== 'characters' || _ci.source !== sourceId) return;
+    var list = d.characters || [];
+    var b = document.getElementById('ci-body');
+    if (!list.length) { b.innerHTML = '<div style="padding:16px;">That campaign has no characters yet.</div>'; return; }
+    b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">' + list.map(function (c) {
+      var pic = c.thumb ? '<img src="' + escapeHtml(c.thumb) + '" loading="lazy" alt="" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;background:#0a0604;">'
+                        : '<div style="width:100%;aspect-ratio:3/4;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:0.6;">No picture</div>';
+      return '<button type="button" class="ci-char" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' + pic +
+        '<b style="font-size:13px;">' + escapeHtml(c.name) + '</b>' + (c.cls ? '<span style="font-size:12px;opacity:0.7;">' + escapeHtml(c.cls) + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+    Array.prototype.forEach.call(b.querySelectorAll('.ci-char'), function (el) {
+      el.onclick = function () { _ciLooks(el.getAttribute('data-id'), el.getAttribute('data-name')); };
+    });
+  });
+}
+
+function _ciLookTile(l) {
+  return '<button type="button" class="ci-look" data-key="' + escapeHtml(l.key) + '" style="' + CI_TILE + 'padding:6px;">' +
+    (l.url ? '<img src="' + escapeHtml(l.url) + '" loading="lazy" alt="" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;background:#0a0604;">'
+           : '<div style="width:100%;aspect-ratio:3/4;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:0.6;">No picture</div>') +
+    '<span style="font-size:12px;"><b>' + escapeHtml(l.label) + '</b>' + (l.date ? '<br><span style="opacity:0.65;">' + escapeHtml(l.date) + '</span>' : '') +
+    (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') + '</span></button>';
+}
+
+function _ciLooks(charId, charName) {
+  if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; }
+  _ci.step = 'looks'; _ci.charId = charId; _ci.charName = charName; _ci.look = null;
+  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. Pick one to copy into this campaign.', '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
+  var base = _ciBase() + '/campaigns/' + encodeURIComponent(_ci.source) + '/characters/' + encodeURIComponent(charId) + '/looks';
+  _ciGet(base, function (d) {
+    if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
+    var grid = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;';
+    var html = '<div style="margin-bottom:14px;"><div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">Original (the campaign\u2019s character card)</div>' +
+      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 it will be imported without one.</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
+    (d.versions || []).forEach(function (v) {
+      html += '<div class="ci-group" data-version="' + v.version_id + '" style="margin-bottom:14px;min-height:60px;">' +
+        '<div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">' + escapeHtml(v.label) + '</div>' +
+        '<div class="ci-group-body" style="' + grid + '"><div style="font-size:12px;opacity:0.6;">Loading\u2026</div></div></div>';
+    });
+    var b = document.getElementById('ci-body');
+    b.innerHTML = html;
+    b.addEventListener('click', _ciPickFromEvent);
+    var load = function (g) {
+      if (g.getAttribute('data-loaded')) return;
+      g.setAttribute('data-loaded', '1');
+      _ciGet(base + '?version_id=' + encodeURIComponent(g.getAttribute('data-version')), function (r) {
+        if (!_ci || _ci.charId !== charId) return;
+        var body = g.querySelector('.ci-group-body');
+        var looks = r.looks || [];
+        body.innerHTML = looks.length ? looks.map(_ciLookTile).join('') : '<div style="font-size:12px;opacity:0.6;">No pictures of ' + escapeHtml(charName) + ' in this version.</div>';
+      });
+    };
+    var groups = b.querySelectorAll('.ci-group');
+    if (typeof IntersectionObserver === 'function') {
+      _ci.observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) load(e.target); });
+      }, { root: b, rootMargin: '200px' });
+      Array.prototype.forEach.call(groups, function (g) { _ci.observer.observe(g); });
+    } else {
+      Array.prototype.forEach.call(groups, load);
+    }
+  });
+}
+
+function _ciPickFromEvent(ev) {
+  var t = ev.target && ev.target.closest ? ev.target.closest('.ci-look') : null;
+  if (!t || !_ci || _ci.step !== 'looks') return;
+  Array.prototype.forEach.call(document.querySelectorAll('#ci-body .ci-look'), function (el) { el.style.outline = ''; });
+  t.style.outline = '2px solid #e8d49a';
+  _ci.look = t.getAttribute('data-key');
+  var go = document.getElementById('ci-go'); if (go) go.disabled = false;
+}
+
+function _ciBack() {
+  if (!_ci) return;
+  if (_ci.step === 'looks') { var b = document.getElementById('ci-body'); if (b) b.removeEventListener('click', _ciPickFromEvent); if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; } _ciCharacters(_ci.source, _ci.sourceName); }
+  else if (_ci.step === 'characters') _ciCampaigns();
+}
+
+function _ciImport() {
+  if (!_ci || !_ci.look) return;
+  var go = document.getElementById('ci-go'); if (go) go.disabled = true;
+  _ciErr('');
+  var s = document.getElementById('ci-sub'); if (s) s.textContent = 'Copying ' + _ci.charName + ' into this campaign\u2026';
+  var mine = _ci;
+  fetch(_ciBase(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_campaign_id: mine.source, character_id: mine.charId, look: mine.look }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (_ci !== mine) return;
+      if (!d || d.error || !d.character) { if (go) go.disabled = false; _ciErr((d && d.error) || 'Could not import the character.'); return; }
+      closeCharImport();
+      if (typeof loadCharacters === 'function') loadCharacters();
+      showAlert(d.renamed
+        ? 'Imported as ' + d.character.name + ' \u2014 this campaign already had a character with that name. Rename either one in Edit.'
+        : d.character.name + ' was imported. Open Edit to check the details.');
+    })
+    .catch(function () { if (_ci === mine) { if (go) go.disabled = false; _ciErr('Connection error. Please try again.'); } });
 }

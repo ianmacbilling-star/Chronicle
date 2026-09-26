@@ -28,6 +28,9 @@ const { checkCharacterLimit } = require('../middleware/tiers');
 const multer = require('multer');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const path = require('path');
+const { versionsForCampaign } = require('../database/db');     // v3.1.23 -- TD-918 (second destructures; the lines above are untouched)
+const { getCampaignRole } = require('../middleware/auth');
+const { restoreCopy } = require('../storage/storage');
 
 // Use memory storage - we handle the upload ourselves via storage layer
 const upload = multer({
@@ -70,6 +73,188 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 });
 
 // POST create character
+// =====================================================================================
+// v3.1.23 -- TD-918. IMPORT A CHARACTER FROM ANOTHER CAMPAIGN. Spec: claude/CHARACTER_IMPORT_SPEC.md.
+//
+// Ian: "Import a character from one campaign to another. Only campaigns you are a part of." and
+// "any version of that character that changed over time in that campaign. Or that same character
+// from another person's version." Three read steps (campaigns -> characters -> looks) and one write.
+//
+// WHAT A "LOOK" IS. The character's own card (its reference picture as the campaign holds it) is the
+// ORIGINAL. Every session_characters row with a reference picture is the character as a particular
+// VERSION drew them in a particular SESSION -- which is where an Amended appearance lands. Versions
+// are the ones versionsForCampaign lets this reader see (the canonical, their own, and any member's
+// with a Ready session), so the picker never shows a draft nobody has shared.
+//
+// THE IMPORT IS A COPY. A new characters row in THIS campaign; every picture is copied to a new file
+// (restoreCopy), so deleting or retouching either side never touches the other. Who plays it does not
+// carry over (owner, player name), and it counts against this campaign's character limit like any
+// new character. The source is re-checked on the write: a look id from the page is a claim, not proof.
+// =====================================================================================
+const CHAR_IMPORT_SLOTS = ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'];
+
+async function importSourceRole(uid, campaignId) {
+  if (!uid || !campaignId) return null;
+  return await getCampaignRole(uid, campaignId);
+}
+
+async function importCopyPicture(url) {
+  if (!url) return null;
+  try { return await restoreCopy(url); } catch (e) { console.warn('[char-import] picture copy failed:', e.message); return null; }
+}
+
+// Every campaign the reader belongs to, Story Master or member, except the one they are importing into.
+router.get('/import/campaigns', requireAuth, verifyCampaignDM, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT c.id, c.name, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id ' +
+      'WHERE cm.user_id = ? AND c.id <> ? ORDER BY LOWER(c.name) ASC'
+    ).all(req.session.userId, req.params.campaignId);
+    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0 }; }) });
+  } catch (e) {
+    console.error('[char-import] campaigns error:', e.message);
+    res.json({ error: 'Could not load your campaigns.' });
+  }
+});
+
+router.get('/import/campaigns/:sourceId/characters', requireAuth, verifyCampaignDM, async function (req, res) {
+  try {
+    if (!(await importSourceRole(req.session.userId, req.params.sourceId))) return res.status(403).json({ error: 'You are not part of that campaign.' });
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT id, name, cls, is_npc, canonical_reference_url, image_portrait, image FROM characters WHERE campaign_id = ? ORDER BY created_at ASC, id ASC'
+    ).all(req.params.sourceId);
+    res.json({ characters: (rows || []).map(function (c) {
+      return { id: c.id, name: c.name, cls: c.cls || '', is_npc: !!c.is_npc, thumb: c.canonical_reference_url || c.image_portrait || c.image || null };
+    }) });
+  } catch (e) {
+    console.error('[char-import] characters error:', e.message);
+    res.json({ error: 'Could not load that campaign\u2019s characters.' });
+  }
+});
+
+// Without ?version_id: the original look and the list of versions (no pictures yet -- the page loads
+// each version's looks as it scrolls into view). With ?version_id: that version's looks, oldest first.
+router.get('/import/campaigns/:sourceId/characters/:charId/looks', requireAuth, verifyCampaignDM, async function (req, res) {
+  try {
+    const uid = req.session.userId, src = req.params.sourceId;
+    if (!(await importSourceRole(uid, src))) return res.status(403).json({ error: 'You are not part of that campaign.' });
+    const db = await getDb();
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.charId, src);
+    if (!ch) return res.status(404).json({ error: 'That character is no longer in the campaign.' });
+    const visible = await versionsForCampaign(db, src, uid, null);
+    if (req.query.version_id) {
+      const v = visible.filter(function (x) { return String(x.version_id) === String(req.query.version_id); })[0];
+      if (!v) return res.status(403).json({ error: 'That version is not shared with you.' });
+      res.json({ version_id: v.version_id, looks: await importLooksForVersion(db, ch.id, v.version_id) });
+      return;
+    }
+    res.json({
+      character: { id: ch.id, name: ch.name, cls: ch.cls || '' },
+      original: ch.canonical_reference_url ? { key: 'original', label: 'Original', url: ch.canonical_reference_url } : null,
+      versions: visible.map(function (v) { return { version_id: v.version_id, label: v.label, is_canonical: v.is_canonical, is_mine: v.is_mine }; })
+    });
+  } catch (e) {
+    console.error('[char-import] looks error:', e.message);
+    res.json({ error: 'Could not load that character\u2019s pictures.' });
+  }
+});
+
+// A session date as YYYY-MM-DD, whether the driver hands back a Date or a string.
+function importDateLabel(d) {
+  if (!d) return null;
+  if (d instanceof Date) return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+}
+
+async function importLooksForVersion(db, charId, versionId) {
+  const rows = await db.prepare(
+    'SELECT sc.id, sc.reference_url, sc.change_flag, sc.change_note, sc.change_detail, s.name AS session_name, s.session_date ' +
+    'FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id ' +
+    'WHERE sf.version_id = ? AND sc.character_id = ? AND sc.reference_url IS NOT NULL AND sc.reference_url <> \'\' ' +
+    'ORDER BY s.session_date ASC, s.id ASC, sc.id ASC'
+  ).all(versionId, charId);
+  const out = []; let last = null;
+  (rows || []).forEach(function (r) {
+    if (r.reference_url === last) return;   // the same picture carried into the next session is one look
+    last = r.reference_url;
+    const changed = r.change_flag === true || r.change_flag === 1 || r.change_flag === 't';
+    out.push({ key: 'sc:' + r.id, url: r.reference_url, label: r.session_name || 'Session',
+      date: importDateLabel(r.session_date), changed: changed,
+      note: changed ? String(r.change_detail || r.change_note || '').slice(0, 200) : '' });
+  });
+  return out;
+}
+
+// { source_campaign_id, character_id, look: 'original' | 'sc:<id>' }
+router.post('/import', requireAuth, verifyCampaignDM, checkCharacterLimit, async function (req, res) {
+  try {
+    const uid = req.session.userId, b = req.body || {};
+    const src = parseInt(b.source_campaign_id, 10), charId = parseInt(b.character_id, 10), look = String(b.look || '');
+    if (!src || !charId || !look) return res.json({ error: 'Choose a character and a picture to import.' });
+    if (String(src) === String(req.params.campaignId)) return res.json({ error: 'That character is already in this campaign.' });
+    if (!(await importSourceRole(uid, src))) return res.status(403).json({ error: 'You are not part of that campaign.' });
+    const db = await getDb();
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(charId, src);
+    if (!ch) return res.status(404).json({ error: 'That character is no longer in the campaign.' });
+
+    let refUrl = null, prompt = ch.canonical_prompt || null, extra = '';
+    if (look === 'original') {
+      refUrl = ch.canonical_reference_url || null;
+    } else {
+      const m = /^sc:(\d+)$/.exec(look);
+      if (!m) return res.json({ error: 'Choose a picture to import.' });
+      const sc = await db.prepare(
+        'SELECT sc.*, sf.version_id, s.name AS session_name FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id ' +
+        'JOIN sessions s ON s.id = sf.session_id WHERE sc.id = ? AND sc.character_id = ? AND s.campaign_id = ?'
+      ).get(m[1], ch.id, src);
+      if (!sc || !sc.reference_url) return res.json({ error: 'That picture is no longer available.' });
+      const visible = await versionsForCampaign(db, src, uid, null);
+      if (!visible.some(function (v) { return String(v.version_id) === String(sc.version_id); })) return res.status(403).json({ error: 'That version is not shared with you.' });
+      refUrl = sc.reference_url;
+      if (sc.prompt) prompt = sc.prompt;
+      const changed = sc.change_flag === true || sc.change_flag === 1 || sc.change_flag === 't';
+      const what = changed ? String(sc.change_detail || sc.change_note || '').trim() : '';
+      if (what) extra = '\n\nAppearance as of ' + (sc.session_name || 'a later session') + ': ' + what;
+    }
+
+    // A name already used here gets a number, on the first alias only, so the rest still match.
+    const taken = await db.prepare('SELECT name FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
+    const first = function (n) { return String(n || '').split('/')[0].trim().toLowerCase(); };
+    const takenSet = {}; (taken || []).forEach(function (t) { takenSet[first(t.name)] = true; });
+    let name = String(ch.name || 'Imported character').trim(), renamed = false;
+    if (takenSet[first(name)]) {
+      const parts = name.split('/'); const base = parts[0].trim(); let n = 2;
+      while (takenSet[(base + ' ' + n).toLowerCase()]) n++;
+      parts[0] = base + ' ' + n + (parts.length > 1 ? ' ' : '');
+      name = parts.join('/'); renamed = true;
+    }
+
+    const newRef = await importCopyPicture(refUrl);
+    if (refUrl && !newRef) return res.json({ error: 'Could not copy the character\u2019s picture. Please try again.' });
+    const slots = {};
+    for (let i = 0; i < CHAR_IMPORT_SLOTS.length; i++) slots[CHAR_IMPORT_SLOTS[i]] = await importCopyPicture(ch[CHAR_IMPORT_SLOTS[i]]);
+
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, ' +
+      'is_npc, height_ft, canonical_prompt, canonical_prompt_at, canonical_reference_url, created_at, created_by) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name, '', ch.cls || '', String(ch.description || '') + extra,
+      slots.image, slots.image_portrait, slots.image_fullbody, slots.image_action, slots.image_other,
+      !!(ch.is_npc === true || ch.is_npc === 1 || ch.is_npc === 't'), ch.height_ft == null ? null : ch.height_ft,
+      prompt, prompt ? now : null, newRef, now, uid);
+    const created = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+    console.log('[char-import] user ' + uid + ' copied character ' + ch.id + ' (campaign ' + src + ', ' + look + ') into campaign ' + req.params.campaignId + ' as ' + created.id);
+    res.json({ character: created, renamed: renamed });
+  } catch (e) {
+    console.error('[char-import] import error:', e.message);
+    res.json({ error: friendlyError(e, 'Could not import the character. Please try again.') });
+  }
+});
+
 router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload(uploadFields, 'characters'), async function(req, res) {
   const { name, player_name, cls, description, is_npc } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
