@@ -26996,6 +26996,7 @@ var _tourCurEl = null;
 var _tourCurStep = null;
 var _tourPanelEl = null;
 var _tourShownAny = false;
+var _tourSuppress = false;   // v3.1.21 -- set by /api/auth/tour-progress while an admin is viewing as a customer
 
 function _tourEnsureData(cb) {
   if (_toursData) { cb(); return; }
@@ -27009,7 +27010,7 @@ function _tourEnsureProgress(cb) {
   if (_tourProgress) { cb(); return; }
   fetch('/api/auth/tour-progress')
     .then(function(r){ return r.json(); })
-    .then(function(d){ _tourProgress = (d && d.progress) ? d.progress : {}; cb(); })
+    .then(function(d){ _tourProgress = (d && d.progress) ? d.progress : {}; _tourSuppress = !!(d && d.suppress); cb(); })   // v3.1.21
     .catch(function(){ _tourProgress = {}; cb(); });
 }
 
@@ -27042,6 +27043,7 @@ function maybeStartTour(viewId) {
     var _go = function() {
       _tourEnsureProgress(function(){
         if (_tourProgress[viewId]) return;
+        if (_tourSuppress) return;   // v3.1.21 -- no tour starts by itself inside a support session
         startTour(viewId, false);
       });
     };

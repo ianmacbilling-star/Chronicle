@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.21",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3121-no-tours-support",
+        "kind": "change",
+        "public": false,
+        "summary": "Guided tours no longer start by themselves while an admin is viewing as a customer.",
+        "detail": "Admin, Support access: start a session as a customer whose tours have not been seen and move around the app: no tour pops up. The customer's own tour history is not changed (a tour opened by hand is not recorded as seen). End the session and tours behave as before for your own account.",
+        "td": [
+          "TD-912"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.20",
     "staged_on": "2026-09-26",
     "entries": [
