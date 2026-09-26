@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.24",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3124-brain-own-art-crop-import",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now knows about uploading your own panel pictures, the cover and asset framing, iPhone photos, and importing characters from another campaign.",
+        "detail": "Help, ask: how do I use my own art on a panel; can I choose which part goes on the cover; can I make an asset from part of an archived picture; can I bring a character from another campaign; why was my upload cropped. Each should get the steps and rules as shipped in 3.1.14 to 3.1.23.",
+        "td": [
+          "TD-917"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.23",
     "staged_on": "2026-09-26",
     "entries": [

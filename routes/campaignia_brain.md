@@ -167,7 +167,9 @@ any of this.
 previewing a custom art style, **reading a character sheet from a file**, and **reading any file that
 is only pictures** — a scan or a photographed page — where the cost is a token a page.
 **Free actions:** replacing a panel image from the Archive, locking an image, archiving an image,
-**importing a batch of asset images into the Asset Library**, and
+**importing a batch of asset images into the Asset Library**, **uploading your own picture onto a panel**,
+**framing a cover picture**, **copying an archived picture to Assets** (framed or not), **importing a
+character from another campaign**, and
 **importing text from a file into the Story or Lore boxes**, which happens in your browser with no AI
 involved at all. Generation is **spend-on-success** — if an image fails, you are **not** charged,
 and a file the AI reads but finds nothing in is not charged either.
@@ -713,6 +715,34 @@ token a page**, quoted before you agree. The reference image is charged separate
 when you press Build character prompt yourself. **Import only sheets you own or have the rights to
 use.**
 
+**Already made this character in another campaign? Import them.** The **Import from another
+campaign** tile, next to **Add character**, copies a character you already built into this campaign so
+you do not have to build them again. It is for the Story Master of the campaign you are bringing them
+into, and it costs no tokens.
+1. **Pick the campaign they come from** — every other campaign you belong to, whether you run it or
+   are a member.
+2. **Pick the character.**
+3. **Pick the look you want.** **Original** is the character as that campaign's character card has
+   them. Below it the pictures are grouped by **version** — the Story Master's, your own, and any
+   member's version they have shared (marked a session Ready) — each running from the first session to
+   the latest. A look where their appearance changed during the story (a scar, new armour, grey hair)
+   is marked **Appearance changed**, so you can bring them in exactly as they ended up. Pictures load
+   as you scroll.
+4. **Import this picture.**
+
+**What comes across:** the name (with its aliases), role or class, description, height, the
+Supporting Character / NPC flag, the look you picked as their reference picture, and the reference
+images uploaded on the original. If you picked a changed look, a line describing the change is added to
+the description so it is not lost later. **Who plays them is not copied** — if someone plays them in
+this campaign, set that up here the same way as for any other character.
+
+**It is a copy, not a link.** Every picture gets its own new copy, so editing, retouching or deleting
+the character in either campaign never changes the other. It counts toward **this** campaign's
+character limit. If this campaign already has a character with that name, the import gets a number
+("Mira 2") and the message says so — rename either one with **Edit**. Check the imported card with
+**Edit** afterwards; if you change the description, press **Build character prompt** to draw a fresh
+reference.
+
 **Building it:** fill in the card, then click **Build character prompt** — it saves the
 character (and any reference images you added) for you first, so there is no separate
 save step to remember. Campaignia then writes the Character Prompt from your info and
@@ -860,13 +890,32 @@ Where the story comes together as alternating image panels and narrative.
 - **Each image panel** has: **Edit prompt** (then Regenerate), **Regenerate**,
   **Retouch** (change one small detail — this is the GUIDED panel, see 10.7), **Revert** (appears after a Retouch/Regenerate;
   undoes that last change — one step deep, hidden once locked), **Replace** (from the
-  Archive), **Lock** (protects it from a global Generate Images), and **Archive** (saves
+  Archive, or **Upload your own** picture — see below), **Lock** (protects it from a global Generate Images), and **Archive** (saves
   a copy).
 - **The panel's ⋯ (moment options)** — the same casting controls as Review (add/remove
   characters/assets, then Regenerate), plus a **Prominence** dropdown that controls size
   at publish/print: set it **high** to make that image as large as possible in the book.
 - **Narrative panels** sit **below and between** the images. Edit the narrative prompt
   and Regenerate, or click into the text and type changes directly.
+
+**Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
+you already have — your own drawing, a photo, a painting — onto that panel instead of one Campaignia
+drew. It is how an artist can let Campaignia write the story and supply the art themselves.
+- **Drop a file on the box, or click to choose one** — JPG, PNG, WebP, or an iPhone photo (HEIC), up
+  to 20 MB.
+- **Every panel is one of seven shapes** — Panoramic, Wide, Standard, Square, Full page, Tall and
+  Tower. Campaignia picks the one your picture fits best and shows you what will be kept; you can pick
+  another shape.
+- **Choose the part you want.** Drag the frame to move it; drag a corner to zoom in on part of the
+  picture (the frame keeps its shape). The size of the finished picture shows underneath.
+- **If the result is small for print** (under about 1,000 pixels on its long side), an orange note
+  says so. You can still use it — check it in True View before you order.
+- **Use this image** crops it and puts it on the panel. **The panel takes that shape and is locked**,
+  so Generate Images leaves your picture alone. To retouch it: unlock it, Retouch, then lock it again.
+  **Revert** puts back the picture that was there before, and its shape.
+- **It costs nothing**, on any plan. It is not saved to the Archive by itself — use **Archive** on
+  the panel if you want a copy there. Only upload pictures you own or have the right to use.
+- An uploaded picture keeps its own look; Campaignia's art style is not applied to it.
 - **Top of the Storyboard:** change **Narrative style** or **Art style**, then
   **Generate Narrative** (rewrites prose across all panels) or **Generate Images**
   (re-renders every image that isn't locked).
@@ -1138,7 +1187,8 @@ specific tavern, or a minor recurring supporting character like the tavern barke
 
 **Adding an asset:** open the Asset Library, click **Add asset**, give it a name (or
 several, slash-separated) and a category, then either **write a description and generate**
-a reference image, or **upload** your own. The description stays editable, and once an
+a reference image, or **upload** your own (an iPhone photo works too — it is converted for you).
+The description stays editable, and once an
 image exists you can **Regenerate** it (a fresh take from the description), **Retouch** it
 (change one thing — the plain box, not the Storyboard's guided panel; see 10.7 for how to
 word it), **Revert** the last change, or **Replace** it with an image from your
@@ -1166,7 +1216,7 @@ a picture: the images are the ones you brought.
 - **Files that could not be used are listed with the reason** — the wrong file type, an image over
   5 MB, or more than fifty files in one go. Nothing disappears quietly.
 
-Up to **50 files** at a time, **JPG, PNG or WebP**. They arrive as ordinary assets, so you can open
+Up to **50 files** at a time, **JPG, PNG, WebP or HEIC** (iPhone photos). They arrive as ordinary assets, so you can open
 any of them afterwards to add a description or change anything. Whoever is allowed to add assets in
 that campaign can use it.
 
@@ -1203,6 +1253,11 @@ storyboard or from character creation. See each image full-size with details, an
 - **Reuse and share** — archived images are what you pull back into a story (via Replace
   from Archive), and they're shared across members: a great image you made can be pulled
   into another member's version.
+- **Copy to Assets** — the **+ Assets** button on an archived picture (Story Master) turns it into an
+  asset in the Asset Library. It opens with a frame around the whole picture: leave it to copy all of
+  it, or drag a corner to frame just one part — a single item on a table, one building in a street —
+  in any shape. Only the framed part becomes the asset; the archived picture is not changed, and it
+  costs nothing.
 
 **Asset & Archive limits:** both the Asset Library and the Archive have a per-campaign
 limit that scales with tier (higher tiers allow more); the live number comes from the
@@ -1261,10 +1316,15 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
   styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
   **Layout** on this same tab. They are on every plan and cost nothing.
-- **Cover, back cover and title-page images** — pick each from your Archive. The **x** on
-  a tile removes that picture, and the tiles show you **the crop the printed page will
-  use**, not the whole image. Clear the cover entirely and you get a **plain framed
-  cover** — dark ground, gold frame, your title on it.
+- **Cover, back cover and title-page images** — pick each from your Archive. The tiles show you
+  **the crop the printed page will use**, not the whole image. **For the front and back cover you
+  choose that crop yourself:** if the picture is not already the cover's shape, it opens in a
+  cover-shaped frame placed where the cover would have cut it — drag the frame to move it, drag a
+  corner to zoom in, then **Use this framing**. A picture that is already cover-shaped goes straight
+  on. If the framed part is under about 750 pixels tall, an orange note says it may look soft in print
+  (you can still use it). The title-page picture is not framed this way. The **x** on a tile removes
+  that picture, and so does picking the picture already on the cover. Clear the cover entirely and you
+  get a **plain framed cover** — dark ground, gold frame, your title on it.
 - **Layout** — the layout itself, borders, captions, fonts and decorations.
 - The right-hand pane previews the book as you change things.
 
@@ -1532,6 +1592,14 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   **My Orders** and **Published Stories** tabs.
 - **"My order says paid but nothing has happened."** My Stuff → My Orders → **Check with the
   printer** on that order. Do that before ordering again, so you do not get two books.
+- **"I'm an artist — I want Campaignia to write the story and I'll do the pictures."** Run **Generate
+  Story** as usual, then on the Storyboard choose **Generate Narrative** only, so no pictures are
+  drawn. On each panel, open **Replace → Upload your own**, choose your picture and frame it. Each
+  panel takes the shape of your picture and is locked, and none of it costs tokens.
+- **"I want to use the same character in a new campaign (a sequel, a spin-off, a new family story)."**
+  In the new campaign, open **Characters → Import from another campaign**, pick the old campaign, the
+  character, and the look you want — for a sequel, usually the latest look from the Story Master's
+  version — then **Import this picture**. The character arrives as their own copy, ready to use.
 
 ---
 
@@ -1626,6 +1694,23 @@ Friction points and what's actually going on.
 - **"I can't bring a book back from my Bookshelf."** Either the version it came from has been
   deleted, or it came from someone else's version and they have since changed that version's
   layout type. It stays on your shelf to view and download.
+- **"My uploaded picture was cropped."** Every panel is one of seven shapes, so the picture is cut to
+  the one it fits best. Pick another shape, or drag the frame and corners to choose the part that is
+  kept. The original on your computer is untouched if you want to try again.
+- **"It says my picture is small for print."** A warning, not a refusal: the finished picture is
+  under about 1,000 pixels on its long side (750 tall for a cover), so it may look soft in the
+  printed book. Use a larger file, or zoom in less; otherwise check it in True View before ordering.
+- **"I can't Retouch the picture I uploaded."** An uploaded picture is locked so Generate Images
+  cannot replace it. Unlock it, Retouch, then lock it again.
+- **"Why didn't the frame open when I picked a cover?"** That picture is already the cover's shape,
+  so it went straight on. The frame opens only for pictures that do not fit the cover as they are.
+- **"I don't see my other campaign in the character import list."** It lists only campaigns you
+  belong to (as Story Master or member), and never the one you are importing into. Ask the campaign's
+  Story Master to invite you.
+- **"I can't see a member's version of the character."** A member's version appears only once they
+  have marked a session in it **Ready**; drafts they have not shared stay private.
+- **"Importing a character says I've reached my character limit."** An imported character counts
+  like any new one. Remove a character you do not need, or upgrade for more.
 
 ---
 
@@ -1696,6 +1781,17 @@ Friction points and what's actually going on.
 - **Can other people see my Bookshelf?** No. Only you see it.
 - **Why does my non-fantasy story look like fantasy?** The style every account starts with
   is a fantasy style. Change it to **Everyday life illustration**. See 8d.
+- **Can I use my own art on a panel?** Yes — **Replace → Upload your own**. It is free on any plan,
+  and the panel takes your picture's shape and is locked.
+- **Can I upload iPhone photos?** Yes. HEIC photos are converted automatically, for panels,
+  characters and assets.
+- **Can I choose which part of a picture goes on my cover?** Yes, for the front and back cover: pick
+  the picture and drag the cover-shaped frame.
+- **Can I make an asset from just part of an archived picture?** Yes — **+ Assets** on the archived
+  picture, then drag a corner of the frame around the part you want.
+- **Can I bring a character from one campaign into another?** Yes — **Import from another campaign**
+  on the Characters page (Story Master). Choose the original look or any later look from any version
+  you can see. It is a separate copy, pictures included, and costs no tokens.
 
 ---
 
