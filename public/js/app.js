@@ -32402,9 +32402,11 @@ function _rpShapeStrip(activeKey) {
     var bw = s.w >= s.h ? 44 : Math.round(44 * s.w / s.h), bh = s.w >= s.h ? Math.round(44 * s.h / s.w) : 44;
     var on = s.key === activeKey, clickable = !!(state.rpUp && state.rpUp.img);
     return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="_rpPickShape(\'' + s.key + '\')"' : '') +
-      ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;height:74px;padding:4px;background:' +
+      ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;min-height:82px;padding:4px;background:' +
       (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
-      '<span style="display:block;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(201,168,76,0.6)') + ';border-radius:2px;"></span>' +
+      // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
+      // Square drew wider than tall (Ian's screenshot). The outline is now exactly the shape's ratio.
+      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(201,168,76,0.6)') + ';border-radius:2px;"></span>' +
       '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
   }).join('');
 }
@@ -32439,11 +32441,49 @@ function _rpBuildPane() {
   };
 }
 
+// v3.1.16 -- the small-picture warning uses the app's warning ORANGE (the --warn-orange token that the
+// version chip and the tester badge read), boxed like the other warnings. Ian: "Red might be too much."
 function _rpMsg(text, kind) {
   var m = document.getElementById('rp-msg'); if (!m) return;
   m.textContent = text || '';
-  m.style.color = kind === 'error' ? '#f0a090' : kind === 'warn' ? '#e8c170' : 'rgba(240,232,208,0.85)';
+  m.className = kind === 'warn' ? 'rp-msg-warn' : '';
+  if (kind === 'warn') {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
+  } else {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+  }
 }
+
+// =====================================================================================
+// v3.1.16 -- TD-910. ZOOM: CORNER HANDLES ON THE CROP FRAME. Ian: "Is there a way to allow you to
+// drag the shape over the part of the image you want?... Yes go ahead and add the corner handles."
+//
+// The crop is now a FRAME of the chosen shape that can be made smaller from any corner and moved
+// anywhere, not only slid along one axis. It travels to the server as three FRACTIONS of the picture
+// -- left, top and width -- and BOTH sides turn them into pixels with the same function
+// (_rpRectFromFrac here, ownRectFromFrac in routes/moments.js), so what the frame shows is exactly
+// what is stored. The guard proves the two agree. The page always passes its own proposal through
+// that function before drawing, so it can never show a frame the server would not produce.
+// =====================================================================================
+var RP_MIN_SIDE = 128;   // smallest crop, long side, in picture pixels (matches OWN_MIN_SIDE)
+
+function _rpRectFromFrac(W, H, key, x, y, w) {
+  var s = _rpShapeByKey(key), r = s.w / s.h;
+  var maxW = Math.min(W, Math.floor(H * r));
+  var minW = Math.min(maxW, Math.max(1, r >= 1 ? RP_MIN_SIDE : Math.round(RP_MIN_SIDE * r)));
+  var width = Math.max(minW, Math.min(maxW, Math.round(w * W)));
+  var height = Math.max(1, Math.min(H, Math.round(width / r)));
+  var left = Math.max(0, Math.min(W - width, Math.round(x * W)));
+  var top = Math.max(0, Math.min(H - height, Math.round(y * H)));
+  return { left: left, top: top, width: width, height: height };
+}
+function _rpFracFromRect(W, H, rect) { return { x: rect.left / W, y: rect.top / H, w: rect.width / W }; }
+// The largest frame of the shape, centred -- where every picture and every shape change starts.
+function _rpDefaultFrac(u) {
+  var c = _rpCropRect(u.W, u.H, u.shape, 0.5);
+  return _rpFracFromRect(u.W, u.H, c);
+}
+function _rpRectOf(u) { return _rpRectFromFrac(u.W, u.H, u.shape, u.frac.x, u.frac.y, u.frac.w); }
 
 function _rpTakeFile(file) {
   if (!isSupportedUploadImage(file)) { _rpMsg(UPLOAD_TYPE_MSG, 'error'); return; }
@@ -32458,16 +32498,37 @@ function _rpTakeFile(file) {
   var url = URL.createObjectURL(file);
   var img = new Image();
   img.onload = function () {
-    state.rpUp = { file: file, url: url, img: img, W: img.naturalWidth, H: img.naturalHeight, shape: _rpNearestShape(img.naturalWidth, img.naturalHeight), offset: 0.5 };
+    var u = { file: file, url: url, img: img, W: img.naturalWidth, H: img.naturalHeight, shape: _rpNearestShape(img.naturalWidth, img.naturalHeight) };
+    u.frac = _rpDefaultFrac(u);
+    state.rpUp = u;
     _rpRender();
   };
   img.onerror = function () { _rpMsg('We could not read that image. Please try a JPG, PNG, WebP or HEIC.', 'error'); };
   img.src = url;
 }
 
-function _rpPickShape(key) { if (!state.rpUp) return; state.rpUp.shape = key; state.rpUp.offset = 0.5; _rpRender(); }
+function _rpPickShape(key) { var u = state.rpUp; if (!u) return; u.shape = key; u.frac = _rpDefaultFrac(u); _rpRender(); }
 
 function _rpChooseAgain() { var i = document.getElementById('rp-file'); if (i) i.click(); }
+
+// Size line and the orange warning, from the frame as it stands.
+function _rpShowSize(u) {
+  var rect = _rpRectOf(u), fin = _rpFinalSize(rect), sh = _rpShapeByKey(u.shape);
+  var line = sh.label + ' ' + sh.w + ':' + sh.h + ' \u00b7 ' + fin.w + ' \u00d7 ' + fin.h + ' pixels once cropped.';
+  if (Math.max(fin.w, fin.h) < RP_SMALL_SIDE) {
+    _rpMsg(line + ' This picture is small for print: Campaignia\u2019s own panel pictures are about ' + RP_SMALL_SIDE.toLocaleString() +
+      ' pixels or more on the long side, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
+  } else {
+    _rpMsg(line);
+  }
+}
+
+function _rpPlaceFrame(u) {
+  var f = document.getElementById('rp-frame'); if (!f || !u.scale) return;
+  var r = _rpRectOf(u), s = u.scale;
+  f.style.left = Math.round(r.left * s) + 'px'; f.style.top = Math.round(r.top * s) + 'px';
+  f.style.width = Math.round(r.width * s) + 'px'; f.style.height = Math.round(r.height * s) + 'px';
+}
 
 function _rpRender() {
   var u = state.rpUp; if (!u) return;
@@ -32478,35 +32539,69 @@ function _rpRender() {
   stage.style.display = 'block'; if (acts) acts.style.display = 'flex';
   var maxW = Math.min(stage.clientWidth || 520, 640), maxH = 360;
   var s = Math.min(maxW / u.W, maxH / u.H, 1);
+  u.scale = s;
   var dw = Math.round(u.W * s), dh = Math.round(u.H * s);
-  var rect = _rpCropRect(u.W, u.H, u.shape, u.offset);
-  stage.innerHTML =
-    '<div id="rp-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;margin:0 auto;overflow:hidden;border-radius:6px;background:#000;touch-action:none;">' +
-      '<img src="' + u.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;">' +
-      '<div id="rp-frame" style="position:absolute;left:' + Math.round(rect.left * s) + 'px;top:' + Math.round(rect.top * s) + 'px;width:' + Math.round(rect.width * s) + 'px;height:' + Math.round(rect.height * s) +
-        'px;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:' + (rect.axis === 'x' ? 'ew-resize' : 'ns-resize') + ';"></div>' +
-    '</div>' +
-    '<div style="text-align:center;font-size:12px;color:rgba(240,232,208,0.6);margin-top:6px;">Drag the frame to choose what is kept.</div>';
-  var frame = document.getElementById('rp-frame');
-  var dragging = false, startPos = 0, startOff = 0;
-  var slack = rect.axis === 'x' ? (u.W - rect.width) * s : (u.H - rect.height) * s;
-  frame.onpointerdown = function (ev) { if (slack <= 0) return; dragging = true; startPos = rect.axis === 'x' ? ev.clientX : ev.clientY; startOff = u.offset; try { frame.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); };
-  frame.onpointermove = function (ev) {
-    if (!dragging) return;
-    var d = (rect.axis === 'x' ? ev.clientX : ev.clientY) - startPos;
-    u.offset = Math.min(1, Math.max(0, startOff + d / slack));
-    var r2 = _rpCropRect(u.W, u.H, u.shape, u.offset);
-    frame.style.left = Math.round(r2.left * s) + 'px'; frame.style.top = Math.round(r2.top * s) + 'px';
+  var H = function (pos, cur, css) {
+    return '<div class="rp-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:#e8d49a;border:2px solid #241810;border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
   };
-  frame.onpointerup = frame.onpointercancel = function () { dragging = false; };
-  var fin = _rpFinalSize(rect), sh = _rpShapeByKey(u.shape);
-  var line = sh.label + ' ' + sh.w + ':' + sh.h + ' \u00b7 ' + fin.w + ' \u00d7 ' + fin.h + ' pixels once cropped.';
-  if (Math.max(fin.w, fin.h) < RP_SMALL_SIDE) {
-    _rpMsg(line + ' This picture is small for print: Campaignia\u2019s own panel pictures are about ' + RP_SMALL_SIDE.toLocaleString() +
-      ' pixels or more on the long side, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
-  } else {
-    _rpMsg(line);
+  stage.innerHTML =
+    // A 10px margin around the picture, inside the clip, so the corner handles are whole even when
+    // the frame fills the picture; the darkening fills that margin too and stops at its edge.
+    '<div id="rp-wrap" style="position:relative;width:' + (dw + 20) + 'px;margin:0 auto;padding:10px;box-sizing:border-box;overflow:hidden;border-radius:6px;background:#000;">' +
+    '<div id="rp-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;touch-action:none;">' +
+      '<img src="' + u.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;pointer-events:none;">' +
+      '<div id="rp-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:move;touch-action:none;">' +
+        H('nw', 'nwse-resize', 'left:0;top:0;') + H('ne', 'nesw-resize', 'left:100%;top:0;') +
+        H('sw', 'nesw-resize', 'left:0;top:100%;') + H('se', 'nwse-resize', 'left:100%;top:100%;') +
+      '</div>' +
+    '</div></div>' +
+    '<div style="text-align:center;font-size:12px;color:rgba(240,232,208,0.6);margin-top:6px;">Drag the frame to move it. Drag a corner to zoom in or out.</div>';
+  _rpPlaceFrame(u);
+  _rpShowSize(u);
+  var frame = document.getElementById('rp-frame');
+  var drag = null;
+  function start(ev, mode) {
+    var r = _rpRectOf(u);
+    drag = { mode: mode, x0: ev.clientX, y0: ev.clientY, r0: r };
+    try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+    ev.preventDefault(); ev.stopPropagation();
   }
+  function move(ev) {
+    if (!drag) return;
+    var dx = (ev.clientX - drag.x0) / s, dy = (ev.clientY - drag.y0) / s, r0 = drag.r0;
+    var sh = _rpShapeByKey(u.shape), ratio = sh.w / sh.h, prop;
+    if (drag.mode === 'move') {
+      prop = { left: r0.left + dx, top: r0.top + dy, width: r0.width, height: r0.height };
+    } else {
+      // Keep the opposite corner still; the width follows whichever way the pointer moved further.
+      var sx = (drag.mode === 'ne' || drag.mode === 'se') ? 1 : -1, sy = (drag.mode === 'sw' || drag.mode === 'se') ? 1 : -1;
+      var wx = r0.width + sx * dx, wy = (r0.height + sy * dy) * ratio;
+      var w = Math.abs(wx - r0.width) >= Math.abs(wy - r0.width) ? wx : wy;
+      var ax = sx > 0 ? r0.left : r0.left + r0.width, ay = sy > 0 ? r0.top : r0.top + r0.height;
+      // Never past the picture's edge on the side that is growing.
+      var room = Math.min(sx > 0 ? u.W - ax : ax, (sy > 0 ? u.H - ay : ay) * ratio);
+      w = Math.min(w, room);
+      var h = w / ratio;
+      prop = { left: sx > 0 ? ax : ax - w, top: sy > 0 ? ay : ay - h, width: w, height: h };
+    }
+    var f = _rpFracFromRect(u.W, u.H, prop);
+    if (drag.mode !== 'move') {
+      // A corner clamped at the minimum size must not wander: pin it back to the fixed corner.
+      var t = _rpRectFromFrac(u.W, u.H, u.shape, f.x, f.y, f.w);
+      if (drag.mode === 'nw' || drag.mode === 'sw') f.x = (r0.left + r0.width - t.width) / u.W;
+      if (drag.mode === 'nw' || drag.mode === 'ne') f.y = (r0.top + r0.height - t.height) / u.H;
+    }
+    u.frac = f;
+    _rpPlaceFrame(u);
+    _rpShowSize(u);
+  }
+  function end() { if (drag) { u.frac = _rpFracFromRect(u.W, u.H, _rpRectOf(u)); drag = null; } }
+  frame.onpointerdown = function (ev) { if (ev.target === frame) start(ev, 'move'); };
+  Array.prototype.forEach.call(frame.querySelectorAll('.rp-handle'), function (hd) {
+    hd.onpointerdown = function (ev) { start(ev, hd.getAttribute('data-h')); };
+    hd.onpointermove = move; hd.onpointerup = hd.onpointercancel = end;
+  });
+  frame.onpointermove = move; frame.onpointerup = frame.onpointercancel = end;
 }
 
 function _rpUse() {
@@ -32517,7 +32612,10 @@ function _rpUse() {
   var fd = new FormData();
   fd.append('image', u.file);
   fd.append('shape', u.shape);
-  fd.append('offset', String(u.offset));
+  // v3.1.16 -- the frame as fractions of the picture; the server turns them into the same pixels.
+  fd.append('crop_x', String(u.frac.x));
+  fd.append('crop_y', String(u.frac.y));
+  fd.append('crop_w', String(u.frac.w));
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + ctx.momentId + '/upload-image', { method: 'POST', body: fd })
     .then(function (r) { return r.json(); })
     .then(function (d) {

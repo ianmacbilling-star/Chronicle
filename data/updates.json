@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.16",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3116-own-image-zoom",
+        "kind": "change",
+        "public": true,
+        "summary": "When you upload your own picture onto a panel, the crop frame now has corner handles: zoom in on just the part you want and move it anywhere.",
+        "detail": "Replace on a panel, Upload your own: after choosing a picture, drag the frame to move it in any direction and drag a corner to make it smaller or larger (the shape stays the same, the opposite corner stays put). The size line and warning update as you drag; the small-picture warning is now the orange warning box used elsewhere. Use this image stores exactly the framed area. Try zooming in far on a large photo (warning appears), then back out (it goes away). Picking another shape starts again from the largest frame.",
+        "td": [
+          "TD-910"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.15",
     "staged_on": "2026-09-25",
     "entries": [

@@ -137,6 +137,7 @@ const ownUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 const OWN_SHAPES = { panoramic: 21 / 9, wide: 16 / 9, standard: 4 / 3, square: 1, fullpage: 3 / 4, tall: 2 / 3, tower: 1 / 4 };
 const OWN_MAX_SIDE = 2048;    // bigger is kept at this size: print does not need more, and PDFs grow with pixels (TD-002)
 const OWN_SMALL_SIDE = 1024;  // our own panel pictures are about this on the long side; below it, warn
+const OWN_MIN_SIDE = 128;     // v3.1.16 -- smallest crop the zoom allows, long side (matches RP_MIN_SIDE in app.js)
 
 function nearestOwnShape(w, h) {
   var a = Math.log(w / h), best = 'standard', bestD = Infinity;
@@ -147,6 +148,20 @@ function nearestOwnShape(w, h) {
   return best;
 }
 // The largest rectangle of the shape's ratio inside W x H, slid along the free axis by offset.
+// v3.1.16 -- TD-910. ZOOM. The page's crop frame arrives as FRACTIONS of the picture (left, top,
+// width) and is turned into pixels HERE by the same arithmetic the page uses to draw it
+// (_rpRectFromFrac in app.js; the guard proves they agree). The shape's ratio is enforced, the frame
+// is kept inside the picture and no smaller than OWN_MIN_SIDE, whatever the page sent.
+function ownRectFromFrac(W, H, shape, x, y, w) {
+  var r = OWN_SHAPES[shape];
+  var maxW = Math.min(W, Math.floor(H * r));
+  var minW = Math.min(maxW, Math.max(1, r >= 1 ? OWN_MIN_SIDE : Math.round(OWN_MIN_SIDE * r)));
+  var width = Math.max(minW, Math.min(maxW, Math.round(w * W)));
+  var height = Math.max(1, Math.min(H, Math.round(width / r)));
+  var left = Math.max(0, Math.min(W - width, Math.round(x * W)));
+  var top = Math.max(0, Math.min(H - height, Math.round(y * H)));
+  return { left: left, top: top, width: width, height: height };
+}
 function ownCropRect(W, H, shape, offset) {
   var r = OWN_SHAPES[shape], o = Math.min(1, Math.max(0, offset));
   if (W / H > r) {
@@ -178,8 +193,13 @@ router.post('/:momentId/upload-image', requireAuth, verifyCampaignMember, guardU
 
     const wanted = String((req.body && req.body.shape) || '');
     const shape = OWN_SHAPES[wanted] ? wanted : nearestOwnShape(W, H);
+    // v3.1.16 -- a zoomed frame (crop_x/crop_y/crop_w) when the page sends one; otherwise the largest
+    // frame of the shape, slid by offset, exactly as in v3.1.15.
+    const cx = parseFloat(req.body && req.body.crop_x), cy = parseFloat(req.body && req.body.crop_y), cw = parseFloat(req.body && req.body.crop_w);
     const off = parseFloat(req.body && req.body.offset);
-    const rect = ownCropRect(W, H, shape, isFinite(off) ? off : 0.5);
+    const rect = (isFinite(cx) && isFinite(cy) && isFinite(cw) && cw > 0)
+      ? ownRectFromFrac(W, H, shape, cx, cy, cw)
+      : ownCropRect(W, H, shape, isFinite(off) ? off : 0.5);
 
     let pipe = sharp(req.file.buffer, { failOn: 'none' }).rotate().extract(rect);
     if (Math.max(rect.width, rect.height) > OWN_MAX_SIDE) {
