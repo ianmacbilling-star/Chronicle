@@ -1,5 +1,37 @@
 [
   {
+    "version": "3.1.24",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3124-brain-own-art-crop-import",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now knows about uploading your own panel pictures, the cover and asset framing, iPhone photos, and importing characters from another campaign.",
+        "detail": "Help, ask: how do I use my own art on a panel; can I choose which part goes on the cover; can I make an asset from part of an archived picture; can I bring a character from another campaign; why was my upload cropped. Each should get the steps and rules as shipped in 3.1.14 to 3.1.23.",
+        "td": [
+          "TD-917"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.23",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3123-character-import",
+        "kind": "feature",
+        "public": true,
+        "summary": "Import a character from another campaign you belong to, choosing any look they have had there.",
+        "detail": "Characters page, the new Import from another campaign tile (Story Master): choose one of your other campaigns (ones you run or belong to), then a character, then a picture. The pictures are the character's original card, then every look from each version of that campaign you can see, oldest first; groups load as you scroll. Import copies the character into this campaign with that look: its own copy of every picture, so changing either campaign never affects the other. Who plays the character does not carry over, and it counts toward this campaign's character limit. If the name is already used here, a number is added.",
+        "td": [
+          "TD-918"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.22",
     "staged_on": "2026-09-26",
     "entries": [
