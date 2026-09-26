@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.22",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3122-missing-references",
+        "kind": "change",
+        "public": true,
+        "summary": "Generate Story now tells you which characters have no reference picture yet, so they can be built before the story is drawn.",
+        "detail": "Story tab, Generate Story, in a campaign whose characters include one with no reference picture: a message names them and explains that the reference is what keeps a character looking the same. Build References goes to the Characters page (Story Master, or the character's owner); Generate Now carries on. It asks every time while any are missing. A campaign with no characters at all still gets the original question once.",
+        "td": [
+          "TD-913"
+        ]
+      },
+      {
+        "id": "3122-recent-support-emails",
+        "kind": "change",
+        "public": false,
+        "summary": "Support access shows the last five customer emails you viewed as; one click puts one back in the box.",
+        "detail": "Admin, Support access: under the email box, Recent: lists up to five different customer emails from the support log, newest first. Clicking one fills the email box (it does not start the session). Nothing new is stored; it reads the same log as Recent support sessions.",
+        "td": [
+          "TD-914"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.21",
     "staged_on": "2026-09-26",
     "entries": [

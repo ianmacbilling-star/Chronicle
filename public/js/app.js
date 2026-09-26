@@ -1599,6 +1599,7 @@ function impersonateSyncAdminPanel() {
   var isAdmin = !!(typeof state !== 'undefined' && state.user && state.user.is_admin);
   var inSession = !!(_impState && _impState.active);
   sec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  if (isAdmin && !inSession) { try { _impRecentLoad(); } catch (e) {} }   // v3.1.22 -- TD-914
 }
 
 function devAddTokens() {
@@ -7420,11 +7421,13 @@ async function warnIfNoCharacters() {
     var _uid = (state.user && state.user.id) || 'anon';
     var _sid = (state.currentSession && state.currentSession.id) || 'nosess';
     var _flagKey = 'chr_nochar_warn_' + _uid + '_' + _sid;
-    if (sessionStorage.getItem(_flagKey)) return true;
     var resp = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters');
     var data = await resp.json();
     var arr = Array.isArray(data) ? data : [];
-    if (arr.length > 0) return true;
+    // v3.1.22 -- TD-913: characters exist, so ask about their reference pictures instead (every time).
+    if (arr.length > 0) return await _warnIfMissingReferences(arr);
+    // The no-characters question is still asked once per browser session for this session.
+    if (sessionStorage.getItem(_flagKey)) return true;
     sessionStorage.setItem(_flagKey, '1');
     // v3.0.889 -- A THIRD BUTTON THAT ACTUALLY GOES SOMEWHERE.
     //
@@ -32963,4 +32966,101 @@ function _cvFit(W, H) {
   var md = document.querySelector('#replace-picker-modal .modal'); if (!md) return;
   var over = md.scrollHeight - md.clientHeight;
   if (over > 1 && c.maxH > 160) _cvMount(W, H, Math.max(160, c.maxH - over - 4), c.view.frac());
+}
+
+// =====================================================================================
+// v3.1.22 -- TD-913. GENERATE STORY ASKS ABOUT MISSING REFERENCE PICTURES, NOT JUST MISSING CHARACTERS.
+//
+// Ian: "I'm seeing where people have made the character but not the actual reference image." A
+// character with no reference picture is drawn from its description alone, so it drifts from panel
+// to panel -- the very thing characters exist to prevent. warnIfNoCharacters now hands the list here
+// whenever the campaign HAS characters. Asked EVERY time Generate Story is pressed while any are
+// missing (Ian chose this over once-per-session: it is the thing he keeps seeing). The third button
+// is offered to whoever can build them: the Story Master, or the owner of one of the characters.
+// Fails open: any error lets the story generate.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+async function _warnIfMissingReferences(arr) {
+  try {
+    var missing = (arr || []).filter(function (c) { return c && !c.canonical_reference_url; });
+    if (!missing.length) return true;
+    var names = missing.map(function (c) { return String(c.name || 'Unnamed character').split('/')[0].trim(); });
+    var list = names.length <= 6 ? names.join(', ') : names.slice(0, 6).join(', ') + ' and ' + (names.length - 6) + ' more';
+    var uid = state.user && state.user.id;
+    var isDM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+    var canBuild = isDM || missing.some(function (c) { return uid != null && String(c.owner_user_id) === String(uid); });
+    var msg = (missing.length === 1
+        ? list + ' does not have a reference picture yet'
+        : 'These characters do not have reference pictures yet: ' + list) +
+      ' (or it is still being drawn).\n\n' +
+      'The reference picture is what keeps a character looking the same from panel to panel. Without one, ' +
+      'Campaignia can only go by the description, so they may look different in every picture.\n\n' +
+      (canBuild
+        ? 'Build the reference pictures first, or generate the story now?'
+        : 'The Story Master can build them. You can generate the story now and they will be used in later pictures.\n\nGenerate the story now?');
+    var ans = await uiConfirm(msg, {
+      title: missing.length === 1 ? 'Reference picture missing' : 'Reference pictures missing',
+      preserveLines: true,
+      okText: canBuild ? 'Generate Now' : 'OK',
+      middleText: canBuild ? 'Build References' : null
+    });
+    if (ans === 'middle' && canBuild) {
+      try { if (typeof showCampaignSection === 'function') showCampaignSection('characters'); } catch (e) {}
+      return false;
+    }
+    return ans === true;
+  } catch (e) {
+    return true;
+  }
+}
+
+// =====================================================================================
+// v3.1.22 -- TD-914. THE LAST FIVE CUSTOMERS, ONE CLICK AWAY. Ian: "remember the last 5 email addresses
+// that were used on the support tab... I have to keep going back and finding them." They were already
+// logged -- every support session is a row in admin_impersonations -- so this reads that log (the same
+// admin-only route as Recent support sessions), keeps the newest five different emails, and shows them
+// as buttons under the email box. A click FILLS the box only; Sign in as this user is still a
+// deliberate second click (Ian's choice). Nothing new is stored.
+// =====================================================================================
+function _impRecentEmails(rows, max) {
+  var seen = {}, out = [];
+  (rows || []).forEach(function (r) {
+    var e = String((r && r.target_email) || '').trim();
+    var k = e.toLowerCase();
+    if (!e || seen[k] || out.length >= (max || 5)) return;
+    seen[k] = true; out.push(e);
+  });
+  return out;
+}
+
+function _impRecentLoad() {
+  var em = document.getElementById('imp-email'); if (!em || !em.parentNode) return;
+  var host = document.getElementById('imp-recent');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'imp-recent';
+    host.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:12px;';
+    em.parentNode.parentNode.insertBefore(host, em.parentNode.nextSibling);
+  }
+  fetch('/api/admin/impersonate/log', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var list = _impRecentEmails(d && d.sessions, 5);
+      if (!list.length) { host.style.display = 'none'; host.innerHTML = ''; return; }
+      host.innerHTML = '<span style="color:var(--text-muted);margin-right:2px;">Recent:</span>' + list.map(function (e) {
+        return '<button type="button" class="btn btn-sm imp-recent-pick" data-email="' + escapeHtml(e) + '" style="padding:3px 10px;font-size:12px;">' + escapeHtml(e) + '</button>';
+      }).join('');
+      Array.prototype.forEach.call(host.querySelectorAll('.imp-recent-pick'), function (b) {
+        b.onclick = function () { _impPick(b.getAttribute('data-email')); };
+      });
+      host.style.display = 'flex';
+    })
+    .catch(function () {});
+}
+
+function _impPick(email) {
+  var em = document.getElementById('imp-email'); if (!em) return;
+  em.value = email || '';
+  var rs = document.getElementById('imp-reason');
+  try { (rs || em).focus(); } catch (e) {}
 }
