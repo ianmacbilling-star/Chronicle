@@ -209,7 +209,7 @@
   </div>
 
   <div class="lib-search" id="stories-search" style="display:none;">
-    <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" />
+    <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -674,6 +674,9 @@
     var sq = document.getElementById('stories-q'); var sqTimer = null;
     if (sq) {
       sq.addEventListener('input', function () {
+        // v3.1.20 -- TD-692: only what the reader typed; a phone's autofill on load is put back.
+        if (document.activeElement !== sq) { sq.value = sq.getAttribute('data-last') || ''; return; }
+        sq.setAttribute('data-last', sq.value);
         clearTimeout(sqTimer);
         sqTimer = setTimeout(function () { sstate.q = sq.value.trim(); resetStories(); }, 300);
       });

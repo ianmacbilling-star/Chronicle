@@ -76,18 +76,31 @@ function panelTextOf(m) {
 //   assets     campaign_assets rows ({ name })
 //   characters characters rows ({ name })
 //   m          { assetNameMatches, characterNameMatches } from routes/images.js
+//   opts       { instructions } -- v3.1.11: the Story Instructions the call was given. Ian asked
+//              whether they count; they did not, so a thing he asked for there but nobody said
+//              aloud at the table ranked last. Mentions now = transcript + instructions. Still
+//              RANK only: the two-panel rule is unchanged.
 //
-// Returns the object stored in session_forks.asset_suggestions.
+// Returns the object stored in session_forks.asset_suggestions, plus `considered` (v3.1.11): one
+// row per candidate the model offered, with what happened to it and why. extract.js logs it and
+// removes it before storing -- it answers "why didn't the mirror show up?" without a guess.
 // ---------------------------------------------------------------------------------------------
-function filterSuggestions(raw, panels, transcript, assets, characters, m) {
+function filterSuggestions(raw, panels, transcript, assets, characters, m, opts) {
   var list = Array.isArray(raw) ? raw : [];
-  var out = [], seenKey = {};
+  var instructions = (opts && opts.instructions) ? String(opts.instructions) : '';
+  var out = [], seenKey = {}, considered = [];
+  function note(r, outcome, extra) {
+    var row = { name: clean(r && r.name, 80) || '(no name)', category: clean(r && r.category, 20), outcome: outcome };
+    if (extra) Object.keys(extra).forEach(function (k) { row[k] = extra[k]; });
+    considered.push(row);
+    return row;
+  }
   list.forEach(function (r) {
-    if (!r || typeof r !== 'object') return;
+    if (!r || typeof r !== 'object') { note(null, 'dropped: not an object'); return; }
     var cat = clean(r.category).toLowerCase();
-    if (CATEGORIES.indexOf(cat) === -1) return;
+    if (CATEGORIES.indexOf(cat) === -1) { note(r, 'dropped: unknown category'); return; }
     var names = namesOf({ name: r.name, aliases: r.aliases });
-    if (!names.length) return;
+    if (!names.length) { note(r, 'dropped: no name of ' + MIN_NAME_LEN + '+ characters'); return; }
     var joined = names.join(' / ');
     var canonLower = names[0].toLowerCase();
     var namesLower = names.join(' ').toLowerCase();
@@ -96,34 +109,77 @@ function filterSuggestions(raw, panels, transcript, assets, characters, m) {
     // candidate's names already attaches to the same panels, so suggesting it again would make a
     // duplicate. This is what makes a re-run of Generate Story "pick up the assets that were
     // already created" (Ian) -- they are passed to the model as known, and filtered here as well.
-    if ((assets || []).some(function (a) { return a && a.name && m.assetNameMatches(a.name, namesLower); })) return;
-    if ((characters || []).some(function (c) { return c && c.name && m.characterNameMatches(c.name, canonLower); })) return;
+    var byAsset = (assets || []).filter(function (a) { return a && a.name && m.assetNameMatches(a.name, namesLower); })[0];
+    if (byAsset) { note(r, 'dropped: already the asset "' + clean(byAsset.name, 80) + '"'); return; }
+    var byChar = (characters || []).filter(function (c) { return c && c.name && m.characterNameMatches(c.name, canonLower); })[0];
+    if (byChar) { note(r, 'dropped: already the character "' + clean(byChar.name, 80) + '"'); return; }
 
     var hit = [];
     (panels || []).forEach(function (p) {
       if (m.assetNameMatches(joined, panelTextOf(p))) hit.push(Number(p.panel_order) || 0);
     });
-    if (hit.length < MIN_PANELS) return;
+    var tm = countMentions(names, transcript), im = countMentions(names, instructions);
+    if (hit.length < MIN_PANELS) {
+      note(r, 'dropped: its names matched ' + hit.length + ' panel' + (hit.length === 1 ? '' : 's') + ' (needs ' + MIN_PANELS + ')', { names: joined, panels: hit });
+      return;
+    }
 
     var key = canonLower.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    if (!key || seenKey[key]) return;
+    if (!key || seenKey[key]) { note(r, 'dropped: duplicate of another suggestion'); return; }
     seenKey[key] = 1;
 
-    out.push({
+    var item = {
       key: key,
       name: names[0],
       aliases: names.slice(1),
       category: cat,
       description: clean(r.description, MAX_DESC_CHARS),
       panels: hit,
-      mentions: countMentions(names, transcript),
+      mentions: tm + im,
       status: 'open',
       asset_id: null
-    });
+    };
+    item._row = note(r, 'kept', { names: joined, panels: hit, transcript_mentions: tm, instruction_mentions: im });
+    out.push(item);
   });
   // Ian: rank by how often the story references it; the panel count breaks ties.
   out.sort(function (a, b) { return (b.mentions - a.mentions) || (b.panels.length - a.panels.length); });
-  return { version: 1, generated_at: new Date().toISOString(), items: out.slice(0, MAX_ITEMS) };
+  out.forEach(function (it, i) {
+    if (i >= MAX_ITEMS) it._row.outcome = 'dropped: ranked ' + (i + 1) + ', past the top ' + MAX_ITEMS;
+    else if (it.category === 'character') it._row.outcome = 'kept (suggested for the Characters tab only)';
+    delete it._row;
+  });
+  return { version: 1, generated_at: new Date().toISOString(), items: out.slice(0, MAX_ITEMS), considered: considered };
+}
+
+// One line for the Railway log: what the model offered and what became of each.
+function describeConsidered(considered) {
+  return (considered || []).map(function (c) {
+    var bits = [c.name + ' (' + (c.category || '?') + ')', c.outcome];
+    if (c.panels) bits.push('panels ' + (c.panels.length ? c.panels.join(',') : 'none'));
+    if (c.transcript_mentions != null) bits.push('mentions ' + c.transcript_mentions + ' + ' + c.instruction_mentions + ' in instructions');
+    return bits.join(': ');
+  }).join(' | ') || 'the model offered nothing';
+}
+
+// v3.1.12 -- TD-908. Ian: "On the Modal... allow them to edit the descriptions of the items."
+// edits = { key: text } from the modal. The edited text is what Yes draws the asset from, and what
+// No writes into the panel prompts. Blank keeps the original rather than storing an empty
+// description; a created item is left alone (its asset owns the description now -- edit it in the
+// Asset Library). Returns how many changed.
+function applyDescriptionEdits(stored, edits) {
+  if (!stored || !Array.isArray(stored.items) || !edits || typeof edits !== 'object') return 0;
+  var n = 0;
+  stored.items.forEach(function (it) {
+    if (!Object.prototype.hasOwnProperty.call(edits, it.key)) return;
+    if (it.status === 'created') return;
+    var v = clean(edits[it.key], MAX_DESC_CHARS);
+    if (!v || v === it.description) return;
+    it.description = v;
+    it.description_edited = true;
+    n++;
+  });
+  return n;
 }
 
 function parseStored(text) {
@@ -181,5 +237,7 @@ module.exports = {
   MIN_PANELS: MIN_PANELS, MAX_ITEMS: MAX_ITEMS, MIN_NAME_LEN: MIN_NAME_LEN,
   namesOf: namesOf, assetNameFor: assetNameFor, countMentions: countMentions,
   filterSuggestions: filterSuggestions, parseStored: parseStored,
-  notesForPanel: notesForPanel, applyRecurringNotes: applyRecurringNotes
+  notesForPanel: notesForPanel, applyRecurringNotes: applyRecurringNotes,
+  describeConsidered: describeConsidered,
+  applyDescriptionEdits: applyDescriptionEdits
 };

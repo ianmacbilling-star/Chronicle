@@ -1,5 +1,182 @@
 [
   {
+    "version": "3.1.21",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3121-no-tours-support",
+        "kind": "change",
+        "public": false,
+        "summary": "Guided tours no longer start by themselves while an admin is viewing as a customer.",
+        "detail": "Admin, Support access: start a session as a customer whose tours have not been seen and move around the app: no tour pops up. The customer's own tour history is not changed (a tour opened by hand is not recorded as seen). End the session and tours behave as before for your own account.",
+        "td": [
+          "TD-912"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.20",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3120-no-autofill",
+        "kind": "fix",
+        "public": true,
+        "summary": "Browsers no longer fill your email into filter and search boxes; autofill is kept only for My Account and the shipping address.",
+        "detail": "On a phone, the Archive's Moment Name filter could arrive filled with your email address and show nothing until cleared. My Account's profile and password now sit in their own forms, every other text box is marked not to autofill, and the filter boxes ignore text nobody typed. The shipping address on the Order tab still offers your saved address. Also: framing a cover on a phone now fits the picture to the screen and keeps the buttons in view.",
+        "td": [
+          "TD-692",
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.19",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3119-cover-frame-fit",
+        "kind": "fix",
+        "public": true,
+        "summary": "The cover framing window now fits on the screen: no scroll bar, and the buttons are always visible.",
+        "detail": "Publish, Cover or Back Cover, choose a picture that opens the frame: the picture is sized to the window so the frame, the size line or warning, and Back to the Archive / Use this framing all show without scrolling. Try it with a small picture (two-line warning) and on a short window.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.18",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3118-cover-frame",
+        "kind": "change",
+        "public": true,
+        "summary": "Choosing a front or back cover picture from the Archive now lets you frame exactly which part of the picture goes on the cover.",
+        "detail": "Publish, Cover or Back Cover, choose a picture: unless it is already the cover's shape, it opens with a cover-shaped frame, placed where the cover would have cut it before. Drag the frame to move it, drag a corner to zoom in, then Use this framing. A frame under 750 pixels tall shows the orange small-picture warning (you can still use it). Pictures that are already cover-shaped, and picking the current cover to remove it, work exactly as before. The title-page picture is unchanged.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.17",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3117-copy-asset-frame",
+        "kind": "change",
+        "public": true,
+        "summary": "Copy to Assets from the Archive now lets you frame just the part of the picture you want as the asset.",
+        "detail": "Archive, Copy to Assets: the picture appears with a frame round the whole of it. Drag a corner to change the frame's size and shape freely, drag the frame to move it; only the framed part becomes the asset (the archived picture is not changed). Leave the frame round the whole picture to copy it as before. The upload-your-own crop on a panel now uses the same frame and should behave exactly as in 3.1.16.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.16",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3116-own-image-zoom",
+        "kind": "change",
+        "public": true,
+        "summary": "When you upload your own picture onto a panel, the crop frame now has corner handles: zoom in on just the part you want and move it anywhere.",
+        "detail": "Replace on a panel, Upload your own: after choosing a picture, drag the frame to move it in any direction and drag a corner to make it smaller or larger (the shape stays the same, the opposite corner stays put). The size line and warning update as you drag; the small-picture warning is now the orange warning box used elsewhere. Use this image stores exactly the framed area. Try zooming in far on a large photo (warning appears), then back out (it goes away). Picking another shape starts again from the largest frame.",
+        "td": [
+          "TD-910"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.15",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3115-own-panel-image",
+        "kind": "feature",
+        "public": true,
+        "summary": "Put your own picture on a storyboard panel: Replace now has an Upload your own tab. Campaignia fits it to the panel shape it suits best, and you can slide the crop.",
+        "detail": "Storyboard, any panel's Replace pill: two tabs, From Archive (as before) and Upload your own. The upload tab shows the seven panel shapes, a drop zone with the usual rights line, and after a file is chosen a crop preview in the shape the picture fits best (click another shape to change it; drag the frame to choose what is kept). A picture under 1024 pixels on its long side once cropped shows a warning and can still be used. Use this image: the panel takes the new shape, the picture is stored at that exact ratio (up to 2048 px), the panel is LOCKED (Generate Images skips it; unlock to retouch), and the previous picture is in Revert -- unlock, Revert, and the old picture AND its old shape come back. JPG, PNG, WebP and HEIC, up to 20 MB, any tier, no tokens. Replacing from the Archive now also remembers the shape for Revert. Other pickers (characters, assets, cover, Title Builder) show no upload tab.",
+        "td": [
+          "TD-910"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.14",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3114-heic-uploads",
+        "kind": "feature",
+        "public": true,
+        "summary": "iPhone photos (HEIC) can now be uploaded for characters and assets; Campaignia converts them to JPG for you.",
+        "detail": "Upload a .heic from an iPhone as a character portrait (any of the four slots), as an asset picture, and in the bulk asset import. In Chrome or Edge the preview should appear after a moment (it is converted on the server first; Chrome cannot show HEIC itself), and the saved image is a JPG. Railway log: one [heic] converted line per file. A file named .heic that is not really one is refused with a clear message. NEW DEPENDENCY heic-convert (WebAssembly, no native build): if the staging deploy fails to build, that is the cause, and the previous version keeps running.",
+        "td": [
+          "TD-909"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.13",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3113-asset-pill-picture",
+        "kind": "change",
+        "public": true,
+        "summary": "Click an asset pill on the Review or Storyboard tab to see that asset's picture without leaving the page.",
+        "detail": "Review tab and the Storyboard panel options: clicking an asset pill opens its picture full size in the lightbox, captioned with its name and category (Escape or a click outside closes it). Clicking the x on the pill still only removes it from the panel and does not open the picture. A pill whose asset has no picture yet says so; an automatically matched pill without an id is found by name.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.12",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "3112-suggested-assets-edit",
+        "kind": "change",
+        "public": true,
+        "summary": "You can edit the description of each suggested asset before choosing Yes or No.",
+        "detail": "Each suggestion in the modal now has an editable description. Yes draws the asset from the edited text (check the new asset's description in the Asset Library); No, or unticking, puts the edited text into those panels' image prompts (the RECURRING ELEMENTS line in the Generate Images debug log). A blank box keeps the original. Members who cannot create assets can still edit, and OK saves their edits for their own version's panels. The boxes lock once Yes is clicked.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.11",
+    "staged_on": "2026-09-24",
+    "entries": [
+      {
+        "id": "3111-suggested-assets-tune",
+        "kind": "change",
+        "public": true,
+        "summary": "Suggested assets now describe how things look rather than what they do, and things you mention in your Story Instructions count when they are ranked.",
+        "detail": "Three follow-ups from Ian's mirror test. (1) Descriptions: Generate Story is told to describe appearance at rest only -- no powers, uses, glowing or activated states -- so an asset picture does not bake one scene's effect into every panel. Check a magic item's suggested description reads as a plain object. (2) Ranking counts mentions in the Story Instructions as well as the transcript; the 2-panel rule is unchanged. (3) Diagnostics: every Generate Story writes one [asset-suggest] line to the Railway log listing each candidate the model offered, whether it was kept, and why not (already an asset or character, matched only N panels, past the top 8, and so on), with panel numbers and mention counts. With debug mode on, the same list is in the Debug panel under Generate Story.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.10",
     "staged_on": "2026-09-24",
     "entries": [

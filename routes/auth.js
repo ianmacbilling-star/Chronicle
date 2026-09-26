@@ -920,7 +920,10 @@ router.get('/tour-progress', async function(req, res) {
     const row = await db.prepare('SELECT tour_progress FROM users WHERE id = ?').get(req.session.userId);
     let tp = row && row.tour_progress;
     if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch (e) { tp = {}; } }
-    res.json({ progress: tp || {} });
+    // v3.1.21 -- Ian: "When I'm in as an Imposter... Can you make it so It doesn't trigger the Tour's?"
+    // Inside a support session no tour starts by itself (the page reads `suppress`), and nothing here
+    // is written either -- see tour-complete -- so the customer still gets their own tours.
+    res.json({ progress: tp || {}, suppress: !!req.session.impersonatorId });
   } catch (e) {
     console.error('tour-progress error:', e.message);
     res.json({ progress: {} });
@@ -932,6 +935,8 @@ router.patch('/tour-complete', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const viewId = (req.body && req.body.viewId) ? String(req.body.viewId) : '';
   if (!/^[a-z0-9_-]+$/i.test(viewId)) return res.status(400).json({ error: 'Bad viewId' });
+  // v3.1.21 -- a tour an admin opens by hand inside a support session is not the customer seeing it.
+  if (req.session.impersonatorId) return res.json({ success: true, skipped: 'support session' });
   try {
     const db = await getDb();
     const row = await db.prepare('SELECT tour_progress FROM users WHERE id = ?').get(req.session.userId);

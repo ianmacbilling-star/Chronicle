@@ -14,6 +14,10 @@ const { getBalance } = require('./tokens');   // v3.1.9 -- TD-908 (a second dest
 const { resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { getCampaignRole } = require('../middleware/auth');
 const assetSuggest = require('../services/assetSuggestions');
+const cropImage = require('../services/cropImage');               // v3.1.18 -- TD-911: the cut is shared with the cover picks
+const cropMath = require('../services/cropMath');                 // v3.1.17
+const CA_MIN_SIDE = 64;     // smallest framed area, in picture pixels (matches CA_MIN_SIDE in app.js)
+const CA_MAX_SIDE = 2048;   // stored no larger than this on the long side, like an uploaded panel
 
 // Memory storage — we push to the R2 storage layer ourselves.
 const upload = multer({
@@ -223,6 +227,16 @@ router.post('/classify-names', requireAuth, verifyCampaignAssetCreator, async fu
 // POST create an asset FROM an existing archived image. The image is copied to
 // a fresh R2 object so the asset owns its bytes independently -- asset deletion
 // hard-deletes its image, so it must never share the archive's object.
+// v3.1.17 -- TD-911. COPY TO ASSETS WITH A FRAME. Ian: "They might want to focus on one small piece of
+// the larger picture for the asset." The page sends the frame as fractions (the free crop view in
+// app.js); the pixels are worked out HERE by cropMath.rectFromFrac, the twin of the page's arithmetic,
+// from the real EXIF-oriented size. The archived picture is only read, never changed. PNG stays PNG
+// (a transparent asset keeps its transparency); anything else is stored as JPEG.
+async function cropArchiveImage(url, frac) {
+  // v3.1.18 -- the same cut as v3.1.17, now in services/cropImage.js so the cover picks share it.
+  return (await cropImage.cutAndStore(url, { ratio: null, minSide: CA_MIN_SIDE, frac: frac, maxSide: CA_MAX_SIDE, name: 'asset-crop' })).url;
+}
+
 router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
   try {
     const db = await getDb();
@@ -239,7 +253,15 @@ router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async func
     if (!archive || !archive.image_url) return res.status(404).json({ error: 'Source image not found.' });
 
     let imageUrl;
-    try {
+    const crop = cropMath.readFrac(req.body && req.body.crop);   // v3.1.17 -- none: copy as before
+    if (crop) {
+      try {
+        imageUrl = await cropArchiveImage(archive.image_url, crop);
+      } catch (e) {
+        console.error('copy-to-asset crop failed:', e.message);
+        return res.json({ error: 'Could not cut out that part of the picture. Please try again.' });
+      }
+    } else try {
       imageUrl = await restoreCopy(archive.image_url);
     } catch (e) {
       console.error('copy-to-asset image copy failed:', e.message);
@@ -380,6 +402,7 @@ router.post('/suggestions/:sessionId/decline', requireAuth, verifyCampaignMember
     const forkId = await suggestionFork(db, req, role);
     if (!forkId) return res.status(403).json({ error: 'That version is not yours to change.' });
     const stored = await readSuggestions(db, forkId);
+    assetSuggest.applyDescriptionEdits(stored, req.body && req.body.descriptions);   // v3.1.12 -- edited in the modal
     stored.items.forEach(function (it) { if (it.status === 'open') it.status = 'declined'; });
     await writeSuggestions(db, forkId, stored);
     res.json({ success: true });
@@ -400,6 +423,8 @@ router.post('/suggestions/:sessionId/accept', requireAuth, verifyCampaignAssetCr
     ((req.body && Array.isArray(req.body.keys)) ? req.body.keys : []).forEach(function (k) { keys[String(k)] = 1; });
     const assetsNow = await db.prepare('SELECT id, name FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
     const stored = refreshCreated(await readSuggestions(db, forkId), assetsNow);
+    // v3.1.12 -- descriptions edited in the modal, applied BEFORE anything is drawn from them.
+    assetSuggest.applyDescriptionEdits(stored, req.body && req.body.descriptions);
     // Characters are never built here (Ian: "we won't automatically build characters").
     const chosen = stored.items.filter(function (it) { return it.category !== 'character' && it.status !== 'created' && keys[it.key]; });
     // Unticked is a No for that item: its description goes into the panel prompts instead.

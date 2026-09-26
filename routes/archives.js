@@ -7,6 +7,14 @@ const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage')
 const { demoteBuiltTitle } = require('../services/titleTarget');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
 const genresvc = require('../services/genres');   // v3.0.827 -- TD-664/TD-665, the sensitive-genre gate
+const cropMath = require('../services/cropMath');     // v3.1.18 -- TD-911
+const cropImage = require('../services/cropImage');   // v3.1.18
+// The cover art frame in routes/pdf.js: .cover-image-layout pads an 8.5in page by 0.7in, so the frame
+// is 7.1in wide, and the print rule pins it 9.6in tall; the back cover uses the same frame. Matches
+// COVER_CROP_ASPECT in app.js (the guard proves both, and reads pdf.js for the numbers).
+const COVER_RATIO = 7.1 / 9.6;
+const COVER_MIN_SIDE = 128;    // matches COVER_MIN_SIDE in app.js
+const COVER_MAX_SIDE = 2048;
 
 // POST /api/campaigns/:campaignId/archives
 // Save an image off to the campaign archive. Open to ANY member: you can
@@ -353,6 +361,29 @@ router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async functi
   }
 });
 
+// POST /api/campaigns/:campaignId/archives/:archiveId/cover-crop   { crop: { x, y, w } }
+// v3.1.18 -- TD-911. Cut the framed part of an archived picture out at the cover's exact shape and
+// store it as a new picture; returns its url. Nothing else changes here: the page then puts the url
+// on the front or back cover through the my-book-meta PUT, exactly as a whole archived picture has
+// always gone on. The archived picture is only read.
+router.post('/:archiveId/cover-crop', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const archive = await db.prepare(
+      'SELECT id, image_url FROM campaign_archives WHERE id = ? AND campaign_id = ?'
+    ).get(req.params.archiveId, req.params.campaignId);
+    if (!archive || !archive.image_url) return res.json({ error: 'Archived image not found.' });
+    const c = req.body && req.body.crop;
+    const frac = cropMath.readFrac(c && typeof c === 'object' ? { x: c.x, y: c.y, w: c.w, h: 1 } : null);
+    if (!frac) return res.json({ error: 'No framing was sent. Please try again.' });
+    const out = await cropImage.cutAndStore(archive.image_url, { ratio: COVER_RATIO, minSide: COVER_MIN_SIDE, frac: frac, maxSide: COVER_MAX_SIDE, name: 'cover-crop' });
+    res.json({ url: out.url, width: out.width, height: out.height });
+  } catch (e) {
+    console.error('cover-crop error:', e.message);
+    res.json({ error: 'Could not cut out the cover. Please try again.' });
+  }
+});
+
 // POST /api/campaigns/:campaignId/archives/:archiveId/apply
 // Replace a target image (a moment panel, or a session-character snapshot)
 // with the chosen archived image. The archive's protected bytes are copied
@@ -373,7 +404,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
         // v3.0.654 -- img_w and img_h are selected because the revert slot below records them.
         // They were not in this list and node --check is perfectly happy with moment.img_w being
         // undefined -- it would have stored null dimensions and nothing would have said so.
-        'SELECT m.id, m.image, m.locked, m.layout_meta, m.img_w, m.img_h, sf.user_id AS fork_owner ' +
+        'SELECT m.id, m.image, m.locked, m.layout_meta, m.img_w, m.img_h, m.shape, sf.user_id AS fork_owner ' +   // v3.1.15 -- m.shape for prev_shape
         'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id ' +
         'JOIN sessions s ON s.id = m.session_id ' +
         'WHERE m.id = ? AND s.campaign_id = ?'
@@ -425,6 +456,15 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
           // An ordinary picture has landed. The row stops being a chapter title -- and v3.0.660
           // keeps the title it displaced in the draft rather than stranding its bytes.
           demoteBuiltTitle(_pm);
+          _touched = true;
+        }
+        // v3.1.15 -- TD-910, the twin of the upload route: an archived picture of another shape changes
+        // the panel's shape, so the shape that went with the displaced picture is recorded for Revert.
+        if (archive.shape && archive.shape !== moment.shape && prevImg && prevImg !== freshUrl) {
+          _pm.prev_shape = { shape: moment.shape || 'standard', image: prevImg };
+          _touched = true;
+        } else if (_pm.prev_shape) {
+          delete _pm.prev_shape;
           _touched = true;
         }
         if (_touched) mergedMeta = JSON.stringify(_pm);

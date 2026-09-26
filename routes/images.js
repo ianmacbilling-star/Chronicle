@@ -25,6 +25,10 @@ const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileS
 // v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
 // on it, used by the image model as a LOCATION diagram only. Same multer shape.
 const markedUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
+// v3.1.14 -- TD-909. HEIC to JPEG for the BROWSER. Chrome and Edge cannot display a HEIC, so a
+// picked iPhone photo would preview as a broken image. The page sends it here first and swaps in the
+// JPEG, so the preview and the later upload are both the JPEG. guardUpload does the conversion.
+const heicUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 
 // Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
 // public origin for THIS environment (set in Railway), e.g. https://campaignia.com
@@ -1827,8 +1831,20 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
       if (_prevBT) _rMeta.built_title = _prevBT; else demoteBuiltTitle(_rMeta);
       if (_liveBT) _rMeta.prev_built_title = _liveBT; else delete _rMeta.prev_built_title;
     } catch (e) { _rMeta = null; }
-    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ?, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null,
+    // v3.1.15 -- TD-910. THE SHAPE SWAPS WITH THE PICTURE. Uploading your own picture (and applying an
+    // archived one) can change the panel's shape; the shape that went with the displaced picture is
+    // recorded as layout_meta.prev_shape, TIED TO THAT IMAGE URL. It is used only while it still
+    // describes the picture in the undo slot -- a later Regenerate re-arms the slot at the current
+    // shape and leaves a stale record that simply no longer matches -- and it swaps like the rest.
+    var _revShape = null;
+    if (_rMeta && _rMeta.prev_shape && _rMeta.prev_shape.image && _rMeta.prev_shape.image === moment.revert_image && _rMeta.prev_shape.shape) {
+      _revShape = _rMeta.prev_shape.shape;
+      _rMeta.prev_shape = { shape: moment.shape || 'standard', image: current || null };
+    } else if (_rMeta && _rMeta.prev_shape) {
+      delete _rMeta.prev_shape;
+    }
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), revert_image = ?, revert_img_w = ?, revert_img_h = ?, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _revShape,
            current || null, moment.img_w || null, moment.img_h || null,
            _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
     res.json({ success: true, image: moment.revert_image });
@@ -2788,6 +2804,18 @@ router.get('/proxy', requireAuth, async function (req, res) {
   } catch (e) {
     return res.status(500).send('proxy failed');
   }
+});
+
+// POST /api/images/heic-to-jpeg -- v3.1.14, TD-909. Nothing is stored and no token is spent: the
+// converted bytes go straight back. A file that is not HEIC is refused rather than echoed.
+router.post('/heic-to-jpeg', requireAuth, guardUpload(heicUpload, 'heic-to-jpeg', 25), function (req, res) {
+  if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'No image received.' });
+  if (!req.file.heicConverted) {
+    return res.status(400).json({ error: 'That is not an iPhone (HEIC) photo.' });
+  }
+  res.set('Content-Type', 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  return res.send(req.file.buffer);
 });
 
 // POST /api/images/marked -- store a marked overlay and return its URL. No

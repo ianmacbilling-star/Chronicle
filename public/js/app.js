@@ -4625,10 +4625,11 @@ function renderReview(data) {
 
     var assetChips = (p.assets || []).map(function(a) {
       var rm = canEditNarr
-        ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
+        ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
         : '';
       // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
-      return '<span class="review-chip review-chip-asset">' +
+      // v3.1.13 -- TD-908. Click the pill to see the asset's picture; the x still only removes.
+      return '<span class="review-chip review-chip-asset" data-asset-id="' + (a.id == null ? '' : a.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openAssetPicture(this)">' +
         escapeHtmlReview(a.name) + rm + '</span>';
     }).join('');
     if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
@@ -6783,6 +6784,11 @@ async function aimpFilesChosen(ev) {
     });
   }
 
+  // v3.1.14 -- TD-909. iPhone photos become JPEGs before the thumbnails are drawn. One that cannot be
+  // converted is kept as it is; the server converts or refuses it with a clear reason.
+  if (files.some(isHeicFile)) {
+    files = await Promise.all(files.map(function (f) { return isHeicFile(f) ? heicToJpegFile(f).catch(function () { return f; }) : f; }));
+  }
   var seen = {};
   files.forEach(function (f) {
     if (!isSupportedUploadImage(f)) { aimpRejects.push({ filename: f.name, reason: UPLOAD_TYPE_MSG }); return; }
@@ -7090,9 +7096,32 @@ function setAssetPreview(src) {
 // Client-side image-type gate -- mirror of the server whitelist so users are
 // stopped at pick/drop time with the SAME message, right by the control used.
 function isSupportedUploadImage(file) {
-  return !!file && ['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1;
+  return !!file && (['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1 || isHeicFile(file));   // v3.1.14 -- HEIC too
 }
-var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
+var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, WebP or HEIC (iPhone) image.';
+// v3.1.14 -- TD-909. iPhone photos. Chrome on Windows often gives a .heic file NO type, so the name
+// counts too. The server checks the bytes; this only decides whether to convert before previewing.
+function isHeicFile(file) {
+  if (!file) return false;
+  var t = String(file.type || '').toLowerCase();
+  if (t === 'image/heic' || t === 'image/heif' || t === 'image/heic-sequence' || t === 'image/heif-sequence') return true;
+  return /\.(heic|heif)$/i.test(String(file.name || ''));
+}
+// Send a HEIC to the server and get a JPEG File back (same name, .jpg). Chrome cannot show a HEIC,
+// so this runs BEFORE any preview; the JPEG is then what gets uploaded as well.
+function heicToJpegFile(file) {
+  var fd = new FormData();
+  fd.append('image', file);
+  return fetch('/api/images/heic-to-jpeg', { method: 'POST', body: fd }).then(function (r) {
+    if (!r.ok) {
+      return r.json().then(function (j) { throw new Error((j && j.error) || 'We could not read that iPhone photo.'); },
+        function () { throw new Error('We could not read that iPhone photo.'); });
+    }
+    return r.blob();
+  }).then(function (b) {
+    return new File([b], String(file.name || 'photo').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+  });
+}
 
 // Show a small inline error directly beneath an upload slot (drop-<slot>) rather
 // than a corner toast. Reused by character portraits AND custom art-style slots.
@@ -7125,6 +7154,14 @@ function acceptAssetFile(file) {
   if (!isSupportedUploadImage(file)) {
     var errEl = document.getElementById('asset-modal-error');
     if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); }
+    return;
+  }
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview can show it.
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { acceptAssetFile(jpg); }, function (err) {
+      var errEl2 = document.getElementById('asset-modal-error');
+      if (errEl2) { errEl2.textContent = (err && err.message) || UPLOAD_TYPE_MSG; errEl2.classList.remove('hidden'); }
+    });
     return;
   }
   state.assetPickedFile = file;
@@ -11979,6 +12016,7 @@ function openPrepImagePicker(kind, campaignId) {
 // ordinary modals.
 function pickerRaise(modal) {
   try { modal.style.zIndex = '100002'; } catch (e) {}
+  try { _rpSync(); } catch (e) {}   // v3.1.15 -- the Upload tab shows only when the picker is choosing for a panel
 }
 function pickerRelease(modal) {
   try { modal.style.zIndex = ''; } catch (e) {}
@@ -13151,6 +13189,11 @@ function handleSlotFileSelect(e, slot) {
 }
 
 function setSlotFile(slot, file) {
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview shows and the upload is a JPEG (both copies patched).
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { setSlotFile(slot, jpg); }, function (err) { showSlotError(slot, (err && err.message) || UPLOAD_TYPE_MSG); });
+    return;
+  }
   slotFiles[slot] = file;
   clearSlotError(slot);
   var reader = new FileReader();
@@ -13839,7 +13882,9 @@ function archiveFilterBarHTML(f, onchange) {
     '<input type="text" class="archive-filter archive-filter-search" placeholder="Moment Name"'
       + ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
       + ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"'
-      + ' value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
+      // v3.1.20 -- TD-692 again: text that arrives while nobody is typing in the box (a phone's
+      // autofill on load) is thrown away and the filter does not move. See _filterTyped.
+      + ' value="' + escapeHtml(f.moment || '') + '" oninput="if (!_filterTyped(this)) return; ' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
@@ -15203,6 +15248,7 @@ function submitRetouch() {
 
 function openReplacePicker(mode, id) {
   state.pickerCtx = { mode: mode };
+  try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
   var tEl = document.getElementById('replace-picker-title');
   if (mode === 'moment') {
@@ -15211,7 +15257,7 @@ function openReplacePicker(mode, id) {
     state.pickerCtx.forkId = state.currentForkId || null;
     if (state.pickerCtx.sessionId) f.session = String(state.pickerCtx.sessionId);
     if (state.currentForkId) f.version = String(state.currentForkId);
-    if (tEl) tEl.textContent = 'Replace panel image from Archive';
+    if (tEl) tEl.textContent = 'Replace panel image';   // v3.1.15 -- the Archive is now one of two tabs
   } else if (mode === 'canonical') {
     state.pickerCtx.characterId = id;
     state.pickerCtx.sessionId = null;
@@ -15260,6 +15306,8 @@ function clearPickerFilters() {
 }
 
 function renderPicker() {
+  try { _cvClear(); } catch (e) {}   // v3.1.18 -- the Archive grid again: filters back, no cover frame (before _rpSync, which has the last word on the filters)
+  try { _rpSync(); } catch (e) {}   // v3.1.15
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
     '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
@@ -15275,7 +15323,7 @@ function renderPickerGrid() {
   // v3.0.671 -- TD-474. Say what the line means, once, rather than hoping it is self-evident.
   var _pkNote = (state.pickerCtx || {}).prepKind;
   if (_pkNote === 'cover' || _pkNote === 'back') {
-    note = '<div class="archive-pick-note">The faint outline shows the part of each picture that will appear on the cover. Anything outside it is trimmed off.</div>' + note;
+    note = '<div class="archive-pick-note">The faint outline shows the part of each picture that will appear on the cover. Anything outside it is trimmed off. After you choose a picture you can move the frame to pick the part you want.</div>' + note;   // v3.1.18
   }
   grid.innerHTML = note + rows.map(function(a){
     // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
@@ -15345,6 +15393,7 @@ function applyArchiveToTarget(archiveId) {
   // v3.0.670 -- TD-474. The cover, back and title-page picks leave here: they are campaign/book-meta
   // fields, not an image on a row, so /apply does not fit them any more than it fits a built title.
   if (ctx.prepKind) {
+    if (_cvMaybeCrop(ctx.prepKind, archiveId)) return;   // v3.1.18 -- TD-911: frame the front or back cover first
     closeReplacePicker();
     selectPrepImage(ctx.prepKind, archiveId);
     return;
@@ -15891,12 +15940,14 @@ function openCopyToAssetModal(archiveId) {
   if (catEl) catEl.value = 'location';
   var m = document.getElementById('copy-asset-modal');
   if (m) m.classList.remove('hidden');
+  try { _caCropStart(a); } catch (e) {}   // v3.1.17 -- TD-911: frame the part to keep
   if (nameEl) setTimeout(function(){ nameEl.focus(); nameEl.select(); }, 0);
 }
 function closeCopyToAssetModal() {
   var m = document.getElementById('copy-asset-modal');
   if (m) m.classList.add('hidden');
   _caArchiveId = null;
+  _caCrop = null; var _cah = document.getElementById('ca-crop'); if (_cah) _cah.innerHTML = '';   // v3.1.17
 }
 function submitCopyToAsset() {
   var nameEl = document.getElementById('ca-name');
@@ -15913,7 +15964,8 @@ function submitCopyToAsset() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/from-archive', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ archive_id: _caArchiveId, name: name, category: catEl ? catEl.value : 'location' })
+    // v3.1.17 -- TD-911: the frame, or nothing when it is the whole picture (then the copy is untouched).
+    body: JSON.stringify({ archive_id: _caArchiveId, name: name, category: catEl ? catEl.value : 'location', crop: _caCropFrac() || undefined })
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -16226,7 +16278,7 @@ function renderStoryboard() {
       : '';
     var replaceBtn = m.locked
       ? '<button class="panel-pill pp-replace dm-only" disabled title="Unlock to replace">Replace</button>'
-      : '<button class="panel-pill pp-replace dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
+      : '<button class="panel-pill pp-replace dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive, or upload your own">Replace</button>';
     var archiveBtn = '';
     if (m.image) {
       var _arched = isMomentArchived(m);
@@ -18364,6 +18416,11 @@ function handleSlotFileSelect(e, slot) {
 }
 
 function setSlotFile(slot, file) {
+  // v3.1.14 -- TD-909. An iPhone photo becomes a JPEG first, so the preview shows and the upload is a JPEG (both copies patched).
+  if (isHeicFile(file)) {
+    heicToJpegFile(file).then(function (jpg) { setSlotFile(slot, jpg); }, function (err) { showSlotError(slot, (err && err.message) || UPLOAD_TYPE_MSG); });
+    return;
+  }
   slotFiles[slot] = file;
   clearSlotError(slot);
   var reader = new FileReader();
@@ -26843,9 +26900,10 @@ function castRowsHtml(p, momentId, canEdit, opts) {
   }).join();
   if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
   var assetChips = (p.assets || []).map(function(a){
-    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
     // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
-    return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
+    // v3.1.13 -- TD-908. Click the pill to see the asset's picture; the x still only removes.
+    return '<span class="review-chip review-chip-asset" data-asset-id="' + (a.id == null ? '' : a.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openAssetPicture(this)">' + escapeHtmlReview(a.name) + rm + '</span>';
   }).join();
   if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
   var addChar = '', addAsset = '';
@@ -26938,6 +26996,7 @@ var _tourCurEl = null;
 var _tourCurStep = null;
 var _tourPanelEl = null;
 var _tourShownAny = false;
+var _tourSuppress = false;   // v3.1.21 -- set by /api/auth/tour-progress while an admin is viewing as a customer
 
 function _tourEnsureData(cb) {
   if (_toursData) { cb(); return; }
@@ -26951,7 +27010,7 @@ function _tourEnsureProgress(cb) {
   if (_tourProgress) { cb(); return; }
   fetch('/api/auth/tour-progress')
     .then(function(r){ return r.json(); })
-    .then(function(d){ _tourProgress = (d && d.progress) ? d.progress : {}; cb(); })
+    .then(function(d){ _tourProgress = (d && d.progress) ? d.progress : {}; _tourSuppress = !!(d && d.suppress); cb(); })   // v3.1.21
     .catch(function(){ _tourProgress = {}; cb(); });
 }
 
@@ -26984,6 +27043,7 @@ function maybeStartTour(viewId) {
     var _go = function() {
       _tourEnsureProgress(function(){
         if (_tourProgress[viewId]) return;
+        if (_tourSuppress) return;   // v3.1.21 -- no tour starts by itself inside a support session
         startTour(viewId, false);
       });
     };
@@ -32000,7 +32060,7 @@ function openAssetSuggestModal(data) {
   box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:#f0e8d0;';
   var h = '';
   h += '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
-  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears.</div>';
+  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears. You can change any description before you choose.</div>';
   if (assetsOffer.length) {
     h += '<div id="asset-suggest-list">';
     assetsOffer.forEach(function (it) {
@@ -32008,7 +32068,8 @@ function openAssetSuggestModal(data) {
         (canCreate ? '<input type="checkbox" class="asset-suggest-cb" data-key="' + escapeHtmlReview(it.key) + '" checked style="margin-top:3px;">' : '') +
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
         ' <span style="font-size:12px;color:rgba(201,168,76,0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
-        (it.description ? '<span style="display:block;font-size:13px;line-height:1.4;color:rgba(240,232,208,0.72);margin-top:3px;">' + escapeHtmlReview(it.description) + '</span>' : '') +
+        // v3.1.12 -- TD-908. Ian: "allow them to edit the descriptions of the items." What Yes draws from, and what No writes into the panels.
+        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:#f0e8d0;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
         '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
@@ -32046,6 +32107,12 @@ function openAssetSuggestModal(data) {
     return out;
   }
   var noteNo = 'Otherwise Campaignia will keep them consistent using the descriptions above.';
+  // v3.1.12 -- the descriptions as the reader left them, sent with Yes, No and OK.
+  function descEdits() {
+    var out = {};
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-desc'), function (t) { out[t.getAttribute('data-key')] = t.value; });
+    return out;
+  }
 
   if (!assetsOffer.length) {
     msgEl.textContent = '';
@@ -32054,7 +32121,12 @@ function openAssetSuggestModal(data) {
   }
   if (!canCreate) {
     msgEl.textContent = 'Only the Story Master can create assets in this campaign, unless they turn on Allow Members to Add Assets. ' + noteNo;
-    mkBtn('OK', 'btn-primary', close);
+    // v3.1.12 -- a member who cannot create still steers the panel prompts with their edits.
+    mkBtn('OK', 'btn-primary', function () {
+      fetch(_assetSuggestUrl('/decline'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fork_id: state.currentForkId || undefined, descriptions: descEdits() }) }).catch(function () {});
+      close();
+    });
     return;
   }
 
@@ -32075,7 +32147,7 @@ function openAssetSuggestModal(data) {
 
   mkBtn('No', '', function () {
     fetch(_assetSuggestUrl('/decline'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fork_id: state.currentForkId || undefined }) }).catch(function () {});
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined, descriptions: descEdits() }) }).catch(function () {});
     close();
   });
   yes = mkBtn('Yes, generate', 'btn-primary', function () {
@@ -32085,7 +32157,7 @@ function openAssetSuggestModal(data) {
     Array.prototype.forEach.call(rowEl.querySelectorAll('button'), function (b) { b.disabled = true; });
     msgEl.textContent = 'Starting\u2026';
     fetch(_assetSuggestUrl('/accept'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fork_id: state.currentForkId || undefined, keys: keys }) })
+      body: JSON.stringify({ fork_id: state.currentForkId || undefined, keys: keys, descriptions: descEdits() }) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res || res.error) {
@@ -32131,6 +32203,7 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
       var row = cb.closest('label');
       if (row) { row.style.cursor = 'default'; if (!cb.checked) row.style.opacity = '0.45'; }
     });
+    Array.prototype.forEach.call(box.querySelectorAll('.asset-suggest-desc'), function (t) { t.disabled = true; });   // v3.1.12
   }
   Object.keys(slotById).forEach(function (id) {
     slotById[id].innerHTML = '<div class="moment-img-busy-spinner asset-suggest-spin" style="width:22px;height:22px;"></div>';
@@ -32195,4 +32268,699 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
       setTimeout(poll, 3000);
     }).catch(function () { if (!stop) setTimeout(poll, 5000); });
   })();
+}
+
+// =====================================================================================
+// v3.1.13 -- TD-908. CLICK AN ASSET PILL TO SEE ITS PICTURE. Ian: "when a user clicks on the pill
+// for the asset on the review or on the story board tab... it opens the picture of the asset...
+// without leaving the review tab." And: "If they click the x then it will still remove it." -- the
+// x stops the click from reaching the pill, so it only removes.
+//
+// The Review data carries each asset's id and name but not its picture, so this asks the asset list
+// (GET /assets, the same one the Asset Library reads) at click time -- always the current picture,
+// including one that finished drawing a moment ago. By id first; by name when an automatically
+// matched pill has no id. Shown in the app's own lightbox.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function openAssetPicture(el) {
+  if (!el || !state.currentCampaign) return;
+  var id = el.getAttribute('data-asset-id') || '';
+  var shown = (el.firstChild && el.firstChild.nodeType === 3) ? String(el.firstChild.textContent || '').trim() : '';
+  var CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets')
+    .then(function (r) { return r.json(); })
+    .then(function (list) {
+      list = Array.isArray(list) ? list : [];
+      var a = null;
+      if (id) a = list.filter(function (x) { return String(x.id) === String(id); })[0] || null;
+      if (!a && shown) {
+        var want = shown.toLowerCase();
+        a = list.filter(function (x) {
+          return String(x.name || '').split('/').some(function (t) { return t.trim().toLowerCase() === want; });
+        })[0] || null;
+      }
+      if (!a) { billingToast('That asset is no longer in the Asset Library.', 'info'); return; }
+      if (!a.image_url) { billingToast('That asset has no picture yet' + (a.description ? ' \u2014 it may still be drawing.' : '.'), 'info'); return; }
+      var cap = String(a.name || shown) + (CAT[a.category] ? ' \u2014 ' + CAT[a.category] : '');
+      openLightbox(a.image_url, cap);
+    })
+    .catch(function () { billingToast('Could not load that asset.', 'error'); });
+}
+
+// =====================================================================================
+// v3.1.15 -- TD-910. "UPLOAD YOUR OWN" ON THE PANEL REPLACE PICKER. Spec: claude/OWN_ART_UPLOAD_SPEC.md.
+//
+// Ian: a tab beside From Archive; "at the top of the file upload tab... say something like... we
+// need to fit your image into one of these X number of shapes. Then show small images of the aspect
+// ratio across the top above the drop zone." The picture is cropped to the shape it already fits
+// best, the reader can slide the crop or pick another shape, and the panel becomes that shape. The
+// rights line sits on the drop zone like the other upload warnings. Small pictures are warned, not
+// refused. The panel is locked on arrival.
+//
+// Only for PANELS (pickerCtx.mode 'moment'). Every other use of this picker -- characters, assets,
+// the book cover, the Title Builder -- sees exactly the picker it had: _rpSync hides the tabs and
+// the upload pane whenever the picker is not choosing for a panel. It runs from pickerRaise, which
+// every opener calls, and from renderPicker, which every opener ends in.
+// APPENDED, NOT INSERTED (TD-853); none of these names exist elsewhere in this file.
+// =====================================================================================
+var RP_SHAPES = [
+  { key: 'panoramic', label: 'Panoramic', w: 21, h: 9 },
+  { key: 'wide', label: 'Wide', w: 16, h: 9 },
+  { key: 'standard', label: 'Standard', w: 4, h: 3 },
+  { key: 'square', label: 'Square', w: 1, h: 1 },
+  { key: 'fullpage', label: 'Full page', w: 3, h: 4 },
+  { key: 'tall', label: 'Tall', w: 2, h: 3 },
+  { key: 'tower', label: 'Tower', w: 1, h: 4 }
+];
+var RP_SMALL_SIDE = 1024;   // matches routes/moments.js OWN_SMALL_SIDE
+
+function _rpShapeByKey(k) { return RP_SHAPES.filter(function (s) { return s.key === k; })[0] || null; }
+function _rpNearestShape(w, h) {
+  var a = Math.log(w / h), best = 'standard', bestD = Infinity;
+  RP_SHAPES.forEach(function (s) { var d = Math.abs(Math.log(s.w / s.h) - a); if (d < bestD - 1e-9) { bestD = d; best = s.key; } });
+  return best;
+}
+function _rpCropRect(W, H, key, offset) {
+  var s = _rpShapeByKey(key), r = s.w / s.h, o = Math.min(1, Math.max(0, offset));
+  if (W / H > r) { var cw = Math.max(1, Math.min(W, Math.round(H * r))); return { left: Math.round(o * (W - cw)), top: 0, width: cw, height: H, axis: 'x' }; }
+  var ch = Math.max(1, Math.min(H, Math.round(W / r)));
+  return { left: 0, top: Math.round(o * (H - ch)), width: W, height: ch, axis: 'y' };
+}
+function _rpFinalSize(rect) {
+  var m = Math.max(rect.width, rect.height);
+  if (m <= 2048) return { w: rect.width, h: rect.height };
+  var k = 2048 / m; return { w: Math.round(rect.width * k), h: Math.round(rect.height * k) };
+}
+
+function _rpEls() {
+  var modal = document.getElementById('replace-picker-modal');
+  if (!modal) return null;
+  var filters = document.getElementById('replace-picker-filters');
+  var grid = document.getElementById('replace-picker-grid');
+  if (!filters || !grid) return null;
+  var tabs = document.getElementById('replace-picker-tabs');
+  if (!tabs) {
+    tabs = document.createElement('div');
+    tabs.id = 'replace-picker-tabs';
+    tabs.style.cssText = 'display:flex;gap:6px;margin:0 0 12px;border-bottom:1px solid rgba(201,168,76,0.2);';
+    filters.parentNode.insertBefore(tabs, filters);
+  }
+  var pane = document.getElementById('replace-upload-pane');
+  if (!pane) {
+    pane = document.createElement('div');
+    pane.id = 'replace-upload-pane';
+    grid.parentNode.insertBefore(pane, grid.nextSibling);
+  }
+  return { modal: modal, filters: filters, grid: grid, tabs: tabs, pane: pane };
+}
+
+function _rpSync() {
+  var e = _rpEls(); if (!e) return;
+  var forPanel = !!(state.pickerCtx && state.pickerCtx.mode === 'moment');
+  if (!forPanel) {
+    e.tabs.style.display = 'none'; e.pane.style.display = 'none';
+    e.filters.style.display = ''; e.grid.style.display = '';
+    return;
+  }
+  var tab = state.rpTab === 'upload' ? 'upload' : 'archive';
+  e.tabs.style.display = 'flex';
+  e.tabs.innerHTML = ['archive', 'upload'].map(function (t) {
+    var on = t === tab;
+    return '<button type="button" class="rp-tab" data-tab="' + t + '" onclick="_rpShowTab(\'' + t + '\')" style="background:none;border:none;border-bottom:2px solid ' +
+      (on ? '#c9a84c' : 'transparent') + ';color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
+      (t === 'archive' ? 'From Archive' : 'Upload your own') + '</button>';
+  }).join('');
+  e.filters.style.display = tab === 'archive' ? '' : 'none';
+  e.grid.style.display = tab === 'archive' ? '' : 'none';
+  e.pane.style.display = tab === 'upload' ? 'block' : 'none';
+  if (tab === 'upload' && !e.pane.getAttribute('data-built')) _rpBuildPane();
+}
+
+function _rpShowTab(t) { state.rpTab = t; _rpSync(); }
+
+function _rpReset() {
+  if (state.rpUp && state.rpUp.url) { try { URL.revokeObjectURL(state.rpUp.url); } catch (e) {} }
+  state.rpUp = null;
+  state.rpTab = 'archive';
+  var pane = document.getElementById('replace-upload-pane');
+  if (pane) { pane.innerHTML = ''; pane.removeAttribute('data-built'); }
+}
+
+function _rpShapeStrip(activeKey) {
+  return RP_SHAPES.map(function (s) {
+    var bw = s.w >= s.h ? 44 : Math.round(44 * s.w / s.h), bh = s.w >= s.h ? Math.round(44 * s.h / s.w) : 44;
+    var on = s.key === activeKey, clickable = !!(state.rpUp && state.rpUp.img);
+    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="_rpPickShape(\'' + s.key + '\')"' : '') +
+      ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;min-height:82px;padding:4px;background:' +
+      (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
+      // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
+      // Square drew wider than tall (Ian's screenshot). The outline is now exactly the shape's ratio.
+      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(201,168,76,0.6)') + ';border-radius:2px;"></span>' +
+      '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
+  }).join('');
+}
+
+function _rpBuildPane() {
+  var pane = document.getElementById('replace-upload-pane'); if (!pane) return;
+  pane.setAttribute('data-built', '1');
+  pane.innerHTML =
+    '<div style="font-size:14px;color:#f0e8d0;margin-bottom:10px;">We need to fit your image into one of these ' + RP_SHAPES.length + ' shapes. We will pick the one it fits best, and the panel will take that shape.</div>' +
+    '<div id="rp-shapes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' + _rpShapeStrip(null) + '</div>' +
+    '<div id="rp-drop" style="border:2px dashed rgba(201,168,76,0.45);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;color:rgba(240,232,208,0.85);">' +
+      '<div style="font-size:15px;">Drop an image here, or click to choose one</div>' +
+      '<div style="font-size:12px;color:rgba(240,232,208,0.6);margin-top:4px;">JPG, PNG, WebP or HEIC (iPhone), up to 20 MB</div>' +
+      '<input type="file" id="rp-file" accept="image/*,.heic,.heif" style="display:none;">' +
+    '</div>' +
+    '<div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>' +
+    '<div id="rp-stage" style="display:none;margin-top:12px;"></div>' +
+    '<div id="rp-msg" style="font-size:13px;line-height:1.45;margin-top:10px;"></div>' +
+    '<div id="rp-actions" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">' +
+      '<button type="button" class="btn btn-sm" onclick="_rpChooseAgain()">Choose a different image</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" id="rp-use" onclick="_rpUse()">Use this image</button>' +
+    '</div>';
+  var drop = document.getElementById('rp-drop'), input = document.getElementById('rp-file');
+  drop.onclick = function () { input.click(); };
+  input.onchange = function () { if (input.files && input.files[0]) _rpTakeFile(input.files[0]); input.value = ''; };
+  drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = '#e8d49a'; };
+  drop.ondragleave = function () { drop.style.borderColor = 'rgba(201,168,76,0.45)'; };
+  drop.ondrop = function (ev) {
+    ev.preventDefault(); drop.style.borderColor = 'rgba(201,168,76,0.45)';
+    var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if (f) _rpTakeFile(f);
+  };
+}
+
+// v3.1.16 -- the small-picture warning uses the app's warning ORANGE (the --warn-orange token that the
+// version chip and the tester badge read), boxed like the other warnings. Ian: "Red might be too much."
+function _rpMsg(text, kind) {
+  var m = document.getElementById('rp-msg'); if (!m) return;
+  m.textContent = text || '';
+  m.className = kind === 'warn' ? 'rp-msg-warn' : '';
+  if (kind === 'warn') {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
+  } else {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+  }
+}
+
+// =====================================================================================
+// v3.1.16 -- TD-910. ZOOM: CORNER HANDLES ON THE CROP FRAME. Ian: "Is there a way to allow you to
+// drag the shape over the part of the image you want?... Yes go ahead and add the corner handles."
+//
+// The crop is now a FRAME of the chosen shape that can be made smaller from any corner and moved
+// anywhere, not only slid along one axis. It travels to the server as three FRACTIONS of the picture
+// -- left, top and width -- and BOTH sides turn them into pixels with the same function
+// (_rpRectFromFrac here, ownRectFromFrac in routes/moments.js), so what the frame shows is exactly
+// what is stored. The guard proves the two agree. The page always passes its own proposal through
+// that function before drawing, so it can never show a frame the server would not produce.
+// =====================================================================================
+var RP_MIN_SIDE = 128;   // smallest crop, long side, in picture pixels (matches OWN_MIN_SIDE)
+
+function _rpRectFromFrac(W, H, key, x, y, w) {
+  var s = _rpShapeByKey(key), r = s.w / s.h;
+  var maxW = Math.min(W, Math.floor(H * r));
+  var minW = Math.min(maxW, Math.max(1, r >= 1 ? RP_MIN_SIDE : Math.round(RP_MIN_SIDE * r)));
+  var width = Math.max(minW, Math.min(maxW, Math.round(w * W)));
+  var height = Math.max(1, Math.min(H, Math.round(width / r)));
+  var left = Math.max(0, Math.min(W - width, Math.round(x * W)));
+  var top = Math.max(0, Math.min(H - height, Math.round(y * H)));
+  return { left: left, top: top, width: width, height: height };
+}
+function _rpFracFromRect(W, H, rect) { return { x: rect.left / W, y: rect.top / H, w: rect.width / W }; }
+// The largest frame of the shape, centred -- where every picture and every shape change starts.
+function _rpDefaultFrac(u) {
+  var c = _rpCropRect(u.W, u.H, u.shape, 0.5);
+  return _rpFracFromRect(u.W, u.H, c);
+}
+function _rpRectOf(u) { return _rpRectFromFrac(u.W, u.H, u.shape, u.frac.x, u.frac.y, u.frac.w); }
+
+function _rpTakeFile(file) {
+  if (!isSupportedUploadImage(file)) { _rpMsg(UPLOAD_TYPE_MSG, 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { _rpMsg('That image is too large \u2014 the maximum size is 20 MB.', 'error'); return; }
+  if (isHeicFile(file)) {
+    _rpMsg('Converting your iPhone photo\u2026');
+    heicToJpegFile(file).then(_rpTakeFile, function (err) { _rpMsg((err && err.message) || UPLOAD_TYPE_MSG, 'error'); });
+    return;
+  }
+  _rpMsg('');
+  if (state.rpUp && state.rpUp.url) { try { URL.revokeObjectURL(state.rpUp.url); } catch (e) {} }
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function () {
+    var u = { file: file, url: url, img: img, W: img.naturalWidth, H: img.naturalHeight, shape: _rpNearestShape(img.naturalWidth, img.naturalHeight) };
+    u.frac = _rpDefaultFrac(u);
+    state.rpUp = u;
+    _rpRender();
+  };
+  img.onerror = function () { _rpMsg('We could not read that image. Please try a JPG, PNG, WebP or HEIC.', 'error'); };
+  img.src = url;
+}
+
+function _rpPickShape(key) { var u = state.rpUp; if (!u) return; u.shape = key; u.frac = _rpDefaultFrac(u); _rpRender(); }
+
+function _rpChooseAgain() { var i = document.getElementById('rp-file'); if (i) i.click(); }
+
+// Size line and the orange warning, from the frame as it stands.
+function _rpShowSize(u) {
+  var rect = _rpRectOf(u), fin = _rpFinalSize(rect), sh = _rpShapeByKey(u.shape);
+  var line = sh.label + ' ' + sh.w + ':' + sh.h + ' \u00b7 ' + fin.w + ' \u00d7 ' + fin.h + ' pixels once cropped.';
+  if (Math.max(fin.w, fin.h) < RP_SMALL_SIDE) {
+    _rpMsg(line + ' This picture is small for print: Campaignia\u2019s own panel pictures are about ' + RP_SMALL_SIDE.toLocaleString() +
+      ' pixels or more on the long side, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
+  } else {
+    _rpMsg(line);
+  }
+}
+
+function _rpPlaceFrame(u) {
+  var f = document.getElementById('rp-frame'); if (!f || !u.scale) return;
+  var r = _rpRectOf(u), s = u.scale;
+  f.style.left = Math.round(r.left * s) + 'px'; f.style.top = Math.round(r.top * s) + 'px';
+  f.style.width = Math.round(r.width * s) + 'px'; f.style.height = Math.round(r.height * s) + 'px';
+}
+
+function _rpRender() {
+  var u = state.rpUp; if (!u) return;
+  var strip = document.getElementById('rp-shapes'); if (strip) strip.innerHTML = _rpShapeStrip(u.shape);
+  var drop = document.getElementById('rp-drop'); if (drop) drop.style.display = 'none';
+  var stage = document.getElementById('rp-stage'), acts = document.getElementById('rp-actions');
+  if (!stage) return;
+  stage.style.display = 'block'; if (acts) acts.style.display = 'flex';
+  // v3.1.17 -- TD-911. The frame is the shared crop view (cropMount, appended below), in ratio mode
+  // with this shape's ratio. What it draws and what the server stores are unchanged from v3.1.16:
+  // cropRectFromFrac with a ratio is _rpRectFromFrac, and the guard proves it.
+  var sh = _rpShapeByKey(u.shape);
+  u.view = cropMount(stage, { url: u.url, W: u.W, H: u.H, ratio: sh.w / sh.h, minSide: RP_MIN_SIDE,
+    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360, hintColor: 'rgba(240,232,208,0.6)',   // v3.1.18: light, as in v3.1.16
+    onChange: function (r) { u.frac = _rpFracFromRect(u.W, u.H, r); _rpShowSize(u); } });
+}
+
+function _rpUse() {
+  var u = state.rpUp, ctx = state.pickerCtx;
+  if (!u || !ctx || ctx.mode !== 'moment' || !state.currentCampaign || !state.currentSession) return;
+  var btn = document.getElementById('rp-use'); if (btn) btn.disabled = true;
+  _rpMsg('Putting your image on the panel\u2026');
+  var fd = new FormData();
+  fd.append('image', u.file);
+  fd.append('shape', u.shape);
+  // v3.1.16 -- the frame as fractions of the picture; the server turns them into the same pixels.
+  fd.append('crop_x', String(u.frac.x));
+  fd.append('crop_y', String(u.frac.y));
+  fd.append('crop_w', String(u.frac.w));
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + ctx.momentId + '/upload-image', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (btn) btn.disabled = false; _rpMsg((d && (d.message || d.error)) || 'Could not put that image on the panel.', 'error'); return; }
+      closeReplacePicker();
+      _rpReset();
+      if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages();
+      billingToast('Your image is on the panel and locked, so Generate Images will leave it alone. Unlock it if you want to retouch it.', 'info');
+    })
+    .catch(function () { if (btn) btn.disabled = false; _rpMsg('Connection error. Please try again.', 'error'); });
+}
+
+// =====================================================================================
+// v3.1.17 -- TD-911. ONE CROP VIEW FOR EVERY PLACE A PICTURE IS FRAMED. Spec: claude/CROP_VIEW_SPEC.md.
+//
+// Ian, after the panel upload: "Now that I know we can do this picture editing i want to add this
+// feature to a couple places" -- the cover picks and Copy to Assets. Three copies of a drag-and-zoom
+// frame would be the section 5c twin fault three times over, so the frame lives HERE once and each
+// place mounts it in its own mode:
+//   ratio = a number  -> the frame keeps that shape (panels: the chosen shape; covers: the cover)
+//   ratio = null      -> FREE: the corners change width and height independently (assets -- Ian:
+//                        "a person can upload any size / shape picture to be an asset so I would let
+//                        the asset pictures be free form shape")
+// The frame is kept as FRACTIONS of the picture (x, y, w, h) and turned into pixels by
+// cropRectFromFrac, whose twin on the server is services/cropMath.js rectFromFrac. The guard proves
+// the two agree, so the frame on the screen is exactly what gets stored, in every mode.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function cropRectFromFrac(W, H, ratio, minSide, x, y, w, h) {
+  var width, height;
+  if (ratio) {
+    var maxW = Math.min(W, Math.floor(H * ratio));
+    var minW = Math.min(maxW, Math.max(1, ratio >= 1 ? minSide : Math.round(minSide * ratio)));
+    width = Math.max(minW, Math.min(maxW, Math.round(w * W)));
+    height = Math.max(1, Math.min(H, Math.round(width / ratio)));
+  } else {
+    width = Math.max(Math.min(minSide, W), Math.min(W, Math.round(w * W)));
+    height = Math.max(Math.min(minSide, H), Math.min(H, Math.round(h * H)));
+  }
+  var left = Math.max(0, Math.min(W - width, Math.round(x * W)));
+  var top = Math.max(0, Math.min(H - height, Math.round(y * H)));
+  return { left: left, top: top, width: width, height: height };
+}
+function cropFracFromRect(W, H, rect) { return { x: rect.left / W, y: rect.top / H, w: rect.width / W, h: rect.height / H }; }
+
+// Mount the frame into `host`. o = { url, W, H, ratio (number or null), minSide, frac, onChange(rect) }.
+// Returns { rect(), frac() }. The picture is shown whole, scaled to fit; the frame darkens the rest.
+function cropMount(host, o) {
+  var st = { frac: o.frac };
+  var rectOf = function () { return cropRectFromFrac(o.W, o.H, o.ratio, o.minSide, st.frac.x, st.frac.y, st.frac.w, st.frac.h); };
+  var maxW = Math.min(host.clientWidth || 520, o.maxW || 640), maxH = o.maxH || 360;
+  var s = Math.min((maxW - 20) / o.W, maxH / o.H, 1);
+  var dw = Math.round(o.W * s), dh = Math.round(o.H * s);
+  var Hd = function (pos, cur, css) {
+    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:#e8d49a;border:2px solid #241810;border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
+  };
+  // A 10px margin round the picture inside the clip, so the handles stay whole at the picture's edge.
+  host.innerHTML =
+    '<div class="crop-wrap" style="position:relative;width:' + (dw + 20) + 'px;margin:0 auto;padding:10px;box-sizing:border-box;overflow:hidden;border-radius:6px;background:#000;">' +
+    '<div class="crop-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;touch-action:none;">' +
+      '<img src="' + o.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;pointer-events:none;">' +
+      '<div class="crop-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:move;touch-action:none;">' +
+        Hd('nw', 'nwse-resize', 'left:0;top:0;') + Hd('ne', 'nesw-resize', 'left:100%;top:0;') +
+        Hd('sw', 'nesw-resize', 'left:0;top:100%;') + Hd('se', 'nwse-resize', 'left:100%;top:100%;') +
+      '</div>' +
+    '</div></div>' +
+    '<div style="text-align:center;font-size:12px;color:' + (o.hintColor || 'var(--text-muted)') + ';margin-top:6px;">Drag the frame to move it. Drag a corner to ' + (o.ratio ? 'zoom in or out' : 'change its size and shape') + '.</div>';
+  var frame = host.querySelector('.crop-frame');
+  function place() {
+    var r = rectOf();
+    frame.style.left = Math.round(r.left * s) + 'px'; frame.style.top = Math.round(r.top * s) + 'px';
+    frame.style.width = Math.round(r.width * s) + 'px'; frame.style.height = Math.round(r.height * s) + 'px';
+    if (o.onChange) o.onChange(r);
+  }
+  var drag = null;
+  function start(ev, mode) {
+    drag = { mode: mode, x0: ev.clientX, y0: ev.clientY, r0: rectOf() };
+    try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+    ev.preventDefault(); ev.stopPropagation();
+  }
+  function move(ev) {
+    if (!drag) return;
+    var dx = (ev.clientX - drag.x0) / s, dy = (ev.clientY - drag.y0) / s, r0 = drag.r0, prop;
+    if (drag.mode === 'move') {
+      prop = { left: r0.left + dx, top: r0.top + dy, width: r0.width, height: r0.height };
+    } else {
+      // The opposite corner stays still; never past the picture's edge on the side that grows.
+      var sx = (drag.mode === 'ne' || drag.mode === 'se') ? 1 : -1, sy = (drag.mode === 'sw' || drag.mode === 'se') ? 1 : -1;
+      var ax = sx > 0 ? r0.left : r0.left + r0.width, ay = sy > 0 ? r0.top : r0.top + r0.height;
+      var roomX = sx > 0 ? o.W - ax : ax, roomY = sy > 0 ? o.H - ay : ay;
+      var w, h;
+      if (o.ratio) {
+        var wx = r0.width + sx * dx, wy = (r0.height + sy * dy) * o.ratio;
+        w = Math.abs(wx - r0.width) >= Math.abs(wy - r0.width) ? wx : wy;
+        w = Math.min(w, roomX, roomY * o.ratio);
+        h = w / o.ratio;
+      } else {
+        w = Math.min(r0.width + sx * dx, roomX);
+        h = Math.min(r0.height + sy * dy, roomY);
+      }
+      prop = { left: sx > 0 ? ax : ax - w, top: sy > 0 ? ay : ay - h, width: w, height: h };
+    }
+    var f = cropFracFromRect(o.W, o.H, prop);
+    if (drag.mode !== 'move') {
+      // A corner held at the minimum size must not wander: pin it to the fixed corner.
+      var t = cropRectFromFrac(o.W, o.H, o.ratio, o.minSide, f.x, f.y, f.w, f.h);
+      if (drag.mode === 'nw' || drag.mode === 'sw') f.x = (r0.left + r0.width - t.width) / o.W;
+      if (drag.mode === 'nw' || drag.mode === 'ne') f.y = (r0.top + r0.height - t.height) / o.H;
+    }
+    st.frac = f;
+    place();
+  }
+  function end() { if (drag) { st.frac = cropFracFromRect(o.W, o.H, rectOf()); drag = null; } }
+  frame.onpointerdown = function (ev) { if (ev.target === frame) start(ev, 'move'); };
+  Array.prototype.forEach.call(frame.querySelectorAll('.crop-handle'), function (hd) {
+    hd.onpointerdown = function (ev) { start(ev, hd.getAttribute('data-h')); };
+    hd.onpointermove = move; hd.onpointerup = hd.onpointercancel = end;
+  });
+  frame.onpointermove = move; frame.onpointerup = frame.onpointercancel = end;
+  place();
+  return { rect: rectOf, frac: function () { return st.frac; } };
+}
+
+// =====================================================================================
+// v3.1.17 -- TD-911. COPY TO ASSETS, WITH A FRAME. Ian: "They might want to focus on one small piece
+// of the larger picture for the asset." The modal shows the archived picture with a FREE frame that
+// starts round the whole picture; only the framed part becomes the asset, and the archived picture
+// is untouched. Left at the whole picture, nothing changes from before: the server copies the file
+// as it always has. No size warning -- an asset picture is a reference for drawing, never printed.
+// =====================================================================================
+var CA_MIN_SIDE = 64;   // matches routes/assets.js CA_MIN_SIDE
+var _caCrop = null;
+
+function _caCropHost() {
+  var m = document.getElementById('copy-asset-modal'); if (!m) return null;
+  var host = document.getElementById('ca-crop');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ca-crop';
+    host.style.cssText = 'margin:4px 0 6px;';
+    var footer = m.querySelector('.modal-footer');
+    if (footer) footer.parentNode.insertBefore(host, footer); else m.querySelector('.modal').appendChild(host);
+  }
+  return host;
+}
+
+function _caCropStart(archive) {
+  _caCrop = null;
+  var host = _caCropHost(); if (!host) return;
+  host.innerHTML = '';
+  if (!archive || !archive.image_url) return;
+  host.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px;">Loading the picture\u2026</div>';
+  var img = new Image();
+  img.onload = function () {
+    if (!_caArchiveId || String(_caArchiveId) !== String(archive.id)) return;   // closed or switched meanwhile
+    var W = img.naturalWidth, H = img.naturalHeight;
+    host.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Frame the part of the picture you want as the asset.</div><div id="ca-crop-stage"></div><div id="ca-crop-size" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:4px;"></div>';
+    var stage = document.getElementById('ca-crop-stage');
+    var sizeEl = document.getElementById('ca-crop-size');
+    _caCrop = { W: W, H: H, view: cropMount(stage, { url: archive.image_url, W: W, H: H, ratio: null, minSide: CA_MIN_SIDE, frac: { x: 0, y: 0, w: 1, h: 1 }, maxW: 460, maxH: Math.min(300, Math.round((window.innerHeight || 800) * 0.35)),
+      onChange: function (r) { if (sizeEl) sizeEl.textContent = (r.width === W && r.height === H) ? ('The whole picture \u00b7 ' + W + ' \u00d7 ' + H + ' pixels') : (r.width + ' \u00d7 ' + r.height + ' pixels'); } }) };
+  };
+  img.onerror = function () { host.innerHTML = ''; _caCrop = null; };
+  img.src = archive.image_url;
+}
+
+// The frame to send, or null when it is the whole picture (then the server copies the file untouched).
+function _caCropFrac() {
+  if (!_caCrop || !_caCrop.view) return null;
+  var r = _caCrop.view.rect();
+  if (r.left === 0 && r.top === 0 && r.width === _caCrop.W && r.height === _caCrop.H) return null;
+  return _caCrop.view.frac();
+}
+
+// =====================================================================================
+// v3.1.18 -- TD-911. FRAME THE FRONT AND BACK COVER. Spec: claude/CROP_VIEW_SPEC.md.
+//
+// Ian: "Allow the user to drag the shape over the archived image so they can pick which part of the
+// image becomes the cover." Front and back covers only -- "not the title picture".
+//
+// Choosing a picture for either cover in the Archive picker now shows it in the shared crop view,
+// with the frame locked to the cover's own shape (COVER_CROP_ASPECT, measured from routes/pdf.js).
+// The frame starts exactly where the cover would cut the picture today (centred across, top or
+// bottom kept according to the title placement), so pressing Use this framing without moving it
+// changes nothing but the file. The server cuts that part out at the cover's exact shape, and the
+// book's cover field points at the cut picture, so the renderer (untouched) has nothing left to trim.
+//
+// A picture that is already the cover's shape (within COVER_FIT_TOL) skips the frame and is applied
+// exactly as before -- Ian: "Let's keep it simpler for now." So does picking the picture already on
+// the cover, which still removes it. A frame shorter than COVER_SMALL_SIDE is warned, never refused.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var COVER_SMALL_SIDE = 750;   // frame height in picture pixels; below it, warn (Ian: "set it at 750")
+var COVER_MIN_SIDE = 128;     // matches routes/archives.js COVER_MIN_SIDE
+var COVER_FIT_TOL = 0.02;     // within 2% of the cover's shape: no frame, applied as before
+var _cvCrop = null;
+
+// Still showing? Closing the picker mid-way must not apply anything afterwards.
+function _cvLive(c) { var pm = document.getElementById('replace-picker-modal'); return !!c && _cvCrop === c && !(pm && pm.classList.contains('hidden')); }
+
+function _cvFitsCover(W, H) { return Math.abs((W / H) / COVER_CROP_ASPECT - 1) <= COVER_FIT_TOL; }
+
+// Where the cover cuts the picture today: the largest cover-shaped frame, centred across, and kept
+// at the top, middle or bottom exactly as pickCropOverlay draws it for the title placement.
+function _cvDefaultFrac(W, H) {
+  var r = cropRectFromFrac(W, H, COVER_CROP_ASPECT, COVER_MIN_SIDE, 0, 0, 1, 1);
+  var anchor = coverCropAnchor();
+  var top = anchor === 'top' ? H - r.height : (anchor === 'middle' ? Math.round((H - r.height) / 2) : 0);
+  return cropFracFromRect(W, H, { left: Math.round((W - r.width) / 2), top: top, width: r.width, height: r.height });
+}
+
+// Called from applyArchiveToTarget for a prep pick. True means the frame has taken the pick over;
+// false means carry on exactly as before.
+function _cvMaybeCrop(kind, archiveId) {
+  if (kind !== 'cover' && kind !== 'back') return false;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return false;
+  var a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
+  if (!a || !a.image_url) return false;
+  if (pickerCurrentUrl() === a.image_url) return false;   // the current cover: Remove, as before
+  var grid = document.getElementById('replace-picker-grid'); if (!grid) return false;
+  var mine = { kind: kind, archive: a, view: null };
+  _cvCrop = mine;
+  grid.innerHTML = '<div style="grid-column:1/-1;font-size:13px;opacity:0.7;text-align:center;padding:20px;">Loading the picture\u2026</div>';
+  var asBefore = function () { _cvCrop = null; closeReplacePicker(); selectPrepImage(kind, archiveId); };
+  var img = new Image();
+  img.onload = function () {
+    if (!_cvLive(mine)) return;   // Back, or closed, meanwhile
+    var W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H || _cvFitsCover(W, H)) { asBefore(); return; }
+    _cvShow(W, H);
+  };
+  img.onerror = function () { if (_cvLive(mine)) asBefore(); };
+  img.src = a.image_url;
+  return true;
+}
+
+function _cvShow(W, H) {
+  var c = _cvCrop; if (!c) return;
+  var grid = document.getElementById('replace-picker-grid'); if (!grid) return;
+  var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = 'none';
+  // v3.1.19 -- the grid scrolls at 60vh for the Archive tiles; the frame, its lines and its buttons must
+  // all show at once, so the grid stops scrolling while framing and the picture is sized to fit instead.
+  grid.style.maxHeight = 'none'; grid.style.overflowY = 'visible';
+  var which = c.kind === 'cover' ? 'front cover' : 'back cover';
+  grid.innerHTML =
+    '<div id="cv-wrap" style="grid-column:1/-1;">' +
+      '<div style="font-size:14px;line-height:1.45;margin-bottom:8px;color:rgba(240,232,208,0.9);">Frame the part of this picture you want on the ' + which + '. The frame is the cover\u2019s shape.</div>' +
+      '<div id="cv-stage"></div>' +
+      '<div id="cv-msg"></div>' +
+      // v3.1.20 -- the buttons stay pinned to the bottom of the window if it still has to scroll.
+      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:#241810;padding:10px 0 2px;">' +
+        '<button class="btn" onclick="_cvBack()">Back to the Archive</button>' +
+        '<button class="btn btn-primary" id="cv-use" onclick="_cvUse()">Use this framing</button>' +
+      '</div>' +
+    '</div>';
+  _cvMount(W, H, _cvStageMaxH(), _cvDefaultFrac(W, H));
+  _cvFit(W, H);   // v3.1.20 -- measured, not estimated: phones have far more wrapped text than a desktop
+}
+
+function _cvMsg(text, kind) {
+  var m = document.getElementById('cv-msg'); if (!m) return;
+  m.textContent = text || '';
+  m.className = kind === 'warn' ? 'cv-msg-warn' : '';
+  if (kind === 'warn') {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
+  } else {
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+  }
+}
+
+function _cvShowSize(r) {
+  var line = 'Cover frame: ' + r.width + ' \u00d7 ' + r.height + ' pixels.';
+  if (r.height < COVER_SMALL_SIDE) {
+    _cvMsg(line + ' This is small for a printed cover: Campaignia\u2019s own cover pictures are about 1,000 pixels or more tall, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
+  } else {
+    _cvMsg(line);
+  }
+}
+
+function _cvBack() { _cvCrop = null; renderPicker(); }
+
+// From renderPicker: every redraw of the Archive grid puts the filters back and forgets the frame.
+function _cvClear() {
+  _cvCrop = null;
+  var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = '';
+  var g = document.getElementById('replace-picker-grid'); if (g) { g.style.maxHeight = ''; g.style.overflowY = ''; }   // v3.1.19
+}
+
+function _cvUse() {
+  var c = _cvCrop; if (!c || !c.view) return;
+  var cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) return;
+  var btn = document.getElementById('cv-use'); if (btn) btn.disabled = true;
+  _cvMsg('Cutting out your cover\u2026');
+  var f = c.view.frac();
+  fetch('/api/campaigns/' + cid + '/archives/' + c.archive.id + '/cover-crop', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ crop: { x: f.x, y: f.y, w: f.w } })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!_cvLive(c)) return;   // closed or went back meanwhile
+      if (!d || d.error || !d.url) { if (btn) btn.disabled = false; _cvMsg((d && d.error) || 'Could not cut out the cover.', 'error'); return; }
+      _cvCrop = null;
+      closePrepImagePicker();
+      _prepMemberSetImage(c.kind, d.url);
+    })
+    .catch(function () { if (_cvLive(c)) { if (btn) btn.disabled = false; _cvMsg('Connection error. Please try again.', 'error'); } });
+}
+
+// v3.1.19 -- TD-911. Ian: the cover frame "had a scroll bar and the buttons were cut off." The picture's
+// height is whatever is left of the modal (90% of the window) after the title, the line above the
+// picture, the hint, a two-line warning and the buttons (CV_CHROME_H, measured in Chromium), between
+// 160 and 420 px. So the whole frame, its warning and both buttons show without scrolling.
+var CV_CHROME_H = 380;
+function _cvStageMaxH() {
+  var h = window.innerHeight || 800;
+  return Math.max(160, Math.min(420, Math.round(h * 0.9) - CV_CHROME_H));
+}
+
+// =====================================================================================
+// v3.1.20 -- TD-692 (again) and TD-911. NO AUTOFILL OUTSIDE MY ACCOUNT AND THE SHIPPING ADDRESS.
+//
+// Ian, on his phone: the Archive's Moment Name filter arrived filled with his email and showed nothing
+// until he cleared it -- after v3.0.844 had already put every vendor opt-out on that box. The cause
+// was the page, not the box: app.html had no <form>, so Chrome's password manager grouped every input
+// with My Account's password boxes and filled a text box as the "username" on load. v3.1.20 gives My
+// Account its own forms (the cure), and this makes the rest of the app say no as well (the belt):
+// every text-like input and textarea outside [data-autofill-ok] gets autocomplete=off and the vendor
+// opt-outs, including ones drawn later, through one MutationObserver. Ian: "The only place we might
+// want auto filling is on the My Account page" -- and the shipping address, which he kept.
+// _filterTyped is the braces on the filter boxes: text that arrives while the box is not being typed
+// in is put back, so a filler that ignores everything above still cannot move a filter.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var NO_AUTOFILL_TYPES = ['', 'text', 'search', 'email', 'tel', 'url', 'number'];
+
+function _noAutofill(el) {
+  if (!el || !el.tagName) return;
+  var tag = el.tagName.toLowerCase();
+  if (tag !== 'input' && tag !== 'textarea') return;
+  if (tag === 'input' && NO_AUTOFILL_TYPES.indexOf(String(el.getAttribute('type') || '').toLowerCase()) === -1) return;
+  if (el.closest && el.closest('[data-autofill-ok]')) return;
+  if (el.getAttribute('autocomplete') !== 'off') el.setAttribute('autocomplete', 'off');
+  if (!el.hasAttribute('data-1p-ignore')) el.setAttribute('data-1p-ignore', '');
+  if (!el.hasAttribute('data-lpignore')) el.setAttribute('data-lpignore', 'true');
+  if (!el.hasAttribute('data-bwignore')) el.setAttribute('data-bwignore', '');
+  if (!el.hasAttribute('data-form-type')) el.setAttribute('data-form-type', 'other');
+}
+
+function _noAutofillSweep(root) {
+  if (!root) return;
+  if (root.nodeType === 1) _noAutofill(root);
+  if (root.querySelectorAll) Array.prototype.forEach.call(root.querySelectorAll('input, textarea'), _noAutofill);
+}
+
+function _noAutofillStart() {
+  try {
+    _noAutofillSweep(document.body);
+    if (typeof MutationObserver === 'function' && document.body) {
+      new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var added = list[i].addedNodes;
+          for (var k = 0; k < added.length; k++) if (added[k].nodeType === 1) _noAutofillSweep(added[k]);
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  } catch (e) {}
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _noAutofillStart); else _noAutofillStart();
+
+// True when the reader is typing in this box; otherwise the text is put back to what they last typed
+// (or what the box was drawn with) and false tells the caller to leave the filter alone.
+function _filterTyped(el) {
+  if (document.activeElement === el) { el.setAttribute('data-last', el.value); return true; }
+  el.value = el.hasAttribute('data-last') ? el.getAttribute('data-last') : el.defaultValue;
+  return false;
+}
+
+// v3.1.20 -- TD-911. Ian, on his phone: with a tall picture "it took me a long time to figure out how to
+// scroll down to the accept button". _cvStageMaxH is an estimate of the text around the picture, and on
+// a phone that text wraps to twice the lines. So after the frame is drawn, the modal is MEASURED and the
+// picture shrinks by exactly what still overflows (never below 160 px); the buttons are also pinned to
+// the bottom of the window in case it still has to scroll.
+function _cvMount(W, H, maxH, frac) {
+  var c = _cvCrop; if (!c) return;
+  c.maxH = maxH;
+  c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
+    frac: frac, maxW: 640, maxH: maxH, onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+}
+
+function _cvFit(W, H) {
+  var c = _cvCrop; if (!c || !c.view) return;
+  var md = document.querySelector('#replace-picker-modal .modal'); if (!md) return;
+  var over = md.scrollHeight - md.clientHeight;
+  if (over > 1 && c.maxH > 160) _cvMount(W, H, Math.max(160, c.maxH - over - 4), c.view.frac());
 }
