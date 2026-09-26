@@ -4625,10 +4625,11 @@ function renderReview(data) {
 
     var assetChips = (p.assets || []).map(function(a) {
       var rm = canEditNarr
-        ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
+        ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
         : '';
       // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
-      return '<span class="review-chip review-chip-asset">' +
+      // v3.1.13 -- TD-908. Click the pill to see the asset's picture; the x still only removes.
+      return '<span class="review-chip review-chip-asset" data-asset-id="' + (a.id == null ? '' : a.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openAssetPicture(this)">' +
         escapeHtmlReview(a.name) + rm + '</span>';
     }).join('');
     if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
@@ -26843,9 +26844,10 @@ function castRowsHtml(p, momentId, canEdit, opts) {
   }).join();
   if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
   var assetChips = (p.assets || []).map(function(a){
-    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
     // v3.0.850 -- TD-706. The name alone; the chip's colour already says it is an asset.
-    return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + rm + '</span>';
+    // v3.1.13 -- TD-908. Click the pill to see the asset's picture; the x still only removes.
+    return '<span class="review-chip review-chip-asset" data-asset-id="' + (a.id == null ? '' : a.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openAssetPicture(this)">' + escapeHtmlReview(a.name) + rm + '</span>';
   }).join();
   if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
   var addChar = '', addAsset = '';
@@ -32208,4 +32210,41 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
       setTimeout(poll, 3000);
     }).catch(function () { if (!stop) setTimeout(poll, 5000); });
   })();
+}
+
+// =====================================================================================
+// v3.1.13 -- TD-908. CLICK AN ASSET PILL TO SEE ITS PICTURE. Ian: "when a user clicks on the pill
+// for the asset on the review or on the story board tab... it opens the picture of the asset...
+// without leaving the review tab." And: "If they click the x then it will still remove it." -- the
+// x stops the click from reaching the pill, so it only removes.
+//
+// The Review data carries each asset's id and name but not its picture, so this asks the asset list
+// (GET /assets, the same one the Asset Library reads) at click time -- always the current picture,
+// including one that finished drawing a moment ago. By id first; by name when an automatically
+// matched pill has no id. Shown in the app's own lightbox.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function openAssetPicture(el) {
+  if (!el || !state.currentCampaign) return;
+  var id = el.getAttribute('data-asset-id') || '';
+  var shown = (el.firstChild && el.firstChild.nodeType === 3) ? String(el.firstChild.textContent || '').trim() : '';
+  var CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets')
+    .then(function (r) { return r.json(); })
+    .then(function (list) {
+      list = Array.isArray(list) ? list : [];
+      var a = null;
+      if (id) a = list.filter(function (x) { return String(x.id) === String(id); })[0] || null;
+      if (!a && shown) {
+        var want = shown.toLowerCase();
+        a = list.filter(function (x) {
+          return String(x.name || '').split('/').some(function (t) { return t.trim().toLowerCase() === want; });
+        })[0] || null;
+      }
+      if (!a) { billingToast('That asset is no longer in the Asset Library.', 'info'); return; }
+      if (!a.image_url) { billingToast('That asset has no picture yet' + (a.description ? ' \u2014 it may still be drawing.' : '.'), 'info'); return; }
+      var cap = String(a.name || shown) + (CAT[a.category] ? ' \u2014 ' + CAT[a.category] : '');
+      openLightbox(a.image_url, cap);
+    })
+    .catch(function () { billingToast('Could not load that asset.', 'error'); });
 }

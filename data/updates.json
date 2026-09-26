@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.13",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3113-asset-pill-picture",
+        "kind": "change",
+        "public": true,
+        "summary": "Click an asset pill on the Review or Storyboard tab to see that asset's picture without leaving the page.",
+        "detail": "Review tab and the Storyboard panel options: clicking an asset pill opens its picture full size in the lightbox, captioned with its name and category (Escape or a click outside closes it). Clicking the x on the pill still only removes it from the panel and does not open the picture. A pill whose asset has no picture yet says so; an automatically matched pill without an id is found by name.",
+        "td": [
+          "TD-908"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.12",
     "staged_on": "2026-09-24",
     "entries": [
