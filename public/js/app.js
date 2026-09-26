@@ -32803,6 +32803,9 @@ function _cvShow(W, H) {
   var c = _cvCrop; if (!c) return;
   var grid = document.getElementById('replace-picker-grid'); if (!grid) return;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = 'none';
+  // v3.1.19 -- the grid scrolls at 60vh for the Archive tiles; the frame, its lines and its buttons must
+  // all show at once, so the grid stops scrolling while framing and the picture is sized to fit instead.
+  grid.style.maxHeight = 'none'; grid.style.overflowY = 'visible';
   var which = c.kind === 'cover' ? 'front cover' : 'back cover';
   grid.innerHTML =
     '<div id="cv-wrap" style="grid-column:1/-1;">' +
@@ -32815,7 +32818,7 @@ function _cvShow(W, H) {
       '</div>' +
     '</div>';
   c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
-    frac: _cvDefaultFrac(W, H), maxW: 640, maxH: Math.min(420, Math.round((window.innerHeight || 800) * 0.45)), onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+    frac: _cvDefaultFrac(W, H), maxW: 640, maxH: _cvStageMaxH(), onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
 }
 
 function _cvMsg(text, kind) {
@@ -32844,6 +32847,7 @@ function _cvBack() { _cvCrop = null; renderPicker(); }
 function _cvClear() {
   _cvCrop = null;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = '';
+  var g = document.getElementById('replace-picker-grid'); if (g) { g.style.maxHeight = ''; g.style.overflowY = ''; }   // v3.1.19
 }
 
 function _cvUse() {
@@ -32866,4 +32870,14 @@ function _cvUse() {
       _prepMemberSetImage(c.kind, d.url);
     })
     .catch(function () { if (_cvLive(c)) { if (btn) btn.disabled = false; _cvMsg('Connection error. Please try again.', 'error'); } });
+}
+
+// v3.1.19 -- TD-911. Ian: the cover frame "had a scroll bar and the buttons were cut off." The picture's
+// height is whatever is left of the modal (90% of the window) after the title, the line above the
+// picture, the hint, a two-line warning and the buttons (CV_CHROME_H, measured in Chromium), between
+// 160 and 420 px. So the whole frame, its warning and both buttons show without scrolling.
+var CV_CHROME_H = 380;
+function _cvStageMaxH() {
+  var h = window.innerHeight || 800;
+  return Math.max(160, Math.min(420, Math.round(h * 0.9) - CV_CHROME_H));
 }

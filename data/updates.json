@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.19",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3119-cover-frame-fit",
+        "kind": "fix",
+        "public": true,
+        "summary": "The cover framing window now fits on the screen: no scroll bar, and the buttons are always visible.",
+        "detail": "Publish, Cover or Back Cover, choose a picture that opens the frame: the picture is sized to the window so the frame, the size line or warning, and Back to the Archive / Use this framing all show without scrolling. Try it with a small picture (two-line warning) and on a short window.",
+        "td": [
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.18",
     "staged_on": "2026-09-26",
     "entries": [
