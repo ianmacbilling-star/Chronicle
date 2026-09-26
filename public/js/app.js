@@ -12016,6 +12016,7 @@ function openPrepImagePicker(kind, campaignId) {
 // ordinary modals.
 function pickerRaise(modal) {
   try { modal.style.zIndex = '100002'; } catch (e) {}
+  try { _rpSync(); } catch (e) {}   // v3.1.15 -- the Upload tab shows only when the picker is choosing for a panel
 }
 function pickerRelease(modal) {
   try { modal.style.zIndex = ''; } catch (e) {}
@@ -15245,6 +15246,7 @@ function submitRetouch() {
 
 function openReplacePicker(mode, id) {
   state.pickerCtx = { mode: mode };
+  try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
   var tEl = document.getElementById('replace-picker-title');
   if (mode === 'moment') {
@@ -15253,7 +15255,7 @@ function openReplacePicker(mode, id) {
     state.pickerCtx.forkId = state.currentForkId || null;
     if (state.pickerCtx.sessionId) f.session = String(state.pickerCtx.sessionId);
     if (state.currentForkId) f.version = String(state.currentForkId);
-    if (tEl) tEl.textContent = 'Replace panel image from Archive';
+    if (tEl) tEl.textContent = 'Replace panel image';   // v3.1.15 -- the Archive is now one of two tabs
   } else if (mode === 'canonical') {
     state.pickerCtx.characterId = id;
     state.pickerCtx.sessionId = null;
@@ -15302,6 +15304,7 @@ function clearPickerFilters() {
 }
 
 function renderPicker() {
+  try { _rpSync(); } catch (e) {}   // v3.1.15
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
     '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
@@ -16268,7 +16271,7 @@ function renderStoryboard() {
       : '';
     var replaceBtn = m.locked
       ? '<button class="panel-pill pp-replace dm-only" disabled title="Unlock to replace">Replace</button>'
-      : '<button class="panel-pill pp-replace dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
+      : '<button class="panel-pill pp-replace dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive, or upload your own">Replace</button>';
     var archiveBtn = '';
     if (m.image) {
       var _arched = isMomentArchived(m);
@@ -32293,4 +32296,236 @@ function openAssetPicture(el) {
       openLightbox(a.image_url, cap);
     })
     .catch(function () { billingToast('Could not load that asset.', 'error'); });
+}
+
+// =====================================================================================
+// v3.1.15 -- TD-910. "UPLOAD YOUR OWN" ON THE PANEL REPLACE PICKER. Spec: claude/OWN_ART_UPLOAD_SPEC.md.
+//
+// Ian: a tab beside From Archive; "at the top of the file upload tab... say something like... we
+// need to fit your image into one of these X number of shapes. Then show small images of the aspect
+// ratio across the top above the drop zone." The picture is cropped to the shape it already fits
+// best, the reader can slide the crop or pick another shape, and the panel becomes that shape. The
+// rights line sits on the drop zone like the other upload warnings. Small pictures are warned, not
+// refused. The panel is locked on arrival.
+//
+// Only for PANELS (pickerCtx.mode 'moment'). Every other use of this picker -- characters, assets,
+// the book cover, the Title Builder -- sees exactly the picker it had: _rpSync hides the tabs and
+// the upload pane whenever the picker is not choosing for a panel. It runs from pickerRaise, which
+// every opener calls, and from renderPicker, which every opener ends in.
+// APPENDED, NOT INSERTED (TD-853); none of these names exist elsewhere in this file.
+// =====================================================================================
+var RP_SHAPES = [
+  { key: 'panoramic', label: 'Panoramic', w: 21, h: 9 },
+  { key: 'wide', label: 'Wide', w: 16, h: 9 },
+  { key: 'standard', label: 'Standard', w: 4, h: 3 },
+  { key: 'square', label: 'Square', w: 1, h: 1 },
+  { key: 'fullpage', label: 'Full page', w: 3, h: 4 },
+  { key: 'tall', label: 'Tall', w: 2, h: 3 },
+  { key: 'tower', label: 'Tower', w: 1, h: 4 }
+];
+var RP_SMALL_SIDE = 1024;   // matches routes/moments.js OWN_SMALL_SIDE
+
+function _rpShapeByKey(k) { return RP_SHAPES.filter(function (s) { return s.key === k; })[0] || null; }
+function _rpNearestShape(w, h) {
+  var a = Math.log(w / h), best = 'standard', bestD = Infinity;
+  RP_SHAPES.forEach(function (s) { var d = Math.abs(Math.log(s.w / s.h) - a); if (d < bestD - 1e-9) { bestD = d; best = s.key; } });
+  return best;
+}
+function _rpCropRect(W, H, key, offset) {
+  var s = _rpShapeByKey(key), r = s.w / s.h, o = Math.min(1, Math.max(0, offset));
+  if (W / H > r) { var cw = Math.max(1, Math.min(W, Math.round(H * r))); return { left: Math.round(o * (W - cw)), top: 0, width: cw, height: H, axis: 'x' }; }
+  var ch = Math.max(1, Math.min(H, Math.round(W / r)));
+  return { left: 0, top: Math.round(o * (H - ch)), width: W, height: ch, axis: 'y' };
+}
+function _rpFinalSize(rect) {
+  var m = Math.max(rect.width, rect.height);
+  if (m <= 2048) return { w: rect.width, h: rect.height };
+  var k = 2048 / m; return { w: Math.round(rect.width * k), h: Math.round(rect.height * k) };
+}
+
+function _rpEls() {
+  var modal = document.getElementById('replace-picker-modal');
+  if (!modal) return null;
+  var filters = document.getElementById('replace-picker-filters');
+  var grid = document.getElementById('replace-picker-grid');
+  if (!filters || !grid) return null;
+  var tabs = document.getElementById('replace-picker-tabs');
+  if (!tabs) {
+    tabs = document.createElement('div');
+    tabs.id = 'replace-picker-tabs';
+    tabs.style.cssText = 'display:flex;gap:6px;margin:0 0 12px;border-bottom:1px solid rgba(201,168,76,0.2);';
+    filters.parentNode.insertBefore(tabs, filters);
+  }
+  var pane = document.getElementById('replace-upload-pane');
+  if (!pane) {
+    pane = document.createElement('div');
+    pane.id = 'replace-upload-pane';
+    grid.parentNode.insertBefore(pane, grid.nextSibling);
+  }
+  return { modal: modal, filters: filters, grid: grid, tabs: tabs, pane: pane };
+}
+
+function _rpSync() {
+  var e = _rpEls(); if (!e) return;
+  var forPanel = !!(state.pickerCtx && state.pickerCtx.mode === 'moment');
+  if (!forPanel) {
+    e.tabs.style.display = 'none'; e.pane.style.display = 'none';
+    e.filters.style.display = ''; e.grid.style.display = '';
+    return;
+  }
+  var tab = state.rpTab === 'upload' ? 'upload' : 'archive';
+  e.tabs.style.display = 'flex';
+  e.tabs.innerHTML = ['archive', 'upload'].map(function (t) {
+    var on = t === tab;
+    return '<button type="button" class="rp-tab" data-tab="' + t + '" onclick="_rpShowTab(\'' + t + '\')" style="background:none;border:none;border-bottom:2px solid ' +
+      (on ? '#c9a84c' : 'transparent') + ';color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
+      (t === 'archive' ? 'From Archive' : 'Upload your own') + '</button>';
+  }).join('');
+  e.filters.style.display = tab === 'archive' ? '' : 'none';
+  e.grid.style.display = tab === 'archive' ? '' : 'none';
+  e.pane.style.display = tab === 'upload' ? 'block' : 'none';
+  if (tab === 'upload' && !e.pane.getAttribute('data-built')) _rpBuildPane();
+}
+
+function _rpShowTab(t) { state.rpTab = t; _rpSync(); }
+
+function _rpReset() {
+  if (state.rpUp && state.rpUp.url) { try { URL.revokeObjectURL(state.rpUp.url); } catch (e) {} }
+  state.rpUp = null;
+  state.rpTab = 'archive';
+  var pane = document.getElementById('replace-upload-pane');
+  if (pane) { pane.innerHTML = ''; pane.removeAttribute('data-built'); }
+}
+
+function _rpShapeStrip(activeKey) {
+  return RP_SHAPES.map(function (s) {
+    var bw = s.w >= s.h ? 44 : Math.round(44 * s.w / s.h), bh = s.w >= s.h ? Math.round(44 * s.h / s.w) : 44;
+    var on = s.key === activeKey, clickable = !!(state.rpUp && state.rpUp.img);
+    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="_rpPickShape(\'' + s.key + '\')"' : '') +
+      ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;height:74px;padding:4px;background:' +
+      (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
+      '<span style="display:block;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(201,168,76,0.6)') + ';border-radius:2px;"></span>' +
+      '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
+  }).join('');
+}
+
+function _rpBuildPane() {
+  var pane = document.getElementById('replace-upload-pane'); if (!pane) return;
+  pane.setAttribute('data-built', '1');
+  pane.innerHTML =
+    '<div style="font-size:14px;color:#f0e8d0;margin-bottom:10px;">We need to fit your image into one of these ' + RP_SHAPES.length + ' shapes. We will pick the one it fits best, and the panel will take that shape.</div>' +
+    '<div id="rp-shapes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' + _rpShapeStrip(null) + '</div>' +
+    '<div id="rp-drop" style="border:2px dashed rgba(201,168,76,0.45);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;color:rgba(240,232,208,0.85);">' +
+      '<div style="font-size:15px;">Drop an image here, or click to choose one</div>' +
+      '<div style="font-size:12px;color:rgba(240,232,208,0.6);margin-top:4px;">JPG, PNG, WebP or HEIC (iPhone), up to 20 MB</div>' +
+      '<input type="file" id="rp-file" accept="image/*,.heic,.heif" style="display:none;">' +
+    '</div>' +
+    '<div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>' +
+    '<div id="rp-stage" style="display:none;margin-top:12px;"></div>' +
+    '<div id="rp-msg" style="font-size:13px;line-height:1.45;margin-top:10px;"></div>' +
+    '<div id="rp-actions" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">' +
+      '<button type="button" class="btn btn-sm" onclick="_rpChooseAgain()">Choose a different image</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" id="rp-use" onclick="_rpUse()">Use this image</button>' +
+    '</div>';
+  var drop = document.getElementById('rp-drop'), input = document.getElementById('rp-file');
+  drop.onclick = function () { input.click(); };
+  input.onchange = function () { if (input.files && input.files[0]) _rpTakeFile(input.files[0]); input.value = ''; };
+  drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = '#e8d49a'; };
+  drop.ondragleave = function () { drop.style.borderColor = 'rgba(201,168,76,0.45)'; };
+  drop.ondrop = function (ev) {
+    ev.preventDefault(); drop.style.borderColor = 'rgba(201,168,76,0.45)';
+    var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if (f) _rpTakeFile(f);
+  };
+}
+
+function _rpMsg(text, kind) {
+  var m = document.getElementById('rp-msg'); if (!m) return;
+  m.textContent = text || '';
+  m.style.color = kind === 'error' ? '#f0a090' : kind === 'warn' ? '#e8c170' : 'rgba(240,232,208,0.85)';
+}
+
+function _rpTakeFile(file) {
+  if (!isSupportedUploadImage(file)) { _rpMsg(UPLOAD_TYPE_MSG, 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { _rpMsg('That image is too large \u2014 the maximum size is 20 MB.', 'error'); return; }
+  if (isHeicFile(file)) {
+    _rpMsg('Converting your iPhone photo\u2026');
+    heicToJpegFile(file).then(_rpTakeFile, function (err) { _rpMsg((err && err.message) || UPLOAD_TYPE_MSG, 'error'); });
+    return;
+  }
+  _rpMsg('');
+  if (state.rpUp && state.rpUp.url) { try { URL.revokeObjectURL(state.rpUp.url); } catch (e) {} }
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function () {
+    state.rpUp = { file: file, url: url, img: img, W: img.naturalWidth, H: img.naturalHeight, shape: _rpNearestShape(img.naturalWidth, img.naturalHeight), offset: 0.5 };
+    _rpRender();
+  };
+  img.onerror = function () { _rpMsg('We could not read that image. Please try a JPG, PNG, WebP or HEIC.', 'error'); };
+  img.src = url;
+}
+
+function _rpPickShape(key) { if (!state.rpUp) return; state.rpUp.shape = key; state.rpUp.offset = 0.5; _rpRender(); }
+
+function _rpChooseAgain() { var i = document.getElementById('rp-file'); if (i) i.click(); }
+
+function _rpRender() {
+  var u = state.rpUp; if (!u) return;
+  var strip = document.getElementById('rp-shapes'); if (strip) strip.innerHTML = _rpShapeStrip(u.shape);
+  var drop = document.getElementById('rp-drop'); if (drop) drop.style.display = 'none';
+  var stage = document.getElementById('rp-stage'), acts = document.getElementById('rp-actions');
+  if (!stage) return;
+  stage.style.display = 'block'; if (acts) acts.style.display = 'flex';
+  var maxW = Math.min(stage.clientWidth || 520, 640), maxH = 360;
+  var s = Math.min(maxW / u.W, maxH / u.H, 1);
+  var dw = Math.round(u.W * s), dh = Math.round(u.H * s);
+  var rect = _rpCropRect(u.W, u.H, u.shape, u.offset);
+  stage.innerHTML =
+    '<div id="rp-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;margin:0 auto;overflow:hidden;border-radius:6px;background:#000;touch-action:none;">' +
+      '<img src="' + u.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;">' +
+      '<div id="rp-frame" style="position:absolute;left:' + Math.round(rect.left * s) + 'px;top:' + Math.round(rect.top * s) + 'px;width:' + Math.round(rect.width * s) + 'px;height:' + Math.round(rect.height * s) +
+        'px;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:' + (rect.axis === 'x' ? 'ew-resize' : 'ns-resize') + ';"></div>' +
+    '</div>' +
+    '<div style="text-align:center;font-size:12px;color:rgba(240,232,208,0.6);margin-top:6px;">Drag the frame to choose what is kept.</div>';
+  var frame = document.getElementById('rp-frame');
+  var dragging = false, startPos = 0, startOff = 0;
+  var slack = rect.axis === 'x' ? (u.W - rect.width) * s : (u.H - rect.height) * s;
+  frame.onpointerdown = function (ev) { if (slack <= 0) return; dragging = true; startPos = rect.axis === 'x' ? ev.clientX : ev.clientY; startOff = u.offset; try { frame.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); };
+  frame.onpointermove = function (ev) {
+    if (!dragging) return;
+    var d = (rect.axis === 'x' ? ev.clientX : ev.clientY) - startPos;
+    u.offset = Math.min(1, Math.max(0, startOff + d / slack));
+    var r2 = _rpCropRect(u.W, u.H, u.shape, u.offset);
+    frame.style.left = Math.round(r2.left * s) + 'px'; frame.style.top = Math.round(r2.top * s) + 'px';
+  };
+  frame.onpointerup = frame.onpointercancel = function () { dragging = false; };
+  var fin = _rpFinalSize(rect), sh = _rpShapeByKey(u.shape);
+  var line = sh.label + ' ' + sh.w + ':' + sh.h + ' \u00b7 ' + fin.w + ' \u00d7 ' + fin.h + ' pixels once cropped.';
+  if (Math.max(fin.w, fin.h) < RP_SMALL_SIDE) {
+    _rpMsg(line + ' This picture is small for print: Campaignia\u2019s own panel pictures are about ' + RP_SMALL_SIDE.toLocaleString() +
+      ' pixels or more on the long side, so it may look soft in the printed book. You can still use it \u2014 check it in True View before you order.', 'warn');
+  } else {
+    _rpMsg(line);
+  }
+}
+
+function _rpUse() {
+  var u = state.rpUp, ctx = state.pickerCtx;
+  if (!u || !ctx || ctx.mode !== 'moment' || !state.currentCampaign || !state.currentSession) return;
+  var btn = document.getElementById('rp-use'); if (btn) btn.disabled = true;
+  _rpMsg('Putting your image on the panel\u2026');
+  var fd = new FormData();
+  fd.append('image', u.file);
+  fd.append('shape', u.shape);
+  fd.append('offset', String(u.offset));
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + ctx.momentId + '/upload-image', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (btn) btn.disabled = false; _rpMsg((d && (d.message || d.error)) || 'Could not put that image on the panel.', 'error'); return; }
+      closeReplacePicker();
+      _rpReset();
+      if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages();
+      billingToast('Your image is on the panel and locked, so Generate Images will leave it alone. Unlock it if you want to retouch it.', 'info');
+    })
+    .catch(function () { if (btn) btn.disabled = false; _rpMsg('Connection error. Please try again.', 'error'); });
 }

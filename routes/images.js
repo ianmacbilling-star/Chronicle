@@ -1831,8 +1831,20 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
       if (_prevBT) _rMeta.built_title = _prevBT; else demoteBuiltTitle(_rMeta);
       if (_liveBT) _rMeta.prev_built_title = _liveBT; else delete _rMeta.prev_built_title;
     } catch (e) { _rMeta = null; }
-    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ?, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null,
+    // v3.1.15 -- TD-910. THE SHAPE SWAPS WITH THE PICTURE. Uploading your own picture (and applying an
+    // archived one) can change the panel's shape; the shape that went with the displaced picture is
+    // recorded as layout_meta.prev_shape, TIED TO THAT IMAGE URL. It is used only while it still
+    // describes the picture in the undo slot -- a later Regenerate re-arms the slot at the current
+    // shape and leaves a stale record that simply no longer matches -- and it swaps like the rest.
+    var _revShape = null;
+    if (_rMeta && _rMeta.prev_shape && _rMeta.prev_shape.image && _rMeta.prev_shape.image === moment.revert_image && _rMeta.prev_shape.shape) {
+      _revShape = _rMeta.prev_shape.shape;
+      _rMeta.prev_shape = { shape: moment.shape || 'standard', image: current || null };
+    } else if (_rMeta && _rMeta.prev_shape) {
+      delete _rMeta.prev_shape;
+    }
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), revert_image = ?, revert_img_w = ?, revert_img_h = ?, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _revShape,
            current || null, moment.img_w || null, moment.img_h || null,
            _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
     res.json({ success: true, image: moment.revert_image });

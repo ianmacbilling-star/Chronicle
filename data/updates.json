@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.15",
+    "staged_on": "2026-09-25",
+    "entries": [
+      {
+        "id": "3115-own-panel-image",
+        "kind": "feature",
+        "public": true,
+        "summary": "Put your own picture on a storyboard panel: Replace now has an Upload your own tab. Campaignia fits it to the panel shape it suits best, and you can slide the crop.",
+        "detail": "Storyboard, any panel's Replace pill: two tabs, From Archive (as before) and Upload your own. The upload tab shows the seven panel shapes, a drop zone with the usual rights line, and after a file is chosen a crop preview in the shape the picture fits best (click another shape to change it; drag the frame to choose what is kept). A picture under 1024 pixels on its long side once cropped shows a warning and can still be used. Use this image: the panel takes the new shape, the picture is stored at that exact ratio (up to 2048 px), the panel is LOCKED (Generate Images skips it; unlock to retouch), and the previous picture is in Revert -- unlock, Revert, and the old picture AND its old shape come back. JPG, PNG, WebP and HEIC, up to 20 MB, any tier, no tokens. Replacing from the Archive now also remembers the shape for Revert. Other pickers (characters, assets, cover, Title Builder) show no upload tab.",
+        "td": [
+          "TD-910"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.14",
     "staged_on": "2026-09-25",
     "entries": [

@@ -373,7 +373,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
         // v3.0.654 -- img_w and img_h are selected because the revert slot below records them.
         // They were not in this list and node --check is perfectly happy with moment.img_w being
         // undefined -- it would have stored null dimensions and nothing would have said so.
-        'SELECT m.id, m.image, m.locked, m.layout_meta, m.img_w, m.img_h, sf.user_id AS fork_owner ' +
+        'SELECT m.id, m.image, m.locked, m.layout_meta, m.img_w, m.img_h, m.shape, sf.user_id AS fork_owner ' +   // v3.1.15 -- m.shape for prev_shape
         'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id ' +
         'JOIN sessions s ON s.id = m.session_id ' +
         'WHERE m.id = ? AND s.campaign_id = ?'
@@ -425,6 +425,15 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
           // An ordinary picture has landed. The row stops being a chapter title -- and v3.0.660
           // keeps the title it displaced in the draft rather than stranding its bytes.
           demoteBuiltTitle(_pm);
+          _touched = true;
+        }
+        // v3.1.15 -- TD-910, the twin of the upload route: an archived picture of another shape changes
+        // the panel's shape, so the shape that went with the displaced picture is recorded for Revert.
+        if (archive.shape && archive.shape !== moment.shape && prevImg && prevImg !== freshUrl) {
+          _pm.prev_shape = { shape: moment.shape || 'standard', image: prevImg };
+          _touched = true;
+        } else if (_pm.prev_shape) {
+          delete _pm.prev_shape;
           _touched = true;
         }
         if (_touched) mergedMeta = JSON.stringify(_pm);
