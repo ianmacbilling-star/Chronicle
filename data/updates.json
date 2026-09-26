@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.1.20",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3120-no-autofill",
+        "kind": "fix",
+        "public": true,
+        "summary": "Browsers no longer fill your email into filter and search boxes; autofill is kept only for My Account and the shipping address.",
+        "detail": "On a phone, the Archive's Moment Name filter could arrive filled with your email address and show nothing until cleared. My Account's profile and password now sit in their own forms, every other text box is marked not to autofill, and the filter boxes ignore text nobody typed. The shipping address on the Order tab still offers your saved address. Also: framing a cover on a phone now fits the picture to the screen and keeps the buttons in view.",
+        "td": [
+          "TD-692",
+          "TD-911"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.19",
     "staged_on": "2026-09-26",
     "entries": [

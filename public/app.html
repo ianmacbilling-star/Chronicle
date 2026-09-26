@@ -771,25 +771,25 @@
 
                 <!-- RIGHT COLUMN: ship to -->
                   </div>
-                  <div class="ord-col">
+                  <div class="ord-col" data-autofill-ok>   <!-- v3.1.20 -- Ian: the shipping address "should auto fill if people want it to" -->
                   <div class="ord-sec">SHIP TO</div>
                   <div class="ord-row">
                     <div class="ord-f1">
                       <label class="ord-lbl">Full name</label>
-                      <input id="print-ship-name" type="text" placeholder="Full name" class="ord-in">
+                      <input id="print-ship-name" type="text" autocomplete="shipping name" placeholder="Full name" class="ord-in">
                     </div>
                     <div class="ord-f2">
                       <label class="ord-lbl">Phone</label>
-                      <input id="print-ship-phone" type="text" placeholder="Phone" class="ord-in">
+                      <input id="print-ship-phone" type="text" autocomplete="shipping tel" placeholder="Phone" class="ord-in">
                     </div>
                   </div>
                   <label class="ord-lbl">Street address</label>
-                  <input id="print-ship-street1" type="text" placeholder="Street address" class="ord-in">
-                  <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" class="ord-in">
+                  <input id="print-ship-street1" type="text" autocomplete="shipping address-line1" placeholder="Street address" class="ord-in">
+                  <input id="print-ship-street2" type="text" autocomplete="shipping address-line2" placeholder="Apt, suite (optional)" class="ord-in">
                   <div class="ord-row">
                     <div class="ord-f1">
                       <label class="ord-lbl">City</label>
-                      <input id="print-ship-city" type="text" placeholder="City" class="ord-in">
+                      <input id="print-ship-city" type="text" autocomplete="shipping address-level2" placeholder="City" class="ord-in">
                     </div>
                     <div class="ord-f2">
                       <label class="ord-lbl">State</label>
@@ -804,7 +804,7 @@
                   <div class="ord-row">
                     <div class="ord-f2">
                       <label class="ord-lbl">Postal code</label>
-                      <input id="print-ship-postcode" type="text" placeholder="Postal code" class="ord-in">
+                      <input id="print-ship-postcode" type="text" autocomplete="shipping postal-code" placeholder="Postal code" class="ord-in">
                     </div>
                     <div class="ord-f3">
                       <label class="ord-lbl">Country</label>
@@ -1474,45 +1474,52 @@
       <!-- Profile + Change password, side by side -->
       <div class="settings-section">
         <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
-          <div style="flex:1;min-width:260px;">
+          <!-- v3.1.20 -- TD-692. MY ACCOUNT GETS REAL FORMS. The app page had no <form> at all, so Chrome's
+               password manager treated every box on the page as one login form, took a text box ahead
+               of these password boxes for the username, and filled Ian's email into the Archive's
+               Moment Name filter on load. Giving the profile and the password their own forms tells it
+               where the login really is. This is the one place autofill is welcome (data-autofill-ok).
+               The buttons are type="button" and the forms never submit, so Enter cannot press the
+               wrong button. -->
+          <form id="settings-profile-form" data-autofill-ok autocomplete="on" onsubmit="return false;" style="flex:1;min-width:260px;">
             <div class="settings-section-title">Profile</div>
             <div class="settings-section-desc">Your name, email, and pen name</div>
             <div id="profile-error" class="alert alert-error hidden"></div>
             <div id="profile-success" class="alert alert-success hidden"></div>
             <div class="form-group">
               <label class="form-label">Your name</label>
-              <input class="form-input" id="settings-name" placeholder="Your name" />
+              <input class="form-input" id="settings-name" autocomplete="name" placeholder="Your name" />
             </div>
             <div class="form-group">
               <label class="form-label">Email address</label>
-              <input class="form-input" id="settings-email" type="email" placeholder="you@example.com" />
+              <input class="form-input" id="settings-email" type="email" autocomplete="email" placeholder="you@example.com" />
             </div>
             <div class="form-group">
               <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
               <input class="form-input" id="settings-penname" maxlength="40" placeholder="The name you want on the cover" />
               <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">Shown publicly as your author name if you publish a story to our Library, and as the Chronicled-by credit inside the book. Must be unique.</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
-          </div>
-          <div style="flex:1;min-width:260px;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
+          </form>
+          <form id="settings-password-form" data-autofill-ok autocomplete="on" onsubmit="return false;" style="flex:1;min-width:260px;">
             <div class="settings-section-title">Change password</div>
             <div class="settings-section-desc">Choose a strong password of at least 8 characters</div>
             <div id="password-error" class="alert alert-error hidden"></div>
             <div id="password-success" class="alert alert-success hidden"></div>
             <div class="form-group">
               <label class="form-label">Current password</label>
-              <input class="form-input" id="settings-current-password" type="password" placeholder="Your current password" />
+              <input class="form-input" id="settings-current-password" type="password" autocomplete="current-password" placeholder="Your current password" />
             </div>
             <div class="form-group">
               <label class="form-label">New password</label>
-              <input class="form-input" id="settings-new-password" type="password" placeholder="At least 8 characters" />
+              <input class="form-input" id="settings-new-password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
             </div>
             <div class="form-group">
               <label class="form-label">Confirm new password</label>
-              <input class="form-input" id="settings-confirm-password" type="password" placeholder="Re-enter your new password" />
+              <input class="form-input" id="settings-confirm-password" type="password" autocomplete="new-password" placeholder="Re-enter your new password" />
             </div>
-            <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
-          </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
+          </form>
         </div>
       </div>
 

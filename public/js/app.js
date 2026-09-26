@@ -13882,7 +13882,9 @@ function archiveFilterBarHTML(f, onchange) {
     '<input type="text" class="archive-filter archive-filter-search" placeholder="Moment Name"'
       + ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"'
       + ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"'
-      + ' value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
+      // v3.1.20 -- TD-692 again: text that arrives while nobody is typing in the box (a phone's
+      // autofill on load) is thrown away and the filter does not move. See _filterTyped.
+      + ' value="' + escapeHtml(f.moment || '') + '" oninput="if (!_filterTyped(this)) return; ' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
@@ -32812,13 +32814,14 @@ function _cvShow(W, H) {
       '<div style="font-size:14px;line-height:1.45;margin-bottom:8px;color:rgba(240,232,208,0.9);">Frame the part of this picture you want on the ' + which + '. The frame is the cover\u2019s shape.</div>' +
       '<div id="cv-stage"></div>' +
       '<div id="cv-msg"></div>' +
-      '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;">' +
+      // v3.1.20 -- the buttons stay pinned to the bottom of the window if it still has to scroll.
+      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:#241810;padding:10px 0 2px;">' +
         '<button class="btn" onclick="_cvBack()">Back to the Archive</button>' +
         '<button class="btn btn-primary" id="cv-use" onclick="_cvUse()">Use this framing</button>' +
       '</div>' +
     '</div>';
-  c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
-    frac: _cvDefaultFrac(W, H), maxW: 640, maxH: _cvStageMaxH(), onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+  _cvMount(W, H, _cvStageMaxH(), _cvDefaultFrac(W, H));
+  _cvFit(W, H);   // v3.1.20 -- measured, not estimated: phones have far more wrapped text than a desktop
 }
 
 function _cvMsg(text, kind) {
@@ -32880,4 +32883,82 @@ var CV_CHROME_H = 380;
 function _cvStageMaxH() {
   var h = window.innerHeight || 800;
   return Math.max(160, Math.min(420, Math.round(h * 0.9) - CV_CHROME_H));
+}
+
+// =====================================================================================
+// v3.1.20 -- TD-692 (again) and TD-911. NO AUTOFILL OUTSIDE MY ACCOUNT AND THE SHIPPING ADDRESS.
+//
+// Ian, on his phone: the Archive's Moment Name filter arrived filled with his email and showed nothing
+// until he cleared it -- after v3.0.844 had already put every vendor opt-out on that box. The cause
+// was the page, not the box: app.html had no <form>, so Chrome's password manager grouped every input
+// with My Account's password boxes and filled a text box as the "username" on load. v3.1.20 gives My
+// Account its own forms (the cure), and this makes the rest of the app say no as well (the belt):
+// every text-like input and textarea outside [data-autofill-ok] gets autocomplete=off and the vendor
+// opt-outs, including ones drawn later, through one MutationObserver. Ian: "The only place we might
+// want auto filling is on the My Account page" -- and the shipping address, which he kept.
+// _filterTyped is the braces on the filter boxes: text that arrives while the box is not being typed
+// in is put back, so a filler that ignores everything above still cannot move a filter.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var NO_AUTOFILL_TYPES = ['', 'text', 'search', 'email', 'tel', 'url', 'number'];
+
+function _noAutofill(el) {
+  if (!el || !el.tagName) return;
+  var tag = el.tagName.toLowerCase();
+  if (tag !== 'input' && tag !== 'textarea') return;
+  if (tag === 'input' && NO_AUTOFILL_TYPES.indexOf(String(el.getAttribute('type') || '').toLowerCase()) === -1) return;
+  if (el.closest && el.closest('[data-autofill-ok]')) return;
+  if (el.getAttribute('autocomplete') !== 'off') el.setAttribute('autocomplete', 'off');
+  if (!el.hasAttribute('data-1p-ignore')) el.setAttribute('data-1p-ignore', '');
+  if (!el.hasAttribute('data-lpignore')) el.setAttribute('data-lpignore', 'true');
+  if (!el.hasAttribute('data-bwignore')) el.setAttribute('data-bwignore', '');
+  if (!el.hasAttribute('data-form-type')) el.setAttribute('data-form-type', 'other');
+}
+
+function _noAutofillSweep(root) {
+  if (!root) return;
+  if (root.nodeType === 1) _noAutofill(root);
+  if (root.querySelectorAll) Array.prototype.forEach.call(root.querySelectorAll('input, textarea'), _noAutofill);
+}
+
+function _noAutofillStart() {
+  try {
+    _noAutofillSweep(document.body);
+    if (typeof MutationObserver === 'function' && document.body) {
+      new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var added = list[i].addedNodes;
+          for (var k = 0; k < added.length; k++) if (added[k].nodeType === 1) _noAutofillSweep(added[k]);
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  } catch (e) {}
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _noAutofillStart); else _noAutofillStart();
+
+// True when the reader is typing in this box; otherwise the text is put back to what they last typed
+// (or what the box was drawn with) and false tells the caller to leave the filter alone.
+function _filterTyped(el) {
+  if (document.activeElement === el) { el.setAttribute('data-last', el.value); return true; }
+  el.value = el.hasAttribute('data-last') ? el.getAttribute('data-last') : el.defaultValue;
+  return false;
+}
+
+// v3.1.20 -- TD-911. Ian, on his phone: with a tall picture "it took me a long time to figure out how to
+// scroll down to the accept button". _cvStageMaxH is an estimate of the text around the picture, and on
+// a phone that text wraps to twice the lines. So after the frame is drawn, the modal is MEASURED and the
+// picture shrinks by exactly what still overflows (never below 160 px); the buttons are also pinned to
+// the bottom of the window in case it still has to scroll.
+function _cvMount(W, H, maxH, frac) {
+  var c = _cvCrop; if (!c) return;
+  c.maxH = maxH;
+  c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
+    frac: frac, maxW: 640, maxH: maxH, onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+}
+
+function _cvFit(W, H) {
+  var c = _cvCrop; if (!c || !c.view) return;
+  var md = document.querySelector('#replace-picker-modal .modal'); if (!md) return;
+  var over = md.scrollHeight - md.clientHeight;
+  if (over > 1 && c.maxH > 160) _cvMount(W, H, Math.max(160, c.maxH - over - 4), c.view.frac());
 }
