@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.32",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3132-first-person-nobody",
+        "kind": "feature",
+        "public": true,
+        "summary": "In first person: 'Nobody in particular (just I)' is now a choice on every narrative style.",
+        "detail": "The Narrator list always offers Nobody in particular: the story is told as 'I' with no character named as the narrator, and nobody is featured in the pictures. If you tick In first person and close the window without choosing, that is what is saved. Choose a character instead to have them named in the pictures and appear in more of them.",
+        "td": [
+          "TD-919"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.31",
     "staged_on": "2026-09-27",
     "entries": [

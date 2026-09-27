@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, forkSelfIllustrated } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, forkSelfIllustrated, forkFirstPersonAnon } = require('../database/db');
 const { releaseImage, deleteFile } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -322,6 +322,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // v3.1.27 -- IN FIRST PERSON. The narrator the generators will use for this version (own, else the
   // version's earlier session), so the picker shows exactly what Generate will do. Never throws.
   const _narr = await forkNarrator(db, viewForkId);
+  const _fpAnon = _narr ? false : await forkFirstPersonAnon(db, viewForkId);   // v3.1.32
   const _selfIll = await forkSelfIllustrated(db, viewForkId);   // v3.1.30 -- TD-921
   try {
     const _vid = viewForkRow && viewForkRow.version_id;
@@ -421,7 +422,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || null,
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
     narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
-    narrative_narrator: _narr ? String(_narr.id) : '',
+    narrative_narrator: _narr ? String(_narr.id) : (_fpAnon ? 'anon' : ''),   // v3.1.32 -- 'anon' = first person, nobody named
     narrative_narrator_name: _narr ? String(_narr.name || '').split('/')[0].trim() : '',   // v3.1.31 -- shown on the style button                       // v3.1.27 -- '' = not first person
     narrative_narrator_inherited: !!(_narr && _narr.inherited),
     self_illustrated: !!_selfIll,                                             // v3.1.30 -- TD-921

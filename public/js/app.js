@@ -5130,7 +5130,9 @@ function refreshNarrStyleButtons() {
   var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
   // v3.1.31 -- the button names WHO narrates, so the saved state is visible without opening anything
   // (Erin Bot: on Calm & Literal the window could not tell you). Falls back to "First person".
-  var label = 'Narrative: ' + narrStyleName(id) + (state.narrativeNarrator ? (' \u00b7 ' + (state.narrativeNarratorName ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
+  // v3.1.32 -- 'anon' reads "First person"; on Calm & Literal (always first person) it adds nothing.
+  var _anon = state.narrativeNarrator === 'anon';
+  var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
   ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -33367,7 +33369,7 @@ function _narratorPanelEnsure() {
     '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
       '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
-      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story. First person stays off until you do.</div>' +
+      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
     '</div>' +
     '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
   _infoTipCss();
@@ -33431,8 +33433,11 @@ function _narratorRender() {
   var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
   // v3.1.31 -- on Calm & Literal the story is always "I", so NOBODY is a real choice, and it is shown
   // as one: the saved state is visible and changeable here, not only by a detour through another style.
-  var opts = locked ? '<option value="">Nobody in particular (just \u201cI\u201d)</option>' : '<option value="">Narrator: choose a character\u2026</option>';
-  var found = false;
+  // v3.1.32 -- Ian: "Could we have the Nobody in particular option all the time". It is a real choice on
+  // every style ('anon'); the placeholder stays first (ticking does NOT pick Nobody -- closing does).
+  // Calm & Literal has no placeholder: it is always first person, so it always has an answer.
+  var opts = (locked ? '' : '<option value="">Narrator: choose a character\u2026</option>') + '<option value="anon">Nobody in particular (just \u201cI\u201d)</option>';
+  var found = (state.narrativeNarrator === 'anon');
   list.forEach(function (c) {
     var nm = String(c.name || 'Unnamed character').split('/')[0].trim();
     if (String(c.id) === String(state.narrativeNarrator)) found = true;
@@ -33440,11 +33445,12 @@ function _narratorRender() {
   });
   if (has && !found) opts += '<option value="' + escapeHtml(String(state.narrativeNarrator)) + '">Narrator (loading\u2026)</option>';
   sel.innerHTML = opts;
-  sel.value = has ? String(state.narrativeNarrator) : '';
+  sel.value = has ? String(state.narrativeNarrator) : (locked ? 'anon' : '');
   if (need) need.style.display = (on && !has && !locked) ? '' : 'none';
   // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
   var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
-    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters.';
+    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters. ' +
+    'With Nobody in particular it is still told as \u201cI\u201d, but nobody is featured in the pictures \u2014 choose a character if you are in the story.';
   if (note) note.textContent = _nt;
   var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
 }
@@ -33458,7 +33464,7 @@ function _narratorToggle(checked) {
 
 function _narratorChoose(v) {
   // v3.1.31 -- on Calm & Literal "Nobody in particular" is a real choice and is saved (clears the narrator).
-  if (!v) { if ((state.narrativeStyle || 'classic') === 'calm' && state.narrativeNarrator) { _narratorSave(''); return; } _narratorRender(); return; }
+  if (!v) { _narratorRender(); return; }   // v3.1.32 -- the placeholder again: nothing to save ('anon' is its own value now)
   _narratorSave(v);
 }
 
@@ -33719,15 +33725,11 @@ function _narratorBlockClose() {
     if (!modal || modal.classList.contains('hidden')) return false;
     if (!_narrPending || state.narrativeNarrator) return false;
     if ((state.narrativeStyle || 'classic') === 'calm') return false;
-    var m = document.querySelector('#style-picker-modal .modal'); if (m) m.scrollTop = 0;
-    var need = document.getElementById('narrator-need');
-    if (need) {
-      need.style.display = '';
-      need.textContent = 'Choose who is telling the story, or untick In first person, before closing.';
-      need.style.fontWeight = '600';
-    }
-    var s = document.getElementById('narrator-select'); if (s) { try { s.focus(); } catch (e) {} }
-    return true;
+    // v3.1.32 -- Ian: "if they don't choose someone when they close it.. it defaults to that" (Nobody in
+    // particular). So closing is never refused any more: the choice is saved and the window closes.
+    _narrPending = false;
+    _narratorSave('anon');
+    return false;
   } catch (e) { return false; }
 }
 
@@ -33765,3 +33767,6 @@ function _outlineBulletsCheck() {
       .catch(function () { box.style.display = 'none'; });
   } catch (e) {}
 }
+
+// v3.1.32 -- _narratorBlockClose no longer blocks: closing with In first person ticked and nobody chosen
+// saves "Nobody in particular (just I)" ('anon'). The name is kept so closeStylePicker's hook is unchanged.

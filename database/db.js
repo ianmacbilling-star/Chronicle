@@ -2761,10 +2761,33 @@ async function forkSelfIllustrated(db, forkId) {
   }
 }
 
+// v3.1.32 -- IN FIRST PERSON WITH NOBODY NAMED. narrative_narrator = 'anon': the story is told as "I"
+// but no character is the narrator. Ian: "if they don't choose someone when they close it.. it defaults
+// to that" and "If they don't select a particular character then nobody is preferred in the image
+// panels." forkNarrator deliberately still answers null for it (not digits), so Generate Story adds no
+// narrator block, no extra pictures and no presence -- exactly "nobody preferred". Only the prose asks
+// this. Resolved like forkNarrator: the fork's own value, else the version's earlier session. Never throws.
+async function forkFirstPersonAnon(db, forkId) {
+  try {
+    if (!forkId) return false;
+    const f = await db.prepare('SELECT narrative_narrator, version_id, session_id FROM session_forks WHERE id = ?').get(forkId);
+    if (!f) return false;
+    let v = (f.narrative_narrator == null) ? '' : String(f.narrative_narrator).trim();
+    if (!v && f.version_id) {
+      const d = await versionStyleDefaults(db, f.version_id, f.session_id);
+      v = (d && d.narrative_narrator) ? String(d.narrative_narrator).trim() : '';
+    }
+    return v === 'anon';
+  } catch (e) {
+    console.error('[narrator] could not resolve first person for fork ' + forkId + ': ' + ((e && e.message) || e));
+    return false;
+  }
+}
+
 // A character name is "Canonical / alias / alias". The canonical is what the prompts call them.
 function narratorNameParts(name) {
   const t = String(name || '').split('/').map(function (x) { return x.trim(); }).filter(function (x) { return x.length; });
   return { canon: t.length ? t[0] : String(name || '').trim(), aka: t.slice(1) };
 }
 
-module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, narratorNameParts, forkSelfIllustrated };
+module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, narratorNameParts, forkSelfIllustrated, forkFirstPersonAnon };

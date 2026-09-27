@@ -890,7 +890,10 @@ appears in more pictures than the other characters**, because it is their story.
 - It works with every narrative style — Epic Saga in the first person reads well for a memoir.
   **Calm & Literal** is always first person. **Adventurer's Journal** turns it on for you; untick it
   for a journal in the third person.
-- It needs a narrator: until you choose one, first person stays off.
+- **Nobody in particular (just "I")** is on the list too: the story is told as "I", but no character is
+  the narrator and nobody is featured in the pictures. It is also what you get if you tick the box and
+  close without choosing. If you are in the story, choose your character instead — they are named in the
+  pictures and appear in more of them.
 - It outranks the Story Instructions, so there is no need to write "I means Beth" there, or to add
   "Me / I" to a character's name.
 - It belongs to the version, like the narrative style, and carries on into that version's next sessions.
@@ -1726,8 +1729,9 @@ Friction points and what's actually going on.
 - **"My first-person story still says 'Beth' instead of 'I'."** Open **Narrative style** and check
   that **In first person** is ticked with Beth as the **Narrator** on this version, then **Generate
   Narrative** again — prose that is already written is not changed until you regenerate it.
-- **"In first person won't stay ticked."** It needs a narrator. Choose one from the list; until you do,
-  first person is off.
+- **"My first-person story doesn't show me in the pictures."** The narrator is probably **Nobody in
+  particular**. Open **Narrative style** and choose your character as the **Narrator**, then run
+  **Generate Story** again so the panels are planned with you in them.
 - **"It says there is no text in my PDF."** The words are part of a picture rather than text
   — a scan, a photograph of a page, or an export saved that way. On the character sheet, and on
   the Story and Lore boxes, Campaignia offers to read the pages as pictures instead; that costs a
