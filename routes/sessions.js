@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator } = require('../database/db');
 const { releaseImage, deleteFile } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -294,6 +294,9 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // no choice, and the moment someone chooses or generates, the value is stored on the fork and
   // this stops firing. Branch time (above) is what makes it STICK for a new session.
   var _inhNarr = null, _inhArt = null;
+  // v3.1.27 -- IN FIRST PERSON. The narrator the generators will use for this version (own, else the
+  // version's earlier session), so the picker shows exactly what Generate will do. Never throws.
+  const _narr = await forkNarrator(db, viewForkId);
   try {
     const _vid = viewForkRow && viewForkRow.version_id;
     if (_vid && (!viewForkRow || !viewForkRow.narrative_style)) {
@@ -392,6 +395,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || null,
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
     narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
+    narrative_narrator: _narr ? String(_narr.id) : '',                       // v3.1.27 -- '' = not first person
+    narrative_narrator_inherited: !!(_narr && _narr.inherited),
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
 });
@@ -1708,8 +1713,9 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   // For a feature whose point is "try different narrative and art options", starting from a copy
   // that quietly drops the art style, the Direction and the verbosity is the wrong default.
   const created = await db.prepare(
-    "INSERT INTO session_forks (session_id, user_id, role, name, version_id, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, created_at) " +
-    "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
+    // v3.1.27 -- narrative_narrator copied too: "a setting that gets copied from fork to fork".
+    "INSERT INTO session_forks (session_id, user_id, role, name, version_id, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, created_at) " +
+    "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
   ).run(sessionId, req.session.userId, newRole, forkName || null, _newVersionId, now, sourceForkId);
   const newForkId = created.lastInsertRowid;
   // v3.0.460 -- CONTENT FROM THE SOURCE, STYLE FROM THE VERSION (TD-252).
@@ -1724,7 +1730,7 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   try {
     const _vs = await versionStyleDefaults(db, _newVersionId, sessionId);
     const _sets = [], _vals = [];
-    ['art_style_override', 'narrative_style', 'narrative_verbosity'].forEach(function (k) {
+    ['art_style_override', 'narrative_style', 'narrative_verbosity', 'narrative_narrator'].forEach(function (k) {   // v3.1.27 -- + narrator
       if (_vs[k]) { _sets.push(k + ' = ?'); _vals.push(_vs[k]); }
     });
     if (_sets.length) {

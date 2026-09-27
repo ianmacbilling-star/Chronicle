@@ -11,7 +11,7 @@ const { logDebug } = require('./debug');   // v3.1.11 -- TD-908: why each sugges
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
-const { getDb, getOrCreateDmFork, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, resolveActingFork, requestedForkIdOf, forkNarrator, narratorNameParts } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
@@ -212,6 +212,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   if (actRow && actRow.role !== 'dm') {
     session.session_notes = actRow.fork_notes || '';
   }
+  // v3.1.27 -- IN FIRST PERSON. The version's narrator, or null (every book before this).
+  const _narrator = await forkNarrator(db, targetForkId);
 
   // Image locking — Generate Story re-extracts by DELETEing and rebuilding
   // every moment on this version, which would destroy locked panels. Refuse
@@ -351,6 +353,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'in the transcript below. Do NOT add a character to a scene just because ' +
     'they are on this list — many of them are not in this session. If a ' +
     'character is not present in the transcript, they must not appear in any panel.\n' +
+    (_narrator ? narratorPanelsBlock(_narrator) : '') +   // v3.1.27 -- who "I" is, and more pictures of them
     (assetList ? ('## KNOWN ASSETS (the campaign\'s recurring places, supporting characters and items; slash-separated names are aliases of ONE asset)\n' + assetList + '\n' +
       'When one of these appears in a panel, refer to it in that panel\'s "description" and "prompt" by one of these exact names, so its reference picture attaches.\n\n') : '') +
     notesSection + '\n\n' +
@@ -663,6 +666,22 @@ router.get('/job/:jobId', requireAuth, async function (req, res) {
 // its full form or its first word over 2 characters, so every existing single-name
 // character behaves exactly as before. Additional aliases need 3+ characters, which is
 // what stops a short alias like `Al` matching every `also` in a transcript.
+// v3.1.27 -- IN FIRST PERSON. Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md.
+// Ian: "If it's First person... that character should be in More pictures than the other characters."
+// The prompts must NAME the narrator, never "I": the name is what attaches their reference picture
+// (images.js characterNameMatches), so a prompt saying "I stand at the rail" would draw a stranger.
+// "I" means the narrator only where the transcript is itself first person -- in a recorded game,
+// "I" is whoever is speaking, and mapping it to the narrator would put them in every player's action.
+function narratorPanelsBlock(n) {
+  var p = narratorNameParts(n.name);
+  var c = p.canon;
+  return '## THE NARRATOR -- THIS BOOK IS TOLD IN THE FIRST PERSON BY ' + c + (p.aka.length ? ' (also known as ' + p.aka.join(', ') + ')' : '') + '\n' +
+    '- Where the transcript or the director\'s instructions are written in the first person, \u201cI\u201d, \u201cme\u201d and \u201cmy\u201d mean ' + c + ', and \u201cwe\u201d and \u201cus\u201d mean ' + c + ' with whoever is with them. In a recorded conversation or game, \u201cI\u201d is whoever is speaking.\n' +
+    '- In every "description", "prompt" and "establishing_scene", write ' + c + ' BY NAME \u2014 never \u201cI\u201d, \u201cme\u201d or \u201cthe narrator\u201d \u2014 so the right reference picture attaches.\n' +
+    '- ' + c + ' IS THE MAIN CHARACTER OF THIS BOOK. Put ' + c + ' in MORE panels than any other character: most panels, wherever ' + c + ' is plausibly in the scene. Vary the shot instead of repeating a portrait \u2014 a close-up, ' + c + ' in the foreground watching the action, ' + c + ' among the group. Leave ' + c + ' out only where the moment clearly happens somewhere ' + c + ' is not.\n' +
+    '- Reader-facing text (titles and emphasis) is in the first person: write \u201cI\u201d, \u201cme\u201d and \u201cmy\u201d for ' + c + ' there, not the name.\n\n';
+}
+
 function characterInText(character, text) {
   if (!character.name) return false;
   return imageHelpers.characterNameMatches(character.name, text.toLowerCase());
@@ -748,6 +767,7 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
 
     // Name-match against transcript + session notes combined.
     const text = (session.transcript || '') + '\n' + (session.session_notes || '');
+    const _narr = await forkNarrator(db, forkId);   // v3.1.27
 
     // Full refresh — but PRESERVE rows the DM has already decided on
     // (accepted OR rejected). An accepted amendment must survive; a
@@ -765,7 +785,8 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
     acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
 
     for (const ch of characters) {
-      if (!characterInText(ch, text)) continue;
+      // v3.1.27 -- the narrator is in every first-person story, whether or not the text names them.
+      if (!characterInText(ch, text) && !(_narr && String(_narr.id) === String(ch.id))) continue;
       if (acceptedIds[ch.id]) continue; // decided — leave its row untouched
       const carry = await resolveCarryForward(db, ch, session, forkId);
       await db.prepare(
@@ -810,6 +831,12 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
       if (r.change_status === 'accepted') acceptedIds[r.character_id] = true;
       else if (r.change_status === 'rejected') rejectedDetail[r.character_id] = r.change_detail || '';
     });
+    // v3.1.27 -- IN FIRST PERSON: the narrator is present even where the transcript only says "I".
+    const _narr = await forkNarrator(db, ddForkId);
+    if (_narr && !present.some(function (ch) { return String(ch.id) === String(_narr.id); })) {
+      const _nc = characters.filter(function (ch) { return String(ch.id) === String(_narr.id); })[0];
+      if (_nc) present.push(_nc);
+    }
     present = present.filter(function(ch) { return !acceptedIds[ch.id]; });
 
     if (!present.length) return;
@@ -827,7 +854,8 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
       : '(no moments)';
 
     const charListText = present.map(function(ch) {
-      return '- ' + ch.name + (ch.cls ? ' (' + ch.cls + ')' : '');
+      return '- ' + ch.name + (ch.cls ? ' (' + ch.cls + ')' : '') +
+        ((_narr && String(_narr.id) === String(ch.id)) ? ' -- the narrator: where the transcript is written in the first person, its \u201cI\u201d is this character' : '');   // v3.1.27
     }).join('\n');
 
     // Stage 3/4: any changes the DM previously REJECTED for this session.

@@ -739,7 +739,8 @@ const NARRATIVE_STYLE_MIN_RANK = {
   noir: 4,         // Platinum
   grim: 4,         // Platinum
   storybook: 4,    // Platinum
-  anime: 2         // Silver (High-Drama Anime; was Platinum)
+  anime: 2,        // Silver (High-Drama Anime; was Platinum)
+  outline: 1       // every plan -- v3.1.27, TD-920 (Outline / I'll write it). Ian: "Every Plan".
 };
 
 // Unknown ids default to the floor (rank 1) so a never-mapped style never

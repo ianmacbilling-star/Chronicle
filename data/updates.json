@@ -1,5 +1,32 @@
 [
   {
+    "version": "3.1.27",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3127-first-person",
+        "kind": "feature",
+        "public": true,
+        "summary": "Tell a story in the first person: pick a narrator at the top of the Narrative style window.",
+        "detail": "Narrative style window, new In first person switch with a Narrator list (any character, Supporting Characters / NPCs included). The narrative is told as that character, as 'I', and they appear in more pictures than the other characters. It works with every narrative style and outranks the Story Instructions. Calm & Literal is always first person; Adventurer's Journal turns it on when chosen and can be switched off. A narrator is required while it is on. It belongs to the version and carries into its next sessions. Takes effect at the next Generate Story and Generate Narrative. Every plan.",
+        "td": [
+          "TD-725",
+          "TD-919"
+        ]
+      },
+      {
+        "id": "3127-outline-style",
+        "kind": "feature",
+        "public": true,
+        "summary": "New narrative style, Outline / I'll write it: bullet points you write your own story over.",
+        "detail": "Each narrative panel gets bullet points instead of prose: what happens, who is there, the key moment and a line of dialogue worth keeping. Low, Med and High set how many bullets. Pictures are drawn as usual. Every plan. Bullets left in a printed book print as one paragraph, so replace them before ordering.",
+        "td": [
+          "TD-920"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.26",
     "staged_on": "2026-09-26",
     "entries": [

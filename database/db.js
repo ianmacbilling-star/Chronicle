@@ -1416,6 +1416,11 @@ async function migrateForks(pool) {
   await pool.query("ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_verbosity TEXT");
   await pool.query("UPDATE session_forks SET narrative_verbosity = 'high' WHERE narrative_verbosity IS NULL");
   await pool.query("ALTER TABLE session_forks ALTER COLUMN narrative_verbosity SET DEFAULT 'med'");
+  // v3.1.27 -- IN FIRST PERSON. Who "I" is for this version: a characters.id held as text, 'none'
+  // when the reader switched first person off, NULL when never set (then the version's earlier
+  // sessions decide -- see forkNarrator). TEXT rather than INTEGER so versionStyleDefaults can treat
+  // it exactly like the other style fields. Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_narrator TEXT');
   // v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION: this version's memory of what happened here,
   // written by Generate Story in the same AI response as the prose (no second call) and read by
   // the NEXT session in stage 2. Per-fork, because Ian's rule is that each version is independent
@@ -2164,7 +2169,8 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
 // versionPriorCharacterLooks, written one build later, excludes the session and requires an earlier
 // date. This is the same rule and should have been the same shape.
 async function versionStyleDefaults(db, versionId, sessionId) {
-  const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null };
+  // v3.1.27 -- narrative_narrator joins the version's style: a first-person version stays first person.
+  const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null, narrative_narrator: null };
   if (!versionId) return out;
   let before = null;
   if (sessionId) {
@@ -2682,4 +2688,48 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };
+// =====================================================================================
+// v3.1.27 -- IN FIRST PERSON. WHO "I" IS FOR THIS VERSION, or null for no first person.
+// Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md. One resolver, used by Generate Story (extract.js),
+// Generate Narrative (narrative.js) and the session payload (sessions.js), so the pictures, the
+// prose and the picker can never disagree about who the narrator is.
+//   * The fork's own value first: a character id, or 'none' (switched off on purpose).
+//   * Never set (NULL): the version's most recent EARLIER session decides -- the rule
+//     versionStyleDefaults already applies to the other style fields -- so session two of a
+//     first-person version is first person without anyone ticking the box again.
+//   * The character must still be in this campaign. A deleted narrator reads as off, so an old
+//     book never fails to generate over it (Ian: "make it work even if there isn't one on old books").
+// NEVER THROWS: any error reads as "no narrator", which is how every book behaved before this.
+// =====================================================================================
+async function forkNarrator(db, forkId) {
+  try {
+    if (!forkId) return null;
+    const f = await db.prepare(
+      'SELECT sf.narrative_narrator, sf.version_id, sf.session_id, s.campaign_id FROM session_forks sf ' +
+      'JOIN sessions s ON s.id = sf.session_id WHERE sf.id = ?'
+    ).get(forkId);
+    if (!f) return null;
+    let v = (f.narrative_narrator == null) ? '' : String(f.narrative_narrator).trim();
+    let inherited = false;
+    if (!v && f.version_id) {
+      const d = await versionStyleDefaults(db, f.version_id, f.session_id);
+      v = (d && d.narrative_narrator) ? String(d.narrative_narrator).trim() : '';
+      inherited = !!v;
+    }
+    if (!/^\d+$/.test(v)) return null;
+    const ch = await db.prepare('SELECT id, name FROM characters WHERE id = ? AND campaign_id = ?').get(parseInt(v, 10), f.campaign_id);
+    if (!ch) return null;
+    return { id: ch.id, name: ch.name || '', inherited: inherited };
+  } catch (e) {
+    console.error('[narrator] could not resolve fork ' + forkId + ': ' + ((e && e.message) || e));
+    return null;
+  }
+}
+
+// A character name is "Canonical / alias / alias". The canonical is what the prompts call them.
+function narratorNameParts(name) {
+  const t = String(name || '').split('/').map(function (x) { return x.trim(); }).filter(function (x) { return x.length; });
+  return { canon: t.length ? t[0] : String(name || '').trim(), aka: t.slice(1) };
+}
+
+module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, narratorNameParts };
