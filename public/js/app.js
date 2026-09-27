@@ -33486,7 +33486,12 @@ function _infoTipCss() {
   st.id = 'info-tip-css';
   st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(201,168,76,0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
     '.info-tip:hover,.info-tip[aria-expanded="true"]{color:#f0e8d0;border-color:var(--gold,#c9a84c);}' +
-    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}';
+    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
+    // v3.1.29 -- the plain modals are LIGHT (white --surface); only the pickers (.archive-picker) are
+    // dark. Explicit colours for each, never inherit (the 3.1.17 lesson: inherit gave dark on dark).
+    '.modal:not(.archive-picker) .info-tip{color:#8a6a20;border-color:rgba(138,106,32,0.6);}' +
+    '.modal:not(.archive-picker) .info-tip:hover,.modal:not(.archive-picker) .info-tip[aria-expanded=\"true\"]{color:#2c1810;border-color:#8a6a20;}' +
+    '.modal:not(.archive-picker) .info-tip-pop{color:#3a2e22;background:#faf6ea;border-color:rgba(201,168,76,0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
   document.head.appendChild(st);
   document.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
@@ -33514,3 +33519,8 @@ function _infoTipToggle(btn, ev) {
   pop.style.display = '';
   btn.setAttribute('aria-expanded', 'true');
 }
+
+// v3.1.29 -- the circled i is used outside the Narrative style window now (Custom Art Style Builder,
+// Reference images), so its style is added when the page loads rather than when that window first
+// opens. _infoTipCss adds it once, whoever calls it first.
+try { _infoTipCss(); } catch (e) {}

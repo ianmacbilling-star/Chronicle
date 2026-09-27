@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.29",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3129-cstyle-info",
+        "kind": "fix",
+        "public": false,
+        "summary": "Custom Art Style Builder: the note about mixed results moved onto an i beside Reference images.",
+        "detail": "The paragraph under the reference image slots (the AI reads the rendering style across your samples; image models have their own tendencies, so results can be mixed) is now on a circled i next to the Reference images label: hover on a desktop, tap on a phone. Same text.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.28",
     "staged_on": "2026-09-27",
     "entries": [

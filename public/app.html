@@ -3105,7 +3105,8 @@
         <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
       </div>
       <div class="form-group">
-        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span></label>
+        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span> <button type="button" class="info-tip" id="cstyle-info-btn" aria-controls="cstyle-info" aria-expanded="false" aria-label="About reference images" title="The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others." onclick="_infoTipToggle(this, event)" style="vertical-align:middle;margin-left:2px;">i</button></label>
+        <div id="cstyle-info" class="info-tip-pop" style="display:none;margin:0 0 8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div>
           <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
@@ -3176,7 +3177,6 @@
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
       </div>
       <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
       <div class="form-group" style="margin-top:14px;">
