@@ -33320,19 +33320,32 @@ function _narratorPanelEnsure() {
   if (!vd || !vd.parentNode) return null;
   el = document.createElement('div');
   el.id = 'narrator-panel';
-  el.style.cssText = 'margin:2px 0 10px;padding:8px 10px;border:1px solid rgba(201,168,76,0.3);border-radius:8px;';
+  el.style.cssText = 'flex:1 1 240px;min-width:0;margin:2px 0 8px;';   // v3.1.28 -- no box; shares a row with Narrative length
   el.innerHTML =
-    '<label id="narrator-on-label" title="' + escapeHtml(NARRATOR_TIP) + '" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
-      '<input type="checkbox" id="narrator-on" onchange="_narratorToggle(this.checked)" style="margin:0;">' +
-      '<span>In first person</span>' +
-      '<span aria-hidden="true" style="font-size:11px;color:var(--gold-dim);border:1px solid rgba(201,168,76,0.5);border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;">i</span>' +
-    '</label>' +
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<label id="narrator-on-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+        '<input type="checkbox" id="narrator-on" onchange="_narratorToggle(this.checked)" style="margin:0;">' +
+        '<span>In first person</span>' +
+      '</label>' +
+      // v3.1.28 -- the i is a real button OUTSIDE the label, so tapping it never ticks the box.
+      '<button type="button" class="info-tip" id="narrator-info" aria-controls="narrator-note" aria-expanded="false" aria-label="About In first person" onclick="_infoTipToggle(this, event)">i</button>' +
+    '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
       '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
       '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story. First person stays off until you do.</div>' +
     '</div>' +
-    '<div id="narrator-note" style="font-size:10px;color:var(--gold-dim);margin:5px 0 0;line-height:1.4;"></div>';
-  vd.parentNode.insertBefore(el, vd);
+    '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
+  _infoTipCss();
+  // v3.1.28 -- Ian: "put the First Person panel next to the Verbosity Control so it doesn't take up
+  // more vertical space." One row holding both; on a narrow phone the two wrap onto two lines.
+  var row = document.createElement('div');
+  row.id = 'narr-settings-row';
+  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px 20px;align-items:flex-start;';
+  vd.parentNode.insertBefore(row, vd);
+  row.appendChild(el);
+  row.appendChild(vd);
+  vd.style.flex = '1 1 240px';
+  vd.style.minWidth = '0';
   return el;
 }
 
@@ -33342,6 +33355,7 @@ function _narratorPanelShow() {
   if (!_narrKeepPending) _narrPending = false;
   _narrKeepPending = false;
   el.style.display = '';
+  _narratorScrollWhole(true);   // v3.1.28
   _narratorRender();
   _narratorLoadCast();
 }
@@ -33350,6 +33364,7 @@ function _narratorPanelHide() {
   var el = document.getElementById('narrator-panel');
   if (el) el.style.display = 'none';
   _narrPending = false;
+  _narratorScrollWhole(false);   // v3.1.28
 }
 
 function _narratorLoadCast() {
@@ -33390,9 +33405,11 @@ function _narratorRender() {
   sel.innerHTML = opts;
   sel.value = has ? String(state.narrativeNarrator) : '';
   if (need) need.style.display = (on && !has) ? '' : 'none';
-  if (note) note.textContent = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
-    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters. ' +
-    'It overrides the Story Instructions. Used the next time you Generate Story and Generate Narrative.';
+  // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
+  var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
+    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters.';
+  if (note) note.textContent = _nt;
+  var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
 }
 
 function _narratorToggle(checked) {
@@ -33437,4 +33454,63 @@ function _narratorAfterStyle(style) {
   var s = document.getElementById('narrator-select');
   if (s) try { s.focus(); } catch (e) {}
   return true;
+}
+
+// =====================================================================================
+// v3.1.28 -- THE NARRATIVE STYLE WINDOW SCROLLS AS ONE. Ian: "let the whole modal scroll... even
+// those controls." The shared picker CSS pins the modal (overflow visible, 92vh) and scrolls only
+// the card grid (62vh), which kept In first person and Narrative length fixed above the cards and
+// left the cards a short strip on a phone. For the NARRATIVE picker only, the modal scrolls and
+// the grid grows to its full height; the art and layout pickers keep the CSS as it was, because
+// on(false) clears exactly the inline values set here. Opening starts at the top.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _narratorScrollWhole(on) {
+  var m = document.querySelector('#style-picker-modal .modal'), g = document.getElementById('style-picker-grid');
+  if (m) { m.style.overflowY = on ? 'auto' : ''; if (on) m.scrollTop = 0; }
+  if (g) { g.style.maxHeight = on ? 'none' : ''; g.style.overflowY = on ? 'visible' : ''; }
+}
+
+// =====================================================================================
+// v3.1.28 -- THE CIRCLED i. Ian: "if we are going to start using the circled 'i' to indicate a tool
+// tip and more info... then we don't need the descriptions as well under the controls."
+// <button class="info-tip" aria-controls="<pop id>" onclick="_infoTipToggle(this, event)">i</button>
+// plus a hidden <div class="info-tip-pop" id="<pop id>"> holding the text. The button's title gives
+// the hover tooltip on a desktop; a tap opens the text under the control, which is the only way a
+// phone can show it (no hover). One open at a time; a tap anywhere else closes it. Reusable for
+// any control that wants the same treatment. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _infoTipCss() {
+  if (document.getElementById('info-tip-css')) return;
+  var st = document.createElement('style');
+  st.id = 'info-tip-css';
+  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(201,168,76,0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
+    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:#f0e8d0;border-color:var(--gold,#c9a84c);}' +
+    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}';
+  document.head.appendChild(st);
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
+    _infoTipCloseAll();
+  });
+}
+
+function _infoTipCloseAll() {
+  var open = document.querySelectorAll('.info-tip[aria-expanded="true"]');
+  for (var i = 0; i < open.length; i++) {
+    open[i].setAttribute('aria-expanded', 'false');
+    var p = document.getElementById(open[i].getAttribute('aria-controls'));
+    if (p) p.style.display = 'none';
+  }
+}
+
+function _infoTipToggle(btn, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  _infoTipCss();
+  var pop = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!pop) return;
+  var wasOpen = btn.getAttribute('aria-expanded') === 'true';
+  _infoTipCloseAll();
+  if (wasOpen) return;
+  pop.style.display = '';
+  btn.setAttribute('aria-expanded', 'true');
 }

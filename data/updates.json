@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.28",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3128-first-person-row",
+        "kind": "fix",
+        "public": false,
+        "summary": "Narrative style window: In first person sits beside Narrative length, the explanations moved onto an i icon, and the whole window scrolls.",
+        "detail": "The In first person switch and Narrator list share one row with the Low/Med/High length control (they stack on a narrow phone), without the surrounding box. The descriptions under In first person and Narrative length moved onto a circled i beside each (hover on a desktop, tap on a phone). The whole Narrative style window now scrolls as one, controls included, instead of only the cards scrolling under fixed controls; the art and layout pickers are unchanged. The note under it keeps only: the narrative is told as the narrator, as 'I', and the narrator appears in more pictures.",
+        "td": [
+          "TD-919"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.27",
     "staged_on": "2026-09-27",
     "entries": [
