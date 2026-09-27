@@ -3494,6 +3494,7 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
       state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
       if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -5127,7 +5128,9 @@ function narrStyleName(id) {
 
 function refreshNarrStyleButtons() {
   var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
-  var label = 'Narrative: ' + narrStyleName(id) + (state.narrativeNarrator ? ' \u00b7 First person' : '');   // v3.1.27
+  // v3.1.31 -- the button names WHO narrates, so the saved state is visible without opening anything
+  // (Erin Bot: on Calm & Literal the window could not tell you). Falls back to "First person".
+  var label = 'Narrative: ' + narrStyleName(id) + (state.narrativeNarrator ? (' \u00b7 ' + (state.narrativeNarratorName ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
   ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -5657,6 +5660,7 @@ function setVerbosity(v) {
 }
 
 function closeStylePicker() {
+  if (typeof _narratorBlockClose === 'function' && _narratorBlockClose()) return;   // v3.1.31 -- pick a narrator first
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -8784,6 +8788,11 @@ async function extractMoments() {
     // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
+    // v3.1.31 -- RELOAD THE SAVED PANELS. The job answers with the AI's panel list, not the saved rows:
+    // no ids and no opening (title) panel, which the server inserts itself. Generate Images used to
+    // paper over it by reloading afterwards; a self-illustrated version never generates images, so its
+    // Opening had no art brief (Ian, 2026-09-27) and Upload your own had no panel id to aim at.
+    setTimeout(function () { if (typeof reloadSessionForFork === 'function') reloadSessionForFork(); }, 0);
     state.narrativeData = { intro: '', sections: [], outro: '' };
     // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
     state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
@@ -9231,6 +9240,7 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+    if (typeof _outlineBulletsCheck === 'function') _outlineBulletsCheck();   // v3.1.31 -- TD-924
   }
   // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
   // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
@@ -17079,6 +17089,7 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
       state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
       if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -17481,6 +17492,11 @@ async function extractMoments() {
     // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
+    // v3.1.31 -- RELOAD THE SAVED PANELS. The job answers with the AI's panel list, not the saved rows:
+    // no ids and no opening (title) panel, which the server inserts itself. Generate Images used to
+    // paper over it by reloading afterwards; a self-illustrated version never generates images, so its
+    // Opening had no art brief (Ian, 2026-09-27) and Upload your own had no panel id to aim at.
+    setTimeout(function () { if (typeof reloadSessionForFork === 'function') reloadSessionForFork(); }, 0);
     state.narrativeData = { intro: '', sections: [], outro: '' };
     // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
     state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
@@ -17875,6 +17891,7 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+    if (typeof _outlineBulletsCheck === 'function') _outlineBulletsCheck();   // v3.1.31 -- TD-924
   }
   // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
   // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
@@ -20190,6 +20207,7 @@ function reloadSessionForFork() {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
       state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
       if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
@@ -33411,7 +33429,9 @@ function _narratorRender() {
   pick.style.display = on ? '' : 'none';
   var cid = state.currentCampaign && state.currentCampaign.id;
   var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
-  var opts = '<option value="">Narrator: choose a character\u2026</option>';
+  // v3.1.31 -- on Calm & Literal the story is always "I", so NOBODY is a real choice, and it is shown
+  // as one: the saved state is visible and changeable here, not only by a detour through another style.
+  var opts = locked ? '<option value="">Nobody in particular (just \u201cI\u201d)</option>' : '<option value="">Narrator: choose a character\u2026</option>';
   var found = false;
   list.forEach(function (c) {
     var nm = String(c.name || 'Unnamed character').split('/')[0].trim();
@@ -33421,7 +33441,7 @@ function _narratorRender() {
   if (has && !found) opts += '<option value="' + escapeHtml(String(state.narrativeNarrator)) + '">Narrator (loading\u2026)</option>';
   sel.innerHTML = opts;
   sel.value = has ? String(state.narrativeNarrator) : '';
-  if (need) need.style.display = (on && !has) ? '' : 'none';
+  if (need) need.style.display = (on && !has && !locked) ? '' : 'none';
   // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
   var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
     'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters.';
@@ -33437,7 +33457,8 @@ function _narratorToggle(checked) {
 }
 
 function _narratorChoose(v) {
-  if (!v) { _narratorRender(); return; }   // "choose a character" again: nothing to save
+  // v3.1.31 -- on Calm & Literal "Nobody in particular" is a real choice and is saved (clears the narrator).
+  if (!v) { if ((state.narrativeStyle || 'classic') === 'calm' && state.narrativeNarrator) { _narratorSave(''); return; } _narratorRender(); return; }
   _narratorSave(v);
 }
 
@@ -33453,6 +33474,7 @@ function _narratorSave(v) {
   .then(function (data) {
     if (!data || data.error) { showError('Could not set the narrator: ' + ((data && data.error) || 'no reply')); state.narrativeNarrator = prev; _narratorRender(); return; }
     state.narrativeNarrator = data.narrator || '';
+    state.narrativeNarratorName = data.narrator_name ? String(data.narrator_name).split('/')[0].trim() : '';   // v3.1.31
     if (state.narrativeNarrator) _narrPending = false;
     _narratorRender();
     refreshNarrStyleButtons();
@@ -33669,12 +33691,77 @@ function _selfBriefHtml(m) {
   }).join('');
   var aim = (typeof artStyleLabel === 'function') ? artStyleLabel(state.artStyle || 'High fantasy illustration') : (state.artStyle || '');
   var L = function (t) { return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim,#a08850);margin:8px 0 2px;">' + t + '</div>'; };
-  return '<div class="self-brief" style="min-height:180px;padding:12px 14px;border:1px dashed rgba(201,168,76,0.45);border-radius:6px;background:rgba(201,168,76,0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;"><b style="font-family:var(--font-display);color:var(--gold,#c9a84c);font-size:13px;">Art brief</b>' +
-      '<span style="opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
-    L('Draw') + '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
+  // v3.1.31 -- Ian: "get rid of the word Draw and replace it with Art Brief... That way when you hover
+  // over the panel... The buttons don't cover the word Art Brief." The top of the box is left clear
+  // for the hover buttons; the heading and the shape sit on the first line below them.
+  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(201,168,76,0.45);border-radius:6px;background:rgba(201,168,76,0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">' + L('Art brief') +
+      '<span style="font-size:11px;opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
+    '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
     L('Who\u2019s in it') + who +
     L('Look to aim for') + '<div>' + escapeHtml(aim) + '</div>' +
     (m.locked ? '' : '<button type="button" class="btn btn-sm dm-only" style="margin-top:10px;" onclick="openReplacePicker(\'moment\', ' + m.id + '); _rpShowTab(\'upload\');">Upload your own</button>') +
   '</div>';
+}
+
+// =====================================================================================
+// v3.1.31 -- TICKED MEANS CHOOSE. Ian: "I wouldn't uncheck it if they don't pic someone. I would force
+// them to pic a person before the box is closed." While In first person is ticked with nobody chosen,
+// closing the Narrative style window (the x, or picking a style card) is refused: the window scrolls
+// back to the switch, the orange line says what is missing, and the Narrator list takes the focus.
+// Unticking is the way out without choosing. Calm & Literal never blocks -- "Nobody in particular" is
+// a real choice there. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _narratorBlockClose() {
+  try {
+    if (STYLE_PICKER_KIND !== 'narrative') return false;
+    var modal = document.getElementById('style-picker-modal');
+    if (!modal || modal.classList.contains('hidden')) return false;
+    if (!_narrPending || state.narrativeNarrator) return false;
+    if ((state.narrativeStyle || 'classic') === 'calm') return false;
+    var m = document.querySelector('#style-picker-modal .modal'); if (m) m.scrollTop = 0;
+    var need = document.getElementById('narrator-need');
+    if (need) {
+      need.style.display = '';
+      need.textContent = 'Choose who is telling the story, or untick In first person, before closing.';
+      need.style.fontWeight = '600';
+    }
+    var s = document.getElementById('narrator-select'); if (s) { try { s.focus(); } catch (e) {} }
+    return true;
+  } catch (e) { return false; }
+}
+
+// =====================================================================================
+// v3.1.31 -- TD-924. OUTLINE BULLETS STILL IN THE BOOK, SAID ON PREP & PREVIEW. Ian: "if you can detect
+// on the Prep & Preview tab... that there are still outline bullets in the book I would warn there...
+// So they can catch it before they optimize." The server counts, per session of the book being
+// previewed, the narrative blocks that still hold bullet lines (sessions/novel/all, outline_bullets).
+// Included sessions only. Never blocks anything; a failed check shows nothing.
+// =====================================================================================
+function _outlineBulletsCheck() {
+  try {
+    if (!state.currentCampaign) return;
+    var tab = document.getElementById('novel-tab-preview');
+    if (!tab) return;
+    var box = document.getElementById('outline-bullets-warn');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'outline-bullets-warn';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      tab.insertBefore(box, tab.firstChild);
+    }
+    var cid = state.currentCampaign.id;
+    fetch('/api/campaigns/' + cid + '/sessions/novel/all' + novelAsUserQ('?'))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (list) {
+        if (!state.currentCampaign || String(state.currentCampaign.id) !== String(cid)) return;
+        var hits = (Array.isArray(list) ? list : []).filter(function (s) { return s && s.novel_include && Number(s.outline_bullets) > 0; });
+        if (!hits.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        var names = hits.map(function (s) { return '<b>' + escapeHtml(s.name || 'Untitled session') + '</b>'; });
+        box.innerHTML = '<b>Outline bullet points are still in this book</b> \u2014 in ' + names.join(', ') + '. ' +
+          'In the printed book they run together as one paragraph. Replace them with your own words on each session\u2019s Storyboard before you Optimize.';
+        box.style.display = 'block';
+      })
+      .catch(function () { box.style.display = 'none'; });
+  } catch (e) {}
 }

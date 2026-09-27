@@ -1,5 +1,40 @@
 [
   {
+    "version": "3.1.31",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3131-outline-bullets-warning",
+        "kind": "feature",
+        "public": true,
+        "summary": "Prep & Preview warns when a book still holds Outline bullet points.",
+        "detail": "If any session in the book still has narrative written as Outline / I'll write it bullets, Prep & Preview names those sessions and explains that bullets print as one run-together paragraph, so they can be replaced before you Optimize.",
+        "td": [
+          "TD-924"
+        ]
+      },
+      {
+        "id": "3131-narrator-and-briefs",
+        "kind": "fix",
+        "public": true,
+        "summary": "First person: the style button names the narrator; Calm & Literal can choose nobody; the Opening panel gets its art brief.",
+        "detail": "The Narrative button reads e.g. 'Epic Saga \u00b7 Narrator: Beth'. On Calm & Literal the Narrator list offers 'Nobody in particular (just I)' so the saved choice is visible and changeable there. With In first person ticked, the window cannot be closed until a narrator is chosen (or the box is unticked). After Generate Story the saved panels are reloaded, so the Opening picture panel appears straight away and, on a Self Illustrated version, shows its art brief. The art brief's heading now sits below the hover buttons.",
+        "td": [
+          "TD-919",
+          "TD-921"
+        ]
+      },
+      {
+        "id": "3131-menu-stamp",
+        "kind": "fix",
+        "public": false,
+        "summary": "Testers and admins see the version stamp at the foot of the profile menu on a phone.",
+        "detail": "The header stamp stays hidden on phones for space; the same text now appears at the bottom of the profile menu there, so a finding from a phone can name its version.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.30",
     "staged_on": "2026-09-27",
     "entries": [

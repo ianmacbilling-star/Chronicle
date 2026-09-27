@@ -33,6 +33,30 @@ router.get('/last-style', requireAuth, verifyCampaignMember, async function(req,
   });
 });
 
+// v3.1.31 -- TD-924. HOW MANY NARRATIVE BLOCKS OF THIS FORK STILL HOLD OUTLINE BULLETS.
+// The Outline / I'll write it style writes each block as lines beginning with the bullet character.
+// Left in, the printed book runs them together as one paragraph (pdf.js joins the lines, and that is
+// the print path, deliberately untouched). Ian: "if you can detect on the Prep & Preview tab... that
+// there are still outline bullets in the book I would warn there... So they can catch it before they
+// optimize." Counted from the SAME fork the book reads (bookForkForSession, below). Never throws.
+function outlineBulletBlocks(fk) {
+  try {
+    if (!fk) return 0;
+    var BUL = /(^|\n)[ \t]*\u2022[ \t]/;
+    var n = 0;
+    if (BUL.test(String(fk.narrative_intro || ''))) n++;
+    if (BUL.test(String(fk.narrative_outro || ''))) n++;
+    var secs = [];
+    try { secs = fk.narrative_sections ? (typeof fk.narrative_sections === 'string' ? JSON.parse(fk.narrative_sections) : fk.narrative_sections) : []; } catch (e) { secs = []; }
+    (Array.isArray(secs) ? secs : []).forEach(function (sec) {
+      if (!sec) return;
+      if (BUL.test(String(sec.before || ''))) n++;
+      if (BUL.test(String(sec.after || ''))) n++;
+    });
+    return n;
+  } catch (e) { return 0; }
+}
+
 // GET novel/all - must come before /:id
 router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
@@ -57,7 +81,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
-    const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
+    const fk = await db.prepare('SELECT player_access_status, narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);   // v3.1.31 -- + the prose, for TD-924
     const _vinfo = await db.prepare(
       'SELECT cv.id, cv.name, cv.is_canonical, cv.user_id FROM session_forks sf ' +
       'LEFT JOIN campaign_versions cv ON cv.id = sf.version_id WHERE sf.id = ?'
@@ -120,7 +144,8 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
       version_is_mine: (_vinfo && _vinfo.id != null)
         ? (_vinfo.is_canonical ? (req.campaignRole === 'dm') : String(_vinfo.user_id) === String(req.session.userId))
         : null,
-      novel_include: !!incMap[s.id]
+      novel_include: !!incMap[s.id],
+      outline_bullets: outlineBulletBlocks(fk)   // v3.1.31 -- TD-924
     });
   }));
   res.json(result);
@@ -396,7 +421,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || null,
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
     narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
-    narrative_narrator: _narr ? String(_narr.id) : '',                       // v3.1.27 -- '' = not first person
+    narrative_narrator: _narr ? String(_narr.id) : '',
+    narrative_narrator_name: _narr ? String(_narr.name || '').split('/')[0].trim() : '',   // v3.1.31 -- shown on the style button                       // v3.1.27 -- '' = not first person
     narrative_narrator_inherited: !!(_narr && _narr.inherited),
     self_illustrated: !!_selfIll,                                             // v3.1.30 -- TD-921
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
