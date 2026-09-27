@@ -1,5 +1,76 @@
 [
   {
+    "version": "3.1.28",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3128-first-person-row",
+        "kind": "fix",
+        "public": false,
+        "summary": "Narrative style window: In first person sits beside Narrative length, the explanations moved onto an i icon, and the whole window scrolls.",
+        "detail": "The In first person switch and Narrator list share one row with the Low/Med/High length control (they stack on a narrow phone), without the surrounding box. The descriptions under In first person and Narrative length moved onto a circled i beside each (hover on a desktop, tap on a phone). The whole Narrative style window now scrolls as one, controls included, instead of only the cards scrolling under fixed controls; the art and layout pickers are unchanged. The note under it keeps only: the narrative is told as the narrator, as 'I', and the narrator appears in more pictures.",
+        "td": [
+          "TD-919"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.27",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3127-first-person",
+        "kind": "feature",
+        "public": true,
+        "summary": "Tell a story in the first person: pick a narrator at the top of the Narrative style window.",
+        "detail": "Narrative style window, new In first person switch with a Narrator list (any character, Supporting Characters / NPCs included). The narrative is told as that character, as 'I', and they appear in more pictures than the other characters. It works with every narrative style and outranks the Story Instructions. Calm & Literal is always first person; Adventurer's Journal turns it on when chosen and can be switched off. A narrator is required while it is on. It belongs to the version and carries into its next sessions. Takes effect at the next Generate Story and Generate Narrative. Every plan.",
+        "td": [
+          "TD-725",
+          "TD-919"
+        ]
+      },
+      {
+        "id": "3127-outline-style",
+        "kind": "feature",
+        "public": true,
+        "summary": "New narrative style, Outline / I'll write it: bullet points you write your own story over.",
+        "detail": "Each narrative panel gets bullet points instead of prose: what happens, who is there, the key moment and a line of dialogue worth keeping. Low, Med and High set how many bullets. Pictures are drawn as usual. Every plan. Bullets left in a printed book print as one paragraph, so replace them before ordering.",
+        "td": [
+          "TD-920"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.26",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3126-tester-badge-phone",
+        "kind": "fix",
+        "public": false,
+        "summary": "On a phone, the tester badge shortens to 'Platinum \u00b7 Test' so the page no longer scrolls sideways.",
+        "detail": "Tester accounts, phone width (under about 600px): the header badge reads e.g. 'Platinum \u00b7 Test' instead of 'Platinum, Test Account (Not Billed)', the page fits the screen and the profile menu is reachable. Desktop unchanged; the tooltip and the click to testing controls are unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.25",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3125-voice-examples",
+        "kind": "change",
+        "public": true,
+        "summary": "New example sentences for the Lorekeeper / Historian and Adventurer's Journal narrative styles, in the style picker and in what the AI is shown.",
+        "detail": "Narrative style picker: Lorekeeper / Historian now reads 'Of the Siege of Hollowmere...' and Adventurer's Journal 'Day six. My boots have given up...'. The same sentences are the model examples the AI imitates, so stories in those two voices lose the old joke tone. Generate Narrative in each voice to compare.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.24",
     "staged_on": "2026-09-26",
     "entries": [

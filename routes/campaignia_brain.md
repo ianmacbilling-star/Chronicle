@@ -883,6 +883,27 @@ Pick your styles up top **first**: the **Narrative style** and **Art style** but
 **Generate Narrative & Images** turns the outline into the finished story — it writes the
 prose, renders the panels, and spends tokens.
 
+**In first person.** At the top of the **Narrative style** window, tick **In first person** and choose
+the **Narrator** — any character in the campaign, a Supporting Character / NPC included. The narrative
+is then told as that character: they are "I", and everyone else is told by name. **The narrator also
+appears in more pictures than the other characters**, because it is their story.
+- It works with every narrative style — Epic Saga in the first person reads well for a memoir.
+  **Calm & Literal** is always first person. **Adventurer's Journal** turns it on for you; untick it
+  for a journal in the third person.
+- It needs a narrator: until you choose one, first person stays off.
+- It outranks the Story Instructions, so there is no need to write "I means Beth" there, or to add
+  "Me / I" to a character's name.
+- It belongs to the version, like the narrative style, and carries on into that version's next sessions.
+- **Generate Story** uses it to choose the pictures and **Generate Narrative** to write the prose. On a
+  session you have already generated, run them again to see it.
+- It is free, on every plan.
+
+**Outline / I'll write it** is a narrative style that writes **bullet points** instead of prose for
+each narrative panel — what happens, who is there, the key moment, and a line of dialogue worth
+keeping. Click into each narrative panel and write your own story over them. Low, Med and High set
+how many bullets. Every plan. Replace the bullets before you order: bullets left in are printed
+as one paragraph.
+
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.
 - **The title panel (first)** — a wide establishing shot of the setting, meant to draw
@@ -1600,6 +1621,15 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   In the new campaign, open **Characters → Import from another campaign**, pick the old campaign, the
   character, and the look you want — for a sequel, usually the latest look from the Story Master's
   version — then **Import this picture**. The character arrives as their own copy, ready to use.
+- **"I want my story told in the first person — a memoir, a trip I took, my own family story."**
+  Make a character for yourself. Open **Narrative style**, tick **In first person** and choose that
+  character as the **Narrator**. Pick any narrative style — Epic Saga, Adventurer's Journal and Calm &
+  Literal all work well. Then **Generate Story** and **Generate Narrative**: you are "I" in the prose,
+  and you appear in more of the pictures than anyone else. See 10.3.
+- **"I want Campaignia to draw the pictures, but I'll write the story myself."** Pick the **Outline /
+  I'll write it** narrative style, then run **Generate Story** and **Generate Narrative & Images** as
+  usual. The pictures are drawn as normal, and every narrative panel arrives as bullet points of what
+  happens. Click into each one and write your own prose over them.
 
 ---
 
@@ -1672,6 +1702,11 @@ Friction points and what's actually going on.
   Literal**. The starting voice, **Classic**, writes dramatic literary prose in the past
   tense, which is the opposite of what a Skill Story needs. Calm & Literal is first person,
   present tense and plain. See 8d.
+- **"My first-person story still says 'Beth' instead of 'I'."** Open **Narrative style** and check
+  that **In first person** is ticked with Beth as the **Narrator** on this version, then **Generate
+  Narrative** again — prose that is already written is not changed until you regenerate it.
+- **"In first person won't stay ticked."** It needs a narrator. Choose one from the list; until you do,
+  first person is off.
 - **"It says there is no text in my PDF."** The words are part of a picture rather than text
   — a scan, a photograph of a page, or an export saved that way. On the character sheet, and on
   the Story and Lore boxes, Campaignia offers to read the pages as pictures instead; that costs a
@@ -1792,6 +1827,10 @@ Friction points and what's actually going on.
 - **Can I bring a character from one campaign into another?** Yes — **Import from another campaign**
   on the Characters page (Story Master). Choose the original look or any later look from any version
   you can see. It is a separate copy, pictures included, and costs no tokens.
+- **Can Campaignia write my story in the first person?** Yes — **In first person** at the top of the
+  Narrative style window, with any of your characters as the Narrator. Every plan, every style.
+- **Can I write the story myself and let Campaignia draw?** Yes — the **Outline / I'll write it**
+  narrative style gives you bullet points to write over. Every plan.
 
 ---
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.486 -- TD-217/TD-189 steering
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf, getAppSettingInt } = require('../database/db');
+const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf, getAppSettingInt, forkNarrator, narratorNameParts } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -71,6 +71,48 @@ function narrativePersona(campaignRow) {
   if (!label) return 'skilled author';
   return 'skilled ' + label + ' author';
 }
+// =====================================================================================================
+// v3.1.27 -- IN FIRST PERSON. Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md.
+//
+// Ian, 2026-09-27: a first-person flag at the top of the Narrative style window with a Narrator
+// dropdown; any character may narrate; it OVERRIDES the Story Instructions; every plan; per version.
+// It replaces the "Beth / Me / I" alias trick of TD-725 with a setting.
+//
+// WHY IT SITS IN BOTH THE SYSTEM MESSAGE AND THE USER PROMPT. buildNarrativeSystem puts the
+// director's instructions above everything with "THESE OVERRIDE EVERYTHING BELOW, INCLUDING ... THE
+// NARRATIVE STYLE" -- so a first-person block only in the user prompt would lose to a note that
+// says "third person". The one-line system header outranks that on point of view ONLY; the full
+// rules live in the user prompt beside the voice they modify.
+//
+// A RECORDED CONVERSATION IS NOT A MEMOIR. In a game transcript "I" is whoever is speaking, so the
+// block says "I" means the narrator only where the transcript itself is written in the first person.
+// =====================================================================================================
+function narratorProseBlock(n) {
+  var p = narratorNameParts(n.name);
+  var c = p.canon;
+  return 'IN FIRST PERSON \u2014 THE NARRATOR IS ' + c + (p.aka.length ? ' (also known as ' + p.aka.join(', ') + ')' : '') + '.\n' +
+    'This was chosen for this version and it OVERRIDES the point of view of the narrative voice above, of the general campaign prompt and of the director\'s instructions \u2014 including any voice or instruction that says third person.\n' +
+    '- Tell the whole story as ' + c + ' telling it: ' + c + ' is \u201cI\u201d, \u201cme\u201d, \u201cmy\u201d and \u201cmyself\u201d, and \u201cwe\u201d, \u201cus\u201d and \u201cour\u201d when ' + c + ' is with others.\n' +
+    '- Never call ' + c + ' by name, or he, she or they, in the narration. Other characters may still say the name aloud in their own spoken lines.\n' +
+    '- Everyone else stays in the third person, by name.\n' +
+    '- The panel descriptions name ' + c + '. Where the transcript is itself written in the first person, its \u201cI\u201d is ' + c + '; in a recorded conversation or game, \u201cI\u201d is whoever is speaking.\n' +
+    '- Keep the TENSE the voice asks for; only the point of view changes.\n' +
+    '- ' + c + ' tells what they saw, did, heard, felt or were told; other people\'s thoughts only as ' + c + ' saw or guessed them.\n' +
+    '- The short *_summary outlines and the summary memory still NAME ' + c + ' instead of saying I, because they are read without this instruction.\n\n';
+}
+function narratorSystemLine(n) {
+  var c = narratorNameParts(n.name).canon;
+  return 'POINT OF VIEW \u2014 FIRST PERSON. The narrative is told by ' + c + ', as \u201cI\u201d. On point of view ONLY, this outranks everything below, including the director\'s instructions and the narrative style.\n\n';
+}
+// v3.1.27 -- TD-920. Outline counts BULLETS, and the Low/Med/High dial sets how many.
+function outlineStyleLines(v) {
+  var n = (v === 'low') ? '1-2' : (v === 'med') ? '2-4' : '3-6';
+  return '- Write EVERY block \u2014 intro, moments, bridges and outro \u2014 as ' + n + ' BULLET POINTS, never as prose\n' +
+    '- One bullet per line: each line begins with the bullet character \u2022 and a space, and the bullets are separated by a newline (\\n inside the JSON string)\n' +
+    '- Cover, in order: what happens, who is there, the key moment, and (where the transcript has one) a line of dialogue worth keeping, quoted with the speaker\'s name\n' +
+    '- Short, plain, factual bullets. The author will write the prose from them\n';
+}
+
 // buildNarrativeSystem: the ONE place the system message is assembled.
 //
 // split/join rather than replace so the persona swap covers every occurrence and is a harmless
@@ -191,7 +233,7 @@ const NARRATIVE_STYLES = (function () {
     },
     journal: {
       name: "Adventurer's Journal",
-      voice: `Personal and grounded, with occasional dry humor or self-reflection, as if taken from an adventurer's personal journal. Focus on what the characters notice, feel, or think in the moment. You may use FIRST person ("I") or close THIRD person ("Zara thought..."). Keep it readable and human.\nExample: "We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters."`,
+      voice: `Personal and grounded, with occasional dry humor or self-reflection, as if taken from an adventurer's personal journal. Focus on what the characters notice, feel, or think in the moment. You may use FIRST person ("I") or close THIRD person ("Zara thought..."). Keep it readable and human.\nExample: "Day six. My boots have given up, and honestly so has half the party, but the map says the pass is close. I have stopped trusting the map."`,
       system: SYS
     },
     cinematic: {
@@ -201,7 +243,7 @@ const NARRATIVE_STYLES = (function () {
     },
     lorekeeper: {
       name: 'Lorekeeper / Historian',
-      voice: `Scholarly, mysterious, and world-building heavy, as if recorded by an in-world historian or lorekeeper. Use formal, slightly archaic language. Provide context, hints of ancient knowledge, or commentary on the significance of events. Avoid humor unless it fits the lorekeeper's personality.\nExample: "In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity, for few mortals have tampered with arcane gastronomy and lived."`,
+      voice: `Scholarly, mysterious, and world-building heavy, as if recorded by an in-world historian or lorekeeper. Use formal, slightly archaic language. Provide context, hints of ancient knowledge, or commentary on the significance of events. Avoid humor unless it fits the lorekeeper's personality.\nExample: "Of the Siege of Hollowmere, the surviving accounts agree on little save this: the old bridge fell at dusk, and with it the last road north."`,
       system: SYS
     },
     noir: {
@@ -260,6 +302,16 @@ Example: "Soon it will be time to go to the dentist. Mum drives me there in the 
       name: 'Comic Dialogue',
       voice: `Comic-book script with a balanced mix of dialogue and narration \u2014 aim for ROUGHLY HALF spoken dialogue and half narrative prose in every block. Narrate what each panel shows in short, vivid prose, and weave the characters' spoken lines through it so the two are about even. Put EACH spoken line on its OWN line, beginning with the speaker's name, a colon, and the quoted line; keep narration on its own lines between them. Give every character a distinct voice and hit the emotional turns of the exchange. Use PRESENT tense for narration. You may quote or adapt what was said in the transcript; invent dialogue where the scene needs it; never copy lines from any published source.\nFormat each block like this (narration prose interleaved with one line per speaker):\nThe hall falls silent as the doors groan open.\nGARRICK: "Hold the line \u2014 they break on three."\nVENA: "You said that last time."\nSteel scrapes free of leather as the dark rolls in.\nGARRICK: "And were we wrong?"`,
       system: DIALOGUE_SYS
+    },
+    // v3.1.27 -- TD-920. OUTLINE / I'LL WRITE IT. Ian: "a writing style... that just outlines the
+    // story but leaves the prose to the user", "The Outline should be bullet points", every plan.
+    // Bullets per block, in the same JSON shape as every other voice, so the Storyboard, Review and
+    // the per-block Regenerate all work unchanged; the reader types their own prose over them.
+    // The bullet counts come from the Low/Med/High dial (outlineStyleLines), not from here.
+    outline: {
+      name: "Outline / I'll write it",
+      voice: `An OUTLINE for the author to write from \u2014 NOT finished prose. Every block is a short list of BULLET POINTS. Cover, in order: what happens; who is there; the key moment; and, where the transcript has one, a line of dialogue worth keeping, quoted with the speaker's name. Plain, factual wording in the PRESENT tense \u2014 no scene-setting paragraphs, no metaphor, no flourish. The author supplies the voice later.\nExample:\n\u2022 The raft reaches the big rapid late in the afternoon.\n\u2022 Tom and the guide are at the front.\n\u2022 Key moment: the raft stalls on the rock and Tom goes over the side.\n\u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d`,
+      system: 'You are a story editor preparing a bullet-point outline that the author will turn into prose themselves. You write clear, factual bullet points and never finished prose. You always return valid JSON.' + IP_GUARD
     }
   };
 })();
@@ -452,12 +504,19 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : (_gdVoice || 'classic');
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
   const isDialogue = (narrStyleId === 'dialogue');
+  const isOutline = (narrStyleId === 'outline');   // v3.1.27 -- TD-920
   // Verbosity dial: 'low' | 'med' | 'high' (default med for new forks; existing books backfilled to high). Length only --
   // never changes voice, tense, or person, so it composes with every narrative style.
   const _vraw = (fkSteer && typeof fkSteer.narrative_verbosity === 'string') ? fkSteer.narrative_verbosity.toLowerCase() : 'med';
   const narrVerbosity = (_vraw === 'low' || _vraw === 'med') ? _vraw : 'high';
-  const _vBlock = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-4 sentences';
-  const _vEnds  = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-3 sentences';
+  // v3.1.27 -- TD-920. Outline counts BULLETS; every other voice counts sentences, unchanged.
+  const _vBlock = isOutline ? ((narrVerbosity === 'low') ? '1-2 bullet points' : (narrVerbosity === 'med') ? '2-4 bullet points' : '3-6 bullet points')
+    : (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-4 sentences';
+  const _vEnds  = isOutline ? ((narrVerbosity === 'low') ? '1-2 bullet points' : (narrVerbosity === 'med') ? '2-4 bullet points' : '3-6 bullet points')
+    : (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-3 sentences';
+  // v3.1.27 -- IN FIRST PERSON. Who "I" is for this version, or null -- which is every book before this.
+  const narrator = await forkNarrator(db, targetForkId);
+  const _narrBlock = narrator ? narratorProseBlock(narrator) : '';
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
@@ -653,7 +712,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
-    (isDialogue
+    (isOutline ? outlineStyleLines(narrVerbosity) : isDialogue
       ? '- Keep the characters\' spoken lines intact; verbosity below controls only the NARRATION prose woven around them, never which lines are spoken\n' +
         (narrVerbosity === 'low'
           ? '- Narration is MINIMAL: at most a single short line of prose between spoken lines, only when needed to show the scene; let the dialogue carry the block\n'
@@ -684,6 +743,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     (_genreProse ? (_genreProse + '\n\n') : '') +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
+    _narrBlock +   // v3.1.27 -- IN FIRST PERSON, directly after the voice it modifies
     (_campPrompt ? ('GENERAL CAMPAIGN PROMPT — the author of this campaign asked for this, and it applies to every session. Follow it unless it conflicts with the copyright rule above, which always wins:\n' + _campPrompt + '\n\n') : '') +
     'CRITICAL - continuity and chronology:\n' +
     '- The MOMENT block of each panel narrates what that panel\'s image depicts; describing the picture in prose is REQUIRED here, not forbidden\n' +
@@ -841,7 +901,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         max_tokens: Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 1100)),
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
-        system: buildNarrativeSystem(styleBundle.system, campaign, directorNotes),
+        system: (narrator ? narratorSystemLine(narrator) : '') + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1359,6 +1419,43 @@ router.put('/verbosity/:campaignId/:sessionId', requireAuth, async function(req,
     .run(_v, now, req.session.userId, targetForkId);
 
   res.json({ success: true, verbosity: _v });
+});
+
+// ============================================================
+// v3.1.27 -- IN FIRST PERSON. SAVE WHO "I" IS FOR THIS VERSION.
+// Body: { narrator: <character id> | '' }. '' switches first person OFF for this version; it is
+// stored as 'none' so an earlier session's narrator is not inherited straight back. Owner-scoped
+// exactly like /verbosity, and on every plan. The character must be in THIS session's campaign;
+// any character may narrate, a Supporting Character / NPC included (Ian: "Every character").
+// The page never saves "ticked with nobody chosen" -- first person needs a narrator (Ian: "Require it").
+// ============================================================
+router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id, s.campaign_id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  const raw = (req.body && req.body.narrator != null) ? String(req.body.narrator).trim() : '';
+  let store = 'none', ch = null;
+  if (raw && raw !== 'none') {
+    if (!/^\d+$/.test(raw)) return res.json({ error: 'Choose a character to tell the story.' });
+    ch = await db.prepare('SELECT id, name FROM characters WHERE id = ? AND campaign_id = ?').get(parseInt(raw, 10), session.campaign_id);
+    if (!ch) return res.json({ error: 'That character is not in this campaign.' });
+    store = String(ch.id);
+  }
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_narrator = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(store, now, req.session.userId, targetForkId);
+
+  res.json({ success: true, narrator: ch ? String(ch.id) : '', narrator_name: ch ? (ch.name || '') : '' });
 });
 
 module.exports = router;

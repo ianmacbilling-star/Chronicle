@@ -3493,6 +3493,7 @@ function selectSession(id) {
       state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
+      state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -5107,12 +5108,13 @@ var NARR_STYLE_META = [
   { id:'dialogue', name:'Comic Dialogue', desc:'Dialogue-driven comic-book script \u2014 each spoken line led by the speaker, like a graphic novel.', example:'GARRICK: "Hold the line." VENA: "You said that last time."' },
   { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' },
   { id:'epic', name:'Epic Saga', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
-  { id:'journal', name:"Adventurer's Journal", desc:'Personal and grounded, with dry humor, like an adventurer\u2019s diary. May use first person.', example:'We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters.' },
+  { id:'journal', name:"Adventurer's Journal", desc:'Personal and grounded, with dry humor, like an adventurer\u2019s diary. May use first person.', example:'Day six. My boots have given up, and honestly so has half the party, but the map says the pass is close. I have stopped trusting the map.' },   // v3.1.25
   { id:'cinematic', name:'Cinematic Script', desc:'Visual, fast, and minimal. Short punchy sentences describing what the camera sees.', example:'The torchlight flickers. Shadows stretch across the stone. Ruk stumbles, pale and shaking, as the shriek fades into the dark.' },
-  { id:'lorekeeper', name:'Lorekeeper / Historian', desc:'Scholarly and mysterious \u2014 formal, slightly archaic, recorded by an in-world historian.', example:'In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity.' },
+  { id:'lorekeeper', name:'Lorekeeper / Historian', desc:'Scholarly and mysterious \u2014 formal, slightly archaic, recorded by an in-world historian.', example:'Of the Siege of Hollowmere, the surviving accounts agree on little save this: the old bridge fell at dusk, and with it the last road north.' },   // v3.1.25 -- Ian: the SoupMaster was a joke character
   { id:'noir', name:'Noir', desc:'Gritty, moody, cynical fantasy-noir. Hard-boiled phrasing, shadows, and suspicion.', example:'The cave breathed cold air like a liar exhaling excuses, and the torchlight wasn\u2019t bright enough to chase off the truth.' },
   { id:'grim', name:'Dark Fantasy / Grim', desc:'Bleak, heavy, and visceral. Dread, decay, and the cost of every choice.', example:'Blood soaked into the stone, vanishing as if the earth itself were thirsty. Even hope felt like a dying ember.' },
-  { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' }
+  { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' },
+  { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' }   // v3.1.27 -- TD-920
 ];
 var STYLE_PICKER_KIND = null;
 
@@ -5123,7 +5125,7 @@ function narrStyleName(id) {
 
 function refreshNarrStyleButtons() {
   var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
-  var label = 'Narrative: ' + narrStyleName(id);
+  var label = 'Narrative: ' + narrStyleName(id) + (state.narrativeNarrator ? ' \u00b7 First person' : '');   // v3.1.27
   ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -5614,8 +5616,10 @@ function openStylePicker(kind) {
     if (STYLE_PICKER_KIND === 'narrative') {
       _vd.classList.remove('hidden');
       highlightVerbosity(state.narrativeVerbosity || 'med');
+      _narratorPanelShow();   // v3.1.27 -- In first person, at the top of the narrative window
     } else {
       _vd.classList.add('hidden');
+      _narratorPanelHide();
     }
   }
   var modal = document.getElementById('style-picker-modal');
@@ -5667,6 +5671,7 @@ function selectStyleCard(kind, id) {
       state.narrativeStyle = data.style || id;
       mpSave('session', { narrative_style: state.narrativeStyle });
       refreshNarrStyleButtons();
+      if (_narratorAfterStyle(state.narrativeStyle)) return;   // v3.1.27 -- Journal / Calm stay open to choose a narrator
       closeStylePicker();
     })
     .catch(function(e) { showError('Could not set narrative style: ' + e.message); });
@@ -17063,6 +17068,7 @@ function selectSession(id) {
       state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
+      state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -20168,6 +20174,7 @@ function reloadSessionForFork() {
       state.narrativeStyle = narrativeStyleFor(data);   // v3.0.839 -- TD-669
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
+      state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       // Art style is per-fork too: re-apply from the viewed fork's data so a member
       // sees their own art style, not the SM's set by the initial no-fork load.
@@ -20537,7 +20544,10 @@ function renderTierBadge(me) {
   // covering you" is the whole reason that badge existed.
   if (tier === 'trial' && !me.isTester) { el.style.display = 'none'; return; }
   var label = tier.charAt(0).toUpperCase() + tier.slice(1);
-  el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
+  // v3.1.26 -- the tester badge's full wording is 219px and pushed a 440px phone 74px sideways,
+  // hiding the profile menu (Erin Bot's mobile pass). On narrow screens it shortens to
+  // "Platinum \u00b7 Test"; the full wording stays on wider screens and in the tooltip.
+  if (me.isTester) _tierBadgeTesterLabel(el, label); else el.textContent = label;
   el.className = 'btn btn-sm' + (me.isTester ? ' tier-badge-tester' : '');
   el.style.display = 'inline-flex';
   // v3.0.674 -- TD-475. TWO BADGES, TWO DESTINATIONS.
@@ -33266,4 +33276,241 @@ function _ciImport() {
         : d.character.name + ' was imported. Open Edit to check the details.');
     })
     .catch(function () { if (_ci === mine) { if (go) go.disabled = false; _ciErr('Connection error. Please try again.'); } });
+}
+
+// =====================================================================================
+// v3.1.26 -- TESTER BADGE ON A PHONE. Erin Bot, mobile pass 2026-09-26: on a 440px iPhone the page
+// was 514px wide because "Platinum, Test Account (Not Billed)" alone is 219px, so every screen
+// scrolled sideways and the profile menu sat off the edge -- and the bots filed phantom mobile bugs
+// from it. Customers never see this badge. Two labels, one shown per width; one small style rule,
+// added once. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _tierBadgeTesterLabel(el, label) {
+  if (!document.getElementById('tier-badge-tester-css')) {
+    var st = document.createElement('style');
+    st.id = 'tier-badge-tester-css';
+    st.textContent = '.tb-short{display:none;}@media (max-width:600px){#tier-badge .tb-long{display:none;}#tier-badge .tb-short{display:inline;}}';
+    document.head.appendChild(st);
+  }
+  el.textContent = '';
+  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = label + ', Test Account (Not Billed)';
+  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = label + ' \u00b7 Test';
+  el.appendChild(lg); el.appendChild(sh);
+}
+
+// =====================================================================================
+// v3.1.27 -- IN FIRST PERSON. Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md.
+// Ian, 2026-09-27: "A 'In First Person' flag at the top of the Narrative Modal. With a drop down for
+// Which Character it is." Every character may narrate; it is REQUIRED -- ticked means nothing until a
+// narrator is chosen, and nothing is saved until then -- but a book with none generates as before;
+// the narrator appears in more pictures, and the tooltip says so; it outranks Story Instructions.
+// Calm & Literal is always first person (the box is locked on). Adventurer's Journal turns it on
+// when picked and can be switched off. Every other style, Outline included, is optional.
+// Per version, copied fork to fork; the server resolves it (routes: PUT /api/narrative/narrator).
+// Built in JS rather than app.html so the whole control lives in one place.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var _narrPending = false, _narrKeepPending = false, _narrCast = { campaignId: null, list: [] };
+var NARRATOR_TIP = 'The narrator will appear in more pictures than the other characters.';
+
+function _narratorPanelEnsure() {
+  var el = document.getElementById('narrator-panel');
+  if (el) return el;
+  var vd = document.getElementById('verbosity-dial');
+  if (!vd || !vd.parentNode) return null;
+  el = document.createElement('div');
+  el.id = 'narrator-panel';
+  el.style.cssText = 'flex:1 1 240px;min-width:0;margin:2px 0 8px;';   // v3.1.28 -- no box; shares a row with Narrative length
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<label id="narrator-on-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+        '<input type="checkbox" id="narrator-on" onchange="_narratorToggle(this.checked)" style="margin:0;">' +
+        '<span>In first person</span>' +
+      '</label>' +
+      // v3.1.28 -- the i is a real button OUTSIDE the label, so tapping it never ticks the box.
+      '<button type="button" class="info-tip" id="narrator-info" aria-controls="narrator-note" aria-expanded="false" aria-label="About In first person" onclick="_infoTipToggle(this, event)">i</button>' +
+    '</div>' +
+    '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
+      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
+      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story. First person stays off until you do.</div>' +
+    '</div>' +
+    '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
+  _infoTipCss();
+  // v3.1.28 -- Ian: "put the First Person panel next to the Verbosity Control so it doesn't take up
+  // more vertical space." One row holding both; on a narrow phone the two wrap onto two lines.
+  var row = document.createElement('div');
+  row.id = 'narr-settings-row';
+  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px 20px;align-items:flex-start;';
+  vd.parentNode.insertBefore(row, vd);
+  row.appendChild(el);
+  row.appendChild(vd);
+  vd.style.flex = '1 1 240px';
+  vd.style.minWidth = '0';
+  return el;
+}
+
+function _narratorPanelShow() {
+  var el = _narratorPanelEnsure();
+  if (!el) return;
+  if (!_narrKeepPending) _narrPending = false;
+  _narrKeepPending = false;
+  el.style.display = '';
+  _narratorScrollWhole(true);   // v3.1.28
+  _narratorRender();
+  _narratorLoadCast();
+}
+
+function _narratorPanelHide() {
+  var el = document.getElementById('narrator-panel');
+  if (el) el.style.display = 'none';
+  _narrPending = false;
+  _narratorScrollWhole(false);   // v3.1.28
+}
+
+function _narratorLoadCast() {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  fetch('/api/campaigns/' + cid + '/characters')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!state.currentCampaign || String(state.currentCampaign.id) !== String(cid)) return;
+      _narrCast = { campaignId: cid, list: Array.isArray(data) ? data : [] };
+      _narratorRender();
+    })
+    .catch(function () {});
+}
+
+function _narratorRender() {
+  var cb = document.getElementById('narrator-on'), pick = document.getElementById('narrator-pick');
+  var sel = document.getElementById('narrator-select'), need = document.getElementById('narrator-need');
+  var note = document.getElementById('narrator-note');
+  if (!cb || !pick || !sel) return;
+  var style = state.narrativeStyle || 'classic';
+  var locked = (style === 'calm');
+  var has = !!state.narrativeNarrator;
+  var on = has || _narrPending || locked;
+  cb.checked = on;
+  cb.disabled = locked;
+  pick.style.display = on ? '' : 'none';
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
+  var opts = '<option value="">Narrator: choose a character\u2026</option>';
+  var found = false;
+  list.forEach(function (c) {
+    var nm = String(c.name || 'Unnamed character').split('/')[0].trim();
+    if (String(c.id) === String(state.narrativeNarrator)) found = true;
+    opts += '<option value="' + escapeHtml(String(c.id)) + '">' + escapeHtml(nm) + (c.is_npc ? ' (Supporting Character / NPC)' : '') + '</option>';
+  });
+  if (has && !found) opts += '<option value="' + escapeHtml(String(state.narrativeNarrator)) + '">Narrator (loading\u2026)</option>';
+  sel.innerHTML = opts;
+  sel.value = has ? String(state.narrativeNarrator) : '';
+  if (need) need.style.display = (on && !has) ? '' : 'none';
+  // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
+  var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
+    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters.';
+  if (note) note.textContent = _nt;
+  var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
+}
+
+function _narratorToggle(checked) {
+  if ((state.narrativeStyle || 'classic') === 'calm') { _narratorRender(); return; }
+  if (checked) { _narrPending = true; _narratorRender(); var s = document.getElementById('narrator-select'); if (s) try { s.focus(); } catch (e) {} return; }
+  _narrPending = false;
+  if (state.narrativeNarrator) _narratorSave(''); else _narratorRender();
+}
+
+function _narratorChoose(v) {
+  if (!v) { _narratorRender(); return; }   // "choose a character" again: nothing to save
+  _narratorSave(v);
+}
+
+function _narratorSave(v) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var prev = state.narrativeNarrator || '';
+  fetch('/api/narrative/narrator/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ narrator: v || '' })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (!data || data.error) { showError('Could not set the narrator: ' + ((data && data.error) || 'no reply')); state.narrativeNarrator = prev; _narratorRender(); return; }
+    state.narrativeNarrator = data.narrator || '';
+    if (state.narrativeNarrator) _narrPending = false;
+    _narratorRender();
+    refreshNarrStyleButtons();
+  })
+  .catch(function (e) { showError('Could not set the narrator: ' + e.message); state.narrativeNarrator = prev; _narratorRender(); });
+}
+
+// After a narrative style is picked. Journal turns first person on; Calm is always first person.
+// Either one with no narrator keeps the window open on the Narrator list. Returns true when it did.
+function _narratorAfterStyle(style) {
+  if (state.narrativeNarrator) return false;
+  if (style !== 'journal' && style !== 'calm') return false;
+  _narrPending = (style === 'journal');
+  _narrKeepPending = true;
+  openStylePicker('narrative');
+  var s = document.getElementById('narrator-select');
+  if (s) try { s.focus(); } catch (e) {}
+  return true;
+}
+
+// =====================================================================================
+// v3.1.28 -- THE NARRATIVE STYLE WINDOW SCROLLS AS ONE. Ian: "let the whole modal scroll... even
+// those controls." The shared picker CSS pins the modal (overflow visible, 92vh) and scrolls only
+// the card grid (62vh), which kept In first person and Narrative length fixed above the cards and
+// left the cards a short strip on a phone. For the NARRATIVE picker only, the modal scrolls and
+// the grid grows to its full height; the art and layout pickers keep the CSS as it was, because
+// on(false) clears exactly the inline values set here. Opening starts at the top.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _narratorScrollWhole(on) {
+  var m = document.querySelector('#style-picker-modal .modal'), g = document.getElementById('style-picker-grid');
+  if (m) { m.style.overflowY = on ? 'auto' : ''; if (on) m.scrollTop = 0; }
+  if (g) { g.style.maxHeight = on ? 'none' : ''; g.style.overflowY = on ? 'visible' : ''; }
+}
+
+// =====================================================================================
+// v3.1.28 -- THE CIRCLED i. Ian: "if we are going to start using the circled 'i' to indicate a tool
+// tip and more info... then we don't need the descriptions as well under the controls."
+// <button class="info-tip" aria-controls="<pop id>" onclick="_infoTipToggle(this, event)">i</button>
+// plus a hidden <div class="info-tip-pop" id="<pop id>"> holding the text. The button's title gives
+// the hover tooltip on a desktop; a tap opens the text under the control, which is the only way a
+// phone can show it (no hover). One open at a time; a tap anywhere else closes it. Reusable for
+// any control that wants the same treatment. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _infoTipCss() {
+  if (document.getElementById('info-tip-css')) return;
+  var st = document.createElement('style');
+  st.id = 'info-tip-css';
+  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(201,168,76,0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
+    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:#f0e8d0;border-color:var(--gold,#c9a84c);}' +
+    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}';
+  document.head.appendChild(st);
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
+    _infoTipCloseAll();
+  });
+}
+
+function _infoTipCloseAll() {
+  var open = document.querySelectorAll('.info-tip[aria-expanded="true"]');
+  for (var i = 0; i < open.length; i++) {
+    open[i].setAttribute('aria-expanded', 'false');
+    var p = document.getElementById(open[i].getAttribute('aria-controls'));
+    if (p) p.style.display = 'none';
+  }
+}
+
+function _infoTipToggle(btn, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  _infoTipCss();
+  var pop = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!pop) return;
+  var wasOpen = btn.getAttribute('aria-expanded') === 'true';
+  _infoTipCloseAll();
+  if (wasOpen) return;
+  pop.style.display = '';
+  btn.setAttribute('aria-expanded', 'true');
 }
