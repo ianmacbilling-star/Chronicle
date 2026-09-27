@@ -1,7 +1,7 @@
 const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.486 -- TD-217/TD-189 steering
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf, getAppSettingInt, forkNarrator, narratorNameParts } = require('../database/db');
+const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf, getAppSettingInt, forkNarrator, narratorNameParts, forkFirstPersonAnon } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -103,6 +103,20 @@ function narratorProseBlock(n) {
 function narratorSystemLine(n) {
   var c = narratorNameParts(n.name).canon;
   return 'POINT OF VIEW \u2014 FIRST PERSON. The narrative is told by ' + c + ', as \u201cI\u201d. On point of view ONLY, this outranks everything below, including the director\'s instructions and the narrative style.\n\n';
+}
+// v3.1.32 -- "Nobody in particular (just 'I')". The same override as a named narrator, without a name:
+// the narrator is part of the story but is none of the named characters, so nobody is turned into "I".
+function narratorAnonBlock() {
+  return 'IN FIRST PERSON \u2014 NO NAMED NARRATOR.\n' +
+    'This was chosen for this version and it OVERRIDES the point of view of the narrative voice above, of the general campaign prompt and of the director\'s instructions \u2014 including any voice or instruction that says third person.\n' +
+    '- Tell the whole story in the FIRST PERSON, as \u201cI\u201d (\u201cwe\u201d when the narrator is with others). The narrator is part of the story but is NOT one of the named characters: never name the narrator and never describe them.\n' +
+    '- Every named character stays in the third person, by name.\n' +
+    '- Where the transcript is itself written in the first person, its \u201cI\u201d is the narrator; in a recorded conversation or game, \u201cI\u201d is whoever is speaking, and each named speaker stays in the third person.\n' +
+    '- Keep the TENSE the voice asks for; only the point of view changes.\n' +
+    '- The short *_summary outlines and the summary memory are written in the third person.\n\n';
+}
+function narratorAnonSystemLine() {
+  return 'POINT OF VIEW \u2014 FIRST PERSON. The narrative is told as \u201cI\u201d, by a narrator who is not named. On point of view ONLY, this outranks everything below, including the director\'s instructions and the narrative style.\n\n';
 }
 // v3.1.27 -- TD-920. Outline counts BULLETS, and the Low/Med/High dial sets how many.
 function outlineStyleLines(v) {
@@ -516,7 +530,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     : (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-3 sentences';
   // v3.1.27 -- IN FIRST PERSON. Who "I" is for this version, or null -- which is every book before this.
   const narrator = await forkNarrator(db, targetForkId);
-  const _narrBlock = narrator ? narratorProseBlock(narrator) : '';
+  // v3.1.32 -- first person with NOBODY named ('anon'). Calm & Literal is first person already, so it
+  // gets nothing extra and reads exactly as it always has.
+  const _fpAnon = (!narrator && narrStyleId !== 'calm') ? await forkFirstPersonAnon(db, targetForkId) : false;
+  const _narrBlock = narrator ? narratorProseBlock(narrator) : (_fpAnon ? narratorAnonBlock() : '');
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
@@ -901,7 +918,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         max_tokens: Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 1100)),
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
-        system: (narrator ? narratorSystemLine(narrator) : '') + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
+        system: (narrator ? narratorSystemLine(narrator) : (_fpAnon ? narratorAnonSystemLine() : '')) + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1444,7 +1461,9 @@ router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, 
 
   const raw = (req.body && req.body.narrator != null) ? String(req.body.narrator).trim() : '';
   let store = 'none', ch = null;
-  if (raw && raw !== 'none') {
+  if (raw === 'anon') {
+    store = 'anon';   // v3.1.32 -- first person, nobody named
+  } else if (raw && raw !== 'none') {
     if (!/^\d+$/.test(raw)) return res.json({ error: 'Choose a character to tell the story.' });
     ch = await db.prepare('SELECT id, name FROM characters WHERE id = ? AND campaign_id = ?').get(parseInt(raw, 10), session.campaign_id);
     if (!ch) return res.json({ error: 'That character is not in this campaign.' });
@@ -1455,7 +1474,7 @@ router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, 
   await db.prepare('UPDATE session_forks SET narrative_narrator = ?, edited_at = ?, edited_by = ? WHERE id = ?')
     .run(store, now, req.session.userId, targetForkId);
 
-  res.json({ success: true, narrator: ch ? String(ch.id) : '', narrator_name: ch ? (ch.name || '') : '' });
+  res.json({ success: true, narrator: ch ? String(ch.id) : (store === 'anon' ? 'anon' : ''), narrator_name: ch ? (ch.name || '') : '' });
 });
 
 module.exports = router;

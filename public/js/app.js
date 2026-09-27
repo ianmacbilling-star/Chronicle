@@ -3494,6 +3494,9 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -5125,7 +5128,11 @@ function narrStyleName(id) {
 
 function refreshNarrStyleButtons() {
   var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
-  var label = 'Narrative: ' + narrStyleName(id) + (state.narrativeNarrator ? ' \u00b7 First person' : '');   // v3.1.27
+  // v3.1.31 -- the button names WHO narrates, so the saved state is visible without opening anything
+  // (Erin Bot: on Calm & Literal the window could not tell you). Falls back to "First person".
+  // v3.1.32 -- 'anon' reads "First person"; on Calm & Literal (always first person) it adds nothing.
+  var _anon = state.narrativeNarrator === 'anon';
+  var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
   ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -5617,9 +5624,11 @@ function openStylePicker(kind) {
       _vd.classList.remove('hidden');
       highlightVerbosity(state.narrativeVerbosity || 'med');
       _narratorPanelShow();   // v3.1.27 -- In first person, at the top of the narrative window
+      _illusPanelHide();   // v3.1.30
     } else {
       _vd.classList.add('hidden');
       _narratorPanelHide();
+      if (STYLE_PICKER_KIND === 'art') _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921
     }
   }
   var modal = document.getElementById('style-picker-modal');
@@ -5653,6 +5662,7 @@ function setVerbosity(v) {
 }
 
 function closeStylePicker() {
+  if (typeof _narratorBlockClose === 'function' && _narratorBlockClose()) return;   // v3.1.31 -- pick a narrator first
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -5751,7 +5761,7 @@ function artStyleLabel(v, stampedName) {
 
 function refreshArtStyleButtons() {
   var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
-  var label = 'Art: ' + artStyleLabel(v);
+  var label = 'Art: ' + (state.selfIllustrated ? 'Self Illustrated' : artStyleLabel(v));   // v3.1.30 -- TD-921
   ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -7430,7 +7440,9 @@ async function warnIfNoCharacters() {
     var data = await resp.json();
     var arr = Array.isArray(data) ? data : [];
     // v3.1.22 -- TD-913: characters exist, so ask about their reference pictures instead (every time).
-    if (arr.length > 0) return await _warnIfMissingReferences(arr);
+    // v3.1.30 -- TD-921. Nothing is drawn on a self-illustrated version, so there is nothing for a
+    // reference picture to keep consistent; characters themselves still matter (the briefs name them).
+    if (arr.length > 0) return state.selfIllustrated ? true : await _warnIfMissingReferences(arr);
     // The no-characters question is still asked once per browser session for this session.
     if (sessionStorage.getItem(_flagKey)) return true;
     sessionStorage.setItem(_flagKey, '1');
@@ -8778,6 +8790,11 @@ async function extractMoments() {
     // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
+    // v3.1.31 -- RELOAD THE SAVED PANELS. The job answers with the AI's panel list, not the saved rows:
+    // no ids and no opening (title) panel, which the server inserts itself. Generate Images used to
+    // paper over it by reloading afterwards; a self-illustrated version never generates images, so its
+    // Opening had no art brief (Ian, 2026-09-27) and Upload your own had no panel id to aim at.
+    setTimeout(function () { if (typeof reloadSessionForFork === 'function') reloadSessionForFork(); }, 0);
     state.narrativeData = { intro: '', sections: [], outro: '' };
     // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
     state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
@@ -9044,6 +9061,9 @@ function refreshStoryboardImages() {
 
 async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
+  // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
+  // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
+  if (state.selfIllustrated) { if (!fromChain) showError('This version is set to \u201cI\u2019ll illustrate it myself\u201d, so no pictures are drawn. Switch it off in the Art style window to draw again.'); return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
@@ -9222,6 +9242,7 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+    if (typeof _outlineBulletsCheck === 'function') _outlineBulletsCheck();   // v3.1.31 -- TD-924
   }
   // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
   // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
@@ -16243,7 +16264,8 @@ function renderStoryboard() {
     var needsWatermark = (state.tierInfo && typeof state.tierInfo.watermark === 'boolean')
       ? state.tierInfo.watermark
       : !!state.inFreeTrial;
-    var imgHtml = m.image
+    // v3.1.30 -- TD-921. An empty panel on a self-illustrated version shows its art brief.
+    var imgHtml = (!m.image && state.selfIllustrated) ? _selfBriefHtml(m) : m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
@@ -16257,7 +16279,7 @@ function renderStoryboard() {
     } else if (m.locked) {
       lockBtn = '<span class="panel-pill pp-lock is-on is-static" title="Locked by the version owner">Locked</span>';
     }
-    var regenBtn = m.locked
+    var regenBtn = state.selfIllustrated ? '' : m.locked   // v3.1.30 -- TD-921: nothing to regenerate
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
       : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
     // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
@@ -17069,6 +17091,9 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -17469,6 +17494,11 @@ async function extractMoments() {
     // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
+    // v3.1.31 -- RELOAD THE SAVED PANELS. The job answers with the AI's panel list, not the saved rows:
+    // no ids and no opening (title) panel, which the server inserts itself. Generate Images used to
+    // paper over it by reloading afterwards; a self-illustrated version never generates images, so its
+    // Opening had no art brief (Ian, 2026-09-27) and Upload your own had no panel id to aim at.
+    setTimeout(function () { if (typeof reloadSessionForFork === 'function') reloadSessionForFork(); }, 0);
     state.narrativeData = { intro: '', sections: [], outro: '' };
     // v3.1.9 -- TD-908. Suggested assets open on the next Review load for THIS version (both copies patched).
     state.assetSuggestPending = (data.assetSuggestionCount > 0) ? _reviewCtxKey() : null;
@@ -17679,6 +17709,9 @@ function regenNarrativeSection(type, panelIndex) {
 
 async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
+  // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
+  // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
+  if (state.selfIllustrated) { if (!fromChain) showError('This version is set to \u201cI\u2019ll illustrate it myself\u201d, so no pictures are drawn. Switch it off in the Art style window to draw again.'); return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
@@ -17860,6 +17893,7 @@ function switchNovelTab(tab) {
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
     if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
+    if (typeof _outlineBulletsCheck === 'function') _outlineBulletsCheck();   // v3.1.31 -- TD-924
   }
   // v3.0.833 -- TD-678. THE COMMENT ON setStoryPublishedUI SAID THIS ALREADY HAPPENED.
   // It reads: "refreshStoryStatus calls it on every entry to the Order tab -- which is
@@ -20175,6 +20209,9 @@ function reloadSessionForFork() {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.narrativeNarratorName = (data && data.narrative_narrator_name) ? String(data.narrative_narrator_name) : '';   // v3.1.31
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       // Art style is per-fork too: re-apply from the viewed fork's data so a member
       // sees their own art style, not the SM's set by the initial no-fork load.
@@ -33332,7 +33369,7 @@ function _narratorPanelEnsure() {
     '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
       '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
-      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story. First person stays off until you do.</div>' +
+      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
     '</div>' +
     '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
   _infoTipCss();
@@ -33394,8 +33431,13 @@ function _narratorRender() {
   pick.style.display = on ? '' : 'none';
   var cid = state.currentCampaign && state.currentCampaign.id;
   var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
-  var opts = '<option value="">Narrator: choose a character\u2026</option>';
-  var found = false;
+  // v3.1.31 -- on Calm & Literal the story is always "I", so NOBODY is a real choice, and it is shown
+  // as one: the saved state is visible and changeable here, not only by a detour through another style.
+  // v3.1.32 -- Ian: "Could we have the Nobody in particular option all the time". It is a real choice on
+  // every style ('anon'); the placeholder stays first (ticking does NOT pick Nobody -- closing does).
+  // Calm & Literal has no placeholder: it is always first person, so it always has an answer.
+  var opts = (locked ? '' : '<option value="">Narrator: choose a character\u2026</option>') + '<option value="anon">Nobody in particular (just \u201cI\u201d)</option>';
+  var found = (state.narrativeNarrator === 'anon');
   list.forEach(function (c) {
     var nm = String(c.name || 'Unnamed character').split('/')[0].trim();
     if (String(c.id) === String(state.narrativeNarrator)) found = true;
@@ -33403,11 +33445,12 @@ function _narratorRender() {
   });
   if (has && !found) opts += '<option value="' + escapeHtml(String(state.narrativeNarrator)) + '">Narrator (loading\u2026)</option>';
   sel.innerHTML = opts;
-  sel.value = has ? String(state.narrativeNarrator) : '';
-  if (need) need.style.display = (on && !has) ? '' : 'none';
+  sel.value = has ? String(state.narrativeNarrator) : (locked ? 'anon' : '');
+  if (need) need.style.display = (on && !has && !locked) ? '' : 'none';
   // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
   var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
-    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters.';
+    'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters. ' +
+    'With Nobody in particular it is still told as \u201cI\u201d, but nobody is featured in the pictures \u2014 choose a character if you are in the story.';
   if (note) note.textContent = _nt;
   var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
 }
@@ -33420,7 +33463,8 @@ function _narratorToggle(checked) {
 }
 
 function _narratorChoose(v) {
-  if (!v) { _narratorRender(); return; }   // "choose a character" again: nothing to save
+  // v3.1.31 -- on Calm & Literal "Nobody in particular" is a real choice and is saved (clears the narrator).
+  if (!v) { _narratorRender(); return; }   // v3.1.32 -- the placeholder again: nothing to save ('anon' is its own value now)
   _narratorSave(v);
 }
 
@@ -33436,6 +33480,7 @@ function _narratorSave(v) {
   .then(function (data) {
     if (!data || data.error) { showError('Could not set the narrator: ' + ((data && data.error) || 'no reply')); state.narrativeNarrator = prev; _narratorRender(); return; }
     state.narrativeNarrator = data.narrator || '';
+    state.narrativeNarratorName = data.narrator_name ? String(data.narrator_name).split('/')[0].trim() : '';   // v3.1.31
     if (state.narrativeNarrator) _narrPending = false;
     _narratorRender();
     refreshNarrStyleButtons();
@@ -33486,7 +33531,12 @@ function _infoTipCss() {
   st.id = 'info-tip-css';
   st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(201,168,76,0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
     '.info-tip:hover,.info-tip[aria-expanded="true"]{color:#f0e8d0;border-color:var(--gold,#c9a84c);}' +
-    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}';
+    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
+    // v3.1.29 -- the plain modals are LIGHT (white --surface); only the pickers (.archive-picker) are
+    // dark. Explicit colours for each, never inherit (the 3.1.17 lesson: inherit gave dark on dark).
+    '.modal:not(.archive-picker) .info-tip{color:#8a6a20;border-color:rgba(138,106,32,0.6);}' +
+    '.modal:not(.archive-picker) .info-tip:hover,.modal:not(.archive-picker) .info-tip[aria-expanded=\"true\"]{color:#2c1810;border-color:#8a6a20;}' +
+    '.modal:not(.archive-picker) .info-tip-pop{color:#3a2e22;background:#faf6ea;border-color:rgba(201,168,76,0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
   document.head.appendChild(st);
   document.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
@@ -33514,3 +33564,209 @@ function _infoTipToggle(btn, ev) {
   pop.style.display = '';
   btn.setAttribute('aria-expanded', 'true');
 }
+
+// v3.1.29 -- the circled i is used outside the Narrative style window now (Custom Art Style Builder,
+// Reference images), so its style is added when the page loads rather than when that window first
+// opens. _infoTipCss adds it once, whoever calls it first.
+try { _infoTipCss(); } catch (e) {}
+
+// =====================================================================================
+// v3.1.30 -- TD-921. I'LL ILLUSTRATE IT MYSELF. Spec: claude/SELF_ILLUSTRATED_SPEC.md.
+// Ian: "'I'll Illustrate it' it doesn't create any images... just leaves the prompts there." A switch
+// at the top of the Art style window, per version, every plan; the full explanation on the i (Ian:
+// "Use the info icon for the full detail of how the control works"). While on: Generate Images and the
+// image half of Generate Narrative & Images do nothing, Regenerate is gone, the reference-picture
+// question at Generate Story is skipped, and every empty picture panel shows its ART BRIEF with Upload
+// your own. The art style list stays usable: it is the look the brief asks for. The server refuses
+// to draw regardless (images.js), so this page is the courtesy, not the lock.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var ILLUS_TIP = 'Campaignia won\u2019t draw any pictures for this version, and no image tokens are spent. Generate Story and Generate Narrative work as usual. Each empty picture panel shows an art brief instead \u2014 what to draw, the panel\u2019s shape, who is in it with their descriptions, and the art style you pick below as the look to aim for \u2014 with Upload your own to put your picture on it. Pictures already on panels stay. The book is labelled Self Illustrated.';
+var _artBriefs = { key: null, byMoment: {}, loading: false };
+
+function _illusPanelEnsure() {
+  var el = document.getElementById('illus-panel');
+  if (el) return el;
+  var grid = document.getElementById('style-picker-grid');
+  if (!grid || !grid.parentNode) return null;
+  el = document.createElement('div');
+  el.id = 'illus-panel';
+  el.style.cssText = 'margin:2px 0 10px;';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+        '<input type="checkbox" id="illus-on" onchange="_illusToggle(this.checked)" style="margin:0;">' +
+        '<span>I\u2019ll illustrate it myself</span>' +
+      '</label>' +
+      '<button type="button" class="info-tip" id="illus-info" aria-controls="illus-note" aria-expanded="false" aria-label="About I\u2019ll illustrate it myself" title="' + escapeHtml(ILLUS_TIP) + '" onclick="_infoTipToggle(this, event)">i</button>' +
+    '</div>' +
+    '<div id="illus-note" class="info-tip-pop" style="display:none;">' + escapeHtml(ILLUS_TIP) + '</div>';
+  grid.parentNode.insertBefore(el, grid);
+  _infoTipCss();
+  return el;
+}
+
+function _illusPanelShow() {
+  var el = _illusPanelEnsure();
+  if (!el) return;
+  el.style.display = '';
+  var cb = document.getElementById('illus-on');
+  if (cb) { cb.checked = !!state.selfIllustrated; cb.disabled = false; }
+}
+
+function _illusPanelHide() {
+  var el = document.getElementById('illus-panel');
+  if (el) el.style.display = 'none';
+}
+
+function _illusToggle(on) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var prev = !!state.selfIllustrated;
+  var cb = document.getElementById('illus-on'); if (cb) cb.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/illustrate-mode', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: on ? 'self' : 'campaignia', fork_id: state.currentForkId || null })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (cb) cb.disabled = false;
+    if (!data || data.error) { showError('Could not change who draws the pictures: ' + ((data && data.error) || 'no reply')); if (cb) cb.checked = prev; return; }
+    state.selfIllustrated = !!data.self_illustrated;
+    _selfIllApplyUi();
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+  })
+  .catch(function (e) { if (cb) { cb.disabled = false; cb.checked = prev; } showError('Could not change who draws the pictures: ' + e.message); });
+}
+
+// The Generate buttons and the Art label follow the switch.
+function _selfIllApplyUi() {
+  try {
+    var on = !!state.selfIllustrated;
+    var g = document.getElementById('generate-all-btn');
+    if (g) g.style.display = on ? 'none' : '';
+    var rb = document.getElementById('review-generate-btn');
+    if (rb) {
+      var lab = on ? 'Generate Narrative' : 'Generate Narrative & Images';
+      rb.setAttribute('data-idle', lab);
+      if (!rb.disabled) rb.textContent = lab;
+    }
+    if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons();
+    var cb = document.getElementById('illus-on'); if (cb) cb.checked = on;
+    if (!on) _artBriefs = { key: null, byMoment: {}, loading: false };
+  } catch (e) {}
+}
+
+var SHAPE_NAMES = { panoramic: 'Panoramic (21:9)', wide: 'Wide (16:9)', standard: 'Standard (4:3)', square: 'Square (1:1)', fullpage: 'Full page (3:4)', tall: 'Tall (2:3)', tower: 'Tower (1:4)' };
+
+function _artBriefsKey() {
+  return String(state.currentCampaign && state.currentCampaign.id) + ':' + String(state.currentSession && state.currentSession.id) + ':' + String(state.currentForkId || '');
+}
+
+function _artBriefsLoad() {
+  var key = _artBriefsKey();
+  if (_artBriefs.loading === key || _artBriefs.key === key) return;
+  if (!state.currentCampaign || !state.currentSession) return;
+  _artBriefs.loading = key;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/art-briefs' + forkQ())
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (_artBriefsKey() !== key) return;
+      var by = {};
+      ((d && d.briefs) || []).forEach(function (b) { by[String(b.moment_id)] = b.characters || []; });
+      _artBriefs = { key: key, byMoment: by, loading: false };
+      if (state.selfIllustrated && typeof renderStoryboard === 'function') renderStoryboard();
+    })
+    .catch(function () { _artBriefs.loading = false; });
+}
+
+// One panel's brief. Everything the person drawing it needs, and nothing Campaignia would draw with.
+function _selfBriefHtml(m) {
+  var shape = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
+  var have = _artBriefs.key === _artBriefsKey();
+  if (!have) _artBriefsLoad();
+  var cast = have ? (_artBriefs.byMoment[String(m.id)] || []) : null;
+  var who;
+  if (cast === null) who = '<div style="opacity:0.7;">Loading\u2026</div>';
+  else if (!cast.length) who = '<div style="opacity:0.7;">No characters named in this panel.</div>';
+  else who = cast.map(function (c) {
+    var pic = c.reference_url ? '<img src="' + escapeHtml(c.reference_url) + '" alt="" onclick="openLightbox(this.src,\'' + escapeHtml(c.name).replace(/'/g, '') + '\')" style="width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none;cursor:pointer;background:#000;">' : '';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;">' + pic +
+      '<div><b style="color:#f0e8d0;">' + escapeHtml(c.name) + '</b>' + (c.cls ? ' <span style="opacity:0.7;">(' + escapeHtml(c.cls) + ')</span>' : '') +
+      (c.description ? '<div style="opacity:0.85;">' + escapeHtml(c.description) + '</div>' : '') + '</div></div>';
+  }).join('');
+  var aim = (typeof artStyleLabel === 'function') ? artStyleLabel(state.artStyle || 'High fantasy illustration') : (state.artStyle || '');
+  var L = function (t) { return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim,#a08850);margin:8px 0 2px;">' + t + '</div>'; };
+  // v3.1.31 -- Ian: "get rid of the word Draw and replace it with Art Brief... That way when you hover
+  // over the panel... The buttons don't cover the word Art Brief." The top of the box is left clear
+  // for the hover buttons; the heading and the shape sit on the first line below them.
+  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(201,168,76,0.45);border-radius:6px;background:rgba(201,168,76,0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">' + L('Art brief') +
+      '<span style="font-size:11px;opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
+    '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
+    L('Who\u2019s in it') + who +
+    L('Look to aim for') + '<div>' + escapeHtml(aim) + '</div>' +
+    (m.locked ? '' : '<button type="button" class="btn btn-sm dm-only" style="margin-top:10px;" onclick="openReplacePicker(\'moment\', ' + m.id + '); _rpShowTab(\'upload\');">Upload your own</button>') +
+  '</div>';
+}
+
+// =====================================================================================
+// v3.1.31 -- TICKED MEANS CHOOSE. Ian: "I wouldn't uncheck it if they don't pic someone. I would force
+// them to pic a person before the box is closed." While In first person is ticked with nobody chosen,
+// closing the Narrative style window (the x, or picking a style card) is refused: the window scrolls
+// back to the switch, the orange line says what is missing, and the Narrator list takes the focus.
+// Unticking is the way out without choosing. Calm & Literal never blocks -- "Nobody in particular" is
+// a real choice there. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _narratorBlockClose() {
+  try {
+    if (STYLE_PICKER_KIND !== 'narrative') return false;
+    var modal = document.getElementById('style-picker-modal');
+    if (!modal || modal.classList.contains('hidden')) return false;
+    if (!_narrPending || state.narrativeNarrator) return false;
+    if ((state.narrativeStyle || 'classic') === 'calm') return false;
+    // v3.1.32 -- Ian: "if they don't choose someone when they close it.. it defaults to that" (Nobody in
+    // particular). So closing is never refused any more: the choice is saved and the window closes.
+    _narrPending = false;
+    _narratorSave('anon');
+    return false;
+  } catch (e) { return false; }
+}
+
+// =====================================================================================
+// v3.1.31 -- TD-924. OUTLINE BULLETS STILL IN THE BOOK, SAID ON PREP & PREVIEW. Ian: "if you can detect
+// on the Prep & Preview tab... that there are still outline bullets in the book I would warn there...
+// So they can catch it before they optimize." The server counts, per session of the book being
+// previewed, the narrative blocks that still hold bullet lines (sessions/novel/all, outline_bullets).
+// Included sessions only. Never blocks anything; a failed check shows nothing.
+// =====================================================================================
+function _outlineBulletsCheck() {
+  try {
+    if (!state.currentCampaign) return;
+    var tab = document.getElementById('novel-tab-preview');
+    if (!tab) return;
+    var box = document.getElementById('outline-bullets-warn');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'outline-bullets-warn';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      tab.insertBefore(box, tab.firstChild);
+    }
+    var cid = state.currentCampaign.id;
+    fetch('/api/campaigns/' + cid + '/sessions/novel/all' + novelAsUserQ('?'))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (list) {
+        if (!state.currentCampaign || String(state.currentCampaign.id) !== String(cid)) return;
+        var hits = (Array.isArray(list) ? list : []).filter(function (s) { return s && s.novel_include && Number(s.outline_bullets) > 0; });
+        if (!hits.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        var names = hits.map(function (s) { return '<b>' + escapeHtml(s.name || 'Untitled session') + '</b>'; });
+        box.innerHTML = '<b>Outline bullet points are still in this book</b> \u2014 in ' + names.join(', ') + '. ' +
+          'In the printed book they run together as one paragraph. Replace them with your own words on each session\u2019s Storyboard before you Optimize.';
+        box.style.display = 'block';
+      })
+      .catch(function () { box.style.display = 'none'; });
+  } catch (e) {}
+}
+
+// v3.1.32 -- _narratorBlockClose no longer blocks: closing with In first person ticked and nobody chosen
+// saves "Nobody in particular (just I)" ('anon'). The name is kept so closeStylePicker's hook is unchanged.

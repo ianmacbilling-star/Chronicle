@@ -1421,6 +1421,11 @@ async function migrateForks(pool) {
   // sessions decide -- see forkNarrator). TEXT rather than INTEGER so versionStyleDefaults can treat
   // it exactly like the other style fields. Spec: claude/FIRST_PERSON_NARRATOR_SPEC.md.
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_narrator TEXT');
+  // v3.1.30 -- TD-921. I'LL ILLUSTRATE IT MYSELF. illustrate_mode = 'self' when this version draws no
+  // pictures (the reader supplies them), 'campaignia' when switched back on, NULL when never set (the
+  // version's earlier sessions decide -- see forkSelfIllustrated). TEXT for versionStyleDefaults.
+  // Spec: claude/SELF_ILLUSTRATED_SPEC.md.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS illustrate_mode TEXT');
   // v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION: this version's memory of what happened here,
   // written by Generate Story in the same AI response as the prose (no second call) and read by
   // the NEXT session in stage 2. Per-fork, because Ian's rule is that each version is independent
@@ -1729,6 +1734,13 @@ async function migrateArchives(pool) {
   // archive time so the label ("Custom: <name>") is identical for every viewer
   // and survives later renames, deletes, or tier lapses. Null for presets.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style_name TEXT');
+  // v3.1.30 -- TD-921. EVERY UPLOADED PICTURE IS "Self Illustrated" (Ian: "any picture uploaded is
+  // tagged as Self Illustrated even if the rest of the book isn't"). Pictures uploaded before this
+  // build were stored with style NULL; they are the only panel pictures whose file is named
+  // uploads/own-<moment>-<time>.jpg (routes/moments.js upload-image), so they are recognisable
+  // exactly. Their archived copies keep the original as source_url. Idempotent: only NULLs change.
+  await pool.query("UPDATE moments SET style = 'Self Illustrated' WHERE style IS NULL AND image LIKE '%/uploads/own-%'");
+  await pool.query("UPDATE campaign_archives SET art_style = 'Self Illustrated' WHERE art_style IS NULL AND source_url LIKE '%/uploads/own-%'");
   // public = owner opted this archived image into the anonymous Public Library.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS public BOOLEAN DEFAULT FALSE');
   // img_w / img_h / shape = the archived image's stored pixel dims and shape, copied from
@@ -2170,7 +2182,8 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
 // date. This is the same rule and should have been the same shape.
 async function versionStyleDefaults(db, versionId, sessionId) {
   // v3.1.27 -- narrative_narrator joins the version's style: a first-person version stays first person.
-  const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null, narrative_narrator: null };
+  // v3.1.30 -- illustrate_mode joins the version's style too (TD-921).
+  const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null, narrative_narrator: null, illustrate_mode: null };
   if (!versionId) return out;
   let before = null;
   if (sessionId) {
@@ -2726,10 +2739,55 @@ async function forkNarrator(db, forkId) {
   }
 }
 
+// v3.1.30 -- TD-921. DOES CAMPAIGNIA DRAW THIS VERSION'S PICTURES? false = yes (every book before this).
+// The fork's own value first ('self' or 'campaignia'); never set, the version's most recent EARLIER
+// session decides -- the same rule forkNarrator follows. Used by the image routes (which refuse to
+// draw), the session payload (the page) and the art briefs. Never throws: an error reads as "draws",
+// which is how every version behaved before this switch existed.
+async function forkSelfIllustrated(db, forkId) {
+  try {
+    if (!forkId) return false;
+    const f = await db.prepare('SELECT illustrate_mode, version_id, session_id FROM session_forks WHERE id = ?').get(forkId);
+    if (!f) return false;
+    let v = (f.illustrate_mode == null) ? '' : String(f.illustrate_mode).trim();
+    if (!v && f.version_id) {
+      const d = await versionStyleDefaults(db, f.version_id, f.session_id);
+      v = (d && d.illustrate_mode) ? String(d.illustrate_mode).trim() : '';
+    }
+    return v === 'self';
+  } catch (e) {
+    console.error('[self-illustrated] could not resolve fork ' + forkId + ': ' + ((e && e.message) || e));
+    return false;
+  }
+}
+
+// v3.1.32 -- IN FIRST PERSON WITH NOBODY NAMED. narrative_narrator = 'anon': the story is told as "I"
+// but no character is the narrator. Ian: "if they don't choose someone when they close it.. it defaults
+// to that" and "If they don't select a particular character then nobody is preferred in the image
+// panels." forkNarrator deliberately still answers null for it (not digits), so Generate Story adds no
+// narrator block, no extra pictures and no presence -- exactly "nobody preferred". Only the prose asks
+// this. Resolved like forkNarrator: the fork's own value, else the version's earlier session. Never throws.
+async function forkFirstPersonAnon(db, forkId) {
+  try {
+    if (!forkId) return false;
+    const f = await db.prepare('SELECT narrative_narrator, version_id, session_id FROM session_forks WHERE id = ?').get(forkId);
+    if (!f) return false;
+    let v = (f.narrative_narrator == null) ? '' : String(f.narrative_narrator).trim();
+    if (!v && f.version_id) {
+      const d = await versionStyleDefaults(db, f.version_id, f.session_id);
+      v = (d && d.narrative_narrator) ? String(d.narrative_narrator).trim() : '';
+    }
+    return v === 'anon';
+  } catch (e) {
+    console.error('[narrator] could not resolve first person for fork ' + forkId + ': ' + ((e && e.message) || e));
+    return false;
+  }
+}
+
 // A character name is "Canonical / alias / alias". The canonical is what the prompts call them.
 function narratorNameParts(name) {
   const t = String(name || '').split('/').map(function (x) { return x.trim(); }).filter(function (x) { return x.length; });
   return { canon: t.length ? t[0] : String(name || '').trim(), aka: t.slice(1) };
 }
 
-module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, narratorNameParts };
+module.exports = { makeShareToken, coverFromPrefs, getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, narratorNameParts, forkSelfIllustrated, forkFirstPersonAnon };

@@ -890,7 +890,10 @@ appears in more pictures than the other characters**, because it is their story.
 - It works with every narrative style — Epic Saga in the first person reads well for a memoir.
   **Calm & Literal** is always first person. **Adventurer's Journal** turns it on for you; untick it
   for a journal in the third person.
-- It needs a narrator: until you choose one, first person stays off.
+- **Nobody in particular (just "I")** is on the list too: the story is told as "I", but no character is
+  the narrator and nobody is featured in the pictures. It is also what you get if you tick the box and
+  close without choosing. If you are in the story, choose your character instead — they are named in the
+  pictures and appear in more of them.
 - It outranks the Story Instructions, so there is no need to write "I means Beth" there, or to add
   "Me / I" to a character's name.
 - It belongs to the version, like the narrative style, and carries on into that version's next sessions.
@@ -937,6 +940,25 @@ drew. It is how an artist can let Campaignia write the story and supply the art 
 - **It costs nothing**, on any plan. It is not saved to the Archive by itself — use **Archive** on
   the panel if you want a copy there. Only upload pictures you own or have the right to use.
 - An uploaded picture keeps its own look; Campaignia's art style is not applied to it.
+- Every uploaded picture is labelled **Self Illustrated** — on the panel, in the Archive and in the
+  Library — even when the rest of the book was drawn by Campaignia.
+
+**I'll illustrate it myself.** At the top of the **Art style** window, tick **I'll illustrate it
+myself** when you will supply every picture. For that version:
+- **Campaignia draws nothing** and spends no image tokens: **Generate Images** disappears, **Generate
+  Narrative & Images** becomes **Generate Narrative**, and **Regenerate** is gone from the panels.
+  **Generate Story** still plans the panels and writes their prompts.
+- **Each empty picture panel shows an art brief** — what to draw, the panel's shape, who is in it (with
+  their descriptions, and their reference picture if one exists), and the look to aim for — with an
+  **Upload your own** button right on it.
+- **The art style list still works:** the style you pick is the look the briefs ask for.
+- **Pictures already on the panels stay.** The switch only stops new drawing.
+- Generate Story does not ask you to build reference pictures first. It still asks if the campaign has
+  no characters at all, because the briefs name them.
+- The book is labelled **Self Illustrated** on your Bookshelf, and a published story that contains
+  your pictures is found under **Self Illustrated** in the Library's art style filter.
+- It belongs to the version and carries into its next sessions. Every plan. Untick it to let Campaignia
+  draw again.
 - **Top of the Storyboard:** change **Narrative style** or **Art style**, then
   **Generate Narrative** (rewrites prose across all panels) or **Generate Images**
   (re-renders every image that isn't locked).
@@ -1613,10 +1635,12 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   **My Orders** and **Published Stories** tabs.
 - **"My order says paid but nothing has happened."** My Stuff → My Orders → **Check with the
   printer** on that order. Do that before ordering again, so you do not get two books.
-- **"I'm an artist — I want Campaignia to write the story and I'll do the pictures."** Run **Generate
-  Story** as usual, then on the Storyboard choose **Generate Narrative** only, so no pictures are
-  drawn. On each panel, open **Replace → Upload your own**, choose your picture and frame it. Each
-  panel takes the shape of your picture and is locked, and none of it costs tokens.
+- **"I'm an artist — I want Campaignia to write the story and I'll do the pictures."** In the **Art
+  style** window tick **I'll illustrate it myself**, then run **Generate Story** and **Generate
+  Narrative** as usual — no pictures are drawn. Every picture panel shows an art brief of what to
+  draw; press **Upload your own** on it, choose your picture and frame it. Each panel takes the shape
+  of your picture and is locked, none of it costs image tokens, and the book is labelled **Self
+  Illustrated**.
 - **"I want to use the same character in a new campaign (a sequel, a spin-off, a new family story)."**
   In the new campaign, open **Characters → Import from another campaign**, pick the old campaign, the
   character, and the look you want — for a sequel, usually the latest look from the Story Master's
@@ -1705,8 +1729,9 @@ Friction points and what's actually going on.
 - **"My first-person story still says 'Beth' instead of 'I'."** Open **Narrative style** and check
   that **In first person** is ticked with Beth as the **Narrator** on this version, then **Generate
   Narrative** again — prose that is already written is not changed until you regenerate it.
-- **"In first person won't stay ticked."** It needs a narrator. Choose one from the list; until you do,
-  first person is off.
+- **"My first-person story doesn't show me in the pictures."** The narrator is probably **Nobody in
+  particular**. Open **Narrative style** and choose your character as the **Narrator**, then run
+  **Generate Story** again so the panels are planned with you in them.
 - **"It says there is no text in my PDF."** The words are part of a picture rather than text
   — a scan, a photograph of a page, or an export saved that way. On the character sheet, and on
   the Story and Lore boxes, Campaignia offers to read the pages as pictures instead; that costs a
@@ -1831,6 +1856,11 @@ Friction points and what's actually going on.
   Narrative style window, with any of your characters as the Narrator. Every plan, every style.
 - **Can I write the story myself and let Campaignia draw?** Yes — the **Outline / I'll write it**
   narrative style gives you bullet points to write over. Every plan.
+- **Can I draw all the pictures myself?** Yes — **I'll illustrate it myself** at the top of the Art
+  style window. Campaignia draws nothing for that version and each panel shows an art brief to draw
+  from. Every plan.
+- **What does "Self Illustrated" mean on a picture?** Somebody uploaded it rather than Campaignia
+  drawing it.
 
 ---
 

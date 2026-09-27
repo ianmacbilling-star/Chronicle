@@ -176,7 +176,7 @@ router.post('/:momentId/upload-image', requireAuth, verifyCampaignMember, guardU
   try {
     const db = await getDb();
     const moment = await db.prepare(
-      'SELECT m.id, m.image, m.locked, m.shape, m.title, m.layout_meta, m.img_w, m.img_h, m.revert_image, sf.user_id AS fork_owner ' +
+      'SELECT m.id, m.image, m.style, m.locked, m.shape, m.title, m.layout_meta, m.img_w, m.img_h, m.revert_image, sf.user_id AS fork_owner ' +
       'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
     ).get(req.params.momentId, req.params.sessionId);
     if (!moment) return res.status(404).json({ error: 'That panel no longer exists.' });
@@ -215,11 +215,14 @@ router.post('/:momentId/upload-image', requireAuth, verifyCampaignMember, guardU
     if (wasTitle) demoteBuiltTitle(pm);
     if (wasTitle) pm.prev_built_title = wasTitle; else delete pm.prev_built_title;
     const prevImg = moment.image || null;
-    if (prevImg) pm.prev_shape = { shape: moment.shape || 'standard', image: prevImg }; else delete pm.prev_shape;
+    // v3.1.30 -- the displaced picture's STYLE rides in the undo slot too, so Revert puts back its label.
+    if (prevImg) pm.prev_shape = { shape: moment.shape || 'standard', image: prevImg, style: (moment.style == null ? null : moment.style) }; else delete pm.prev_shape;
 
     const now = new Date().toISOString();
     await db.prepare(
-      'UPDATE moments SET image = ?, style = NULL, img_w = ?, img_h = ?, shape = ?, title = ?, layout_meta = ?, ' +
+      // v3.1.30 -- TD-921. Ian: "any picture uploaded is tagged as Self Illustrated even if the rest of
+      // the book isn't." Was style = NULL, which every label read as the session's art style.
+      "UPDATE moments SET image = ?, style = 'Self Illustrated', img_w = ?, img_h = ?, shape = ?, title = ?, layout_meta = ?, " +
       'revert_image = ?, revert_img_w = ?, revert_img_h = ?, locked = 1, edited_at = ?, edited_by = ? WHERE id = ?'
     ).run(url, out.info.width, out.info.height, shape, (moment.title == null ? null : capTitleForShape(moment.title, shape)), JSON.stringify(pm),
       prevImg, prevImg ? (moment.img_w || null) : null, prevImg ? (moment.img_h || null) : null,

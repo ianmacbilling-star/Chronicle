@@ -53,6 +53,14 @@ var PRESET_NAMES = [
 var CUSTOM_SLUG = 'custom';
 var CUSTOM_LABEL = 'Custom';
 
+// v3.1.30 -- TD-921. "Self Illustrated": every picture a reader uploads onto a panel, and every book
+// made with "I'll illustrate it myself". Stored on moments.style / campaign_archives.art_style as this
+// exact name, like a preset, so the Library filter matches it by equality and the publish snapshot
+// (pdf.js, styleSlug) records it without any change there. It is NOT in PRESET_NAMES, because that
+// list must match getStylePrefix in images.js -- nothing is ever GENERATED in this style.
+var SELF_NAME = 'Self Illustrated';
+var SELF_SLUG = 'self-illustrated';
+
 // v3.0.858 -- TD-718. TWO OPTIONS IN THE ART-STYLE DROPDOWN THAT ARE NOT ART STYLES.
 //
 // Ian, 2026-09-11: "Can you add 'Titles' and 'Characters' to the art style drop down...
@@ -112,10 +120,12 @@ var PRESETS = PRESET_NAMES.map(function (n) {
   BY_SLUG[s] = n;
   return { slug: s, label: n, name: n };
 });
+BY_SLUG[SELF_SLUG] = SELF_NAME;   // v3.1.30 -- known to nameForSlug / styleSlug / isStyleSlug; listed after the presets
 
 // The list the filter control is built from: every preset, then Custom.
 function facetOptions() {
   var out = PRESETS.map(function (p) { return { slug: p.slug, label: p.label }; });
+  out.push({ slug: SELF_SLUG, label: SELF_NAME });   // v3.1.30 -- TD-921
   out.push({ slug: CUSTOM_SLUG, label: CUSTOM_LABEL });
   return out;
 }
@@ -151,6 +161,8 @@ module.exports = {
   PRESETS: PRESETS,
   CUSTOM_SLUG: CUSTOM_SLUG,
   CUSTOM_LABEL: CUSTOM_LABEL,
+  SELF_NAME: SELF_NAME,
+  SELF_SLUG: SELF_SLUG,
   facetOptions: facetOptions,
   isStyleSlug: isStyleSlug,
   KINDS: KINDS,

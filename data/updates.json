@@ -1,5 +1,96 @@
 [
   {
+    "version": "3.1.32",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3132-first-person-nobody",
+        "kind": "feature",
+        "public": true,
+        "summary": "In first person: 'Nobody in particular (just I)' is now a choice on every narrative style.",
+        "detail": "The Narrator list always offers Nobody in particular: the story is told as 'I' with no character named as the narrator, and nobody is featured in the pictures. If you tick In first person and close the window without choosing, that is what is saved. Choose a character instead to have them named in the pictures and appear in more of them.",
+        "td": [
+          "TD-919"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.31",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3131-outline-bullets-warning",
+        "kind": "feature",
+        "public": true,
+        "summary": "Prep & Preview warns when a book still holds Outline bullet points.",
+        "detail": "If any session in the book still has narrative written as Outline / I'll write it bullets, Prep & Preview names those sessions and explains that bullets print as one run-together paragraph, so they can be replaced before you Optimize.",
+        "td": [
+          "TD-924"
+        ]
+      },
+      {
+        "id": "3131-narrator-and-briefs",
+        "kind": "fix",
+        "public": true,
+        "summary": "First person: the style button names the narrator; Calm & Literal can choose nobody; the Opening panel gets its art brief.",
+        "detail": "The Narrative button reads e.g. 'Epic Saga \u00b7 Narrator: Beth'. On Calm & Literal the Narrator list offers 'Nobody in particular (just I)' so the saved choice is visible and changeable there. With In first person ticked, the window cannot be closed until a narrator is chosen (or the box is unticked). After Generate Story the saved panels are reloaded, so the Opening picture panel appears straight away and, on a Self Illustrated version, shows its art brief. The art brief's heading now sits below the hover buttons.",
+        "td": [
+          "TD-919",
+          "TD-921"
+        ]
+      },
+      {
+        "id": "3131-menu-stamp",
+        "kind": "fix",
+        "public": false,
+        "summary": "Testers and admins see the version stamp at the foot of the profile menu on a phone.",
+        "detail": "The header stamp stays hidden on phones for space; the same text now appears at the bottom of the profile menu there, so a finding from a phone can name its version.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.30",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3130-self-illustrated",
+        "kind": "feature",
+        "public": true,
+        "summary": "I'll illustrate it myself: a switch in the Art style window for books where you supply every picture.",
+        "detail": "Art style window, new I'll illustrate it myself switch (per version, every plan). Campaignia then draws no pictures for that version and spends no image tokens; each empty picture panel shows an art brief (what to draw, the panel's shape, who is in it with their descriptions, the look to aim for) with Upload your own on it. Pictures already on panels stay. The book is labelled Self Illustrated.",
+        "td": [
+          "TD-921"
+        ]
+      },
+      {
+        "id": "3130-self-label",
+        "kind": "feature",
+        "public": true,
+        "summary": "Every picture you upload onto a panel is now labelled Self Illustrated.",
+        "detail": "On the panel, in the Archive and in the Library, whether or not the rest of the book was drawn by Campaignia. Pictures uploaded earlier are labelled too. The Library's art style filter has a Self Illustrated option. Revert on an uploaded picture puts back the earlier picture's own label.",
+        "td": [
+          "TD-921"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.29",
+    "staged_on": "2026-09-27",
+    "entries": [
+      {
+        "id": "3129-cstyle-info",
+        "kind": "fix",
+        "public": false,
+        "summary": "Custom Art Style Builder: the note about mixed results moved onto an i beside Reference images.",
+        "detail": "The paragraph under the reference image slots (the AI reads the rendering style across your samples; image models have their own tendencies, so results can be mixed) is now on a circled i next to the Reference images label: hover on a desktop, tap on a phone. Same text.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.28",
     "staged_on": "2026-09-27",
     "entries": [

@@ -101,6 +101,11 @@
         <div class="user-menu-divider"></div>
         <div class="user-menu-item" id="nav-install-item" style="display:none;" onclick="installApp();closeUserMenu()">Install app</div>
         <div class="user-menu-item danger" onclick="logout()">Sign out</div>
+        <!-- v3.1.31 -- the build stamp, at the foot of this menu on a phone only, where the header has no
+             room for it (Erin Bot: a finding from a phone could not say which version it was on). Filled by
+             the same /version answer as #build-stamp, so admins and testers only. -->
+        <div id="menu-build-stamp" style="display:none;padding:6px 14px 8px;font:11px/1.3 ui-monospace,Menlo,Consolas,monospace;color:#9a8a68;opacity:0.8;"></div>
+        <style>@media (max-width: 640px) { #menu-build-stamp.has-v { display: block !important; } }</style>
       </div>
     </div>
   </div>
@@ -3105,7 +3110,8 @@
         <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
       </div>
       <div class="form-group">
-        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span></label>
+        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span> <button type="button" class="info-tip" id="cstyle-info-btn" aria-controls="cstyle-info" aria-expanded="false" aria-label="About reference images" title="The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others." onclick="_infoTipToggle(this, event)" style="vertical-align:middle;margin-left:2px;">i</button></label>
+        <div id="cstyle-info" class="info-tip-pop" style="display:none;margin:0 0 8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div>
           <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
@@ -3176,7 +3182,6 @@
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
       </div>
       <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
       <div class="form-group" style="margin-top:14px;">
@@ -3543,6 +3548,8 @@
         el.textContent = 'v' + (v.version || '?') + (v.env && v.env !== 'production' ? ' \u00b7 ' + v.env : '');
         if (v.commit) el.title = 'commit ' + v.commit + '  \u00b7  ' + (v.ts || '');
         el.style.display = 'inline';
+        var mb = document.getElementById('menu-build-stamp');   // v3.1.31 -- the phone copy
+        if (mb) { mb.textContent = el.textContent; mb.className = 'has-v'; }
       })
       .catch(function(){});
   } catch (e) {}
