@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.26",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3126-tester-badge-phone",
+        "kind": "fix",
+        "public": false,
+        "summary": "On a phone, the tester badge shortens to 'Platinum \u00b7 Test' so the page no longer scrolls sideways.",
+        "detail": "Tester accounts, phone width (under about 600px): the header badge reads e.g. 'Platinum \u00b7 Test' instead of 'Platinum, Test Account (Not Billed)', the page fits the screen and the profile menu is reachable. Desktop unchanged; the tooltip and the click to testing controls are unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.25",
     "staged_on": "2026-09-26",
     "entries": [

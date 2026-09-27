@@ -20537,7 +20537,10 @@ function renderTierBadge(me) {
   // covering you" is the whole reason that badge existed.
   if (tier === 'trial' && !me.isTester) { el.style.display = 'none'; return; }
   var label = tier.charAt(0).toUpperCase() + tier.slice(1);
-  el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
+  // v3.1.26 -- the tester badge's full wording is 219px and pushed a 440px phone 74px sideways,
+  // hiding the profile menu (Erin Bot's mobile pass). On narrow screens it shortens to
+  // "Platinum \u00b7 Test"; the full wording stays on wider screens and in the tooltip.
+  if (me.isTester) _tierBadgeTesterLabel(el, label); else el.textContent = label;
   el.className = 'btn btn-sm' + (me.isTester ? ' tier-badge-tester' : '');
   el.style.display = 'inline-flex';
   // v3.0.674 -- TD-475. TWO BADGES, TWO DESTINATIONS.
@@ -33266,4 +33269,24 @@ function _ciImport() {
         : d.character.name + ' was imported. Open Edit to check the details.');
     })
     .catch(function () { if (_ci === mine) { if (go) go.disabled = false; _ciErr('Connection error. Please try again.'); } });
+}
+
+// =====================================================================================
+// v3.1.26 -- TESTER BADGE ON A PHONE. Erin Bot, mobile pass 2026-09-26: on a 440px iPhone the page
+// was 514px wide because "Platinum, Test Account (Not Billed)" alone is 219px, so every screen
+// scrolled sideways and the profile menu sat off the edge -- and the bots filed phantom mobile bugs
+// from it. Customers never see this badge. Two labels, one shown per width; one small style rule,
+// added once. APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function _tierBadgeTesterLabel(el, label) {
+  if (!document.getElementById('tier-badge-tester-css')) {
+    var st = document.createElement('style');
+    st.id = 'tier-badge-tester-css';
+    st.textContent = '.tb-short{display:none;}@media (max-width:600px){#tier-badge .tb-long{display:none;}#tier-badge .tb-short{display:inline;}}';
+    document.head.appendChild(st);
+  }
+  el.textContent = '';
+  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = label + ', Test Account (Not Billed)';
+  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = label + ' \u00b7 Test';
+  el.appendChild(lg); el.appendChild(sh);
 }
