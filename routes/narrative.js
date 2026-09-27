@@ -191,7 +191,7 @@ const NARRATIVE_STYLES = (function () {
     },
     journal: {
       name: "Adventurer's Journal",
-      voice: `Personal and grounded, with occasional dry humor or self-reflection, as if taken from an adventurer's personal journal. Focus on what the characters notice, feel, or think in the moment. You may use FIRST person ("I") or close THIRD person ("Zara thought..."). Keep it readable and human.\nExample: "We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters."`,
+      voice: `Personal and grounded, with occasional dry humor or self-reflection, as if taken from an adventurer's personal journal. Focus on what the characters notice, feel, or think in the moment. You may use FIRST person ("I") or close THIRD person ("Zara thought..."). Keep it readable and human.\nExample: "Day six. My boots have given up, and honestly so has half the party, but the map says the pass is close. I have stopped trusting the map."`,
       system: SYS
     },
     cinematic: {
@@ -201,7 +201,7 @@ const NARRATIVE_STYLES = (function () {
     },
     lorekeeper: {
       name: 'Lorekeeper / Historian',
-      voice: `Scholarly, mysterious, and world-building heavy, as if recorded by an in-world historian or lorekeeper. Use formal, slightly archaic language. Provide context, hints of ancient knowledge, or commentary on the significance of events. Avoid humor unless it fits the lorekeeper's personality.\nExample: "In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity, for few mortals have tampered with arcane gastronomy and lived."`,
+      voice: `Scholarly, mysterious, and world-building heavy, as if recorded by an in-world historian or lorekeeper. Use formal, slightly archaic language. Provide context, hints of ancient knowledge, or commentary on the significance of events. Avoid humor unless it fits the lorekeeper's personality.\nExample: "Of the Siege of Hollowmere, the surviving accounts agree on little save this: the old bridge fell at dusk, and with it the last road north."`,
       system: SYS
     },
     noir: {

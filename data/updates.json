@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.25",
+    "staged_on": "2026-09-26",
+    "entries": [
+      {
+        "id": "3125-voice-examples",
+        "kind": "change",
+        "public": true,
+        "summary": "New example sentences for the Lorekeeper / Historian and Adventurer's Journal narrative styles, in the style picker and in what the AI is shown.",
+        "detail": "Narrative style picker: Lorekeeper / Historian now reads 'Of the Siege of Hollowmere...' and Adventurer's Journal 'Day six. My boots have given up...'. The same sentences are the model examples the AI imitates, so stories in those two voices lose the old joke tone. Generate Narrative in each voice to compare.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.24",
     "staged_on": "2026-09-26",
     "entries": [
