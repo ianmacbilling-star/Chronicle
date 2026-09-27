@@ -157,16 +157,22 @@ function makeHandlers(d) {
     async function forks(vid) {
       var m = {};
       if (!vid) return m;
-      var fr = await db.prepare('SELECT session_id, art_style_override, narrative_style, narrative_style_used FROM session_forks WHERE version_id = ?').all(vid);
+      var fr = await db.prepare('SELECT session_id, art_style_override, narrative_style, narrative_style_used, illustrate_mode FROM session_forks WHERE version_id = ?').all(vid);
       (fr || []).forEach(function (f) { if (!m[f.session_id]) m[f.session_id] = f; });
       return m;
     }
     var vmap = await forks(bookVersionId), cmap = await forks(canon && canon.id);
     var sess = await db.prepare('SELECT id, art_style FROM sessions WHERE campaign_id = ? ORDER BY session_date, id').all(campaignId);
+    // v3.1.30 -- TD-921. A self-illustrated session is listed as "Self Illustrated", whatever art style
+    // it aims for. Never set on a session means its version's earlier session decides (the
+    // forkSelfIllustrated rule), carried here in session order.
+    var _selfMode = '';
     (sess || []).forEach(function (s) {
+      var _f0 = vmap[s.id] || cmap[s.id] || {};
+      if (_f0.illustrate_mode) _selfMode = String(_f0.illustrate_mode);
       if (ids && ids.indexOf(String(s.id)) === -1) return;
-      var f = vmap[s.id] || cmap[s.id] || {};
-      var art = String(f.art_style_override || s.art_style || '').trim();
+      var f = _f0;
+      var art = (_selfMode === 'self') ? 'Self Illustrated' : String(f.art_style_override || s.art_style || '').trim();
       var narr = String(f.narrative_style_used || f.narrative_style || '').trim();
       if (art && out.art.indexOf(art) === -1) out.art.push(art);
       if (narr && out.narr.indexOf(narr) === -1) out.narr.push(narr);

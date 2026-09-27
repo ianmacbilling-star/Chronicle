@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks, forkNarrator, forkSelfIllustrated } = require('../database/db');
 const { releaseImage, deleteFile } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -297,6 +297,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // v3.1.27 -- IN FIRST PERSON. The narrator the generators will use for this version (own, else the
   // version's earlier session), so the picker shows exactly what Generate will do. Never throws.
   const _narr = await forkNarrator(db, viewForkId);
+  const _selfIll = await forkSelfIllustrated(db, viewForkId);   // v3.1.30 -- TD-921
   try {
     const _vid = viewForkRow && viewForkRow.version_id;
     if (_vid && (!viewForkRow || !viewForkRow.narrative_style)) {
@@ -397,6 +398,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
     narrative_narrator: _narr ? String(_narr.id) : '',                       // v3.1.27 -- '' = not first person
     narrative_narrator_inherited: !!(_narr && _narr.inherited),
+    self_illustrated: !!_selfIll,                                             // v3.1.30 -- TD-921
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
 });
@@ -485,6 +487,63 @@ router.put('/:id/art-style', requireAuth, verifyCampaignMember, async function(r
   await db.prepare('UPDATE session_forks SET art_style_override=?, edited_at=?, edited_by=? WHERE id=?')
     .run(artStyle, now, req.session.userId, forkId);
   res.json({ success: true, scope: 'fork', art_style: artStyle });
+});
+
+// ============================================================
+// v3.1.30 -- TD-921. I'LL ILLUSTRATE IT MYSELF, per version. Body { mode: 'self' | 'campaignia', fork_id }.
+// Written to the acting fork only (the canonical included: this is a version setting, not the
+// session's art style), owner-scoped by callerForkId like /art-style. Every plan. Pictures already
+// on panels are left alone -- the switch only stops new drawing (Ian: "Yes keep old pictures in place").
+// ============================================================
+router.put('/:id/illustrate-mode', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=?').get(req.params.id);
+  if (!sess || String(sess.campaign_id) !== String(req.params.campaignId)) return res.status(404).json({ error: 'Session not found' });
+  const mode = (req.body && req.body.mode === 'self') ? 'self' : (req.body && req.body.mode === 'campaignia') ? 'campaignia' : '';
+  if (!mode) return res.json({ error: 'Unknown mode.' });
+  const forkId = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
+  if (!forkId) return res.status(403).json({ error: 'You have no version of this session' });
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET illustrate_mode = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(mode, now, req.session.userId, forkId);
+  res.json({ success: true, self_illustrated: mode === 'self' });
+});
+
+// v3.1.30 -- TD-921. THE ART BRIEFS: who is in each panel, for the person drawing it.
+// The Review cast lists only characters WITH a reference picture (buildCharacterBlock's refs), which is
+// exactly the wrong list here -- a self-illustrated book may have none. So this names every character
+// the panel's text names, by the same rule (imageHelpers.characterNameMatches), or the panel's explicit
+// cast when it has one, with each character's description and reference picture if one exists.
+router.get('/:id/art-briefs', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const viewForkId = await getViewableForkId(db, req.params.id, req.session.userId, req.query.fork_id);
+    if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
+    const moments = await db.prepare('SELECT id, title, description, prompt, cast_explicit FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(viewForkId);
+    const chars = await db.prepare(
+      'SELECT ch.id, ch.name, ch.cls, ch.description, ch.canonical_reference_url, sc.reference_url AS snapshot_reference_url ' +
+      'FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.id'
+    ).all(viewForkId, req.params.campaignId);
+    const mc = await db.prepare('SELECT mc.moment_id, mc.character_id FROM moment_characters mc JOIN moments m ON m.id = mc.moment_id WHERE m.fork_id = ?').all(viewForkId);
+    const explicit = {};
+    (mc || []).forEach(function (r) { (explicit[r.moment_id] = explicit[r.moment_id] || []).push(String(r.character_id)); });
+    const briefs = (moments || []).map(function (m) {
+      const text = ((m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '')).toLowerCase();
+      const isExplicit = !!(m.cast_explicit === true || m.cast_explicit === 1 || m.cast_explicit === 't');
+      const cast = (chars || []).filter(function (c) {
+        if (isExplicit) return (explicit[m.id] || []).indexOf(String(c.id)) !== -1;
+        return !!c.name && imageHelpers.characterNameMatches(c.name, text);
+      });
+      return { moment_id: m.id, characters: cast.map(function (c) {
+        return { id: c.id, name: String(c.name || '').split('/')[0].trim(), cls: c.cls || '',
+          description: String(c.description || '').slice(0, 400), reference_url: c.snapshot_reference_url || c.canonical_reference_url || null };
+      }) };
+    });
+    res.json({ briefs: briefs });
+  } catch (e) {
+    console.error('[art-briefs] ' + (e && e.message));
+    res.json({ error: 'Could not load the art briefs.' });
+  }
 });
 
 router.put('/:id/access-status', requireAuth, verifyCampaignMember, async function(req, res) {
@@ -1714,8 +1773,8 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   // that quietly drops the art style, the Direction and the verbosity is the wrong default.
   const created = await db.prepare(
     // v3.1.27 -- narrative_narrator copied too: "a setting that gets copied from fork to fork".
-    "INSERT INTO session_forks (session_id, user_id, role, name, version_id, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, created_at) " +
-    "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
+    "INSERT INTO session_forks (session_id, user_id, role, name, version_id, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, illustrate_mode, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, created_at) " +
+    "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_narrator, illustrate_mode, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
   ).run(sessionId, req.session.userId, newRole, forkName || null, _newVersionId, now, sourceForkId);
   const newForkId = created.lastInsertRowid;
   // v3.0.460 -- CONTENT FROM THE SOURCE, STYLE FROM THE VERSION (TD-252).
@@ -1730,7 +1789,7 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   try {
     const _vs = await versionStyleDefaults(db, _newVersionId, sessionId);
     const _sets = [], _vals = [];
-    ['art_style_override', 'narrative_style', 'narrative_verbosity', 'narrative_narrator'].forEach(function (k) {   // v3.1.27 -- + narrator
+    ['art_style_override', 'narrative_style', 'narrative_verbosity', 'narrative_narrator', 'illustrate_mode'].forEach(function (k) {   // v3.1.27 -- + narrator
       if (_vs[k]) { _sets.push(k + ' = ?'); _vals.push(_vs[k]); }
     });
     if (_sets.length) {

@@ -4,7 +4,7 @@ const assetSuggest = require('../services/assetSuggestions');   // v3.1.9 -- TD-
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
+const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, forkSelfIllustrated } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2, fetchFile } = require('../storage/storage');
 const imageCrop = require('../services/imageCrop');
 const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
@@ -1376,6 +1376,10 @@ async function submitEditReference(falKey, baseImageUrl, changeText, charName, m
 // ============================================================
 
 // POST /api/images/generate-moment
+// v3.1.30 -- TD-921. The refusal the two drawing routes give for a self-illustrated version. The page
+// never asks (it hides Regenerate and skips Generate Images), so this is the backstop, not the path.
+const SELF_ILLUSTRATED_MSG = "This version is set to \u201cI\u2019ll illustrate it myself\u201d, so Campaignia doesn\u2019t draw its pictures. Switch that off in the Art style window to draw again.";
+
 router.post('/generate-moment', requireAuth, async function(req, res) {
   const { moment_id, session_id, campaign_id, prompt, style } = req.body;
   const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
@@ -1397,6 +1401,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
   if (!ownsThisFork) return res.status(403).json({ error: 'You can only regenerate your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to regenerate.' });
+  // v3.1.30 -- TD-921. A version set to "I'll illustrate it myself" is never drawn, whatever the page sends.
+  if (await forkSelfIllustrated(db, moment.fork_id)) return res.json({ error: 'SELF_ILLUSTRATED', message: SELF_ILLUSTRATED_MSG });
 
   // Tier gate: block generating with an art style locked at the caller's
   // effective tier (e.g. after an SM downgrade once the style was chosen).
@@ -1836,10 +1842,13 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
     // recorded as layout_meta.prev_shape, TIED TO THAT IMAGE URL. It is used only while it still
     // describes the picture in the undo slot -- a later Regenerate re-arms the slot at the current
     // shape and leaves a stale record that simply no longer matches -- and it swaps like the rest.
-    var _revShape = null;
+    var _revShape = null, _revStyle = null;
     if (_rMeta && _rMeta.prev_shape && _rMeta.prev_shape.image && _rMeta.prev_shape.image === moment.revert_image && _rMeta.prev_shape.shape) {
       _revShape = _rMeta.prev_shape.shape;
-      _rMeta.prev_shape = { shape: moment.shape || 'standard', image: current || null };
+      // v3.1.30 -- TD-921. The label swaps with the picture when the slot recorded it (uploads do), so
+      // reverting an upload does not leave a Campaignia picture labelled Self Illustrated.
+      if (Object.prototype.hasOwnProperty.call(_rMeta.prev_shape, 'style')) _revStyle = { v: _rMeta.prev_shape.style };
+      _rMeta.prev_shape = { shape: moment.shape || 'standard', image: current || null, style: (moment.style == null ? null : moment.style) };
     } else if (_rMeta && _rMeta.prev_shape) {
       delete _rMeta.prev_shape;
     }
@@ -1847,6 +1856,7 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
       .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _revShape,
            current || null, moment.img_w || null, moment.img_h || null,
            _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
+    if (_revStyle) await db.prepare('UPDATE moments SET style = ? WHERE id = ?').run(_revStyle.v, moment.id);   // v3.1.30
     res.json({ success: true, image: moment.revert_image });
   } catch (e) {
     console.error('revert-moment error:', e.message);
@@ -1927,6 +1937,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
     targetForkId = myFork.id;
   }
+  // v3.1.30 -- TD-921. Nothing is drawn, and nothing is charged, for a self-illustrated version.
+  if (await forkSelfIllustrated(db, targetForkId)) return res.json({ error: 'SELF_ILLUSTRATED', message: SELF_ILLUSTRATED_MSG });
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
   // Image locking — skip locked panels (don't regenerate, don't charge for them).

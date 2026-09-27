@@ -3494,6 +3494,8 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -5617,9 +5619,11 @@ function openStylePicker(kind) {
       _vd.classList.remove('hidden');
       highlightVerbosity(state.narrativeVerbosity || 'med');
       _narratorPanelShow();   // v3.1.27 -- In first person, at the top of the narrative window
+      _illusPanelHide();   // v3.1.30
     } else {
       _vd.classList.add('hidden');
       _narratorPanelHide();
+      if (STYLE_PICKER_KIND === 'art') _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921
     }
   }
   var modal = document.getElementById('style-picker-modal');
@@ -5751,7 +5755,7 @@ function artStyleLabel(v, stampedName) {
 
 function refreshArtStyleButtons() {
   var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
-  var label = 'Art: ' + artStyleLabel(v);
+  var label = 'Art: ' + (state.selfIllustrated ? 'Self Illustrated' : artStyleLabel(v));   // v3.1.30 -- TD-921
   ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -7430,7 +7434,9 @@ async function warnIfNoCharacters() {
     var data = await resp.json();
     var arr = Array.isArray(data) ? data : [];
     // v3.1.22 -- TD-913: characters exist, so ask about their reference pictures instead (every time).
-    if (arr.length > 0) return await _warnIfMissingReferences(arr);
+    // v3.1.30 -- TD-921. Nothing is drawn on a self-illustrated version, so there is nothing for a
+    // reference picture to keep consistent; characters themselves still matter (the briefs name them).
+    if (arr.length > 0) return state.selfIllustrated ? true : await _warnIfMissingReferences(arr);
     // The no-characters question is still asked once per browser session for this session.
     if (sessionStorage.getItem(_flagKey)) return true;
     sessionStorage.setItem(_flagKey, '1');
@@ -9044,6 +9050,9 @@ function refreshStoryboardImages() {
 
 async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
+  // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
+  // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
+  if (state.selfIllustrated) { if (!fromChain) showError('This version is set to \u201cI\u2019ll illustrate it myself\u201d, so no pictures are drawn. Switch it off in the Art style window to draw again.'); return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
@@ -16243,7 +16252,8 @@ function renderStoryboard() {
     var needsWatermark = (state.tierInfo && typeof state.tierInfo.watermark === 'boolean')
       ? state.tierInfo.watermark
       : !!state.inFreeTrial;
-    var imgHtml = m.image
+    // v3.1.30 -- TD-921. An empty panel on a self-illustrated version shows its art brief.
+    var imgHtml = (!m.image && state.selfIllustrated) ? _selfBriefHtml(m) : m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
@@ -16257,7 +16267,7 @@ function renderStoryboard() {
     } else if (m.locked) {
       lockBtn = '<span class="panel-pill pp-lock is-on is-static" title="Locked by the version owner">Locked</span>';
     }
-    var regenBtn = m.locked
+    var regenBtn = state.selfIllustrated ? '' : m.locked   // v3.1.30 -- TD-921: nothing to regenerate
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
       : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
     // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
@@ -17069,6 +17079,8 @@ function selectSession(id) {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -17679,6 +17691,9 @@ function regenNarrativeSection(type, panelIndex) {
 
 async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
+  // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
+  // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
+  if (state.selfIllustrated) { if (!fromChain) showError('This version is set to \u201cI\u2019ll illustrate it myself\u201d, so no pictures are drawn. Switch it off in the Art style window to draw again.'); return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
@@ -20175,6 +20190,8 @@ function reloadSessionForFork() {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       state.narrativeNarrator = (data && data.narrative_narrator != null) ? String(data.narrative_narrator) : '';   // v3.1.27 -- '' = not first person
+      state.selfIllustrated = !!(data && data.self_illustrated);   // v3.1.30 -- TD-921
+      if (typeof _selfIllApplyUi === 'function') _selfIllApplyUi();
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       // Art style is per-fork too: re-apply from the viewed fork's data so a member
       // sees their own art style, not the SM's set by the initial no-fork load.
@@ -33524,3 +33541,140 @@ function _infoTipToggle(btn, ev) {
 // Reference images), so its style is added when the page loads rather than when that window first
 // opens. _infoTipCss adds it once, whoever calls it first.
 try { _infoTipCss(); } catch (e) {}
+
+// =====================================================================================
+// v3.1.30 -- TD-921. I'LL ILLUSTRATE IT MYSELF. Spec: claude/SELF_ILLUSTRATED_SPEC.md.
+// Ian: "'I'll Illustrate it' it doesn't create any images... just leaves the prompts there." A switch
+// at the top of the Art style window, per version, every plan; the full explanation on the i (Ian:
+// "Use the info icon for the full detail of how the control works"). While on: Generate Images and the
+// image half of Generate Narrative & Images do nothing, Regenerate is gone, the reference-picture
+// question at Generate Story is skipped, and every empty picture panel shows its ART BRIEF with Upload
+// your own. The art style list stays usable: it is the look the brief asks for. The server refuses
+// to draw regardless (images.js), so this page is the courtesy, not the lock.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var ILLUS_TIP = 'Campaignia won\u2019t draw any pictures for this version, and no image tokens are spent. Generate Story and Generate Narrative work as usual. Each empty picture panel shows an art brief instead \u2014 what to draw, the panel\u2019s shape, who is in it with their descriptions, and the art style you pick below as the look to aim for \u2014 with Upload your own to put your picture on it. Pictures already on panels stay. The book is labelled Self Illustrated.';
+var _artBriefs = { key: null, byMoment: {}, loading: false };
+
+function _illusPanelEnsure() {
+  var el = document.getElementById('illus-panel');
+  if (el) return el;
+  var grid = document.getElementById('style-picker-grid');
+  if (!grid || !grid.parentNode) return null;
+  el = document.createElement('div');
+  el.id = 'illus-panel';
+  el.style.cssText = 'margin:2px 0 10px;';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+        '<input type="checkbox" id="illus-on" onchange="_illusToggle(this.checked)" style="margin:0;">' +
+        '<span>I\u2019ll illustrate it myself</span>' +
+      '</label>' +
+      '<button type="button" class="info-tip" id="illus-info" aria-controls="illus-note" aria-expanded="false" aria-label="About I\u2019ll illustrate it myself" title="' + escapeHtml(ILLUS_TIP) + '" onclick="_infoTipToggle(this, event)">i</button>' +
+    '</div>' +
+    '<div id="illus-note" class="info-tip-pop" style="display:none;">' + escapeHtml(ILLUS_TIP) + '</div>';
+  grid.parentNode.insertBefore(el, grid);
+  _infoTipCss();
+  return el;
+}
+
+function _illusPanelShow() {
+  var el = _illusPanelEnsure();
+  if (!el) return;
+  el.style.display = '';
+  var cb = document.getElementById('illus-on');
+  if (cb) { cb.checked = !!state.selfIllustrated; cb.disabled = false; }
+}
+
+function _illusPanelHide() {
+  var el = document.getElementById('illus-panel');
+  if (el) el.style.display = 'none';
+}
+
+function _illusToggle(on) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var prev = !!state.selfIllustrated;
+  var cb = document.getElementById('illus-on'); if (cb) cb.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/illustrate-mode', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: on ? 'self' : 'campaignia', fork_id: state.currentForkId || null })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (cb) cb.disabled = false;
+    if (!data || data.error) { showError('Could not change who draws the pictures: ' + ((data && data.error) || 'no reply')); if (cb) cb.checked = prev; return; }
+    state.selfIllustrated = !!data.self_illustrated;
+    _selfIllApplyUi();
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+  })
+  .catch(function (e) { if (cb) { cb.disabled = false; cb.checked = prev; } showError('Could not change who draws the pictures: ' + e.message); });
+}
+
+// The Generate buttons and the Art label follow the switch.
+function _selfIllApplyUi() {
+  try {
+    var on = !!state.selfIllustrated;
+    var g = document.getElementById('generate-all-btn');
+    if (g) g.style.display = on ? 'none' : '';
+    var rb = document.getElementById('review-generate-btn');
+    if (rb) {
+      var lab = on ? 'Generate Narrative' : 'Generate Narrative & Images';
+      rb.setAttribute('data-idle', lab);
+      if (!rb.disabled) rb.textContent = lab;
+    }
+    if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons();
+    var cb = document.getElementById('illus-on'); if (cb) cb.checked = on;
+    if (!on) _artBriefs = { key: null, byMoment: {}, loading: false };
+  } catch (e) {}
+}
+
+var SHAPE_NAMES = { panoramic: 'Panoramic (21:9)', wide: 'Wide (16:9)', standard: 'Standard (4:3)', square: 'Square (1:1)', fullpage: 'Full page (3:4)', tall: 'Tall (2:3)', tower: 'Tower (1:4)' };
+
+function _artBriefsKey() {
+  return String(state.currentCampaign && state.currentCampaign.id) + ':' + String(state.currentSession && state.currentSession.id) + ':' + String(state.currentForkId || '');
+}
+
+function _artBriefsLoad() {
+  var key = _artBriefsKey();
+  if (_artBriefs.loading === key || _artBriefs.key === key) return;
+  if (!state.currentCampaign || !state.currentSession) return;
+  _artBriefs.loading = key;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/art-briefs' + forkQ())
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (_artBriefsKey() !== key) return;
+      var by = {};
+      ((d && d.briefs) || []).forEach(function (b) { by[String(b.moment_id)] = b.characters || []; });
+      _artBriefs = { key: key, byMoment: by, loading: false };
+      if (state.selfIllustrated && typeof renderStoryboard === 'function') renderStoryboard();
+    })
+    .catch(function () { _artBriefs.loading = false; });
+}
+
+// One panel's brief. Everything the person drawing it needs, and nothing Campaignia would draw with.
+function _selfBriefHtml(m) {
+  var shape = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
+  var have = _artBriefs.key === _artBriefsKey();
+  if (!have) _artBriefsLoad();
+  var cast = have ? (_artBriefs.byMoment[String(m.id)] || []) : null;
+  var who;
+  if (cast === null) who = '<div style="opacity:0.7;">Loading\u2026</div>';
+  else if (!cast.length) who = '<div style="opacity:0.7;">No characters named in this panel.</div>';
+  else who = cast.map(function (c) {
+    var pic = c.reference_url ? '<img src="' + escapeHtml(c.reference_url) + '" alt="" onclick="openLightbox(this.src,\'' + escapeHtml(c.name).replace(/'/g, '') + '\')" style="width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none;cursor:pointer;background:#000;">' : '';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;">' + pic +
+      '<div><b style="color:#f0e8d0;">' + escapeHtml(c.name) + '</b>' + (c.cls ? ' <span style="opacity:0.7;">(' + escapeHtml(c.cls) + ')</span>' : '') +
+      (c.description ? '<div style="opacity:0.85;">' + escapeHtml(c.description) + '</div>' : '') + '</div></div>';
+  }).join('');
+  var aim = (typeof artStyleLabel === 'function') ? artStyleLabel(state.artStyle || 'High fantasy illustration') : (state.artStyle || '');
+  var L = function (t) { return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim,#a08850);margin:8px 0 2px;">' + t + '</div>'; };
+  return '<div class="self-brief" style="min-height:180px;padding:12px 14px;border:1px dashed rgba(201,168,76,0.45);border-radius:6px;background:rgba(201,168,76,0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;"><b style="font-family:var(--font-display);color:var(--gold,#c9a84c);font-size:13px;">Art brief</b>' +
+      '<span style="opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
+    L('Draw') + '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
+    L('Who\u2019s in it') + who +
+    L('Look to aim for') + '<div>' + escapeHtml(aim) + '</div>' +
+    (m.locked ? '' : '<button type="button" class="btn btn-sm dm-only" style="margin-top:10px;" onclick="openReplacePicker(\'moment\', ' + m.id + '); _rpShowTab(\'upload\');">Upload your own</button>') +
+  '</div>';
+}
