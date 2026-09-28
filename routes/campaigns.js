@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId, coverFromPrefs } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId, coverFromPrefs, versionStyleDefaults, versionPriorCharacterLooks } = require('../database/db');
+const promoteCanonical = require('../services/promoteCanonical');   // v3.1.35 -- TD-928
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
@@ -961,6 +962,45 @@ router.put('/:campaignId/default-version', requireAuth, verifyCampaignMember, as
   }
   await db.prepare('UPDATE campaign_members SET default_version_id = ? WHERE campaign_id = ? AND user_id = ?').run(id, req.params.campaignId, req.session.userId);
   res.json({ success: true, default_version_id: id });
+});
+
+// v3.1.35 -- TD-928. PROMOTE TO CANONICAL. Spec: claude/PROMOTE_CANONICAL_SPEC.md; the work is in
+// services/promoteCanonical.js. The check is read-only and drives the confirm window; the POST runs the
+// same check again before it changes anything. Story Master only, on one of his own versions.
+function promoteDeps() {
+  const pdf = require('./pdf');
+  return {
+    inFlight: pdf.campaignWorkInFlight,
+    forgetCaches: pdf.forgetCampaignCaches,
+    releaseImage: releaseImage,
+    deleteFile: deleteFile,
+    versionStyleDefaults: versionStyleDefaults,
+    versionPriorCharacterLooks: versionPriorCharacterLooks
+  };
+}
+router.get('/:campaignId/versions/:versionId/promote-check', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    if (!/^\d+$/.test(String(req.params.versionId))) return res.status(400).json({ ok: false, error: 'That is not a version.' });
+    const out = await promoteCanonical.promoteCheck(db, req.params.campaignId, req.params.versionId, req.session.userId, promoteDeps());
+    res.json(out);
+  } catch (e) {
+    console.error('[promote] check failed: ' + ((e && e.message) || e));
+    res.status(500).json({ ok: false, error: 'Could not check this version. Please try again.' });
+  }
+});
+router.post('/:campaignId/versions/:versionId/promote', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    if (!/^\d+$/.test(String(req.params.versionId))) return res.status(400).json({ error: 'That is not a version.' });
+    const b = req.body || {};
+    const r = await promoteCanonical.promoteRun(db, req.params.campaignId, req.params.versionId, req.session.userId,
+      { new_name: b.new_name, delete_old: b.delete_old === true }, promoteDeps());
+    res.status(r.status).json(r.body);
+  } catch (e) {
+    console.error('[promote] failed, nothing changed: ' + ((e && e.stack) || e));
+    res.status((e && e.status) || 500).json({ error: (e && e.status && e.message) || 'The Canonical could not be changed. Nothing was changed; please try again.' });
+  }
 });
 
 module.exports = router;

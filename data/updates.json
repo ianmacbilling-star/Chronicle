@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.35",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3135-promote-to-canonical",
+        "kind": "feature",
+        "public": true,
+        "summary": "Story Masters can make one of their own versions the Canonical, and carry on in its style.",
+        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style, narrative style and Story Instructions. Sessions it never had are copied in from the old Canonical as they are. Every other version stays exactly as it was. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
+        "td": [
+          "TD-928"
+        ]
+      },
+      {
+        "id": "3135-summary-follows-version",
+        "kind": "fix",
+        "public": false,
+        "summary": "The summary carried into the next session now comes from the same version's previous session.",
+        "detail": "inheritedSummary took the caller's first fork by id, which with several versions could hand one version another's memory, and after a promote would have picked the old Canonical.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.34",
     "staged_on": "2026-09-28",
     "entries": [

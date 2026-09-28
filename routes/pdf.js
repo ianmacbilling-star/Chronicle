@@ -14789,3 +14789,38 @@ module.exports.assembleNovelHtml = assembleNovelHtml;
 module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
 module.exports.formatDateRange = formatDateRange;   // v3.0.552 -- campaigns.js seeds the subtitle field from this, so the two cannot drift
 module.exports.parseCustomOpts = parseCustomOpts;   // v3.0.981 -- TD-901. routes/bookshelf.js reads the arrange the same way last-optimized-file does
+
+// v3.1.35 -- TD-928. WHAT PROMOTE TO CANONICAL MUST WAIT FOR, and what it must forget afterwards.
+// Read-only over this process's run stores; nothing here changes a run. An Optimize can be anyone's
+// (members optimize the Canonical too), so the run store is searched by CAMPAIGN, across users --
+// optimizeRunGet answers per user and is the wrong question here. Stale entries are skipped by the same
+// rule optimizeRunGet uses. Print renders carry no campaign, so a member's render counts.
+function campaignWorkInFlight(campaignId, memberUserIds) {
+  var cid = String(campaignId), now = Date.now(), label = null;
+  try {
+    _optimizeRuns.forEach(function (r) {
+      if (label || !r) return;
+      if (now - (r.beat || r.startedAt) > OPTIMIZE_LOCK_STALE_MS) return;
+      if (String(r.campaignId) === cid) label = 'An Optimize';
+    });
+    if (!label) _saveJobs.forEach(function (j) { if (!label && j && j.state === 'running' && String(j.campaignId) === cid) label = 'Saving an optimized book'; });
+    if (!label) _applyJobs.forEach(function (j) { if (!label && j && j.state === 'running' && String(j.campaignId) === cid) label = 'An Optimize'; });
+    if (!label && Array.isArray(memberUserIds) && memberUserIds.length) {
+      var ids = memberUserIds.map(String);
+      _renderJobs.forEach(function (j) {
+        if (!label && j && j.state === 'running' && now - (j.startedAt || now) < OPTIMIZE_LOCK_STALE_MS && ids.indexOf(String(j.userId)) !== -1) label = 'A print file render';
+      });
+    }
+  } catch (e) { label = 'Work'; }   // a throw is not "nothing is running"
+  return label;
+}
+// The composed-book caches key a Canonical request without its version, so after the Canonical changes
+// they would hand back the old book. Every key starts with the campaign id.
+function forgetCampaignCaches(campaignId) {
+  var head = String(campaignId) + '|';
+  [_composedCache, _runGrows, _runMoves, _runRefusals].forEach(function (m) {
+    Array.from(m.keys()).forEach(function (k) { if (String(k).indexOf(head) === 0) m.delete(k); });
+  });
+}
+module.exports.campaignWorkInFlight = campaignWorkInFlight;
+module.exports.forgetCampaignCaches = forgetCampaignCaches;

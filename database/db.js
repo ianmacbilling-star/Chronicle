@@ -121,6 +121,43 @@ class AsyncDB {
   async exec(sql) {
     await this.pool.query(sql);
   }
+
+  // v3.1.35 -- TD-928. A REAL TRANSACTION, ON ONE CLIENT. Every prepare() above is its own pool.query,
+  // so two statements can land on two connections and nothing can be rolled back. Promote to
+  // Canonical moves the Canonical's markers and the data tied to them; half of that is worse than
+  // none, so it runs here: fn(tx) gets tx.query(sql, params) -- raw pg, $1-style -- and tx.prepare()
+  // with the same ?-style run/get/all as the wrapper, both on the one client. Any throw rolls back.
+  async transaction(fn) {
+    const client = await this.pool.connect();
+    const toPg = function (sql) { let i = 0; return sql.replace(/\?/g, function () { return '$' + (++i); }); };
+    const tx = {
+      query: function (sql, params) { return client.query(sql, params || []); },
+      prepare: function (sql) {
+        const pgSql = toPg(sql);
+        return {
+          run: async function (...args) {
+            const params = args.flat();
+            const s = pgSql.trim().toUpperCase().startsWith('INSERT') ? pgSql + ' RETURNING id' : pgSql;
+            const r = await client.query(s, params);
+            return { lastInsertRowid: r.rows[0] ? r.rows[0].id : null, changes: r.rowCount };
+          },
+          get: async function (...args) { const r = await client.query(pgSql, args.flat()); return r.rows[0] || null; },
+          all: async function (...args) { const r = await client.query(pgSql, args.flat()); return r.rows; }
+        };
+      }
+    };
+    try {
+      await client.query('BEGIN');
+      const out = await fn(tx);
+      await client.query('COMMIT');
+      return out;
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (_e) {}
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 // ============================================================

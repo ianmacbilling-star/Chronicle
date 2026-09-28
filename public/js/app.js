@@ -3281,6 +3281,7 @@ function renderSessions() {
 
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
+  if (typeof _promoteNudge === 'function' && _promoteNudge()) return;   // v3.1.35 -- TD-928
   document.getElementById('session-name').value = '';
   var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
@@ -16982,6 +16983,7 @@ function renderSessions() {
 
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
+  if (typeof _promoteNudge === 'function' && _promoteNudge()) return;   // v3.1.35 -- TD-928
   document.getElementById('session-name').value = '';
   var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
@@ -19875,6 +19877,11 @@ function paintVersionMenu() {
   var mine = !!(shownFork && shownFork.is_mine);
   if (verMenu) verMenu.style.display = mine ? '' : 'none';
   if (delItem) delItem.style.display = mine ? '' : 'none';
+  // v3.1.35 -- TD-928. Make This Version the Canonical: the Story Master, on one of his own versions
+  // that is not already the Canonical.
+  var promoteItem = document.getElementById('promote-version-item');
+  if (promoteItem) promoteItem.style.display = (mine && shownFork && shownFork.role !== 'dm' && shownFork.version_id &&
+    state.currentCampaign && state.currentCampaign.my_role === 'dm') ? '' : 'none';
   // v3.0.887 -- TD-765. The same answer drives the chip, from the same place, so the menu and the
   // chip can never disagree about whose version this is.
   paintForeignVersionChip('session-fork-select', mine);
@@ -34037,3 +34044,174 @@ function toggleVersionPin(versionId) {
     _vpickClose();
   }, true);
 })();
+
+// v3.1.35 -- TD-928. MAKE THIS VERSION THE CANONICAL. Spec: claude/PROMOTE_CANONICAL_SPEC.md.
+// Ian: "I make several versions and finally land on an art and narrative style I like... Now I want to
+// continue on with my next session(s) using my new favorite stylings." The server does the work in one
+// transaction (services/promoteCanonical.js); this is the menu item, the confirm window, the second
+// confirmation for a delete, and the nudge when a new session is made while a different version is pinned.
+function _promoteVersionIdOnScreen() {
+  var sel = document.getElementById('session-fork-select');
+  var id = (sel && sel.value) || state.currentForkId;
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(id); })[0];
+  return (f && f.version_id) ? String(f.version_id) : null;
+}
+function _promoteList(rows) {
+  return (rows || []).map(function (r) { return '\u201c' + (r.name || 'Untitled session') + '\u201d'; }).join(', ');
+}
+function _promoteOthersLine(u) {
+  u = u || {};
+  var parts = [];
+  if (u.pins) parts.push(u.pins === 1 ? '1 member has pinned it' : (u.pins + ' members have pinned it'));
+  if (u.saved_layouts) parts.push(u.saved_layouts === 1 ? '1 member has a saved layout of it' : (u.saved_layouts + ' members have saved layouts of it'));
+  if (u.shelved) parts.push(u.shelved === 1 ? '1 member has it on their Bookshelf' : (u.shelved + ' members have it on their Bookshelf'));
+  return parts.length ? (parts.join(', ') + '.') : '';
+}
+function _promoteDialog(info) {
+  return new Promise(function (resolve) {
+    var vName = info.version.name, cName = info.canonical.name;
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var box = document.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
+    var bullets = [
+      'Members read \u201c' + vName + '\u201d as the book from now on, and new sessions start in its art style, narrative style and Story Instructions.',
+      'Every other version \u2014 yours and your members\u2019 \u2014 stays exactly as it is.'
+    ];
+    if (info.missing && info.missing.length) bullets.push('\u201c' + vName + '\u201d doesn\u2019t have ' + _promoteList(info.missing) + ' yet, so ' + (info.missing.length === 1 ? 'it is' : 'they are') + ' copied in from the current Canonical as ' + (info.missing.length === 1 ? 'it is' : 'they are') + '. You can regenerate ' + (info.missing.length === 1 ? 'it' : 'them') + ' in the new style afterwards.');
+    if (info.drafts && info.drafts.length) bullets.push(_promoteList(info.drafts) + (info.drafts.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d, so members won\u2019t see ' + (info.drafts.length === 1 ? 'it' : 'them') + ' until you set ' + (info.drafts.length === 1 ? 'it' : 'them') + ' to Ready.');
+    var others = _promoteOthersLine(info.others_using);
+    box.innerHTML =
+      '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">What is the Canonical?</div>' +
+      '<div style="margin-bottom:14px;">The Canonical is the campaign\u2019s official book. It\u2019s what every member reads, and every other version shows it on any session that version hasn\u2019t made its own copy of. Every campaign has exactly one, and it belongs to the Story Master.</div>' +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Making \u201c' + escapeHtml(vName) + '\u201d the Canonical means:</div>' +
+      '<ul style="margin:0 0 14px 18px;padding:0;">' + bullets.map(function (b) { return '<li style="margin-bottom:4px;">' + escapeHtml(b) + '</li>'; }).join('') + '</ul>' +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Your current Canonical, \u201c' + escapeHtml(cName) + '\u201d</div>' +
+      '<div style="margin-bottom:8px;">You need to name your old Canonical version, or do you want me to delete it once we make the switch?</div>' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;cursor:pointer;"><input type="radio" name="promote-old" value="keep" checked style="margin-top:4px;"> <span>Keep it as one of my versions, named:</span></label>' +
+      '<input type="text" id="promote-old-name" maxlength="60" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin:0 0 10px 0;">' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;cursor:pointer;"><input type="radio" name="promote-old" value="delete" style="margin-top:4px;"> <span>Delete it</span></label>' +
+      (others ? '<div style="font-size:12.5px;color:rgba(240,232,208,0.7);margin:0 0 8px 26px;">Others are using it: ' + escapeHtml(others) + '</div>' : '') +
+      '<div id="promote-err" style="display:none;color:#f08a7a;font-size:13px;margin:6px 0 0 0;"></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
+      '<button type="button" class="btn btn-sm" id="promote-cancel">Cancel</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" id="promote-ok">Make it the Canonical</button></div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    var input = box.querySelector('#promote-old-name');
+    input.value = info.suggested_name || '';
+    var err = box.querySelector('#promote-err');
+    function mode() { var r = box.querySelector('input[name="promote-old"]:checked'); return r ? r.value : 'keep'; }
+    function sync() { input.disabled = (mode() !== 'keep'); input.style.opacity = input.disabled ? '0.5' : ''; }
+    Array.prototype.forEach.call(box.querySelectorAll('input[name="promote-old"]'), function (r) { r.addEventListener('change', sync); });
+    function done(v) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); document.removeEventListener('keydown', onKey); resolve(v); }
+    function submit() {
+      if (mode() === 'delete') { done({ deleteOld: true }); return; }
+      var n = String(input.value || '').trim();
+      var msg = '';
+      if (!n) msg = 'Please give your current Canonical a name, or choose Delete it.';
+      else if (n.toLowerCase() === 'canonical') msg = 'Please choose a name other than \u201cCanonical\u201d.';
+      else if ((info.taken_names || []).indexOf(n) !== -1) msg = 'You already have a version called \u201c' + n + '\u201d.';
+      if (msg) { err.textContent = msg; err.style.display = ''; try { input.focus(); } catch (e) {} return; }
+      done({ deleteOld: false, newName: n });
+    }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(null); } else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); submit(); } }
+    box.querySelector('#promote-cancel').onclick = function () { done(null); };
+    box.querySelector('#promote-ok').onclick = submit;
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    document.addEventListener('keydown', onKey);
+    // The window opens at its top, so the explanation is what is read first. On a touch screen the
+    // name box is not focused, or the keyboard would cover the window before it has been read.
+    setTimeout(function () {
+      try {
+        box.scrollTop = 0;
+        var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        if (touch) box.querySelector('#promote-ok').focus({ preventScroll: true });
+        else { input.focus({ preventScroll: true }); input.select(); }
+      } catch (e) {}
+    }, 30);
+  });
+}
+function _promoteDeleteConfirm(info) {
+  var others = _promoteOthersLine(info.others_using);
+  return uiConfirm(
+    'This deletes \u201c' + info.canonical.name + '\u201d for good: its pages, its pictures and its saved books. Pictures another version also uses are kept.\n\n' +
+    (others ? ('Others are using it: ' + others + ' Their pins go back to the normal default, saved layouts of it are removed, and Bookshelf copies can no longer be brought back into the editor.\n\n') : '') +
+    'Published stories and orders are not affected.',
+    { title: 'Delete \u201c' + info.canonical.name + '\u201d?', okText: 'Delete it', cancelText: 'Keep it', danger: true, preserveLines: true });
+}
+function _promoteRun(c, vid, choice, info) {
+  var cover = document.createElement('div');
+  cover.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;color:#f0e8d0;font-size:15px;';
+  cover.textContent = 'Making \u201c' + info.version.name + '\u201d the Canonical\u2026';
+  document.body.appendChild(cover);
+  function unCover() { if (cover.parentNode) cover.parentNode.removeChild(cover); }
+  return fetch('/api/campaigns/' + c.id + '/versions/' + vid + '/promote', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_name: choice.newName || '', delete_old: !!choice.deleteOld })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      unCover();
+      if (!res.ok || !res.j.success) { showError(res.j.error || 'The Canonical could not be changed. Nothing was changed; please try again.'); return; }
+      var lines = ['\u201c' + info.version.name + '\u201d is now the Canonical.'];
+      lines.push(res.j.deleted_old ? 'Your old Canonical was deleted.' : ('Your old Canonical is now your version \u201c' + ((res.j.old && res.j.old.name) || '') + '\u201d.'));
+      if (res.j.copied_missing) lines.push(res.j.copied_missing === 1 ? '1 session was copied in from the old Canonical.' : (res.j.copied_missing + ' sessions were copied in from the old Canonical.'));
+      try { if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions(); } catch (e) {}
+      try { if (state.currentSession && typeof selectSession === 'function') selectSession(state.currentSession.id); } catch (e) {}
+      return uiConfirm(lines.join('\n\n'), { title: 'Done', hideCancel: true, okText: 'OK', preserveLines: true });
+    })
+    .catch(function () { unCover(); showError('The Canonical could not be changed. Please check your connection and try again.'); });
+}
+function promoteVersionFlow(versionId) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  try { document.querySelectorAll('.row-menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); }); } catch (e) {}
+  var vid = versionId ? String(versionId) : _promoteVersionIdOnScreen();
+  if (!vid) return;
+  fetch('/api/campaigns/' + c.id + '/versions/' + vid + '/promote-check')
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      var info = res.j;
+      if (!res.ok || !info.ok) {
+        return uiConfirm((info && (info.reason || info.error)) || 'The Canonical cannot be changed right now.', { title: 'Make This Version the Canonical', hideCancel: true, okText: 'OK' });
+      }
+      return _promoteDialog(info).then(function (choice) {
+        if (!choice) return;
+        var sure = choice.deleteOld ? _promoteDeleteConfirm(info) : Promise.resolve(true);
+        return sure.then(function (ok) { if (ok === true) return _promoteRun(c, vid, choice, info); });
+      });
+    })
+    .catch(function () { showError('Could not check this version. Please try again.'); });
+}
+// THE NUDGE. A Story Master whose pinned version is one of his own, and not the Canonical, is asked
+// before a new session is made, because a new session starts from the Canonical. "Just make the session"
+// is remembered for the campaign until the page is reloaded.
+var _promoteNudgeSkip = {};
+function _promoteNudge() {
+  var c = state.currentCampaign;
+  if (!c || c.my_role !== 'dm') return false;
+  if (state._promoteNudgeBypass) { state._promoteNudgeBypass = false; return false; }
+  if (_promoteNudgeSkip[String(c.id)]) return false;
+  var pin = (typeof starredVersionId === 'function') ? starredVersionId() : null;
+  if (!pin) return false;
+  function proceed() { state._promoteNudgeBypass = true; openSessionModal(); }
+  fetch('/api/campaigns/' + c.id + '/versions')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var v = (Array.isArray(rows) ? rows : []).filter(function (x) { return String(x.version_id) === String(pin); })[0];
+      if (!v || v.is_canonical || !v.is_mine) { proceed(); return; }
+      return uiConfirm(
+        'Your pinned version is \u201c' + v.name + '\u201d, but a new session starts from the Canonical.\n\nMake \u201c' + v.name + '\u201d the Canonical first, so this session starts in its style?',
+        { title: 'Start in \u201c' + v.name + '\u201d?', okText: 'Make it the Canonical', middleText: 'Just make the session', cancelText: 'Cancel', preserveLines: true })
+        .then(function (ans) {
+          if (ans === true) { promoteVersionFlow(v.version_id); return; }
+          if (ans === 'middle') { _promoteNudgeSkip[String(c.id)] = true; proceed(); }
+        });
+    })
+    .catch(function () { proceed(); });
+  return true;
+}

@@ -359,7 +359,7 @@ Example: "Soon it will be time to go to the dentist. Mum drives me there in the 
 // fallback is the common path rather than an edge case. `source` says which, and the panel
 // prints it, so nobody has to guess whose memory they are carrying.
 // ============================================================
-async function inheritedSummary(db, session, userId) {
+async function inheritedSummary(db, session, userId, forkId) {
   try {
     if (!session || !session.session_date) return null;
     const prev = await db.prepare(
@@ -368,8 +368,19 @@ async function inheritedSummary(db, session, userId) {
       'ORDER BY session_date DESC, created_at DESC, id DESC LIMIT 1'
     ).get(session.campaign_id, session.session_date, session.created_at, session.id);
     if (!prev) return null;
-    // The caller own version of that session.
-    let fk = await db.prepare(
+    // v3.1.35 -- TD-928. THE SAME VERSION'S COPY FIRST. "The caller's first fork by id" was a guess that
+    // only held while a person had one version: with several it could hand version B the memory of
+    // version A, and after a Promote to Canonical the Story Master's first fork of the previous session
+    // is the OLD Canonical. The version being written is the one whose memory this is.
+    let fk = null;
+    if (forkId) {
+      const _cur = await db.prepare('SELECT version_id FROM session_forks WHERE id = ?').get(forkId);
+      if (_cur && _cur.version_id) {
+        fk = await db.prepare('SELECT narrative_summary FROM session_forks WHERE session_id = ? AND version_id = ?').get(prev.id, _cur.version_id);
+      }
+    }
+    // Otherwise the caller own version of that session.
+    if (!fk) fk = await db.prepare(
       'SELECT narrative_summary FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC'
     ).get(prev.id, userId);
     let source = 'own';
@@ -558,7 +569,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   try { var _sc = await getAppSettingInt('summary_char_limit', 1500); if (Number.isFinite(_sc) && _sc >= 200) _summaryCap = _sc; } catch (e) { _summaryCap = 1500; }
 
   // v3.0.969 -- TD-854. What the previous session left for this one.
-  var _inherited = await inheritedSummary(db, session, req.session.userId);
+  var _inherited = await inheritedSummary(db, session, req.session.userId, targetForkId);
   var _prevText = (_inherited && _inherited.text) ? _inherited.text : '';
   if (_narrCharge > 0) {
     const _nbal = await getBalance(req.session.userId);
@@ -1229,7 +1240,7 @@ router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   try { var _sc2 = await getAppSettingInt('summary_char_limit', 1500); if (Number.isFinite(_sc2) && _sc2 >= 200) _sumCap = _sc2; } catch (_e3) { _sumCap = 1500; }
   // v3.0.969 -- TD-854. Resolved with the SAME helper the generation uses, so the line in the
   // panel and the text the model is handed can never describe different sessions.
-  var _inh = await inheritedSummary(db, session, req.session.userId);
+  var _inh = await inheritedSummary(db, session, req.session.userId, viewForkId);
 
   res.json({
     intro: fk && fk.narrative_intro ? fk.narrative_intro : '',

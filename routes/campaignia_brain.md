@@ -1129,6 +1129,29 @@ automatically the first time any session is worked on, and it's what everyone el
 reads through for sessions they haven't branched themselves. It belongs to whoever currently
 holds the Story Master role, so it follows a handover.
 
+**Making one of your versions the Canonical (Story Master)**
+
+Tried a few versions and found the one you like best? Open that version on any session, click the
+**⋯** menu and choose **Make This Version the Canonical**. The window explains what the Canonical is
+and what will happen, then:
+
+- **Your version becomes the official book.** Members read it from now on, and **new sessions start
+  in its art style, narrative style and Story Instructions** — so you just carry on writing, with
+  nothing to remake. Its Story Instructions (or none) become the Canonical's.
+- **Sessions your version never had are copied in** from the current Canonical as they are, so the
+  new Canonical covers every session. Regenerate them afterwards if you want them in the new style.
+- **Every other version stays exactly as it is** — yours and your members'. Each one keeps its own
+  copy of the old pages it was reading, with its saved layouts and pins untouched. Only the old
+  book's name in the picker changes.
+- **Your old Canonical** is kept as one of your versions under a name you give it, or deleted.
+  Deleting asks a second time and tells you who else is using it. Published stories and orders are
+  never affected.
+- It only works on **your own** versions, and it waits if an Optimize or a generation is running on
+  the campaign. Draft sessions in the version you promote stay hidden from members until you set
+  them to Ready.
+- If you've **pinned** one of your versions that isn't the Canonical, making a new session asks
+  whether to make that version the Canonical first.
+
 **Making a version**
 
 A trial account gets one version, and keeps every art style. The full rule is below.
