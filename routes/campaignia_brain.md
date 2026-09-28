@@ -1174,6 +1174,25 @@ render half in one look and half in another.
 As new sessions get created you can add them to your existing versions, then regenerate them
 with that version's art and narrative styles — so a book stays consistent as it grows.
 
+**Your default version (the star)**
+
+Next to the version picker — on the session page and on the Publish page — there's a small
+**star**. Click it to make the version on screen **your default**: from then on, that's the
+version that opens for you whenever you come to this campaign. Click the filled star again to
+clear it.
+
+- **One per person per campaign.** Starring another version moves the star. Your star is
+  yours alone; it doesn't change what anyone else sees, and it doesn't make anything the
+  canonical.
+- **You can star any version you can open** — the canonical, one of your own, or another
+  member's Ready version. The starred one is marked with a ★ in the picker.
+- **On a session your starred version never branched**, you see the canonical there, the
+  same as the book does.
+- **With no star**, the old rule applies: the Story Master opens on the canonical and a
+  member opens on their own version.
+- Starring moves nothing and changes no book — it only decides which version opens first.
+  A book opened from your Bookshelf still opens on the version it was saved from.
+
 **Who can change what**
 
 **You can look at anyone's version. You can only change your own.** Opening someone else's

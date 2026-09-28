@@ -1988,6 +1988,8 @@ router.delete('/:id/fork/:forkId', requireAuth, verifyCampaignMember, async func
       await db.prepare('DELETE FROM fork_book_prefs WHERE version_id = ?').run(fork.version_id);
       await db.prepare('DELETE FROM session_includes WHERE version_id = ?').run(fork.version_id);
       await db.prepare('DELETE FROM campaign_versions WHERE id = ? AND NOT is_canonical').run(fork.version_id);
+      // v3.1.33 -- TD-927. Anyone who had starred it goes back to the ordinary default.
+      await db.prepare('UPDATE campaign_members SET default_version_id = NULL WHERE default_version_id = ?').run(fork.version_id);
       versionDeleted = true;
     }
   }

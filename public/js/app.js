@@ -9462,6 +9462,7 @@ function refreshNovelVersionOptions(done) {
         sel.innerHTML = opts;
         // Hold the selection across a rebuild, so refreshing the counts never moves the book.
         if (keep && rows.some(function (v) { return String(v.version_id) === String(keep); })) sel.value = keep;
+        if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
       }
       if (done) done(rows);
     })
@@ -9494,6 +9495,12 @@ function loadNovelPeople() {
     // whole feature exists to stop.
     var own = rows.filter(function(v) { return v.is_mine; });
     var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+    // v3.1.33 -- TD-927. YOUR STAR FIRST. A starred version opens ahead of the rule above.
+    var _starRow = rows.filter(function (v) { return v.is_default; })[0];
+    if (_starRow) {
+      pick = _starRow;
+      try { state._starVersion = state._starVersion || {}; state._starVersion[String(state.currentCampaign.id)] = String(_starRow.version_id); } catch (e) {}
+    }
     // v3.0.982 -- TD-901. A book brought back from the Bookshelf opens on ITS version, not the default.
     var _shelfT = state._shelfOpen;
     if (_shelfT && _shelfT.versionId && state.currentCampaign && String(_shelfT.campaignId) === String(state.currentCampaign.id)) {
@@ -9545,6 +9552,7 @@ function bookMetaVersionQ(prefix, ctx) {
 // the server prefers as_version wherever both arrive.
 function applyNovelVersion(versionId) {
   state.novelVersionId = versionId ? String(versionId) : null;
+  if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
   var v = novelVersionOnScreen();
   state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
   // v3.0.888 -- TD-765. THE CHIP BELONGS HERE, AND v3.0.887 PUT IT IN THE WRONG PLACE.
@@ -20000,6 +20008,7 @@ function loadSessionForks(sessionId) {
       // are applied first and the per-fork reload then overrides art and narrative. Calling the
       // reload bare would leave the previous session layout on screen.
       var _navSetFork = false;
+      var _navHad = !!state._sessNavVersionId;   // v3.1.33 -- TD-927: an arrow move keeps its version, star or not
       if (state._sessNavVersionId) {
         var _want = (forks || []).filter(function (f) { return String(f.version_id) === String(state._sessNavVersionId); })[0];
         // NO MATCH IS NOT A FAILURE. A session where this version has no fork keeps the canonical,
@@ -20060,12 +20069,29 @@ function loadSessionForks(sessionId) {
       // stay on the canonical. Only applies on a fresh load (currentForkId
       // not yet chosen); an explicit dropdown pick goes through onForkChange.
       var _defaultedToOwn = false;
-      if (!state.currentForkId && mineFork && mineFork.role !== 'dm') {
+      // v3.1.33 -- TD-927. THE STAR DECIDES FIRST, for anyone who has one. Its fork here opens; where
+      // the starred version has no fork on this session, the canonical stays -- the same fall-through
+      // as the book -- and the member's-own default below does NOT then second-guess it. An arrow move
+      // that carried a version keeps it (_navHad), and a pick from the dropdown goes through onForkChange.
+      var _starRuled = false;
+      var _starV = (typeof starredVersionId === 'function') ? starredVersionId() : null;
+      if (_starV && !_navHad && !state.currentForkId) {
+        _starRuled = true;
+        var _starF = forks.filter(function (f) { return String(f.version_id) === String(_starV); })[0];
+        if (_starF && _starF.role !== 'dm') {
+          state.currentForkId = _starF.fork_id;
+          if (sel) sel.value = String(_starF.fork_id);
+          if (_starF.is_mine) state.myForkId = _starF.fork_id;
+          _defaultedToOwn = true;
+        }
+      }
+      if (!_starRuled && !state.currentForkId && mineFork && mineFork.role !== 'dm') {
         state.currentForkId = mineFork.fork_id;
         if (sel) sel.value = String(mineFork.fork_id);
         _defaultedToOwn = true;
       }
       updateForkEditability();
+      if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
       // ONE reload, whichever of the two moved the fork. Both cannot fire: Phase 4 is gated on
       // !state.currentForkId and _navSetFork can only be true when it has just been set.
       if (_navSetFork) {
@@ -20098,6 +20124,7 @@ function onForkChange(forkId) {
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
+  if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
   updateForkEditability();
   if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch();   // v3.0.328: different fork, different book
   // Apply this member's saved layout first; the per-fork reload then overrides
@@ -33770,3 +33797,76 @@ function _outlineBulletsCheck() {
 
 // v3.1.32 -- _narratorBlockClose no longer blocks: closing with In first person ticked and nobody chosen
 // saves "Nobody in particular (just I)" ('anon'). The name is kept so closeStylePicker's hook is unchanged.
+
+// v3.1.33 -- TD-927. THE STAR: YOUR DEFAULT VERSION.
+// Ian: "a small star option in the version picker... and that's what loads by default for any given
+// user... Only one per user per campaign." The star sits beside both pickers (Session page and Publish
+// page) and acts on the version the picker is showing. Starring moves nothing -- the page stays where it
+// is -- it only decides which version opens next time. Stored per member per campaign on the server.
+function starredVersionId() {
+  var c = state.currentCampaign;
+  if (!c) return null;
+  var m = state._starVersion || {};
+  if (Object.prototype.hasOwnProperty.call(m, String(c.id))) return m[String(c.id)];
+  return (c.default_version_id != null && c.default_version_id !== '') ? String(c.default_version_id) : null;
+}
+function _starTargetVersion(where) {
+  if (where === 'session') {
+    var ss = document.getElementById('session-fork-select');
+    if (!ss) return null;
+    var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(ss.value); })[0];
+    return (f && f.version_id) ? String(f.version_id) : null;
+  }
+  var ns = document.getElementById('novel-version-select');
+  return (ns && ns.value) ? String(ns.value) : null;
+}
+function _starPaintOne(btnId, selId, versionOf, where) {
+  var btn = document.getElementById(btnId), sel = document.getElementById(selId);
+  if (!btn || !sel) return;
+  var star = starredVersionId();
+  for (var i = 0; i < sel.options.length; i++) {
+    var o = sel.options[i];
+    if (o.getAttribute('data-base') == null) o.setAttribute('data-base', o.textContent);
+    var isStar = !!(star && versionOf(o.value) && String(versionOf(o.value)) === String(star));
+    o.textContent = (isStar ? '\u2605 ' : '') + o.getAttribute('data-base');
+  }
+  var target = _starTargetVersion(where);
+  var shown = !!target && sel.style.display !== 'none' && sel.options.length > 1;
+  btn.style.display = shown ? '' : 'none';
+  var on = !!(shown && star && String(star) === String(target));
+  btn.textContent = on ? '\u2605' : '\u2606';
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.title = on
+    ? 'This is your default version \u2014 it opens first whenever you come to this campaign. Click to clear it.'
+    : 'Make this your default version \u2014 it opens first whenever you come to this campaign.';
+}
+function paintVersionStars() {
+  try {
+    _starPaintOne('session-fork-star', 'session-fork-select', function (forkId) {
+      var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(forkId); })[0];
+      return (f && f.version_id) ? f.version_id : null;
+    }, 'session');
+    _starPaintOne('novel-version-star', 'novel-version-select', function (vid) { return vid || null; }, 'novel');
+  } catch (e) {}
+}
+function toggleVersionStar(where) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  var target = _starTargetVersion(where);
+  if (!target) return;
+  var cur = starredVersionId();
+  var next = (cur && String(cur) === String(target)) ? null : target;
+  fetch('/api/campaigns/' + c.id + '/default-version', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version_id: next })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      if (!res.ok) { showError(res.j.error || 'Your default version could not be saved. Please try again.'); return; }
+      var saved = (res.j.default_version_id != null) ? String(res.j.default_version_id) : null;
+      state._starVersion = state._starVersion || {};
+      state._starVersion[String(c.id)] = saved;
+      c.default_version_id = saved;
+      paintVersionStars();
+    })
+    .catch(function () { showError('Your default version could not be saved. Please check your connection and try again.'); });
+}

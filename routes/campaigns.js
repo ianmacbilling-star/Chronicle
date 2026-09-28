@@ -46,7 +46,7 @@ router.get('/', requireAuth, async function(req, res) {
   // (until forks land in Phase 4). EXISTS subquery is cheap on the
   // small per-user campaign set.
   const campaigns = await db.prepare(
-    'SELECT c.*, cm.role AS my_role, ' +
+    'SELECT c.*, cm.role AS my_role, cm.default_version_id, ' +
     "EXISTS (SELECT 1 FROM session_forks f JOIN sessions s ON s.id = f.session_id " +
     "WHERE s.campaign_id = c.id AND f.role = 'dm' AND f.player_access_status = 'ready') AS locked " +
     'FROM campaigns c ' +
@@ -940,6 +940,27 @@ router.patch('/:campaignId/versions/:versionId', requireAuth, verifyCampaignMemb
   await db.prepare('UPDATE campaign_versions SET name = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(name, v.id);
   await db.prepare('UPDATE session_forks SET name = ? WHERE version_id = ?').run(name, v.id);
   res.json({ success: true, version_id: v.id, name: name });
+});
+
+// v3.1.33 -- TD-927. SET OR CLEAR THE STAR. Ian: "a small star option in the version picker... and
+// that's what loads by default for any given user... Only one per user per campaign."
+// Body { version_id } stars that version; { version_id: null } clears it. Any version the caller can
+// open may be starred -- the canonical, one of their own, or another member's Ready one -- and the
+// check is the same list the picker is drawn from, so the two can never disagree. It moves nothing
+// and touches no book: it is only which version opens first.
+router.put('/:campaignId/default-version', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const raw = (req.body && req.body.version_id != null && req.body.version_id !== '') ? String(req.body.version_id) : null;
+  let id = null;
+  if (raw !== null) {
+    if (!/^\d+$/.test(raw)) return res.status(400).json({ error: 'That is not a version.' });
+    const list = await versionsForCampaign(db, req.params.campaignId, req.session.userId, null);
+    const hit = list.filter(function (v) { return String(v.version_id) === raw; })[0];
+    if (!hit) return res.status(404).json({ error: 'That version is not one you can open in this campaign.' });
+    id = hit.version_id;
+  }
+  await db.prepare('UPDATE campaign_members SET default_version_id = ? WHERE campaign_id = ? AND user_id = ?').run(id, req.params.campaignId, req.session.userId);
+  res.json({ success: true, default_version_id: id });
 });
 
 module.exports = router;

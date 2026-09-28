@@ -1046,6 +1046,12 @@ async function initPostgres() {
   // JSON string. Absent => the member has no saved prefs (UI falls back to
   // campaign/session defaults). Guarded ALTER so it is safe to re-run.
   await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS member_prefs TEXT');
+  // v3.1.33 -- TD-927. THE STAR: the version this member opens on in this campaign. One per member per
+  // campaign, so it lives on the membership row. NULL = no star, and the old rules decide (the Story
+  // Master opens on the canonical, a member on their own version). Never a foreign key on purpose: a
+  // star pointing at a version that has gone, or that this member can no longer see, is simply ignored
+  // by the reader, which is safer than a cascade reaching into the membership table.
+  await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS default_version_id INTEGER');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS campaign_invites (
@@ -2266,6 +2272,13 @@ async function versionsForCampaign(db, campaignId, viewerUserId, sessionId) {
     'WHERE v.campaign_id = ? ORDER BY v.is_canonical DESC, v.id ASC'
   ).all(campaignId);
   const dmRow = await db.prepare("SELECT user_id FROM campaign_members WHERE campaign_id = ? AND role = 'dm' LIMIT 1").get(campaignId);
+  // v3.1.33 -- TD-927. The viewer's starred version, flagged on its row. Only a version this list
+  // actually returns can carry the flag, so a star on something the viewer can no longer see is inert.
+  let _starId = null;
+  try {
+    const _st = viewerUserId ? await db.prepare('SELECT default_version_id FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(campaignId, viewerUserId) : null;
+    _starId = (_st && _st.default_version_id != null) ? String(_st.default_version_id) : null;
+  } catch (e) { _starId = null; }
   const out = [];
   for (let i = 0; i < rows.length; i++) {
     const v = rows[i];
@@ -2299,7 +2312,8 @@ async function versionsForCampaign(db, campaignId, viewerUserId, sessionId) {
       // representation on this session" and "there is no representation here" are different states.
       fork_id: here ? here.id : null,
       here: here ? 'own' : 'canonical',
-      status: here ? here.player_access_status : null
+      status: here ? here.player_access_status : null,
+      is_default: _starId !== null && String(v.id) === _starId
     });
   }
   return out;
