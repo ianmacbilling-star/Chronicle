@@ -33798,11 +33798,22 @@ function _outlineBulletsCheck() {
 // v3.1.32 -- _narratorBlockClose no longer blocks: closing with In first person ticked and nobody chosen
 // saves "Nobody in particular (just I)" ('anon'). The name is kept so closeStylePicker's hook is unchanged.
 
-// v3.1.33 -- TD-927. THE STAR: YOUR DEFAULT VERSION.
+// v3.1.33 -- TD-927. YOUR DEFAULT VERSION, now THE PIN (v3.1.34).
 // Ian: "a small star option in the version picker... and that's what loads by default for any given
-// user... Only one per user per campaign." The star sits beside both pickers (Session page and Publish
-// page) and acts on the version the picker is showing. Starring moves nothing -- the page stays where it
-// is -- it only decides which version opens next time. Stored per member per campaign on the server.
+// user... Only one per user per campaign." Then (v3.1.34): "Is it possible to put the Star inside the
+// Picker?" and "instead of a star... Make it a Pin... like a thumb tack."
+//
+// A NATIVE <select> CAN ONLY SHOW TEXT, so both version pickers are now drawn by us: a button that
+// looks like the old picker, opening a list with one row per version and a pin at the end of each row.
+// Click a row to switch; click its pin to make that version open first for you (click again to
+// clear). Pinning never switches anything.
+//
+// THE NATIVE SELECT STAYS, HIDDEN, AND IS STILL THE ONE SOURCE OF TRUTH. Every existing caller keeps
+// reading and writing sel.value, toggling sel.disabled (the in-flight locks) and sel.style.display, and
+// its inline onchange still runs onForkChange / onNovelVersionChange -- so the switching rules and the
+// "not while something is running" refusals are untouched. Choosing a row sets sel.value and fires a
+// real change event. The drawn button follows the select through a per-element value hook and a
+// MutationObserver (options, disabled, style, title), so no caller had to learn it exists.
 function starredVersionId() {
   var c = state.currentCampaign;
   if (!c) return null;
@@ -33810,63 +33821,219 @@ function starredVersionId() {
   if (Object.prototype.hasOwnProperty.call(m, String(c.id))) return m[String(c.id)];
   return (c.default_version_id != null && c.default_version_id !== '') ? String(c.default_version_id) : null;
 }
-function _starTargetVersion(where) {
+function _vpickVersionOf(where, value) {
+  if (!value) return null;
   if (where === 'session') {
-    var ss = document.getElementById('session-fork-select');
-    if (!ss) return null;
-    var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(ss.value); })[0];
+    var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(value); })[0];
     return (f && f.version_id) ? String(f.version_id) : null;
   }
-  var ns = document.getElementById('novel-version-select');
-  return (ns && ns.value) ? String(ns.value) : null;
+  return String(value);
 }
-function _starPaintOne(btnId, selId, versionOf, where) {
-  var btn = document.getElementById(btnId), sel = document.getElementById(selId);
-  if (!btn || !sel) return;
+function _vpickPinSvg(on) {
+  return '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M9 3h6l-1 6 3 3v2h-4v6l-1 1-1-1v-6H7v-2l3-3z" fill="' + (on ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+}
+function _vpickCss() {
+  if (document.getElementById('vpick-css')) return;
+  var s = document.createElement('style');
+  s.id = 'vpick-css';
+  s.textContent =
+    '.vpick-native{position:absolute !important;width:1px !important;height:1px !important;min-width:0 !important;opacity:0 !important;pointer-events:none !important;overflow:hidden !important;padding:0 !important;border:0 !important;}' +
+    '.vpick-trigger{display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-align:left;white-space:nowrap;min-width:0;}' +
+    '.vpick-trigger:disabled{cursor:not-allowed;}' +
+    '.vpick-trigger .vpick-label{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;}' +
+    '.vpick-trigger .vpick-caret{flex:0 0 auto;opacity:0.7;font-size:10px;}' +
+    '.vpick-trigger .vpick-pin{flex:0 0 auto;display:inline-flex;color:#c9a84c;}' +
+    '.vpick-list{position:fixed;z-index:10050;background:#16100a;border:1px solid rgba(201,168,76,0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:#f0e8d0;font-size:13px;box-sizing:border-box;}' +
+    '.vpick-row{display:flex;align-items:center;gap:6px;padding:0 4px 0 12px;min-height:38px;}' +
+    '.vpick-row:hover,.vpick-row.is-cur{background:rgba(201,168,76,0.12);}' +
+    '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid #c9a84c;outline-offset:1px;}' +
+    '.vpick-row.is-cur .vpick-choose{color:#e8c870;font-weight:600;}' +
+    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
+    '.vpick-pinbtn:hover{background:rgba(201,168,76,0.18);color:#c9a84c;}' +
+    '.vpick-pinbtn.on{color:#c9a84c;}' +
+    '.vpick-pinbtn.off svg{transform:rotate(45deg);}' +
+    '.vpick-foot{font-size:11px;color:rgba(240,232,208,0.62);padding:7px 12px 5px;border-top:1px solid rgba(201,168,76,0.2);margin-top:4px;line-height:1.4;white-space:normal;}';
+  document.head.appendChild(s);
+}
+function _vpickEnsure(selId, where) {
+  var sel = document.getElementById(selId);
+  if (!sel || sel._vpick || !sel.parentNode) return;
+  _vpickCss();
+  var t = document.createElement('button');
+  t.type = 'button';
+  t.id = selId + '-vpick';
+  t.className = String(sel.className || '').replace(/\bsession-fork-select\b/, '').trim() + ' vpick-trigger';
+  t.setAttribute('style', sel.getAttribute('style') || '');
+  t.setAttribute('aria-haspopup', 'listbox');
+  t.setAttribute('aria-expanded', 'false');
+  t.innerHTML = '<span class="vpick-label"></span><span class="vpick-pin" style="display:none;">' + _vpickPinSvg(true) + '</span><span class="vpick-caret" aria-hidden="true">\u25be</span>';
+  t.addEventListener('click', function (e) { e.stopPropagation(); _vpickToggle(selId); });
+  t.addEventListener('keydown', function (e) { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); _vpickOpen(selId); } });
+  sel.parentNode.insertBefore(t, sel);
+  sel.classList.add('vpick-native');
+  sel.setAttribute('tabindex', '-1');
+  sel.setAttribute('aria-hidden', 'true');
+  sel._vpick = { trigger: t, where: where };
+  ['value', 'selectedIndex'].forEach(function (prop) {
+    var d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, prop);
+    if (!d || !d.set) return;
+    Object.defineProperty(sel, prop, { configurable: true,
+      get: function () { return d.get.call(this); },
+      set: function (v) { d.set.call(this, v); _vpickSync(selId); } });
+  });
+  try {
+    new MutationObserver(function () { _vpickSync(selId); })
+      .observe(sel, { attributes: true, attributeFilter: ['style', 'disabled', 'title'], childList: true, subtree: true, characterData: true });
+  } catch (e) {}
+  _vpickSync(selId);
+}
+var _vpickOpenId = null;
+function _vpickSync(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel._vpick) return;
+  var t = sel._vpick.trigger, where = sel._vpick.where;
+  t.style.display = (sel.style.display === 'none') ? 'none' : '';
+  t.disabled = !!sel.disabled;
+  t.style.opacity = sel.style.opacity || '';
+  var o = (sel.selectedIndex >= 0) ? sel.options[sel.selectedIndex] : null;
+  var label = o ? o.textContent : '';
+  var lab = t.querySelector('.vpick-label');
+  if (lab) lab.textContent = label;
   var star = starredVersionId();
-  for (var i = 0; i < sel.options.length; i++) {
-    var o = sel.options[i];
-    if (o.getAttribute('data-base') == null) o.setAttribute('data-base', o.textContent);
-    var isStar = !!(star && versionOf(o.value) && String(versionOf(o.value)) === String(star));
-    o.textContent = (isStar ? '\u2605 ' : '') + o.getAttribute('data-base');
+  var vid = o ? _vpickVersionOf(where, o.value) : null;
+  var pinned = !!(vid && star && String(vid) === String(star));
+  var pin = t.querySelector('.vpick-pin');
+  if (pin) pin.style.display = pinned ? '' : 'none';
+  t.title = sel.title || (pinned ? 'Pinned: this version opens first for you in this campaign' : '');
+  t.setAttribute('aria-label', 'Version: ' + label + (pinned ? ' (pinned)' : ''));
+  if (_vpickOpenId === selId) {
+    if (sel.disabled || t.style.display === 'none') _vpickClose(); else _vpickRender(selId);
   }
-  var target = _starTargetVersion(where);
-  var shown = !!target && sel.style.display !== 'none' && sel.options.length > 1;
-  btn.style.display = shown ? '' : 'none';
-  var on = !!(shown && star && String(star) === String(target));
-  btn.textContent = on ? '\u2605' : '\u2606';
-  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  btn.title = on
-    ? 'This is your default version \u2014 it opens first whenever you come to this campaign. Click to clear it.'
-    : 'Make this your default version \u2014 it opens first whenever you come to this campaign.';
+}
+function _vpickRender(selId) {
+  var sel = document.getElementById(selId), list = document.getElementById('vpick-list');
+  if (!sel || !sel._vpick || !list) return;
+  var where = sel._vpick.where, star = starredVersionId(), html = '';
+  for (var i = 0; i < sel.options.length; i++) {
+    var o = sel.options[i], vid = _vpickVersionOf(where, o.value);
+    var cur = (i === sel.selectedIndex), on = !!(vid && star && String(vid) === String(star));
+    html += '<div class="vpick-row' + (cur ? ' is-cur' : '') + '" role="option" aria-selected="' + (cur ? 'true' : 'false') + '">' +
+      '<button type="button" class="vpick-choose" data-i="' + i + '">' + escapeHtml(o.textContent) + '</button>' +
+      (vid ? '<button type="button" class="vpick-pinbtn ' + (on ? 'on' : 'off') + '" data-pin="' + escapeHtml(vid) + '" aria-pressed="' + (on ? 'true' : 'false') + '" title="' +
+        (on ? 'Pinned: this version opens first for you. Click to unpin.' : 'Pin: open this version first whenever you come to this campaign.') + '">' + _vpickPinSvg(on) + '</button>' : '') +
+      '</div>';
+  }
+  html += '<div class="vpick-foot">Pin a version and it opens first for you whenever you come to this campaign.</div>';
+  list.innerHTML = html;
+}
+function _vpickPlace(selId) {
+  var sel = document.getElementById(selId), list = document.getElementById('vpick-list');
+  if (!sel || !sel._vpick || !list) return;
+  var r = sel._vpick.trigger.getBoundingClientRect();
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var w = Math.min(Math.max(r.width, 260), vw - 16);
+  var left = Math.max(8, Math.min(r.left, vw - w - 8));
+  list.style.width = w + 'px';
+  list.style.left = left + 'px';
+  var below = vh - r.bottom - 8, above = r.top - 8;
+  if (below >= 160 || below >= above) { list.style.top = (r.bottom + 4) + 'px'; list.style.bottom = ''; list.style.maxHeight = Math.max(120, below - 4) + 'px'; }
+  else { list.style.top = ''; list.style.bottom = (vh - r.top + 4) + 'px'; list.style.maxHeight = Math.max(120, above - 4) + 'px'; }
+}
+function _vpickOpen(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel._vpick || sel.disabled) return;
+  _vpickClose();
+  var list = document.createElement('div');
+  list.id = 'vpick-list';
+  list.className = 'vpick-list';
+  list.setAttribute('role', 'listbox');
+  list.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var pb = e.target.closest ? e.target.closest('.vpick-pinbtn') : null;
+    if (pb) { toggleVersionPin(pb.getAttribute('data-pin')); return; }
+    var cb = e.target.closest ? e.target.closest('.vpick-choose') : null;
+    if (cb) _vpickChoose(selId, Number(cb.getAttribute('data-i')));
+  });
+  list.addEventListener('keydown', function (e) {
+    var bs = Array.prototype.slice.call(list.querySelectorAll('.vpick-choose'));
+    var k = bs.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (bs.length) bs[Math.min(bs.length - 1, k + 1)].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (bs.length) bs[Math.max(0, k - 1)].focus(); }
+  });
+  document.body.appendChild(list);
+  _vpickOpenId = selId;
+  sel._vpick.trigger.setAttribute('aria-expanded', 'true');
+  _vpickRender(selId);
+  _vpickPlace(selId);
+  var curB = list.querySelector('.vpick-row.is-cur .vpick-choose') || list.querySelector('.vpick-choose');
+  if (curB) { try { curB.focus({ preventScroll: true }); } catch (e) { curB.focus(); } }
+}
+function _vpickClose(refocus) {
+  var list = document.getElementById('vpick-list');
+  if (list && list.parentNode) list.parentNode.removeChild(list);
+  var id = _vpickOpenId;
+  _vpickOpenId = null;
+  var sel = id ? document.getElementById(id) : null;
+  if (sel && sel._vpick) {
+    sel._vpick.trigger.setAttribute('aria-expanded', 'false');
+    if (refocus) { try { sel._vpick.trigger.focus(); } catch (e) {} }
+  }
+}
+function _vpickToggle(selId) {
+  if (_vpickOpenId === selId) _vpickClose(); else _vpickOpen(selId);
+}
+function _vpickChoose(selId, i) {
+  var sel = document.getElementById(selId);
+  _vpickClose(true);
+  if (!sel || sel.disabled || !sel.options[i] || i === sel.selectedIndex) return;
+  sel.value = sel.options[i].value;
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 function paintVersionStars() {
   try {
-    _starPaintOne('session-fork-star', 'session-fork-select', function (forkId) {
-      var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(forkId); })[0];
-      return (f && f.version_id) ? f.version_id : null;
-    }, 'session');
-    _starPaintOne('novel-version-star', 'novel-version-select', function (vid) { return vid || null; }, 'novel');
+    _vpickEnsure('session-fork-select', 'session');
+    _vpickEnsure('novel-version-select', 'novel');
+    _vpickSync('session-fork-select');
+    _vpickSync('novel-version-select');
   } catch (e) {}
 }
-function toggleVersionStar(where) {
+function toggleVersionPin(versionId) {
   var c = state.currentCampaign;
-  if (!c) return;
-  var target = _starTargetVersion(where);
-  if (!target) return;
+  if (!c || !versionId) return;
   var cur = starredVersionId();
-  var next = (cur && String(cur) === String(target)) ? null : target;
+  var next = (cur && String(cur) === String(versionId)) ? null : String(versionId);
   fetch('/api/campaigns/' + c.id + '/default-version', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version_id: next })
   })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
     .then(function (res) {
-      if (!res.ok) { showError(res.j.error || 'Your default version could not be saved. Please try again.'); return; }
+      if (!res.ok) { showError(res.j.error || 'Your pinned version could not be saved. Please try again.'); return; }
       var saved = (res.j.default_version_id != null) ? String(res.j.default_version_id) : null;
       state._starVersion = state._starVersion || {};
       state._starVersion[String(c.id)] = saved;
       c.default_version_id = saved;
       paintVersionStars();
+      var pb = document.querySelector('#vpick-list .vpick-pinbtn[data-pin="' + String(versionId).replace(/[^0-9]/g, '') + '"]');
+      if (pb) { try { pb.focus({ preventScroll: true }); } catch (e) {} }
     })
-    .catch(function () { showError('Your default version could not be saved. Please check your connection and try again.'); });
+    .catch(function () { showError('Your pinned version could not be saved. Please check your connection and try again.'); });
 }
+(function () {
+  function go() { paintVersionStars(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  document.addEventListener('click', function (e) {
+    if (!_vpickOpenId) return;
+    var list = document.getElementById('vpick-list');
+    if (list && list.contains(e.target)) return;
+    _vpickClose();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _vpickOpenId) _vpickClose(true); });
+  window.addEventListener('resize', function () { if (_vpickOpenId) _vpickClose(); });
+  window.addEventListener('scroll', function (e) {
+    if (!_vpickOpenId) return;
+    var list = document.getElementById('vpick-list');
+    if (list && e.target && e.target.nodeType === 1 && list.contains(e.target)) return;
+    _vpickClose();
+  }, true);
+})();

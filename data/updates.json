@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.34",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3134-version-picker-pin",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Both version pickers are now drawn by Campaignia, with a pin on every row; the separate star is gone.",
+        "detail": "The native select stays hidden as the source of truth, so switching, the in-flight locks and the change handlers are unchanged. The 3.1.33 entry was reworded from star to pin.",
+        "td": [
+          "TD-927"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.33",
     "staged_on": "2026-09-28",
     "entries": [
@@ -7,8 +23,8 @@
         "id": "3133-default-version-star",
         "kind": "feature",
         "public": true,
-        "summary": "Star a version to make it your default: it's the one that opens whenever you come to the campaign.",
-        "detail": "A small star now sits beside the version picker on the session page and the Publish page. Click it to make the version on screen your default; click the filled star to clear it. One per person per campaign. On a session your starred version never branched, you see the canonical there, just as the book does. Starring changes no book and nothing anyone else sees.",
+        "summary": "Pin a version to make it your default: it's the one that opens whenever you come to the campaign.",
+        "detail": "Open the version picker on the session page or the Publish page and click the pin at the end of a version's row; click it again to unpin. One per person per campaign. On a session your pinned version never branched, you see the canonical there, just as the book does. Pinning changes no book and nothing anyone else sees.",
         "td": [
           "TD-927"
         ]
