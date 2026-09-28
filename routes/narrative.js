@@ -433,7 +433,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
-  if (!session.transcript) return res.json({ error: 'No transcript found. Please add a transcript first.' });
+  if (!session.transcript) return res.json({ error: 'This session has nothing in its Story / Session Transcript box yet. Add your story there first \u2014 a transcript, a written story, notes or an outline all work.' });
 
   // Phase 4 — the DM generates the canonical narrative; a player generates
   // their OWN version's narrative. Each writes only to its own fork row.

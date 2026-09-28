@@ -3560,7 +3560,7 @@ function saveSessionField(field, value) {
     if (data && data.id) state.currentSession = data;
     var saved = document.getElementById('notes-saved');
     if (saved) {
-      saved.textContent = (field === 'transcript' ? 'Transcript saved' : 'Notes saved');
+      saved.textContent = (field === 'transcript' ? 'Story saved' : 'Notes saved');   // v3.1.40 -- not only transcripts
       saved.classList.remove('hidden');
       setTimeout(function() { saved.classList.add('hidden'); }, 1800);
     }
@@ -3578,7 +3578,7 @@ function saveTranscript() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     state.currentSession = data;
-    showAlert('Transcript saved!');
+    showAlert('Story saved!');   // v3.1.40
   });
 }
 
@@ -8700,8 +8700,10 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    // v3.1.39 -- "longer" read oddly for an empty box (tester).
-    errorEl.textContent = transcript.length ? 'Please paste a longer transcript first.' : 'Please paste a transcript first.';
+    // v3.1.40 -- not only transcripts (Ian): a story, notes, a narrative, anything that says what happened.
+    errorEl.textContent = transcript.length
+      ? 'Please add a little more to the Story / Session Transcript box first \u2014 a few sentences at least.'
+      : 'Please add your story first \u2014 type or paste it into the Story / Session Transcript box. A transcript, a written story, notes or an outline all work.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -8751,7 +8753,7 @@ async function extractMoments() {
   btn.disabled = true;
   wrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Reading your session transcript...';
+  msg.textContent = 'Reading your story...';   // v3.1.40
 
   var pct = 5;
   // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
@@ -17162,7 +17164,7 @@ function saveTranscript() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     state.currentSession = data;
-    showAlert('Transcript saved!');
+    showAlert('Story saved!');   // v3.1.40
   });
 }
 
@@ -17415,8 +17417,10 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    // v3.1.39 -- "longer" read oddly for an empty box (tester).
-    errorEl.textContent = transcript.length ? 'Please paste a longer transcript first.' : 'Please paste a transcript first.';
+    // v3.1.40 -- not only transcripts (Ian): a story, notes, a narrative, anything that says what happened.
+    errorEl.textContent = transcript.length
+      ? 'Please add a little more to the Story / Session Transcript box first \u2014 a few sentences at least.'
+      : 'Please add your story first \u2014 type or paste it into the Story / Session Transcript box. A transcript, a written story, notes or an outline all work.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -17466,7 +17470,7 @@ async function extractMoments() {
   btn.disabled = true;
   wrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Reading your session transcript...';
+  msg.textContent = 'Reading your story...';   // v3.1.40
 
   var pct = 5;
   // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
