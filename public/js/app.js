@@ -8700,7 +8700,8 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    errorEl.textContent = 'Please paste a longer transcript first.';
+    // v3.1.39 -- "longer" read oddly for an empty box (tester).
+    errorEl.textContent = transcript.length ? 'Please paste a longer transcript first.' : 'Please paste a transcript first.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -17414,7 +17415,8 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    errorEl.textContent = 'Please paste a longer transcript first.';
+    // v3.1.39 -- "longer" read oddly for an empty box (tester).
+    errorEl.textContent = transcript.length ? 'Please paste a longer transcript first.' : 'Please paste a transcript first.';
     errorEl.classList.remove('hidden');
     return;
   }

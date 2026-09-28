@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.39",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3139-help-canonical",
+        "kind": "change",
+        "public": true,
+        "summary": "The help assistant now explains what the Canonical is, what order sessions come in, and where the Outline warnings appear.",
+        "detail": "Also: an empty transcript box now says 'Please paste a transcript first.'",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.38",
     "staged_on": "2026-09-28",
     "entries": [

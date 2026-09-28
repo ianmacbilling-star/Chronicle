@@ -905,7 +905,8 @@ appears in more pictures than the other characters**, because it is their story.
 each narrative panel — what happens, who is there, the key moment, and a line of dialogue worth
 keeping. Click into each narrative panel and write your own story over them. Low, Med and High set
 how many bullets. Every plan. Replace the bullets before you order: bullets left in are printed
-as one paragraph.
+as one paragraph. Campaignia warns you while any are left — on the session's **Preview** tab and on
+the Publish page's **Prep & Preview** tab, which names the sessions that still have them.
 
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.
@@ -1122,12 +1123,25 @@ one.
   version exists they're separate things. Renaming the campaign later does **not** rename
   your book.
 
-**The canonical version**
+**What is the Canonical?**
 
-Every campaign has one **canonical** version. It's the Story Master's, it's created
-automatically the first time any session is worked on, and it's what everyone else's version
-reads through for sessions they haven't branched themselves. It belongs to whoever currently
-holds the Story Master role, so it follows a handover.
+The **Canonical** is the campaign's **official book**. Every campaign has exactly one.
+
+- **It's what members read.** When a member opens a session, they see the Canonical's pages —
+  unless they've made their own version of that session.
+- **It's what every other version falls back to.** A version only holds its own copy of the
+  sessions it has branched; on every other session it shows the Canonical. That's what makes a
+  version cheap: change one session and the rest of your book is still the Canonical's. The
+  session cards say which you're looking at — your version's name, or **Canonical**.
+- **It's where new sessions begin.** Creating a session creates the Canonical's copy of it first,
+  in the art style and narrative style of the Canonical's previous session. Anyone can then make
+  their own version of it once the Story Master sets it to Ready.
+- **It belongs to the Story Master** — whoever holds the role, so it follows a handover. Members
+  can read it but not change it; to change something they make their own version.
+- **It's permanent.** It can't be deleted, and a session can't be removed from it (that option
+  isn't offered on the Canonical). The Story Master can **rename** it — the picker always marks
+  it **(Canonical)** — and can make one of their other versions the Canonical instead (below).
+- It's created automatically the first time any session is worked on.
 
 **Making one of your versions the Canonical (Story Master)**
 
@@ -1258,7 +1272,10 @@ under the title; if you want the session dates there, type them.
   the *same* version, so the font, frames and layout stay consistent across the run while the
   cover and subtitle change per issue. Episode One in the Library is untouched.
 - **Renaming and deleting act on the version you're looking at**, never on another. Deleting
-  is done a session at a time.
+  is done a session at a time, and never from the Canonical.
+- **Open on a Publish session card opens the version you're looking at** on the Publish page —
+  that version's copy of the session, or the Canonical where the version never made the session
+  its own, exactly as the card says.
 
 ---
 
@@ -1827,6 +1844,14 @@ Friction points and what's actually going on.
 
 ## 21. Quick FAQ
 
+- **What is the Canonical?** The campaign's official book: what members read, what every other
+  version shows on sessions it hasn't made its own, and where new sessions begin. It belongs to
+  the Story Master. See **§11 Versions** for the full picture, and for making another version the
+  Canonical.
+- **What order are my sessions in?** By their **date**. Two sessions on the same date go in the
+  order they were made — oldest first on the Publish page and in the book, newest first on the
+  session page (which reads newest first). To change the order, change a session's date; there
+  is no drag-to-reorder.
 - **Can I import a character sheet instead of typing it in?** Yes — **Import a sheet** in
   the character window reads a PDF, Word or text file and fills the card in. It costs one token, or a
   token a page if the sheet is only pictures.
