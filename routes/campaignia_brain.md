@@ -1140,9 +1140,10 @@ and what will happen, then:
   nothing to remake. Its Story Instructions (or none) become the Canonical's.
 - **Sessions your version never had are copied in** from the current Canonical as they are, so the
   new Canonical covers every session. Regenerate them afterwards if you want them in the new style.
-- **Every other version stays exactly as it is** — yours and your members'. Each one keeps its own
-  copy of the old pages it was reading, with its saved layouts and pins untouched. Only the old
-  book's name in the picker changes.
+- **Other versions follow the new Canonical** — yours and your members'. On any session a version
+  hasn't made its own, it shows the new Canonical, the same as always; the sessions it did make its
+  own don't change, and nobody's pin moves. A member who already approved a layout keeps the old
+  pages in that saved file until they Optimize again.
 - **Your old Canonical** is kept as one of your versions under a name you give it, or deleted.
   Deleting asks a second time and tells you who else is using it. Published stories and orders are
   never affected.
@@ -1774,6 +1775,10 @@ Friction points and what's actually going on.
 - **"My first-person story still says 'Beth' instead of 'I'."** Open **Narrative style** and check
   that **In first person** is ticked with Beth as the **Narrator** on this version, then **Generate
   Narrative** again — prose that is already written is not changed until you regenerate it.
+- **"My Story Instructions say third person, but the story came out as 'I'."** When **In first person**
+  is ticked for a version, it wins over the Story Instructions on point of view; everything else in
+  the instructions is still followed. The Narrative style window says so when your instructions
+  mention point of view. Untick **In first person** if you want the instructions to decide.
 - **"My first-person story doesn't show me in the pictures."** The narrator is probably **Nobody in
   particular**. Open **Narrative style** and choose your character as the **Narrator**, then run
   **Generate Story** again so the panels are planned with you in them.

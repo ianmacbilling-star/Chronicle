@@ -545,6 +545,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // gets nothing extra and reads exactly as it always has.
   const _fpAnon = (!narrator && narrStyleId !== 'calm') ? await forkFirstPersonAnon(db, targetForkId) : false;
   const _narrBlock = narrator ? narratorProseBlock(narrator) : (_fpAnon ? narratorAnonBlock() : '');
+  // v3.1.36 -- THE SETTING WINS, AND SAYS SO BESIDE THE INSTRUCTIONS. Tester, 2026-09-28: Story
+  // Instructions reading "third person... never use the word I" beat In first person, although the first-
+  // person lines already claimed to outrank them -- both claimed to override everything, and the model
+  // sided with the director's. Ian: "the setting wins but with a warning. Technically both the
+  // instructions and the Setting are owned by the version." So the exception is written INTO the
+  // instructions, in both places they appear (system and user prompt), where it cannot be read as a rival.
+  if (directorNotes && (narrator || _fpAnon)) {
+    directorNotes = directorNotes + '\n(POINT OF VIEW EXCEPTION, set for this version: the story is told IN THE FIRST PERSON' +
+      (narrator ? (', by ' + narratorNameParts(narrator.name).canon) : ', by a narrator who is not named') +
+      '. Where the instructions above ask for the third person, an invisible narrator, or never using \u201cI\u201d, ignore that part only. Follow everything else they say.)';
+  }
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);

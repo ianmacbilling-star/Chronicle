@@ -4689,7 +4689,7 @@ function renderReview(data) {
       : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
-        '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">Opening</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
@@ -6484,6 +6484,7 @@ function switchSessionTab(tab) {
     var _spb = document.getElementById('session-preview-mode-btn');
     if (_spb) _spb.textContent = 'Quick View';
     loadPreview(state.layoutStyle || 'Classic');
+    if (typeof _sessionOutlineWarn === 'function') _sessionOutlineWarn();   // v3.1.36
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -17196,6 +17197,7 @@ function switchSessionTab(tab) {
     var _spb = document.getElementById('session-preview-mode-btn');
     if (_spb) _spb.textContent = 'Quick View';
     loadPreview(state.layoutStyle || 'Classic');
+    if (typeof _sessionOutlineWarn === 'function') _sessionOutlineWarn();   // v3.1.36
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -33077,7 +33079,7 @@ async function _warnIfMissingReferences(arr) {
     var msg = (missing.length === 1
         ? list + ' does not have a reference picture yet'
         : 'These characters do not have reference pictures yet: ' + list) +
-      ' (or it is still being drawn).\n\n' +
+      (missing.length === 1 ? ' (or it is still being drawn).\n\n' : ' (or they are still being drawn).\n\n') +
       'The reference picture is what keeps a character looking the same from panel to panel. Without one, ' +
       'Campaignia can only go by the description, so they may look different in every picture.\n\n' +
       (canBuild
@@ -33404,6 +33406,7 @@ function _narratorPanelEnsure() {
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
       '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
       '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
+      '<div id="narrator-povwarn" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
     '</div>' +
     '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
   _infoTipCss();
@@ -33481,6 +33484,13 @@ function _narratorRender() {
   sel.innerHTML = opts;
   sel.value = has ? String(state.narrativeNarrator) : (locked ? 'anon' : '');
   if (need) need.style.display = (on && !has && !locked) ? '' : 'none';
+  // v3.1.36 -- the setting wins over the Story Instructions (Ian), and says so when they disagree.
+  var _pw = document.getElementById('narrator-povwarn');
+  if (_pw) {
+    var _ntx = '';
+    try { var _nIn = document.getElementById('session-notes-input'); _ntx = _nIn ? String(_nIn.value || '') : ''; } catch (e) { _ntx = ''; }
+    _pw.style.display = (on && _notesMentionPov(_ntx)) ? '' : 'none';
+  }
   // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
   var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
     'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters. ' +
@@ -33853,7 +33863,7 @@ function _vpickCss() {
     '.vpick-list{position:fixed;z-index:10050;background:#16100a;border:1px solid rgba(201,168,76,0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:#f0e8d0;font-size:13px;box-sizing:border-box;}' +
     '.vpick-row{display:flex;align-items:center;gap:6px;padding:0 4px 0 12px;min-height:38px;}' +
     '.vpick-row:hover,.vpick-row.is-cur{background:rgba(201,168,76,0.12);}' +
-    '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
     '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid #c9a84c;outline-offset:1px;}' +
     '.vpick-row.is-cur .vpick-choose{color:#e8c870;font-weight:600;}' +
     '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
@@ -33939,9 +33949,14 @@ function _vpickPlace(selId) {
   if (!sel || !sel._vpick || !list) return;
   var r = sel._vpick.trigger.getBoundingClientRect();
   var vw = window.innerWidth, vh = window.innerHeight;
-  var w = Math.min(Math.max(r.width, 260), vw - 16);
+  // v3.1.36 -- as wide as the longest name needs, up to the screen; a longer name wraps (tester: two
+  // versions named alike were cut to the same text). Measured after the rows are drawn.
+  list.style.width = 'auto';
+  list.style.left = '0px';
+  list.style.minWidth = Math.min(Math.max(r.width, 260), vw - 16) + 'px';
+  list.style.maxWidth = (vw - 16) + 'px';
+  var w = list.getBoundingClientRect().width;
   var left = Math.max(8, Math.min(r.left, vw - w - 8));
-  list.style.width = w + 'px';
   list.style.left = left + 'px';
   var below = vh - r.bottom - 8, above = r.top - 8;
   if (below >= 160 || below >= above) { list.style.top = (r.bottom + 4) + 'px'; list.style.bottom = ''; list.style.maxHeight = Math.max(120, below - 4) + 'px'; }
@@ -34078,7 +34093,7 @@ function _promoteDialog(info) {
     box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
     var bullets = [
       'Members read \u201c' + vName + '\u201d as the book from now on, and new sessions start in its art style, narrative style and Story Instructions.',
-      'Every other version \u2014 yours and your members\u2019 \u2014 stays exactly as it is.'
+      'Other versions \u2014 yours and your members\u2019 \u2014 show the new Canonical on any session they haven\u2019t made their own.'
     ];
     if (info.missing && info.missing.length) bullets.push('\u201c' + vName + '\u201d doesn\u2019t have ' + _promoteList(info.missing) + ' yet, so ' + (info.missing.length === 1 ? 'it is' : 'they are') + ' copied in from the current Canonical as ' + (info.missing.length === 1 ? 'it is' : 'they are') + '. You can regenerate ' + (info.missing.length === 1 ? 'it' : 'them') + ' in the new style afterwards.');
     if (info.drafts && info.drafts.length) bullets.push(_promoteList(info.drafts) + (info.drafts.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d, so members won\u2019t see ' + (info.drafts.length === 1 ? 'it' : 'them') + ' until you set ' + (info.drafts.length === 1 ? 'it' : 'them') + ' to Ready.');
@@ -34214,4 +34229,36 @@ function _promoteNudge() {
     })
     .catch(function () { proceed(); });
   return true;
+}
+
+// v3.1.36 -- does this text talk about point of view? Used to warn, in the narrator panel, that In first
+// person wins over the Story Instructions (Ian: "the setting wins but with a warning").
+function _notesMentionPov(t) {
+  var s = String(t || '');
+  if (!s) return false;
+  return /third[\s-]*person|first[\s-]*person|point of view|\bpov\b|narrator|never (use|say|write) (the word )?["'\u201c\u2018]?i\b/i.test(s);
+}
+// v3.1.36 -- the session Preview shows Outline bullets run together, so it says why, the way Prep &
+// Preview already does for the whole book (tester, 2026-09-28). Read from the narrative on screen.
+function _sessionOutlineWarn() {
+  try {
+    var tab = document.getElementById('session-tab-export');
+    if (!tab) return;
+    var box = document.getElementById('session-outline-warn');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'session-outline-warn';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      tab.insertBefore(box, tab.firstChild);
+    }
+    var nd = state.narrativeData || {};
+    var parts = [nd.intro, nd.outro];
+    (Array.isArray(nd.sections) ? nd.sections : []).forEach(function (s) { if (s) { parts.push(s.before); parts.push(s.after); } });
+    var bullet = /(^|\n)[ \t]*\u2022[ \t]/;
+    var hit = parts.some(function (p) { return typeof p === 'string' && bullet.test(p); });
+    if (!hit) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = '<b>Outline bullet points are still in this session.</b> In the book they run together as one paragraph, as you can see below. ' +
+      'Replace them with your own words on the Storyboard before you Optimize.';
+    box.style.display = 'block';
+  } catch (e) {}
 }

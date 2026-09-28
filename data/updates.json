@@ -1,5 +1,51 @@
 [
   {
+    "version": "3.1.36",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3136-first-person-wins",
+        "kind": "fix",
+        "public": true,
+        "summary": "In first person now wins over Story Instructions that ask for the third person, and says so.",
+        "detail": "When In first person is ticked, the story is told as 'I' even if the Story Instructions ask for third person; the rest of the instructions are still followed. The Narrative style window warns when your instructions mention point of view.",
+        "td": [
+          "TD-919"
+        ]
+      },
+      {
+        "id": "3136-session-preview-outline",
+        "kind": "change",
+        "public": true,
+        "summary": "A session's Preview now explains when Outline bullet points are still in it.",
+        "detail": "The same warning as Prep & Preview: in the book the bullets run together as one paragraph, so replace them with your own words before you Optimize.",
+        "td": [
+          "TD-924"
+        ]
+      },
+      {
+        "id": "3136-small-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Small fixes: the Opening badge on Review, long version names in the picker, and clearer messages.",
+        "detail": "The Opening badge on the Review tab no longer spills into the title. Long version names wrap in the version picker instead of being cut short. The missing-transcript message no longer says your transcript is gone. The reference-picture message says 'they' for more than one character, and the Story Instructions hint says notes save when you click away.",
+        "td": [
+          "TD-927"
+        ]
+      },
+      {
+        "id": "3136-promote-no-freeze",
+        "kind": "change",
+        "public": false,
+        "summary": "Promote to Canonical no longer freezes other versions with copies of the old pages.",
+        "detail": "Ian: take out the freezing. Other versions follow the new Canonical on sessions they never branched. The promoted version still gets every session. The 3.1.35 entry was reworded.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.35",
     "staged_on": "2026-09-28",
     "entries": [
@@ -8,7 +54,7 @@
         "kind": "feature",
         "public": true,
         "summary": "Story Masters can make one of their own versions the Canonical, and carry on in its style.",
-        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style, narrative style and Story Instructions. Sessions it never had are copied in from the old Canonical as they are. Every other version stays exactly as it was. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
+        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style, narrative style and Story Instructions. Sessions it never had are copied in from the old Canonical as they are. Other versions show the new Canonical on any session they haven't made their own. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
         "td": [
           "TD-928"
         ]

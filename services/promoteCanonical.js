@@ -11,10 +11,9 @@
 //     so the new Canonical always covers every session;
 //   * the promoted version's Story Instructions (or none) become the Canonical's;
 //   * members' pins stay exactly where they are;
-//   * EVERY OTHER VERSION STAYS EXACTLY AS IT WAS. A version only holds its own copy of the sessions it
-//     branched and reads the Canonical everywhere else, so each one first gets its own copy of every
-//     old-Canonical session it was reading. Its book, its saved layouts and its look do not move;
-//     only the old book's name in the picker changes;
+//   * every other version FOLLOWS THE NEW CANONICAL on the sessions it never branched -- the ordinary
+//     rule. v3.1.35 froze each of them with its own copy of the old pages; Ian, 2026-09-28, after seeing
+//     that it hid which sessions a member had never made their own: "take out the freezing". v3.1.36;
 //   * the old Canonical is kept under a name, or deleted (with a second confirmation on the client);
 //   * refused while an Optimize, a save, a render or a generation is running on the campaign.
 //
@@ -111,20 +110,6 @@ async function promoteCheck(db, campaignId, versionId, userId, deps) {
     else if (b.x.player_access_status !== 'ready' && b.dm[0].player_access_status === 'ready') out.drafts.push({ id: s.id, name: s.name || '' });
   });
 
-  // Every other version with at least one session of its own gets its own copy of each old-Canonical
-  // session it reads. A version with NO sessions is an empty shell kept for later (Ian: "If they keep it
-  // then they can still use it later on another session"): it is not frozen into a full copy of the book.
-  let fv = 0, fs = 0;
-  st.versions.forEach(function (v) {
-    if (String(v.id) === String(X.id) || String(v.id) === String(C.id)) return;
-    const mine = st.forks.filter(function (f) { return String(f.version_id) === String(v.id); });
-    if (!mine.length) return;
-    const have = {};
-    mine.forEach(function (f) { have[f.session_id] = true; });
-    const n = st.sessions.filter(function (s) { return !have[s.id]; }).length;
-    if (n) { fv++; fs += n; }
-  });
-  out.frozen = { versions: fv, sessions: fs };
 
   // Who else is using the current Canonical, for the delete choice.
   const pins = await db.prepare('SELECT COUNT(*)::int AS n FROM campaign_members WHERE campaign_id = ? AND default_version_id = ? AND user_id <> ?').get(campaignId, C.id, userId);
@@ -223,10 +208,9 @@ async function promoteRun(db, campaignId, versionId, userId, opts, deps) {
     if (String(f.version_id) === String(X.id)) xFork[f.session_id] = f;
   });
   // Style values resolved BEFORE the transaction: these helpers read through the pool.
-  const cStyle = {}, xStyle = {}, xLooks = {};
+  const xStyle = {}, xLooks = {};
   for (let i = 0; i < st.sessions.length; i++) {
     const sid = st.sessions[i].id;
-    try { cStyle[sid] = deps.versionStyleDefaults ? await deps.versionStyleDefaults(db, C.id, sid) : {}; } catch (e) { cStyle[sid] = {}; }
     if (!xFork[sid]) {
       try { xStyle[sid] = deps.versionStyleDefaults ? await deps.versionStyleDefaults(db, X.id, sid) : {}; } catch (e) { xStyle[sid] = {}; }
       try { xLooks[sid] = deps.versionPriorCharacterLooks ? await deps.versionPriorCharacterLooks(db, X.id, sid) : {}; } catch (e) { xLooks[sid] = {}; }
@@ -234,7 +218,7 @@ async function promoteRun(db, campaignId, versionId, userId, opts, deps) {
   }
   const STYLE_KEYS = ['narrative_style', 'narrative_verbosity', 'narrative_narrator', 'illustrate_mode'];
   const release = [], dropFiles = [];
-  let copiedMissing = 0, copiedFrozen = 0;
+  let copiedMissing = 0;
 
   await db.transaction(async function (tx) {
     await tx.query('SELECT pg_advisory_xact_lock($1::int, $2::int)', [LOCK_CLASS, Number(campaignId)]);
@@ -246,27 +230,8 @@ async function promoteRun(db, campaignId, versionId, userId, opts, deps) {
     }
     const cols = { forks: await tableColumns(tx, 'session_forks'), moments: await tableColumns(tx, 'moments'), chars: await tableColumns(tx, 'session_characters') };
 
-    // 1. EVERY OTHER VERSION KEEPS ITS BOOK: its own copy of each old-Canonical session it was reading.
-    //    Status: a version nobody else can see (no Ready session) stays invisible, so its copies are
-    //    Draft; a visible one shows each copy exactly as the Canonical showed it.
-    for (let i = 0; i < st.versions.length; i++) {
-      const v = st.versions[i];
-      if (String(v.id) === String(X.id) || String(v.id) === String(C.id)) continue;
-      const vf = st.forks.filter(function (f) { return String(f.version_id) === String(v.id); });
-      if (!vf.length) continue;
-      const have = {}; let anyReady = false;
-      vf.forEach(function (f) { have[f.session_id] = true; if (f.player_access_status === 'ready') anyReady = true; });
-      for (let k = 0; k < st.sessions.length; k++) {
-        const sid = st.sessions[k].id;
-        if (have[sid] || !cFork[sid]) continue;
-        const nid = await copyFork(tx, cols, cFork[sid].id, { user_id: v.user_id, role: 'player', name: v.name, version_id: v.id, status: anyReady ? cFork[sid].player_access_status : 'draft' });
-        const sets = [], vals = [];
-        STYLE_KEYS.forEach(function (key) { if (cStyle[sid] && cStyle[sid][key]) { sets.push(key + ' = COALESCE(NULLIF(' + key + ", ''), $" + (vals.length + 1) + ')'); vals.push(cStyle[sid][key]); } });
-        if (sets.length) { vals.push(nid); await tx.query('UPDATE session_forks SET ' + sets.join(', ') + ' WHERE id = $' + vals.length, vals); }
-        copiedFrozen++;
-      }
-    }
-
+    // 1. OTHER VERSIONS ARE NOT TOUCHED. On a session they never branched they read the Canonical, which
+    //    from the commit on is the promoted version -- the same rule as any other day (v3.1.36).
     // 2. THE PROMOTED VERSION GETS EVERY SESSION. A session it never branched is copied in from the
     //    Canonical as it is (Ian: regenerate it later if you want it in the new style), wearing the
     //    version's own styles and character looks the way "add this session to a version" does.
@@ -328,24 +293,13 @@ async function promoteRun(db, campaignId, versionId, userId, opts, deps) {
     await tx.query('DELETE FROM session_includes WHERE user_id = $1 AND version_id = $2', [userId, X.id]);
 
     // 6. BOOK PREFS: cover, title, layout and saved books. Version 0 IS the Canonical. The Story
-    //    Master's other versions that had no prefs of their own were reading version 0, so each gets a
-    //    copy of what it was reading first (without the saved book, whose files belong to one row).
+    //    Master's other versions that have no prefs of their own read version 0, so they follow the new
+    //    Canonical's cover and layout, like their sessions (v3.1.36 -- no longer frozen).
     //    Rows at the old Canonical's own id cannot have been read (the Canonical always maps to 0), so
     //    they are cleared out of the way of the move.
     await tx.query('DELETE FROM fork_book_prefs WHERE campaign_id = $1 AND fork_user_id = $2 AND version_id = $3', [campaignId, userId, C.id]);
     const base = await tx.query('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = $1 AND fork_user_id = $1 AND campaign_id = $2 AND version_id = 0', [userId, campaignId]);
     const baseRow = base.rows[0] || null;
-    if (baseRow) {
-      for (let i = 0; i < st.versions.length; i++) {
-        const v = st.versions[i];
-        if (v.is_canonical || String(v.id) === String(X.id) || String(v.user_id) !== String(userId)) continue;
-        await tx.query(
-          'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, version_id, prefs, updated_at) VALUES ($1, $1, $2, $3, $4, CURRENT_TIMESTAMP) ' +
-          'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id, version_id) DO NOTHING',
-          [userId, campaignId, v.id, stripSaved(baseRow.prefs)]
-        );
-      }
-    }
     await tx.query('UPDATE fork_book_prefs SET version_id = $1 WHERE campaign_id = $2 AND fork_user_id = $3 AND version_id = 0', [-Number(C.id), campaignId, userId]);
     await tx.query('UPDATE fork_book_prefs SET version_id = 0 WHERE campaign_id = $1 AND fork_user_id = $2 AND version_id = $3', [campaignId, userId, X.id]);
     await tx.query('UPDATE fork_book_prefs SET version_id = $1 WHERE campaign_id = $2 AND fork_user_id = $3 AND version_id = $4', [C.id, campaignId, userId, -Number(C.id)]);
@@ -407,14 +361,13 @@ async function promoteRun(db, campaignId, versionId, userId, opts, deps) {
     try { if (deps.deleteFile) await deps.deleteFile(dropFiles[i]); } catch (e) { console.error('[promote] saved book file left in place: ' + ((e && e.message) || e)); }
   }
   console.log('[promote] campaign ' + campaignId + ': version ' + X.id + ' is the Canonical; old ' + C.id + (deleteOld ? ' deleted' : ' kept as "' + newName + '"') +
-    '; copied ' + copiedMissing + ' missing session(s), ' + copiedFrozen + ' session(s) into other versions');
+    '; copied ' + copiedMissing + ' missing session(s)');
   return { status: 200, body: {
     success: true,
     canonical: { id: X.id, name: X.name },
     old: deleteOld ? null : { id: C.id, name: newName },
     deleted_old: deleteOld,
-    copied_missing: copiedMissing,
-    copied_frozen: copiedFrozen
+    copied_missing: copiedMissing
   } };
 }
 
