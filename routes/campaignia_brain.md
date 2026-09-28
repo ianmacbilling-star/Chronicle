@@ -1164,7 +1164,7 @@ and what will happen, then:
   never affected.
 - It only works on **your own** versions, and it waits if an Optimize or a generation is running on
   the campaign. Draft sessions in the version you promote stay hidden from members until you set
-  them to Ready.
+  them to Ready; the window warns you at the top, naming them, when any are Draft.
 - If you've **pinned** one of your versions that isn't the Canonical, making a new session asks
   whether to make that version the Canonical first.
 

@@ -1,5 +1,39 @@
 [
   {
+    "version": "3.1.41",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3141-promote-draft-warning",
+        "kind": "change",
+        "public": true,
+        "summary": "Making a version the Canonical now warns at the top of the window when any of its sessions are Draft.",
+        "detail": "Members only see sessions set to Ready. The warning names every Draft session, and says so plainly when the whole version is Draft.",
+        "td": [
+          "TD-928"
+        ]
+      },
+      {
+        "id": "3141-member-small",
+        "kind": "fix",
+        "public": true,
+        "summary": "Members who can't publish are no longer offered All publishing options on a session's Preview, and an invitation with no character no longer says Playing as null.",
+        "detail": "",
+        "td": [
+          "TD-812"
+        ]
+      },
+      {
+        "id": "3141-arrow-tooltips",
+        "kind": "fix",
+        "public": false,
+        "summary": "The session arrows' tooltips name the previous and next session.",
+        "detail": "They read .title, which sessions don't have; they use the name, or the date when there is none.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.40",
     "staged_on": "2026-09-28",
     "entries": [

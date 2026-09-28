@@ -19965,13 +19965,13 @@ function sessNavSync() {
       prev.disabled = noPrev;
       prev.style.opacity = noPrev ? '0.35' : '';
       prev.style.cursor = noPrev ? 'not-allowed' : 'pointer';
-      prev.title = noPrev ? 'This is the first session in the list' : ('Previous session: ' + ((o[i - 1] && o[i - 1].title) || ''));
+      prev.title = noPrev ? 'This is the first session in the list' : ('Previous session: ' + _sessNavLabel(o[i - 1]));
     }
     if (next) {
       next.disabled = noNext;
       next.style.opacity = noNext ? '0.35' : '';
       next.style.cursor = noNext ? 'not-allowed' : 'pointer';
-      next.title = noNext ? 'This is the last session in the list' : ('Next session: ' + ((o[i + 1] && o[i + 1].title) || ''));
+      next.title = noNext ? 'This is the last session in the list' : ('Next session: ' + _sessNavLabel(o[i + 1]));
     }
   } catch (e) {}
 }
@@ -28070,6 +28070,9 @@ function paintPublishLock() {
     for (i = 0; i < nn.length; i++) els.push(nn[i]);
     var sp = document.getElementById('session-all-publish-btn');
     if (sp) els.push(sp);
+    // v3.1.41 -- a member who can't open Publish isn't offered the way there (tester: it bounced them to the
+    // Sessions list). The whole "Publish or print the full book?" line goes, not just the button.
+    if (sp && sp.parentNode) sp.parentNode.style.display = canOpenPublishPage() ? 'flex' : 'none';
     for (i = 0; i < els.length; i++) {
       var b = els[i];
       if (!b) continue;
@@ -28131,6 +28134,7 @@ function optimizeLockStop() {
 // inside the first does nothing about the second, which would have left the novel panes
 // toggled underneath a view that never changed. One named handler, one guard, one return.
 function goToPublishOptions() {
+  if (!canOpenPublishPage()) return;   // v3.1.41 -- the button is hidden then; this only guards a stale page
   if (optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   showCampaignSection('novel');
   switchNovelTab('sessions');
@@ -34095,6 +34099,22 @@ function _promoteVersionIdOnScreen() {
 function _promoteList(rows) {
   return (rows || []).map(function (r) { return '\u201c' + (r.name || 'Untitled session') + '\u201d'; }).join(', ');
 }
+function _promoteDraftBox(info, vName) {
+  // v3.1.41 -- members see only Ready sessions. Tester: every session in the promoted version was Draft,
+  // the window said nothing, and the members' book went empty. Ian: leave promote alone, make the warning
+  // loud. Shown first, before the explainer, whenever any session will be Draft.
+  var d = (info && info.drafts) || [];
+  if (!d.length) return '';
+  var total = Number(info.session_count) || 0;
+  var all = total > 0 && d.length >= total;
+  var head = all ? 'Members won\u2019t see any of this book yet' : 'Members won\u2019t see ' + (d.length === 1 ? 'one session' : d.length + ' sessions');
+  var body = all
+    ? 'Every session in \u201c' + vName + '\u201d is Draft. Members only see sessions set to Ready, so after the switch they\u2019ll see nothing until you set them to Ready.'
+    : _promoteList(d) + (d.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d. Members only see sessions set to Ready, so after the switch they won\u2019t see ' + (d.length === 1 ? 'it' : 'them') + ' until you set ' + (d.length === 1 ? 'it' : 'them') + ' to Ready.';
+  return '<div class="promote-draft-warn" role="alert" style="background:rgba(224,150,50,0.14);border:1px solid #e09632;border-radius:8px;padding:10px 12px;margin-bottom:14px;">' +
+    '<div style="font-weight:700;color:#f0b050;margin-bottom:4px;">\u26a0 ' + escapeHtml(head) + '</div>' +
+    '<div>' + escapeHtml(body) + '</div></div>';
+}
 function _promoteOthersLine(u) {
   u = u || {};
   var parts = [];
@@ -34113,14 +34133,17 @@ function _promoteDialog(info) {
     box.setAttribute('aria-modal', 'true');
     box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
     var bullets = [
-      'Members read \u201c' + vName + '\u201d as the book from now on, and new sessions start in its art style and narrative style.',
+      // v3.1.41 -- no promise that members read all of it: only its Ready sessions (Ian chose a louder warning).
+      'Members read \u201c' + vName + '\u201d as the book from now on \u2014 the sessions in it set to Ready \u2014 and new sessions start in its art style and narrative style.',
       'Other versions \u2014 yours and your members\u2019 \u2014 show the new Canonical on any session they haven\u2019t made their own.'
     ];
     if (info.missing && info.missing.length) bullets.push('\u201c' + vName + '\u201d doesn\u2019t have ' + _promoteList(info.missing) + ' yet, so ' + (info.missing.length === 1 ? 'it is' : 'they are') + ' copied in from the current Canonical as ' + (info.missing.length === 1 ? 'it is' : 'they are') + '. You can regenerate ' + (info.missing.length === 1 ? 'it' : 'them') + ' in the new style afterwards.');
-    if (info.drafts && info.drafts.length) bullets.push(_promoteList(info.drafts) + (info.drafts.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d, so members won\u2019t see ' + (info.drafts.length === 1 ? 'it' : 'them') + ' until you set ' + (info.drafts.length === 1 ? 'it' : 'them') + ' to Ready.');
+    // v3.1.41 -- the Draft warning moved out of the bullets to a highlighted box at the top of the window.
+    var draftBox = _promoteDraftBox(info, vName);
     var others = _promoteOthersLine(info.others_using);
     box.innerHTML =
       '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
+      draftBox +
       '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">What is the Canonical?</div>' +
       '<div style="margin-bottom:14px;">The Canonical is the campaign\u2019s official book. It\u2019s what every member reads, and every other version shows it on any session that version hasn\u2019t made its own copy of. Every campaign has exactly one, and it belongs to the Story Master.</div>' +
       '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Making \u201c' + escapeHtml(vName) + '\u201d the Canonical means:</div>' +
@@ -34290,4 +34313,23 @@ function _sessTieNewestFirst(a, b) {
   var ca = String((a && a.created_at) || ''), cb = String((b && b.created_at) || '');
   if (ca !== cb) return ca < cb ? 1 : -1;
   return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+}
+
+function canOpenPublishPage() {
+  // v3.1.41 -- the same rule showCampaignSection('novel') applies: the Story Master, or anyone when the
+  // campaign lets members into Publish.
+  try {
+    var c = state && state.currentCampaign;
+    if (!c) return false;
+    if (c.my_role === 'dm') return true;
+    var a = c.allow_player_novel_access;
+    return a === true || a === 1 || a === 't' || a === 'true';
+  } catch (e) { return false; }
+}
+function _sessNavLabel(s) {
+  // v3.1.41 -- the arrow tooltips read .title, which sessions don't have ("Previous session: "). Name, else date.
+  if (!s) return '';
+  if (s.name && String(s.name).trim()) return String(s.name).trim();
+  var d = String(s.session_date || '').split('T')[0];
+  return d || 'Untitled session';
 }

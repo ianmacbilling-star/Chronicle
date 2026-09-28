@@ -107,8 +107,13 @@ async function promoteCheck(db, campaignId, versionId, userId, deps) {
   st.sessions.forEach(function (s) {
     const b = bySession[s.id];
     if (!b.x) out.missing.push({ id: s.id, name: s.name || '' });
-    else if (b.x.player_access_status !== 'ready' && b.dm[0].player_access_status === 'ready') out.drafts.push({ id: s.id, name: s.name || '' });
+    // v3.1.41 -- EVERY session that will be Draft once this version is the Canonical, not only the ones
+    // that were Ready before (tester: a version whose sessions were all Draft promoted with no warning,
+    // and members saw nothing). A missing session is copied in with the current Canonical's status.
+    const willBe = b.x ? b.x.player_access_status : b.dm[0].player_access_status;
+    if (willBe !== 'ready') out.drafts.push({ id: s.id, name: s.name || '' });
   });
+  out.session_count = st.sessions.length;
 
 
   // Who else is using the current Canonical, for the delete choice.
