@@ -12981,7 +12981,7 @@ function renderNovelSummary(sessions) {
         '</div>' +
         '<div class="session-card-actions">' +
           includeChk +
-          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+          '<a onclick="goToSessionPage(' + s.id + ', true)" class="session-card-open">Open</a>' +   // v3.1.37 -- keeps the Publish version
         '</div>' +
       '</div>' +
     '</div>';
@@ -18226,7 +18226,7 @@ function renderNovelSummary(sessions) {
         '</div>' +
         '<div class="session-card-actions">' +
           includeChk +
-          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+          '<a onclick="goToSessionPage(' + s.id + ', true)" class="session-card-open">Open</a>' +   // v3.1.37 -- keeps the Publish version
         '</div>' +
       '</div>' +
     '</div>';
@@ -19878,7 +19878,9 @@ function paintVersionMenu() {
   // deciding them separately.
   var mine = !!(shownFork && shownFork.is_mine);
   if (verMenu) verMenu.style.display = mine ? '' : 'none';
-  if (delItem) delItem.style.display = mine ? '' : 'none';
+  // v3.1.37 -- a session cannot be removed from the Canonical, so the item is not offered there (tester:
+  // it answered "Something went wrong"). Rename stays.
+  if (delItem) delItem.style.display = (mine && !(shownFork && shownFork.role === 'dm')) ? '' : 'none';
   // v3.1.35 -- TD-928. Make This Version the Canonical: the Story Master, on one of his own versions
   // that is not already the Canonical.
   var promoteItem = document.getElementById('promote-version-item');
@@ -20094,7 +20096,9 @@ function loadSessionForks(sessionId) {
           _defaultedToOwn = true;
         }
       }
-      if (!_starRuled && !state.currentForkId && mineFork && mineFork.role !== 'dm') {
+      // v3.1.37 -- nor after a move that carried a version (_navHad): a session that version never branched
+      // shows the Canonical, as the comment at the top of this function always said it would.
+      if (!_starRuled && !_navHad && !state.currentForkId && mineFork && mineFork.role !== 'dm') {
         state.currentForkId = mineFork.fork_id;
         if (sel) sel.value = String(mineFork.fork_id);
         _defaultedToOwn = true;
@@ -26525,7 +26529,18 @@ function toggleNovelInclude(sessionId, checked) {
     .catch(function () { loadNovelSummary(); });
 }
 
-function goToSessionPage(id) {
+function goToSessionPage(id, fromBook) {
+  // v3.1.37 -- OPEN FROM A PUBLISH CARD OPENS THAT VERSION. Tester, 2026-09-28: the card said "Outline
+  // original" and Open landed on the pinned version. The Publish page's version travels with the move, the
+  // same way an arrow move carries it: that version's copy of the session if it has one, the Canonical if
+  // it never made the session its own -- which is what the card says. '__canonical__' marks the Canonical
+  // itself, so neither the pin nor a member's own-version default can take the session somewhere else.
+  if (fromBook) {
+    try {
+      var _bv = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+      if (_bv) state._sessNavVersionId = _bv.is_canonical ? '__canonical__' : String(_bv.version_id);
+    } catch (e) {}
+  }
   if (typeof showCampaignSection === 'function') showCampaignSection('sessions');
   if (typeof selectSession === 'function') selectSession(id);
 }
@@ -34092,7 +34107,7 @@ function _promoteDialog(info) {
     box.setAttribute('aria-modal', 'true');
     box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
     var bullets = [
-      'Members read \u201c' + vName + '\u201d as the book from now on, and new sessions start in its art style, narrative style and Story Instructions.',
+      'Members read \u201c' + vName + '\u201d as the book from now on, and new sessions start in its art style and narrative style.',
       'Other versions \u2014 yours and your members\u2019 \u2014 show the new Canonical on any session they haven\u2019t made their own.'
     ];
     if (info.missing && info.missing.length) bullets.push('\u201c' + vName + '\u201d doesn\u2019t have ' + _promoteList(info.missing) + ' yet, so ' + (info.missing.length === 1 ? 'it is' : 'they are') + ' copied in from the current Canonical as ' + (info.missing.length === 1 ? 'it is' : 'they are') + '. You can regenerate ' + (info.missing.length === 1 ? 'it' : 'them') + ' in the new style afterwards.');

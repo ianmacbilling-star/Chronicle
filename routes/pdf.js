@@ -6648,7 +6648,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
@@ -6915,7 +6915,7 @@ async function printInteriorHandler(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   function sessionDateKey(s) {
@@ -7824,7 +7824,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare(
     'SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?'
   ).all(campaign.id);
@@ -8415,7 +8415,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (!campaign) { const e = new Error('Access denied'); e.status = 403; throw e; }
   if (!campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
   function sessionDateKey(s) {
     if (!s.session_date) return '';

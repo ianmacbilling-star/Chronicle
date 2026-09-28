@@ -1,5 +1,39 @@
 [
   {
+    "version": "3.1.37",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3137-open-from-publish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Open on a Publish session card now opens the version you were looking at.",
+        "detail": "It used to open your pinned version. It now opens that version's copy of the session, or the Canonical where the version never made the session its own, as the card says.",
+        "td": [
+          "TD-927"
+        ]
+      },
+      {
+        "id": "3137-same-date-order",
+        "kind": "fix",
+        "public": true,
+        "summary": "Two sessions on the same date now appear in the order they were made, in the list, on Publish and in the book.",
+        "detail": "",
+        "td": []
+      },
+      {
+        "id": "3137-small",
+        "kind": "fix",
+        "public": false,
+        "summary": "Delete This Session From This Version is no longer offered on the Canonical; the promote window no longer promises Story Instructions carry to new sessions.",
+        "detail": "Story Instructions belong to each session. The 3.1.35 entry and the Brain were corrected.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.36",
     "staged_on": "2026-09-28",
     "entries": [
@@ -54,7 +88,7 @@
         "kind": "feature",
         "public": true,
         "summary": "Story Masters can make one of their own versions the Canonical, and carry on in its style.",
-        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style, narrative style and Story Instructions. Sessions it never had are copied in from the old Canonical as they are. Other versions show the new Canonical on any session they haven't made their own. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
+        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style and narrative style. Sessions it never had are copied in from the old Canonical as they are. Other versions show the new Canonical on any session they haven't made their own. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
         "td": [
           "TD-928"
         ]

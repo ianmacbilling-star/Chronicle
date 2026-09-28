@@ -66,7 +66,8 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const _bv = await resolveBookVersion(db, Number(req.params.campaignId), req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
+  // v3.1.37 -- two sessions on one date come out in the order they were made (they had no order at all).
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC, created_at ASC, id ASC').all(req.params.campaignId);
   const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser, prefsVersionId(_bv));
   const asUserRow = asUser ? await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser) : null;
   const asUserName = asUserRow ? asUserRow.name : null;
@@ -274,7 +275,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
       "WHERE m.fork_id = " + _tileForkSql + " AND m.image IS NOT NULL AND m.image <> '' " +
       "ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC " +
       "LIMIT 1) tm ON TRUE " +
-    'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC'
+    'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC'   // v3.1.37 -- same-date tie
   ).all(...listParams);
   res.json(sessions);
 });

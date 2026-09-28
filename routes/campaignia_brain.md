@@ -1136,8 +1136,9 @@ Tried a few versions and found the one you like best? Open that version on any s
 and what will happen, then:
 
 - **Your version becomes the official book.** Members read it from now on, and **new sessions start
-  in its art style, narrative style and Story Instructions** — so you just carry on writing, with
-  nothing to remake. Its Story Instructions (or none) become the Canonical's.
+  in its art style and narrative style** — so you just carry on writing, with nothing to remake.
+  Story Instructions belong to each session: every session keeps its own, and a new session starts
+  with an empty box.
 - **Sessions your version never had are copied in** from the current Canonical as they are, so the
   new Canonical covers every session. Regenerate them afterwards if you want them in the new style.
 - **Other versions follow the new Canonical** — yours and your members'. On any session a version
