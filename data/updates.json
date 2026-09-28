@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.38",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3138-session-page-same-date",
+        "kind": "fix",
+        "public": true,
+        "summary": "On the session page, two sessions on the same date now show the one made last first.",
+        "detail": "The session page reads newest first and Publish and the book read oldest first; same-date sessions now follow each page's direction, and the session arrows follow the cards.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.37",
     "staged_on": "2026-09-28",
     "entries": [

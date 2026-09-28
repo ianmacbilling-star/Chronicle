@@ -3237,7 +3237,7 @@ function renderSessions() {
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
     if (da > db) return -1;
-    return 0;
+    return _sessTieNewestFirst(a, b);   // v3.1.38 -- same date: made last, first
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
@@ -16940,7 +16940,7 @@ function renderSessions() {
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
     if (da > db) return -1;
-    return 0;
+    return _sessTieNewestFirst(a, b);   // v3.1.38 -- same date: made last, first
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
@@ -19936,7 +19936,7 @@ function sessNavOrdered() {
     var dy = (y.session_date || '').toString().split('T')[0];
     if (dx < dy) return 1;
     if (dx > dy) return -1;
-    return 0;
+    return _sessTieNewestFirst(x, y);   // v3.1.38 -- the arrows follow the cards
   });
 }
 function sessNavIndex() {
@@ -34276,4 +34276,12 @@ function _sessionOutlineWarn() {
       'Replace them with your own words on the Storyboard before you Optimize.';
     box.style.display = 'block';
   } catch (e) {}
+}
+
+function _sessTieNewestFirst(a, b) {
+  // v3.1.38 -- two sessions on one date: the one made LAST comes first on the session page (Ian: "The one
+  // made last is first"), the reverse of Publish and the book, which read oldest first. created_at, then id.
+  var ca = String((a && a.created_at) || ''), cb = String((b && b.created_at) || '');
+  if (ca !== cb) return ca < cb ? 1 : -1;
+  return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
 }
