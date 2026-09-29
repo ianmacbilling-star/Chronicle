@@ -4890,7 +4890,9 @@ function renderHelpThread() {
   } else {
     _helpThread.forEach(function(m){
       var cls = (m.role === 'user') ? 'help-msg-user' : 'help-msg-bot';
-      html += '<div class="help-msg ' + cls + '">' + escapeHtml(m.content) + '</div>';
+      // v3.1.42 -- TD-811. Answers came through with their **bold** markers showing. The assistant's replies
+      // get light formatting; what the reader typed is shown exactly as typed.
+      html += '<div class="help-msg ' + cls + '">' + (m.role === 'user' ? escapeHtml(m.content) : _helpFormat(m.content)) + '</div>';
     });
   }
   if (_helpPending) html += '<div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>';
@@ -23359,7 +23361,7 @@ function csHint(map, genresValue) {
 // reader is least likely to think of unprompted, and it is where consistency comes from.
 var CS_GENRE_HINTS = {
   _default: {
-    transcript: 'Paste your session transcript here...',
+    transcript: 'Type or paste your story here \u2014 a transcript, a written story, notes or an outline...',   // v3.1.42 -- not only transcripts
     notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing Zara betraying the party at the bridge\n\nEVERY MOMENT:\n- Make sure each moment has Theron\u2019s wolf Shadow somewhere in it\n\nVISUAL STYLE:\n- Keep it dark gothic throughout, candlelit crypts'
   },
   skillstory: {
@@ -34332,4 +34334,16 @@ function _sessNavLabel(s) {
   if (s.name && String(s.name).trim()) return String(s.name).trim();
   var d = String(s.session_date || '').split('T')[0];
   return d || 'Untitled session';
+}
+
+function _helpFormat(text) {
+  // v3.1.42 -- TD-811. Escape FIRST, then turn a small set of markdown into tags, so nothing the answer
+  // contains can become markup of its own. **bold**, *italic*, "# Heading" lines as bold, "* item" as a dot.
+  // Markers never span a line, and a lone asterisk (5 * 3) is left as it is.
+  var s = escapeHtml(String(text == null ? '' : text));
+  s = s.replace(/^[ \t]*#{1,4}[ \t]+(.+)$/gm, '<strong>$1</strong>');
+  s = s.replace(/^([ \t]*)[*][ \t]+/gm, '$1\u2022 ');
+  s = s.replace(/[*][*]((?:[^*\n]|[*](?![*]))*?[^*\s\n])[*][*]/g, function (m, t) { return /^\s/.test(t) ? m : '<strong>' + t + '</strong>'; });
+  s = s.replace(/(^|[^\w*])[*]([^*\s\n](?:[^*\n]*[^*\s\n])?)[*](?![\w*])/g, '$1<em>$2</em>');
+  return s;
 }
