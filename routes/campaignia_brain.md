@@ -905,7 +905,8 @@ appears in more pictures than the other characters**, because it is their story.
 each narrative panel — what happens, who is there, the key moment, and a line of dialogue worth
 keeping. Click into each narrative panel and write your own story over them. Low, Med and High set
 how many bullets. Every plan. Replace the bullets before you order: bullets left in are printed
-as one paragraph.
+as one paragraph. Campaignia warns you while any are left — on the session's **Preview** tab and on
+the Publish page's **Prep & Preview** tab, which names the sessions that still have them.
 
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.
@@ -1122,12 +1123,50 @@ one.
   version exists they're separate things. Renaming the campaign later does **not** rename
   your book.
 
-**The canonical version**
+**What is the Canonical?**
 
-Every campaign has one **canonical** version. It's the Story Master's, it's created
-automatically the first time any session is worked on, and it's what everyone else's version
-reads through for sessions they haven't branched themselves. It belongs to whoever currently
-holds the Story Master role, so it follows a handover.
+The **Canonical** is the campaign's **official book**. Every campaign has exactly one.
+
+- **It's what members read.** When a member opens a session, they see the Canonical's pages —
+  unless they've made their own version of that session.
+- **It's what every other version falls back to.** A version only holds its own copy of the
+  sessions it has branched; on every other session it shows the Canonical. That's what makes a
+  version cheap: change one session and the rest of your book is still the Canonical's. The
+  session cards say which you're looking at — your version's name, or **Canonical**.
+- **It's where new sessions begin.** Creating a session creates the Canonical's copy of it first,
+  in the art style and narrative style of the Canonical's previous session. Anyone can then make
+  their own version of it once the Story Master sets it to Ready.
+- **It belongs to the Story Master** — whoever holds the role, so it follows a handover. Members
+  can read it but not change it; to change something they make their own version.
+- **It's permanent.** It can't be deleted, and a session can't be removed from it (that option
+  isn't offered on the Canonical). The Story Master can **rename** it — the picker always marks
+  it **(Canonical)** — and can make one of their other versions the Canonical instead (below).
+- It's created automatically the first time any session is worked on.
+
+**Making one of your versions the Canonical (Story Master)**
+
+Tried a few versions and found the one you like best? Open that version on any session, click the
+**⋯** menu and choose **Make This Version the Canonical**. The window explains what the Canonical is
+and what will happen, then:
+
+- **Your version becomes the official book.** Members read it from now on, and **new sessions start
+  in its art style and narrative style** — so you just carry on writing, with nothing to remake.
+  Story Instructions belong to each session: every session keeps its own, and a new session starts
+  with an empty box.
+- **Sessions your version never had are copied in** from the current Canonical as they are, so the
+  new Canonical covers every session. Regenerate them afterwards if you want them in the new style.
+- **Other versions follow the new Canonical** — yours and your members'. On any session a version
+  hasn't made its own, it shows the new Canonical, the same as always; the sessions it did make its
+  own don't change, and nobody's pin moves. A member who already approved a layout keeps the old
+  pages in that saved file until they Optimize again.
+- **Your old Canonical** is kept as one of your versions under a name you give it, or deleted.
+  Deleting asks a second time and tells you who else is using it. Published stories and orders are
+  never affected.
+- It only works on **your own** versions, and it waits if an Optimize or a generation is running on
+  the campaign. Draft sessions in the version you promote stay hidden from members until you set
+  them to Ready; the window warns you at the top, naming them, when any are Draft.
+- If you've **pinned** one of your versions that isn't the Canonical, making a new session asks
+  whether to make that version the Canonical first.
 
 **Making a version**
 
@@ -1174,6 +1213,28 @@ render half in one look and half in another.
 As new sessions get created you can add them to your existing versions, then regenerate them
 with that version's art and narrative styles — so a book stays consistent as it grows.
 
+**Your default version (the pin)**
+
+Open the **version picker** — on the session page or the Publish page — and every version in
+the list has a **pin** (a thumbtack) at the end of its row. Click a version's pin to make it
+**your default**: from then on, that's the version that opens for you whenever you come to this
+campaign. Click the pin again to unpin it. Clicking the version's name still switches to it, as
+before; clicking the pin never switches anything.
+
+- **One per person per campaign.** Pinning another version moves the pin. Your pin is yours
+  alone; it doesn't change what anyone else sees, and it doesn't make anything the canonical.
+- **You can pin any version you can open** — the canonical, one of your own, or another
+  member's Ready version. When the pinned version is the one on screen, the picker shows the
+  pin next to its name.
+- **On a session your pinned version never branched**, you see the canonical there, the same
+  as the book does.
+- **With nothing pinned**, the old rule applies: the Story Master opens on the canonical and a
+  member opens on their own version.
+- Pinning changes no book — it only decides which version opens first. A book opened from your
+  Bookshelf still opens on the version it was saved from.
+- **The picker can't be opened while something is running** on the version (a generation or an
+  Optimize), the same as before.
+
 **Who can change what**
 
 **You can look at anyone's version. You can only change your own.** Opening someone else's
@@ -1211,7 +1272,10 @@ under the title; if you want the session dates there, type them.
   the *same* version, so the font, frames and layout stay consistent across the run while the
   cover and subtitle change per issue. Episode One in the Library is untouched.
 - **Renaming and deleting act on the version you're looking at**, never on another. Deleting
-  is done a session at a time.
+  is done a session at a time, and never from the Canonical.
+- **Open on a Publish session card opens the version you're looking at** on the Publish page —
+  that version's copy of the session, or the Canonical where the version never made the session
+  its own, exactly as the card says.
 
 ---
 
@@ -1729,6 +1793,10 @@ Friction points and what's actually going on.
 - **"My first-person story still says 'Beth' instead of 'I'."** Open **Narrative style** and check
   that **In first person** is ticked with Beth as the **Narrator** on this version, then **Generate
   Narrative** again — prose that is already written is not changed until you regenerate it.
+- **"My Story Instructions say third person, but the story came out as 'I'."** When **In first person**
+  is ticked for a version, it wins over the Story Instructions on point of view; everything else in
+  the instructions is still followed. The Narrative style window says so when your instructions
+  mention point of view. Untick **In first person** if you want the instructions to decide.
 - **"My first-person story doesn't show me in the pictures."** The narrator is probably **Nobody in
   particular**. Open **Narrative style** and choose your character as the **Narrator**, then run
   **Generate Story** again so the panels are planned with you in them.
@@ -1776,6 +1844,14 @@ Friction points and what's actually going on.
 
 ## 21. Quick FAQ
 
+- **What is the Canonical?** The campaign's official book: what members read, what every other
+  version shows on sessions it hasn't made its own, and where new sessions begin. It belongs to
+  the Story Master. See **§11 Versions** for the full picture, and for making another version the
+  Canonical.
+- **What order are my sessions in?** By their **date**. Two sessions on the same date go in the
+  order they were made — oldest first on the Publish page and in the book, newest first on the
+  session page (which reads newest first). To change the order, change a session's date; there
+  is no drag-to-reorder.
 - **Can I import a character sheet instead of typing it in?** Yes — **Import a sheet** in
   the character window reads a PDF, Word or text file and fills the card in. It costs one token, or a
   token a page if the sheet is only pictures.

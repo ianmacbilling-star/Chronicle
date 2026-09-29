@@ -189,7 +189,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
-  if (!session.transcript) return res.json({ error: 'No transcript found for this session' });
+  // v3.1.36 -- a tester saw this with her transcript plainly in the box, on a page holding another
+  // campaign's session (TD-926's stale state). It said her transcript was gone; it was not.
+  if (!session.transcript) return res.json({ error: 'Campaignia could not find anything saved in this session\u2019s Story / Session Transcript box. Reload the page and try again \u2014 if it still says this, add your story there again.' });
 
   // Phase 4 — the DM re-extracts the CANONICAL version; a player re-extracts
   // THEIR OWN version. The transcript is always the DM's (read-only to the

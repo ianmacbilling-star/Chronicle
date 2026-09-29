@@ -159,7 +159,7 @@
       <div class="invite-details">
         <div class="label">Campaign</div>
         <div class="value" id="campaign-name"></div>
-        <div class="label">Playing as</div>
+        <div class="label" id="character-label">Playing as</div>
         <div class="value" id="character-name"></div>
         <div class="label">Expires</div>
         <div class="value" id="expires-at"></div>
@@ -192,8 +192,14 @@ function showInvite(invite, authState) {
   document.getElementById('invited-by-label').textContent =
     'Invited by ' + invite.invited_by;
   document.getElementById('campaign-name').textContent = invite.campaign_name;
-  document.getElementById('character-name').textContent =
-    invite.character_name + (invite.character_class ? ' (' + invite.character_class + ')' : '');
+  // v3.1.41 -- TD-812. An invite with no character read "Playing as null"; the row is left out instead.
+  if (invite.character_name) {
+    document.getElementById('character-name').textContent =
+      invite.character_name + (invite.character_class ? ' (' + invite.character_class + ')' : '');
+  } else {
+    document.getElementById('character-label').style.display = 'none';
+    document.getElementById('character-name').style.display = 'none';
+  }
   var d = new Date(invite.expires_at);
   document.getElementById('expires-at').textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
   renderAuthArea(invite, authState);

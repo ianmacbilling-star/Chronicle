@@ -998,6 +998,7 @@
                     onclick="toggleRowMenu('session-version-dropdown', event)">&#8943;</button>
             <div class="row-menu-dropdown" id="session-version-dropdown">
               <button class="row-menu-item" onclick="renameSessionVersion()">Rename This Version</button>
+              <button id="promote-version-item" class="row-menu-item" onclick="promoteVersionFlow()" style="display:none;">Make This Version the Canonical</button>
               <button id="delete-version-item" class="row-menu-item row-menu-item-danger" onclick="deleteMyVersion()">Delete This Session From This Version</button>
             </div>
           </div>
@@ -1073,7 +1074,7 @@
           </div>
         </div>
 
-        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Notes and transcript are saved automatically when you click Generate Story</div>
+        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Notes and transcript save automatically when you click away from the box, and again when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>

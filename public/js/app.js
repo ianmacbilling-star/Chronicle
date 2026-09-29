@@ -3237,7 +3237,7 @@ function renderSessions() {
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
     if (da > db) return -1;
-    return 0;
+    return _sessTieNewestFirst(a, b);   // v3.1.38 -- same date: made last, first
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
@@ -3281,6 +3281,7 @@ function renderSessions() {
 
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
+  if (typeof _promoteNudge === 'function' && _promoteNudge()) return;   // v3.1.35 -- TD-928
   document.getElementById('session-name').value = '';
   var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
@@ -3559,7 +3560,7 @@ function saveSessionField(field, value) {
     if (data && data.id) state.currentSession = data;
     var saved = document.getElementById('notes-saved');
     if (saved) {
-      saved.textContent = (field === 'transcript' ? 'Transcript saved' : 'Notes saved');
+      saved.textContent = (field === 'transcript' ? 'Story saved' : 'Notes saved');   // v3.1.40 -- not only transcripts
       saved.classList.remove('hidden');
       setTimeout(function() { saved.classList.add('hidden'); }, 1800);
     }
@@ -3577,7 +3578,7 @@ function saveTranscript() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     state.currentSession = data;
-    showAlert('Transcript saved!');
+    showAlert('Story saved!');   // v3.1.40
   });
 }
 
@@ -4688,7 +4689,7 @@ function renderReview(data) {
       : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
-        '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">Opening</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
@@ -6483,6 +6484,7 @@ function switchSessionTab(tab) {
     var _spb = document.getElementById('session-preview-mode-btn');
     if (_spb) _spb.textContent = 'Quick View';
     loadPreview(state.layoutStyle || 'Classic');
+    if (typeof _sessionOutlineWarn === 'function') _sessionOutlineWarn();   // v3.1.36
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -8698,7 +8700,10 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    errorEl.textContent = 'Please paste a longer transcript first.';
+    // v3.1.40 -- not only transcripts (Ian): a story, notes, a narrative, anything that says what happened.
+    errorEl.textContent = transcript.length
+      ? 'Please add a little more to the Story / Session Transcript box first \u2014 a few sentences at least.'
+      : 'Please add your story first \u2014 type or paste it into the Story / Session Transcript box. A transcript, a written story, notes or an outline all work.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -8748,7 +8753,7 @@ async function extractMoments() {
   btn.disabled = true;
   wrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Reading your session transcript...';
+  msg.textContent = 'Reading your story...';   // v3.1.40
 
   var pct = 5;
   // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
@@ -9462,6 +9467,7 @@ function refreshNovelVersionOptions(done) {
         sel.innerHTML = opts;
         // Hold the selection across a rebuild, so refreshing the counts never moves the book.
         if (keep && rows.some(function (v) { return String(v.version_id) === String(keep); })) sel.value = keep;
+        if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
       }
       if (done) done(rows);
     })
@@ -9494,6 +9500,12 @@ function loadNovelPeople() {
     // whole feature exists to stop.
     var own = rows.filter(function(v) { return v.is_mine; });
     var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+    // v3.1.33 -- TD-927. YOUR STAR FIRST. A starred version opens ahead of the rule above.
+    var _starRow = rows.filter(function (v) { return v.is_default; })[0];
+    if (_starRow) {
+      pick = _starRow;
+      try { state._starVersion = state._starVersion || {}; state._starVersion[String(state.currentCampaign.id)] = String(_starRow.version_id); } catch (e) {}
+    }
     // v3.0.982 -- TD-901. A book brought back from the Bookshelf opens on ITS version, not the default.
     var _shelfT = state._shelfOpen;
     if (_shelfT && _shelfT.versionId && state.currentCampaign && String(_shelfT.campaignId) === String(state.currentCampaign.id)) {
@@ -9545,6 +9557,7 @@ function bookMetaVersionQ(prefix, ctx) {
 // the server prefers as_version wherever both arrive.
 function applyNovelVersion(versionId) {
   state.novelVersionId = versionId ? String(versionId) : null;
+  if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
   var v = novelVersionOnScreen();
   state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
   // v3.0.888 -- TD-765. THE CHIP BELONGS HERE, AND v3.0.887 PUT IT IN THE WRONG PLACE.
@@ -12971,7 +12984,7 @@ function renderNovelSummary(sessions) {
         '</div>' +
         '<div class="session-card-actions">' +
           includeChk +
-          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+          '<a onclick="goToSessionPage(' + s.id + ', true)" class="session-card-open">Open</a>' +   // v3.1.37 -- keeps the Publish version
         '</div>' +
       '</div>' +
     '</div>';
@@ -16930,7 +16943,7 @@ function renderSessions() {
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
     if (da > db) return -1;
-    return 0;
+    return _sessTieNewestFirst(a, b);   // v3.1.38 -- same date: made last, first
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
@@ -16974,6 +16987,7 @@ function renderSessions() {
 
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
+  if (typeof _promoteNudge === 'function' && _promoteNudge()) return;   // v3.1.35 -- TD-928
   document.getElementById('session-name').value = '';
   var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
@@ -17150,7 +17164,7 @@ function saveTranscript() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     state.currentSession = data;
-    showAlert('Transcript saved!');
+    showAlert('Story saved!');   // v3.1.40
   });
 }
 
@@ -17186,6 +17200,7 @@ function switchSessionTab(tab) {
     var _spb = document.getElementById('session-preview-mode-btn');
     if (_spb) _spb.textContent = 'Quick View';
     loadPreview(state.layoutStyle || 'Classic');
+    if (typeof _sessionOutlineWarn === 'function') _sessionOutlineWarn();   // v3.1.36
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -17402,7 +17417,10 @@ async function extractMoments() {
   }
 
   if (transcript.length < 50) {
-    errorEl.textContent = 'Please paste a longer transcript first.';
+    // v3.1.40 -- not only transcripts (Ian): a story, notes, a narrative, anything that says what happened.
+    errorEl.textContent = transcript.length
+      ? 'Please add a little more to the Story / Session Transcript box first \u2014 a few sentences at least.'
+      : 'Please add your story first \u2014 type or paste it into the Story / Session Transcript box. A transcript, a written story, notes or an outline all work.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -17452,7 +17470,7 @@ async function extractMoments() {
   btn.disabled = true;
   wrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Reading your session transcript...';
+  msg.textContent = 'Reading your story...';   // v3.1.40
 
   var pct = 5;
   // The random jump is gone with the ceiling. It existed to make a sprint look organic; a curve
@@ -18214,7 +18232,7 @@ function renderNovelSummary(sessions) {
         '</div>' +
         '<div class="session-card-actions">' +
           includeChk +
-          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+          '<a onclick="goToSessionPage(' + s.id + ', true)" class="session-card-open">Open</a>' +   // v3.1.37 -- keeps the Publish version
         '</div>' +
       '</div>' +
     '</div>';
@@ -19866,7 +19884,14 @@ function paintVersionMenu() {
   // deciding them separately.
   var mine = !!(shownFork && shownFork.is_mine);
   if (verMenu) verMenu.style.display = mine ? '' : 'none';
-  if (delItem) delItem.style.display = mine ? '' : 'none';
+  // v3.1.37 -- a session cannot be removed from the Canonical, so the item is not offered there (tester:
+  // it answered "Something went wrong"). Rename stays.
+  if (delItem) delItem.style.display = (mine && !(shownFork && shownFork.role === 'dm')) ? '' : 'none';
+  // v3.1.35 -- TD-928. Make This Version the Canonical: the Story Master, on one of his own versions
+  // that is not already the Canonical.
+  var promoteItem = document.getElementById('promote-version-item');
+  if (promoteItem) promoteItem.style.display = (mine && shownFork && shownFork.role !== 'dm' && shownFork.version_id &&
+    state.currentCampaign && state.currentCampaign.my_role === 'dm') ? '' : 'none';
   // v3.0.887 -- TD-765. The same answer drives the chip, from the same place, so the menu and the
   // chip can never disagree about whose version this is.
   paintForeignVersionChip('session-fork-select', mine);
@@ -19917,7 +19942,7 @@ function sessNavOrdered() {
     var dy = (y.session_date || '').toString().split('T')[0];
     if (dx < dy) return 1;
     if (dx > dy) return -1;
-    return 0;
+    return _sessTieNewestFirst(x, y);   // v3.1.38 -- the arrows follow the cards
   });
 }
 function sessNavIndex() {
@@ -19940,13 +19965,13 @@ function sessNavSync() {
       prev.disabled = noPrev;
       prev.style.opacity = noPrev ? '0.35' : '';
       prev.style.cursor = noPrev ? 'not-allowed' : 'pointer';
-      prev.title = noPrev ? 'This is the first session in the list' : ('Previous session: ' + ((o[i - 1] && o[i - 1].title) || ''));
+      prev.title = noPrev ? 'This is the first session in the list' : ('Previous session: ' + _sessNavLabel(o[i - 1]));
     }
     if (next) {
       next.disabled = noNext;
       next.style.opacity = noNext ? '0.35' : '';
       next.style.cursor = noNext ? 'not-allowed' : 'pointer';
-      next.title = noNext ? 'This is the last session in the list' : ('Next session: ' + ((o[i + 1] && o[i + 1].title) || ''));
+      next.title = noNext ? 'This is the last session in the list' : ('Next session: ' + _sessNavLabel(o[i + 1]));
     }
   } catch (e) {}
 }
@@ -20000,6 +20025,7 @@ function loadSessionForks(sessionId) {
       // are applied first and the per-fork reload then overrides art and narrative. Calling the
       // reload bare would leave the previous session layout on screen.
       var _navSetFork = false;
+      var _navHad = !!state._sessNavVersionId;   // v3.1.33 -- TD-927: an arrow move keeps its version, star or not
       if (state._sessNavVersionId) {
         var _want = (forks || []).filter(function (f) { return String(f.version_id) === String(state._sessNavVersionId); })[0];
         // NO MATCH IS NOT A FAILURE. A session where this version has no fork keeps the canonical,
@@ -20060,12 +20086,31 @@ function loadSessionForks(sessionId) {
       // stay on the canonical. Only applies on a fresh load (currentForkId
       // not yet chosen); an explicit dropdown pick goes through onForkChange.
       var _defaultedToOwn = false;
-      if (!state.currentForkId && mineFork && mineFork.role !== 'dm') {
+      // v3.1.33 -- TD-927. THE STAR DECIDES FIRST, for anyone who has one. Its fork here opens; where
+      // the starred version has no fork on this session, the canonical stays -- the same fall-through
+      // as the book -- and the member's-own default below does NOT then second-guess it. An arrow move
+      // that carried a version keeps it (_navHad), and a pick from the dropdown goes through onForkChange.
+      var _starRuled = false;
+      var _starV = (typeof starredVersionId === 'function') ? starredVersionId() : null;
+      if (_starV && !_navHad && !state.currentForkId) {
+        _starRuled = true;
+        var _starF = forks.filter(function (f) { return String(f.version_id) === String(_starV); })[0];
+        if (_starF && _starF.role !== 'dm') {
+          state.currentForkId = _starF.fork_id;
+          if (sel) sel.value = String(_starF.fork_id);
+          if (_starF.is_mine) state.myForkId = _starF.fork_id;
+          _defaultedToOwn = true;
+        }
+      }
+      // v3.1.37 -- nor after a move that carried a version (_navHad): a session that version never branched
+      // shows the Canonical, as the comment at the top of this function always said it would.
+      if (!_starRuled && !_navHad && !state.currentForkId && mineFork && mineFork.role !== 'dm') {
         state.currentForkId = mineFork.fork_id;
         if (sel) sel.value = String(mineFork.fork_id);
         _defaultedToOwn = true;
       }
       updateForkEditability();
+      if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
       // ONE reload, whichever of the two moved the fork. Both cannot fire: Phase 4 is gated on
       // !state.currentForkId and _navSetFork can only be true when it has just been set.
       if (_navSetFork) {
@@ -20098,6 +20143,7 @@ function onForkChange(forkId) {
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
+  if (typeof paintVersionStars === 'function') paintVersionStars();   // v3.1.33 -- TD-927
   updateForkEditability();
   if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch();   // v3.0.328: different fork, different book
   // Apply this member's saved layout first; the per-fork reload then overrides
@@ -26489,7 +26535,18 @@ function toggleNovelInclude(sessionId, checked) {
     .catch(function () { loadNovelSummary(); });
 }
 
-function goToSessionPage(id) {
+function goToSessionPage(id, fromBook) {
+  // v3.1.37 -- OPEN FROM A PUBLISH CARD OPENS THAT VERSION. Tester, 2026-09-28: the card said "Outline
+  // original" and Open landed on the pinned version. The Publish page's version travels with the move, the
+  // same way an arrow move carries it: that version's copy of the session if it has one, the Canonical if
+  // it never made the session its own -- which is what the card says. '__canonical__' marks the Canonical
+  // itself, so neither the pin nor a member's own-version default can take the session somewhere else.
+  if (fromBook) {
+    try {
+      var _bv = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+      if (_bv) state._sessNavVersionId = _bv.is_canonical ? '__canonical__' : String(_bv.version_id);
+    } catch (e) {}
+  }
   if (typeof showCampaignSection === 'function') showCampaignSection('sessions');
   if (typeof selectSession === 'function') selectSession(id);
 }
@@ -28013,6 +28070,9 @@ function paintPublishLock() {
     for (i = 0; i < nn.length; i++) els.push(nn[i]);
     var sp = document.getElementById('session-all-publish-btn');
     if (sp) els.push(sp);
+    // v3.1.41 -- a member who can't open Publish isn't offered the way there (tester: it bounced them to the
+    // Sessions list). The whole "Publish or print the full book?" line goes, not just the button.
+    if (sp && sp.parentNode) sp.parentNode.style.display = canOpenPublishPage() ? 'flex' : 'none';
     for (i = 0; i < els.length; i++) {
       var b = els[i];
       if (!b) continue;
@@ -28074,6 +28134,7 @@ function optimizeLockStop() {
 // inside the first does nothing about the second, which would have left the novel panes
 // toggled underneath a view that never changed. One named handler, one guard, one return.
 function goToPublishOptions() {
+  if (!canOpenPublishPage()) return;   // v3.1.41 -- the button is hidden then; this only guards a stale page
   if (optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   showCampaignSection('novel');
   switchNovelTab('sessions');
@@ -33043,7 +33104,7 @@ async function _warnIfMissingReferences(arr) {
     var msg = (missing.length === 1
         ? list + ' does not have a reference picture yet'
         : 'These characters do not have reference pictures yet: ' + list) +
-      ' (or it is still being drawn).\n\n' +
+      (missing.length === 1 ? ' (or it is still being drawn).\n\n' : ' (or they are still being drawn).\n\n') +
       'The reference picture is what keeps a character looking the same from panel to panel. Without one, ' +
       'Campaignia can only go by the description, so they may look different in every picture.\n\n' +
       (canBuild
@@ -33370,6 +33431,7 @@ function _narratorPanelEnsure() {
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
       '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
       '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
+      '<div id="narrator-povwarn" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
     '</div>' +
     '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
   _infoTipCss();
@@ -33447,6 +33509,13 @@ function _narratorRender() {
   sel.innerHTML = opts;
   sel.value = has ? String(state.narrativeNarrator) : (locked ? 'anon' : '');
   if (need) need.style.display = (on && !has && !locked) ? '' : 'none';
+  // v3.1.36 -- the setting wins over the Story Instructions (Ian), and says so when they disagree.
+  var _pw = document.getElementById('narrator-povwarn');
+  if (_pw) {
+    var _ntx = '';
+    try { var _nIn = document.getElementById('session-notes-input'); _ntx = _nIn ? String(_nIn.value || '') : ''; } catch (e) { _ntx = ''; }
+    _pw.style.display = (on && _notesMentionPov(_ntx)) ? '' : 'none';
+  }
   // v3.1.28 -- the description lives on the i (hover on a desktop, tap on a phone), not under the control.
   var _nt = (locked ? 'Calm & Literal is always told in the first person. ' : '') +
     'The whole narrative is told as the narrator, as \u201cI\u201d, and the narrator appears in more pictures than the other characters. ' +
@@ -33770,3 +33839,497 @@ function _outlineBulletsCheck() {
 
 // v3.1.32 -- _narratorBlockClose no longer blocks: closing with In first person ticked and nobody chosen
 // saves "Nobody in particular (just I)" ('anon'). The name is kept so closeStylePicker's hook is unchanged.
+
+// v3.1.33 -- TD-927. YOUR DEFAULT VERSION, now THE PIN (v3.1.34).
+// Ian: "a small star option in the version picker... and that's what loads by default for any given
+// user... Only one per user per campaign." Then (v3.1.34): "Is it possible to put the Star inside the
+// Picker?" and "instead of a star... Make it a Pin... like a thumb tack."
+//
+// A NATIVE <select> CAN ONLY SHOW TEXT, so both version pickers are now drawn by us: a button that
+// looks like the old picker, opening a list with one row per version and a pin at the end of each row.
+// Click a row to switch; click its pin to make that version open first for you (click again to
+// clear). Pinning never switches anything.
+//
+// THE NATIVE SELECT STAYS, HIDDEN, AND IS STILL THE ONE SOURCE OF TRUTH. Every existing caller keeps
+// reading and writing sel.value, toggling sel.disabled (the in-flight locks) and sel.style.display, and
+// its inline onchange still runs onForkChange / onNovelVersionChange -- so the switching rules and the
+// "not while something is running" refusals are untouched. Choosing a row sets sel.value and fires a
+// real change event. The drawn button follows the select through a per-element value hook and a
+// MutationObserver (options, disabled, style, title), so no caller had to learn it exists.
+function starredVersionId() {
+  var c = state.currentCampaign;
+  if (!c) return null;
+  var m = state._starVersion || {};
+  if (Object.prototype.hasOwnProperty.call(m, String(c.id))) return m[String(c.id)];
+  return (c.default_version_id != null && c.default_version_id !== '') ? String(c.default_version_id) : null;
+}
+function _vpickVersionOf(where, value) {
+  if (!value) return null;
+  if (where === 'session') {
+    var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(value); })[0];
+    return (f && f.version_id) ? String(f.version_id) : null;
+  }
+  return String(value);
+}
+function _vpickPinSvg(on) {
+  return '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M9 3h6l-1 6 3 3v2h-4v6l-1 1-1-1v-6H7v-2l3-3z" fill="' + (on ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+}
+function _vpickCss() {
+  if (document.getElementById('vpick-css')) return;
+  var s = document.createElement('style');
+  s.id = 'vpick-css';
+  s.textContent =
+    '.vpick-native{position:absolute !important;width:1px !important;height:1px !important;min-width:0 !important;opacity:0 !important;pointer-events:none !important;overflow:hidden !important;padding:0 !important;border:0 !important;}' +
+    '.vpick-trigger{display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-align:left;white-space:nowrap;min-width:0;}' +
+    '.vpick-trigger:disabled{cursor:not-allowed;}' +
+    '.vpick-trigger .vpick-label{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;}' +
+    '.vpick-trigger .vpick-caret{flex:0 0 auto;opacity:0.7;font-size:10px;}' +
+    '.vpick-trigger .vpick-pin{flex:0 0 auto;display:inline-flex;color:#c9a84c;}' +
+    '.vpick-list{position:fixed;z-index:10050;background:#16100a;border:1px solid rgba(201,168,76,0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:#f0e8d0;font-size:13px;box-sizing:border-box;}' +
+    '.vpick-row{display:flex;align-items:center;gap:6px;padding:0 4px 0 12px;min-height:38px;}' +
+    '.vpick-row:hover,.vpick-row.is-cur{background:rgba(201,168,76,0.12);}' +
+    '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
+    '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid #c9a84c;outline-offset:1px;}' +
+    '.vpick-row.is-cur .vpick-choose{color:#e8c870;font-weight:600;}' +
+    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
+    '.vpick-pinbtn:hover{background:rgba(201,168,76,0.18);color:#c9a84c;}' +
+    '.vpick-pinbtn.on{color:#c9a84c;}' +
+    '.vpick-pinbtn.off svg{transform:rotate(45deg);}' +
+    '.vpick-foot{font-size:11px;color:rgba(240,232,208,0.62);padding:7px 12px 5px;border-top:1px solid rgba(201,168,76,0.2);margin-top:4px;line-height:1.4;white-space:normal;}';
+  document.head.appendChild(s);
+}
+function _vpickEnsure(selId, where) {
+  var sel = document.getElementById(selId);
+  if (!sel || sel._vpick || !sel.parentNode) return;
+  _vpickCss();
+  var t = document.createElement('button');
+  t.type = 'button';
+  t.id = selId + '-vpick';
+  t.className = String(sel.className || '').replace(/\bsession-fork-select\b/, '').trim() + ' vpick-trigger';
+  t.setAttribute('style', sel.getAttribute('style') || '');
+  t.setAttribute('aria-haspopup', 'listbox');
+  t.setAttribute('aria-expanded', 'false');
+  t.innerHTML = '<span class="vpick-label"></span><span class="vpick-pin" style="display:none;">' + _vpickPinSvg(true) + '</span><span class="vpick-caret" aria-hidden="true">\u25be</span>';
+  t.addEventListener('click', function (e) { e.stopPropagation(); _vpickToggle(selId); });
+  t.addEventListener('keydown', function (e) { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); _vpickOpen(selId); } });
+  sel.parentNode.insertBefore(t, sel);
+  sel.classList.add('vpick-native');
+  sel.setAttribute('tabindex', '-1');
+  sel.setAttribute('aria-hidden', 'true');
+  sel._vpick = { trigger: t, where: where };
+  ['value', 'selectedIndex'].forEach(function (prop) {
+    var d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, prop);
+    if (!d || !d.set) return;
+    Object.defineProperty(sel, prop, { configurable: true,
+      get: function () { return d.get.call(this); },
+      set: function (v) { d.set.call(this, v); _vpickSync(selId); } });
+  });
+  try {
+    new MutationObserver(function () { _vpickSync(selId); })
+      .observe(sel, { attributes: true, attributeFilter: ['style', 'disabled', 'title'], childList: true, subtree: true, characterData: true });
+  } catch (e) {}
+  _vpickSync(selId);
+}
+var _vpickOpenId = null;
+function _vpickSync(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel._vpick) return;
+  var t = sel._vpick.trigger, where = sel._vpick.where;
+  t.style.display = (sel.style.display === 'none') ? 'none' : '';
+  t.disabled = !!sel.disabled;
+  t.style.opacity = sel.style.opacity || '';
+  var o = (sel.selectedIndex >= 0) ? sel.options[sel.selectedIndex] : null;
+  var label = o ? o.textContent : '';
+  var lab = t.querySelector('.vpick-label');
+  if (lab) lab.textContent = label;
+  var star = starredVersionId();
+  var vid = o ? _vpickVersionOf(where, o.value) : null;
+  var pinned = !!(vid && star && String(vid) === String(star));
+  var pin = t.querySelector('.vpick-pin');
+  if (pin) pin.style.display = pinned ? '' : 'none';
+  t.title = sel.title || (pinned ? 'Pinned: this version opens first for you in this campaign' : '');
+  t.setAttribute('aria-label', 'Version: ' + label + (pinned ? ' (pinned)' : ''));
+  if (_vpickOpenId === selId) {
+    if (sel.disabled || t.style.display === 'none') _vpickClose(); else _vpickRender(selId);
+  }
+}
+function _vpickRender(selId) {
+  var sel = document.getElementById(selId), list = document.getElementById('vpick-list');
+  if (!sel || !sel._vpick || !list) return;
+  var where = sel._vpick.where, star = starredVersionId(), html = '';
+  for (var i = 0; i < sel.options.length; i++) {
+    var o = sel.options[i], vid = _vpickVersionOf(where, o.value);
+    var cur = (i === sel.selectedIndex), on = !!(vid && star && String(vid) === String(star));
+    html += '<div class="vpick-row' + (cur ? ' is-cur' : '') + '" role="option" aria-selected="' + (cur ? 'true' : 'false') + '">' +
+      '<button type="button" class="vpick-choose" data-i="' + i + '">' + escapeHtml(o.textContent) + '</button>' +
+      (vid ? '<button type="button" class="vpick-pinbtn ' + (on ? 'on' : 'off') + '" data-pin="' + escapeHtml(vid) + '" aria-pressed="' + (on ? 'true' : 'false') + '" title="' +
+        (on ? 'Pinned: this version opens first for you. Click to unpin.' : 'Pin: open this version first whenever you come to this campaign.') + '">' + _vpickPinSvg(on) + '</button>' : '') +
+      '</div>';
+  }
+  html += '<div class="vpick-foot">Pin a version and it opens first for you whenever you come to this campaign.</div>';
+  list.innerHTML = html;
+}
+function _vpickPlace(selId) {
+  var sel = document.getElementById(selId), list = document.getElementById('vpick-list');
+  if (!sel || !sel._vpick || !list) return;
+  var r = sel._vpick.trigger.getBoundingClientRect();
+  var vw = window.innerWidth, vh = window.innerHeight;
+  // v3.1.36 -- as wide as the longest name needs, up to the screen; a longer name wraps (tester: two
+  // versions named alike were cut to the same text). Measured after the rows are drawn.
+  list.style.width = 'auto';
+  list.style.left = '0px';
+  list.style.minWidth = Math.min(Math.max(r.width, 260), vw - 16) + 'px';
+  list.style.maxWidth = (vw - 16) + 'px';
+  var w = list.getBoundingClientRect().width;
+  var left = Math.max(8, Math.min(r.left, vw - w - 8));
+  list.style.left = left + 'px';
+  var below = vh - r.bottom - 8, above = r.top - 8;
+  if (below >= 160 || below >= above) { list.style.top = (r.bottom + 4) + 'px'; list.style.bottom = ''; list.style.maxHeight = Math.max(120, below - 4) + 'px'; }
+  else { list.style.top = ''; list.style.bottom = (vh - r.top + 4) + 'px'; list.style.maxHeight = Math.max(120, above - 4) + 'px'; }
+}
+function _vpickOpen(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel._vpick || sel.disabled) return;
+  _vpickClose();
+  var list = document.createElement('div');
+  list.id = 'vpick-list';
+  list.className = 'vpick-list';
+  list.setAttribute('role', 'listbox');
+  list.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var pb = e.target.closest ? e.target.closest('.vpick-pinbtn') : null;
+    if (pb) { toggleVersionPin(pb.getAttribute('data-pin')); return; }
+    var cb = e.target.closest ? e.target.closest('.vpick-choose') : null;
+    if (cb) _vpickChoose(selId, Number(cb.getAttribute('data-i')));
+  });
+  list.addEventListener('keydown', function (e) {
+    var bs = Array.prototype.slice.call(list.querySelectorAll('.vpick-choose'));
+    var k = bs.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (bs.length) bs[Math.min(bs.length - 1, k + 1)].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (bs.length) bs[Math.max(0, k - 1)].focus(); }
+  });
+  document.body.appendChild(list);
+  _vpickOpenId = selId;
+  sel._vpick.trigger.setAttribute('aria-expanded', 'true');
+  _vpickRender(selId);
+  _vpickPlace(selId);
+  var curB = list.querySelector('.vpick-row.is-cur .vpick-choose') || list.querySelector('.vpick-choose');
+  if (curB) { try { curB.focus({ preventScroll: true }); } catch (e) { curB.focus(); } }
+}
+function _vpickClose(refocus) {
+  var list = document.getElementById('vpick-list');
+  if (list && list.parentNode) list.parentNode.removeChild(list);
+  var id = _vpickOpenId;
+  _vpickOpenId = null;
+  var sel = id ? document.getElementById(id) : null;
+  if (sel && sel._vpick) {
+    sel._vpick.trigger.setAttribute('aria-expanded', 'false');
+    if (refocus) { try { sel._vpick.trigger.focus(); } catch (e) {} }
+  }
+}
+function _vpickToggle(selId) {
+  if (_vpickOpenId === selId) _vpickClose(); else _vpickOpen(selId);
+}
+function _vpickChoose(selId, i) {
+  var sel = document.getElementById(selId);
+  _vpickClose(true);
+  if (!sel || sel.disabled || !sel.options[i] || i === sel.selectedIndex) return;
+  sel.value = sel.options[i].value;
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+function paintVersionStars() {
+  try {
+    _vpickEnsure('session-fork-select', 'session');
+    _vpickEnsure('novel-version-select', 'novel');
+    _vpickSync('session-fork-select');
+    _vpickSync('novel-version-select');
+  } catch (e) {}
+}
+function toggleVersionPin(versionId) {
+  var c = state.currentCampaign;
+  if (!c || !versionId) return;
+  var cur = starredVersionId();
+  var next = (cur && String(cur) === String(versionId)) ? null : String(versionId);
+  fetch('/api/campaigns/' + c.id + '/default-version', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version_id: next })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      if (!res.ok) { showError(res.j.error || 'Your pinned version could not be saved. Please try again.'); return; }
+      var saved = (res.j.default_version_id != null) ? String(res.j.default_version_id) : null;
+      state._starVersion = state._starVersion || {};
+      state._starVersion[String(c.id)] = saved;
+      c.default_version_id = saved;
+      paintVersionStars();
+      var pb = document.querySelector('#vpick-list .vpick-pinbtn[data-pin="' + String(versionId).replace(/[^0-9]/g, '') + '"]');
+      if (pb) { try { pb.focus({ preventScroll: true }); } catch (e) {} }
+    })
+    .catch(function () { showError('Your pinned version could not be saved. Please check your connection and try again.'); });
+}
+(function () {
+  function go() { paintVersionStars(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  document.addEventListener('click', function (e) {
+    if (!_vpickOpenId) return;
+    var list = document.getElementById('vpick-list');
+    if (list && list.contains(e.target)) return;
+    _vpickClose();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _vpickOpenId) _vpickClose(true); });
+  window.addEventListener('resize', function () { if (_vpickOpenId) _vpickClose(); });
+  window.addEventListener('scroll', function (e) {
+    if (!_vpickOpenId) return;
+    var list = document.getElementById('vpick-list');
+    if (list && e.target && e.target.nodeType === 1 && list.contains(e.target)) return;
+    _vpickClose();
+  }, true);
+})();
+
+// v3.1.35 -- TD-928. MAKE THIS VERSION THE CANONICAL. Spec: claude/PROMOTE_CANONICAL_SPEC.md.
+// Ian: "I make several versions and finally land on an art and narrative style I like... Now I want to
+// continue on with my next session(s) using my new favorite stylings." The server does the work in one
+// transaction (services/promoteCanonical.js); this is the menu item, the confirm window, the second
+// confirmation for a delete, and the nudge when a new session is made while a different version is pinned.
+function _promoteVersionIdOnScreen() {
+  var sel = document.getElementById('session-fork-select');
+  var id = (sel && sel.value) || state.currentForkId;
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(id); })[0];
+  return (f && f.version_id) ? String(f.version_id) : null;
+}
+function _promoteList(rows) {
+  return (rows || []).map(function (r) { return '\u201c' + (r.name || 'Untitled session') + '\u201d'; }).join(', ');
+}
+function _promoteDraftBox(info, vName) {
+  // v3.1.41 -- members see only Ready sessions. Tester: every session in the promoted version was Draft,
+  // the window said nothing, and the members' book went empty. Ian: leave promote alone, make the warning
+  // loud. Shown first, before the explainer, whenever any session will be Draft.
+  var d = (info && info.drafts) || [];
+  if (!d.length) return '';
+  var total = Number(info.session_count) || 0;
+  var all = total > 0 && d.length >= total;
+  var head = all ? 'Members won\u2019t see any of this book yet' : 'Members won\u2019t see ' + (d.length === 1 ? 'one session' : d.length + ' sessions');
+  var body = all
+    ? 'Every session in \u201c' + vName + '\u201d is Draft. Members only see sessions set to Ready, so after the switch they\u2019ll see nothing until you set them to Ready.'
+    : _promoteList(d) + (d.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d. Members only see sessions set to Ready, so after the switch they won\u2019t see ' + (d.length === 1 ? 'it' : 'them') + ' until you set ' + (d.length === 1 ? 'it' : 'them') + ' to Ready.';
+  return '<div class="promote-draft-warn" role="alert" style="background:rgba(224,150,50,0.14);border:1px solid #e09632;border-radius:8px;padding:10px 12px;margin-bottom:14px;">' +
+    '<div style="font-weight:700;color:#f0b050;margin-bottom:4px;">\u26a0 ' + escapeHtml(head) + '</div>' +
+    '<div>' + escapeHtml(body) + '</div></div>';
+}
+function _promoteOthersLine(u) {
+  u = u || {};
+  var parts = [];
+  if (u.pins) parts.push(u.pins === 1 ? '1 member has pinned it' : (u.pins + ' members have pinned it'));
+  if (u.saved_layouts) parts.push(u.saved_layouts === 1 ? '1 member has a saved layout of it' : (u.saved_layouts + ' members have saved layouts of it'));
+  if (u.shelved) parts.push(u.shelved === 1 ? '1 member has it on their Bookshelf' : (u.shelved + ' members have it on their Bookshelf'));
+  return parts.length ? (parts.join(', ') + '.') : '';
+}
+function _promoteDialog(info) {
+  return new Promise(function (resolve) {
+    var vName = info.version.name, cName = info.canonical.name;
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var box = document.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
+    var bullets = [
+      // v3.1.41 -- no promise that members read all of it: only its Ready sessions (Ian chose a louder warning).
+      'Members read \u201c' + vName + '\u201d as the book from now on \u2014 the sessions in it set to Ready \u2014 and new sessions start in its art style and narrative style.',
+      'Other versions \u2014 yours and your members\u2019 \u2014 show the new Canonical on any session they haven\u2019t made their own.'
+    ];
+    if (info.missing && info.missing.length) bullets.push('\u201c' + vName + '\u201d doesn\u2019t have ' + _promoteList(info.missing) + ' yet, so ' + (info.missing.length === 1 ? 'it is' : 'they are') + ' copied in from the current Canonical as ' + (info.missing.length === 1 ? 'it is' : 'they are') + '. You can regenerate ' + (info.missing.length === 1 ? 'it' : 'them') + ' in the new style afterwards.');
+    // v3.1.41 -- the Draft warning moved out of the bullets to a highlighted box at the top of the window.
+    var draftBox = _promoteDraftBox(info, vName);
+    var others = _promoteOthersLine(info.others_using);
+    box.innerHTML =
+      '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
+      draftBox +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">What is the Canonical?</div>' +
+      '<div style="margin-bottom:14px;">The Canonical is the campaign\u2019s official book. It\u2019s what every member reads, and every other version shows it on any session that version hasn\u2019t made its own copy of. Every campaign has exactly one, and it belongs to the Story Master.</div>' +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Making \u201c' + escapeHtml(vName) + '\u201d the Canonical means:</div>' +
+      '<ul style="margin:0 0 14px 18px;padding:0;">' + bullets.map(function (b) { return '<li style="margin-bottom:4px;">' + escapeHtml(b) + '</li>'; }).join('') + '</ul>' +
+      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Your current Canonical, \u201c' + escapeHtml(cName) + '\u201d</div>' +
+      '<div style="margin-bottom:8px;">You need to name your old Canonical version, or do you want me to delete it once we make the switch?</div>' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;cursor:pointer;"><input type="radio" name="promote-old" value="keep" checked style="margin-top:4px;"> <span>Keep it as one of my versions, named:</span></label>' +
+      '<input type="text" id="promote-old-name" maxlength="60" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin:0 0 10px 0;">' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;cursor:pointer;"><input type="radio" name="promote-old" value="delete" style="margin-top:4px;"> <span>Delete it</span></label>' +
+      (others ? '<div style="font-size:12.5px;color:rgba(240,232,208,0.7);margin:0 0 8px 26px;">Others are using it: ' + escapeHtml(others) + '</div>' : '') +
+      '<div id="promote-err" style="display:none;color:#f08a7a;font-size:13px;margin:6px 0 0 0;"></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
+      '<button type="button" class="btn btn-sm" id="promote-cancel">Cancel</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" id="promote-ok">Make it the Canonical</button></div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    var input = box.querySelector('#promote-old-name');
+    input.value = info.suggested_name || '';
+    var err = box.querySelector('#promote-err');
+    function mode() { var r = box.querySelector('input[name="promote-old"]:checked'); return r ? r.value : 'keep'; }
+    function sync() { input.disabled = (mode() !== 'keep'); input.style.opacity = input.disabled ? '0.5' : ''; }
+    Array.prototype.forEach.call(box.querySelectorAll('input[name="promote-old"]'), function (r) { r.addEventListener('change', sync); });
+    function done(v) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); document.removeEventListener('keydown', onKey); resolve(v); }
+    function submit() {
+      if (mode() === 'delete') { done({ deleteOld: true }); return; }
+      var n = String(input.value || '').trim();
+      var msg = '';
+      if (!n) msg = 'Please give your current Canonical a name, or choose Delete it.';
+      else if (n.toLowerCase() === 'canonical') msg = 'Please choose a name other than \u201cCanonical\u201d.';
+      else if ((info.taken_names || []).indexOf(n) !== -1) msg = 'You already have a version called \u201c' + n + '\u201d.';
+      if (msg) { err.textContent = msg; err.style.display = ''; try { input.focus(); } catch (e) {} return; }
+      done({ deleteOld: false, newName: n });
+    }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(null); } else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); submit(); } }
+    box.querySelector('#promote-cancel').onclick = function () { done(null); };
+    box.querySelector('#promote-ok').onclick = submit;
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    document.addEventListener('keydown', onKey);
+    // The window opens at its top, so the explanation is what is read first. On a touch screen the
+    // name box is not focused, or the keyboard would cover the window before it has been read.
+    setTimeout(function () {
+      try {
+        box.scrollTop = 0;
+        var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        if (touch) box.querySelector('#promote-ok').focus({ preventScroll: true });
+        else { input.focus({ preventScroll: true }); input.select(); }
+      } catch (e) {}
+    }, 30);
+  });
+}
+function _promoteDeleteConfirm(info) {
+  var others = _promoteOthersLine(info.others_using);
+  return uiConfirm(
+    'This deletes \u201c' + info.canonical.name + '\u201d for good: its pages, its pictures and its saved books. Pictures another version also uses are kept.\n\n' +
+    (others ? ('Others are using it: ' + others + ' Their pins go back to the normal default, saved layouts of it are removed, and Bookshelf copies can no longer be brought back into the editor.\n\n') : '') +
+    'Published stories and orders are not affected.',
+    { title: 'Delete \u201c' + info.canonical.name + '\u201d?', okText: 'Delete it', cancelText: 'Keep it', danger: true, preserveLines: true });
+}
+function _promoteRun(c, vid, choice, info) {
+  var cover = document.createElement('div');
+  cover.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;color:#f0e8d0;font-size:15px;';
+  cover.textContent = 'Making \u201c' + info.version.name + '\u201d the Canonical\u2026';
+  document.body.appendChild(cover);
+  function unCover() { if (cover.parentNode) cover.parentNode.removeChild(cover); }
+  return fetch('/api/campaigns/' + c.id + '/versions/' + vid + '/promote', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_name: choice.newName || '', delete_old: !!choice.deleteOld })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      unCover();
+      if (!res.ok || !res.j.success) { showError(res.j.error || 'The Canonical could not be changed. Nothing was changed; please try again.'); return; }
+      var lines = ['\u201c' + info.version.name + '\u201d is now the Canonical.'];
+      lines.push(res.j.deleted_old ? 'Your old Canonical was deleted.' : ('Your old Canonical is now your version \u201c' + ((res.j.old && res.j.old.name) || '') + '\u201d.'));
+      if (res.j.copied_missing) lines.push(res.j.copied_missing === 1 ? '1 session was copied in from the old Canonical.' : (res.j.copied_missing + ' sessions were copied in from the old Canonical.'));
+      try { if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions(); } catch (e) {}
+      try { if (state.currentSession && typeof selectSession === 'function') selectSession(state.currentSession.id); } catch (e) {}
+      return uiConfirm(lines.join('\n\n'), { title: 'Done', hideCancel: true, okText: 'OK', preserveLines: true });
+    })
+    .catch(function () { unCover(); showError('The Canonical could not be changed. Please check your connection and try again.'); });
+}
+function promoteVersionFlow(versionId) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  try { document.querySelectorAll('.row-menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); }); } catch (e) {}
+  var vid = versionId ? String(versionId) : _promoteVersionIdOnScreen();
+  if (!vid) return;
+  fetch('/api/campaigns/' + c.id + '/versions/' + vid + '/promote-check')
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (res) {
+      var info = res.j;
+      if (!res.ok || !info.ok) {
+        return uiConfirm((info && (info.reason || info.error)) || 'The Canonical cannot be changed right now.', { title: 'Make This Version the Canonical', hideCancel: true, okText: 'OK' });
+      }
+      return _promoteDialog(info).then(function (choice) {
+        if (!choice) return;
+        var sure = choice.deleteOld ? _promoteDeleteConfirm(info) : Promise.resolve(true);
+        return sure.then(function (ok) { if (ok === true) return _promoteRun(c, vid, choice, info); });
+      });
+    })
+    .catch(function () { showError('Could not check this version. Please try again.'); });
+}
+// THE NUDGE. A Story Master whose pinned version is one of his own, and not the Canonical, is asked
+// before a new session is made, because a new session starts from the Canonical. "Just make the session"
+// is remembered for the campaign until the page is reloaded.
+var _promoteNudgeSkip = {};
+function _promoteNudge() {
+  var c = state.currentCampaign;
+  if (!c || c.my_role !== 'dm') return false;
+  if (state._promoteNudgeBypass) { state._promoteNudgeBypass = false; return false; }
+  if (_promoteNudgeSkip[String(c.id)]) return false;
+  var pin = (typeof starredVersionId === 'function') ? starredVersionId() : null;
+  if (!pin) return false;
+  function proceed() { state._promoteNudgeBypass = true; openSessionModal(); }
+  fetch('/api/campaigns/' + c.id + '/versions')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var v = (Array.isArray(rows) ? rows : []).filter(function (x) { return String(x.version_id) === String(pin); })[0];
+      if (!v || v.is_canonical || !v.is_mine) { proceed(); return; }
+      return uiConfirm(
+        'Your pinned version is \u201c' + v.name + '\u201d, but a new session starts from the Canonical.\n\nMake \u201c' + v.name + '\u201d the Canonical first, so this session starts in its style?',
+        { title: 'Start in \u201c' + v.name + '\u201d?', okText: 'Make it the Canonical', middleText: 'Just make the session', cancelText: 'Cancel', preserveLines: true })
+        .then(function (ans) {
+          if (ans === true) { promoteVersionFlow(v.version_id); return; }
+          if (ans === 'middle') { _promoteNudgeSkip[String(c.id)] = true; proceed(); }
+        });
+    })
+    .catch(function () { proceed(); });
+  return true;
+}
+
+// v3.1.36 -- does this text talk about point of view? Used to warn, in the narrator panel, that In first
+// person wins over the Story Instructions (Ian: "the setting wins but with a warning").
+function _notesMentionPov(t) {
+  var s = String(t || '');
+  if (!s) return false;
+  return /third[\s-]*person|first[\s-]*person|point of view|\bpov\b|narrator|never (use|say|write) (the word )?["'\u201c\u2018]?i\b/i.test(s);
+}
+// v3.1.36 -- the session Preview shows Outline bullets run together, so it says why, the way Prep &
+// Preview already does for the whole book (tester, 2026-09-28). Read from the narrative on screen.
+function _sessionOutlineWarn() {
+  try {
+    var tab = document.getElementById('session-tab-export');
+    if (!tab) return;
+    var box = document.getElementById('session-outline-warn');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'session-outline-warn';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      tab.insertBefore(box, tab.firstChild);
+    }
+    var nd = state.narrativeData || {};
+    var parts = [nd.intro, nd.outro];
+    (Array.isArray(nd.sections) ? nd.sections : []).forEach(function (s) { if (s) { parts.push(s.before); parts.push(s.after); } });
+    var bullet = /(^|\n)[ \t]*\u2022[ \t]/;
+    var hit = parts.some(function (p) { return typeof p === 'string' && bullet.test(p); });
+    if (!hit) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = '<b>Outline bullet points are still in this session.</b> In the book they run together as one paragraph, as you can see below. ' +
+      'Replace them with your own words on the Storyboard before you Optimize.';
+    box.style.display = 'block';
+  } catch (e) {}
+}
+
+function _sessTieNewestFirst(a, b) {
+  // v3.1.38 -- two sessions on one date: the one made LAST comes first on the session page (Ian: "The one
+  // made last is first"), the reverse of Publish and the book, which read oldest first. created_at, then id.
+  var ca = String((a && a.created_at) || ''), cb = String((b && b.created_at) || '');
+  if (ca !== cb) return ca < cb ? 1 : -1;
+  return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+}
+
+function canOpenPublishPage() {
+  // v3.1.41 -- the same rule showCampaignSection('novel') applies: the Story Master, or anyone when the
+  // campaign lets members into Publish.
+  try {
+    var c = state && state.currentCampaign;
+    if (!c) return false;
+    if (c.my_role === 'dm') return true;
+    var a = c.allow_player_novel_access;
+    return a === true || a === 1 || a === 't' || a === 'true';
+  } catch (e) { return false; }
+}
+function _sessNavLabel(s) {
+  // v3.1.41 -- the arrow tooltips read .title, which sessions don't have ("Previous session: "). Name, else date.
+  if (!s) return '';
+  if (s.name && String(s.name).trim()) return String(s.name).trim();
+  var d = String(s.session_date || '').split('T')[0];
+  return d || 'Untitled session';
+}

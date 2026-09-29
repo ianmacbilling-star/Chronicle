@@ -1,5 +1,221 @@
 [
   {
+    "version": "3.1.41",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3141-promote-draft-warning",
+        "kind": "change",
+        "public": true,
+        "summary": "Making a version the Canonical now warns at the top of the window when any of its sessions are Draft.",
+        "detail": "Members only see sessions set to Ready. The warning names every Draft session, and says so plainly when the whole version is Draft.",
+        "td": [
+          "TD-928"
+        ]
+      },
+      {
+        "id": "3141-member-small",
+        "kind": "fix",
+        "public": true,
+        "summary": "Members who can't publish are no longer offered All publishing options on a session's Preview, and an invitation with no character no longer says Playing as null.",
+        "detail": "",
+        "td": [
+          "TD-812"
+        ]
+      },
+      {
+        "id": "3141-arrow-tooltips",
+        "kind": "fix",
+        "public": false,
+        "summary": "The session arrows' tooltips name the previous and next session.",
+        "detail": "They read .title, which sessions don't have; they use the name, or the date when there is none.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.40",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3140-story-not-transcript",
+        "kind": "change",
+        "public": true,
+        "summary": "Messages about the story box no longer assume a transcript.",
+        "detail": "An empty or very short Story / Session Transcript box, the saved message and the Generate Story progress line now talk about your story: a transcript, a written story, notes or an outline all work.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.39",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3139-help-canonical",
+        "kind": "change",
+        "public": true,
+        "summary": "The help assistant now explains what the Canonical is, what order sessions come in, and where the Outline warnings appear.",
+        "detail": "Also: an empty transcript box now says 'Please paste a transcript first.'",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.38",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3138-session-page-same-date",
+        "kind": "fix",
+        "public": true,
+        "summary": "On the session page, two sessions on the same date now show the one made last first.",
+        "detail": "The session page reads newest first and Publish and the book read oldest first; same-date sessions now follow each page's direction, and the session arrows follow the cards.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.37",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3137-open-from-publish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Open on a Publish session card now opens the version you were looking at.",
+        "detail": "It used to open your pinned version. It now opens that version's copy of the session, or the Canonical where the version never made the session its own, as the card says.",
+        "td": [
+          "TD-927"
+        ]
+      },
+      {
+        "id": "3137-same-date-order",
+        "kind": "fix",
+        "public": true,
+        "summary": "Two sessions on the same date now appear in the order they were made, in the list, on Publish and in the book.",
+        "detail": "",
+        "td": []
+      },
+      {
+        "id": "3137-small",
+        "kind": "fix",
+        "public": false,
+        "summary": "Delete This Session From This Version is no longer offered on the Canonical; the promote window no longer promises Story Instructions carry to new sessions.",
+        "detail": "Story Instructions belong to each session. The 3.1.35 entry and the Brain were corrected.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.36",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3136-first-person-wins",
+        "kind": "fix",
+        "public": true,
+        "summary": "In first person now wins over Story Instructions that ask for the third person, and says so.",
+        "detail": "When In first person is ticked, the story is told as 'I' even if the Story Instructions ask for third person; the rest of the instructions are still followed. The Narrative style window warns when your instructions mention point of view.",
+        "td": [
+          "TD-919"
+        ]
+      },
+      {
+        "id": "3136-session-preview-outline",
+        "kind": "change",
+        "public": true,
+        "summary": "A session's Preview now explains when Outline bullet points are still in it.",
+        "detail": "The same warning as Prep & Preview: in the book the bullets run together as one paragraph, so replace them with your own words before you Optimize.",
+        "td": [
+          "TD-924"
+        ]
+      },
+      {
+        "id": "3136-small-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Small fixes: the Opening badge on Review, long version names in the picker, and clearer messages.",
+        "detail": "The Opening badge on the Review tab no longer spills into the title. Long version names wrap in the version picker instead of being cut short. The missing-transcript message no longer says your transcript is gone. The reference-picture message says 'they' for more than one character, and the Story Instructions hint says notes save when you click away.",
+        "td": [
+          "TD-927"
+        ]
+      },
+      {
+        "id": "3136-promote-no-freeze",
+        "kind": "change",
+        "public": false,
+        "summary": "Promote to Canonical no longer freezes other versions with copies of the old pages.",
+        "detail": "Ian: take out the freezing. Other versions follow the new Canonical on sessions they never branched. The promoted version still gets every session. The 3.1.35 entry was reworded.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.35",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3135-promote-to-canonical",
+        "kind": "feature",
+        "public": true,
+        "summary": "Story Masters can make one of their own versions the Canonical, and carry on in its style.",
+        "detail": "Open the version, click the ... menu and choose Make This Version the Canonical. Members read it from now on and new sessions start in its art style and narrative style. Sessions it never had are copied in from the old Canonical as they are. Other versions show the new Canonical on any session they haven't made their own. The old Canonical is kept under a new name, or deleted after a second confirmation. Published stories and orders are not affected.",
+        "td": [
+          "TD-928"
+        ]
+      },
+      {
+        "id": "3135-summary-follows-version",
+        "kind": "fix",
+        "public": false,
+        "summary": "The summary carried into the next session now comes from the same version's previous session.",
+        "detail": "inheritedSummary took the caller's first fork by id, which with several versions could hand one version another's memory, and after a promote would have picked the old Canonical.",
+        "td": [
+          "TD-928"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.34",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3134-version-picker-pin",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Both version pickers are now drawn by Campaignia, with a pin on every row; the separate star is gone.",
+        "detail": "The native select stays hidden as the source of truth, so switching, the in-flight locks and the change handlers are unchanged. The 3.1.33 entry was reworded from star to pin.",
+        "td": [
+          "TD-927"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.33",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3133-default-version-star",
+        "kind": "feature",
+        "public": true,
+        "summary": "Pin a version to make it your default: it's the one that opens whenever you come to the campaign.",
+        "detail": "Open the version picker on the session page or the Publish page and click the pin at the end of a version's row; click it again to unpin. One per person per campaign. On a session your pinned version never branched, you see the canonical there, just as the book does. Pinning changes no book and nothing anyone else sees.",
+        "td": [
+          "TD-927"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.32",
     "staged_on": "2026-09-27",
     "entries": [

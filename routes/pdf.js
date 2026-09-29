@@ -6648,7 +6648,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
@@ -6915,7 +6915,7 @@ async function printInteriorHandler(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   function sessionDateKey(s) {
@@ -7824,7 +7824,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare(
     'SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?'
   ).all(campaign.id);
@@ -8415,7 +8415,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (!campaign) { const e = new Error('Access denied'); e.status = 403; throw e; }
   if (!campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
   function sessionDateKey(s) {
     if (!s.session_date) return '';
@@ -14789,3 +14789,38 @@ module.exports.assembleNovelHtml = assembleNovelHtml;
 module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
 module.exports.formatDateRange = formatDateRange;   // v3.0.552 -- campaigns.js seeds the subtitle field from this, so the two cannot drift
 module.exports.parseCustomOpts = parseCustomOpts;   // v3.0.981 -- TD-901. routes/bookshelf.js reads the arrange the same way last-optimized-file does
+
+// v3.1.35 -- TD-928. WHAT PROMOTE TO CANONICAL MUST WAIT FOR, and what it must forget afterwards.
+// Read-only over this process's run stores; nothing here changes a run. An Optimize can be anyone's
+// (members optimize the Canonical too), so the run store is searched by CAMPAIGN, across users --
+// optimizeRunGet answers per user and is the wrong question here. Stale entries are skipped by the same
+// rule optimizeRunGet uses. Print renders carry no campaign, so a member's render counts.
+function campaignWorkInFlight(campaignId, memberUserIds) {
+  var cid = String(campaignId), now = Date.now(), label = null;
+  try {
+    _optimizeRuns.forEach(function (r) {
+      if (label || !r) return;
+      if (now - (r.beat || r.startedAt) > OPTIMIZE_LOCK_STALE_MS) return;
+      if (String(r.campaignId) === cid) label = 'An Optimize';
+    });
+    if (!label) _saveJobs.forEach(function (j) { if (!label && j && j.state === 'running' && String(j.campaignId) === cid) label = 'Saving an optimized book'; });
+    if (!label) _applyJobs.forEach(function (j) { if (!label && j && j.state === 'running' && String(j.campaignId) === cid) label = 'An Optimize'; });
+    if (!label && Array.isArray(memberUserIds) && memberUserIds.length) {
+      var ids = memberUserIds.map(String);
+      _renderJobs.forEach(function (j) {
+        if (!label && j && j.state === 'running' && now - (j.startedAt || now) < OPTIMIZE_LOCK_STALE_MS && ids.indexOf(String(j.userId)) !== -1) label = 'A print file render';
+      });
+    }
+  } catch (e) { label = 'Work'; }   // a throw is not "nothing is running"
+  return label;
+}
+// The composed-book caches key a Canonical request without its version, so after the Canonical changes
+// they would hand back the old book. Every key starts with the campaign id.
+function forgetCampaignCaches(campaignId) {
+  var head = String(campaignId) + '|';
+  [_composedCache, _runGrows, _runMoves, _runRefusals].forEach(function (m) {
+    Array.from(m.keys()).forEach(function (k) { if (String(k).indexOf(head) === 0) m.delete(k); });
+  });
+}
+module.exports.campaignWorkInFlight = campaignWorkInFlight;
+module.exports.forgetCampaignCaches = forgetCampaignCaches;

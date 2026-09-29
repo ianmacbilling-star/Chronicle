@@ -73,7 +73,11 @@ var DENY = [
   // Publishing is a SNAPSHOT and cannot be taken back cleanly, so it is the customer's decision.
   { m: 'POST', p: '/api/pdf/publish-story',         why: 'publish to the Library', prefix: true },
   { m: 'POST', p: '/api/pdf/unpublish-story',       why: 'unpublish from the Library', prefix: true },
-  { m: 'POST', p: '/api/pdf/story',                 why: 'unpublish from the Library', prefix: true, suffix: '/unpublish' }
+  { m: 'POST', p: '/api/pdf/story',                 why: 'unpublish from the Library', prefix: true, suffix: '/unpublish' },
+
+  // --- The campaign's official book. v3.1.35 -- TD-928: Promote to Canonical changes what every member
+  // reads and can delete the old Canonical, so it is the Story Master's decision, not support's. ---
+  { m: 'POST', p: '/api/campaigns/',                why: 'change which version is the Canonical', suffix: '/promote' }
 ];
 
 function deniedEntry(method, path) {
