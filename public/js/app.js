@@ -21296,11 +21296,13 @@ function redateGift(id) {
 // confirmed email whose day has come and that are not redeemed yet; the server returns none while gifts
 // are switched off. One gift opens straight on it; several open the first, and the badge says how many.
 function refreshGiftBadge() {
-  // The header badge (wide screens) and the strip under the header (phones) say the same thing.
+  // v3.1.48 -- the header badge (wide screens), the icon pinned to the account button (phones, where the
+  // header has no room) and the top line of the account menu (everywhere) all say the same thing.
   var b = document.getElementById('gift-badge');
-  var strip = document.getElementById('gift-strip');
+  var pin = document.getElementById('gift-pin');
+  var mi = document.getElementById('gift-menu-item');
   if (!b) return;
-  function hide() { b.style.display = 'none'; if (strip) strip.classList.remove('on'); }
+  function hide() { b.style.display = 'none'; if (pin) pin.classList.remove('on'); if (mi) mi.style.display = 'none'; }
   fetch('/api/gifts/mine', { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : { gifts: [] }; })
     .then(function (d) {
@@ -21312,11 +21314,12 @@ function refreshGiftBadge() {
       if (t) t.textContent = list.length > 1 ? ('SOMEONE GAVE YOU ' + list.length + ' GIFTS') : 'SOMEONE GAVE YOU A GIFT';
       b.title = list[0].fromName ? (list[0].fromName + ' gave you a Campaignia gift. Click to redeem it.') : 'Someone gave you a Campaignia gift. Click to redeem it.';
       b.style.display = 'inline-flex';
-      if (strip) {
-        strip.href = href;
-        var st = document.getElementById('gift-strip-text');
-        if (st) st.textContent = list.length > 1 ? ('Someone gave you ' + list.length + ' gifts') : 'Someone gave you a gift';
-        strip.classList.add('on');
+      if (pin) { pin.href = href; pin.classList.add('on'); }
+      if (mi) {
+        mi.href = href;
+        var mt = document.getElementById('gift-menu-text');
+        if (mt) mt.textContent = list.length > 1 ? ('Someone gave you ' + list.length + ' gifts') : 'Someone gave you a gift';
+        mi.style.display = 'flex';
       }
     })
     .catch(hide);

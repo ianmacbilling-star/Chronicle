@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.48",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3148-gift-pin",
+        "kind": "change",
+        "public": false,
+        "summary": "On a phone the gift notice no longer adds a strip under the header: a small gift icon sits on the corner of the account button, and the account menu's first line says Someone gave you a gift.",
+        "detail": "Ian: it must not take up any more vertical space. On a phone (640px and narrower) the header has no room for the badge, so the gift is an icon pinned to the corner of the account button (tap it to redeem) and the top line of the account menu. The header is the same height and width as for an account with no gift. On a wider screen nothing changed: SOMEONE GAVE YOU A GIFT in the header, now also on the top line of the account menu.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.47",
     "staged_on": "2026-10-01",
     "entries": [
