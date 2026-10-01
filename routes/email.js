@@ -677,6 +677,7 @@ function purchaseReceiptHTML(name, receipt) {
   rows += row('Token balance', receipt.balanceAfter != null ? receipt.balanceAfter : '');
   rows += row('Plan', receipt.tierLabel);
   rows += row('Runs until', when(receipt.runsUntil));
+  rows += row('Your subscription', receipt.subscriptionNote || '');   // v3.1.45 -- TD-938; dropped when empty
   // v3.0.963 -- TD-838. A NUMBER THE CUSTOMER CAN QUOTE, OR NOTHING AT ALL.
   //
   // This was receipt.reference -- the Stripe session or invoice id. Ian: "You've got reference
@@ -1307,7 +1308,7 @@ function buildEmailPreview(type, name) {
       return receiptEmail(who, { kind: 'pass', reference: 'cs_test_c2PLmQdXvRtYuIoPaSdFgHjKlZxCvBnM4qWeRtYuIoP7aSdF', purchaseNo: 'tp-00043',
         itemName: '3 Month Platinum Pass', amountCents: 7900, currency: 'usd',
         tokensGranted: 200, balanceAfter: 243, tierLabel: 'platinum',
-        runsUntil: '2026-12-21T00:00:00.000Z',
+        runsUntil: '2026-12-21T00:00:00.000Z', subscriptionNote: 'Gold paused until December 21, 2026, then it restarts by itself',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_subscription':
       return receiptEmail(who, { kind: 'subscription', reference: 'in_1UIE4oFtFqbShreeDSZhnl3p',

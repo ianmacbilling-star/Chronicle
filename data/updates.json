@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.1.45",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3145-pass-pause",
+        "kind": "change",
+        "public": false,
+        "summary": "Buying a Platinum Pass no longer ends a Silver or Gold subscription: Platinum starts at once and the subscription is paused until the pass ends, then restarts by itself.",
+        "detail": "Test in Stripe test mode. Gold subscriber buys a pass: the dialog says Gold will be paused (Buy the pass / Not yet). After paying: Platinum now, My Account shows Billing paused until the pass end date, the Stripe subscription shows payment collection paused until that date (invoices voided), no Gold charge meanwhile, and the receipt says Gold paused until DATE. Buy a second pass while paused: the pause moves to the new end date. Platinum subscriber buys a pass: a confirmation that the subscription stops renewing (as before). A gifted pass redeemed by a Gold subscriber offers Platinum now (Gold paused) or the tokens. If Stripe refuses a pause, the pass is still granted and Ian gets an email.",
+        "td": [
+          "TD-938",
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.44",
     "staged_on": "2026-10-01",
     "entries": [

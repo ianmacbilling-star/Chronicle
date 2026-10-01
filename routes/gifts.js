@@ -90,7 +90,7 @@ router.post('/lookup', async function (req, res) {
     let viewer = null;
     if (req.session && req.session.userId) {
       try {
-        viewer = await db.prepare('SELECT email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end FROM users WHERE id = ?').get(req.session.userId);
+        viewer = await db.prepare('SELECT email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
       } catch (_) { viewer = null; }
     }
     const r = await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db), viewer);

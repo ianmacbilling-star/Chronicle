@@ -823,7 +823,28 @@ function startPassCheckout(passId) {
   // direction for a warning.
   // v3.0.942 -- WAS TWO LINES OF THE SAME RULE WRITTEN OUT HERE. It is a function now, shared with
   // the account panel, because a rule in two places is a rule that will be updated in one of them.
-  if (hasBillingSubscription(_me) && typeof uiConfirm === 'function') {
+  // v3.1.45 -- TD-938. WHICH SUBSCRIPTION DECIDES WHAT IS SAID. Ian: "I really don't like passes
+  // ending existing subscriptions." Only a PLATINUM subscription is stopped by a pass now (the pass
+  // gives them nothing else). Silver and Gold are PAUSED until the pass ends and restart by themselves
+  // -- no choice to make; keeping both was dropped because it only buys tokens a pack sells cheaper.
+  // A subscription already set to cancel is ending anyway, so nothing is said. The server checks the
+  // same confirmations (409 until given), so this dialog can be skipped but never bypassed.
+  var _billing = hasBillingSubscription(_me) && !(_me && _me.cancelAtPeriodEnd);
+  if (_billing && (_acct === 'silver' || _acct === 'gold') && typeof uiConfirm === 'function') {
+    var _sName = (_all[_acct] && _all[_acct].name) || _acct;
+    var _pausedTo = (_me && _me.subPausedUntil && new Date(_me.subPausedUntil).getTime() > Date.now()) ? _cmpNiceDate(_me.subPausedUntil) : '';
+    uiConfirm(_pausedTo
+      ? ('Your ' + _sName + ' subscription is paused while your current pass runs.\n\n' +
+         'This pass is added on the end, and ' + _sName + ' stays paused until it finishes, then restarts by itself.')
+      : ('Platinum starts as soon as you pay.\n\n' +
+         'Your ' + _sName + ' subscription is paused while the pass runs, so you are not charged for it, ' +
+         'and it restarts by itself the day the pass ends. You are back on ' + _sName + ' then.'),
+      { title: _pausedTo ? 'Your subscription stays paused' : 'Your ' + _sName + ' subscription will be paused',
+        preserveLines: true, okText: 'Buy the pass', cancelText: 'Not yet' }
+    ).then(function (ok) { if (ok) _startPassCheckout(passId, { confirmPause: true }); });
+    return;
+  }
+  if (_billing && _acct === 'platinum' && typeof uiConfirm === 'function') {
     var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
     var _copperName = (_all.copper && _all.copper.name) || 'Copper';
     uiConfirm(
@@ -836,19 +857,20 @@ function startPassCheckout(passId) {
       'You would need to subscribe again or buy another pass.',
       { title: 'Your subscription will stop billing', preserveLines: true,
         okText: 'Buy the pass', cancelText: 'Not yet' }
-    ).then(function (ok) { if (ok) _startPassCheckout(passId); });
+    ).then(function (ok) { if (ok) _startPassCheckout(passId, { confirmEnd: true }); });
     return;
   }
-  _startPassCheckout(passId);
+  _startPassCheckout(passId, {});
 }
 
-function _startPassCheckout(passId) {
+// v3.1.45 -- extra carries the subscription confirmation: { confirmPause: true } or { confirmEnd: true }.
+function _startPassCheckout(passId, extra) {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
   fetch('/api/tokens/pass-checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passId: passId })
+    body: JSON.stringify(Object.assign({ passId: passId }, extra || {}))
   }).then(function(r) {
     if (r.status === 503) {
       show('Passes are being set up and will be available shortly.');
@@ -2640,6 +2662,9 @@ function renderAccountStanding(me) {
       // the same false alarm v3.0.933 fixed one row up.
       html += row('Subscription ends', _when,
         pass ? 'billing stops \u2014 your pass carries on' : 'then your account moves to Copper');
+    } else if (me.subPausedUntil) {
+      // v3.1.45 -- TD-938. Paused for a pass: there is no next charge until it restarts.
+      html += row('Billing paused', 'until ' + _cmpNiceDate(me.subPausedUntil), 'restarts by itself when your pass ends');
     } else {
       html += row('Next billing date', _when);
     }
@@ -2693,9 +2718,14 @@ function renderAccountStanding(me) {
         ? ('You are on <b>' + escapeHtml(ownName) + '</b> from now until your pass ends. Your ' +
            escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the current ' +
            'period &mdash; it will not bill again, and nothing about your access changes when it does.')
-        : ('You have both a pass and a subscription, and <b>they do not stack</b> &mdash; your ' +
-           'subscription is billing you for access your pass already gives you. You can stop it ' +
-           'with Manage subscription &amp; billing below.')) +
+        : me.subPausedUntil
+        // v3.1.45 -- TD-938. The pause is the normal case for a Silver/Gold subscriber now.
+        ? ('You are on <b>' + escapeHtml(ownName) + '</b> until your pass ends. Your ' + escapeHtml(acctName) +
+           ' subscription is <b>paused</b> and is not billing; it restarts by itself on ' +
+           escapeHtml(_cmpNiceDate(me.subPausedUntil)) + ', and you are back on ' + escapeHtml(acctName) + '.')
+        : ('Your pass and your ' + escapeHtml(acctName) + ' subscription are <b>both billing</b>. When the pass ' +
+           'ends you are back on ' + escapeHtml(acctName) + '. If you would rather not pay for both, you can ' +
+           'stop the subscription with Manage subscription &amp; billing below.')) +
       '</div>';
   }
 

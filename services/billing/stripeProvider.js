@@ -198,6 +198,11 @@ async function createPassCheckout(opts) {
       quoted_tier: String(pass.tier)
     }
   };
+  // v3.1.45 -- TD-938. What the buyer chose for their subscription (sub_choice) travels with the
+  // payment, so the webhook does what they agreed to on screen. Only string values, as Stripe wants.
+  if (opts.extraMetadata) {
+    Object.keys(opts.extraMetadata).forEach(function (k) { params.metadata[k] = String(opts.extraMetadata[k]); });
+  }
   Object.assign(params, buyerRef(opts), invoiceRef(opts, 'pass', { pass_id: String(pass.id) }));   // v3.0.945 -- TD-791, v3.0.946 invoice
   return await stripe.checkout.sessions.create(params);
 }
@@ -211,6 +216,20 @@ async function cancelSubscriptionAtPeriodEnd(subId) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
   return await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
+}
+
+// v3.1.45 -- TD-938. PAUSE A SUBSCRIPTION'S BILLING UNTIL A PASS ENDS.
+// Stripe docs (docs.stripe.com/billing/subscriptions/pause-payment, read 2026-10-01): with
+// pause_collection the subscription "remains active", invoices still generate, and with
+// behavior 'void' they are voided -- "No record of charges is created for these periods", and
+// Stripe sends no upcoming-invoice emails or webhooks for them. resumes_at (Unix seconds) restarts
+// collection by itself. Setting it again simply moves the date, which is how a second pass extends it.
+async function pauseSubscriptionCollection(subId, resumesAtUnix) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const t = parseInt(resumesAtUnix, 10);
+  if (!(t > Math.floor(Date.now() / 1000))) throw new Error('resumes_at must be in the future');
+  return await stripe.subscriptions.update(subId, { pause_collection: { behavior: 'void', resumes_at: t } });
 }
 
 // Create a hosted Checkout Session for a recurring tier SUBSCRIPTION. priceId is a
@@ -426,7 +445,7 @@ async function getPrice(priceId) {
 }
 
 module.exports = {
-  createPassCheckout, cancelSubscriptionAtPeriodEnd,
+  createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,

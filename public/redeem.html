@@ -31,6 +31,8 @@
     font-size: 13px; width: 100%; justify-content: center; padding: 12px; margin-top: 8px; }
   .auth-box .btn-primary:hover { background: #e8c870; }
   .auth-box .btn-primary[disabled] { opacity: 0.6; cursor: default; }
+  /* v3.1.45 -- choice labels can be long on a phone: wrap rather than clip. */
+  .auth-box .btn { white-space: normal; line-height: 1.35; text-align: center; }
   .gift-card { border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(201,168,76,0.06); }
   .gift-from { font-size: 13px; color: rgba(201,168,76,0.7); margin-bottom: 4px; }
   .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
@@ -148,11 +150,18 @@
           cb.style.background = ''; cb.style.color = '';
           $('convert-note').textContent = 'You already have Platinum through your subscription, so the pass would add nothing. ' +
             'Take the tokens instead. Your subscription is not affected.';
+        } else if ((sub === 'silver' || sub === 'gold') && r.subPausedUntil) {
+          // v3.1.45 -- already paused for an earlier pass: this one extends the pause, nothing to choose.
+          rb.textContent = 'Platinum now: ' + r.months + ' more months' + tokensPart;
+          $('convert-note').textContent = 'Your ' + cap(sub) + ' subscription is already paused while your current pass runs. ' +
+            'This pass is added on the end, and ' + cap(sub) + ' stays paused until it finishes, then restarts by itself. ' +
+            'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
         } else if (sub === 'silver' || sub === 'gold') {
+          // v3.1.45 -- TD-938. Platinum now, and their subscription pauses until the pass ends.
           rb.textContent = 'Platinum now: ' + r.months + ' months' + tokensPart;
           $('convert-note').textContent = 'Platinum starts today and runs for ' + r.months + ' months. Your ' + cap(sub) +
-            ' subscription carries on as normal and keeps billing; when the pass ends you are back on ' + cap(sub) +
-            '. Or take the tokens instead. Choose one; it cannot be changed afterwards.';
+            ' subscription is paused while the pass runs, so you are not charged for it, and it restarts by itself when the pass ends. ' +
+            'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
         } else {
           rb.textContent = 'Redeem: ' + r.months + ' months of Platinum' + tokensPart;
           $('convert-note').textContent = 'Taking tokens means no Platinum months. Choose one; it cannot be changed afterwards.';
@@ -182,17 +191,22 @@
   function redeem(convert) {
     error('');
     var btn = convert ? $('convert-btn') : $('redeem-btn');
-    var other = convert ? $('redeem-btn') : $('convert-btn');
+    var all = [$('convert-btn'), $('redeem-btn')];
     var label = btn.textContent;
-    btn.disabled = true; other.disabled = true; btn.textContent = 'Redeeming...';
-    post('/api/gifts/redeem', { code: state.code, convert: !!convert }).then(function (r) {
-      btn.disabled = false; other.disabled = false; btn.textContent = label;
+    all.forEach(function (b) { b.disabled = true; });
+    btn.textContent = 'Redeeming...';
+    var body = { code: state.code, convert: !!convert };
+    post('/api/gifts/redeem', body).then(function (r) {
+      all.forEach(function (b) { b.disabled = false; });
+      btn.textContent = label;
       if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
       var lines = [];
       if (r.kind === 'pass' && !r.converted) {
         lines.push(r.months + ' months of Campaignia Platinum added. It now runs until ' + fmtDate(r.runsUntil) + '.');
-        if (r.subscription === 'silver' || r.subscription === 'gold') {
-          lines.push('Your ' + cap(r.subscription) + ' subscription carries on as before.');
+        if (r.subAction === 'pause' && !r.pauseFailed) {
+          lines.push('Your ' + cap(r.subscription) + ' subscription is paused until ' + fmtDate(r.pausedUntil) + ' and restarts by itself.');
+        } else if (r.subAction === 'pause' && r.pauseFailed) {
+          lines.push('We could not pause your ' + cap(r.subscription) + ' subscription automatically. Support has been told and will pause it for you.');
         }
       }
       if (r.tokens > 0) lines.push(r.tokens + ' tokens added to your balance.');
@@ -200,7 +214,7 @@
       show('done', true); show('found', false);
       $('subtitle').textContent = 'Enjoy your gift.';
       $('app-link').textContent = 'Open Campaignia';
-    }).catch(function () { btn.disabled = false; other.disabled = false; btn.textContent = label; error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
+    }).catch(function () { all.forEach(function (b) { b.disabled = false; }); btn.textContent = label; error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
   }
 
   $('check-btn').addEventListener('click', check);

@@ -484,6 +484,9 @@ async function initPostgres() {
     // a default would silently declare that every existing account holds a pass.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_tier TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_expires_at TIMESTAMP',
+    // v3.1.45 -- TD-938. When a subscription's billing is paused for a pass, the date it restarts
+    // (Stripe pause_collection.resumes_at). Kept in step by the subscription webhook. NULL = not paused.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_paused_until TIMESTAMP',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS back_cover_image_url TEXT',

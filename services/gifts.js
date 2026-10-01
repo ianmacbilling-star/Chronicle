@@ -299,6 +299,7 @@ async function lookup(db, input, rate, viewer) {
            sentToOther: viewerEmail ? sentToOther(row, viewerEmail) : false,
            sentToMasked: (viewerEmail && sentToOther(row, viewerEmail)) ? maskEmail(row.recipient_email) : null,
            subscription: viewer ? subscriptionState(viewer) : null,
+           subPausedUntil: (viewer && require('./billing/subscriptionPause').isFuture(viewer.sub_paused_until)) ? viewer.sub_paused_until : null,
            description: describeGift(row), fromName: row.buyer_name || null };
 }
 
@@ -345,20 +346,23 @@ async function redeem(db, userId, input, deps, opts) {
   }
   const tok = deps.tokens || require('../routes/tokens');
   const now = deps.now || new Date();
-  return db.transaction(async function (tx) {
+  const result = await db.transaction(async function (tx) {
     const g = (await tx.query('SELECT * FROM gift_certificates WHERE code_hash = $1 FOR UPDATE', [hash])).rows[0];
     if (!g) return { ok: false, reason: 'not_found' };
     if (g.status === 'redeemed') return { ok: false, reason: 'redeemed' };
     if (g.status === 'void') return { ok: false, reason: 'void' };
     if (g.status !== 'paid' && g.status !== 'delivered') return { ok: false, reason: 'not_found' };
     const u = (await tx.query(
-      'SELECT tier, pass_expires_at, current_period_end, stripe_subscription_id, subscription_status, cancel_at_period_end FROM users WHERE id = $1 FOR UPDATE',
+      'SELECT tier, pass_expires_at, current_period_end, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = $1 FOR UPDATE',
       [userId])).rows[0];
     if (!u) throw new Error('No such user');
     const sub = subscriptionState(u);
     // EVERY REFUSAL COMES BEFORE THE FIRST WRITE. A Platinum subscriber keeping the pass would get
     // months they already have, so they are sent back to take the tokens; nothing is spent.
     if (g.item_kind === 'pass' && !convert && sub === 'platinum') return { ok: false, reason: 'take_tokens' };
+    // v3.1.45 -- TD-938. A Silver/Gold subscriber keeping the pass has their billing paused until it
+    // ends (extended if already paused for an earlier pass). The Redeem page says so before they click.
+    const plan = require('./billing/subscriptionPause').planForPass(u, '', { gift: true, nowMs: now.getTime() });
     const grant = convert ? convertTokensFor(g, rate) : g.tokens;
     if (convert && !grant) throw new Error('conversion lost its value');
     await tx.query(
@@ -370,7 +374,7 @@ async function redeem(db, userId, input, deps, opts) {
       // Platinum from TODAY (after any pass they already hold) -- their paid period is not
       // waiting to end, so it must not delay the upgrade. Anyone else stacks exactly as a bought
       // pass does: after the later of now, a live pass, or a paid-up period that is ending.
-      const periodEnd = (sub === 'silver' || sub === 'gold') ? null : u.current_period_end;
+      const periodEnd = plan.stackPeriodEnd;
       const until = tok.passAddMonths(tok.passStackFrom(now.getTime(), u.pass_expires_at, periodEnd), g.months);
       runsUntil = until.toISOString();
       await tx.query('UPDATE users SET pass_tier = $1, pass_expires_at = $2 WHERE id = $3', ['platinum', runsUntil, userId]);
@@ -381,9 +385,30 @@ async function redeem(db, userId, input, deps, opts) {
         [userId, grant, 'cot', 'gift_redeem', 'gift:' + g.id + (convert ? ':as-tokens' : '')]);
     }
     await tx.query('UPDATE users SET last_purchase_at = $1 WHERE id = $2', [now.toISOString(), userId]);
+    const subAction = (g.item_kind === 'pass' && !convert && (sub === 'silver' || sub === 'gold')) ? plan.action : 'none';
     return { ok: true, id: g.id, kind: g.item_kind, converted: convert, months: convert ? null : g.months, tokens: grant,
-             runsUntil: runsUntil, subscription: sub, description: describeGift(g) };
+             runsUntil: runsUntil, subscription: sub, subAction: subAction, _subId: u.stripe_subscription_id, description: describeGift(g) };
   });
+  // v3.1.45 -- AFTER THE COMMIT, NEVER INSIDE IT. The pass is theirs whatever Stripe says next. A
+  // refused pause leaves them with the pass and a subscription still billing: visible, fixable, and
+  // Ian is emailed. Pausing inside the transaction could pause billing for a grant that rolls back.
+  if (result && result.ok && result.subAction === 'pause' && result._subId) {
+    try {
+      await require('./billing/subscriptionPause').pauseForPass(db, userId, result._subId, result.runsUntil, deps);
+      result.pausedUntil = result.runsUntil;
+    } catch (e) {
+      result.pauseFailed = true;
+      try {
+        const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
+        await alert('Gift redeemed, but the subscription could not be paused',
+          'User ' + userId + ' redeemed gift ' + result.id + ' (Platinum until ' + String(result.runsUntil).slice(0, 10) + '). Their ' +
+          result.subscription + ' subscription ' + result._subId + ' could not be paused: ' + ((e && e.message) || 'unknown error') +
+          String.fromCharCode(10) + 'They are still being billed. Pause it by hand in the Stripe dashboard until that date.');
+      } catch (_) {}
+    }
+  }
+  if (result) delete result._subId;
+  return result;
 }
 
 module.exports = {

@@ -345,7 +345,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, sub_paused_until, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
@@ -453,6 +453,8 @@ router.get('/me', async function(req, res) {
       subscriptionStatus: user.subscription_status || '',
       currentPeriodEnd: user.current_period_end || null,
       cancelAtPeriodEnd: !!user.cancel_at_period_end,
+      // v3.1.45 -- TD-938. When billing is paused for a pass, the date it restarts. Only while in the future.
+      subPausedUntil: (user.sub_paused_until && new Date(user.sub_paused_until).getTime() > Date.now()) ? user.sub_paused_until : null,
       loneCopper: await isLoneCopper(user.id),
       hasBilling: !!user.stripe_customer_id,
       hasSubscription: !!user.stripe_subscription_id,
