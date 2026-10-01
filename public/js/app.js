@@ -5171,7 +5171,10 @@ var NARR_STYLE_META = [
   { id:'noir', name:'Noir', desc:'Gritty, moody, cynical fantasy-noir. Hard-boiled phrasing, shadows, and suspicion.', example:'The cave breathed cold air like a liar exhaling excuses, and the torchlight wasn\u2019t bright enough to chase off the truth.' },
   { id:'grim', name:'Dark Fantasy / Grim', desc:'Bleak, heavy, and visceral. Dread, decay, and the cost of every choice.', example:'Blood soaked into the stone, vanishing as if the earth itself were thirsty. Even hope felt like a dying ember.' },
   { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' },
-  { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' }   // v3.1.27 -- TD-920
+  { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' },   // v3.1.27 -- TD-920
+  // v3.1.49 -- TD-941. Ian: "takes pretty much exactly what is written... and slices it into the appropriate
+  // narrative and image panels". The server copies the author's sentences; nothing is rewritten.
+  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box.', example:'Your words, exactly as you wrote them.' }
 ];
 var STYLE_PICKER_KIND = null;
 
@@ -33776,6 +33779,12 @@ function _narratorRender() {
   cb.checked = on;
   cb.disabled = locked;
   pick.style.display = on ? '' : 'none';
+  // v3.1.49 -- TD-941. Already Written keeps the author's words, so neither the length nor the first
+  // person applies (Ian). Both controls are greyed and say why; their saved values are left alone, so
+  // switching back to another style finds them as they were.
+  var _written = (style === 'written');
+  _writtenControls(_written);
+  if (_written) { cb.checked = false; cb.disabled = true; pick.style.display = 'none'; }
   var cid = state.currentCampaign && state.currentCampaign.id;
   var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
   // v3.1.31 -- on Calm & Literal the story is always "I", so NOBODY is a real choice, and it is shown
@@ -33807,6 +33816,30 @@ function _narratorRender() {
     'With Nobody in particular it is still told as \u201cI\u201d, but nobody is featured in the pictures \u2014 choose a character if you are in the story.';
   if (note) note.textContent = _nt;
   var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
+}
+
+// v3.1.49 -- TD-941. Grey the Narrative length dial and the In first person box for Already Written, with
+// one line saying why. Called from _narratorRender, which runs whenever the narrative window opens.
+function _writtenControls(on) {
+  var vd = document.getElementById('verbosity-dial');
+  var np = document.getElementById('narrator-panel');
+  [vd, np].forEach(function (el) {
+    if (!el) return;
+    el.style.opacity = on ? '0.45' : '';
+    // The length buttons and the narrator list. The first-person box itself is set by _narratorRender.
+    var bs = el.querySelectorAll('button.vseg-btn, select');
+    for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on;
+  });
+  var note = document.getElementById('written-note');
+  if (!note && vd && vd.parentNode) {
+    note = document.createElement('div');
+    note.id = 'written-note';
+    note.style.cssText = 'display:none;font-size:12px;color:#e8c766;margin:0 0 8px;line-height:1.4;';
+    note.textContent = 'Already Written keeps your words exactly as you wrote them, so Narrative length and In first person do not apply.';
+    var row = document.getElementById('narr-settings-row') || vd;
+    row.parentNode.insertBefore(note, row.nextSibling);
+  }
+  if (note) note.style.display = on ? '' : 'none';
 }
 
 function _narratorToggle(checked) {

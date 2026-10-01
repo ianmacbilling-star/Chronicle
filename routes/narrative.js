@@ -7,6 +7,7 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
+const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
 // NARRATIVE STYLES — the prose analog of art styles.
@@ -326,6 +327,16 @@ Example: "Soon it will be time to go to the dentist. Mum drives me there in the 
       name: "Outline / I'll write it",
       voice: `An OUTLINE for the author to write from \u2014 NOT finished prose. Every block is a short list of BULLET POINTS. Cover, in order: what happens; who is there; the key moment; and, where the transcript has one, a line of dialogue worth keeping, quoted with the speaker's name. Plain, factual wording in the PRESENT tense \u2014 no scene-setting paragraphs, no metaphor, no flourish. The author supplies the voice later.\nExample:\n\u2022 The raft reaches the big rapid late in the afternoon.\n\u2022 Tom and the guide are at the front.\n\u2022 Key moment: the raft stalls on the rock and Tom goes over the side.\n\u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d`,
       system: 'You are a story editor preparing a bullet-point outline that the author will turn into prose themselves. You write clear, factual bullet points and never finished prose. You always return valid JSON.' + IP_GUARD
+    },
+    // v3.1.49 -- TD-941. ALREADY WRITTEN. Ian: "takes pretty much exactly what is written... and slices it
+    // into the appropriate narrative and image panels". Every plan; length and first person do not apply.
+    // There is no voice: the model writes none of the story. It answers with sentence NUMBERS and the
+    // server copies the author's own text between them (services/writtenSlices.js), so the words are
+    // exact by construction. The prompt is its own (writtenPrompt below), not the shared one.
+    written: {
+      name: 'Already Written',
+      voice: '',
+      system: 'You are a careful editor dividing an author\'s finished story into the blocks of an illustrated book. The author wrote every word. You never write, rewrite, add or remove any of the story; you only say, by sentence number, where each block begins. You always return valid JSON.'
     }
   };
 })();
@@ -530,6 +541,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
   const isDialogue = (narrStyleId === 'dialogue');
   const isOutline = (narrStyleId === 'outline');   // v3.1.27 -- TD-920
+  const isWritten = (narrStyleId === 'written');   // v3.1.49 -- TD-941
   // Verbosity dial: 'low' | 'med' | 'high' (default med for new forks; existing books backfilled to high). Length only --
   // never changes voice, tense, or person, so it composes with every narrative style.
   const _vraw = (fkSteer && typeof fkSteer.narrative_verbosity === 'string') ? fkSteer.narrative_verbosity.toLowerCase() : 'med';
@@ -560,6 +572,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
+  // v3.1.49 -- TD-941. The author's text in numbered sentences: what the model answers with, and what
+  // the blocks are copied from afterwards. Worked out once, here, so both use exactly the same cuts.
+  const _wUnits = isWritten ? writtenSlices.splitUnits(session.transcript) : null;
+  if (isWritten && !_wUnits.length) return res.json({ error: 'Already Written splits the story in the Story / Session Transcript box, and it is empty.' });
 
   // Optional size-based charge for Generate Narrative (admin-configured; scales
   // with panel count). Verified before the job starts; spent on job success.
@@ -655,7 +671,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // read as Fantasy there, so there is no second place for that rule to live.
   const _genreProse = genresvc.genreSteering(campaign && campaign.genres, 'prose');
   const _campPrompt = genresvc.campaignPrompt(campaign && campaign.campaign_prompt);
-  const prompt =
+  let prompt =
     // v3.0.704 -- TD-507. Was hardcoded 'fantasy', two lines above the _genreProse steering it
     // argued with. Same persona helper as the system message, so the two cannot disagree.
     // v3.0.744 -- TD-543. The persona already carries the genre (v3.0.704); TTRPG here only ever
@@ -863,6 +879,46 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ' AIM FOR AT MOST 12 BULLETS and stop when the facts run out \u2014 a short memory is a good memory, and there is no credit for filling the space. ' + _summaryCap + ' characters is a CEILING you must not cross, not a target to reach."\n' +
     '}';
 
+  // v3.1.49 -- TD-941. ALREADY WRITTEN ASKS A DIFFERENT QUESTION: not "write the blocks" but "where does
+  // each block start". The memory ("summary") instruction is the SAME text as every other style's, taken
+  // from the prompt above rather than copied, so the two can never drift apart.
+  if (isWritten) {
+    const _sumSpec = prompt.slice(prompt.lastIndexOf('  "summary": "'));
+    const _nU = _wUnits.length;
+    prompt =
+      'You are dividing an author\'s finished story into the blocks of an illustrated book. The author wrote every word of it. ' +
+      'You write NONE of the story: you only say where each block STARTS, by sentence number.\n\n' +
+      (_prevText ? ('THE STORY SO FAR (from the previous session -- for the memory at the end only):\n' + _prevText + '\n\n') : '') +
+      '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n' +
+      'THE PICTURES, in the order they appear in the book (do NOT reorder):\n' +
+      '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n' +
+      momentsList + '\n\n' +
+      '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n' +
+      'THE AUTHOR\'S TEXT, cut into ' + _nU + ' numbered sentences:\n' +
+      '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n' +
+      writtenSlices.numberedText(_wUnits) + '\n\n' +
+      'YOUR JOB: the book reads intro -> PANEL 1 "before" -> PANEL 1 "after" -> PANEL 2 "before" -> ... -> outro. ' +
+      'Each block runs from its start sentence up to the next block\'s start, so every sentence is used exactly once, in order. Give the start of each block:\n' +
+      '- The intro always starts at sentence 1: the opening, before the first picture.\n' +
+      '- before_start of a panel: the first sentence of the passage that tells what THAT panel\'s picture shows.\n' +
+      '- after_start of a panel: the first sentence after that passage, as the story carries on toward the next picture.\n' +
+      '- outro_start: the first sentence after the last picture\'s passage -- the ending. Use ' + (_nU + 1) + ' if there is no ending left.\n' +
+      '- Starts NEVER go backwards. A block may be EMPTY: give it the same start as the block after it -- for example when two pictures come one straight after the other in the text.\n' +
+      '- Where it fits, start a block at the beginning of a paragraph.\n' +
+      '- Sentence numbers run from 1 to ' + _nU + '; ' + (_nU + 1) + ' means "after the last sentence".\n\n' +
+      'The short *_summary fields are a few words each describing what that block covers; they are never printed.\n' +
+      'QUOTATION MARKS -- inside any string value never use the straight ASCII double quote; use typographic quotes.\n' +
+      'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length + ' entries, one per panel, in order, with panel_index 0 through ' + (moments.length - 1) + ' (PANEL 1 is panel_index 0):\n' +
+      '{\n' +
+      '  "intro_summary": "A terse outline of the opening. Maximum 25 words.",\n' +
+      '  "sections": [\n' +
+      '    { "panel_index": 0, "before_start": 2, "before_summary": "Maximum 25 words.", "after_start": 5, "after_summary": "Maximum 25 words." }\n' +
+      '  ],\n' +
+      '  "outro_start": ' + _nU + ',\n' +
+      '  "outro_summary": "A terse outline of the ending. Maximum 25 words.",\n' +
+      _sumSpec;
+  }
+
   // Async: create a pending job, respond immediately, then run the (slow)
   // generation in the background. Express does not await this handler, so the
   // Claude call finishes after the response is sent \u2014 no gateway timeout.
@@ -937,10 +993,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         // sessions overrun -- and an overrun is a truncation, which TD-514 turns into a REFUSED
         // generation and a lost book, on exactly the sessions that most need a memory. The 400 is
         // headroom on top of the arithmetic, not a guess at it.
-        max_tokens: Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 1100)),
+        max_tokens: isWritten ? Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 200))   // v3.1.49 -- numbers, not prose
+          : Math.min(32000, 1500 + Math.ceil(_summaryCap / 3) + 400 + (moments.length * 1100)),
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
-        system: (narrator ? narratorSystemLine(narrator) : (_fpAnon ? narratorAnonSystemLine() : '')) + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
+        system: isWritten ? styleBundle.system   // v3.1.49 -- no voice, no first person: the author's words stand
+          : (narrator ? narratorSystemLine(narrator) : (_fpAnon ? narratorAnonSystemLine() : '')) + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1042,6 +1100,21 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       if (_secs.length > moments.length) _secs = _secs.slice(0, moments.length);
       parsed.sections = _secs.map(function (sec, i) { sec = sec || {}; sec.panel_index = i; return sec; });
     } catch (e) { /* leave parsed.sections as-is on any unexpected shape */ }
+
+    // v3.1.49 -- TD-941. ALREADY WRITTEN: the model gave sentence numbers; the blocks are the author's own
+    // text copied between them. The summaries the model wrote are kept; the numbers are not stored.
+    if (isWritten) {
+      const _wb = writtenSlices.buildBlocks(session.transcript, _wUnits, parsed, moments.length);
+      parsed.intro = _wb.intro;
+      parsed.outro = _wb.outro;
+      parsed.sections = parsed.sections.map(function (sec, i) {
+        sec = Object.assign({}, sec, { before: _wb.sections[i].before, after: _wb.sections[i].after });
+        delete sec.before_start; delete sec.after_start;
+        return sec;
+      });
+      delete parsed.outro_start;
+      if (_wb.fixed) { try { console.warn('[narrative] Already Written: ' + _wb.fixed + ' block start(s) out of order or missing; those blocks were left empty'); } catch (_wf) {} }
+    }
 
     // Save to database — sections JSON already carries each panel's
     // after_summary; intro/outro summaries get their own columns.

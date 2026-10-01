@@ -908,6 +908,17 @@ how many bullets. Every plan. Replace the bullets before you order: bullets left
 as one paragraph. Campaignia warns you while any are left — on the session's **Preview** tab and on
 the Publish page's **Prep & Preview** tab, which names the sessions that still have them.
 
+**Already Written** is a narrative style for a story you have **already written yourself**. Put your
+finished story in the **Story / Session Transcript** box, pick Already Written, then run **Generate
+Story** (the pictures are chosen from what your text describes) and **Generate Narrative**.
+Campaignia writes nothing new: it splits **your own words, exactly as you wrote them**, into the
+narrative panels around the pictures — the opening, the text that goes with each picture, the text
+between pictures, and the ending. Cuts always fall between sentences, and every sentence is used
+once, in order. A narrative panel can come out empty when two pictures follow each other in your
+text. **Narrative length** and **In first person** don't apply to it, so they are greyed out. It
+costs the usual Generate Narrative tokens. Every plan. You can still edit any narrative panel by
+hand afterwards; generating again re-splits the text and replaces those edits.
+
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.
 - **The title panel (first)** — a wide establishing shot of the setting, meant to draw
@@ -1718,6 +1729,10 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   I'll write it** narrative style, then run **Generate Story** and **Generate Narrative & Images** as
   usual. The pictures are drawn as normal, and every narrative panel arrives as bullet points of what
   happens. Click into each one and write your own prose over them.
+- **"I've already written my story. I just want the pictures, with my words kept exactly."** Paste
+  your story into the **Story / Session Transcript** box and pick the **Already Written** narrative
+  style. Run **Generate Story**, then **Generate Narrative & Images**. Your text is split word for
+  word around the pictures; Campaignia adds nothing to it. See 10.3.
 
 ---
 
@@ -1932,6 +1947,9 @@ Friction points and what's actually going on.
   Narrative style window, with any of your characters as the Narrator. Every plan, every style.
 - **Can I write the story myself and let Campaignia draw?** Yes — the **Outline / I'll write it**
   narrative style gives you bullet points to write over. Every plan.
+- **I've already written my story. Will Campaignia change my words?** Not with the **Already
+  Written** narrative style: it splits your own text around the pictures, word for word, and writes
+  nothing new. Every plan.
 - **Can I draw all the pictures myself?** Yes — **I'll illustrate it myself** at the top of the Art
   style window. Campaignia draws nothing for that version and each panel shows an art brief to draw
   from. Every plan.

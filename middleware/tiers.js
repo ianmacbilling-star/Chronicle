@@ -740,7 +740,8 @@ const NARRATIVE_STYLE_MIN_RANK = {
   grim: 4,         // Platinum
   storybook: 4,    // Platinum
   anime: 2,        // Silver (High-Drama Anime; was Platinum)
-  outline: 1       // every plan -- v3.1.27, TD-920 (Outline / I'll write it). Ian: "Every Plan".
+  outline: 1,      // every plan -- v3.1.27, TD-920 (Outline / I'll write it). Ian: "Every Plan".
+  written: 1       // every plan -- v3.1.49, TD-941 (Already Written). Ian: "Every Plan".
 };
 
 // Unknown ids default to the floor (rank 1) so a never-mapped style never

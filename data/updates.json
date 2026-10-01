@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.49",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3149-already-written",
+        "kind": "feature",
+        "public": false,
+        "summary": "A new narrative style, Already Written: your own finished story, kept word for word and split around the pictures. Campaignia writes nothing new.",
+        "detail": "Put a finished story in the Story / Session Transcript box, choose Narrative style > Already Written (last in the list, every plan), then Generate Story and Generate Narrative. Every narrative panel holds your own sentences, in order, each used once; cuts fall between sentences. A panel can be empty where two pictures come one after the other in the text. Narrative length and In first person are greyed out for this style and come back as they were on any other. It costs the usual Generate Narrative tokens. Also fixed: in the tall-picture layouts, a narrative panel that is empty no longer prints the picture's internal description in its place (that note is only used now when the book has no narrative at all).",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.48",
     "staged_on": "2026-10-01",
     "entries": [
