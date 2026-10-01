@@ -1142,6 +1142,9 @@ async function initPostgres() {
   // v3.0.981 -- TD-901. The Bookshelf table.
   await migrateBookshelf(pool);
 
+  // v3.1.43 -- TD-934. Gift certificates. Its own table; nothing existing changes.
+  await migrateGifts(pool);
+
   // Scaling hardening — performance indexes on hot-path FK / filter
   // columns and the releaseImage() URL lookups. Runs LAST so every
   // referenced column already exists.
@@ -2102,6 +2105,63 @@ async function migrateBookshelf(pool) {
   // failed ("column id does not exist") after the picture had already been drawn and uploaded. Added
   // here for the table staging already has; the CREATE above carries it for a fresh database.
   await pool.query('ALTER TABLE order_cover_thumbs ADD COLUMN IF NOT EXISTS id SERIAL');
+}
+
+// v3.1.43 -- TD-934. GIFT CERTIFICATES (spec: claude/GIFT_CERTIFICATES_SPEC.md).
+// One row per gift. The plain code is NEVER stored: code_hash is sha256 of it and code_last4 is
+// for people to recognise it by. code_hash is NULL until the gift is delivered, because the code is
+// made at delivery. item_kind/item_id/months/tokens/price_cents are the FROZEN QUOTE: what was
+// bought, whatever the catalog says later. price_cents is what was PAID (0 for a free gift);
+// value_cents is the item's catalog price at the time, kept for both. status: pending_payment -> paid -> delivered ->
+// redeemed, or void. redeemed_as is 'pass', 'pack' or 'tokens' (a pass taken as tokens) and
+// redeemed_tokens what was granted. comp = issued free from the dashboard. No foreign keys, so a deleted account
+// can never block or cascade into a gift (the emails and names are kept on the row).
+// id SERIAL because the db wrapper appends RETURNING id to every INSERT (v3.0.991's lesson).
+async function migrateGifts(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gift_certificates (
+      id SERIAL PRIMARY KEY,
+      code_hash TEXT,
+      code_last4 TEXT,
+      item_kind TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      item_name TEXT,
+      months INTEGER,
+      tokens INTEGER NOT NULL DEFAULT 0,
+      price_cents INTEGER NOT NULL DEFAULT 0,
+      value_cents INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'usd',
+      comp BOOLEAN NOT NULL DEFAULT false,
+      buyer_user_id INTEGER,
+      buyer_email TEXT,
+      buyer_name TEXT,
+      recipient_name TEXT,
+      recipient_email TEXT NOT NULL,
+      message TEXT,
+      deliver_on DATE,
+      stripe_session_id TEXT,
+      stripe_payment_intent TEXT,
+      status TEXT NOT NULL DEFAULT 'pending_payment',
+      delivery_attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      delivered_at TIMESTAMP,
+      redeemed_at TIMESTAMP,
+      redeemed_by_user_id INTEGER,
+      redeemed_as TEXT,
+      redeemed_tokens INTEGER,
+      voided_at TIMESTAMP,
+      void_reason TEXT,
+      created_by_admin TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_code_hash ON gift_certificates(code_hash) WHERE code_hash IS NOT NULL');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_stripe_session ON gift_certificates(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gift_status ON gift_certificates(status, deliver_on)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gift_created ON gift_certificates(created_at)');
+  // The pass-to-tokens rate (cents per token), seeded at 20 once (Ian, 2026-10-01). After that the
+  // dashboard owns it; this never overwrites a value that is already there.
+  await pool.query("INSERT INTO app_settings (setting_key, value) SELECT 'gift_convert_cents_per_token', '20' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE setting_key = 'gift_convert_cents_per_token')");
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

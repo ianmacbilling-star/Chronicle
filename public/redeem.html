@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaignia &mdash; Redeem a Gift</title>
+<meta name="description" content="Redeem a Campaignia gift." />
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+<link rel="stylesheet" href="/css/fonts.css">
+<link rel="stylesheet" href="/css/style.css">
+<!-- v3.1.43 -- TD-934. THE GIFT REDEMPTION PAGE. Spec: claude/GIFT_CERTIFICATES_SPEC.md section 4.
+     Every rule is the server's: this page asks /api/gifts/status, /lookup and /redeem and says what
+     they answer. Nothing here decides whether a gift is valid. -->
+<style>
+  body { margin: 0; }
+  .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    background: #0a0806; background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; position: relative; }
+  .auth-page::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.65); }
+  .auth-box { position: relative; z-index: 1; background: rgba(20,15,8,0.92); border: 1px solid rgba(201,168,76,0.25); border-radius: 16px;
+    padding: 32px; width: 100%; max-width: 440px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: #e8d5a3; }
+  .auth-logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 22px; gap: 10px; }
+  .auth-logo-img { height: 72px; width: auto; max-width: 80%; }
+  .auth-title { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; text-align: center; letter-spacing: 1px; margin-bottom: 6px; }
+  .auth-subtitle { font-size: 13px; color: rgba(201,168,76,0.6); text-align: center; margin-bottom: 20px; line-height: 1.5; }
+  .auth-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 0 0 20px; }
+  .auth-box .form-label { color: rgba(201,168,76,0.7); }
+  .auth-box .form-input { background: rgba(255,255,255,0.05); border-color: rgba(201,168,76,0.2); color: #e8d5a3; width: 100%; box-sizing: border-box;
+    font-family: 'Courier New', monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .auth-box .btn-primary { background: #c9a84c; color: #1a0e06; border-color: #c9a84c; font-family: 'Cinzel', Georgia, serif; letter-spacing: 1px;
+    font-size: 13px; width: 100%; justify-content: center; padding: 12px; margin-top: 8px; }
+  .auth-box .btn-primary:hover { background: #e8c870; }
+  .auth-box .btn-primary[disabled] { opacity: 0.6; cursor: default; }
+  .gift-card { border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(201,168,76,0.06); }
+  .gift-from { font-size: 13px; color: rgba(201,168,76,0.7); margin-bottom: 4px; }
+  .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
+  .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
+  .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; line-height: 1.6; }
+  .links { text-align: center; margin-top: 14px; font-size: 13px; color: rgba(201,168,76,0.6); }
+  .links a { color: #c9a84c; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo-wrap">
+      <img class="auth-logo-img" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
+    </div>
+    <div class="auth-title">Redeem a Gift</div>
+    <div class="auth-subtitle" id="subtitle">Enter the code from your gift email.</div>
+    <div class="auth-divider"></div>
+
+    <div id="error" class="msg-error hidden" role="alert"></div>
+    <div id="done" class="msg-ok hidden" role="status"></div>
+
+    <div id="off" class="hidden"><p class="note" style="text-align:center;">Gifts are not available right now. Your gift never expires, so please try this link again later.</p></div>
+
+    <div id="enter">
+      <label class="form-label" for="code">Gift code</label>
+      <input class="form-input" id="code" maxlength="30" placeholder="GIFT-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" />
+      <button class="btn btn-primary" id="check-btn" type="button">Check code</button>
+    </div>
+
+    <div id="found" class="hidden">
+      <div class="gift-card">
+        <div class="gift-from" id="gift-from"></div>
+        <div class="gift-what" id="gift-what"></div>
+      </div>
+      <div id="signed-in" class="hidden">
+        <button class="btn btn-primary" id="redeem-btn" type="button">Redeem</button>
+        <div id="convert-wrap" class="hidden">
+          <button class="btn btn-primary" id="convert-btn" type="button" style="background:transparent;color:#c9a84c;"></button>
+          <p class="note" id="convert-note"></p>
+        </div>
+        <p class="note" id="who"></p>
+      </div>
+      <div id="signed-out" class="hidden">
+        <p class="note" style="margin-top:0;">To use your gift, sign in or create a free Campaignia account.</p>
+        <a class="btn btn-primary" id="login-link" href="/login">Sign in</a>
+        <a class="btn btn-primary" id="signup-link" href="/login?signup" style="background:transparent;color:#c9a84c;">Create a free account</a>
+        <p class="note">New here? After you confirm your email address, come back to the link in your gift email to redeem it. Your gift never expires.</p>
+      </div>
+    </div>
+
+    <div class="links" id="app-link-wrap"><a href="/app.html" id="app-link">Open Campaignia</a></div>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { me: null, code: '' };
+  function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
+  function error(text) { var e = $('error'); e.textContent = text || ''; show('error', !!text); }
+  function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+  }
+  function fmtDate(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  var REASON = {
+    not_found: 'That code was not recognised. Check it against your gift email. If the gift was sent again, only the newest code works.',
+    redeemed: 'This gift has already been redeemed.',
+    'void': 'This gift has been cancelled and can no longer be redeemed.',
+    needs_plan: 'Tokens cannot be added to a Free Trial account. Choose a plan in Campaignia, then come back to this link. Your gift never expires and will still be here.',
+    cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.'
+  };
+
+  function check() {
+    error('');
+    var code = ($('code').value || '').trim();
+    if (!code) { error('Enter the code from your gift email.'); return; }
+    $('check-btn').disabled = true;
+    post('/api/gifts/lookup', { code: code }).then(function (r) {
+      $('check-btn').disabled = false;
+      if (r.reason === 'off') { show('enter', false); show('off', true); return; }
+      if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
+      if (r.state === 'redeemed') { error(REASON.redeemed); return; }
+      if (r.state === 'void') { error(REASON['void']); return; }
+      state.code = code;
+      state.gift = r;
+      $('gift-from').textContent = r.fromName ? ('A gift from ' + r.fromName) : 'A gift for you';
+      $('gift-what').textContent = r.description.charAt(0).toUpperCase() + r.description.slice(1);
+      show('enter', false); show('found', true);
+      var back = '/redeem?code=' + encodeURIComponent(code);
+      // A pass can be taken as tokens instead (the server decides the number and the rules).
+      var canConvert = (r.kind === 'pass' && r.convertTokens > 0);
+      if (canConvert) {
+        $('redeem-btn').textContent = 'Redeem: ' + r.months + ' months of Platinum' + (r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '');
+        $('convert-btn').textContent = 'Take ' + r.convertTokens + ' tokens instead';
+        $('convert-note').textContent = 'Taking tokens means no Platinum months. Choose one; it cannot be changed afterwards.';
+      }
+      show('convert-wrap', canConvert && !!state.me);
+      if (state.me) {
+        $('who').textContent = 'It will be added to the account you are signed in to: ' + (state.me.email || 'this account') + '.';
+        show('signed-in', true); show('signed-out', false);
+      } else {
+        $('login-link').href = '/login?returnTo=' + encodeURIComponent(back);
+        $('signup-link').href = '/login?signup&returnTo=' + encodeURIComponent(back);
+        show('signed-in', false); show('signed-out', true);
+      }
+    }).catch(function () { $('check-btn').disabled = false; error('Could not reach Campaignia. Please try again.'); });
+  }
+
+  function redeem(convert) {
+    error('');
+    var btn = convert ? $('convert-btn') : $('redeem-btn');
+    var other = convert ? $('redeem-btn') : $('convert-btn');
+    var label = btn.textContent;
+    btn.disabled = true; other.disabled = true; btn.textContent = 'Redeeming...';
+    post('/api/gifts/redeem', { code: state.code, convert: !!convert }).then(function (r) {
+      btn.disabled = false; other.disabled = false; btn.textContent = label;
+      if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
+      var lines = [];
+      if (r.kind === 'pass' && !r.converted) {
+        lines.push(r.months + ' months of Campaignia Platinum added. It now runs until ' + fmtDate(r.runsUntil) + '.');
+      }
+      if (r.tokens > 0) lines.push(r.tokens + ' tokens added to your balance.');
+      var d = $('done'); d.textContent = lines.join(' ') || 'Your gift has been added.';
+      show('done', true); show('found', false);
+      $('subtitle').textContent = 'Enjoy your gift.';
+      $('app-link').textContent = 'Open Campaignia';
+    }).catch(function () { btn.disabled = false; other.disabled = false; btn.textContent = label; error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
+  }
+
+  $('check-btn').addEventListener('click', check);
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+  $('redeem-btn').addEventListener('click', function () { redeem(false); });
+  $('convert-btn').addEventListener('click', function () { redeem(true); });
+
+  var pre = '';
+  try { pre = new URLSearchParams(window.location.search).get('code') || ''; } catch (e) {}
+  Promise.all([
+    fetch('/api/gifts/status', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { enabled: false }; }),
+    fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
+  ]).then(function (res) {
+    if (!res[0] || !res[0].enabled) { show('enter', false); show('off', true); return; }
+    state.me = (res[1] && res[1].authenticated) ? res[1] : null;
+    if (!state.me) $('app-link').textContent = 'Back to Campaignia';
+    if (pre) { $('code').value = pre; check(); }
+  });
+})();
+</script>
+</body>
+</html>

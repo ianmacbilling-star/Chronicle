@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.43",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3143-gifts-dashboard",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gift certificates, part one: a Gifts tab on the dashboard with an on/off switch, free gifts sent by email (now or on a date), and a Redeem page where a gifted pass can be kept or taken as tokens.",
+        "detail": "Gifts are OFF until switched on in Dashboard > Gifts, separately on each server. To test: switch on, send yourself a free 3-month pass, open the email's Redeem link, sign in and redeem; the pass and 200 tokens land on your account. Send another pass and choose Take tokens instead (list price divided by the Pass to tokens rate, 20 cents to start, e.g. 395 for the 3-month pass). Try the link again (already redeemed), a token pack on a Free Trial account (refused, gift kept), Resend (old code stops working), Void, and a dated gift (sent at 9am Eastern that day). Buying gifts comes in part two.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.42",
     "staged_on": "2026-09-28",
     "entries": [

@@ -77,7 +77,9 @@ var DENY = [
 
   // --- The campaign's official book. v3.1.35 -- TD-928: Promote to Canonical changes what every member
   // reads and can delete the old Canonical, so it is the Story Master's decision, not support's. ---
-  { m: 'POST', p: '/api/campaigns/',                why: 'change which version is the Canonical', suffix: '/promote' }
+  { m: 'POST', p: '/api/campaigns/',                why: 'change which version is the Canonical', suffix: '/promote' },
+  // v3.1.43 -- TD-934. A gift belongs to whoever redeems it; support must never spend one for them.
+  { m: 'POST', p: '/api/gifts/redeem',              why: 'redeem a gift' }
 ];
 
 function deniedEntry(method, path) {

@@ -293,6 +293,11 @@ app.get('/library', function(req, res) {
 // v3.0.741 -- TD-537. Extensionless, matching /library and /login. express.static would serve
 // /our-story.html on its own, but the nav links to /our-story and a 404 on the founder letter
 // is not a thing to discover after launch.
+// v3.1.43 -- TD-934. The gift redemption page. It asks /api/gifts/status itself, so with gifts
+// switched off it says so rather than offering anything.
+app.get('/redeem', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'redeem.html'));
+});
 app.get('/our-story', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'our-story.html'));
 });
@@ -384,6 +389,7 @@ app.use('/api/order-covers', require('./routes/orderCovers'));   // v3.0.989 -- 
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
 app.use('/api', require('./routes/invites'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/gifts', require('./routes/gifts'));   // v3.1.43 -- TD-934 gift certificates
 app.use('/api/debug', require('./routes/debug'));
 
 // Public, unauthenticated: landing-page pricing (reads live tier config).

@@ -1197,6 +1197,67 @@ async function sendHelpTranscriptEmail(opts) {
 }
 
 // ============================================================
+// v3.1.43 -- TD-934. THE GIFT EMAIL (spec: claude/GIFT_CERTIFICATES_SPEC.md section 4).
+//
+// EVERYTHING A BUYER TYPED IS ESCAPED: their name, the recipient's name and the message all land
+// in HTML, and a gift message is the one field in this file a stranger writes. The message keeps
+// its line breaks and nothing else.
+//
+// The code is printed as well as linked, so it can be typed if the button is stripped or the link
+// mangled. "Never expires" is stated because it is true and because the law asks for the terms to
+// be clear (spec section 8).
+// ============================================================
+function giftEmailHTML(g) {
+  function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  var msg = g.message ? esc(g.message).replace(/\r?\n/g, '<br>') : '';
+  var packNote = (g.itemKind === 'pack')
+    ? '<div style="font-size:13px;line-height:1.6;color:rgba(232,213,163,0.75);margin-top:14px;">Tokens can be added to any Campaignia account except one on the Free Trial.</div>'
+    : '';
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
+<body style="margin:0;padding:24px 0;background:#1a1008;">
+  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="padding:32px;">
+      <div style="font-size:20px;color:#f0e8d0;margin-bottom:16px;">${esc(g.fromName)} sent you a gift</div>
+      <div style="font-size:15px;line-height:1.7;color:#e8d5a3;margin-bottom:18px;">Hi ${esc(g.recipientName || 'there')},<br><br>${esc(g.fromName)} has given you <b>${esc(g.description)}</b>.</div>
+      ${msg ? '<div style="font-size:15px;line-height:1.7;color:#f0e8d0;border-left:3px solid #c9a84c;padding:4px 0 4px 14px;margin:0 0 22px;font-style:italic;">' + msg + '</div>' : ''}
+      <a href="${esc(g.redeemUrl)}" style="display:inline-block;background:#c0392b;color:#f0e8d0;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">Redeem your gift</a>
+      <div style="font-size:13px;line-height:1.7;color:rgba(232,213,163,0.75);margin-top:22px;">Or go to ${esc(g.redeemBase)} and enter this code:</div>
+      <div style="font-family:'Courier New',monospace;font-size:20px;letter-spacing:2px;color:#f0e8d0;margin-top:6px;">${esc(g.code)}</div>
+      <div style="font-size:13px;line-height:1.6;color:rgba(232,213,163,0.75);margin-top:14px;">This gift never expires. You will need a free Campaignia account to use it.</div>
+      ${packNote}
+    </div>
+    <div style="padding:18px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:11px;color:rgba(201,168,76,0.5);">You are receiving this because someone sent you a Campaignia gift at this address. Keep the code private: anyone with it can redeem the gift.</div>
+  </div>
+</body>
+</html>`;
+}
+
+function giftEmail(row, code) {
+  var app = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  var describe = require('../services/gifts').describeGift;
+  var fromName = row.buyer_name || 'Someone';
+  var g = {
+    fromName: fromName, recipientName: row.recipient_name, message: row.message,
+    description: describe(row), itemKind: row.item_kind, code: code,
+    redeemBase: app.replace(/^https?:\/\//, '') + '/redeem',
+    redeemUrl: app + '/redeem?code=' + encodeURIComponent(code)
+  };
+  return { subject: fromName + ' sent you a Campaignia gift', html: giftEmailHTML(g) };
+}
+
+async function sendGiftEmail(row, code) {
+  var built = giftEmail(row, code);
+  await sendEmail(row.recipient_email, built.subject, built.html);
+  return true;
+}
+
+// ============================================================
 // ADMIN: Email preview / test-send  (admin-gated)
 // Sends a copy of any transactional template, populated with realistic
 // sample data, to the requesting admin's own email so they can see how
@@ -1273,6 +1334,11 @@ function buildEmailPreview(type, name) {
         itemName: 'Gold subscription', tierLabel: 'Gold',
         tokensGranted: 15, balanceAfter: 457,
         paidAt: '2026-10-05T15:25:00.000Z' });
+    // v3.1.43 -- TD-934. Through giftEmail(), the same function the live send uses. The sample code
+    // is made of characters a real code can never contain (0, O, 1), so it can never redeem anything.
+    case 'gift':
+      return giftEmail({ buyer_name: 'Marisol', recipient_name: who, item_kind: 'pass', months: 3, tokens: 200,
+        message: 'Happy birthday! Now you can finally turn our campaign into a book.' }, 'GIFT-0O01-SAMP-LE00');
     case 'feedback':
       return { subject: '[Campaignia Feedback] Bug report - Storyboard not loading', html: feedbackHTML({ category: 'Bug report', subject: 'Storyboard not loading', from_name: who, from_email: 'player@example.com', tier: 'Gold', message: 'The storyboard spinner never finishes on my last session. I tried refreshing a few times with no luck.' }) };
     case 'trial_ending_soon':
@@ -1326,4 +1392,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendGiftEmail, giftEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

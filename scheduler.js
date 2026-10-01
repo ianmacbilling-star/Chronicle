@@ -478,6 +478,45 @@ async function maybeDailyLifecyclePass(db) {
   console.log('[scheduler] daily lifecycle sweep complete for ' + today + ' ' + JSON.stringify(summary));
 }
 
+// v3.1.43 -- TD-934. GIFT DELIVERY. Sends every gift that is paid, not yet sent, and due:
+// its date is today (from 9am Eastern) or earlier, or it has no date at all (a send-now that failed).
+//
+// DELIBERATELY UNLIKE THE JOBS ABOVE:
+//   * NOT gated by LIFECYCLE_EMAILS_ENABLED. That switch is for marketing mail and is off on
+//     staging; a gift someone paid for goes out regardless.
+//   * NO ONCE-A-DAY MARKER. Each gift's own status is the record, so a restart or a missed tick
+//     delays a gift to the next hourly tick and can never skip it.
+//   * GATED BY THE GIFTS SWITCH instead: off means dormant, and the link in the email would not
+//     work, so nothing is sent until it is on again.
+//   * A gift that fails MAX_DELIVERY_ATTEMPTS times stops being retried and Ian is alerted once.
+async function deliverDueGifts(db, opts) {
+  opts = opts || {};
+  const gifts = require('./services/gifts');
+  const out = { matched: 0, sent: 0, failed: 0, skipped: '' };
+  if (!(await gifts.isEnabled(db))) { out.skipped = 'gifts are switched off'; return out; }
+  const sendFn = opts.sendFn || require('./routes/email').sendGiftEmail;
+  const rows = await db.prepare(
+    "SELECT * FROM gift_certificates WHERE status = 'paid' AND delivery_attempts < ? ORDER BY id"
+  ).all(gifts.MAX_DELIVERY_ATTEMPTS);
+  const now = opts.now || new Date();
+  for (const row of (rows || [])) {
+    if (!gifts.isDue(row.deliver_on, now)) continue;
+    out.matched++;
+    const r = await gifts.issueAndSend(db, row, sendFn);
+    if (r.ok) { out.sent++; continue; }
+    out.failed++;
+    if ((row.delivery_attempts || 0) + 1 >= gifts.MAX_DELIVERY_ATTEMPTS) {
+      try {
+        await sendAlertEmail('Gift ' + row.id + ' could not be delivered',
+          'Gift ' + row.id + ' to ' + row.recipient_email + ' failed ' + gifts.MAX_DELIVERY_ATTEMPTS +
+          ' times and will not be retried automatically. Last error: ' + r.error +
+          String.fromCharCode(10) + 'Correct the address and use Resend on the Gifts tab.');
+      } catch (_) {}
+    }
+  }
+  return out;
+}
+
 async function tick() {
   let db;
   try { db = await getDb(); }
@@ -506,6 +545,13 @@ async function tick() {
   } catch (e) {
     console.error('[scheduler] lifecycle sweep failed:', e && e.message);
   }
+  // v3.1.43 -- TD-934. Every tick, its own try, like every job here.
+  try {
+    const g = await deliverDueGifts(db);
+    if (g.matched || g.failed) console.log('[scheduler] gift delivery: matched ' + g.matched + ', sent ' + g.sent + ', failed ' + g.failed);
+  } catch (e) {
+    console.error('[scheduler] gift delivery failed:', e && e.message);
+  }
 }
 
 let started = false;
@@ -517,4 +563,4 @@ function startScheduler() {
   console.log('[scheduler] started (hourly tick; weekly snapshot Sunday night UTC)');
 }
 
-module.exports = { startScheduler, runLifecycleSweep, runPassSweep };
+module.exports = { deliverDueGifts, startScheduler, runLifecycleSweep, runPassSweep };

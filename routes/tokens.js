@@ -1680,5 +1680,8 @@ module.exports = {
   fulfillSubscriptionUpdate,
   syncSubscriptionToUser,
   linkSubscriptionCheckout,
-  stripeWebhook
+  stripeWebhook,
+  // v3.1.43 -- TD-934. A redeemed gift pass stacks by exactly the rule a bought one does.
+  passStackFrom,
+  passAddMonths
 };

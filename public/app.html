@@ -1673,6 +1673,8 @@
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
         <button class="settings-tab" id="settings-tab-promos" onclick="switchSettingsTab('promos')">Promo Codes</button>
+        <!-- v3.1.43 -- TD-934. Gift certificates. Admin only, by membership of SETTINGS_TABS_ALL. -->
+        <button class="settings-tab" id="settings-tab-gifts" onclick="switchSettingsTab('gifts')">Gifts</button>
         <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
              now reachable by testers and impersonation must never be. -->
         <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
@@ -1841,6 +1843,7 @@
             <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
             <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
             <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
+            <option value="gift">Gift &mdash; to the recipient</option>
             <option value="feedback">Feedback (to support)</option>
             <option value="trial_ending_soon">Trial &mdash; ending soon</option>
             <option value="trial_expired">Trial &mdash; expired</option>
@@ -2104,6 +2107,67 @@
            The list keeps its OWN scroll box rather than growing the page, because the lazy load is
            driven by that element's scroll position -- letting the tab grow instead would need a
            window listener and a different mechanism for the same result. -->
+      <!-- v3.1.43 -- TD-934. GIFTS. Spec: claude/GIFT_CERTIFICATES_SPEC.md.
+           The switch is per server (staging and production each keep their own) and needs no deploy.
+           The list never shows a code: only its last four characters, because the full code is never
+           stored. Resend makes a NEW code, so the old one stops working. -->
+      <div class="settings-pane" id="settings-pane-gifts" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Gifts on this server</div>
+          <div class="settings-section-desc" id="gift-switch-desc">Loading...</div>
+          <button class="btn btn-sm" id="gift-switch-btn" onclick="toggleGiftsEnabled()" style="display:none;">Switch on</button>
+          <span class="settings-section-desc" id="gift-switch-msg" style="margin:0 0 0 8px;"></span>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Pass to tokens</div>
+          <div class="settings-section-desc">Anyone redeeming a gifted pass can take tokens instead of the months. They get the pass&#39;s list price divided by this rate, rounded down. The rate is read when the gift is redeemed, so a change here applies to every pass gift not yet redeemed, paid or free.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input class="form-input" id="gift-rate-input" type="number" min="0.01" step="0.01" style="width:110px;" oninput="renderGiftRatePreview()" />
+            <span style="font-size:13px;">cents per token</span>
+            <button class="btn btn-primary btn-sm" onclick="saveGiftRate()">Save rate</button>
+            <span class="settings-section-desc" id="gift-rate-msg" style="margin:0;"></span>
+          </div>
+          <div class="settings-section-desc" id="gift-rate-preview" style="margin-top:8px;"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Send a free gift</div>
+          <div class="settings-section-desc">For giveaways, influencers and apologies. Kept apart from sales. Leave the date empty to send it now; a date sends it at 9am Eastern that day.</div>
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;max-width:620px;">
+            <label style="color:var(--gold);font-size:13px;" for="gift-item-input">Gift</label>
+            <select class="form-input" id="gift-item-input"></select>
+            <label style="color:var(--gold);font-size:13px;" for="gift-to-name">Recipient&#39;s name</label>
+            <input class="form-input" id="gift-to-name" maxlength="80" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-to-email">Recipient&#39;s email</label>
+            <input class="form-input" id="gift-to-email" type="email" maxlength="254" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-from-name">From</label>
+            <input class="form-input" id="gift-from-name" maxlength="80" value="Campaignia" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-message">Message <span style="color:var(--text-muted);">(optional)</span></label>
+            <textarea class="form-input" id="gift-message" maxlength="300" rows="3" style="resize:vertical;"></textarea>
+            <label style="color:var(--gold);font-size:13px;" for="gift-deliver-on">Deliver on <span style="color:var(--text-muted);">(optional)</span></label>
+            <input class="form-input" id="gift-deliver-on" type="date" style="width:180px;" />
+          </div>
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="gift-comp-btn" onclick="sendCompGift()">Send gift</button>
+            <span class="settings-section-desc" id="gift-comp-msg" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">All gifts</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;">
+            <select class="form-input" id="gift-f-status" style="width:170px;" onchange="loadGifts()">
+              <option value="">Every status</option>
+              <option value="pending_payment">Awaiting payment</option>
+              <option value="paid">Not sent yet</option>
+              <option value="delivered">Sent</option>
+              <option value="redeemed">Redeemed</option>
+              <option value="void">Void</option>
+            </select>
+            <input class="form-input" id="gift-f-q" style="width:240px;" placeholder="name, email or last 4 of the code" onkeydown="if(event.key==='Enter')loadGifts()" />
+            <button class="btn btn-primary btn-sm" onclick="loadGifts()">Filter</button>
+          </div>
+          <div id="gift-list" class="settings-section-desc">Loading...</div>
+        </div>
+      </div>
       <div class="settings-pane" id="settings-pane-orders" style="display:none;">
         <div class="settings-section">
           <div class="settings-section-title">Orders &mdash; All Users</div>

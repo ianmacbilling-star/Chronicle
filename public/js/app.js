@@ -20582,7 +20582,7 @@ var TIER_FIELD_LABELS = {
 // else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
 // div, a button with its own check -- would be a second rule to keep in step with this one.
 // The route is gated independently; neither is load-bearing alone.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support', 'orders'];
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'orders'];   // v3.1.43 -- 'gifts' (TD-934)
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --
@@ -20679,6 +20679,7 @@ function switchSettingsTab(tab) {
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
   if (tab === 'promos') loadPromoCodes();
+  if (tab === 'gifts') loadGifts();   // v3.1.43 -- TD-934
   if (tab === 'orders') initAdminOrdersTab();
 }
 
@@ -21053,6 +21054,196 @@ function togglePromoCode(id) {
       else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
     })
     .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
+}
+
+// ============================================================
+// v3.1.43 -- TD-934. THE GIFTS TAB. Spec: claude/GIFT_CERTIFICATES_SPEC.md.
+// Every rule here is also enforced on the server (routes/gifts.js); this only draws and asks.
+// ============================================================
+var _giftCatalog = [];
+var GIFT_STATUS_LABEL = { pending_payment: 'Awaiting payment', paid: 'Not sent yet', delivered: 'Sent', redeemed: 'Redeemed', 'void': 'Void' };
+
+function giftDay(v) {
+  if (!v) return '';
+  try { return new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); } catch (e) { return String(v).slice(0, 10); }
+}
+// A DATE column arrives as UTC midnight; reading it in Eastern would show the day before.
+function giftDateOnly(v) { return v ? String(v).slice(0, 10) : ''; }
+
+function giftItemLabel(c) {
+  if (c.kind === 'pass') return c.name + ' (' + c.months + ' months + ' + c.tokens + ' tokens)';
+  return c.name + ' (' + c.tokens + ' tokens)';
+}
+
+function loadGifts() {
+  var box = document.getElementById('gift-list');
+  if (box) box.textContent = 'Loading...';
+  var st = (document.getElementById('gift-f-status') || {}).value || '';
+  var q = (document.getElementById('gift-f-q') || {}).value || '';
+  fetch('/api/gifts/admin/overview?status=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (box) box.textContent = (d && d.error) || 'Could not load gifts.'; return; }
+      renderGiftSwitch(!!d.enabled);
+      _giftCatalog = d.catalog || [];
+      var ri = document.getElementById('gift-rate-input');
+      if (ri && document.activeElement !== ri) ri.value = d.convertRate;
+      renderGiftRatePreview();
+      var sel = document.getElementById('gift-item-input');
+      if (sel && !sel.options.length) {
+        sel.innerHTML = _giftCatalog.map(function (c) {
+          return '<option value="' + escapeHtml(c.kind + ':' + c.id) + '">' + escapeHtml(giftItemLabel(c)) + '</option>';
+        }).join('');
+      }
+      renderGifts(d.gifts || []);
+    })
+    .catch(function () { if (box) box.textContent = 'Could not load gifts.'; });
+}
+
+// What each pass would convert to at the rate in the box (the server does the real sum at redemption).
+function renderGiftRatePreview() {
+  var el = document.getElementById('gift-rate-preview');
+  var rate = parseFloat((document.getElementById('gift-rate-input') || {}).value);
+  if (!el) return;
+  if (!(rate > 0)) { el.textContent = ''; return; }
+  el.textContent = 'At ' + rate + ' cents: ' + _giftCatalog.filter(function (c) { return c.kind === 'pass'; }).map(function (c) {
+    return c.name + ' ($' + (c.price_cents / 100).toFixed(2).replace(/\.00$/, '') + ') = ' + Math.floor(c.price_cents / rate) + ' tokens';
+  }).join('; ') + '.';
+}
+
+function saveGiftRate() {
+  var msg = document.getElementById('gift-rate-msg');
+  var v = (document.getElementById('gift-rate-input') || {}).value;
+  giftPost('/api/gifts/admin/convert-rate', { cents: v }).then(function (res) {
+    if (msg) { msg.textContent = res.ok ? 'Saved.' : (res.j.error || 'Could not save the rate.'); msg.style.color = res.ok ? '' : 'var(--error)'; }
+  }).catch(function () { if (msg) { msg.textContent = 'Could not save the rate.'; msg.style.color = 'var(--error)'; } });
+}
+
+function renderGiftSwitch(on) {
+  var desc = document.getElementById('gift-switch-desc');
+  var btn = document.getElementById('gift-switch-btn');
+  if (desc) desc.innerHTML = on
+    ? 'Gifts are <b style="color:var(--gold);">ON</b> here. Customers can use gift links, and dated gifts are being sent.'
+    : 'Gifts are <b>OFF</b> here. Gift links do not work, nothing is sent, and no free gift can be issued. This switch is separate on staging and production.';
+  if (btn) { btn.style.display = ''; btn.textContent = on ? 'Switch off' : 'Switch on'; btn.setAttribute('data-on', on ? '1' : '0'); }
+}
+
+function toggleGiftsEnabled() {
+  var btn = document.getElementById('gift-switch-btn');
+  var msg = document.getElementById('gift-switch-msg');
+  var next = !(btn && btn.getAttribute('data-on') === '1');
+  if (btn) btn.disabled = true;
+  fetch('/api/gifts/admin/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (d && d.ok) { renderGiftSwitch(!!d.enabled); if (msg) msg.textContent = ''; }
+      else if (msg) msg.textContent = (d && d.error) || 'Could not save the switch.';
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not save the switch.'; });
+}
+
+function renderGifts(rows) {
+  var box = document.getElementById('gift-list');
+  if (!box) return;
+  if (!rows.length) { box.textContent = 'No gifts yet.'; return; }
+  box.innerHTML = rows.map(function (g) {
+    var item = g.item_kind === 'pass'
+      ? (g.item_name || 'Pass') + ' - ' + g.months + ' months + ' + g.tokens + ' tokens'
+      : (g.item_name || 'Token pack') + ' - ' + g.tokens + ' tokens';
+    var when = [];
+    if (g.status === 'paid') when.push(g.deliver_on ? ('sends ' + giftDateOnly(g.deliver_on) + ' at 9am ET') : 'not sent');
+    if (g.delivered_at) when.push('sent ' + giftDay(g.delivered_at));
+    if (g.redeemed_at) when.push('redeemed ' + giftDay(g.redeemed_at) + (g.redeemed_by_email ? ' by ' + g.redeemed_by_email : '') + (g.redeemed_as === 'tokens' ? ' as ' + g.redeemed_tokens + ' tokens' : ''));
+    if (g.voided_at) when.push('voided ' + giftDay(g.voided_at) + (g.void_reason ? ' (' + g.void_reason + ')' : ''));
+    var live = (g.status === 'paid' || g.status === 'delivered');
+    var acts = '';
+    if (live) acts += '<button class="btn btn-sm" onclick="resendGift(' + g.id + ')">' + (g.status === 'paid' ? 'Send now' : 'Resend') + '</button>';
+    if (g.status === 'paid') acts += '<button class="btn btn-sm" onclick="redateGift(' + g.id + ')">Change date</button>';
+    if (live && g.comp) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ')">Void</button>';
+    return '<div style="display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
+      '<strong class="adm-row-id">#' + g.id + '</strong>' +
+      '<span style="min-width:96px;color:' + (g.status === 'redeemed' ? 'var(--gold)' : g.status === 'void' ? 'var(--text-muted)' : 'inherit') + ';">' + escapeHtml(GIFT_STATUS_LABEL[g.status] || g.status) + '</span>' +
+      '<span style="min-width:230px;">' + escapeHtml(item) + (g.comp ? ' <span style="color:var(--text-muted);">(free)</span>' : '') + '</span>' +
+      '<span>to ' + escapeHtml((g.recipient_name || '') + ' <' + g.recipient_email + '>') + '</span>' +
+      '<span>from ' + escapeHtml(g.buyer_name || g.buyer_email || '') + '</span>' +
+      (g.code_last4 ? '<span style="font-family:monospace;">code ...' + escapeHtml(g.code_last4) + '</span>' : '') +
+      '<span style="color:var(--text-muted);">' + escapeHtml(when.join(', ')) + '</span>' +
+      acts +
+      (g.last_error ? '<span style="flex-basis:100%;color:var(--error);">Last send failed (' + (g.delivery_attempts || 0) + ' tries): ' + escapeHtml(g.last_error) + '</span>' : '') +
+      (g.message ? '<span style="flex-basis:100%;color:var(--text-muted);font-style:italic;">' + escapeHtml(g.message) + '</span>' : '') +
+      '<span class="settings-section-desc" id="gift-row-msg-' + g.id + '" style="margin:0;flex-basis:100%;"></span>' +
+      '</div>';
+  }).join('');
+}
+
+function giftRowMsg(id, text, bad) {
+  var el = document.getElementById('gift-row-msg-' + id);
+  if (el) { el.textContent = text; el.style.color = bad ? 'var(--error)' : ''; }
+}
+
+function giftPost(url, body) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j && j.ok, j: j || {} }; }); });
+}
+
+function sendCompGift() {
+  var g = function (id) { return document.getElementById(id); };
+  var msg = g('gift-comp-msg');
+  var pick = String((g('gift-item-input') || {}).value || '').split(':');
+  var payload = {
+    item_kind: pick[0] || '', item_id: pick[1] || '',
+    recipient_name: (g('gift-to-name') || {}).value || '',
+    recipient_email: (g('gift-to-email') || {}).value || '',
+    from_name: (g('gift-from-name') || {}).value || '',
+    message: (g('gift-message') || {}).value || '',
+    deliver_on: (g('gift-deliver-on') || {}).value || ''
+  };
+  var btn = g('gift-comp-btn');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Sending...'; msg.style.color = ''; }
+  giftPost('/api/gifts/admin/comp', payload).then(function (res) {
+    if (btn) btn.disabled = false;
+    if (!res.ok) { if (msg) { msg.textContent = res.j.error || 'Could not create the gift.'; msg.style.color = 'var(--error)'; } return; }
+    ['gift-to-name', 'gift-to-email', 'gift-message', 'gift-deliver-on'].forEach(function (id) { if (g(id)) g(id).value = ''; });
+    if (msg) {
+      if (res.j.sent) msg.textContent = 'Gift #' + res.j.id + ' sent.';
+      else if (res.j.scheduled) msg.textContent = 'Gift #' + res.j.id + ' will be sent on ' + res.j.scheduled + ' at 9am Eastern.';
+      else { msg.textContent = 'Gift #' + res.j.id + ' was saved but not sent: ' + (res.j.error || 'unknown error') + ' Use Send now on its row.'; msg.style.color = 'var(--error)'; }
+    }
+    loadGifts();
+  }).catch(function () { if (btn) btn.disabled = false; if (msg) { msg.textContent = 'Could not create the gift.'; msg.style.color = 'var(--error)'; } });
+}
+
+function resendGift(id) {
+  uiPrompt('Send this gift', 'A new code is made and emailed; any earlier code for this gift stops working. Leave the address empty to use the one on file, or enter a corrected one.', '')
+    .then(function (email) {
+      if (email === null) return;
+      giftRowMsg(id, 'Sending...');
+      giftPost('/api/gifts/admin/' + id + '/resend', email ? { email: email } : {}).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not send.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not send.', true); });
+    });
+}
+
+function redateGift(id) {
+  uiPrompt('Change the delivery date', 'The new date, as YYYY-MM-DD. It is sent at 9am Eastern that day.', '')
+    .then(function (d) {
+      if (d === null) return;
+      giftPost('/api/gifts/admin/' + id + '/date', { deliver_on: d }).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not change the date.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not change the date.', true); });
+    });
+}
+
+function voidGift(id) {
+  uiConfirm('Void gift #' + id + '? Its code stops working straight away. This cannot be undone.', { title: 'Void this gift', danger: true, okText: 'Void' })
+    .then(function (yes) {
+      if (!yes) return;
+      giftPost('/api/gifts/admin/' + id + '/void', {}).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not void the gift.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not void the gift.', true); });
+    });
 }
 
 // ============================================================
