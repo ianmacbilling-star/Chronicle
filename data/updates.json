@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.52",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3152-story-tab-readable",
+        "kind": "fix",
+        "public": false,
+        "summary": "The word counts and the help lines under the story and instructions boxes on the Story tab are readable now.",
+        "detail": "The word counts were dark brown on near-black and could not be seen; the help lines and the saves-automatically note were dim. All of them are lighter and a touch larger, each with a contrast of at least 4.5 to 1. The amber colour for a story past the Already Written limit is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.51",
     "staged_on": "2026-10-01",
     "entries": [

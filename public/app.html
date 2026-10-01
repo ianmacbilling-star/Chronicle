@@ -1082,6 +1082,15 @@
         </div>
 
         <!-- Transcript (left) and Notes (right), side by side -->
+        <!-- v3.1.52 -- Ian: the lines under the two boxes were hardly readable, and the word counts could not be seen
+             at all (#6b5f55 on near-black). Scoped to the Story tab. The counts take their colour from this rule, not
+             an inline style, so the amber "past the Already Written limit" colour set by updateWordCounts still wins. -->
+        <style>
+          #session-tab-notes .story-count { font-size: 12px; color: rgba(240,232,208,0.82); }
+          #session-tab-notes .form-hint { font-size: 12px; color: rgba(232,213,163,0.78); }
+          #session-tab-notes .story-sub { color: rgba(232,213,163,0.72); }
+          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(201,168,76,0.8); }
+        </style>
         <div class="notes-grid">
           <div class="form-group">
             <!-- v3.1.51 -- Ian: line the story box up with the instructions box. The label takes the class's own
@@ -1098,18 +1107,18 @@
             <div id="transcript-wrap" style="position:relative;">
             <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Type or paste your story here &mdash; a transcript, a written story, notes or an outline..."></textarea>
             </div>
-            <div id="transcript-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
+            <div id="transcript-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— director's instructions for the AI</span></label>
+            <label class="form-label">Story Notes and Instructions <span class="story-sub" style="font-weight:400;text-transform:none;letter-spacing:0;">— director's instructions for the AI</span></label>
             <textarea class="transcript-box" id="session-notes-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Tell Campaignia what to do. Write instructions, not notes...&#10;&#10;MANDATORY SCENES:&#10;- Make sure you have a moment showing Zara betraying the party at the bridge&#10;&#10;EVERY MOMENT:&#10;- Make sure each moment has Theron&#8217;s wolf Shadow somewhere in it&#10;&#10;VISUAL STYLE:&#10;- Keep it dark gothic throughout, candlelit crypts"></textarea>
-            <div id="session-notes-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
+            <div id="session-notes-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
           </div>
         </div>
 
-        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
+        <div class="story-savenote" style="margin-top:6px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>
