@@ -183,6 +183,15 @@ function isDue(deliverOn, now) {
 // ---------------------------------------------------------------------------
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
 
+// a***@example.com -- enough for the owner to recognise their own address, not enough to hand a
+// stranger holding the code somebody's email.
+function maskEmail(email) {
+  const s = String(email || '');
+  const at = s.lastIndexOf('@');
+  if (at < 1) return '';
+  return s.charAt(0) + '***' + s.slice(at);
+}
+
 function isValidEmail(v) { return EMAIL_RE.test(String(v || '')); }
 
 function cleanText(v, max) {
@@ -248,7 +257,36 @@ async function issueAndSend(db, row, sendFn, opts) {
 // for whom beyond the "from" name the gift itself carries, and never whose
 // account used it.
 // ---------------------------------------------------------------------------
-async function lookup(db, input, rate) {
+// viewerEmail (signed-in only): when it differs from the address the gift was sent to, say so.
+// A WARNING, NEVER A BLOCK (Ian, 2026-10-01): people redeem gifts on a different account than the
+// one the email reached all the time. The address is masked, and only a signed-in viewer gets it.
+// ---------------------------------------------------------------------------
+// WHAT SUBSCRIPTION IS THIS PERSON ON, for the pass-or-tokens choice (Ian, 2026-10-01):
+//   'platinum'      -> a gifted pass adds nothing; they take the tokens (the server insists)
+//   'silver'/'gold' -> Platinum starts TODAY on top; the subscription is not touched
+//   'none'          -> no subscription, or one that is already cancelling: the pass as normal
+// "Can still bill" uses the same five statuses as fulfillPassCheckout in routes/tokens.js, which
+// asks the same question. TD-793 records that this list is defined in several places.
+// ---------------------------------------------------------------------------
+const SUB_CAN_BILL = ['active', 'trialing', 'past_due', 'unpaid', 'paused'];
+function subscriptionState(u) {
+  if (!u) return 'none';
+  const tier = String(u.tier || '');
+  if (['silver', 'gold', 'platinum'].indexOf(tier) < 0) return 'none';
+  if (!u.stripe_subscription_id) return 'none';
+  if (SUB_CAN_BILL.indexOf(String(u.subscription_status || '')) < 0) return 'none';
+  if (u.cancel_at_period_end === true) return 'none';
+  return tier;
+}
+
+function sentToOther(row, viewerEmail) {
+  const a = String((row && row.recipient_email) || '').trim().toLowerCase();
+  const b = String(viewerEmail || '').trim().toLowerCase();
+  return !!(a && b && a !== b);
+}
+
+async function lookup(db, input, rate, viewer) {
+  const viewerEmail = viewer && viewer.email;
   const bare = normalizeCode(input);
   if (!bare) return { ok: false, reason: 'not_found' };
   const row = await db.prepare('SELECT * FROM gift_certificates WHERE code_hash = ?').get(hashCode(bare));
@@ -258,6 +296,9 @@ async function lookup(db, input, rate) {
   if (state === 'not_found') return { ok: false, reason: 'not_found' };
   return { ok: true, state: state, kind: row.item_kind, months: row.months, tokens: row.tokens,
            convertTokens: rate ? convertTokensFor(row, rate) : null,
+           sentToOther: viewerEmail ? sentToOther(row, viewerEmail) : false,
+           sentToMasked: (viewerEmail && sentToOther(row, viewerEmail)) ? maskEmail(row.recipient_email) : null,
+           subscription: viewer ? subscriptionState(viewer) : null,
            description: describeGift(row), fromName: row.buyer_name || null };
 }
 
@@ -278,7 +319,7 @@ async function lookup(db, input, rate) {
 // now. No months, no pass. Converting makes it a token gift, so the pack rule applies.
 //
 // Returns { ok:true, kind, months, tokens, runsUntil, converted } or { ok:false, reason }.
-// reason: not_found | redeemed | void | needs_plan | cannot_convert
+// reason: not_found | redeemed | void | needs_plan | cannot_convert | take_tokens
 // ---------------------------------------------------------------------------
 async function redeem(db, userId, input, deps, opts) {
   deps = deps || {};
@@ -310,16 +351,27 @@ async function redeem(db, userId, input, deps, opts) {
     if (g.status === 'redeemed') return { ok: false, reason: 'redeemed' };
     if (g.status === 'void') return { ok: false, reason: 'void' };
     if (g.status !== 'paid' && g.status !== 'delivered') return { ok: false, reason: 'not_found' };
-    await tx.query(
-      "UPDATE gift_certificates SET status = 'redeemed', redeemed_at = $1, redeemed_by_user_id = $2, redeemed_as = $3, redeemed_tokens = $4 WHERE id = $5",
-      [now.toISOString(), userId, convert ? 'tokens' : g.item_kind, convert ? convertTokensFor(g, rate) : g.tokens, g.id]);
-    let runsUntil = null;
+    const u = (await tx.query(
+      'SELECT tier, pass_expires_at, current_period_end, stripe_subscription_id, subscription_status, cancel_at_period_end FROM users WHERE id = $1 FOR UPDATE',
+      [userId])).rows[0];
+    if (!u) throw new Error('No such user');
+    const sub = subscriptionState(u);
+    // EVERY REFUSAL COMES BEFORE THE FIRST WRITE. A Platinum subscriber keeping the pass would get
+    // months they already have, so they are sent back to take the tokens; nothing is spent.
+    if (g.item_kind === 'pass' && !convert && sub === 'platinum') return { ok: false, reason: 'take_tokens' };
     const grant = convert ? convertTokensFor(g, rate) : g.tokens;
     if (convert && !grant) throw new Error('conversion lost its value');
+    await tx.query(
+      "UPDATE gift_certificates SET status = 'redeemed', redeemed_at = $1, redeemed_by_user_id = $2, redeemed_as = $3, redeemed_tokens = $4 WHERE id = $5",
+      [now.toISOString(), userId, convert ? 'tokens' : g.item_kind, grant, g.id]);
+    let runsUntil = null;
     if (g.item_kind === 'pass' && !convert) {
-      const u = (await tx.query('SELECT pass_expires_at, current_period_end FROM users WHERE id = $1 FOR UPDATE', [userId])).rows[0];
-      if (!u) throw new Error('No such user');
-      const until = tok.passAddMonths(tok.passStackFrom(now.getTime(), u.pass_expires_at, u.current_period_end), g.months);
+      // WHEN THE PASS STARTS. A Silver or Gold subscriber who keeps their subscription gets
+      // Platinum from TODAY (after any pass they already hold) -- their paid period is not
+      // waiting to end, so it must not delay the upgrade. Anyone else stacks exactly as a bought
+      // pass does: after the later of now, a live pass, or a paid-up period that is ending.
+      const periodEnd = (sub === 'silver' || sub === 'gold') ? null : u.current_period_end;
+      const until = tok.passAddMonths(tok.passStackFrom(now.getTime(), u.pass_expires_at, periodEnd), g.months);
       runsUntil = until.toISOString();
       await tx.query('UPDATE users SET pass_tier = $1, pass_expires_at = $2 WHERE id = $3', ['platinum', runsUntil, userId]);
     }
@@ -329,7 +381,8 @@ async function redeem(db, userId, input, deps, opts) {
         [userId, grant, 'cot', 'gift_redeem', 'gift:' + g.id + (convert ? ':as-tokens' : '')]);
     }
     await tx.query('UPDATE users SET last_purchase_at = $1 WHERE id = $2', [now.toISOString(), userId]);
-    return { ok: true, id: g.id, kind: g.item_kind, converted: convert, months: convert ? null : g.months, tokens: grant, runsUntil: runsUntil, description: describeGift(g) };
+    return { ok: true, id: g.id, kind: g.item_kind, converted: convert, months: convert ? null : g.months, tokens: grant,
+             runsUntil: runsUntil, subscription: sub, description: describeGift(g) };
   });
 }
 
@@ -340,6 +393,6 @@ module.exports = {
   catalog, quoteFor, describeGift,
   isEnabled, setEnabled,
   easternParts, dayString, isDue,
-  isValidEmail, validateGiftInput, issueAndSend,
+  isValidEmail, maskEmail, sentToOther, subscriptionState, SUB_CAN_BILL, validateGiftInput, issueAndSend,
   lookup, redeem
 };

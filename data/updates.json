@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.44",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3144-gift-other-account",
+        "kind": "feature",
+        "public": false,
+        "summary": "Redeeming a gift on an account with a different email from the one it was sent to now shows a warning, but still lets you redeem.",
+        "detail": "Send a free gift to one address, then open its Redeem link signed in as a different account: an amber note names the address it was sent to (masked, e.g. a***@example.com) and the account you are signed in as. Redeem still works. Signed in with the matching address (any capitals), no note. Signed out, nothing is shown.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3144-gift-pass-subscribers",
+        "kind": "change",
+        "public": false,
+        "summary": "A gifted pass now fits the subscription it lands on: Platinum subscribers take the tokens, Silver and Gold subscribers get Platinum starting today with their subscription untouched, and a gift never ends a subscription.",
+        "detail": "Test on staging with three accounts. Platinum subscriber: the Redeem page offers only Take tokens (the pass is refused even if forced). Gold subscriber: Platinum now for the pass's months plus its tokens, or the tokens; choosing Platinum makes them Platinum today, the Gold subscription is unchanged and keeps billing, and they return to Gold when the pass ends. No subscription, or one already set to cancel: the pass as before (it starts after any paid-up period). Pausing the subscription during a pass comes in 3.1.45.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.43",
     "staged_on": "2026-10-01",
     "entries": [

@@ -85,7 +85,15 @@ router.post('/lookup', async function (req, res) {
     const db = await getDb();
     if (!(await gifts.isEnabled(db))) return res.status(404).json({ error: NOT_AVAILABLE, reason: 'off' });
     if (tooManyMisses(req)) return res.status(429).json({ error: SLOW_DOWN, reason: 'slow_down' });
-    const r = await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db));
+    // Signed in: who is looking, so the page can warn about a different address and offer the
+    // right choice for their subscription. Signed out: nothing about anyone.
+    let viewer = null;
+    if (req.session && req.session.userId) {
+      try {
+        viewer = await db.prepare('SELECT email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end FROM users WHERE id = ?').get(req.session.userId);
+      } catch (_) { viewer = null; }
+    }
+    const r = await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db), viewer);
     if (!r.ok) recordMiss(req);
     res.json(r);
   } catch (e) {

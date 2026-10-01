@@ -36,6 +36,7 @@
   .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
   .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
   .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-warn { background: rgba(201,140,40,0.14); border: 1px solid rgba(230,170,70,0.55); color: #f3d9a4; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
   .msg-ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; line-height: 1.6; }
   .links { text-align: center; margin-top: 14px; font-size: 13px; color: rgba(201,168,76,0.6); }
   .links a { color: #c9a84c; }
@@ -69,6 +70,7 @@
         <div class="gift-what" id="gift-what"></div>
       </div>
       <div id="signed-in" class="hidden">
+        <div id="other-account" class="msg-warn hidden" role="note"></div>
         <button class="btn btn-primary" id="redeem-btn" type="button">Redeem</button>
         <div id="convert-wrap" class="hidden">
           <button class="btn btn-primary" id="convert-btn" type="button" style="background:transparent;color:#c9a84c;"></button>
@@ -105,8 +107,10 @@
     redeemed: 'This gift has already been redeemed.',
     'void': 'This gift has been cancelled and can no longer be redeemed.',
     needs_plan: 'Tokens cannot be added to a Free Trial account. Choose a plan in Campaignia, then come back to this link. Your gift never expires and will still be here.',
-    cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.'
+    cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.',
+    take_tokens: 'You already have Platinum through your subscription, so this pass would add nothing. Take the tokens instead.'
   };
+  function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
 
   function check() {
     error('');
@@ -125,14 +129,45 @@
       $('gift-what').textContent = r.description.charAt(0).toUpperCase() + r.description.slice(1);
       show('enter', false); show('found', true);
       var back = '/redeem?code=' + encodeURIComponent(code);
-      // A pass can be taken as tokens instead (the server decides the number and the rules).
+      // v3.1.44 -- THE CHOICE DEPENDS ON THE SUBSCRIPTION (Ian, 2026-10-01). The server decides the
+      // numbers and enforces the rules; this only lays out the buttons and says what each one does.
+      //   platinum      -> tokens only (the pass would add nothing)
+      //   silver / gold -> Platinum from today on top of the subscription, or the tokens
+      //   none          -> the pass as normal, or the tokens
       var canConvert = (r.kind === 'pass' && r.convertTokens > 0);
+      var sub = r.subscription || 'none';
+      var rb = $('redeem-btn'), cb = $('convert-btn');
+      rb.classList.remove('hidden');
+      cb.style.background = 'transparent'; cb.style.color = '#c9a84c';
       if (canConvert) {
-        $('redeem-btn').textContent = 'Redeem: ' + r.months + ' months of Platinum' + (r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '');
-        $('convert-btn').textContent = 'Take ' + r.convertTokens + ' tokens instead';
-        $('convert-note').textContent = 'Taking tokens means no Platinum months. Choose one; it cannot be changed afterwards.';
+        cb.textContent = 'Take ' + r.convertTokens + ' tokens instead';
+        var tokensPart = r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '';
+        if (sub === 'platinum') {
+          rb.classList.add('hidden');
+          cb.textContent = 'Take ' + r.convertTokens + ' tokens';
+          cb.style.background = ''; cb.style.color = '';
+          $('convert-note').textContent = 'You already have Platinum through your subscription, so the pass would add nothing. ' +
+            'Take the tokens instead. Your subscription is not affected.';
+        } else if (sub === 'silver' || sub === 'gold') {
+          rb.textContent = 'Platinum now: ' + r.months + ' months' + tokensPart;
+          $('convert-note').textContent = 'Platinum starts today and runs for ' + r.months + ' months. Your ' + cap(sub) +
+            ' subscription carries on as normal and keeps billing; when the pass ends you are back on ' + cap(sub) +
+            '. Or take the tokens instead. Choose one; it cannot be changed afterwards.';
+        } else {
+          rb.textContent = 'Redeem: ' + r.months + ' months of Platinum' + tokensPart;
+          $('convert-note').textContent = 'Taking tokens means no Platinum months. Choose one; it cannot be changed afterwards.';
+        }
       }
       show('convert-wrap', canConvert && !!state.me);
+      // v3.1.44 -- sent to a different address than the one signed in. A warning, never a block.
+      if (state.me && r.sentToOther) {
+        $('other-account').textContent = 'This gift was sent to ' + (r.sentToMasked || 'a different email address') +
+          ', but you are signed in as ' + (state.me.email || 'another account') +
+          '. You can still redeem it here, and it will belong to this account. If you meant another account, sign out and sign in to that one first.';
+        show('other-account', true);
+      } else {
+        show('other-account', false);
+      }
       if (state.me) {
         $('who').textContent = 'It will be added to the account you are signed in to: ' + (state.me.email || 'this account') + '.';
         show('signed-in', true); show('signed-out', false);
@@ -156,6 +191,9 @@
       var lines = [];
       if (r.kind === 'pass' && !r.converted) {
         lines.push(r.months + ' months of Campaignia Platinum added. It now runs until ' + fmtDate(r.runsUntil) + '.');
+        if (r.subscription === 'silver' || r.subscription === 'gold') {
+          lines.push('Your ' + cap(r.subscription) + ' subscription carries on as before.');
+        }
       }
       if (r.tokens > 0) lines.push(r.tokens + ' tokens added to your balance.');
       var d = $('done'); d.textContent = lines.join(' ') || 'Your gift has been added.';
