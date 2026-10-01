@@ -277,6 +277,9 @@ router.get('/verify', async function (req, res) {
     const now = new Date().toISOString();
     const trialStart = user.trial_started_at ? now : user.trial_started_at;
     await db.prepare('UPDATE users SET email_verified = true, verify_token = NULL, verify_token_expires = NULL, trial_started_at = ?, last_active_at = ? WHERE id = ?').run(trialStart, now, user.id);
+    // v3.1.47 -- the address this person just proved they own. Gifts sent to it show in their banner.
+    // A profile edit later never changes it. Its own try: it must never stop anyone verifying.
+    try { await db.prepare('UPDATE users SET verified_email = lower(email) WHERE id = ?').run(user.id); } catch (e) { console.error('verified_email not saved:', e.message); }
     // Welcome email fires here (a real, activated account). Invite-path accounts
     // (trial_started_at was null) already received the campaign welcome, so only
     // regular trial signups get the general welcome. Non-fatal.

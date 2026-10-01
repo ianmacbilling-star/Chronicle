@@ -2165,6 +2165,22 @@ async function migrateGifts(pool) {
   // The pass-to-tokens rate (cents per token), seeded at 20 once (Ian, 2026-10-01). After that the
   // dashboard owns it; this never overwrites a value that is already there.
   await pool.query("INSERT INTO app_settings (setting_key, value) SELECT 'gift_convert_cents_per_token', '20' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE setting_key = 'gift_convert_cents_per_token')");
+  // v3.1.47 -- the code made at purchase is kept sealed (never plain) until the gift email has gone.
+  await pool.query('ALTER TABLE gift_certificates ADD COLUMN IF NOT EXISTS code_sealed TEXT');
+  // v3.1.47 -- THE CONFIRMED EMAIL, for the "someone gave you a gift" banner. Set when the sign-up link
+  // is clicked (routes/auth.js /verify); a profile edit never changes it. Accounts already confirmed
+  // before this release take their current address, ONCE (the marker stops it running again).
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_email TEXT');
+  // In its own try: on a brand-new database email_verified is added later (routes/auth.js), and a boot
+  // must never fail over this. Without the marker it simply runs again next boot.
+  try {
+    const done = await pool.query("SELECT 1 FROM app_settings WHERE setting_key = 'verified_email_backfilled'");
+    if (!done.rows.length) {
+      await pool.query("UPDATE users SET verified_email = lower(email) WHERE verified_email IS NULL AND email_verified = true AND email IS NOT NULL");
+      await pool.query("INSERT INTO app_settings (setting_key, value) SELECT 'verified_email_backfilled', '1' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE setting_key = 'verified_email_backfilled')");
+    }
+  } catch (e) { console.error('[gifts] verified_email backfill skipped this boot:', e && e.message); }
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gift_recipient_open ON gift_certificates(lower(recipient_email)) WHERE status IN (\'paid\', \'delivered\')');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

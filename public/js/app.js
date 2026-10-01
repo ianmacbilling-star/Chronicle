@@ -1868,6 +1868,9 @@ function checkAuth() {
       // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
       if (loneBadge) loneBadge.style.display = 'none';
+      // v3.1.47 -- TD-934. Someone gave you a gift: the badge sits there until it is redeemed. (In both
+      // checkAuth copies; the later declaration is the one that runs -- TD-853.)
+      try { refreshGiftBadge(); } catch (e) {}
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -16596,6 +16599,9 @@ function checkAuth() {
       // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
       if (loneBadge) loneBadge.style.display = 'none';
+      // v3.1.47 -- TD-934. Someone gave you a gift: the badge sits there until it is redeemed. (In both
+      // checkAuth copies; the later declaration is the one that runs -- TD-853.)
+      try { refreshGiftBadge(); } catch (e) {}
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -21284,6 +21290,36 @@ function redateGift(id) {
         if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not change the date.', true);
       }).catch(function () { giftRowMsg(id, 'Could not change the date.', true); });
     });
+}
+
+// v3.1.47 -- TD-934. THE GIFT BADGE (Ian, 2026-10-01). Asks the server for gifts sent to this account's
+// confirmed email whose day has come and that are not redeemed yet; the server returns none while gifts
+// are switched off. One gift opens straight on it; several open the first, and the badge says how many.
+function refreshGiftBadge() {
+  // The header badge (wide screens) and the strip under the header (phones) say the same thing.
+  var b = document.getElementById('gift-badge');
+  var strip = document.getElementById('gift-strip');
+  if (!b) return;
+  function hide() { b.style.display = 'none'; if (strip) strip.classList.remove('on'); }
+  fetch('/api/gifts/mine', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : { gifts: [] }; })
+    .then(function (d) {
+      var list = (d && d.gifts) || [];
+      if (!list.length) { hide(); return; }
+      var href = '/redeem?gift=' + encodeURIComponent(list[0].id);
+      b.href = href;
+      var t = document.getElementById('gift-badge-text');
+      if (t) t.textContent = list.length > 1 ? ('SOMEONE GAVE YOU ' + list.length + ' GIFTS') : 'SOMEONE GAVE YOU A GIFT';
+      b.title = list[0].fromName ? (list[0].fromName + ' gave you a Campaignia gift. Click to redeem it.') : 'Someone gave you a Campaignia gift. Click to redeem it.';
+      b.style.display = 'inline-flex';
+      if (strip) {
+        strip.href = href;
+        var st = document.getElementById('gift-strip-text');
+        if (st) st.textContent = list.length > 1 ? ('Someone gave you ' + list.length + ' gifts') : 'Someone gave you a gift';
+        strip.classList.add('on');
+      }
+    })
+    .catch(hide);
 }
 
 function voidGift(id, refund) {

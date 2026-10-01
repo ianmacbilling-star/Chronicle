@@ -90,10 +90,15 @@ router.post('/lookup', async function (req, res) {
     let viewer = null;
     if (req.session && req.session.userId) {
       try {
-        viewer = await db.prepare('SELECT email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
+        viewer = await db.prepare('SELECT email, verified_email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
       } catch (_) { viewer = null; }
     }
-    const r = await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db), viewer);
+    // v3.1.47 -- from the banner: a gift named by id, for the signed-in account's confirmed email only.
+    const byId = req.body && req.body.giftId != null;
+    if (byId && !viewer) return res.status(401).json({ error: 'Sign in to see your gift.', reason: 'signin' });
+    const r = byId
+      ? await gifts.lookupMine(db, req.body.giftId, await gifts.getConvertRate(db), viewer, viewer.verified_email)
+      : await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db), viewer);
     if (!r.ok) recordMiss(req);
     res.json(r);
   } catch (e) {
@@ -166,13 +171,34 @@ router.post('/checkout', async function (req, res) {
   }
 });
 
+// v3.1.47 -- THE BANNER. Gifts sent to this account's confirmed email whose day has come and that are
+// not redeemed yet. Off means an empty list, so the banner never shows while gifts are switched off.
+router.get('/mine', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    if (!(await gifts.isEnabled(db))) return res.json({ gifts: [] });
+    const me = await db.prepare('SELECT verified_email FROM users WHERE id = ?').get(req.session.userId);
+    res.json({ gifts: await gifts.listMine(db, me && me.verified_email) });
+  } catch (e) {
+    console.error('[gifts] mine error:', e && e.message);
+    res.json({ gifts: [] });
+  }
+});
+
 // REDEEM, into whoever is signed in. Refused in a support session (impersonationGuard).
 router.post('/redeem', requireAuth, async function (req, res) {
   try {
     const db = await getDb();
     if (!(await gifts.isEnabled(db))) return res.status(404).json({ error: NOT_AVAILABLE, reason: 'off' });
     if (tooManyMisses(req)) return res.status(429).json({ error: SLOW_DOWN, reason: 'slow_down' });
-    const r = await gifts.redeem(db, req.session.userId, req.body && req.body.code, null, { convert: !!(req.body && req.body.convert === true) });
+    const opts = { convert: !!(req.body && req.body.convert === true) };
+    // v3.1.47 -- from the banner: by id, matched against the CONFIRMED email, never the profile one.
+    if (req.body && req.body.giftId != null) {
+      const me = await db.prepare('SELECT verified_email FROM users WHERE id = ?').get(req.session.userId);
+      opts.giftId = req.body.giftId;
+      opts.verifiedEmail = (me && me.verified_email) || '';
+    }
+    const r = await gifts.redeem(db, req.session.userId, req.body && req.body.code, null, opts);
     if (!r.ok && r.reason === 'not_found') recordMiss(req);
     if (r.ok) console.log('[gifts] gift ' + r.id + ' redeemed by user ' + req.session.userId);
     res.json(r);

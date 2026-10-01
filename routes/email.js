@@ -662,6 +662,8 @@ function purchaseReceiptHTML(name, receipt) {
   rows += row('Purchase', receipt.itemName);
   rows += row('For', receipt.giftFor || '');              // v3.1.46 -- gift receipts only; dropped when empty
   rows += row('Delivery', receipt.giftDelivery || '');
+  rows += row('Gift code', receipt.giftCode || '');        // v3.1.47 -- made at purchase
+  rows += row('Keep it safe', receipt.giftCode ? 'Anyone with the code can redeem it' : '');
   rows += row('Amount', money(receipt.amountCents, receipt.currency));
   rows += row('Paid with', card);
   rows += row('Date', when(receipt.paidAt));
@@ -762,10 +764,10 @@ var RECEIPT_COPY = {
                   leadIn: 'Your new plan is active and the extra tokens are already on your account. There is nothing to pay today \u2014 the charge for the change will appear on your next invoice.' },
   proration:    { subject: 'Your Campaignia plan change',
                   leadIn: 'Your plan change has been charged. Here are the details:' },
-  // v3.1.46 -- TD-934. The buyer's receipt for a gift. The code is NOT on it: it is made at delivery,
-  // and the buyer gets a copy then (sendGiftEmail).
+  // v3.1.46 -- TD-934. The buyer's receipt for a gift. v3.1.47: the code is on it (made at purchase),
+  // and the buyer is told they will hear when it is redeemed (Ian, 2026-10-01).
   gift:         { subject: 'Your Campaignia gift receipt',
-                  leadIn: 'Thank you for your gift. It never expires. Here are the details:' }
+                  leadIn: 'Thank you for your gift. It never expires, and we will email you when it is redeemed. Here are the details:' }
 };
 
 // THE ONE BUILDER. Both the live send and the admin preview call this, so what an admin sees
@@ -1281,7 +1283,8 @@ function giftBuyerCopy(row, code) {
     body: 'We have emailed <b>' + esc(describe(row)) + '</b> to ' + esc(row.recipient_email) + '. ' +
       'Here is a copy of the code, in case it is easier to hand over yourself:<br><br>' +
       '<span style="font-family:\'Courier New\',monospace;font-size:18px;letter-spacing:2px;color:#f0e8d0;">' + esc(code) + '</span><br><br>' +
-      'It is redeemed at ' + esc(app.replace(/^https?:\/\//, '')) + '/redeem and never expires. Keep it private: anyone with the code can use it.',
+      'It is redeemed at ' + esc(app.replace(/^https?:\/\//, '')) + '/redeem and never expires. Keep it private: anyone with the code can use it.<br><br>' +
+      'We will email you again when it is redeemed.',
     cta: 'Give another gift'
   };
   // The shared shell's footer says "you created a Campaignia account", which a guest buyer did not.
@@ -1291,8 +1294,35 @@ function giftBuyerCopy(row, code) {
   return { subject: 'Your Campaignia gift to ' + (row.recipient_name || row.recipient_email) + ' has been delivered', html: html };
 }
 
+// v3.1.47 -- "YOUR GIFT WAS REDEEMED", to the buyer of a paid gift (Ian, 2026-10-01). It says when,
+// and to whom the gift was sent -- never which account took it.
+function giftRedeemedEmail(row) {
+  var esc = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var describe = require('../services/gifts').describeGift;
+  var app = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  var to = row.recipient_name || row.recipient_email;
+  var when = '';
+  try { when = new Date(row.redeemed_at || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }); } catch (e) { when = ''; }
+  var copy = {
+    headline: 'Your gift to ' + esc(to) + ' has been redeemed',
+    body: 'Good news: <b>' + esc(describe(row)) + '</b>, your gift to ' + esc(to) + ', was redeemed' + (when ? ' on ' + esc(when) : '') + '. ' +
+      'Thank you for giving Campaignia.',
+    cta: 'Give another gift'
+  };
+  var html = trialLifecycleHTML(copy, esc(row.buyer_name || 'there'), app + '/gift')
+    .replace('You are receiving this because you created a Campaignia account.', 'You are receiving this because you bought a Campaignia gift.');
+  return { subject: 'Your Campaignia gift to ' + to + ' has been redeemed', html: html };
+}
+
+async function sendGiftRedeemedEmail(row) {
+  if (!row || row.comp || !row.buyer_email) return false;
+  var built = giftRedeemedEmail(row);
+  await sendEmail(row.buyer_email, built.subject, built.html);
+  return true;
+}
+
 // v3.1.46 -- the buyer's receipt, through the same receipt builder every purchase uses.
-function giftReceipt(row) {
+function giftReceipt(row, code) {
   var describe = require('../services/gifts').describeGift;
   var when = row.deliver_on ? String(row.deliver_on instanceof Date ? row.deliver_on.toISOString() : row.deliver_on).slice(0, 10) : '';
   var nice = '';
@@ -1302,13 +1332,14 @@ function giftReceipt(row) {
     itemName: 'Gift: ' + describe(row), amountCents: row.price_cents, currency: row.currency || 'usd',
     paidAt: new Date().toISOString(),
     giftFor: (row.recipient_name ? row.recipient_name + ' (' + row.recipient_email + ')' : row.recipient_email),
-    giftDelivery: nice ? ('Emailed on ' + nice + ' at 9am Eastern; you get a copy of the code then') : 'Emailed now; you get a copy of the code too'
+    giftDelivery: nice ? ('Emailed to them on ' + nice + ' at 9am Eastern') : 'Emailed to them now',
+    giftCode: code || ''
   };
 }
 
-async function sendGiftReceiptEmail(row) {
+async function sendGiftReceiptEmail(row, code) {
   if (!row || !row.buyer_email) return false;
-  var built = receiptEmail(row.buyer_name || 'there', giftReceipt(row));
+  var built = receiptEmail(row.buyer_name || 'there', giftReceipt(row, code));
   await sendEmail(row.buyer_email, built.subject, built.html);
   return true;
 }
@@ -1394,7 +1425,10 @@ function buildEmailPreview(type, name) {
     // is made of characters a real code can never contain (0, O, 1), so it can never redeem anything.
     case 'receipt_gift':
       return receiptEmail(who, giftReceipt({ id: 42, item_kind: 'pass', months: 3, tokens: 200, price_cents: 7900, currency: 'usd',
-        recipient_name: 'Thorin', recipient_email: 'thorin@example.com', deliver_on: '2026-12-25' }));
+        recipient_name: 'Thorin', recipient_email: 'thorin@example.com', deliver_on: '2026-12-25' }, 'GIFT-0O01-SAMP-LE00'));
+    case 'gift_redeemed':
+      return giftRedeemedEmail({ id: 42, item_kind: 'pass', months: 3, tokens: 200, recipient_name: 'Thorin', recipient_email: 'thorin@example.com',
+        buyer_name: who, redeemed_at: new Date().toISOString() });
     case 'gift_buyer_copy':
       return giftBuyerCopy({ id: 42, item_kind: 'pass', months: 3, tokens: 200, recipient_name: 'Thorin', recipient_email: 'thorin@example.com', buyer_name: who }, 'GIFT-0O01-SAMP-LE00');
     case 'gift':
@@ -1453,4 +1487,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

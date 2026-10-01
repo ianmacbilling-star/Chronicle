@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.47",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3147-gift-badge",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gifts: the buyer's receipt carries the gift code, the buyer is emailed when the gift is redeemed, and the person it was sent to sees a Someone gave you a gift badge at the top of Campaignia until they redeem it.",
+        "detail": "Gifts must be switched on. Buy a gift (Stripe test card) for an address that has a Campaignia account: the receipt now shows the code, even for a gift dated in the future, and that same code is the one in the gift email on the day. The buyer's copy of the code says they will hear when it is redeemed. Sign in as the recipient once the gift's day has come: the header shows SOMEONE GAVE YOU A GIFT (GIFT on a phone); click it, redeem, and the badge is gone. The badge only counts the email address the account confirmed at sign-up, never one typed into the profile later. When the recipient redeems, the buyer gets an email saying so (not for free gifts, and not when the buyer redeems it). New email previews: Gift - buyer told it was redeemed.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.46",
     "staged_on": "2026-10-01",
     "entries": [

@@ -59,6 +59,40 @@ function hashCode(bare) {
   return crypto.createHash('sha256').update('campaignia-gift:' + bare).digest('hex');
 }
 
+// v3.1.47 -- THE CODE IS MADE AT PURCHASE (Ian, 2026-10-01: the buyer's receipt carries it, so the
+// buyer can use it or give it to someone else). Until the gift email has gone, the scheduled job needs
+// that same code, so it is kept SEALED (AES-256-GCM) in code_sealed and cleared once the email is
+// sent. Only its hash is ever used to find it. The key is GIFT_CODE_KEY, or one derived from
+// SESSION_SECRET. If the key changes before a dated gift goes out, the seal will not open and the
+// delivery simply makes a new code (the buyer is sent a copy of it then), so nothing is stranded.
+function codeKey() {
+  const secret = process.env.GIFT_CODE_KEY || process.env.SESSION_SECRET || 'chronicle-dev-secret';
+  return Buffer.from(crypto.hkdfSync('sha256', Buffer.from(String(secret), 'utf8'), Buffer.alloc(0), Buffer.from('campaignia-gift-code-v1', 'utf8'), 32));
+}
+function sealCode(bare) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', codeKey(), iv);
+  const ct = Buffer.concat([c.update(String(bare), 'utf8'), c.final()]);
+  return 'v1:' + Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
+}
+function openCode(sealed) {
+  try {
+    if (typeof sealed !== 'string' || sealed.indexOf('v1:') !== 0) return null;
+    const b = Buffer.from(sealed.slice(3), 'base64');
+    if (b.length < 29) return null;
+    const d = crypto.createDecipheriv('aes-256-gcm', codeKey(), b.subarray(0, 12));
+    d.setAuthTag(b.subarray(12, 28));
+    const bare = Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8');
+    return normalizeCode(bare);
+  } catch (e) { return null; }
+}
+// The sealed code for this row, but only if it opens AND is the code the row's hash says it is.
+function storedCode(row) {
+  if (!row || !row.code_sealed || !row.code_hash) return null;
+  const bare = openCode(row.code_sealed);
+  return (bare && hashCode(bare) === row.code_hash) ? bare : null;
+}
+
 // ---------------------------------------------------------------------------
 // WHAT CAN BE GIFTED, read from the live catalogs every time. Same contract as a
 // purchase: the server decides what an id is worth, never the client.
@@ -234,11 +268,13 @@ function validateGiftInput(body, now) {
 // ---------------------------------------------------------------------------
 async function issueAndSend(db, row, sendFn, opts) {
   opts = opts || {};
-  const bare = generateCode();
+  // v3.1.47 -- the code made at purchase (on the buyer's receipt) is sent, while it is still sealed
+  // here. A gift already delivered has none left, so a Resend makes a new code and the old one stops.
+  const bare = storedCode(row) || generateCode();
   const r = await db.prepare(
-    "UPDATE gift_certificates SET code_hash = ?, code_last4 = ?, recipient_email = COALESCE(?, recipient_email) " +
+    "UPDATE gift_certificates SET code_hash = ?, code_last4 = ?, code_sealed = ?, recipient_email = COALESCE(?, recipient_email) " +
     "WHERE id = ? AND status IN ('paid', 'delivered')"
-  ).run(hashCode(bare), bare.slice(-4), opts.newEmail || null, row.id);
+  ).run(hashCode(bare), bare.slice(-4), sealCode(bare), opts.newEmail || null, row.id);
   if (!r || !r.changes) return { ok: false, error: 'This gift can no longer be sent (it was redeemed or voided).' };
   const fresh = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(row.id);
   try {
@@ -249,7 +285,7 @@ async function issueAndSend(db, row, sendFn, opts) {
     return { ok: false, error: 'The email could not be sent: ' + ((e && e.message) || 'unknown error') };
   }
   await db.prepare(
-    "UPDATE gift_certificates SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP, last_error = NULL WHERE id = ? AND status IN ('paid', 'delivered')"
+    "UPDATE gift_certificates SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP, last_error = NULL, code_sealed = NULL WHERE id = ? AND status IN ('paid', 'delivered')"
   ).run(row.id);
   return { ok: true };
 }
@@ -288,10 +324,45 @@ function sentToOther(row, viewerEmail) {
 }
 
 async function lookup(db, input, rate, viewer) {
-  const viewerEmail = viewer && viewer.email;
   const bare = normalizeCode(input);
   if (!bare) return { ok: false, reason: 'not_found' };
   const row = await db.prepare('SELECT * FROM gift_certificates WHERE code_hash = ?').get(hashCode(bare));
+  return viewGift(row, rate, viewer);
+}
+
+// v3.1.47 -- THE BANNER'S GIFTS. A gift is "yours" when it was sent to the email address this account
+// CONFIRMED (users.verified_email -- set when the sign-up link is clicked; a later profile edit does
+// not change it), and its day has come: delivered, or paid and due. Anyone can type any address into
+// their profile, so the confirmed one is the only one trusted here.
+function isMineNow(row, verifiedEmail, now) {
+  const em = String(verifiedEmail || '').trim().toLowerCase();
+  if (!row || !em || String(row.recipient_email || '').trim().toLowerCase() !== em) return false;
+  if (row.status === 'delivered') return true;
+  return row.status === 'paid' && isDue(row.deliver_on, now || new Date());
+}
+async function listMine(db, verifiedEmail, now) {
+  const em = String(verifiedEmail || '').trim().toLowerCase();
+  if (!em) return [];
+  const rows = await db.prepare(
+    "SELECT id, item_kind, months, tokens, buyer_name, recipient_email, deliver_on, status FROM gift_certificates " +
+    "WHERE lower(recipient_email) = ? AND status IN ('paid', 'delivered') ORDER BY id"
+  ).all(em);
+  return (rows || []).filter(function (r) { return isMineNow(r, em, now); })
+    .map(function (r) { return { id: r.id, fromName: r.buyer_name || null, description: describeGift(r) }; });
+}
+async function lookupMine(db, giftId, rate, viewer, verifiedEmail, now) {
+  const id = parseInt(giftId, 10);
+  if (!(id > 0)) return { ok: false, reason: 'not_found' };
+  const em = String(verifiedEmail || '').trim().toLowerCase();
+  const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
+  // Not sent to this account's confirmed address, or not its day yet: as good as not there.
+  if (!row || !em || String(row.recipient_email || '').trim().toLowerCase() !== em) return { ok: false, reason: 'not_found' };
+  if (row.status === 'paid' && !isDue(row.deliver_on, now || new Date())) return { ok: false, reason: 'not_found' };
+  return viewGift(row, rate, viewer);
+}
+
+function viewGift(row, rate, viewer) {
+  const viewerEmail = viewer && viewer.email;
   if (!row) return { ok: false, reason: 'not_found' };
   const state = (row.status === 'paid' || row.status === 'delivered') ? 'available'
     : (row.status === 'redeemed') ? 'redeemed' : (row.status === 'void') ? 'void' : 'not_found';
@@ -303,6 +374,14 @@ async function lookup(db, input, rate, viewer) {
            subscription: viewer ? subscriptionState(viewer) : null,
            subPausedUntil: (viewer && require('./billing/subscriptionPause').isFuture(viewer.sub_paused_until)) ? viewer.sub_paused_until : null,
            description: describeGift(row), fromName: row.buyer_name || null };
+}
+
+// v3.1.47 -- does the buyer get the "your gift was redeemed" email? A paid gift with a buyer address,
+// redeemed by someone other than the buyer.
+function shouldTellBuyer(row, redeemerId, redeemerEmail) {
+  if (!row || row.comp || !row.buyer_email) return false;
+  if (row.buyer_user_id && redeemerId && Number(row.buyer_user_id) === Number(redeemerId)) return false;
+  return String(row.buyer_email).trim().toLowerCase() !== String(redeemerEmail || '').trim().toLowerCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -328,11 +407,26 @@ async function redeem(db, userId, input, deps, opts) {
   deps = deps || {};
   opts = opts || {};
   const convert = opts.convert === true;
-  const bare = normalizeCode(input);
-  if (!bare) return { ok: false, reason: 'not_found' };
-  const hash = hashCode(bare);
-  const peek = await db.prepare('SELECT id, item_kind, status, value_cents FROM gift_certificates WHERE code_hash = ?').get(hash);
+  const now = deps.now || new Date();
+  // v3.1.47 -- TWO WAYS TO NAME THE GIFT. By its code (anyone holding it), or from the banner by its
+  // id, which only works for the account whose CONFIRMED email the gift was sent to, once its day has
+  // come. Everything after the lookup is the same for both.
+  const byId = opts.giftId != null;
+  const myEmail = byId ? String(opts.verifiedEmail || '').trim().toLowerCase() : '';
+  const giftId = byId ? parseInt(opts.giftId, 10) : 0;
+  let hash = null;
+  if (byId) {
+    if (!(giftId > 0) || !myEmail) return { ok: false, reason: 'not_found' };
+  } else {
+    const bare = normalizeCode(input);
+    if (!bare) return { ok: false, reason: 'not_found' };
+    hash = hashCode(bare);
+  }
+  const peek = byId
+    ? await db.prepare('SELECT id, item_kind, status, value_cents, recipient_email, deliver_on FROM gift_certificates WHERE id = ? AND lower(recipient_email) = ?').get(giftId, myEmail)
+    : await db.prepare('SELECT id, item_kind, status, value_cents FROM gift_certificates WHERE code_hash = ?').get(hash);
   if (!peek) return { ok: false, reason: 'not_found' };
+  if (byId && peek.status === 'paid' && !isDue(peek.deliver_on, now)) return { ok: false, reason: 'not_found' };
   if (peek.status === 'redeemed') return { ok: false, reason: 'redeemed' };
   if (peek.status === 'void') return { ok: false, reason: 'void' };
   if (peek.status !== 'paid' && peek.status !== 'delivered') return { ok: false, reason: 'not_found' };
@@ -347,13 +441,15 @@ async function redeem(db, userId, input, deps, opts) {
     if (!(await canBuy(userId))) return { ok: false, reason: 'needs_plan' };
   }
   const tok = deps.tokens || require('../routes/tokens');
-  const now = deps.now || new Date();
   const result = await db.transaction(async function (tx) {
-    const g = (await tx.query('SELECT * FROM gift_certificates WHERE code_hash = $1 FOR UPDATE', [hash])).rows[0];
+    const g = (byId
+      ? await tx.query('SELECT * FROM gift_certificates WHERE id = $1 AND lower(recipient_email) = $2 FOR UPDATE', [giftId, myEmail])
+      : await tx.query('SELECT * FROM gift_certificates WHERE code_hash = $1 FOR UPDATE', [hash])).rows[0];
     if (!g) return { ok: false, reason: 'not_found' };
     if (g.status === 'redeemed') return { ok: false, reason: 'redeemed' };
     if (g.status === 'void') return { ok: false, reason: 'void' };
     if (g.status !== 'paid' && g.status !== 'delivered') return { ok: false, reason: 'not_found' };
+    if (byId && g.status === 'paid' && !isDue(g.deliver_on, now)) return { ok: false, reason: 'not_found' };
     const u = (await tx.query(
       'SELECT tier, pass_expires_at, current_period_end, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = $1 FOR UPDATE',
       [userId])).rows[0];
@@ -409,6 +505,18 @@ async function redeem(db, userId, input, deps, opts) {
       } catch (_) {}
     }
   }
+  // v3.1.47 -- TELL THE BUYER (Ian, 2026-10-01). After the commit, best effort: the gift is redeemed
+  // whether or not this email lands. Never for a free gift, and never when the buyer redeemed it.
+  if (result && result.ok) {
+    try {
+      const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(result.id);
+      const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+      if (shouldTellBuyer(row, userId, me && me.email)) {
+        const send = deps.sendRedeemedEmail || require('../routes/email').sendGiftRedeemedEmail;
+        await send(row);
+      }
+    } catch (e) { console.error('[gifts] redeemed email for gift ' + result.id + ' failed:', e && e.message); }
+  }
   if (result) delete result._subId;
   return result;
 }
@@ -446,8 +554,19 @@ async function fulfillGiftCheckout(db, session, deps) {
     "buyer_email = COALESCE(buyer_email, ?) WHERE id = ? AND stripe_session_id = ? AND status = 'pending_payment'"
   ).run(piId, (session.amount_total != null) ? session.amount_total : null, email, id, session.id);
   if (!r || !r.changes) return null;
+  // v3.1.47 -- THE CODE IS MADE NOW, so the receipt can carry it (Ian, 2026-10-01). Sealed until the
+  // gift email goes, which sends this same code. If this fails the gift is still paid: the receipt
+  // goes without a code and delivery makes one, exactly as before.
+  let code = null;
+  try {
+    const bare = generateCode();
+    const c = await db.prepare(
+      "UPDATE gift_certificates SET code_hash = ?, code_last4 = ?, code_sealed = ? WHERE id = ? AND status = 'paid' AND code_hash IS NULL"
+    ).run(hashCode(bare), bare.slice(-4), sealCode(bare), id);
+    if (c && c.changes) code = formatCode(bare);
+  } catch (e) { console.error('[gifts] could not make the code for gift ' + id + ' at purchase:', e && e.message); }
   const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
-  try { if (deps.sendReceipt) await deps.sendReceipt(row); } catch (e) { console.error('[gifts] receipt failed for gift ' + id + ':', e && e.message); }
+  try { if (deps.sendReceipt) await deps.sendReceipt(row, code); } catch (e) { console.error('[gifts] receipt failed for gift ' + id + ':', e && e.message); }
   if (isDue(row.deliver_on, deps.now || new Date())) {
     const sent = await issueAndSend(db, row, deps.sendGift);
     if (!sent.ok) console.error('[gifts] gift ' + id + ' paid but not sent yet (the hourly job retries): ' + sent.error);
@@ -519,5 +638,6 @@ module.exports = {
   easternParts, dayString, isDue,
   isValidEmail, maskEmail, sentToOther, subscriptionState, SUB_CAN_BILL, validateGiftInput, issueAndSend,
   lookup, redeem,
+  sealCode, openCode, storedCode, isMineNow, listMine, lookupMine, viewGift, shouldTellBuyer,
   BUYER_DAILY_LIMIT, buyerCountToday, fulfillGiftCheckout, markGiftCheckoutAbandoned, handleGiftPaymentReversal, voidAndRefund
 };

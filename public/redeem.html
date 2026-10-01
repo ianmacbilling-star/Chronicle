@@ -94,7 +94,7 @@
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var state = { me: null, code: '' };
+  var state = { me: null, code: '', giftId: null };
   function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
   function error(text) { var e = $('error'); e.textContent = text || ''; show('error', !!text); }
   function post(url, body) {
@@ -110,18 +110,23 @@
     'void': 'This gift has been cancelled and can no longer be redeemed.',
     needs_plan: 'Tokens cannot be added to a Free Trial account. Choose a plan in Campaignia, then come back to this link. Your gift never expires and will still be here.',
     cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.',
-    take_tokens: 'You already have Platinum through your subscription, so this pass would add nothing. Take the tokens instead.'
+    take_tokens: 'You already have Platinum through your subscription, so this pass would add nothing. Take the tokens instead.',
+    not_mine: 'That gift is not waiting on this account. If you have the code from your gift email, enter it below.'
   };
   function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
 
   function check() {
     error('');
+    // v3.1.47 -- from the banner (?gift=ID): the gift is named by id, and the server only shows it to the
+    // account whose confirmed email it was sent to. Typing a code switches back to the code.
     var code = ($('code').value || '').trim();
-    if (!code) { error('Enter the code from your gift email.'); return; }
+    if (code) state.giftId = null;
+    if (!code && !state.giftId) { error('Enter the code from your gift email.'); return; }
     $('check-btn').disabled = true;
-    post('/api/gifts/lookup', { code: code }).then(function (r) {
+    post('/api/gifts/lookup', state.giftId ? { giftId: state.giftId } : { code: code }).then(function (r) {
       $('check-btn').disabled = false;
       if (r.reason === 'off') { show('enter', false); show('off', true); return; }
+      if (!r.ok && state.giftId) { state.giftId = null; show('enter', true); error(REASON.not_mine); return; }
       if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
       if (r.state === 'redeemed') { error(REASON.redeemed); return; }
       if (r.state === 'void') { error(REASON['void']); return; }
@@ -130,7 +135,7 @@
       $('gift-from').textContent = r.fromName ? ('A gift from ' + r.fromName) : 'A gift for you';
       $('gift-what').textContent = r.description.charAt(0).toUpperCase() + r.description.slice(1);
       show('enter', false); show('found', true);
-      var back = '/redeem?code=' + encodeURIComponent(code);
+      var back = state.giftId ? ('/redeem?gift=' + encodeURIComponent(state.giftId)) : ('/redeem?code=' + encodeURIComponent(code));
       // v3.1.44 -- THE CHOICE DEPENDS ON THE SUBSCRIPTION (Ian, 2026-10-01). The server decides the
       // numbers and enforces the rules; this only lays out the buttons and says what each one does.
       //   platinum      -> tokens only (the pass would add nothing)
@@ -195,7 +200,7 @@
     var label = btn.textContent;
     all.forEach(function (b) { b.disabled = true; });
     btn.textContent = 'Redeeming...';
-    var body = { code: state.code, convert: !!convert };
+    var body = state.giftId ? { giftId: state.giftId, convert: !!convert } : { code: state.code, convert: !!convert };
     post('/api/gifts/redeem', body).then(function (r) {
       all.forEach(function (b) { b.disabled = false; });
       btn.textContent = label;
@@ -222,8 +227,9 @@
   $('redeem-btn').addEventListener('click', function () { redeem(false); });
   $('convert-btn').addEventListener('click', function () { redeem(true); });
 
-  var pre = '';
+  var pre = '', preGift = '';
   try { pre = new URLSearchParams(window.location.search).get('code') || ''; } catch (e) {}
+  try { preGift = new URLSearchParams(window.location.search).get('gift') || ''; } catch (e) {}
   Promise.all([
     fetch('/api/gifts/status', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { enabled: false }; }),
     fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
@@ -232,6 +238,11 @@
     state.me = (res[1] && res[1].authenticated) ? res[1] : null;
     if (!state.me) $('app-link').textContent = 'Back to Campaignia';
     if (pre) { $('code').value = pre; check(); }
+    else if (/^[0-9]{1,12}$/.test(preGift)) {
+      // From the banner. Signed out: sign in first, then come straight back here.
+      if (!state.me) { window.location = '/login?returnTo=' + encodeURIComponent('/redeem?gift=' + preGift); return; }
+      state.giftId = preGift; show('enter', false); $('subtitle').textContent = 'Someone gave you a gift.'; check();
+    }
   });
 })();
 </script>
