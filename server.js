@@ -298,6 +298,10 @@ app.get('/library', function(req, res) {
 app.get('/redeem', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'redeem.html'));
 });
+// v3.1.46 -- TD-934 step 2. The gift page; like /redeem it asks the server whether gifts are on.
+app.get('/gift', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'gift.html'));
+});
 app.get('/our-story', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'our-story.html'));
 });

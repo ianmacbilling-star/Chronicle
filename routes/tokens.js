@@ -924,6 +924,15 @@ async function stripeWebhook(req, res) {
         // looks up md.pack_id, would find nothing, and would return having granted nothing at
         // all. Money taken, silence.
         _receipt = await fulfillPassCheckout(s, event.id);
+      } else if (s && s.metadata && s.metadata.kind === 'gift') {
+        // v3.1.46 -- TD-934 step 2. A GIFT, BEFORE THE PACK FALLBACK, for exactly the reason the pass
+        // branch above gives: fulfillCheckout would look for md.pack_id, find nothing, and return having
+        // recorded nothing. The gift sends its own receipt (to a buyer who may have no account) and its
+        // own delivery, so _receipt stays null here.
+        const _email = require('./email');
+        await require('../services/gifts').fulfillGiftCheckout(await getDb(), s, {
+          sendReceipt: _email.sendGiftReceiptEmail, sendGift: _email.sendGiftEmail
+        });
       } else if (s && s.metadata && s.metadata.kind === 'print_order') {
         // Paid book order: submit the job to the print vendor now (payment-first).
         // NO RECEIPT HERE EITHER, deliberately: fulfillPrintOrder sends its own confirmation
@@ -950,6 +959,16 @@ async function stripeWebhook(req, res) {
       // ?order=cancel fires only if the reader clicks back from Stripe; closing the tab, switching
       // apps or simply walking away produces nothing at all. This one always arrives.
       await markCheckoutExpired(event.data.object);
+    } else if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {
+      // v3.1.46 -- TD-934. A refund or dispute on a GIFT voids it if unused (its code stops working);
+      // a redeemed one is never clawed back -- Ian is emailed. Anything that is not a gift: no-op.
+      // These two events must be switched on for the webhook endpoint in the Stripe dashboard.
+      const _o = event.data.object || {};
+      const _pi = (_o.payment_intent && typeof _o.payment_intent === 'object') ? _o.payment_intent.id : (_o.payment_intent || null);
+      if (event.type === 'charge.dispute.created' || _o.refunded === true) {
+        try { await require('../services/gifts').handleGiftPaymentReversal(await getDb(), _pi, event.type === 'charge.dispute.created' ? 'dispute' : 'refund'); }
+        catch (gErr) { console.error('gift reversal failed (non-fatal):', gErr && gErr.message); }
+      }
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       // Also the prorated charge for a mid-cycle upgrade, which gets a receipt but no grant.
@@ -1439,6 +1458,8 @@ async function markCheckoutExpired(session) {
   if (!session) return;
   try {
     const md = session.metadata || {};
+    // v3.1.46 -- a gift checkout walked away from: its row becomes 'abandoned'.
+    if (md.kind === 'gift') { await require('../services/gifts').markGiftCheckoutAbandoned(await getDb(), session); return; }
     if (md.kind !== 'print_order') return;   // token packs and subscriptions have no order row
     const orderId = parseInt(md.order_id, 10);
     if (!Number.isFinite(orderId)) return;

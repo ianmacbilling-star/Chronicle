@@ -1575,6 +1575,10 @@
           <div class="settings-section-title" style="font-size:14px;">Platinum Passes</div>
           <div class="settings-section-desc" id="account-passes-desc">Months of Platinum access and a block of tokens, paid once. Nothing to cancel.</div>
           <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
+          <!-- v3.1.46 -- TD-934. Shown only while gifts are switched on. -->
+          <div id="account-gift-link" class="settings-section-desc" style="display:none;margin-top:12px;">
+            Know someone who would love this? <a href="/gift" target="_blank" rel="noopener" style="color:var(--gold);font-weight:600;">Give Campaignia as a gift</a>.
+          </div>
         </div>
       </div>
 
@@ -1844,6 +1848,8 @@
             <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
             <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
             <option value="gift">Gift &mdash; to the recipient</option>
+            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
+            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
             <option value="feedback">Feedback (to support)</option>
             <option value="trial_ending_soon">Trial &mdash; ending soon</option>
             <option value="trial_expired">Trial &mdash; expired</option>
@@ -2161,6 +2167,7 @@
               <option value="delivered">Sent</option>
               <option value="redeemed">Redeemed</option>
               <option value="void">Void</option>
+              <option value="abandoned">Checkout abandoned</option>
             </select>
             <input class="form-input" id="gift-f-q" style="width:240px;" placeholder="name, email or last 4 of the code" onkeydown="if(event.key==='Enter')loadGifts()" />
             <button class="btn btn-primary btn-sm" onclick="loadGifts()">Filter</button>

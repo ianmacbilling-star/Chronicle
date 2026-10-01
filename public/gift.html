@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaignia &mdash; Give a Gift</title>
+<meta name="description" content="Give Campaignia as a gift: months of Platinum or a block of tokens, emailed now or on the day you choose." />
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+<link rel="stylesheet" href="/css/fonts.css">
+<link rel="stylesheet" href="/css/style.css">
+<!-- v3.1.46 -- TD-934 step 2. THE GIFT PAGE. Spec: claude/GIFT_CERTIFICATES_SPEC.md section 3.
+     Every price and every rule is the server's: this page reads /api/gifts/catalog and posts to
+     /api/gifts/checkout, which re-reads the catalog by id and refuses anything it does not like. -->
+<style>
+  body { margin: 0; }
+  .page { min-height: 100vh; display: flex; justify-content: center; padding: 28px 16px; box-sizing: border-box;
+    background: #0a0806; background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
+  .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.68); }
+  .box { position: relative; z-index: 1; background: rgba(20,15,8,0.94); border: 1px solid rgba(201,168,76,0.25); border-radius: 16px;
+    padding: 30px; width: 100%; max-width: 620px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: #e8d5a3; align-self: flex-start; }
+  .logo { display: block; height: 64px; margin: 0 auto 14px; }
+  h1 { font-family: 'Cinzel', Georgia, serif; font-size: 22px; font-weight: 400; color: #c9a84c; text-align: center; letter-spacing: 1px; margin: 0 0 6px; }
+  .sub { font-size: 14px; color: rgba(232,213,163,0.75); text-align: center; margin: 0 0 22px; line-height: 1.5; }
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 22px 0; }
+  h2 { font-family: 'Cinzel', Georgia, serif; font-size: 14px; font-weight: 400; color: #c9a84c; letter-spacing: 1px; margin: 0 0 12px; }
+  .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .item { position: relative; border: 1px solid rgba(201,168,76,0.28); border-radius: 10px; padding: 12px; cursor: pointer; background: rgba(255,255,255,0.02); }
+  .item input { position: absolute; opacity: 0; pointer-events: none; }
+  .item.sel { border-color: #c9a84c; background: rgba(201,168,76,0.12); box-shadow: 0 0 0 1px #c9a84c inset; }
+  .item:focus-within { outline: 2px solid #e8c870; outline-offset: 2px; }
+  .item-kicker { font-size: 11px; letter-spacing: 1px; color: rgba(201,168,76,0.75); text-transform: uppercase; }
+  .item-name { font-size: 15px; color: #f0e8d0; margin: 4px 0 2px; }
+  .item-detail { font-size: 12px; color: rgba(232,213,163,0.7); }
+  .item-price { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; margin-top: 6px; }
+  label.f { display: block; font-size: 13px; color: rgba(201,168,76,0.8); margin: 12px 0 5px; }
+  .in { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(201,168,76,0.2); color: #e8d5a3; border-radius: 8px; padding: 10px 12px; font-size: 15px; font-family: inherit; }
+  .in:focus { border-color: rgba(201,168,76,0.6); outline: none; }
+  textarea.in { resize: vertical; min-height: 80px; }
+  .count { font-size: 11px; color: rgba(232,213,163,0.55); text-align: right; margin-top: 3px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .when { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+  .when label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.75); margin: 10px 0 0; }
+  .btn-go { display: block; width: 100%; margin-top: 18px; background: #c9a84c; color: #1a0e06; border: 1px solid #c9a84c; border-radius: 8px; padding: 13px;
+    font-family: 'Cinzel', Georgia, serif; font-size: 14px; letter-spacing: 1px; cursor: pointer; white-space: normal; }
+  .btn-go:hover { background: #e8c870; } .btn-go[disabled] { opacity: 0.6; cursor: default; }
+  .err { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px; line-height: 1.5; }
+  .ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.6; }
+  .links { text-align: center; margin-top: 16px; font-size: 13px; } .links a { color: #c9a84c; }
+  .hidden { display: none !important; }
+  @media (max-width: 520px) { .box { padding: 22px 18px; } .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="box">
+    <img class="logo" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
+    <h1>Give Campaignia as a Gift</h1>
+    <p class="sub" id="sub">Months of Platinum or a block of tokens, emailed to them now or on the day you choose. Gifts never expire.</p>
+
+    <div id="off" class="hidden"><p class="note" style="text-align:center;">Gifts are not available right now. Please check back soon.</p></div>
+    <div id="done" class="ok hidden" role="status"></div>
+    <div id="cancelled" class="err hidden" role="status">Checkout was cancelled. Nothing was charged. You can try again below.</div>
+
+    <form id="form" class="hidden" novalidate>
+      <h2>1. Choose the gift</h2>
+      <div class="items" id="items" role="radiogroup" aria-label="Gift"></div>
+      <p class="note hidden" id="pack-note">Token gifts can be used on any Campaignia account except one on the Free Trial.</p>
+
+      <div class="divider"></div>
+      <h2>2. Who is it for?</h2>
+      <div class="two">
+        <div><label class="f" for="to-name">Their name</label><input class="in" id="to-name" maxlength="80" autocomplete="off" /></div>
+        <div><label class="f" for="to-email">Their email</label><input class="in" id="to-email" type="email" maxlength="254" autocomplete="off" /></div>
+      </div>
+      <label class="f" for="message">A message <span style="color:rgba(232,213,163,0.5);">(optional)</span></label>
+      <textarea class="in" id="message" maxlength="300"></textarea>
+      <div class="count" id="count">0 / 300</div>
+
+      <div class="divider"></div>
+      <h2>3. When should it arrive?</h2>
+      <div class="when">
+        <label><input type="radio" name="when" value="now" checked /> Send it now</label>
+        <label><input type="radio" name="when" value="date" /> On a date</label>
+        <input class="in hidden" id="deliver-on" type="date" style="width:auto;" />
+      </div>
+      <p class="note hidden" id="date-note">It is emailed at 9am Eastern on that day.</p>
+
+      <div class="divider"></div>
+      <h2>4. From you</h2>
+      <div class="two">
+        <div><label class="f" for="from-name">Your name, as they will see it</label><input class="in" id="from-name" maxlength="80" /></div>
+        <div id="buyer-email-wrap"><label class="f" for="buyer-email">Your email, for the receipt</label><input class="in" id="buyer-email" type="email" maxlength="254" /></div>
+      </div>
+      <p class="note hidden" id="signed-in-note"></p>
+
+      <div id="error" class="err hidden" role="alert"></div>
+      <button class="btn-go" id="go" type="submit">Continue to payment</button>
+      <p class="note" style="text-align:center;">You pay on Stripe's secure checkout. You get a receipt now, and a copy of the gift code when it is delivered.</p>
+    </form>
+
+    <div class="links"><a href="/">Back to Campaignia</a></div>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
+  function error(t) { $('error').textContent = t || ''; show('error', !!t); }
+  var state = { items: [], pick: null, me: null };
+  var q = new URLSearchParams(window.location.search);
+
+  function money(c) { var d = Number(c) / 100; return '$' + (d % 1 === 0 ? String(d) : d.toFixed(2)); }
+  function easternToday() {
+    try {
+      var p = {}; new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+      return p.year + '-' + p.month + '-' + p.day;
+    } catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+
+  function drawItems() {
+    var box = $('items'); box.innerHTML = '';
+    state.items.forEach(function (it, i) {
+      var key = it.kind + ':' + it.id;
+      var lab = document.createElement('label'); lab.className = 'item'; lab.setAttribute('data-key', key);
+      var inp = document.createElement('input'); inp.type = 'radio'; inp.name = 'item'; inp.value = key;
+      inp.addEventListener('change', function () { pick(key); });
+      var k = document.createElement('div'); k.className = 'item-kicker'; k.textContent = it.kind === 'pass' ? 'Platinum Pass' : 'Token pack';
+      var n = document.createElement('div'); n.className = 'item-name'; n.textContent = it.kind === 'pass' ? (it.months + ' months of Platinum') : (it.tokens + ' tokens');
+      var d = document.createElement('div'); d.className = 'item-detail'; d.textContent = it.kind === 'pass' ? ('plus ' + it.tokens + ' tokens') : 'to spend on anything';
+      var p = document.createElement('div'); p.className = 'item-price'; p.textContent = money(it.price_cents);
+      lab.appendChild(inp); lab.appendChild(k); lab.appendChild(n); lab.appendChild(d); lab.appendChild(p);
+      box.appendChild(lab);
+      if (i === 0) { inp.checked = true; }
+    });
+    if (state.items.length) pick(state.items[0].kind + ':' + state.items[0].id);
+  }
+  function pick(key) {
+    state.pick = key;
+    Array.prototype.forEach.call(document.querySelectorAll('.item'), function (el) { el.classList.toggle('sel', el.getAttribute('data-key') === key); });
+    show('pack-note', key.indexOf('pack:') === 0);
+  }
+
+  $('message').addEventListener('input', function () { $('count').textContent = this.value.length + ' / 300'; });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="when"]'), function (r) {
+    r.addEventListener('change', function () { var d = this.value === 'date' && this.checked; show('deliver-on', d); show('date-note', d); });
+  });
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault(); error('');
+    if (!state.pick) { error('Choose a gift.'); return; }
+    var whenDate = document.querySelector('input[name="when"]:checked').value === 'date';
+    var parts = state.pick.split(':');
+    var body = {
+      item_kind: parts[0], item_id: parts[1],
+      recipient_name: $('to-name').value, recipient_email: $('to-email').value,
+      message: $('message').value, from_name: $('from-name').value,
+      deliver_on: whenDate ? $('deliver-on').value : ''
+    };
+    if (whenDate && !body.deliver_on) { error('Choose the day it should arrive.'); return; }
+    if (!state.me) body.buyer_email = $('buyer-email').value;
+    var go = $('go'); go.disabled = true; go.textContent = 'Opening checkout...';
+    try { sessionStorage.setItem('cmpGiftTo', body.recipient_name || body.recipient_email); sessionStorage.setItem('cmpGiftWhen', body.deliver_on || ''); } catch (x) {}
+    fetch('/api/gifts/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d && d.url) { window.location = d.url; return; }
+        go.disabled = false; go.textContent = 'Continue to payment';
+        error((d && d.error) || 'We could not start the checkout. Nothing was charged.');
+      })
+      .catch(function () { go.disabled = false; go.textContent = 'Continue to payment'; error('Could not reach Campaignia. Nothing was charged.'); });
+  });
+
+  // Back from Stripe.
+  if (q.get('done')) {
+    var to = '', when = '';
+    try { to = sessionStorage.getItem('cmpGiftTo') || ''; when = sessionStorage.getItem('cmpGiftWhen') || ''; } catch (x) {}
+    var nice = '';
+    if (when) { try { nice = new Date(when + 'T12:00:00Z').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }); } catch (x) { nice = when; } }
+    $('done').textContent = 'Thank you! Your gift' + (to ? ' for ' + to : '') + ' is paid for. ' +
+      (nice ? 'We will email it on ' + nice + ' at 9am Eastern.' : 'We are emailing it now.') +
+      ' Your receipt is on its way, and you will get a copy of the gift code when it is delivered.';
+    show('done', true);
+    $('sub').textContent = 'Want to send another?';
+  }
+  if (q.get('cancelled')) show('cancelled', true);
+
+  Promise.all([
+    fetch('/api/gifts/catalog', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+    fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
+  ]).then(function (res) {
+    if (!res[0] || !res[0].items || !res[0].items.length) { show('off', true); show('done', false); return; }
+    state.items = res[0].items;
+    state.me = (res[1] && res[1].authenticated) ? res[1] : null;
+    if (state.me) {
+      show('buyer-email-wrap', false);
+      $('signed-in-note').textContent = 'Your receipt goes to ' + (state.me.email || 'your account email') + '.';
+      show('signed-in-note', true);
+      if (state.me.name && !$('from-name').value) $('from-name').value = state.me.name;
+    }
+    var min = easternToday(); $('deliver-on').min = min;
+    drawItems();
+    show('form', true);
+  });
+})();
+</script>
+</body>
+</html>

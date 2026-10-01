@@ -218,6 +218,49 @@ async function cancelSubscriptionAtPeriodEnd(subId) {
   return await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
 }
 
+// v3.1.46 -- TD-934 step 2. A GIFT PURCHASE. An ordinary one-time payment; everything that makes it a
+// gift lives in our gift_certificates row, whose id rides in the metadata. PROMO CODES ARE OFF
+// (Ian, 2026-10-01 -- TD-936 for later). The amount is the frozen quote saved on the row, never the
+// client's. A signed-in buyer pays as their own Stripe customer; a guest's email is prefilled from
+// the gift form, so the receipt and the daily limit both have an address.
+// STRIPE_PRODUCT_GIFTS, when set, points the line at its own Product so a future gift promo code can
+// target gifts alone without spilling onto passes (TD-936).
+async function createGiftCheckout(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const g = opts.gift;
+  const params = {
+    mode: 'payment',
+    allow_promotion_codes: false,
+    line_items: [{
+      quantity: 1,
+      price_data: Object.assign({ currency: 'usd', unit_amount: g.price_cents },
+        productRef('STRIPE_PRODUCT_GIFTS', 'Campaignia gift -- ' + g.item_name))
+    }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    metadata: {
+      kind: 'gift',
+      gift_id: String(g.id),
+      item_kind: String(g.item_kind),
+      item_id: String(g.item_id),
+      quoted_price_cents: String(g.price_cents)
+    },
+    payment_intent_data: { metadata: { kind: 'gift', gift_id: String(g.id) } }
+  };
+  if (opts.userId != null) { params.client_reference_id = String(opts.userId); params.metadata.user_id = String(opts.userId); }
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'gift', { gift_id: String(g.id) }));
+  return await stripe.checkout.sessions.create(params);
+}
+
+// v3.1.46 -- refund a gift in full. Throws on failure, so the caller can put the gift back.
+async function refundPaymentIntent(paymentIntentId, reason) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  if (!paymentIntentId) throw new Error('no payment to refund');
+  return await stripe.refunds.create({ payment_intent: paymentIntentId, metadata: { reason: String(reason || 'gift voided') } });
+}
+
 // v3.1.45 -- TD-938. PAUSE A SUBSCRIPTION'S BILLING UNTIL A PASS ENDS.
 // Stripe docs (docs.stripe.com/billing/subscriptions/pause-payment, read 2026-10-01): with
 // pause_collection the subscription "remains active", invoices still generate, and with
@@ -445,7 +488,7 @@ async function getPrice(priceId) {
 }
 
 module.exports = {
-  createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection,
+  createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection, createGiftCheckout, refundPaymentIntent,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,

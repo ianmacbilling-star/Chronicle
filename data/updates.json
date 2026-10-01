@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.46",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3146-buy-gifts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gift certificates, part two: anyone can buy a Platinum Pass or a token pack as a gift from a Give Campaignia page, with a button below the tiers on both landing pages.",
+        "detail": "Gifts must be switched on (Dashboard > Gifts) or none of this shows. Test with a Stripe test card: open /gift signed out, pick a pass, fill in a recipient you can read, pay. You should get a receipt (no code on it), the recipient gets the gift email, and you get a copy of the code. Try a delivery date (paid now, sent at 9am Eastern that day). Try a 4th purchase from the same email within 24 hours (refused). On the Gifts tab a paid gift shows its price and Void & refund (refunds in Stripe and kills the code; refused once redeemed). Walking away from checkout marks the gift Checkout abandoned once Stripe expires the session. For refunds made in the Stripe dashboard to void a gift, the webhook endpoint must have charge.refunded and charge.dispute.created switched on. Also fixed: the pass panel on My Account no longer tells subscribers their subscription keeps billing.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.45",
     "staged_on": "2026-10-01",
     "entries": [

@@ -2,8 +2,8 @@
 // GIFT ROUTES  (mounted at /api/gifts)  --  v3.1.43, TD-934 step 1
 // Spec: claude/GIFT_CERTIFICATES_SPEC.md
 //
-// Step 1: the on/off switch, the dashboard list, free (comp) gifts with their
-// email, and redeeming. Buying (step 2) arrives in a later batch.
+// The on/off switch, the dashboard list, free (comp) gifts, redeeming (3.1.43+),
+// and buying (3.1.46).
 //
 // THE SWITCH GATES THE SERVER, NOT THE PAINT. Every customer-facing route reads
 // gifts.isEnabled() itself. A hidden button over a live route is not off.
@@ -17,12 +17,12 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const gifts = require('../services/gifts');
 
 const LIST_COLUMNS =
-  'g.id, g.code_last4, g.item_kind, g.item_id, g.item_name, g.months, g.tokens, g.price_cents, g.value_cents, g.currency, g.comp, ' +
+  'g.id, g.code_last4, g.item_kind, g.item_id, g.item_name, g.months, g.tokens, g.price_cents, g.value_cents, g.currency, g.comp, g.stripe_payment_intent IS NOT NULL AS has_payment, ' +
   'g.buyer_email, g.buyer_name, g.recipient_name, g.recipient_email, g.message, g.deliver_on, g.status, ' +
   'g.delivery_attempts, g.last_error, g.delivered_at, g.redeemed_at, g.redeemed_by_user_id, g.redeemed_as, g.redeemed_tokens, g.voided_at, g.void_reason, ' +
   'g.created_by_admin, g.created_at, u.email AS redeemed_by_email';
 
-const STATUSES = ['pending_payment', 'paid', 'delivered', 'redeemed', 'void'];
+const STATUSES = ['pending_payment', 'paid', 'delivered', 'redeemed', 'void', 'abandoned'];
 const OFF_MESSAGE = 'Gifts are switched off on this server. Switch them on first: a gift sent now would carry a link that does not work.';
 
 async function adminEmail(db, req) {
@@ -99,6 +99,70 @@ router.post('/lookup', async function (req, res) {
   } catch (e) {
     console.error('[gifts] lookup error:', e && e.message);
     res.status(500).json({ error: 'Could not check that code.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// v3.1.46 -- TD-934 step 2. BUYING A GIFT.
+// ---------------------------------------------------------------------------
+// PUBLIC: what can be given, at what price -- read from the live catalogs, the same ones checkout
+// charges from. Off means off: the gift page says gifts are unavailable.
+router.get('/catalog', async function (req, res) {
+  try {
+    const db = await getDb();
+    if (!(await gifts.isEnabled(db))) return res.status(404).json({ error: NOT_AVAILABLE, reason: 'off' });
+    res.json({ items: gifts.catalog(), messageMax: gifts.MESSAGE_MAX, dailyLimit: gifts.BUYER_DAILY_LIMIT });
+  } catch (e) { res.status(500).json({ error: 'Could not load the gifts.' }); }
+});
+
+// PUBLIC: start a gift checkout. No account needed (Ian, 2026-10-01). A signed-in buyer's own email
+// is used and the body's ignored; a guest gives theirs, and Stripe's checkout carries it.
+router.post('/checkout', async function (req, res) {
+  let rowId = null;
+  try {
+    const db = await getDb();
+    if (!(await gifts.isEnabled(db))) return res.status(404).json({ error: NOT_AVAILABLE, reason: 'off' });
+    const provider = require('../services/billing/stripeProvider');
+    if (!provider.isConfigured()) return res.status(503).json({ error: 'Payments are not set up on this server.' });
+    const checked = gifts.validateGiftInput(req.body || {}, new Date());
+    if (!checked.ok) return res.status(400).json({ error: checked.error });
+    const v = checked.v;
+    const userId = (req.session && req.session.userId) || null;
+    let buyerEmail = null;
+    if (userId) {
+      const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+      buyerEmail = (u && u.email) ? String(u.email).toLowerCase() : null;
+    }
+    if (!buyerEmail) {
+      buyerEmail = String((req.body && req.body.buyer_email) || '').trim().toLowerCase().slice(0, 254);
+      if (!gifts.isValidEmail(buyerEmail)) return res.status(400).json({ error: 'Enter your email address, for your receipt.' });
+    }
+    if ((await gifts.buyerCountToday(db, buyerEmail, userId)) >= gifts.BUYER_DAILY_LIMIT) {
+      return res.status(429).json({ code: 'DAILY_LIMIT', error: 'You can buy up to ' + gifts.BUYER_DAILY_LIMIT + ' gifts a day. Please come back tomorrow, or contact support if you need more.' });
+    }
+    const ins = await db.prepare(
+      'INSERT INTO gift_certificates (item_kind, item_id, item_name, months, tokens, price_cents, value_cents, currency, comp, ' +
+      'buyer_user_id, buyer_email, buyer_name, recipient_name, recipient_email, message, deliver_on, status) ' +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, 'usd', false, ?, ?, ?, ?, ?, ?, ?, 'pending_payment')"
+    ).run(v.quote.kind, v.quote.id, v.quote.name, v.quote.months, v.quote.tokens, v.quote.price_cents, v.quote.price_cents,
+      userId, buyerEmail, v.fromName, v.recipientName, v.recipientEmail, v.message || null, v.deliverOn);
+    rowId = ins && ins.lastInsertRowid;
+    const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(rowId);
+    let customerId = null;
+    if (userId) {
+      try { customerId = await require('../services/billing/stripeCustomer').ensureStripeCustomer(userId); } catch (_) { customerId = null; }
+    }
+    const base = (process.env.PUBLIC_BASE_URL || process.env.APP_URL || '').replace(/\/+$/, '');
+    const session = await provider.createGiftCheckout({
+      gift: row, userId: userId, customerId: customerId, customerEmail: buyerEmail,
+      successUrl: base + '/gift?done=' + rowId, cancelUrl: base + '/gift?cancelled=1'
+    });
+    await db.prepare('UPDATE gift_certificates SET stripe_session_id = ? WHERE id = ?').run(session.id, rowId);
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error('[gifts] checkout error:', e && e.message);
+    if (rowId) { try { const db2 = await getDb(); await db2.prepare("UPDATE gift_certificates SET status = 'abandoned' WHERE id = ? AND status = 'pending_payment'").run(rowId); } catch (_) {} }
+    res.status(500).json({ error: "We couldn't start the checkout. Nothing was charged. Please try again." });
   }
 });
 
@@ -234,8 +298,8 @@ router.post('/admin/:id/date', requireAuth, requireAdmin, async function (req, r
   } catch (e) { res.status(500).json({ error: 'Could not change the date.' }); }
 });
 
-// VOID: the code stops working. Free gifts only in this step -- voiding a PAID gift must refund it
-// in Stripe at the same moment, and that arrives with gift purchases (step 2). Never a redeemed one.
+// VOID: the code stops working. A free gift is simply voided; a PAID one is voided AND refunded in
+// full (v3.1.46), together or not at all. Never a redeemed one.
 router.post('/admin/:id/void', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
@@ -243,8 +307,12 @@ router.post('/admin/:id/void', requireAuth, requireAdmin, async function (req, r
     if (!id) return res.status(400).json({ error: 'Bad id.' });
     const row = await db.prepare('SELECT id, comp, status FROM gift_certificates WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ error: 'Not found.' });
-    if (!row.comp) return res.status(409).json({ error: 'A paid gift is voided together with its refund, which is not built yet.' });
     const reason = String((req.body && req.body.reason) || '').trim().slice(0, 200) || null;
+    if (!row.comp) {
+      const out = await gifts.voidAndRefund(db, id, reason || 'voided and refunded by admin');
+      if (!out.ok) return res.status(out.status || 500).json({ error: out.error });
+      return res.json({ ok: true, refunded: true });
+    }
     const r = await db.prepare(
       "UPDATE gift_certificates SET status = 'void', voided_at = CURRENT_TIMESTAMP, void_reason = ? " +
       "WHERE id = ? AND comp = true AND status IN ('pending_payment', 'paid', 'delivered')"

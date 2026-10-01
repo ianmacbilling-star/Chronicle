@@ -660,6 +660,8 @@ function purchaseReceiptHTML(name, receipt) {
   var card = (receipt.cardBrand && receipt.cardLast4) ? (receipt.cardBrand + ' ****' + receipt.cardLast4) : '';
   var rows = '';
   rows += row('Purchase', receipt.itemName);
+  rows += row('For', receipt.giftFor || '');              // v3.1.46 -- gift receipts only; dropped when empty
+  rows += row('Delivery', receipt.giftDelivery || '');
   rows += row('Amount', money(receipt.amountCents, receipt.currency));
   rows += row('Paid with', card);
   rows += row('Date', when(receipt.paidAt));
@@ -719,7 +721,7 @@ function purchaseReceiptHTML(name, receipt) {
       <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
-      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can see your plan, your passes and your token balance any time on My Account.</div>
+      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">${receipt.kind === 'gift' ? ('Questions about your gift? Write to ' + esc(process.env.SUPPORT_EMAIL || 'support@campaignia.com') + ' and quote the purchase ID.') : 'You can see your plan, your passes and your token balance any time on My Account.'}</div>
     </div>
     <div class="footer">Campaignia &middot; Receipt for your purchase.</div>
   </div>
@@ -759,7 +761,11 @@ var RECEIPT_COPY = {
   upgrade:      { subject: 'Your Campaignia plan upgrade',
                   leadIn: 'Your new plan is active and the extra tokens are already on your account. There is nothing to pay today \u2014 the charge for the change will appear on your next invoice.' },
   proration:    { subject: 'Your Campaignia plan change',
-                  leadIn: 'Your plan change has been charged. Here are the details:' }
+                  leadIn: 'Your plan change has been charged. Here are the details:' },
+  // v3.1.46 -- TD-934. The buyer's receipt for a gift. The code is NOT on it: it is made at delivery,
+  // and the buyer gets a copy then (sendGiftEmail).
+  gift:         { subject: 'Your Campaignia gift receipt',
+                  leadIn: 'Thank you for your gift. It never expires. Here are the details:' }
 };
 
 // THE ONE BUILDER. Both the live send and the admin preview call this, so what an admin sees
@@ -1255,6 +1261,55 @@ function giftEmail(row, code) {
 async function sendGiftEmail(row, code) {
   var built = giftEmail(row, code);
   await sendEmail(row.recipient_email, built.subject, built.html);
+  // v3.1.46 -- THE BUYER'S COPY, for a paid gift, once the recipient's has gone. Best-effort: the gift
+  // is delivered whether or not this lands, so its failure is logged and never thrown.
+  if (row && !row.comp && row.buyer_email && String(row.buyer_email).toLowerCase() !== String(row.recipient_email || '').toLowerCase()) {
+    try {
+      var copy = giftBuyerCopy(row, code);
+      await sendEmail(row.buyer_email, copy.subject, copy.html);
+    } catch (e) { console.error('[gifts] buyer copy failed for gift ' + row.id + ':', e && e.message); }
+  }
+  return true;
+}
+
+function giftBuyerCopy(row, code) {
+  var esc = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var describe = require('../services/gifts').describeGift;
+  var app = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  var copy = {
+    headline: 'Your gift to ' + esc(row.recipient_name || row.recipient_email) + ' has been delivered',
+    body: 'We have emailed <b>' + esc(describe(row)) + '</b> to ' + esc(row.recipient_email) + '. ' +
+      'Here is a copy of the code, in case it is easier to hand over yourself:<br><br>' +
+      '<span style="font-family:\'Courier New\',monospace;font-size:18px;letter-spacing:2px;color:#f0e8d0;">' + esc(code) + '</span><br><br>' +
+      'It is redeemed at ' + esc(app.replace(/^https?:\/\//, '')) + '/redeem and never expires. Keep it private: anyone with the code can use it.',
+    cta: 'Give another gift'
+  };
+  // The shared shell's footer says "you created a Campaignia account", which a guest buyer did not.
+  // The shell puts the name in raw, and a guest typed this one: it is escaped here.
+  var html = trialLifecycleHTML(copy, esc(row.buyer_name || 'there'), app + '/gift')
+    .replace('You are receiving this because you created a Campaignia account.', 'You are receiving this because you bought a Campaignia gift.');
+  return { subject: 'Your Campaignia gift to ' + (row.recipient_name || row.recipient_email) + ' has been delivered', html: html };
+}
+
+// v3.1.46 -- the buyer's receipt, through the same receipt builder every purchase uses.
+function giftReceipt(row) {
+  var describe = require('../services/gifts').describeGift;
+  var when = row.deliver_on ? String(row.deliver_on instanceof Date ? row.deliver_on.toISOString() : row.deliver_on).slice(0, 10) : '';
+  var nice = '';
+  if (when) { try { nice = new Date(when + 'T12:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }); } catch (e) { nice = when; } }
+  return {
+    kind: 'gift', reference: 'gift:' + row.id, purchaseNo: 'GIFT-' + row.id,
+    itemName: 'Gift: ' + describe(row), amountCents: row.price_cents, currency: row.currency || 'usd',
+    paidAt: new Date().toISOString(),
+    giftFor: (row.recipient_name ? row.recipient_name + ' (' + row.recipient_email + ')' : row.recipient_email),
+    giftDelivery: nice ? ('Emailed on ' + nice + ' at 9am Eastern; you get a copy of the code then') : 'Emailed now; you get a copy of the code too'
+  };
+}
+
+async function sendGiftReceiptEmail(row) {
+  if (!row || !row.buyer_email) return false;
+  var built = receiptEmail(row.buyer_name || 'there', giftReceipt(row));
+  await sendEmail(row.buyer_email, built.subject, built.html);
   return true;
 }
 
@@ -1337,6 +1392,11 @@ function buildEmailPreview(type, name) {
         paidAt: '2026-10-05T15:25:00.000Z' });
     // v3.1.43 -- TD-934. Through giftEmail(), the same function the live send uses. The sample code
     // is made of characters a real code can never contain (0, O, 1), so it can never redeem anything.
+    case 'receipt_gift':
+      return receiptEmail(who, giftReceipt({ id: 42, item_kind: 'pass', months: 3, tokens: 200, price_cents: 7900, currency: 'usd',
+        recipient_name: 'Thorin', recipient_email: 'thorin@example.com', deliver_on: '2026-12-25' }));
+    case 'gift_buyer_copy':
+      return giftBuyerCopy({ id: 42, item_kind: 'pass', months: 3, tokens: 200, recipient_name: 'Thorin', recipient_email: 'thorin@example.com', buyer_name: who }, 'GIFT-0O01-SAMP-LE00');
     case 'gift':
       return giftEmail({ buyer_name: 'Marisol', recipient_name: who, item_kind: 'pass', months: 3, tokens: 200,
         message: 'Happy birthday! Now you can finally turn our campaign into a book.' }, 'GIFT-0O01-SAMP-LE00');
@@ -1393,4 +1453,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendGiftEmail, giftEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

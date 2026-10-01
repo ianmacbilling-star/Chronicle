@@ -2767,9 +2767,20 @@ function renderAccountPasses(me, data) {
   var desc = document.getElementById('account-passes-desc');
   if (desc) {
     if (live) {
-      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. ' +
-        'Your subscription is not cancelled when you buy one \u2014 it keeps billing until you stop it ' +
-        'yourself. Any time you have already paid for is added to the pass rather than lost.';
+      // v3.1.46 -- THIS SENTENCE WAS WRONG SINCE v3.0.935 and more wrong after v3.1.45 (TD-938). It said
+      // the subscription keeps billing; a pass actually stops a Platinum subscription renewing, and
+      // pauses a Silver or Gold one until the pass ends.
+      var _acctL = (me && (me.accountTier || me.tier)) || '';
+      var _subName = (_acctL.charAt(0).toUpperCase() + _acctL.slice(1)) || 'Your';
+      if (me && me.cancelAtPeriodEnd) {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Your subscription is already set to end, so a pass simply takes over.';
+      } else if (_acctL === 'platinum') {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one stops your Platinum ' +
+          'subscription renewing; the pass starts when the time you have already paid for runs out.';
+      } else {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one puts you on Platinum at once ' +
+          'and pauses your ' + _subName + ' subscription until the pass ends; it then restarts by itself.';
+      }
     } else if (hasPass) {
       // v3.0.930 -- WITH THE DATE, ONCE. Ian asked whether an expiry belongs under the pass
       // panels. It belongs in this sentence rather than on three cards: the question somebody
@@ -2784,6 +2795,13 @@ function renderAccountPasses(me, data) {
       desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
     }
   }
+
+  // v3.1.46 -- TD-934. The gift link under the passes, only while gifts are switched on.
+  try {
+    fetch('/api/gifts/status').then(function (r) { return r.json(); }).then(function (d) {
+      var gl = document.getElementById('account-gift-link'); if (gl) gl.style.display = (d && d.enabled) ? 'block' : 'none';
+    }).catch(function () {});
+  } catch (e) {}
 
   box.innerHTML = list.map(function (p) {
     var dollars = Number(p.price_cents) / 100;
@@ -21091,7 +21109,7 @@ function togglePromoCode(id) {
 // Every rule here is also enforced on the server (routes/gifts.js); this only draws and asks.
 // ============================================================
 var _giftCatalog = [];
-var GIFT_STATUS_LABEL = { pending_payment: 'Awaiting payment', paid: 'Not sent yet', delivered: 'Sent', redeemed: 'Redeemed', 'void': 'Void' };
+var GIFT_STATUS_LABEL = { pending_payment: 'Awaiting payment', paid: 'Not sent yet', delivered: 'Sent', redeemed: 'Redeemed', 'void': 'Void', abandoned: 'Checkout abandoned' };
 
 function giftDay(v) {
   if (!v) return '';
@@ -21191,10 +21209,12 @@ function renderGifts(rows) {
     if (live) acts += '<button class="btn btn-sm" onclick="resendGift(' + g.id + ')">' + (g.status === 'paid' ? 'Send now' : 'Resend') + '</button>';
     if (g.status === 'paid') acts += '<button class="btn btn-sm" onclick="redateGift(' + g.id + ')">Change date</button>';
     if (live && g.comp) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ')">Void</button>';
+    // v3.1.46 -- a paid gift is voided and refunded together, or not at all.
+    if (live && !g.comp && g.has_payment) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ', true)">Void &amp; refund</button>';
     return '<div style="display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">#' + g.id + '</strong>' +
       '<span style="min-width:96px;color:' + (g.status === 'redeemed' ? 'var(--gold)' : g.status === 'void' ? 'var(--text-muted)' : 'inherit') + ';">' + escapeHtml(GIFT_STATUS_LABEL[g.status] || g.status) + '</span>' +
-      '<span style="min-width:230px;">' + escapeHtml(item) + (g.comp ? ' <span style="color:var(--text-muted);">(free)</span>' : '') + '</span>' +
+      '<span style="min-width:230px;">' + escapeHtml(item) + (g.comp ? ' <span style="color:var(--text-muted);">(free)</span>' : ' <span style="color:var(--text-muted);">(paid $' + escapeHtml((Number(g.price_cents) / 100).toFixed(2)) + ')</span>') + '</span>' +
       '<span>to ' + escapeHtml((g.recipient_name || '') + ' <' + g.recipient_email + '>') + '</span>' +
       '<span>from ' + escapeHtml(g.buyer_name || g.buyer_email || '') + '</span>' +
       (g.code_last4 ? '<span style="font-family:monospace;">code ...' + escapeHtml(g.code_last4) + '</span>' : '') +
@@ -21266,8 +21286,11 @@ function redateGift(id) {
     });
 }
 
-function voidGift(id) {
-  uiConfirm('Void gift #' + id + '? Its code stops working straight away. This cannot be undone.', { title: 'Void this gift', danger: true, okText: 'Void' })
+function voidGift(id, refund) {
+  uiConfirm(refund
+    ? ('Void gift #' + id + ' and refund the buyer in full? Its code stops working straight away. This cannot be undone.')
+    : ('Void gift #' + id + '? Its code stops working straight away. This cannot be undone.'),
+    { title: refund ? 'Void and refund this gift' : 'Void this gift', danger: true, okText: refund ? 'Void & refund' : 'Void' })
     .then(function (yes) {
       if (!yes) return;
       giftPost('/api/gifts/admin/' + id + '/void', {}).then(function (res) {

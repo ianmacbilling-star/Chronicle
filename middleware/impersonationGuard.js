@@ -79,7 +79,9 @@ var DENY = [
   // reads and can delete the old Canonical, so it is the Story Master's decision, not support's. ---
   { m: 'POST', p: '/api/campaigns/',                why: 'change which version is the Canonical', suffix: '/promote' },
   // v3.1.43 -- TD-934. A gift belongs to whoever redeems it; support must never spend one for them.
-  { m: 'POST', p: '/api/gifts/redeem',              why: 'redeem a gift' }
+  { m: 'POST', p: '/api/gifts/redeem',              why: 'redeem a gift' },
+  // v3.1.46 -- nor spend the customer's card on one.
+  { m: 'POST', p: '/api/gifts/checkout',            why: 'buy a gift' }
 ];
 
 function deniedEntry(method, path) {

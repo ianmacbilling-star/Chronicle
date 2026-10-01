@@ -26,6 +26,8 @@ const SETTING_KEY = 'gifts_enabled';
 const DELIVERY_HOUR_ET = 9;        // Ian, 2026-10-01: dated gifts go out at 9am Eastern
 const MAX_DELIVERY_ATTEMPTS = 5;   // then stop and tell Ian, rather than retry forever
 const MESSAGE_MAX = 300;
+const BUYER_DAILY_LIMIT = 3;   // Ian, 2026-10-01: 3 gifts per buyer per day (a rolling 24 hours)
+const PENDING_HOLD_MINUTES = 30; // an unfinished checkout counts toward the limit for this long
 // A PASS CAN BE TAKEN AS TOKENS INSTEAD (Ian, 2026-10-01): its list price divided by this many cents
 // per token, rounded down, read AT REDEMPTION so the dashboard dial always applies. Seeded at 20.
 const CONVERT_SETTING = 'gift_convert_cents_per_token';
@@ -411,6 +413,103 @@ async function redeem(db, userId, input, deps, opts) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// v3.1.46 -- BUYING (step 2)
+// ---------------------------------------------------------------------------
+// How many gifts this buyer has bought in the last 24 hours, counting a checkout still open from the
+// last half hour (so the limit cannot be beaten by opening many tabs). Free gifts never count.
+// Rolling 24 hours rather than a calendar day: both sides of the comparison are the database's own
+// clock, so it cannot drift with anyone's time zone.
+async function buyerCountToday(db, email, userId) {
+  const r = await db.prepare(
+    "SELECT COUNT(*)::int AS n FROM gift_certificates WHERE comp = false AND (" +
+    "  lower(COALESCE(buyer_email, '')) = lower(?) OR (buyer_user_id IS NOT NULL AND buyer_user_id = ?)) AND (" +
+    "  (status IN ('paid', 'delivered', 'redeemed') AND created_at > CURRENT_TIMESTAMP - INTERVAL '24 hours') OR " +
+    "  (status = 'pending_payment' AND created_at > CURRENT_TIMESTAMP - (? * INTERVAL '1 minute')))"
+  ).get(String(email || ''), userId || -1, PENDING_HOLD_MINUTES);
+  return (r && r.n) || 0;
+}
+
+// The webhook's half of a purchase. IDEMPOTENT: only the first event to move the row out of
+// pending_payment does anything, so a Stripe retry sends nothing twice. Returns the row it paid, or
+// null. The receipt and the delivery are the caller's (deps), so the guard can run this with no mail.
+async function fulfillGiftCheckout(db, session, deps) {
+  deps = deps || {};
+  const md = (session && session.metadata) || {};
+  const id = parseInt(md.gift_id, 10);
+  if (!(id > 0) || !session.id) return null;
+  if (session.payment_status && session.payment_status !== 'paid') return null;   // not paid (yet)
+  const piId = (session.payment_intent && typeof session.payment_intent === 'object') ? session.payment_intent.id : (session.payment_intent || null);
+  const email = (session.customer_details && session.customer_details.email) || session.customer_email || null;
+  const r = await db.prepare(
+    "UPDATE gift_certificates SET status = 'paid', stripe_payment_intent = ?, price_cents = COALESCE(?, price_cents), " +
+    "buyer_email = COALESCE(buyer_email, ?) WHERE id = ? AND stripe_session_id = ? AND status = 'pending_payment'"
+  ).run(piId, (session.amount_total != null) ? session.amount_total : null, email, id, session.id);
+  if (!r || !r.changes) return null;
+  const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
+  try { if (deps.sendReceipt) await deps.sendReceipt(row); } catch (e) { console.error('[gifts] receipt failed for gift ' + id + ':', e && e.message); }
+  if (isDue(row.deliver_on, deps.now || new Date())) {
+    const sent = await issueAndSend(db, row, deps.sendGift);
+    if (!sent.ok) console.error('[gifts] gift ' + id + ' paid but not sent yet (the hourly job retries): ' + sent.error);
+  }
+  return row;
+}
+
+// checkout.session.expired: the buyer walked away. The row stays for the record, as 'abandoned'.
+async function markGiftCheckoutAbandoned(db, session) {
+  const id = parseInt(((session && session.metadata) || {}).gift_id, 10);
+  if (!(id > 0)) return 0;
+  const r = await db.prepare("UPDATE gift_certificates SET status = 'abandoned' WHERE id = ? AND stripe_session_id = ? AND status = 'pending_payment'").run(id, session.id);
+  return (r && r.changes) || 0;
+}
+
+// A refund or a dispute arrived from Stripe (charge.refunded / charge.dispute.created). An unused
+// gift is voided so its code stops working; a REDEEMED one is never clawed back automatically --
+// Ian is told and decides. Returns what it did.
+async function handleGiftPaymentReversal(db, paymentIntentId, what, deps) {
+  deps = deps || {};
+  if (!paymentIntentId) return 'none';
+  const row = await db.prepare('SELECT id, status, recipient_email FROM gift_certificates WHERE stripe_payment_intent = ?').get(paymentIntentId);
+  if (!row) return 'none';
+  const r = await db.prepare(
+    "UPDATE gift_certificates SET status = 'void', voided_at = CURRENT_TIMESTAMP, void_reason = ? " +
+    "WHERE id = ? AND status IN ('pending_payment', 'paid', 'delivered')"
+  ).run(what === 'dispute' ? 'payment disputed' : 'refunded in Stripe', row.id);
+  if (r && r.changes) return 'voided';
+  if (row.status === 'redeemed') {
+    try {
+      const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
+      await alert('A redeemed gift was ' + (what === 'dispute' ? 'disputed' : 'refunded'),
+        'Gift ' + row.id + ' (to ' + row.recipient_email + ') has already been redeemed, and its payment was ' +
+        (what === 'dispute' ? 'disputed' : 'refunded') + ' in Stripe. Nothing was taken back automatically. Decide by hand.');
+    } catch (_) {}
+    return 'alerted';
+  }
+  return 'none';
+}
+
+// Admin Void & refund for a PAID gift. The gift is claimed first (so it cannot be redeemed while the
+// refund is in flight), then refunded; if Stripe refuses, the gift is put back exactly as it was.
+async function voidAndRefund(db, id, reason, deps) {
+  deps = deps || {};
+  const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
+  if (!row) return { ok: false, status: 404, error: 'Not found.' };
+  if (row.comp) return { ok: false, status: 409, error: 'A free gift is voided without a refund.' };
+  if (!row.stripe_payment_intent) return { ok: false, status: 409, error: 'This gift has no payment to refund.' };
+  const claim = await db.prepare(
+    "UPDATE gift_certificates SET status = 'void', voided_at = CURRENT_TIMESTAMP, void_reason = ? WHERE id = ? AND status IN ('paid', 'delivered')"
+  ).run(reason || 'voided and refunded', id);
+  if (!claim || !claim.changes) return { ok: false, status: 409, error: 'This gift has already been redeemed or voided.' };
+  try {
+    const provider = deps.stripeProvider || require('./billing/stripeProvider');
+    await provider.refundPaymentIntent(row.stripe_payment_intent, 'gift ' + id + ' voided by admin');
+  } catch (e) {
+    await db.prepare('UPDATE gift_certificates SET status = ?, voided_at = NULL, void_reason = NULL WHERE id = ?').run(row.status, id);
+    return { ok: false, status: 502, error: 'Stripe would not refund it, so the gift was left as it was: ' + ((e && e.message) || 'unknown error') };
+  }
+  return { ok: true };
+}
+
 module.exports = {
   CODE_ALPHABET, CODE_LEN, SETTING_KEY, DELIVERY_HOUR_ET, MAX_DELIVERY_ATTEMPTS, MESSAGE_MAX,
   CONVERT_SETTING, DEFAULT_CONVERT_CENTS, cleanRate, getConvertRate, setConvertRate, convertTokensFor,
@@ -419,5 +518,6 @@ module.exports = {
   isEnabled, setEnabled,
   easternParts, dayString, isDue,
   isValidEmail, maskEmail, sentToOther, subscriptionState, SUB_CAN_BILL, validateGiftInput, issueAndSend,
-  lookup, redeem
+  lookup, redeem,
+  BUYER_DAILY_LIMIT, buyerCountToday, fulfillGiftCheckout, markGiftCheckoutAbandoned, handleGiftPaymentReversal, voidAndRefund
 };
