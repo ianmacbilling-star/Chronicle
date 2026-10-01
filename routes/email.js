@@ -1161,7 +1161,9 @@ async function sendAccountClosedEmail(name, email) {
 async function sendHelpTranscriptEmail(opts) {
   opts = opts || {};
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return;
+  // v3.1.53 -- SAY WHY A HELP EMAIL DID NOT GO. Ian: "I haven't gotten any help emails lately." Every way
+  // this function could fail used to be silent, so nothing in the logs said whether an email was even tried.
+  if (!apiKey) { console.error('[help transcript email] not sent: RESEND_API_KEY is not set'); throw new Error('RESEND_API_KEY is not set'); }
   const to = process.env.SUPPORT_EMAIL || 'support@campaignia.com';
   const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
   const u = opts.user || {};
@@ -1193,15 +1195,20 @@ async function sendHelpTranscriptEmail(opts) {
   try {
     const { Resend } = require('resend');
     const resend = new Resend(apiKey);
-    await resend.emails.send({
+    // Resend does not throw when it refuses an email (a bad sender, an unverified domain, a limit): it
+    // returns { error }. That was ignored, so a refused email looked sent. Now it is logged and thrown.
+    const _sent = await resend.emails.send({
       from: 'Campaignia Help <' + fromEmail + '>',
       to: to,
       subject: 'Help transcript - ' + (u.email || ('user ' + (u.id != null ? u.id : '?'))) + ' (' + ((opts.trigger === 'logout') ? 'logout' : 'AI-done') + ')',
       html: html,
       attachments: [{ filename: fileName, content: Buffer.from(bodyText, 'utf8').toString('base64') }]
     });
+    if (_sent && _sent.error) throw new Error((_sent.error && _sent.error.message) || 'Resend refused the email');
+    console.log('[help transcript email] sent to ' + to + ' (' + (opts.trigger === 'logout' ? 'logout' : 'AI-done') + ')');
   } catch (e) {
-    try { console.warn('[help transcript email] ' + (e && e.message)); } catch (_e) {}
+    try { console.error('[help transcript email] not sent to ' + to + ' from ' + fromEmail + ': ' + (e && e.message)); } catch (_e) {}
+    throw e;
   }
 }
 

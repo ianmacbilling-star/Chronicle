@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.53",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3153-help-thanks",
+        "kind": "fix",
+        "public": false,
+        "summary": "Saying thanks or perfect to the help assistant no longer shows Could not answer that right now.",
+        "detail": "With the end-of-help email switched on, the assistant sometimes answered a thank-you with only its hidden end marker, which left an empty reply and showed an error with your word put back in the box. It now says a short goodbye instead, and the end-of-help email is sent as intended (it was being skipped in exactly these cases). The assistant is also told to always write a closing line before the marker. Separately, when the email service refused a help transcript email, nothing said so and the page was told it had gone; a refusal is now logged with the reason and the address it was meant for.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.52",
     "staged_on": "2026-10-01",
     "entries": [

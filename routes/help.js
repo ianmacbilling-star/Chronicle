@@ -295,7 +295,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
   if (_aiDoneOn && !_aiDoneAlready) {
-    system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
+    system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply -- always AFTER at least one short friendly sentence, never as the whole reply -- ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
   }
 
   try {
@@ -336,7 +336,12 @@ router.post('/ask', requireAuth, async function(req, res) {
     const rawAnswer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
     const _marker = '<<HELP_DONE>>';
     const _isDone = rawAnswer.indexOf(_marker) !== -1;
-    const answer = rawAnswer.split(_marker).join('').trim();
+    let answer = rawAnswer.split(_marker).join('').trim();
+    // v3.1.53 -- A THANK-YOU IS NOT A FAILURE. Ian, twice: "perfect" after a good answer came back as
+    // "Could not answer that right now", with his word put back in the box. With the session-end email on,
+    // the model answered a plain thank-you with the end marker and nothing else, so stripping the marker
+    // left an empty reply. The user said they are done: say a short goodbye, and the email still goes.
+    if (!answer && _isDone) answer = 'Glad that helped! If anything else comes up, just ask.';
     if (!answer) {
       console.error('help/ask empty answer:', response.status, JSON.stringify(data).slice(0, 400));
       return res.json({ ok: false, error: 'Could not answer that right now.' });
