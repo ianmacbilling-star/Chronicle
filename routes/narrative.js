@@ -423,6 +423,17 @@ async function callerForkId(db, sessionId, userId, role, requested) {
 }
 
 // ============================================================
+// v3.1.51 -- TD-941. The Already Written word limit, for the page: the Story tab's word count and the
+// warning before Generate Story / Generate Narrative. A WARNING ONLY (Ian: "if they are close they can
+// keep going"); nothing on the server refuses a long story. Dashboard setting, default 3000.
+// ============================================================
+router.get('/written-limit', requireAuth, async function (req, res) {
+  var n = 3000;
+  try { var v = await getAppSettingInt('written_max_words', 3000); if (Number.isFinite(v) && v >= 100) n = v; } catch (e) { n = 3000; }
+  res.json({ limit: n });
+});
+
+// ============================================================
 // GENERATE narrative prose for a session
 // ============================================================
 // Outline value helpers. narrative_outlines stores either a plain string (a

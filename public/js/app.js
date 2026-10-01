@@ -5174,7 +5174,7 @@ var NARR_STYLE_META = [
   { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' },   // v3.1.27 -- TD-920
   // v3.1.49 -- TD-941. Ian: "takes pretty much exactly what is written... and slices it into the appropriate
   // narrative and image panels". The server copies the author's sentences; nothing is rewritten.
-  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box.', example:'Your words, exactly as you wrote them.' }
+  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box: up to {words} words a session, about a chapter. Longer stories, one session per chapter.', example:'Your words, exactly as you wrote them.' }
 ];
 var STYLE_PICKER_KIND = null;
 
@@ -5190,10 +5190,12 @@ function refreshNarrStyleButtons() {
   // v3.1.32 -- 'anon' reads "First person"; on Calm & Literal (always first person) it adds nothing.
   var _anon = state.narrativeNarrator === 'anon';
   var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
-  ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
+  ['review-narr-style-btn', 'sb-narr-style-btn', 'story-narr-style-btn'].forEach(function(bid) {   // v3.1.51 -- and the Story tab
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
   });
+  _storyStyleLabel('story-narr-style-btn', 'Narrative: ', label);   // v3.1.51 -- phones drop the prefix
+  try { updateWordCounts(); } catch (e) {}   // v3.1.51 -- TD-941: the Already Written note follows the style
 }
 
 // Fetch the caller's EFFECTIVE tier + style locks for the current campaign so
@@ -5643,7 +5645,7 @@ function openStylePicker(kind) {
     var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
-      '<div class="style-card-desc">' + escapeHtml(s.desc) + '</div>' +
+      '<div class="style-card-desc">' + escapeHtml(String(s.desc).replace('{words}', _writtenLimit().toLocaleString())) + '</div>' +   // v3.1.51 -- TD-941
       eg +
       '</div>';
   }).join('');
@@ -5819,10 +5821,11 @@ function artStyleLabel(v, stampedName) {
 function refreshArtStyleButtons() {
   var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
   var label = 'Art: ' + (state.selfIllustrated ? 'Self Illustrated' : artStyleLabel(v));   // v3.1.30 -- TD-921
-  ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
+  ['review-art-style-btn', 'sb-art-style-btn', 'story-art-style-btn'].forEach(function (bid) {   // v3.1.51 -- and the Story tab
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
   });
+  _storyStyleLabel('story-art-style-btn', 'Art: ', label);   // v3.1.51 -- phones drop the prefix
 }
 
 // Was referenced on session load but never defined (a no-op). Now it sets the
@@ -5988,6 +5991,9 @@ function ensureGenFree() {
 
 function generateNarrativeAndImages() {
   if (!ensureGenFree()) return;
+  // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
+  if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
+  state._writtenLenOk = false;
   setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
   // v3.0.972 -- TD-865. No origLabel here either; narrButtonsIdle() reads data-idle.
@@ -6132,6 +6138,8 @@ function cancelNarr() {
 // confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
+  if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeOnly(); } }); return; }
   if (!state._sbSummaryAsked && state._sbSummaryEdited) {
     // v3.0.972 -- TD-864. THREE ANSWERS, AND FALSE IS THE ONE THAT DOES NOT RUN.
     //
@@ -6146,7 +6154,7 @@ function generateNarrativeOnly() {
     uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?',
               { okText: 'Replace it', middleText: 'Keep mine', cancelText: "Don't generate" })
       .then(function (ans) {
-        if (ans === false) { state._sbSummaryAsked = false; return; }
+        if (ans === false) { state._sbSummaryAsked = false; state._writtenLenOk = false; return; }
         state._sbSummaryReplace = (ans === true);
         state._sbSummaryAsked = true;
         generateNarrativeOnly();
@@ -6154,6 +6162,7 @@ function generateNarrativeOnly() {
     return;
   }
   state._sbSummaryAsked = false;
+  state._writtenLenOk = false;
   setGenLock('Generate Narrative');
   // v3.0.972 -- TD-865. NO origLabel CAPTURE. The idle text is a data-idle attribute in
   // app.html and narrButtonsIdle() is the only thing that writes it back, so a button left
@@ -8740,6 +8749,7 @@ function _pollExtractJob(jobId, signal) {
 }
 
 async function extractMoments() {
+  if (!(await _writtenLengthCheck())) return;   // v3.1.51 -- TD-941: a long story for Already Written asks first
   if (!ensureGenFree()) return;
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
@@ -17460,6 +17470,7 @@ function applyLayoutStyle(layout) {
 }
 
 async function extractMoments() {
+  if (!(await _writtenLengthCheck())) return;   // v3.1.51 -- TD-941: a long story for Already Written asks first
   if (!ensureGenFree()) return;
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
@@ -23544,7 +23555,63 @@ function updateWordCounts() {
     var v = (el.value || '').trim();
     var n = v ? v.split(/\s+/).length : 0;
     out.textContent = n + (n === 1 ? ' word' : ' words');
+    // v3.1.51 -- TD-941. On the story box, while Already Written is chosen: the recommended limit on the
+    // same line, amber once over it. A recommendation, not a rule (Ian).
+    if (pr[0] === 'transcript-input') {
+      out.style.color = '';
+      if (state.narrativeStyle === 'written') {
+        var lim = _writtenLimit();
+        out.textContent += ' \u00b7 Already Written: up to ' + lim.toLocaleString() + ' a session';
+        if (n > lim) out.style.color = '#e0a040';
+      }
+    }
   });
+}
+
+// v3.1.51 -- THE STORY TAB'S STYLE BUTTONS ON A PHONE. Ian: the two style buttons on the same row as Generate
+// Story. There is room for the style NAMES but not for "Narrative:" and "Art:" too, so the prefix is its
+// own span, hidden by the Story tab's phone rule; the full label stays as the tooltip. Text only, escaped.
+function _storyStyleLabel(id, prefix, label) {
+  var b = document.getElementById(id);
+  if (!b) return;
+  var rest = (label.indexOf(prefix) === 0) ? label.slice(prefix.length) : label;
+  b.textContent = '';
+  var pre = document.createElement('span'); pre.className = 'sty-pre'; pre.textContent = prefix;
+  b.appendChild(pre); b.appendChild(document.createTextNode(rest));
+  b.title = label;
+}
+
+// v3.1.51 -- TD-941. THE ALREADY WRITTEN WORD LIMIT, from the dashboard (GET /api/narrative/written-limit,
+// default 3000). Read once per page load; until it arrives the default stands in.
+var _writtenLim = { n: 3000, asked: false };
+function _writtenLimit() {
+  if (!_writtenLim.asked) {
+    _writtenLim.asked = true;
+    fetch('/api/narrative/written-limit', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.limit >= 100) { _writtenLim.n = d.limit; try { updateWordCounts(); } catch (e) {} } })
+      .catch(function () {});
+  }
+  return _writtenLim.n;
+}
+
+// v3.1.51 -- TD-941. BEFORE GENERATE STORY AND GENERATE NARRATIVE: with Already Written, a story past the
+// recommended length is a WARNING (Ian: "if they are close they can keep going but if they are way off...
+// they can choose to stop and make a new session"). Resolves true to go on, false to go back. Any other
+// style, or a story within the limit, resolves true at once with nothing shown.
+function _writtenLengthCheck() {
+  if (state.narrativeStyle !== 'written') return Promise.resolve(true);
+  var el = document.getElementById('transcript-input');
+  var t = el ? String(el.value || '') : String((state.currentSession && state.currentSession.transcript) || '');
+  t = t.trim();
+  var n = t ? t.split(/\s+/).length : 0;
+  var lim = _writtenLimit();
+  if (n <= lim) return Promise.resolve(true);
+  return uiConfirm('This session is ' + n.toLocaleString() + ' words. Already Written works best up to ' + lim.toLocaleString() +
+    ' words a session \u2014 about a chapter. It keeps every word, so a longer story puts a lot of text between the pictures.\n\n' +
+    'For a long story, make one session per chapter and paste a part into each. Or carry on with this one.',
+    { title: 'A long story for one session', okText: 'Continue anyway', cancelText: 'Go back', preserveLines: true })
+    .then(function (ok) { return ok === true; });
 }
 
 function loreCount(el, countId) {
@@ -26925,6 +26992,7 @@ function loadGenerationSettings() {
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
       if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
+      if (g('gen-written-max-words')) g('gen-written-max-words').value = (j.writtenMaxWords != null ? j.writtenMaxWords : 3000);   // v3.1.51 -- TD-941
     })
     .catch(function () {});
 }
@@ -26943,6 +27011,7 @@ function saveGenerationSettings() {
       narrativeFloor: iv('gen-narr-floor'),
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
       summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
+      writtenMaxWords: (function () { var n = parseInt((g('gen-written-max-words') || {}).value, 10); return (isFinite(n) && n >= 100) ? n : 3000; })(),   // v3.1.51 -- TD-941
       layoutLoopCostCents: (function () { var n = parseInt((g('layout-loop-cost') || {}).value, 10); return (isFinite(n) && n >= 1) ? n : 8; })()   // v3.0.356 -- never send 0
     })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })

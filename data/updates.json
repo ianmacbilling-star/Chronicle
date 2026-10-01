@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.51",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3151-story-tab-styles",
+        "kind": "change",
+        "public": false,
+        "summary": "The Narrative and Art style buttons are on the Story tab too, beside Generate Story, so a style can be chosen before the first generation. Already Written now recommends a length and asks before generating a story longer than that.",
+        "detail": "On the Story tab the two buttons sit beside Generate Story, as on Review and Storyboard. With Already Written chosen, the word count under the story box adds: Already Written: up to 3,000 a session, and turns amber past it. Past it, Generate Story and Generate Narrative ask first (Continue anyway or Go back); nothing is refused and nothing is charged until you continue. The number is a dashboard setting: Dashboard > Settings > Generation charging > Already Written, recommended words per session (default 3,000, about a chapter). The Already Written card names the number. On a phone the two style buttons share Generate Story's row, showing just the style names (the full label is the tooltip). Also: the Import from file button is shorter, so the story box and the instructions box now start at the same height.",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.50",
     "staged_on": "2026-10-01",
     "entries": [

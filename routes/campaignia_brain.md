@@ -918,6 +918,13 @@ once, in order. A narrative panel can come out empty when two pictures follow ea
 text. **Narrative length** and **In first person** don't apply to it, so they are greyed out. It
 costs the usual Generate Narrative tokens. Every plan. You can still edit any narrative panel by
 hand afterwards; generating again re-splits the text and replaces those edits.
+**Choose it before the first Generate Story:** the **Narrative** and **Art** style buttons are on the
+**Story** tab too, beside Generate Story. **How long:** it works best up to about **3,000 words a
+session** — roughly a chapter (the number on the style card is the current one). It keeps every word,
+so a longer story puts a lot of text between the pictures. The word count under the story box shows
+the limit while Already Written is chosen, and turns amber past it. Past it, Generate Story and
+Generate Narrative ask first: **Continue anyway** or **Go back**. For a book-length story, make one
+session per chapter and paste a part into each.
 
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.

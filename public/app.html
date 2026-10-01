@@ -1051,7 +1051,26 @@
             <span class="fr-result" id="fr-result"></span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-            <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+            <!-- v3.1.51 -- TD-941. The two style buttons, as on Review and Storyboard (Ian), so the narrative
+                 style -- Already Written above all -- can be chosen BEFORE the first Generate Story. -->
+            <!-- On a phone the three stay on ONE row (Ian): smaller type, no "Narrative:" / "Art:" prefix (the full
+                 label is the tooltip), and in the last resort a long name is cut short rather than pushing
+                 Generate Story onto a line of its own. -->
+            <style>
+              @media (max-width: 640px) {
+                .notes-toolbar > div:last-child { width: 100%; }
+                #story-style-row { flex-wrap: nowrap !important; gap: 6px !important; width: 100%; }
+                #story-style-row .btn { font-size: 11.5px; padding: 6px 8px; white-space: nowrap; }
+                #story-narr-style-btn, #story-art-style-btn { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+                #extract-btn { flex: 0 0 auto; }
+                #story-style-row .sty-pre { display: none; }
+              }
+            </style>
+            <div id="story-style-row" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;">
+              <button class="btn btn-sm dm-only" id="story-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
+              <button class="btn btn-sm dm-only" id="story-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
+              <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+            </div>
             <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
           </div>
         </div>
@@ -1065,11 +1084,14 @@
         <!-- Transcript (left) and Notes (right), side by side -->
         <div class="notes-grid">
           <div class="form-group">
+            <!-- v3.1.51 -- Ian: line the story box up with the instructions box. The label takes the class's own
+                 margin, as the instructions label does, and the button is short enough (16px + 5px) never to make
+                 this row taller than that label: both boxes now start at the same height. -->
             <!-- v3.0.865 -- TD-733. The Import button rides the LABEL ROW: no new vertical space,
                  always visible, and it can never sit on top of the text. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-              <label class="form-label" style="margin-bottom:6px;">Story / Session Transcript</label>
-              <button class="btn btn-sm" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:6px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+              <label class="form-label">Story / Session Transcript</label>
+              <button class="btn btn-xs" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
             </div>
             <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
                  rather than a new class, so this batch touches no stylesheet. -->
@@ -1904,6 +1926,9 @@
           <!-- v3.0.967 -- TD-852. The model is told this number and writes to fit it. -->
           <label style="color:var(--gold);font-size:13px;">Summary For Next Session &mdash; character limit</label>
           <input type="number" min="200" step="50" id="gen-summary-limit" style="width:110px;" />
+          <!-- v3.1.51 -- TD-941. A warning, never a refusal: past this, Already Written asks before generating. -->
+          <label style="color:var(--gold);font-size:13px;" title="Already Written keeps every word, so a long story makes a wall of text between pictures. Past this many words in one session, people are warned and can still continue.">Already Written &mdash; recommended words per session</label>
+          <input type="number" min="100" step="100" id="gen-written-max-words" style="width:110px;" />
         </div>
         </div>
 

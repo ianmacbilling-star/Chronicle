@@ -427,7 +427,10 @@ router.get('/generation-settings', requireAuth, requireAdmin, async function (re
       // v3.0.967 -- TD-852. How many characters the Summary For Next Session may run to. The
       // model is told this number and prunes to fit, so raising it lets a campaign remember more
       // and costs a little more on every Generate Story. Floor 200, default 1500.
-      summaryCharLimit: (function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 200) ? n : 1500; })(await g('summary_char_limit'))
+      summaryCharLimit: (function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 200) ? n : 1500; })(await g('summary_char_limit')),
+      // v3.1.51 -- TD-941. The word count past which Already Written WARNS (never refuses) before Generate
+      // Story and Generate Narrative. Default 3000: about a chapter, and about 200 words a picture at 15.
+      writtenMaxWords: (function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 100) ? n : 3000; })(await g('written_max_words'))
     });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -447,7 +450,9 @@ router.put('/generation-settings', requireAuth, requireAdmin, async function (re
       ['layout_loop_cost_cents', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 1) ? n : 8; })(b.layoutLoopCostCents))],
       // v3.0.967 -- TD-852. Floor of 200: a tiny cap would ask the model for a memory too short
       // to be worth carrying, and a zero would ask for an empty string on every session.
-      ['summary_char_limit', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 200) ? n : 1500; })(b.summaryCharLimit))]
+      ['summary_char_limit', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 200) ? n : 1500; })(b.summaryCharLimit))],
+      // v3.1.51 -- TD-941. Floor 100; anything else falls back to the default rather than to zero.
+      ['written_max_words', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 100) ? n : 3000; })(b.writtenMaxWords))]
     ];
     for (var i = 0; i < pairs.length; i++) {
       const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);
