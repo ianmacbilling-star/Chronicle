@@ -24,7 +24,7 @@
   .auth-title { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; text-align: center; letter-spacing: 1px; margin-bottom: 6px; }
   .auth-subtitle { font-size: 13px; color: rgba(201,168,76,0.6); text-align: center; margin-bottom: 20px; line-height: 1.5; }
   .auth-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 0 0 20px; }
-  .auth-box .form-label { color: rgba(201,168,76,0.7); }
+  .auth-box .form-label { color: #e8d5a3; } /* v3.1.54 -- brighter, as on the Gift page */
   .auth-box .form-input { background: rgba(255,255,255,0.05); border-color: rgba(201,168,76,0.2); color: #e8d5a3; width: 100%; box-sizing: border-box;
     font-family: 'Courier New', monospace; letter-spacing: 1px; text-transform: uppercase; }
   .auth-box .btn-primary { background: #c9a84c; color: #1a0e06; border-color: #c9a84c; font-family: 'Cinzel', Georgia, serif; letter-spacing: 1px;
@@ -96,6 +96,26 @@
   var $ = function (id) { return document.getElementById(id); };
   var state = { me: null, code: '', giftId: null };
   function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
+  // v3.1.54 -- BACK GOES WHERE YOU CAME FROM (Ian, 2026-10-01: "the back should always take them back to where
+  // they were prior"). Signed in: the app. Signed out: the landing page they came from, / or /story, taken from
+  // ?from= or the referrer and remembered for this tab, so it survives a Stripe checkout or a sign-in and back.
+  // Nothing known (a link from an email): the game landing page.
+  function backTarget(signedIn) {
+    if (signedIn) return '/app.html';
+    var ok = { '/': '/', '/index.html': '/', '/story': '/story' };
+    var from = '';
+    try { from = new URLSearchParams(window.location.search).get('from') || ''; } catch (e) {}
+    if (!ok[from]) {
+      try {
+        var r = document.referrer ? new URL(document.referrer) : null;
+        var rp = r ? (r.pathname.replace(/\/+$/, '') || '/') : '';
+        if (r && r.origin === window.location.origin && ok[rp]) from = rp;
+      } catch (e) {}
+    }
+    try { if (ok[from]) sessionStorage.setItem('cg_back', ok[from]); else from = sessionStorage.getItem('cg_back') || ''; } catch (e) {}
+    return ok[from] || '/';
+  }
+  $('app-link').href = backTarget(false);
   function error(text) { var e = $('error'); e.textContent = text || ''; show('error', !!text); }
   function post(url, body) {
     return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) })
@@ -234,9 +254,10 @@
     fetch('/api/gifts/status', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { enabled: false }; }),
     fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
   ]).then(function (res) {
-    if (!res[0] || !res[0].enabled) { show('enter', false); show('off', true); return; }
     state.me = (res[1] && res[1].authenticated) ? res[1] : null;
+    $('app-link').href = backTarget(!!state.me);
     if (!state.me) $('app-link').textContent = 'Back to Campaignia';
+    if (!res[0] || !res[0].enabled) { show('enter', false); show('off', true); return; }
     if (pre) { $('code').value = pre; check(); }
     else if (/^[0-9]{1,12}$/.test(preGift)) {
       // From the banner. Signed out: sign in first, then come straight back here.

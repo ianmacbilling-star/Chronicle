@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.54",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3154-gift-back-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Back to Campaignia on the Gift and Redeem pages takes you back where you were, and their field labels are easier to read.",
+        "detail": "Signed in, it opens the app. Signed out, it goes back to the page you came from: the storyteller page or the game page. That still works after a Stripe checkout or a sign-in. Opened from an email link, it goes to the home page. The name, email, message and gift code labels are also brighter on the dark background.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.53",
     "staged_on": "2026-10-01",
     "entries": [

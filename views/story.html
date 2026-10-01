@@ -415,7 +415,7 @@
       <!-- v3.1.46 -- TD-934. Give Campaignia as a gift, below the tiers (Ian, 2026-10-01). Hidden until
            the server says gifts are on, so a dormant feature never shows a button that leads nowhere. -->
       <div class="tg-root" id="gift-open-wrap" style="display:none;padding:0 20px 18px;text-align:center;">
-        <a href="/gift" class="tg-open" style="display:inline-block;text-decoration:none;">GIVE CAMPAIGNIA AS A GIFT</a>
+        <a href="/gift?from=/story" class="tg-open" style="display:inline-block;text-decoration:none;">GIVE CAMPAIGNIA AS A GIFT</a>
       </div>
       <script>
         fetch('/api/gifts/status').then(function (r) { return r.json(); }).then(function (d) {

@@ -33,11 +33,12 @@
   .item-name { font-size: 15px; color: #f0e8d0; margin: 4px 0 2px; }
   .item-detail { font-size: 12px; color: rgba(232,213,163,0.7); }
   .item-price { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; margin-top: 6px; }
-  label.f { display: block; font-size: 13px; color: rgba(201,168,76,0.8); margin: 12px 0 5px; }
+  /* v3.1.54 -- brighter field labels (Ian: "brighten up the Name, email and message labels"); same cream as the Send it now choices. */
+  label.f { display: block; font-size: 14px; color: #e8d5a3; margin: 12px 0 5px; }
   .in { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(201,168,76,0.2); color: #e8d5a3; border-radius: 8px; padding: 10px 12px; font-size: 15px; font-family: inherit; }
   .in:focus { border-color: rgba(201,168,76,0.6); outline: none; }
   textarea.in { resize: vertical; min-height: 80px; }
-  .count { font-size: 11px; color: rgba(232,213,163,0.55); text-align: right; margin-top: 3px; }
+  .count { font-size: 12px; color: rgba(232,213,163,0.75); text-align: right; margin-top: 3px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .when { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
   .when label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -74,7 +75,7 @@
         <div><label class="f" for="to-name">Their name</label><input class="in" id="to-name" maxlength="80" autocomplete="off" /></div>
         <div><label class="f" for="to-email">Their email</label><input class="in" id="to-email" type="email" maxlength="254" autocomplete="off" /></div>
       </div>
-      <label class="f" for="message">A message <span style="color:rgba(232,213,163,0.5);">(optional)</span></label>
+      <label class="f" for="message">A message <span style="color:rgba(232,213,163,0.7);">(optional)</span></label>
       <textarea class="in" id="message" maxlength="300"></textarea>
       <div class="count" id="count">0 / 300</div>
 
@@ -100,7 +101,7 @@
       <p class="note" style="text-align:center;">You pay on Stripe's secure checkout. You get a receipt now, and a copy of the gift code when it is delivered.</p>
     </form>
 
-    <div class="links"><a href="/">Back to Campaignia</a></div>
+    <div class="links"><a href="/" id="back-link">Back to Campaignia</a></div>
   </div>
 </div>
 <script>
@@ -108,6 +109,26 @@
   var $ = function (id) { return document.getElementById(id); };
   function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
   function error(t) { $('error').textContent = t || ''; show('error', !!t); }
+  // v3.1.54 -- BACK GOES WHERE YOU CAME FROM (Ian, 2026-10-01: "the back should always take them back to where
+  // they were prior"). Signed in: the app. Signed out: the landing page they came from, / or /story, taken from
+  // ?from= or the referrer and remembered for this tab, so it survives a Stripe checkout or a sign-in and back.
+  // Nothing known (a link from an email): the game landing page.
+  function backTarget(signedIn) {
+    if (signedIn) return '/app.html';
+    var ok = { '/': '/', '/index.html': '/', '/story': '/story' };
+    var from = '';
+    try { from = new URLSearchParams(window.location.search).get('from') || ''; } catch (e) {}
+    if (!ok[from]) {
+      try {
+        var r = document.referrer ? new URL(document.referrer) : null;
+        var rp = r ? (r.pathname.replace(/\/+$/, '') || '/') : '';
+        if (r && r.origin === window.location.origin && ok[rp]) from = rp;
+      } catch (e) {}
+    }
+    try { if (ok[from]) sessionStorage.setItem('cg_back', ok[from]); else from = sessionStorage.getItem('cg_back') || ''; } catch (e) {}
+    return ok[from] || '/';
+  }
+  $('back-link').href = backTarget(false);
   var state = { items: [], pick: null, me: null };
   var q = new URLSearchParams(window.location.search);
 
@@ -190,6 +211,7 @@
     fetch('/api/gifts/catalog', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
     fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
   ]).then(function (res) {
+    $('back-link').href = backTarget(!!(res[1] && res[1].authenticated));
     if (!res[0] || !res[0].items || !res[0].items.length) { show('off', true); show('done', false); return; }
     state.items = res[0].items;
     state.me = (res[1] && res[1].authenticated) ? res[1] : null;
