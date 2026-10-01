@@ -216,6 +216,36 @@
     </div>
   </div>
 
+  <!-- v3.1.50 -- TD-940. CAMPAIGNIA CAN DO IT ALL, OR YOU CAN (Ian, 2026-10-01): "if you're an artist, you
+       illustrate it; you're a writer, you write it. We've got you covered in all cases." "Illustrate", never
+       "draw", and kept vague about where (today it is the story panels). Write it yourself is Already Written
+       (TD-941). Three cells on the features-strip classes; this block only sets the three columns. -->
+  <style>
+    .features-strip-body.ways-3 { grid-template-columns: repeat(3, 1fr); }
+    .ways-foot { padding: 14px 20px 18px; text-align: center; font-style: italic; color: rgba(240,232,208,0.75); border-top: 2px solid rgba(201,168,76,0.1); }
+    @media (max-width: 900px) { .features-strip-body.ways-3 { grid-template-columns: 1fr; } .features-strip-body.ways-3 .feature-cell { border-right: none; } }
+  </style>
+  <div class="features-strip" id="your-way">
+    <div class="features-strip-header">
+      <div class="features-strip-title">TELL IT YOUR WAY &mdash; CAMPAIGNIA CAN DO IT ALL. OR YOU CAN.</div>
+    </div>
+    <div class="features-strip-body ways-3">
+      <div class="feature-cell">
+        <div class="feature-title">WE DO IT ALL</div>
+        <div class="feature-desc">Share the story. Campaignia writes it beautifully and illustrates every page.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">ILLUSTRATE IT YOURSELF</div>
+        <div class="feature-desc">Family photos, a child&rsquo;s drawings, your own paintings &mdash; they go right into the story.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">WRITE IT YOURSELF</div>
+        <div class="feature-desc">Already wrote it? Every word stays exactly as you wrote it, and Campaignia adds the pictures.</div>
+      </div>
+    </div>
+    <div class="ways-foot feature-desc">Artist, writer, or neither &mdash; we&rsquo;ve got you covered.</div>
+  </div>
+
   <!-- ============================================================
        ROW 4 — Pricing + Campaignia Book Payoff
        ============================================================ -->
@@ -427,6 +457,11 @@
       <div class="faq-cell">
         <div class="faq-q">Can I cancel anytime?</div>
         <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your stories and chapters are always accessible — they don't disappear.</div>
+      </div>
+      <!-- v3.1.50 -- TD-940. The seventh question spans the row, so the grid of three stays whole. -->
+      <div class="faq-cell" style="grid-column:1 / -1;border-right:none;border-top:2px solid rgba(201,168,76,0.1);">
+        <div class="faq-q">Can I use my own photos, or my own writing?</div>
+        <div class="faq-a">Yes. Family photos, children&rsquo;s drawings or your own art can go right into the story, and a story you&rsquo;ve already written stays word for word while Campaignia adds the pictures. Or let Campaignia do it all.</div>
       </div>
     </div>
   </div>

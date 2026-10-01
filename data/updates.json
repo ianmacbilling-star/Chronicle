@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.50",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3150-your-way",
+        "kind": "change",
+        "public": false,
+        "summary": "Both landing pages now say Campaignia can do it all, or you can: We do it all, Illustrate it yourself, Write it yourself.",
+        "detail": "A new band right after the features strip on the game page (Play it your way) and the storyteller page (Tell it your way), three across on a desktop and stacked on a phone, ending with: Artist, writer, or neither, we've got you covered. Each page has its own slant: an artist at the table and a DM's campaign journal on one; family photos, a child's drawings and an already-written story on the other. One new FAQ on each page, full width at the end. Write it yourself is the Already Written narrative style (3.1.49).",
+        "td": [
+          "TD-940"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.49",
     "staged_on": "2026-10-01",
     "entries": [
