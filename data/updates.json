@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.57",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3157-redeem-note-trim",
+        "kind": "change",
+        "public": false,
+        "summary": "The Redeem page's note under the two choices is shorter and no longer reads oddly for someone already on Platinum.",
+        "detail": "Redeem a pass gift as a Copper or Free Trial account: the note under the buttons reads only Choose one; it cannot be changed afterwards. Silver, Gold and Platinum subscribers keep their own notes, unchanged.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.56",
     "staged_on": "2026-10-12",
     "entries": [

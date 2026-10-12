@@ -280,7 +280,8 @@
             'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
         } else {
           rb.textContent = 'Redeem: ' + r.months + ' months of Platinum' + tokensPart;
-          $('convert-note').textContent = 'Taking tokens means no Platinum months. Choose one; it cannot be changed afterwards.';
+          // v3.1.57 -- first half of this sentence dropped (Ian, 2026-10-12): it made no sense to someone already on a pass.
+          $('convert-note').textContent = 'Choose one; it cannot be changed afterwards.';
         }
       }
       show('convert-wrap', canConvert && !!state.me);
