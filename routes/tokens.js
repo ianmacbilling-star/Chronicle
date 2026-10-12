@@ -965,9 +965,21 @@ async function stripeWebhook(req, res) {
       // These two events must be switched on for the webhook endpoint in the Stripe dashboard.
       const _o = event.data.object || {};
       const _pi = (_o.payment_intent && typeof _o.payment_intent === 'object') ? _o.payment_intent.id : (_o.payment_intent || null);
+      let _gift = null;
       if (event.type === 'charge.dispute.created' || _o.refunded === true) {
-        try { await require('../services/gifts').handleGiftPaymentReversal(await getDb(), _pi, event.type === 'charge.dispute.created' ? 'dispute' : 'refund'); }
+        try { _gift = await require('../services/gifts').handleGiftPaymentReversal(await getDb(), _pi, event.type === 'charge.dispute.created' ? 'dispute' : 'refund'); }
         catch (gErr) { console.error('gift reversal failed (non-fatal):', gErr && gErr.message); }
+      }
+      // v3.1.60 -- EVERY DISPUTE EMAILS SUPPORT AND THE ALERT ADDRESS (Ian, 2026-10-12: "Email Support on
+      // every dispute... not just redeemed gifts"). Any purchase: a gift, a pass, tokens, a book, a
+      // subscription. Behind ALERTS_ENABLED like every alert (off on staging, where it writes a log line).
+      // Best effort: it can never fail the webhook.
+      if (event.type === 'charge.dispute.created') {
+        try {
+          let _det = null;
+          try { _det = await stripeProvider.paymentDetails(_pi, { session: true }); } catch (_) { _det = null; }
+          await require('./email').sendDisputeAlertEmail({ dispute: _o, paymentIntentId: _pi, details: _det, gift: _gift, livemode: !!event.livemode });
+        } catch (dErr) { console.error('dispute alert failed (non-fatal):', dErr && dErr.message); }
       }
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.

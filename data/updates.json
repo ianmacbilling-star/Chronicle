@@ -1,5 +1,41 @@
 [
   {
+    "version": "3.1.60",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3160-gift-dispute-race",
+        "kind": "fix",
+        "public": false,
+        "summary": "A gift whose payment is disputed or refunded is now cancelled even when Stripe reports it within seconds of the purchase.",
+        "detail": "Buy a gift with the dispute test card 4000 0000 0000 0259 and do not redeem it. Within a minute or two its code must say This gift has been cancelled. Before this, a dispute that arrived before the purchase had been recorded was missed and the code kept working (found by the bots on GIFT-12). Also check: a disputed gift sends no gift email if the dispute came first.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3160-dispute-email",
+        "kind": "change",
+        "public": false,
+        "summary": "Every disputed payment, on any purchase, now emails support and the alert address with the amount, the reason, the evidence deadline and a link to it in Stripe.",
+        "detail": "Alerts are switched off on staging (ALERTS_ENABLED), so there a dispute writes a log line starting [alert suppressed: ALERTS_ENABLED!=true] Payment disputed instead. On production it emails both addresses. A disputed gift is named in the same email, with whether it was cancelled or already redeemed.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3160-brain-gifts",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now knows about gift certificates: giving one, redeeming one, and what a gifted pass does with each plan.",
+        "detail": "Ask the help assistant: how do I give Campaignia as a gift; do gifts expire; I am on Gold, will a gifted pass cancel my subscription; why can I not take my gift as tokens on the trial; my gift code is not recognised.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.59",
     "staged_on": "2026-10-12",
     "entries": [

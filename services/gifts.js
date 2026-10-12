@@ -578,6 +578,19 @@ async function fulfillGiftCheckout(db, session, deps) {
     "buyer_email = COALESCE(buyer_email, ?) WHERE id = ? AND stripe_session_id = ? AND status = 'pending_payment'"
   ).run(piId, (session.amount_total != null) ? session.amount_total : null, email, id, session.id);
   if (!r || !r.changes) return null;
+  // v3.1.60 -- ALREADY DISPUTED OR REFUNDED BEFORE WE GOT HERE? Stripe's dispute test card opens a
+  // dispute within seconds, and a real one can race the same way. Ask Stripe about the charge before a
+  // code is made or anything is sent; if it is disputed or refunded, void the gift and stop. An unknown
+  // answer (Stripe not configured, an error) changes nothing, and handleGiftPaymentReversal still runs
+  // when the dispute or refund event itself arrives.
+  let _rev = null;
+  try { _rev = piId ? await (deps.paymentDetails || require('./billing/stripeProvider').paymentDetails)(piId) : null; } catch (_) { _rev = null; }
+  if (_rev && (_rev.disputed || _rev.refunded)) {
+    await db.prepare("UPDATE gift_certificates SET status = 'void', voided_at = CURRENT_TIMESTAMP, void_reason = ? WHERE id = ? AND status = 'paid'")
+      .run(_rev.disputed ? 'payment disputed' : 'refunded in Stripe', id);
+    console.error('[gifts] gift ' + id + ' was ' + (_rev.disputed ? 'disputed' : 'refunded') + ' before it was fulfilled: voided, nothing sent');
+    return await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
+  }
   // v3.1.47 -- THE CODE IS MADE NOW, so the receipt can carry it (Ian, 2026-10-01). Sealed until the
   // gift email goes, which sends this same code. If this fails the gift is still paid: the receipt
   // goes without a code and delivery makes one, exactly as before.
@@ -608,27 +621,52 @@ async function markGiftCheckoutAbandoned(db, session) {
 
 // A refund or a dispute arrived from Stripe (charge.refunded / charge.dispute.created). An unused
 // gift is voided so its code stops working; a REDEEMED one is never clawed back automatically --
-// Ian is told and decides. Returns what it did.
+// Ian is told and decides.
+//
+// v3.1.60 -- TD-934, found by the test bots 2026-10-12: a gift paid with Stripe's dispute test card
+// stayed redeemable after the dispute opened. The dispute can reach us BEFORE checkout.session.completed
+// has written the payment id onto the gift row, and the lookup by payment id found nothing and did
+// nothing. Now, when no row has that payment id yet, the gift is found from the PAYMENT ITSELF: every
+// gift payment carries kind 'gift' and its gift_id (createGiftCheckout, payment_intent_data). A gift
+// voided while still pending_payment is then never fulfilled -- fulfillGiftCheckout only moves a
+// pending_payment row -- so no receipt, no code and no gift email go out for it.
+//
+// RETURNS { action, giftId }: 'voided' | 'redeemed' (already redeemed, nothing taken back) | 'none'.
+// A REFUND of a redeemed gift is emailed from here. A DISPUTE is emailed by the webhook's own
+// dispute alert (every dispute, any purchase), which names the gift, so it is never sent twice.
 async function handleGiftPaymentReversal(db, paymentIntentId, what, deps) {
   deps = deps || {};
-  if (!paymentIntentId) return 'none';
-  const row = await db.prepare('SELECT id, status, recipient_email FROM gift_certificates WHERE stripe_payment_intent = ?').get(paymentIntentId);
-  if (!row) return 'none';
+  if (!paymentIntentId) return { action: 'none', giftId: null };
+  let row = await db.prepare('SELECT id, status, recipient_email FROM gift_certificates WHERE stripe_payment_intent = ?').get(paymentIntentId);
+  if (!row) {
+    let det = null;
+    try { det = await (deps.paymentDetails || require('./billing/stripeProvider').paymentDetails)(paymentIntentId, { session: true }); } catch (_) { det = null; }
+    const md = (det && det.metadata && det.metadata.kind === 'gift') ? det.metadata
+      : ((det && det.sessionMetadata && det.sessionMetadata.kind === 'gift') ? det.sessionMetadata : null);
+    const gid = md ? parseInt(md.gift_id, 10) : 0;
+    if (gid > 0) {
+      row = await db.prepare('SELECT id, status, recipient_email FROM gift_certificates WHERE id = ? AND (stripe_payment_intent IS NULL OR stripe_payment_intent = ?)').get(gid, paymentIntentId);
+      if (row) await db.prepare('UPDATE gift_certificates SET stripe_payment_intent = ? WHERE id = ? AND stripe_payment_intent IS NULL').run(paymentIntentId, row.id);
+    }
+  }
+  if (!row) return { action: 'none', giftId: null };
   const r = await db.prepare(
     "UPDATE gift_certificates SET status = 'void', voided_at = CURRENT_TIMESTAMP, void_reason = ? " +
     "WHERE id = ? AND status IN ('pending_payment', 'paid', 'delivered')"
   ).run(what === 'dispute' ? 'payment disputed' : 'refunded in Stripe', row.id);
-  if (r && r.changes) return 'voided';
+  if (r && r.changes) return { action: 'voided', giftId: row.id };
   if (row.status === 'redeemed') {
-    try {
-      const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
-      await alert('A redeemed gift was ' + (what === 'dispute' ? 'disputed' : 'refunded'),
-        'Gift ' + row.id + ' (to ' + row.recipient_email + ') has already been redeemed, and its payment was ' +
-        (what === 'dispute' ? 'disputed' : 'refunded') + ' in Stripe. Nothing was taken back automatically. Decide by hand.');
-    } catch (_) {}
-    return 'alerted';
+    if (what !== 'dispute') {
+      try {
+        const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
+        await alert('A redeemed gift was refunded',
+          'Gift ' + row.id + ' (to ' + row.recipient_email + ') has already been redeemed, and its payment was ' +
+          'refunded in Stripe. Nothing was taken back automatically. Decide by hand.');
+      } catch (_) {}
+    }
+    return { action: 'redeemed', giftId: row.id };
   }
-  return 'none';
+  return { action: 'none', giftId: row.id };
 }
 
 // Admin Void & refund for a PAID gift. The gift is claimed first (so it cannot be redeemed while the

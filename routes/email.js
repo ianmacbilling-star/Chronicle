@@ -499,7 +499,7 @@ async function sendReportEmail(opts) {
   }
 }
 
-async function sendAlertEmail(subject, message) {
+async function sendAlertEmail(subject, message, opts) {
   try {
     if (process.env.ALERTS_ENABLED !== 'true') {
       console.log('[alert suppressed: ALERTS_ENABLED!=true] ' + subject);
@@ -507,7 +507,11 @@ async function sendAlertEmail(subject, message) {
     }
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) { console.error('[alert] RESEND_API_KEY not set'); return false; }
-    const to = process.env.ALERT_EMAIL || 'monitoring@campaignia.com';
+    const alertTo = process.env.ALERT_EMAIL || 'monitoring@campaignia.com';
+    // v3.1.60 -- opts.alsoSupport copies SUPPORT_EMAIL as well (every dispute, Ian 2026-10-12). One send to
+    // both addresses, and never the same address twice.
+    const supportTo = (opts && opts.alsoSupport) ? (process.env.SUPPORT_EMAIL || 'support@campaignia.com') : '';
+    const to = (supportTo && supportTo.trim().toLowerCase() !== alertTo.trim().toLowerCase()) ? [alertTo, supportTo] : alertTo;
     const from = process.env.ALERT_FROM || 'monitoring@campaignia.com';
     const env = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'production';
     const appUrl = process.env.APP_URL || '(APP_URL not set)';
@@ -1494,4 +1498,45 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+// v3.1.60 -- A DISPUTE ON ANY PURCHASE (Ian, 2026-10-12: "Email Support on every dispute... not just
+// redeemed gifts"). To the alert address AND support, behind ALERTS_ENABLED like every alert. Plain facts
+// and a link: whether to respond with evidence or accept is decided in Stripe. disputeAlertText is pure
+// so the guard can drive it.
+// info: { dispute (Stripe Dispute object), paymentIntentId, details (stripeProvider.paymentDetails, or
+// null), gift ({ action, giftId } from handleGiftPaymentReversal, or null), livemode }
+function disputeAlertText(info) {
+  info = info || {};
+  const d = info.dispute || {};
+  const det = info.details || null;
+  const money = (typeof d.amount === 'number') ? ((d.currency ? String(d.currency).toUpperCase() + ' ' : '') + (d.amount / 100).toFixed(2)) : 'unknown';
+  const reason = String(d.reason || 'not given').replace(/_/g, ' ');
+  const dueSecs = d.evidence_details && d.evidence_details.due_by;
+  const due = dueSecs ? new Date(dueSecs * 1000).toISOString().slice(0, 10) : 'see Stripe';
+  const meta = (det && det.metadata) || {};
+  const smeta = (det && det.sessionMetadata) || {};
+  const kind = meta.kind || smeta.kind || (smeta.pack_id ? 'pack' : '');
+  const WHAT = { gift: 'a gift certificate', pass: 'a Platinum Pass', print_order: 'a printed book order', pack: 'a token pack', upgrade: 'a plan upgrade' };
+  const what = WHAT[kind] || (det && det.description) || 'not recorded on the payment (most likely a subscription payment); see Stripe';
+  const g = info.gift;
+  let giftLine = '';
+  if (g && g.giftId) {
+    giftLine = g.action === 'voided' ? ('Gift ' + g.giftId + ' was cancelled: its code no longer works.')
+      : g.action === 'redeemed' ? ('Gift ' + g.giftId + ' had ALREADY BEEN REDEEMED. Nothing was taken back automatically; decide by hand.')
+      : ('Gift ' + g.giftId + ': no change made.');
+  }
+  const link = 'https://dashboard.stripe.com/' + (info.livemode ? '' : 'test/') + (d.id ? ('disputes/' + d.id) : ('payments/' + (info.paymentIntentId || '')));
+  const lines = ['A customer has disputed a payment (a chargeback).', '',
+    'Amount: ' + money, 'Reason: ' + reason, 'Evidence due by: ' + due,
+    'Customer: ' + ((det && det.email) || 'unknown'), 'What it was for: ' + what];
+  if (giftLine) lines.push(giftLine);
+  lines.push('Payment: ' + (info.paymentIntentId || 'unknown'), 'Dispute: ' + (d.id || 'unknown'), '',
+    'Open it in Stripe: ' + link, '',
+    'Nothing else was done automatically. Respond with evidence in Stripe before the deadline, or accept the dispute there.');
+  return { subject: 'Payment disputed: ' + money + (WHAT[kind] ? ' (' + WHAT[kind] + ')' : ''), message: lines.join(String.fromCharCode(10)) };
+}
+async function sendDisputeAlertEmail(info) {
+  const t = disputeAlertText(info);
+  return sendAlertEmail(t.subject, t.message, { alsoSupport: true });
+}
+
+module.exports = { disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

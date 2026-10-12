@@ -487,7 +487,40 @@ async function getPrice(priceId) {
   return await stripe.prices.retrieve(priceId);
 }
 
+// v3.1.60 -- TD-934. WHAT STRIPE KNOWS ABOUT A PAYMENT, for the gift dispute race and the dispute alert.
+// The payment's own metadata (a gift payment carries kind 'gift' and gift_id), whether its charge is
+// disputed or refunded, the payer's email and the description. opts.session also reads the checkout
+// session's metadata, which names what was bought for passes, packs and books. NULL ON ANY FAILURE:
+// every caller treats null as 'unknown' and changes nothing because of it.
+async function paymentDetails(paymentIntentId, opts) {
+  const stripe = getClient();
+  if (!stripe || !paymentIntentId) return null;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+    const ch = (pi && pi.latest_charge && typeof pi.latest_charge === 'object') ? pi.latest_charge : null;
+    let sessionMetadata = null;
+    if (opts && opts.session) {
+      try {
+        const list = await stripe.checkout.sessions.list({ payment_intent: paymentIntentId, limit: 1 });
+        const s = list && list.data && list.data[0];
+        sessionMetadata = s ? (s.metadata || {}) : null;
+      } catch (_) { sessionMetadata = null; }
+    }
+    return {
+      metadata: (pi && pi.metadata) || {},
+      sessionMetadata: sessionMetadata,
+      disputed: !!(ch && ch.disputed),
+      refunded: !!(ch && ch.refunded),
+      email: (ch && ch.billing_details && ch.billing_details.email) || (pi && pi.receipt_email) || null,
+      description: (pi && pi.description) || null
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
+  paymentDetails,   // v3.1.60
   createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection, createGiftCheckout, refundPaymentIntent,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
