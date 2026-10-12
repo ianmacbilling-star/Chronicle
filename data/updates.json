@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.58",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3158-redeem-no-tokens-on-trial",
+        "kind": "change",
+        "public": false,
+        "summary": "On the Free Trial, the Redeem page no longer offers to take a pass gift as tokens, since the trial cannot hold them.",
+        "detail": "Redeem a pass gift on a Free Trial account: only the Redeem button shows, with its Platinum date and token total; there is no Take tokens instead button and no note under it. A Copper, Silver or Gold account still sees both choices. A token-pack gift on the trial still shows its button switched off with the reason.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.57",
     "staged_on": "2026-10-12",
     "entries": [

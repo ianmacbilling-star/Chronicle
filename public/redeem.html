@@ -207,19 +207,22 @@
     var n = state.balance + (Number(add) || 0);
     return n.toLocaleString() + (n === 1 ? ' token' : ' tokens');
   }
+  // v3.1.58 -- ONE ANSWER to: is this the Free Trial, where tokens cannot be added? check() uses it to leave the
+  // tokens choice off the page altogether (Ian, 2026-10-12: "why even show it"), and drawProjections() to switch
+  // off a token-pack gift. True only when the server says no AND the account is on the trial.
+  function trialNoTokens(r) { return !!(r && state.me && r.canTakeTokens === false && state.me.inFreeTrial); }
   function drawProjections() {
     var r = state.gift; if (!r || !state.me) return;
     var rb = $('redeem-btn'), cb = $('convert-btn');
     var sub = r.subscription || 'none';
-    var noTokens = (r.canTakeTokens === false && !!state.me.inFreeTrial);
+    var noTokens = trialNoTokens(r);
     var NO_TOKENS = 'Tokens cannot be added during the Free Trial';
     if (r.kind === 'pass') {
       var parts = [];
       if (r.runsUntilIfRedeemed) parts.push('Platinum until ' + fmtDate(r.runsUntilIfRedeemed) + ((sub === 'silver' || sub === 'gold') ? ', then ' + cap(sub) + ' again' : ''));
       var t = tokensAfter(r.tokens); if (t) parts.push(t);
       setSub(rb, parts.join(' \u00b7 '));
-      if (noTokens) { setSub(cb, NO_TOKENS); cb.disabled = true; }
-      else { var c = tokensAfter(r.convertTokens); setSub(cb, c ? 'Bringing you to ' + c : ''); }
+      if (!noTokens) { var c = tokensAfter(r.convertTokens); setSub(cb, c ? 'Bringing you to ' + c : ''); }   // on the trial it is not shown
     } else {
       if (noTokens) { setSub(rb, NO_TOKENS + '. Choose a plan, then come back; your gift never expires.'); rb.disabled = true; }
       else { var p = tokensAfter(r.tokens); setSub(rb, p ? 'Bringing you to ' + p : ''); }
@@ -284,7 +287,7 @@
           $('convert-note').textContent = 'Choose one; it cannot be changed afterwards.';
         }
       }
-      show('convert-wrap', canConvert && !!state.me);
+      show('convert-wrap', canConvert && !!state.me && !trialNoTokens(r));   // v3.1.58 -- never on the Free Trial
       // v3.1.44 -- sent to a different address than the one signed in. A warning, never a block.
       if (state.me && r.sentToOther) {
         $('other-account').textContent = 'This gift was sent to ' + (r.sentToMasked || 'a different email address') +
