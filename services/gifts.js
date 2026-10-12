@@ -301,7 +301,9 @@ async function issueAndSend(db, row, sendFn, opts) {
 // ---------------------------------------------------------------------------
 // WHAT SUBSCRIPTION IS THIS PERSON ON, for the pass-or-tokens choice (Ian, 2026-10-01):
 //   'platinum'      -> a gifted pass adds nothing; they take the tokens (the server insists)
-//   'silver'/'gold' -> Platinum starts TODAY on top; the subscription is not touched
+//   'silver'/'gold' -> Platinum starts TODAY on top, and the Silver or Gold subscription is PAUSED
+//                      until the pass ends, then restarts by itself (v3.1.45, TD-938; v3.1.59 corrected
+//                      this line, which used to say the subscription is left alone)
 //   'none'          -> no subscription, or one that is already cancelling: the pass as normal
 // "Can still bill" uses the same five statuses as fulfillPassCheckout in routes/tokens.js, which
 // asks the same question. TD-793 records that this list is defined in several places.

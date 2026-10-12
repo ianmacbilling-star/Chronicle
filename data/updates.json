@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.59",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3159-gifts-comment",
+        "kind": "change",
+        "public": false,
+        "summary": "Internal: a code comment about gifted passes now says Silver and Gold subscriptions are paused.",
+        "detail": "Comment only, in services/gifts.js. Nothing anyone sees changes and there is nothing to test beyond the site still running.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.58",
     "staged_on": "2026-10-12",
     "entries": [
