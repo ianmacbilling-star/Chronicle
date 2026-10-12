@@ -38,6 +38,10 @@
   .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
   /* v3.1.55 -- what they already have, so they choose between the pass and the tokens knowing it. */
   .acct { border: 1px solid rgba(201,168,76,0.18); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #e8d5a3; }
+  /* v3.1.56 -- small print on each choice: what they would have after it. Ordinary type, not the capitals. */
+  #redeem-btn, #convert-btn { flex-direction: column; gap: 2px; }
+  .auth-box .btn .btn-sub { display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 400;
+    letter-spacing: 0; text-transform: none; font-variant: normal; opacity: 0.85; }
   .acct-kicker { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(201,168,76,0.75); margin-bottom: 2px; }
   .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
   .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
@@ -75,7 +79,7 @@
         <div class="gift-what" id="gift-what"></div>
       </div>
       <div id="acct" class="acct hidden" aria-live="polite">
-        <div class="acct-kicker" id="acct-kicker">Your account</div>
+        <div class="acct-kicker" id="acct-kicker">Currently, your account</div>
         <div id="acct-tier"></div>
         <div id="acct-tokens"></div>
       </div>
@@ -179,11 +183,47 @@
     Promise.all([after ? getJson('/api/auth/me') : Promise.resolve(state.me), getJson('/api/tokens/balance')]).then(function (res) {
       var me = (res[0] && res[0].authenticated) ? res[0] : state.me;
       var b = res[1]; var n = b ? Number(b.total) : NaN;
-      $('acct-kicker').textContent = after ? 'Your account now' : 'Your account';
+      $('acct-kicker').textContent = after ? 'Your account now' : 'Currently, your account';   // v3.1.56 wording (Ian)
       $('acct-tier').textContent = describeTier(me);
       $('acct-tokens').textContent = isFinite(n) ? (n.toLocaleString() + (n === 1 ? ' token' : ' tokens')) : '';
       show('acct', true);
+      if (!after) { state.balance = isFinite(n) ? n : null; drawProjections(); }
     });
+  }
+
+  // v3.1.56 -- SMALL PRINT ON EACH BUTTON: where they would end up (Ian, 2026-10-12: "what they would have
+  // after the redeem, each option"). The pass date is the SERVER'S (runsUntilIfRedeemed, from the same
+  // function redeem() writes with); the token totals are the balance in the box plus what the gift adds.
+  // The Free Trial cannot take tokens (canPurchaseTokens): that choice is switched off only when the server
+  // says no AND the account is on the trial, so an unknown answer switches nothing off.
+  function setSub(btn, text) {
+    var s = btn.querySelector('.btn-sub');
+    if (!text) { if (s) s.parentNode.removeChild(s); return; }
+    if (!s) { s = document.createElement('span'); s.className = 'btn-sub'; btn.appendChild(s); }
+    s.textContent = text;
+  }
+  function tokensAfter(add) {
+    if (state.balance == null) return '';
+    var n = state.balance + (Number(add) || 0);
+    return n.toLocaleString() + (n === 1 ? ' token' : ' tokens');
+  }
+  function drawProjections() {
+    var r = state.gift; if (!r || !state.me) return;
+    var rb = $('redeem-btn'), cb = $('convert-btn');
+    var sub = r.subscription || 'none';
+    var noTokens = (r.canTakeTokens === false && !!state.me.inFreeTrial);
+    var NO_TOKENS = 'Tokens cannot be added during the Free Trial';
+    if (r.kind === 'pass') {
+      var parts = [];
+      if (r.runsUntilIfRedeemed) parts.push('Platinum until ' + fmtDate(r.runsUntilIfRedeemed) + ((sub === 'silver' || sub === 'gold') ? ', then ' + cap(sub) + ' again' : ''));
+      var t = tokensAfter(r.tokens); if (t) parts.push(t);
+      setSub(rb, parts.join(' \u00b7 '));
+      if (noTokens) { setSub(cb, NO_TOKENS); cb.disabled = true; }
+      else { var c = tokensAfter(r.convertTokens); setSub(cb, c ? 'Bringing you to ' + c : ''); }
+    } else {
+      if (noTokens) { setSub(rb, NO_TOKENS + '. Choose a plan, then come back; your gift never expires.'); rb.disabled = true; }
+      else { var p = tokensAfter(r.tokens); setSub(rb, p ? 'Bringing you to ' + p : ''); }
+    }
   }
 
   function check() {
@@ -269,13 +309,13 @@
     error('');
     var btn = convert ? $('convert-btn') : $('redeem-btn');
     var all = [$('convert-btn'), $('redeem-btn')];
-    var label = btn.textContent;
+    var label = btn.innerHTML;   // v3.1.56 -- the label now carries its small print; keep both
     all.forEach(function (b) { b.disabled = true; });
     btn.textContent = 'Redeeming...';
     var body = state.giftId ? { giftId: state.giftId, convert: !!convert } : { code: state.code, convert: !!convert };
     post('/api/gifts/redeem', body).then(function (r) {
       all.forEach(function (b) { b.disabled = false; });
-      btn.textContent = label;
+      btn.innerHTML = label; drawProjections();
       if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
       var lines = [];
       if (r.kind === 'pass' && !r.converted) {
@@ -293,7 +333,7 @@
       $('done').parentNode.insertBefore($('acct'), $('done').nextSibling); loadAccount(true);
       $('subtitle').textContent = 'Enjoy your gift.';
       $('app-link').textContent = 'Open Campaignia';
-    }).catch(function () { all.forEach(function (b) { b.disabled = false; }); btn.textContent = label; error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
+    }).catch(function () { all.forEach(function (b) { b.disabled = false; }); btn.innerHTML = label; drawProjections(); error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
   }
 
   $('check-btn').addEventListener('click', check);

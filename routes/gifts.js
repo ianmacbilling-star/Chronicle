@@ -90,7 +90,7 @@ router.post('/lookup', async function (req, res) {
     let viewer = null;
     if (req.session && req.session.userId) {
       try {
-        viewer = await db.prepare('SELECT email, verified_email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
+        viewer = await db.prepare('SELECT email, verified_email, tier, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until, pass_expires_at, current_period_end FROM users WHERE id = ?').get(req.session.userId);
       } catch (_) { viewer = null; }
     }
     // v3.1.47 -- from the banner: a gift named by id, for the signed-in account's confirmed email only.
@@ -100,6 +100,12 @@ router.post('/lookup', async function (req, res) {
       ? await gifts.lookupMine(db, req.body.giftId, await gifts.getConvertRate(db), viewer, viewer.verified_email)
       : await gifts.lookup(db, req.body && req.body.code, await gifts.getConvertRate(db), viewer);
     if (!r.ok) recordMiss(req);
+    // v3.1.56 -- CAN TOKENS BE ADDED TO THIS ACCOUNT? The rule redeem() refuses with (canPurchaseTokens:
+    // not on the Free Trial), asked here so the page can say so on the button BEFORE the click.
+    // A hint only; redeem() still asks for itself.
+    if (r.ok && viewer) {
+      try { r.canTakeTokens = await require('../middleware/tiers').canPurchaseTokens(req.session.userId); } catch (_) { r.canTakeTokens = null; }
+    }
     res.json(r);
   } catch (e) {
     console.error('[gifts] lookup error:', e && e.message);

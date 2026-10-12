@@ -361,6 +361,25 @@ async function lookupMine(db, giftId, rate, viewer, verifiedEmail, now) {
   return viewGift(row, rate, viewer);
 }
 
+// v3.1.56 -- WHEN A REDEEMED PASS WOULD END. ONE FUNCTION, TWO CALLERS: redeem() writes the date
+// with it, and viewGift() shows the same date on the Redeem button before the click (Ian,
+// 2026-10-12: small print saying what they would have after each choice). Two copies of the rule
+// could promise one date and grant another, so there is only this one.
+// u: users columns tier, pass_expires_at, current_period_end, stripe_subscription_id,
+// subscription_status, cancel_at_period_end, sub_paused_until.
+function passRunsUntil(u, months, nowMs, tok) {
+  tok = tok || require('../routes/tokens');
+  const plan = require('./billing/subscriptionPause').planForPass(u, '', { gift: true, nowMs: nowMs });
+  return tok.passAddMonths(tok.passStackFrom(nowMs, u.pass_expires_at, plan.stackPeriodEnd), months);
+}
+// The preview for the page. Null when there is nothing to show: signed out, not a pass, or a
+// Platinum subscriber (who is sent to the tokens). It must never break the lookup.
+function passPreview(row, viewer, nowMs) {
+  if (!viewer || !row || row.item_kind !== 'pass' || !(Number(row.months) > 0)) return null;
+  if (subscriptionState(viewer) === 'platinum') return null;
+  try { return passRunsUntil(viewer, Number(row.months), nowMs || Date.now()).toISOString(); } catch (e) { return null; }
+}
+
 function viewGift(row, rate, viewer) {
   const viewerEmail = viewer && viewer.email;
   if (!row) return { ok: false, reason: 'not_found' };
@@ -373,6 +392,7 @@ function viewGift(row, rate, viewer) {
            sentToMasked: (viewerEmail && sentToOther(row, viewerEmail)) ? maskEmail(row.recipient_email) : null,
            subscription: viewer ? subscriptionState(viewer) : null,
            subPausedUntil: (viewer && require('./billing/subscriptionPause').isFuture(viewer.sub_paused_until)) ? viewer.sub_paused_until : null,
+           runsUntilIfRedeemed: passPreview(row, viewer),   // v3.1.56
            description: describeGift(row), fromName: row.buyer_name || null };
 }
 
@@ -390,9 +410,11 @@ function shouldTellBuyer(row, redeemerId, redeemerEmail) {
 // second waits on the lock, then finds it redeemed. Any throw rolls all of it back.
 //
 // A PASS stacks exactly as a bought pass does (passStackFrom / passAddMonths in
-// routes/tokens.js), and its tokens land as carry-over. Unlike a bought pass it
-// does NOT stop a subscription renewing (Ian, 2026-10-01): a gift should never
-// change someone's billing.
+// routes/tokens.js, through passRunsUntil above), and its tokens land as carry-over.
+// v3.1.56 -- this comment used to say a gift never touches billing. Since v3.1.45 (TD-938)
+// it does: a Silver or Gold subscriber keeping the pass has their billing PAUSED until it
+// ends (services/billing/subscriptionPause.js), and a Platinum subscriber is refused and
+// takes the tokens instead.
 //
 // A TOKEN PACK follows the pack rule (canPurchaseTokens): refused on a Free Trial
 // account, with the gift left untouched for later -- it never expires.
@@ -472,8 +494,8 @@ async function redeem(db, userId, input, deps, opts) {
       // Platinum from TODAY (after any pass they already hold) -- their paid period is not
       // waiting to end, so it must not delay the upgrade. Anyone else stacks exactly as a bought
       // pass does: after the later of now, a live pass, or a paid-up period that is ending.
-      const periodEnd = plan.stackPeriodEnd;
-      const until = tok.passAddMonths(tok.passStackFrom(now.getTime(), u.pass_expires_at, periodEnd), g.months);
+      // v3.1.56 -- through passRunsUntil, the same function the Redeem page's preview uses.
+      const until = passRunsUntil(u, g.months, now.getTime(), tok);
       runsUntil = until.toISOString();
       await tx.query('UPDATE users SET pass_tier = $1, pass_expires_at = $2 WHERE id = $3', ['platinum', runsUntil, userId]);
     }
@@ -639,5 +661,6 @@ module.exports = {
   isValidEmail, maskEmail, sentToOther, subscriptionState, SUB_CAN_BILL, validateGiftInput, issueAndSend,
   lookup, redeem,
   sealCode, openCode, storedCode, isMineNow, listMine, lookupMine, viewGift, shouldTellBuyer,
+  passRunsUntil, passPreview,   // v3.1.56
   BUYER_DAILY_LIMIT, buyerCountToday, fulfillGiftCheckout, markGiftCheckoutAbandoned, handleGiftPaymentReversal, voidAndRefund
 };

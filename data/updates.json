@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.56",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3156-redeem-small-print",
+        "kind": "change",
+        "public": false,
+        "summary": "Each choice on the Redeem page now says what you would have after it.",
+        "detail": "Redeem a pass gift signed in. The Redeem button's small print reads Platinum until <date> and your new token total; for a Silver or Gold subscriber it adds, then Gold again (or Silver). Take tokens instead reads Bringing you to <total> tokens. A Platinum subscriber sees only the tokens choice. On the Free Trial the tokens choice is switched off and says tokens cannot be added during the Free Trial; a token-pack gift is switched off the same way. The date comes from the same code that sets it when you click, so it should match the result exactly. The account box now reads Currently, your account.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.55",
     "staged_on": "2026-10-12",
     "entries": [
