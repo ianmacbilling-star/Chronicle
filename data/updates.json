@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.55",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3155-redeem-your-account",
+        "kind": "change",
+        "public": false,
+        "summary": "Redeeming a gift now shows your current plan and token balance, with end dates, before you choose how to take it.",
+        "detail": "Redeem page, signed in, after Check code: a Your account box between the gift and the buttons. Copper reads Copper; a subscription reads e.g. Gold subscription, renews <date> (or ends, or paused until); a pass adds Platinum Pass until <date>; the Free Trial reads Free Trial, ends <date> (N days left). The token count matches the app header. After redeeming, the box moves under the result as Your account now and shows the new pass date or balance. Signed out, no box.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3155-gift-top-back-link",
+        "kind": "change",
+        "public": false,
+        "summary": "After buying a gift, a Back to Campaignia link sits right beside Want to send another?",
+        "detail": "Buy a gift and return from Stripe: the line under the title reads Want to send another? followed by Back to Campaignia. It goes to the same place as the link at the bottom: the app when signed in, otherwise the landing page you came from.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.54",
     "staged_on": "2026-10-01",
     "entries": [

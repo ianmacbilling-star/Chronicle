@@ -49,6 +49,7 @@
   .err { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px; line-height: 1.5; }
   .ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.6; }
   .links { text-align: center; margin-top: 16px; font-size: 13px; } .links a { color: #c9a84c; }
+  .sub a { color: #c9a84c; } /* v3.1.55 -- the Back to Campaignia link beside Want to send another? */
   .hidden { display: none !important; }
   @media (max-width: 520px) { .box { padding: 22px 18px; } .two { grid-template-columns: 1fr; } }
 </style>
@@ -128,7 +129,11 @@
     try { if (ok[from]) sessionStorage.setItem('cg_back', ok[from]); else from = sessionStorage.getItem('cg_back') || ''; } catch (e) {}
     return ok[from] || '/';
   }
-  $('back-link').href = backTarget(false);
+  // v3.1.55 -- ONE SETTER FOR BOTH BACK LINKS. Back from Stripe, the line under the title reads
+  // 'Want to send another? . Back to Campaignia' (Ian, 2026-10-12: so nobody has to scroll to the bottom).
+  // Both links take their href from here, so they cannot disagree.
+  function setBack(href) { ['back-link', 'back-link-top'].forEach(function (id) { var a = $(id); if (a) a.href = href; }); }
+  setBack(backTarget(false));
   var state = { items: [], pick: null, me: null };
   var q = new URLSearchParams(window.location.search);
 
@@ -203,7 +208,9 @@
       (nice ? 'We will email it on ' + nice + ' at 9am Eastern.' : 'We are emailing it now.') +
       ' Your receipt is on its way, and you will get a copy of the gift code when it is delivered.';
     show('done', true);
-    $('sub').textContent = 'Want to send another?';
+    var sub = $('sub'); sub.textContent = 'Want to send another? \u00b7 ';
+    var topBack = document.createElement('a'); topBack.id = 'back-link-top'; topBack.textContent = 'Back to Campaignia';
+    sub.appendChild(topBack); setBack(backTarget(false));
   }
   if (q.get('cancelled')) show('cancelled', true);
 
@@ -211,7 +218,7 @@
     fetch('/api/gifts/catalog', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
     fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
   ]).then(function (res) {
-    $('back-link').href = backTarget(!!(res[1] && res[1].authenticated));
+    setBack(backTarget(!!(res[1] && res[1].authenticated)));
     if (!res[0] || !res[0].items || !res[0].items.length) { show('off', true); show('done', false); return; }
     state.items = res[0].items;
     state.me = (res[1] && res[1].authenticated) ? res[1] : null;

@@ -36,6 +36,9 @@
   .gift-card { border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(201,168,76,0.06); }
   .gift-from { font-size: 13px; color: rgba(201,168,76,0.7); margin-bottom: 4px; }
   .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
+  /* v3.1.55 -- what they already have, so they choose between the pass and the tokens knowing it. */
+  .acct { border: 1px solid rgba(201,168,76,0.18); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #e8d5a3; }
+  .acct-kicker { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(201,168,76,0.75); margin-bottom: 2px; }
   .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
   .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
   .msg-warn { background: rgba(201,140,40,0.14); border: 1px solid rgba(230,170,70,0.55); color: #f3d9a4; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
@@ -70,6 +73,11 @@
       <div class="gift-card">
         <div class="gift-from" id="gift-from"></div>
         <div class="gift-what" id="gift-what"></div>
+      </div>
+      <div id="acct" class="acct hidden" aria-live="polite">
+        <div class="acct-kicker" id="acct-kicker">Your account</div>
+        <div id="acct-tier"></div>
+        <div id="acct-tokens"></div>
       </div>
       <div id="signed-in" class="hidden">
         <div id="other-account" class="msg-warn hidden" role="note"></div>
@@ -134,6 +142,49 @@
     not_mine: 'That gift is not waiting on this account. If you have the code from your gift email, enter it below.'
   };
   function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
+
+  // v3.1.55 -- YOUR ACCOUNT (Ian, 2026-10-12: show the redeemer's current tier and token count, with end
+  // dates, so they know what they have when they decide how to take the gift). READ ONLY: the tier comes
+  // from /api/auth/me, and the balance from /api/tokens/balance, the same call the app header makes. A
+  // missing balance just leaves its line empty. Nothing here decides anything; the server still does.
+  function tierLabel(me, id) {
+    var all = me && me.allTiers; var t = all && id ? all[id] : null;
+    return (t && t.name) || cap(id || 'copper');
+  }
+  function describeTier(me) {
+    if (me.inFreeTrial) {
+      var tr = 'Free Trial';
+      if (me.trialEndsAt) tr += ', ends ' + fmtDate(me.trialEndsAt);
+      if (me.trialDaysLeft != null) tr += ' (' + me.trialDaysLeft + (me.trialDaysLeft === 1 ? ' day' : ' days') + ' left)';
+      return tr;
+    }
+    var base = me.accountTier || 'copper';
+    var paid = base === 'silver' || base === 'gold' || base === 'platinum';
+    var live = ['active', 'trialing', 'past_due'].indexOf(me.subscriptionStatus || '') >= 0;
+    var line = tierLabel(me, base);
+    if (paid && me.subPausedUntil) line += ' subscription, paused until ' + fmtDate(me.subPausedUntil);
+    else if (paid && live && me.currentPeriodEnd) line += ' subscription, ' + (me.cancelAtPeriodEnd ? 'ends ' : 'renews ') + fmtDate(me.currentPeriodEnd);
+    if (me.pass && me.pass.expiresAt) {
+      var passLine = tierLabel(me, me.pass.tier) + ' Pass until ' + fmtDate(me.pass.expiresAt);
+      return paid ? (line + '; ' + passLine) : passLine;
+    }
+    return line;
+  }
+  function getJson(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+  // after = true once a gift is redeemed: re-read the account, since the pass or the balance just changed.
+  function loadAccount(after) {
+    if (!state.me) { show('acct', false); return; }
+    Promise.all([after ? getJson('/api/auth/me') : Promise.resolve(state.me), getJson('/api/tokens/balance')]).then(function (res) {
+      var me = (res[0] && res[0].authenticated) ? res[0] : state.me;
+      var b = res[1]; var n = b ? Number(b.total) : NaN;
+      $('acct-kicker').textContent = after ? 'Your account now' : 'Your account';
+      $('acct-tier').textContent = describeTier(me);
+      $('acct-tokens').textContent = isFinite(n) ? (n.toLocaleString() + (n === 1 ? ' token' : ' tokens')) : '';
+      show('acct', true);
+    });
+  }
 
   function check() {
     error('');
@@ -205,6 +256,7 @@
       if (state.me) {
         $('who').textContent = 'It will be added to the account you are signed in to: ' + (state.me.email || 'this account') + '.';
         show('signed-in', true); show('signed-out', false);
+        loadAccount(false);
       } else {
         $('login-link').href = '/login?returnTo=' + encodeURIComponent(back);
         $('signup-link').href = '/login?signup&returnTo=' + encodeURIComponent(back);
@@ -237,6 +289,8 @@
       if (r.tokens > 0) lines.push(r.tokens + ' tokens added to your balance.');
       var d = $('done'); d.textContent = lines.join(' ') || 'Your gift has been added.';
       show('done', true); show('found', false);
+      // v3.1.55 -- the account box leaves the gift panel (now hidden) and sits under the result, refreshed.
+      $('done').parentNode.insertBefore($('acct'), $('done').nextSibling); loadAccount(true);
       $('subtitle').textContent = 'Enjoy your gift.';
       $('app-link').textContent = 'Open Campaignia';
     }).catch(function () { all.forEach(function (b) { b.disabled = false; }); btn.textContent = label; error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
