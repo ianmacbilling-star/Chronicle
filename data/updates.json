@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.61",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3161-help-pass-vs-subscription",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant now knows whether your Platinum comes from a subscription or a pass, so it no longer tells a pass holder that a gift can only be taken as tokens.",
+        "detail": "Signed in on an account that is Platinum through a pass (no Platinum subscription), ask: Why can I not take my gift as a pass? or Can I take my gift as Platinum months? It should say you get both choices and the months are added after your pass. On a Platinum subscriber it should still say tokens only. Also ask: Am I on a subscription or a pass? and When does my pass end?",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.60",
     "staged_on": "2026-10-12",
     "entries": [

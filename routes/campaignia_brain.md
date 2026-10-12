@@ -310,7 +310,9 @@ carry no fees.**
   are not charged for it. It **restarts by itself** when the pass ends, and you are back on Silver
   or Gold. **Or** take tokens instead and your subscription is not affected.
 - **Platinum subscription:** you already have everything a pass gives, so the gift is offered **as
-  tokens only**. Your subscription is not affected.
+  tokens only**. Your subscription is not affected. **This is only for a Platinum subscription.** If
+  you are Platinum through a **pass**, you get both choices, and the new months are added after the
+  pass you already hold.
 - **Free Trial:** you can redeem the pass (Platinum starts today, tokens included), but **not**
   take it as tokens, because tokens cannot be added during the Free Trial.
 - **A subscription already set to cancel:** the pass starts when the paid-up period ends.

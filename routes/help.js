@@ -6,7 +6,7 @@ const { getDb, getAppSettingInt } = require('../database/db');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
-const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper, ownTier } = require('../middleware/tiers');
+const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper, ownTier, passIsLive, isOnFreeTrial } = require('../middleware/tiers');   // v3.1.61 -- passIsLive, isOnFreeTrial
 const { listPacks } = require('../services/billing/packs');
 const { sendHelpTranscriptEmail } = require('./email');
 
@@ -147,7 +147,7 @@ router.post('/ask', requireAuth, async function(req, res) {
               utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, email, tier, pass_tier, pass_expires_at, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, email, tier, pass_tier, pass_expires_at, subscription_status, cancel_at_period_end, sub_paused_until, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.email = u.email || null;
@@ -156,7 +156,16 @@ router.post('/ask', requireAuth, async function(req, res) {
       // Copper, confidently, in their own words.
       ctx.tier = (u.tier || u.pass_tier) ? ownTier(u) : 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
-      ctx.in_free_trial = (u.subscription_status === 'trialing');
+      // v3.1.61 -- the same Free Trial test the rest of the app uses (a live pass or a subscription wins),
+      // not the billing status: an account with a pass whose status still read 'trialing' was told it was
+      // on the trial while holding Platinum.
+      ctx.in_free_trial = isOnFreeTrial(u);
+      // v3.1.61 -- WHAT THE PLAN IS MADE OF. Told only 'platinum', the assistant told a pass holder that a
+      // gifted pass could only be taken as tokens -- the rule for a Platinum SUBSCRIPTION (bots, 2026-10-12).
+      ctx.account_tier = u.tier || null;
+      ctx.cancel_at_period_end = u.cancel_at_period_end === true;
+      ctx.paused_until = (u.sub_paused_until && new Date(u.sub_paused_until).getTime() > Date.now()) ? new Date(u.sub_paused_until).toISOString().slice(0, 10) : null;
+      ctx.pass = passIsLive(u) ? { tier: u.pass_tier, until: new Date(u.pass_expires_at).toISOString().slice(0, 10) } : null;
       ctx.vocab = u.vocab || 'ttrpg';
       ctx.trial_started_at = u.trial_started_at || null;
       ctx.current_period_end = u.current_period_end || null;
@@ -260,10 +269,20 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   // v3.0.859 -- the role preamble moved to SYSTEM_CACHED at module scope. Every
   // line left in here is per-user or per-turn and must stay OUT of the cached block.
+  // v3.1.61 -- the plan in three parts: what they can use now, the subscription behind it, and any pass.
+  // A Platinum pass holder and a Platinum subscriber look the same in 'Plan/tier' and are treated
+  // differently by gifts, renewals and passes, so the assistant is told which one it is talking to.
+  const _paidAccount = ['silver', 'gold', 'platinum'].indexOf(ctx.account_tier) >= 0;
+  const subLine = !_paidAccount ? ('none (account tier: ' + (ctx.account_tier || 'unknown') + ')')
+    : (ctx.account_tier + ' subscription, status ' + ctx.subscription_status +
+       (ctx.paused_until ? ', billing paused until ' + ctx.paused_until : (ctx.cancel_at_period_end ? ', set to cancel at the end of the billing period' : '')));
+  const passLine = ctx.pass ? (ctx.pass.tier + ' pass until ' + ctx.pass.until + ' (a pass, NOT a subscription)') : 'none';
   const header = [
     'WHO YOU ARE HELPING (these live values are authoritative -- use them for any tier/token/billing answer):',
     '- Name: ' + ctx.name,
-    '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
+    '- Plan/tier (what they can use right now): ' + ctx.tier + (ctx.in_free_trial ? ' (on the Free Trial)' : ''),
+    '- Subscription: ' + subLine,
+    '- Pass: ' + passLine,
     '- Tokens: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total',
     '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : ''),
     '- This user calls campaigns "' + vocabCampaign + '" and sessions "' + vocabSession + '" -- use those words regardless of how the Brain phrases them.',
