@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.80",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3180-no-convert",
+        "kind": "change",
+        "public": false,
+        "summary": "The Convert to questions button is gone from the custom art style builder; an older style is brought onto the questions with Analyze style.",
+        "detail": "Open a style made before the questions: no Convert button; the note says to click Analyze style. Analyze it: the answers and three descriptions appear, and the style keeps drawing as before until you pick a winner and save. Ask the help assistant about older styles: it should say Analyze, not Convert.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.79",
     "staged_on": "2026-10-13",
     "entries": [

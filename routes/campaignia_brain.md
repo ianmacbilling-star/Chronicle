@@ -1727,7 +1727,7 @@ under **Campaign Styles (SM)**, while you stay on Platinum.
 
 **Closing the builder:** if you close it with changes that are not saved, it asks: **Save**,
 **Don't save** (the style stays as it was last saved), or **Keep editing**. Analyze, each
-preview picture, Use this one and Convert to questions save by themselves.
+preview picture and Use this one save by themselves.
 
 **Getting it right:** the words decide the picture almost word for word, so fix the
 answer behind what looks wrong, then Rewrite. Too much going on behind the figures:
@@ -1737,17 +1737,16 @@ drawn the wrong way: **Characters: faces, eyes and bodies**. **Soft / faded edge
 filling the frame; Analyze sets it from the Edges answer and you can change it.
 
 **Styles made before the questions** keep working exactly as they were. Opening one
-shows its description and a **Convert to questions (free)** button: it fills in the 18
-answers from your description and saved samples, keeps your description as **Faithful**,
-and writes **Bolder** and **Softer** beside it. Nothing in your books changes until you
-pick a winner and save.
+shows its description. To get the 18 answers and the three descriptions, click **Analyze
+style** (1 token); it reads the style's saved reference pictures. Nothing in your books
+changes until you pick a winner and save.
 
 **Not yet:** a style cannot yet draw a picture as a comic page of several panels, or add
 speech bubbles. Each story picture is one image.
 
 Notes: creating a style requires a **true Platinum subscription** (inheriting Platinum
 from a Story Master lets you *use* styles, not *build* them). **Analyze and each preview
-picture cost a token. Rewrite and Convert to questions are free**, up to 20 a day. If you
+picture cost a token. Rewrite is free**, up to 20 a day. If you
 later drop from Platinum, your existing styles stay usable — you just can't make new ones.
 
 ---
