@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.70",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3170-style-preview-people",
+        "kind": "fix",
+        "public": false,
+        "summary": "Style previews draw their people in the style's own way again: no more weathered, realistic faces in an anime style.",
+        "detail": "Generate a Close up in an anime style: one man in his thirties, no hood, dark hair showing, a dramatic startled expression, drawn with the style's own faces and eyes. The Group's four people should look like the style too. Faithful, Bolder and Softer should still show much the same people.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.69",
     "staged_on": "2026-10-13",
     "entries": [

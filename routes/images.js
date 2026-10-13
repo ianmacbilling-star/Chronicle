@@ -2404,9 +2404,13 @@ const STYLE_PREVIEW_SCENES = {
   // v3.1.68 -- Ian: the close up should have ONE person, about 15% tighter; and the people varied too much
   // between previews, so each is described precisely (a specific description holds steadier than "four
   // companions"). No reference pictures: they pull the drawing toward their own style.
-  closeup:  { shape: 'square', prompt: 'A close head-and-shoulders portrait of one person only: a weathered traveller in his fifties with a short grey beard, a thin scar through his left eyebrow, and a dark green hooded cloak, sitting alone at a small table and looking down in thought, lit by a single lamp. No one else is in the picture.' },
+  // v3.1.70 -- Ian: v3.1.68's "weathered... in his fifties... scar... stocky bald... older" asked for realistic,
+  // lined faces and beat the style (Anime Fantasy lost its anime faces). People are described only by things
+  // that do not decide how a face is drawn -- hair, clothes, what they are doing -- and the close up is a man in
+  // his thirties with no hood, so his hair shows, and a dramatic expression (Ian).
+  closeup:  { shape: 'square', prompt: 'A close head-and-shoulders portrait of one person only: a man in his thirties with tousled shoulder-length dark brown hair and a deep green travelling coat, sitting alone at a small table lit by a single lamp, with a dramatic expression: eyes wide, brow tight, lips parted, as if he has just heard something terrible. No hood, no hat. No one else is in the picture.' },
   outdoors: { shape: 'wide',   prompt: 'A small caravan of three covered wagons crosses a wide valley toward a walled town on a far hill, under a vast evening sky.' },
-  group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map: a tall woman with short red hair in a leather coat, a stocky bald man with a braided black beard, a slim young man with long silver hair in a blue robe, and an older woman with grey curls and round spectacles.' }
+  group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map: a woman with short red hair in a leather coat, a man with a braided black beard in a brown jerkin, a young man with long silver hair in a blue robe, and a woman with grey curls and round spectacles.' }
 };
 
 // POST /api/images/custom-style-preview -- render ONE sample panel in a (possibly
@@ -2429,7 +2433,8 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to preview a style.' });
     }
     const _scene = (req.body && typeof req.body.scene === 'string' && Object.prototype.hasOwnProperty.call(STYLE_PREVIEW_SCENES, req.body.scene)) ? STYLE_PREVIEW_SCENES[req.body.scene] : null;   // v3.1.66
-    const SAMPLE_PROMPT = _scene ? _scene.prompt : 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
+    // v3.1.70 -- the style decides how people look (big anime eyes, ink-carved faces), never the scene text.
+    const SAMPLE_PROMPT = _scene ? (_scene.prompt + ' Draw every face, eye and body entirely in the required art style\'s own way; nothing in this description changes how people are drawn.') : 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
     // v3.1.68 -- the screen sends one seed per scene so the three descriptions start from the same picture
     // and differ in style, not in who is in it. Anything else gets a random seed, as before.
     const _askSeed = (_scene && req.body) ? Number(req.body.seed) : NaN;
