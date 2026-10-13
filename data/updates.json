@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.66",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3166-style-questions-engine",
+        "kind": "change",
+        "public": false,
+        "summary": "Behind the scenes: Analyze now answers 18 questions about how your samples are drawn and writes three descriptions from them. The screen to use them comes next.",
+        "detail": "On the current Custom Art Style screen: Analyze a style. The description that appears is the first of three now written from the 18 answers; it should name the background, where the detail goes, the finish, faces and figures and the energy, and state outright what the style does not have (no outlines, no glows). Existing styles and every book draw exactly as before. Preview still draws the old knight scene on this screen; the three new scenes arrive with the new screen.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.65",
     "staged_on": "2026-10-13",
     "entries": [
