@@ -252,6 +252,13 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 
 ## 4a. Gifts — giving Campaignia, and redeeming a gift
 
+**Before answering any gift question, read the person's account details first** (Plan/tier,
+Subscription and Pass). Say they are on the Free Trial only if their plan says so. Say they have a
+Platinum subscription only if their Subscription line says platinum. **A Platinum pass is not a
+Platinum subscription.** If a question assumes something that is not true for them (for example
+"why can't I take my gift as tokens?" from someone who can), say what their account actually shows
+and what the Redeem page will offer them.
+
 You can give Campaignia to someone else as a present: **months of Platinum** (a Platinum Pass,
 which comes with tokens) or **a pack of tokens**. A gift costs the same as buying the same thing
 for yourself, and the Gift page shows the current choices and prices. **Gifts never expire and
@@ -1966,11 +1973,17 @@ Friction points and what's actually going on.
 - **"My gift says it has already been redeemed."** Someone has used the code. A gift can only be
   redeemed once, and the page never says which account used it. If you did not redeem it, contact
   support.
-- **"I can't take my gift as tokens."** Tokens cannot be added during the **Free Trial**, so on the
-  trial the tokens option is not offered for a pass, and a token-pack gift has to wait until you
-  choose a plan. The gift never expires, so nothing is lost by waiting.
-- **"I'm a Platinum subscriber and I can only take tokens."** That is intended: a pass would give
-  you nothing you do not already have, so the gift is offered as tokens instead.
+- **"I can't take my gift as tokens" / "Why can't I take my gift as tokens?"** It depends on the
+  account, so check theirs first. **On the Free Trial** tokens cannot be added, so a pass gift is
+  offered as the pass only, and a token-pack gift waits until a plan is chosen (it never expires).
+  **On any other account** (Copper, Silver, Gold, or Platinum through a pass) the Redeem page offers
+  **Take tokens instead** next to the pass. **With a Platinum subscription** it offers only the tokens.
+  If they do not see the option they expect, check they are signed in to the account they mean to
+  use, and that the gift is a pass: a token-pack gift is already tokens.
+- **"I'm a Platinum subscriber and I can only take tokens."** Only for someone whose account shows
+  a Platinum **subscription**: a pass would give them nothing they do not already have, so the gift is
+  offered as tokens instead. Someone who is Platinum through a **pass** is not a Platinum subscriber
+  and gets both choices.
 - **"Will a gifted pass cancel my subscription?"** No. A Silver or Gold subscription is **paused**
   while the pass runs and restarts by itself afterwards; a Platinum subscription is not touched at
   all.

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.63",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3163-help-gift-answers-by-account",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant answers gift questions from your actual account, instead of assuming you are on the Free Trial or have a Platinum subscription.",
+        "detail": "Ask exactly: Why can't I take my gift as tokens? On an account that is Platinum through a pass (with or without a Silver/Gold subscription) it should say you can: the Redeem page offers Take tokens instead next to the pass. On a real Free Trial account it should say tokens cannot be added on the trial. On a Platinum subscriber it should say the gift is offered as tokens only. It must never call a pass holder a Platinum subscriber or say a paying account is on the Free Trial.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.62",
     "staged_on": "2026-10-13",
     "entries": [
