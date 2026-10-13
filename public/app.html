@@ -3229,6 +3229,8 @@
 #cstyle-modal .cs-refs .slot-preview{pointer-events:none;}
 #cstyle-modal .cs-refs .image-slot:has(.slot-preview:not(.hidden)){cursor:zoom-in;}
 #cstyle-modal .cs-refs > div:has(.slot-preview.hidden) .cs-replace{display:none;}
+/* v3.1.78 -- Ian: Remove sat a pixel or two off Replace (the two symbols are different heights). Same height, tops aligned. */
+#cstyle-modal .cs-refs .cs-replace,#cstyle-modal .cs-refs [id^="clear-cstyle_"]{vertical-align:top;height:26px;line-height:1;box-sizing:border-box;}
 .cs-section{margin-top:18px;position:relative;}
 .cs-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
 .cs-section-title{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}

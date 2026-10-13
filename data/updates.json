@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.78",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3178-style-ref-buttons",
+        "kind": "change",
+        "public": false,
+        "summary": "Replace and Remove under each reference image in the style builder now line up.",
+        "detail": "Open the style builder with reference pictures in place: Replace and Remove under each one are the same height, tops level.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.77",
     "staged_on": "2026-10-13",
     "entries": [
