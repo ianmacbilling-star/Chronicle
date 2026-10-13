@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.76",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3176-style-close-asks",
+        "kind": "change",
+        "public": false,
+        "summary": "Closing the custom art style builder with unsaved changes now asks: Save, Don't save, or Keep editing.",
+        "detail": "Open a saved style, change an answer or a description (or click Rewrite), then close with the x: it asks. Keep editing leaves everything as it was on screen; Don't save closes and reopening shows the style as last saved; Save saves and closes. Open a style and close it without changing anything: it closes without asking. Generate a preview, then close: it does not ask (previews save themselves).",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.75",
     "staged_on": "2026-10-13",
     "entries": [

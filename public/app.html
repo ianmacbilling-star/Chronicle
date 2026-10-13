@@ -3398,6 +3398,21 @@
     </div>
   </div>
 </div>
+<!-- v3.1.76 -- Ian: closing the style builder with unsaved changes asks first (Save / Don't save / Keep editing). -->
+<div class="modal-overlay hidden" id="cs-close-modal" style="z-index:130;" onclick="if(event.target===this)cstyleCloseKeep()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Save your changes?</div>
+      <button class="modal-close" onclick="cstyleCloseKeep()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:14px;">This style has changes that are not saved yet. If you don't save, they are lost and the style stays as it was last saved.</p>
+    <div class="modal-footer">
+      <button class="btn" id="cs-close-keep" onclick="cstyleCloseKeep()">Keep editing</button>
+      <button class="btn" id="cs-close-discard" onclick="cstyleCloseDiscard()">Don't save</button>
+      <button class="btn btn-primary" id="cs-close-save" onclick="cstyleCloseSave()">Save</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay hidden" id="style-picker-modal">
   <div class="modal archive-picker" style="max-width:680px;">

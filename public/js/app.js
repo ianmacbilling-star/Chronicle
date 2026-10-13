@@ -5442,10 +5442,46 @@ function openCustomStyles() {
     return;
   }
   resetCustomStyleForm();
+  cstyleMarkSaved();   // v3.1.76
   var m = document.getElementById('cstyle-modal');
   if (m) m.classList.remove('hidden');
 }
+// v3.1.76 -- Ian: "Does it save even if I close using the x on the art styling modal?" It did not: only
+// Analyze, a preview picture, Use this one and Convert saved by themselves. Now closing (the x or Close)
+// with unsaved changes asks: Save / Don't save / Keep editing (Ian chose asking over saving silently, so
+// Don't save is a way back from a Rewrite he didn't like). "Changes" means what Save sends: the name, the
+// soft-edges box, the answers, the descriptions (text, hand-edited, pictures) and the winner. Reference
+// pictures are not counted -- Save does not send new ones; they go up with Analyze. A new style with no
+// description yet has nothing Save could keep, so it closes without asking.
+// Named cstyle*, not cs*: app.js already has a csDirty (further down, another screen's), and the later
+// declaration of a name wins.
+function cstyleSnap() {
+  var ans = {};
+  Object.keys(CS.answers || {}).forEach(function (k) { ans[k] = String(CS.answers[k] || ''); });
+  (CS.questions || []).forEach(function (q) { var el = document.getElementById('cs-ans-' + q.key); if (el) ans[q.key] = String(el.value || ''); });
+  var keys = Object.keys(ans).filter(function (k) { return ans[k] !== ''; }).sort();
+  return JSON.stringify({
+    name: String((document.getElementById('cstyle-name') || {}).value || '').trim(),
+    fade: !!((document.getElementById('cstyle-fade') || {}).checked),
+    answers: keys.map(function (k) { return [k, ans[k]]; }),
+    options: (CS.options || []).map(function (o) { return [String(o.text || '').trim(), !!o.edited, o.previews || {}]; }),
+    winner: (CS.winner === null || CS.winner === undefined) ? null : CS.winner
+  });
+}
+function cstyleMarkSaved(snap) { CS.saved = (snap === undefined) ? cstyleSnap() : snap; }
+function cstyleDirty() {
+  var hasText = (CS.options || []).some(function (o) { return String(o.text || '').trim(); });
+  if (!hasText && !(document.getElementById('cstyle-edit-id') || {}).value) return false;
+  return cstyleSnap() !== CS.saved;
+}
+function cstyleCloseKeep() { var m = document.getElementById('cs-close-modal'); if (m) m.classList.add('hidden'); }
+function cstyleCloseDiscard() { cstyleCloseKeep(); cstyleCloseNow(); }
+function cstyleCloseSave() { cstyleCloseKeep(); saveCustomStyle(); }
 function closeCustomStyles() {
+  if (cstyleDirty()) { var p = document.getElementById('cs-close-modal'); if (p) { p.classList.remove('hidden'); return; } }
+  cstyleCloseNow();
+}
+function cstyleCloseNow() {
   var m = document.getElementById('cstyle-modal');
   if (m) m.classList.add('hidden');
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ slotFiles[k] = null; slotFiles[k + '_clear'] = false; });
@@ -5853,11 +5889,13 @@ function saveCustomStyle(opts) {
   var url = editId ? ('/api/art-styles/custom/' + editId) : '/api/art-styles/custom';
   var method = editId ? 'PUT' : 'POST';
   var body = { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples, answers: CS.answers, options: options, winner: w };
+  var _snapAtSend = cstyleSnap();   // v3.1.76: what this save keeps; edits made while it is on its way stay unsaved
   fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data.error) { cstyleSaveErr(data.message || data.error); return; }
       if (!editId && data && data.id && editEl) { editEl.value = data.id; var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style'; }
+      cstyleMarkSaved(_snapAtSend);   // v3.1.76
       if (!keepOpen) closeCustomStyles();
       loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
     })
@@ -5898,6 +5936,7 @@ function editCustomStyle(id) {
     CS.winner = 0;
   }
   CS.legacy = !csHasAnswers();   // no answers yet: offer Convert to questions
+  cstyleMarkSaved();   // v3.1.76: as opened is as saved
   csLoadQuestions(csRender);
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
