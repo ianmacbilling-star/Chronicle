@@ -1,5 +1,32 @@
 [
   {
+    "version": "3.1.65",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3165-title-picture-text",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story text written beside a session's title picture now ends up in the Opening instead of being lost.",
+        "detail": "Already Written: generate a session that has a title picture. Every sentence of the story must appear, in order, with the first ones in the Opening (bots: rerun the 18-sentence Alpha to Romeo test). Any other style: regenerate a session that has a title picture. The Opening should set up the situation and lead into the story without describing the title picture, and nothing should be missing between the Opening and the first picture after it. Books are untouched until their narrative is generated again.",
+        "td": [
+          "TD-941",
+          "TD-946"
+        ]
+      },
+      {
+        "id": "3165-written-no-narrator",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Narrative button no longer names a narrator for Already Written.",
+        "detail": "On a version set to In first person with a narrator, switch the narrative style to Already Written. The Narrative button on the Storyboard, Review and Story tabs should read Narrative: Already Written, with no narrator. Switch back to another style: the narrator shows again.",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.64",
     "staged_on": "2026-10-13",
     "entries": [

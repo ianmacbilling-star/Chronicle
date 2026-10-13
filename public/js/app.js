@@ -5189,7 +5189,8 @@ function refreshNarrStyleButtons() {
   // (Erin Bot: on Calm & Literal the window could not tell you). Falls back to "First person".
   // v3.1.32 -- 'anon' reads "First person"; on Calm & Literal (always first person) it adds nothing.
   var _anon = state.narrativeNarrator === 'anon';
-  var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
+  // v3.1.65 -- TD-941. Already Written is the author's own words: no narrator, so the button names none.
+  var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && id !== 'written' && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
   ['review-narr-style-btn', 'sb-narr-style-btn', 'story-narr-style-btn'].forEach(function(bid) {   // v3.1.51 -- and the Story tab
     var b = document.getElementById(bid);
     if (b) b.textContent = label;

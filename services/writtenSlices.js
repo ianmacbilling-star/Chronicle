@@ -77,9 +77,10 @@ function numberedText(units) {
 // The intro always starts at unit 1. Any start that is missing, not a whole number, out of range
 // or earlier than the block before it is treated as "the same as the block before" -- i.e. that
 // block is empty and its text stays with the previous one. Nothing is ever lost or doubled.
-// Returns { intro, sections: [{ panel_index, before, after }], outro, fixed } where `fixed` counts
-// the starts that had to be corrected (for the log).
-function buildBlocks(text, units, parsed, nMoments) {
+// Returns { intro, sections: [{ panel_index, before, after }], outro, fixed, folded } where `fixed` counts
+// the starts that had to be corrected and `folded` the hidden panels whose text moved (both for the log).
+// `hidden` (v3.1.65) is one true/false per panel: true for a panel that never shows text of its own.
+function buildBlocks(text, units, parsed, nMoments, hidden) {
   const s = String(text == null ? '' : text);
   const n = units.length;
   const END = n + 1;
@@ -104,13 +105,27 @@ function buildBlocks(text, units, parsed, nMoments) {
   const starts = val.slice();
   let next = END;
   for (let k = starts.length - 1; k >= 0; k--) { if (starts[k] === null) starts[k] = next; else next = starts[k]; }
+  // v3.1.65 -- TD-941. Pass 3: a HIDDEN panel -- the session's title picture -- never shows text of its own.
+  // The Storyboard, the book and the print file all skip its two blocks, so sentences cut there were saved
+  // and never read (the bots' opening sentences vanished this way). Its blocks take the start of the block
+  // after them: both come out empty and their sentences stay with the block before -- the intro, for a
+  // title picture at the top -- word for word and in order. Back to front, so hidden panels in a row all
+  // fold into the same visible block.
+  let folded = 0;
+  for (let p = nMoments - 1; p >= 0; p--) {
+    if (!(hidden && hidden[p])) continue;
+    const nxt = starts[3 + 2 * p];
+    if (starts[1 + 2 * p] !== nxt) folded++;
+    starts[1 + 2 * p] = nxt;
+    starts[2 + 2 * p] = nxt;
+  }
   function offsetOf(unitNo) { return (unitNo >= END || !n) ? s.length : units[unitNo - 1].start; }
   function block(k) {
     const a = offsetOf(starts[k]);
     const b = (k + 1 < starts.length) ? offsetOf(starts[k + 1]) : s.length;
     return s.slice(a, b).trim();
   }
-  const out = { intro: block(0), sections: [], outro: block(starts.length - 1), fixed: fixed };
+  const out = { intro: block(0), sections: [], outro: block(starts.length - 1), fixed: fixed, folded: folded };
   for (let p = 0; p < nMoments; p++) {
     out.sections.push({ panel_index: p, before: block(1 + 2 * p), after: block(2 + 2 * p) });
   }
