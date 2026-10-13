@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.79",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3179-style-help",
+        "kind": "change",
+        "public": false,
+        "summary": "The custom art style builder has its own ?s help button, with a few tips and six ready-made questions you can click.",
+        "detail": "Open the style builder and click ?s beside the x. Help opens over the builder with tips for custom styles and six common questions above the box you type in. Click one: it is asked and answered as if typed, and the questions stay for another. Close help and open it from the main ?s: no questions shown.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.78",
     "staged_on": "2026-10-13",
     "entries": [
