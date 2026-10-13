@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaignia &mdash; Redeem a Gift</title>
+<meta name="description" content="Redeem a Campaignia gift." />
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+<link rel="stylesheet" href="/css/fonts.css">
+<link rel="stylesheet" href="/css/style.css">
+<!-- v3.1.43 -- TD-934. THE GIFT REDEMPTION PAGE. Spec: claude/GIFT_CERTIFICATES_SPEC.md section 4.
+     Every rule is the server's: this page asks /api/gifts/status, /lookup and /redeem and says what
+     they answer. Nothing here decides whether a gift is valid. -->
+<style>
+  body { margin: 0; }
+  .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    background: #0a0806; background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; position: relative; }
+  .auth-page::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.65); }
+  .auth-box { position: relative; z-index: 1; background: rgba(20,15,8,0.92); border: 1px solid rgba(201,168,76,0.25); border-radius: 16px;
+    padding: 32px; width: 100%; max-width: 440px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: #e8d5a3; }
+  .auth-logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 22px; gap: 10px; }
+  .auth-logo-img { height: 72px; width: auto; max-width: 80%; }
+  .auth-title { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; text-align: center; letter-spacing: 1px; margin-bottom: 6px; }
+  .auth-subtitle { font-size: 13px; color: rgba(201,168,76,0.6); text-align: center; margin-bottom: 20px; line-height: 1.5; }
+  .auth-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 0 0 20px; }
+  .auth-box .form-label { color: #e8d5a3; } /* v3.1.54 -- brighter, as on the Gift page */
+  .auth-box .form-input { background: rgba(255,255,255,0.05); border-color: rgba(201,168,76,0.2); color: #e8d5a3; width: 100%; box-sizing: border-box;
+    font-family: 'Courier New', monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .auth-box .btn-primary { background: #c9a84c; color: #1a0e06; border-color: #c9a84c; font-family: 'Cinzel', Georgia, serif; letter-spacing: 1px;
+    font-size: 13px; width: 100%; justify-content: center; padding: 12px; margin-top: 8px; }
+  .auth-box .btn-primary:hover { background: #e8c870; }
+  .auth-box .btn-primary[disabled] { opacity: 0.6; cursor: default; }
+  /* v3.1.45 -- choice labels can be long on a phone: wrap rather than clip. */
+  .auth-box .btn { white-space: normal; line-height: 1.35; text-align: center; }
+  .gift-card { border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(201,168,76,0.06); }
+  .gift-from { font-size: 13px; color: rgba(201,168,76,0.7); margin-bottom: 4px; }
+  .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
+  /* v3.1.55 -- what they already have, so they choose between the pass and the tokens knowing it. */
+  .acct { border: 1px solid rgba(201,168,76,0.18); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #e8d5a3; }
+  /* v3.1.56 -- small print on each choice: what they would have after it. Ordinary type, not the capitals. */
+  #redeem-btn, #convert-btn { flex-direction: column; gap: 2px; }
+  .auth-box .btn .btn-sub { display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 400;
+    letter-spacing: 0; text-transform: none; font-variant: normal; opacity: 0.85; }
+  .acct-kicker { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(201,168,76,0.75); margin-bottom: 2px; }
+  .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
+  .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-warn { background: rgba(201,140,40,0.14); border: 1px solid rgba(230,170,70,0.55); color: #f3d9a4; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; line-height: 1.6; }
+  .links { text-align: center; margin-top: 14px; font-size: 13px; color: rgba(201,168,76,0.6); }
+  .links a { color: #c9a84c; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo-wrap">
+      <img class="auth-logo-img" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
+    </div>
+    <div class="auth-title">Redeem a Gift</div>
+    <div class="auth-subtitle" id="subtitle">Enter the code from your gift email.</div>
+    <div class="auth-divider"></div>
+
+    <div id="error" class="msg-error hidden" role="alert"></div>
+    <div id="done" class="msg-ok hidden" role="status"></div>
+
+    <div id="off" class="hidden"><p class="note" style="text-align:center;">Gifts are not available right now. Your gift never expires, so please try this link again later.</p></div>
+
+    <div id="enter">
+      <label class="form-label" for="code">Gift code</label>
+      <input class="form-input" id="code" maxlength="30" placeholder="GIFT-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" />
+      <button class="btn btn-primary" id="check-btn" type="button">Check code</button>
+    </div>
+
+    <div id="found" class="hidden">
+      <div class="gift-card">
+        <div class="gift-from" id="gift-from"></div>
+        <div class="gift-what" id="gift-what"></div>
+      </div>
+      <div id="acct" class="acct hidden" aria-live="polite">
+        <div class="acct-kicker" id="acct-kicker">Currently, your account</div>
+        <div id="acct-tier"></div>
+        <div id="acct-tokens"></div>
+      </div>
+      <div id="signed-in" class="hidden">
+        <div id="other-account" class="msg-warn hidden" role="note"></div>
+        <button class="btn btn-primary" id="redeem-btn" type="button">Redeem</button>
+        <div id="convert-wrap" class="hidden">
+          <button class="btn btn-primary" id="convert-btn" type="button" style="background:transparent;color:#c9a84c;"></button>
+          <p class="note" id="convert-note"></p>
+        </div>
+        <p class="note" id="who"></p>
+      </div>
+      <div id="signed-out" class="hidden">
+        <p class="note" style="margin-top:0;">To use your gift, sign in or create a free Campaignia account.</p>
+        <a class="btn btn-primary" id="login-link" href="/login">Sign in</a>
+        <a class="btn btn-primary" id="signup-link" href="/login?signup" style="background:transparent;color:#c9a84c;">Create a free account</a>
+        <p class="note">New here? After you confirm your email address, come back to the link in your gift email to redeem it. Your gift never expires.</p>
+      </div>
+    </div>
+
+    <div class="links" id="app-link-wrap"><a href="/app.html" id="app-link">Open Campaignia</a></div>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { me: null, code: '', giftId: null };
+  function show(id, on) { var el = $(id); if (el) el.classList.toggle('hidden', !on); }
+  // v3.1.54 -- BACK GOES WHERE YOU CAME FROM (Ian, 2026-10-01: "the back should always take them back to where
+  // they were prior"). Signed in: the app. Signed out: the landing page they came from, / or /story, taken from
+  // ?from= or the referrer and remembered for this tab, so it survives a Stripe checkout or a sign-in and back.
+  // Nothing known (a link from an email): the game landing page.
+  function backTarget(signedIn) {
+    if (signedIn) return '/app.html';
+    var ok = { '/': '/', '/index.html': '/', '/story': '/story' };
+    var from = '';
+    try { from = new URLSearchParams(window.location.search).get('from') || ''; } catch (e) {}
+    if (!ok[from]) {
+      try {
+        var r = document.referrer ? new URL(document.referrer) : null;
+        var rp = r ? (r.pathname.replace(/\/+$/, '') || '/') : '';
+        if (r && r.origin === window.location.origin && ok[rp]) from = rp;
+      } catch (e) {}
+    }
+    try { if (ok[from]) sessionStorage.setItem('cg_back', ok[from]); else from = sessionStorage.getItem('cg_back') || ''; } catch (e) {}
+    return ok[from] || '/';
+  }
+  $('app-link').href = backTarget(false);
+  function error(text) { var e = $('error'); e.textContent = text || ''; show('error', !!text); }
+  function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+  }
+  function fmtDate(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  var REASON = {
+    not_found: 'That code was not recognised. Check it against your gift email. If the gift was sent again, only the newest code works.',
+    redeemed: 'This gift has already been redeemed.',
+    'void': 'This gift has been cancelled and can no longer be redeemed.',
+    needs_plan: 'Tokens cannot be added to a Free Trial account. Choose a plan in Campaignia, then come back to this link. Your gift never expires and will still be here.',
+    cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.',
+    take_tokens: 'You already have Platinum through your subscription, so this pass would add nothing. Take the tokens instead.',
+    not_mine: 'That gift is not waiting on this account. If you have the code from your gift email, enter it below.'
+  };
+  function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
+
+  // v3.1.55 -- YOUR ACCOUNT (Ian, 2026-10-12: show the redeemer's current tier and token count, with end
+  // dates, so they know what they have when they decide how to take the gift). READ ONLY: the tier comes
+  // from /api/auth/me, and the balance from /api/tokens/balance, the same call the app header makes. A
+  // missing balance just leaves its line empty. Nothing here decides anything; the server still does.
+  function tierLabel(me, id) {
+    var all = me && me.allTiers; var t = all && id ? all[id] : null;
+    return (t && t.name) || cap(id || 'copper');
+  }
+  function describeTier(me) {
+    if (me.inFreeTrial) {
+      var tr = 'Free Trial';
+      if (me.trialEndsAt) tr += ', ends ' + fmtDate(me.trialEndsAt);
+      if (me.trialDaysLeft != null) tr += ' (' + me.trialDaysLeft + (me.trialDaysLeft === 1 ? ' day' : ' days') + ' left)';
+      return tr;
+    }
+    var base = me.accountTier || 'copper';
+    var paid = base === 'silver' || base === 'gold' || base === 'platinum';
+    var live = ['active', 'trialing', 'past_due'].indexOf(me.subscriptionStatus || '') >= 0;
+    var line = tierLabel(me, base);
+    if (paid && me.subPausedUntil) line += ' subscription, paused until ' + fmtDate(me.subPausedUntil);
+    else if (paid && live && me.currentPeriodEnd) line += ' subscription, ' + (me.cancelAtPeriodEnd ? 'ends ' : 'renews ') + fmtDate(me.currentPeriodEnd);
+    if (me.pass && me.pass.expiresAt) {
+      var passLine = tierLabel(me, me.pass.tier) + ' Pass until ' + fmtDate(me.pass.expiresAt);
+      return paid ? (line + '; ' + passLine) : passLine;
+    }
+    return line;
+  }
+  function getJson(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+  // after = true once a gift is redeemed: re-read the account, since the pass or the balance just changed.
+  function loadAccount(after) {
+    if (!state.me) { show('acct', false); return; }
+    Promise.all([after ? getJson('/api/auth/me') : Promise.resolve(state.me), getJson('/api/tokens/balance')]).then(function (res) {
+      var me = (res[0] && res[0].authenticated) ? res[0] : state.me;
+      var b = res[1]; var n = b ? Number(b.total) : NaN;
+      $('acct-kicker').textContent = after ? 'Your account now' : 'Currently, your account';   // v3.1.56 wording (Ian)
+      $('acct-tier').textContent = describeTier(me);
+      $('acct-tokens').textContent = isFinite(n) ? (n.toLocaleString() + (n === 1 ? ' token' : ' tokens')) : '';
+      show('acct', true);
+      if (!after) { state.balance = isFinite(n) ? n : null; drawProjections(); }
+    });
+  }
+
+  // v3.1.56 -- SMALL PRINT ON EACH BUTTON: where they would end up (Ian, 2026-10-12: "what they would have
+  // after the redeem, each option"). The pass date is the SERVER'S (runsUntilIfRedeemed, from the same
+  // function redeem() writes with); the token totals are the balance in the box plus what the gift adds.
+  // The Free Trial cannot take tokens (canPurchaseTokens): that choice is switched off only when the server
+  // says no AND the account is on the trial, so an unknown answer switches nothing off.
+  function setSub(btn, text) {
+    var s = btn.querySelector('.btn-sub');
+    if (!text) { if (s) s.parentNode.removeChild(s); return; }
+    if (!s) { s = document.createElement('span'); s.className = 'btn-sub'; btn.appendChild(s); }
+    s.textContent = text;
+  }
+  function tokensAfter(add) {
+    if (state.balance == null) return '';
+    var n = state.balance + (Number(add) || 0);
+    return n.toLocaleString() + (n === 1 ? ' token' : ' tokens');
+  }
+  // v3.1.58 -- ONE ANSWER to: is this the Free Trial, where tokens cannot be added? check() uses it to leave the
+  // tokens choice off the page altogether (Ian, 2026-10-12: "why even show it"), and drawProjections() to switch
+  // off a token-pack gift. True only when the server says no AND the account is on the trial.
+  function trialNoTokens(r) { return !!(r && state.me && r.canTakeTokens === false && state.me.inFreeTrial); }
+  function drawProjections() {
+    var r = state.gift; if (!r || !state.me) return;
+    var rb = $('redeem-btn'), cb = $('convert-btn');
+    var sub = r.subscription || 'none';
+    var noTokens = trialNoTokens(r);
+    var NO_TOKENS = 'Tokens cannot be added during the Free Trial';
+    if (r.kind === 'pass') {
+      var parts = [];
+      if (r.runsUntilIfRedeemed) parts.push('Platinum until ' + fmtDate(r.runsUntilIfRedeemed) + ((sub === 'silver' || sub === 'gold') ? ', then ' + cap(sub) + ' again' : ''));
+      var t = tokensAfter(r.tokens); if (t) parts.push(t);
+      setSub(rb, parts.join(' \u00b7 '));
+      if (!noTokens) { var c = tokensAfter(r.convertTokens); setSub(cb, c ? 'Bringing you to ' + c : ''); }   // on the trial it is not shown
+    } else {
+      if (noTokens) { setSub(rb, NO_TOKENS + '. Choose a plan, then come back; your gift never expires.'); rb.disabled = true; }
+      else { var p = tokensAfter(r.tokens); setSub(rb, p ? 'Bringing you to ' + p : ''); }
+    }
+  }
+
+  function check() {
+    error('');
+    // v3.1.47 -- from the banner (?gift=ID): the gift is named by id, and the server only shows it to the
+    // account whose confirmed email it was sent to. Typing a code switches back to the code.
+    var code = ($('code').value || '').trim();
+    if (code) state.giftId = null;
+    if (!code && !state.giftId) { error('Enter the code from your gift email.'); return; }
+    $('check-btn').disabled = true;
+    post('/api/gifts/lookup', state.giftId ? { giftId: state.giftId } : { code: code }).then(function (r) {
+      $('check-btn').disabled = false;
+      if (r.reason === 'off') { show('enter', false); show('off', true); return; }
+      if (!r.ok && state.giftId) { state.giftId = null; show('enter', true); error(REASON.not_mine); return; }
+      if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
+      if (r.state === 'redeemed') { error(REASON.redeemed); return; }
+      if (r.state === 'void') { error(REASON['void']); return; }
+      state.code = code;
+      state.gift = r;
+      $('gift-from').textContent = r.fromName ? ('A gift from ' + r.fromName) : 'A gift for you';
+      $('gift-what').textContent = r.description.charAt(0).toUpperCase() + r.description.slice(1);
+      show('enter', false); show('found', true);
+      var back = state.giftId ? ('/redeem?gift=' + encodeURIComponent(state.giftId)) : ('/redeem?code=' + encodeURIComponent(code));
+      // v3.1.44 -- THE CHOICE DEPENDS ON THE SUBSCRIPTION (Ian, 2026-10-01). The server decides the
+      // numbers and enforces the rules; this only lays out the buttons and says what each one does.
+      //   platinum      -> tokens only (the pass would add nothing)
+      //   silver / gold -> Platinum from today on top of the subscription, or the tokens
+      //   none          -> the pass as normal, or the tokens
+      var canConvert = (r.kind === 'pass' && r.convertTokens > 0);
+      var sub = r.subscription || 'none';
+      var rb = $('redeem-btn'), cb = $('convert-btn');
+      rb.classList.remove('hidden');
+      cb.style.background = 'transparent'; cb.style.color = '#c9a84c';
+      if (canConvert) {
+        cb.textContent = 'Take ' + r.convertTokens + ' tokens instead';
+        var tokensPart = r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '';
+        if (sub === 'platinum') {
+          rb.classList.add('hidden');
+          cb.textContent = 'Take ' + r.convertTokens + ' tokens';
+          cb.style.background = ''; cb.style.color = '';
+          $('convert-note').textContent = 'You already have Platinum through your subscription, so the pass would add nothing. ' +
+            'Take the tokens instead. Your subscription is not affected.';
+        } else if ((sub === 'silver' || sub === 'gold') && r.subPausedUntil) {
+          // v3.1.45 -- already paused for an earlier pass: this one extends the pause, nothing to choose.
+          rb.textContent = 'Platinum now: ' + r.months + ' more months' + tokensPart;
+          $('convert-note').textContent = 'Your ' + cap(sub) + ' subscription is already paused while your current pass runs. ' +
+            'This pass is added on the end, and ' + cap(sub) + ' stays paused until it finishes, then restarts by itself. ' +
+            'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
+        } else if (sub === 'silver' || sub === 'gold') {
+          // v3.1.45 -- TD-938. Platinum now, and their subscription pauses until the pass ends.
+          rb.textContent = 'Platinum now: ' + r.months + ' months' + tokensPart;
+          $('convert-note').textContent = 'Platinum starts today and runs for ' + r.months + ' months. Your ' + cap(sub) +
+            ' subscription is paused while the pass runs, so you are not charged for it, and it restarts by itself when the pass ends. ' +
+            'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
+        } else {
+          rb.textContent = 'Redeem: ' + r.months + ' months of Platinum' + tokensPart;
+          // v3.1.57 -- first half of this sentence dropped (Ian, 2026-10-12): it made no sense to someone already on a pass.
+          $('convert-note').textContent = 'Choose one; it cannot be changed afterwards.';
+        }
+      }
+      show('convert-wrap', canConvert && !!state.me && !trialNoTokens(r));   // v3.1.58 -- never on the Free Trial
+      // v3.1.44 -- sent to a different address than the one signed in. A warning, never a block.
+      if (state.me && r.sentToOther) {
+        $('other-account').textContent = 'This gift was sent to ' + (r.sentToMasked || 'a different email address') +
+          ', but you are signed in as ' + (state.me.email || 'another account') +
+          '. You can still redeem it here, and it will belong to this account. If you meant another account, sign out and sign in to that one first.';
+        show('other-account', true);
+      } else {
+        show('other-account', false);
+      }
+      if (state.me) {
+        $('who').textContent = 'It will be added to the account you are signed in to: ' + (state.me.email || 'this account') + '.';
+        show('signed-in', true); show('signed-out', false);
+        loadAccount(false);
+      } else {
+        $('login-link').href = '/login?returnTo=' + encodeURIComponent(back);
+        $('signup-link').href = '/login?signup&returnTo=' + encodeURIComponent(back);
+        show('signed-in', false); show('signed-out', true);
+      }
+    }).catch(function () { $('check-btn').disabled = false; error('Could not reach Campaignia. Please try again.'); });
+  }
+
+  function redeem(convert) {
+    error('');
+    var btn = convert ? $('convert-btn') : $('redeem-btn');
+    var all = [$('convert-btn'), $('redeem-btn')];
+    var label = btn.innerHTML;   // v3.1.56 -- the label now carries its small print; keep both
+    all.forEach(function (b) { b.disabled = true; });
+    btn.textContent = 'Redeeming...';
+    var body = state.giftId ? { giftId: state.giftId, convert: !!convert } : { code: state.code, convert: !!convert };
+    post('/api/gifts/redeem', body).then(function (r) {
+      all.forEach(function (b) { b.disabled = false; });
+      btn.innerHTML = label; drawProjections();
+      if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
+      var lines = [];
+      if (r.kind === 'pass' && !r.converted) {
+        lines.push(r.months + ' months of Campaignia Platinum added. It now runs until ' + fmtDate(r.runsUntil) + '.');
+        if (r.subAction === 'pause' && !r.pauseFailed) {
+          lines.push('Your ' + cap(r.subscription) + ' subscription is paused until ' + fmtDate(r.pausedUntil) + ' and restarts by itself.');
+        } else if (r.subAction === 'pause' && r.pauseFailed) {
+          lines.push('We could not pause your ' + cap(r.subscription) + ' subscription automatically. Support has been told and will pause it for you.');
+        }
+      }
+      if (r.tokens > 0) lines.push(r.tokens + ' tokens added to your balance.');
+      var d = $('done'); d.textContent = lines.join(' ') || 'Your gift has been added.';
+      show('done', true); show('found', false);
+      // v3.1.55 -- the account box leaves the gift panel (now hidden) and sits under the result, refreshed.
+      $('done').parentNode.insertBefore($('acct'), $('done').nextSibling); loadAccount(true);
+      $('subtitle').textContent = 'Enjoy your gift.';
+      $('app-link').textContent = 'Open Campaignia';
+    }).catch(function () { all.forEach(function (b) { b.disabled = false; }); btn.innerHTML = label; drawProjections(); error('Could not reach Campaignia. Nothing was redeemed. Please try again.'); });
+  }
+
+  $('check-btn').addEventListener('click', check);
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+  $('redeem-btn').addEventListener('click', function () { redeem(false); });
+  $('convert-btn').addEventListener('click', function () { redeem(true); });
+
+  var pre = '', preGift = '';
+  try { pre = new URLSearchParams(window.location.search).get('code') || ''; } catch (e) {}
+  try { preGift = new URLSearchParams(window.location.search).get('gift') || ''; } catch (e) {}
+  Promise.all([
+    fetch('/api/gifts/status', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { enabled: false }; }),
+    fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return {}; })
+  ]).then(function (res) {
+    state.me = (res[1] && res[1].authenticated) ? res[1] : null;
+    $('app-link').href = backTarget(!!state.me);
+    if (!state.me) $('app-link').textContent = 'Back to Campaignia';
+    if (!res[0] || !res[0].enabled) { show('enter', false); show('off', true); return; }
+    if (pre) { $('code').value = pre; check(); }
+    else if (/^[0-9]{1,12}$/.test(preGift)) {
+      // From the banner. Signed out: sign in first, then come straight back here.
+      if (!state.me) { window.location = '/login?returnTo=' + encodeURIComponent('/redeem?gift=' + preGift); return; }
+      state.giftId = preGift; show('enter', false); $('subtitle').textContent = 'Someone gave you a gift.'; check();
+    }
+  });
+})();
+</script>
+</body>
+</html>

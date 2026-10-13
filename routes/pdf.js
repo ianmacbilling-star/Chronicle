@@ -576,9 +576,14 @@ function portraitMedia(m, kind) {
   return momentImgAspectBox(m, ratio, 'border:1px solid rgba(201,168,76,0.25);border-radius:3px;', '');
 }
 
-function asideText(m, sectionAfter) {
-  var t = sectionAfter || m.description || m.title || '';
-  return buildClassicTextPanel(t);
+// v3.1.49 -- TD-941. THE PICTURE'S DESCRIPTION IS A STAND-IN ONLY WHILE THERE IS NO NARRATIVE AT ALL.
+// m.description is the internal note written for the image model (English bullet points), never prose for
+// a reader. It used to fill in whenever a panel's "after" block was empty -- rare until Already Written,
+// where an empty block is a normal answer (two pictures one after the other in the author's text). Once a
+// narrative exists, an empty block prints as nothing. hasNarr is false only when the book has no sections.
+function asideText(m, sectionAfter, hasNarr) {
+  var t = hasNarr ? (sectionAfter || '') : (sectionAfter || m.description || m.title || '');
+  return t ? buildClassicTextPanel(t) : '';
 }
 
 function asideBlock(mediaHTML, sideHTML, imgLeft) {
@@ -593,7 +598,7 @@ function asideBlock(mediaHTML, sideHTML, imgLeft) {
 function portraitAside(moments, sections, i, kind) {
   var m = moments[i];
   var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-  var side = (section.before ? buildClassicTextPanel(section.before) : '') + asideText(m, section.after);
+  var side = (section.before ? buildClassicTextPanel(section.before) : '') + asideText(m, section.after, sections.length > 0);
   var consumed = 0;
   var nxt = moments[i + 1];
   if (nxt && companionEligible(nxt)) {
@@ -1773,7 +1778,8 @@ function coRow(row, opts) {
 function coPortrait(moments, sections, i, opts) {
   var m = moments[i];
   var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-  var side = (section.before ? coNarr(section.before, opts, false) : '') + coNarr(section.after || m.description || m.title || '', opts, false);
+  // v3.1.49 -- TD-941. The description stands in only when the book has no narrative at all (see asideText).
+  var side = (section.before ? coNarr(section.before, opts, false) : '') + coNarr(section.after || (sections.length ? '' : (m.description || m.title || '')), opts, false);
   var consumed = 0;
   var nxt = moments[i + 1];
   if (opts.companion && nxt && companionEligible(nxt)) {

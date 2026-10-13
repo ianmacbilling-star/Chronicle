@@ -250,6 +250,93 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 
 ---
 
+## 4a. Gifts — giving Campaignia, and redeeming a gift
+
+**Before answering any gift question, read the person's account details first** (Plan/tier,
+Subscription and Pass). Say they are on the Free Trial only if their plan says so. Say they have a
+Platinum subscription only if their Subscription line says platinum. **A Platinum pass is not a
+Platinum subscription.** If a question assumes something that is not true for them (for example
+"why can't I take my gift as tokens?" from someone who can), say what their account actually shows
+and what the Redeem page will offer them.
+
+You can give Campaignia to someone else as a present: **months of Platinum** (a Platinum Pass,
+which comes with tokens) or **a pack of tokens**. A gift costs the same as buying the same thing
+for yourself, and the Gift page shows the current choices and prices. **Gifts never expire and
+carry no fees.**
+
+**GIVING A GIFT**
+
+- **Where:** the **Give Campaignia as a gift** button below Compare the Tiers on the home page and
+  the storyteller page, or the gift link under the passes on your **Account** page. Both go to the
+  **Gift** page.
+- **You do not need an account to buy one.** Signed out, you give your email for the receipt.
+  Signed in, the receipt goes to your account email and your name is filled in for you.
+- **What you fill in:** the gift; their name and email; an optional message (up to 300
+  characters); your name as they will see it; and **when it should arrive**: **now**, or **on a
+  date** you choose, in which case it is emailed at **9am Eastern** that day. Handy for a birthday.
+- **You pay on Stripe's secure checkout.** Promo codes cannot be used on gifts.
+- **What you get:**
+  - **A receipt straight away, with the gift code on it.** Anyone with the code can redeem it, so
+    you can also hand the code over yourself.
+  - **A copy of the code when the gift is delivered** (not sent when you bought it for your own
+    address).
+  - **An email when it is redeemed**, saying when. It never says which account used it.
+- **A limit of three gifts a day** per buyer. A fourth is refused with a message saying to come
+  back tomorrow or contact support.
+- **Nothing tells you whether the person already has a Campaignia account**, by design. The gift
+  works either way: they can make a free account when they redeem it.
+
+**REDEEMING A GIFT**
+
+- **The gift email** has a **Redeem your gift** button and the code printed underneath. You can
+  also go to the **Redeem** page and type the code in.
+- **You need to be signed in.** Signed out, the Redeem page shows what the gift is and offers
+  **Sign in** or **Create a free account**. After a new account confirms its email, come back to
+  the link in the gift email. The gift is still there.
+- **If it was sent to the email address you confirmed on your account**, a **"Someone gave you a
+  gift"** notice appears at the top of Campaignia (on a phone, a small gift icon on the account
+  button and the top line of the account menu). Click it to redeem without typing the code.
+- **The gift goes to whichever account is signed in when you redeem it.** If that is not the
+  address the gift was sent to, the page warns you, but does not stop you. Once redeemed it
+  cannot be moved to another account, so if you meant a different account, sign out and sign in
+  to that one first.
+- **Before you choose, the page shows where you stand and where you would end up:** a **Currently,
+  your account** box (your plan, any pass and its end date, and your token balance), and a line
+  of small print on each button saying what you would have afterwards: the date your Platinum
+  would run to and your new token total, or the token total if you take tokens.
+- **After redeeming,** the page says what was added, and the box shows **Your account now**.
+
+**WHAT A GIFTED PLATINUM PASS DOES, depending on what you have now**
+
+- **No subscription (Copper, or a lapsed pass):** Platinum starts today for the gift's months,
+  plus its tokens. **Or** take tokens instead (see below).
+- **You already hold a pass:** the new months are **added on to the end** of the one you have.
+  They never overlap or replace it.
+- **Silver or Gold subscription:** Platinum starts **today** (or after a pass you already hold),
+  plus the tokens, and your Silver or Gold subscription is **paused** while the pass runs, so you
+  are not charged for it. It **restarts by itself** when the pass ends, and you are back on Silver
+  or Gold. **Or** take tokens instead and your subscription is not affected.
+- **Platinum subscription:** you already have everything a pass gives, so the gift is offered **as
+  tokens only**. Your subscription is not affected. **This is only for a Platinum subscription.** If
+  you are Platinum through a **pass**, you get both choices, and the new months are added after the
+  pass you already hold.
+- **Free Trial:** you can redeem the pass (Platinum starts today, tokens included), but **not**
+  take it as tokens, because tokens cannot be added during the Free Trial.
+- **A subscription already set to cancel:** the pass starts when the paid-up period ends.
+
+**TAKING A PASS AS TOKENS INSTEAD**
+
+Any pass gift can be taken as a lump of tokens rather than months of Platinum, except on the Free
+Trial. The **Take tokens instead** button shows exactly how many. **It is one choice, and it
+cannot be changed afterwards.** The tokens are carry-over tokens: they never expire.
+
+**A GIFTED TOKEN PACK**
+
+The tokens are added to your balance as carry-over tokens. **It cannot be redeemed on the Free
+Trial**: choose a plan first, then come back to the gift email. The gift waits; it never expires.
+
+---
+
 ## 5. The Account page
 
 - **Profile:** your name, email, and an optional **pen name** (your public author
@@ -269,6 +356,10 @@ this flow using the live numbers, and reassure that staying active keeps everyth
   subject, and your message; it reaches support, who can reply directly.
 - **Your orders, your Bookshelf and your published stories are not on this page any
   more.** They live together on **My Stuff** — see 5a.
+- **Give Campaignia as a gift:** a link under the passes opens the Gift page. See §4a.
+- **"Someone gave you a gift":** when a gift has been sent to your account's confirmed email, a
+  notice in the header (on a phone, an icon on the account button and the top line of the menu)
+  takes you straight to it. It disappears once the gift is redeemed.
 
 ## 5a. My Stuff — My Orders, Bookshelf and Published Stories
 
@@ -907,6 +998,24 @@ keeping. Click into each narrative panel and write your own story over them. Low
 how many bullets. Every plan. Replace the bullets before you order: bullets left in are printed
 as one paragraph. Campaignia warns you while any are left — on the session's **Preview** tab and on
 the Publish page's **Prep & Preview** tab, which names the sessions that still have them.
+
+**Already Written** is a narrative style for a story you have **already written yourself**. Put your
+finished story in the **Story / Session Transcript** box, pick Already Written, then run **Generate
+Story** (the pictures are chosen from what your text describes) and **Generate Narrative**.
+Campaignia writes nothing new: it splits **your own words, exactly as you wrote them**, into the
+narrative panels around the pictures — the opening, the text that goes with each picture, the text
+between pictures, and the ending. Cuts always fall between sentences, and every sentence is used
+once, in order. A narrative panel can come out empty when two pictures follow each other in your
+text. **Narrative length** and **In first person** don't apply to it, so they are greyed out. It
+costs the usual Generate Narrative tokens. Every plan. You can still edit any narrative panel by
+hand afterwards; generating again re-splits the text and replaces those edits.
+**Choose it before the first Generate Story:** the **Narrative** and **Art** style buttons are on the
+**Story** tab too, beside Generate Story. **How long:** it works best up to about **3,000 words a
+session** — roughly a chapter (the number on the style card is the current one). It keeps every word,
+so a longer story puts a lot of text between the pictures. The word count under the story box shows
+the limit while Already Written is chosen, and turns amber past it. Past it, Generate Story and
+Generate Narrative ask first: **Continue anyway** or **Go back**. For a book-length story, make one
+session per chapter and paste a part into each.
 
 ### 10.4 Storyboard
 Where the story comes together as alternating image panels and narrative.
@@ -1718,6 +1827,22 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   I'll write it** narrative style, then run **Generate Story** and **Generate Narrative & Images** as
   usual. The pictures are drawn as normal, and every narrative panel arrives as bullet points of what
   happens. Click into each one and write your own prose over them.
+- **"I've already written my story. I just want the pictures, with my words kept exactly."** Paste
+  your story into the **Story / Session Transcript** box and pick the **Already Written** narrative
+  style. Run **Generate Story**, then **Generate Narrative & Images**. Your text is split word for
+  word around the pictures; Campaignia adds nothing to it. See 10.3.
+- **"I want to give Campaignia to someone as a present."** Use **Give Campaignia as a gift**
+  (below Compare the Tiers on the home page, or under the passes on the Account page). Choose
+  months of Platinum or a token pack, enter their name and email, add a message if you like, and
+  choose **now** or **a date** (it arrives at 9am Eastern that day). You do not need an account to
+  buy one. The receipt has the gift code on it in case you would rather hand it over yourself.
+- **"Someone gave me a gift. How do I use it?"** Click **Redeem your gift** in the email (or the
+  **Someone gave you a gift** notice in Campaignia), sign in or create a free account, check the
+  **Currently, your account** box and the small print on each button, then choose. See §4a for
+  what a pass does with your current plan.
+- **"I want to give a gift to myself."** That works: buy it with your own address as the
+  recipient and redeem it. You just get no separate copy of the code, because the receipt already
+  has it.
 
 ---
 
@@ -1839,6 +1964,40 @@ Friction points and what's actually going on.
   have marked a session in it **Ready**; drafts they have not shared stay private.
 - **"Importing a character says I've reached my character limit."** An imported character counts
   like any new one. Remove a character you do not need, or upgrade for more.
+- **"My gift code says it was not recognised."** Check it against the gift email, letter for
+  letter. **If the gift was sent again, only the newest code works**; an older code from an
+  earlier email stops working when a gift is resent. Too many wrong codes in a row and the page
+  asks you to wait 15 minutes.
+- **"My gift says it has been cancelled."** The gift was cancelled, usually because its payment
+  was refunded or disputed. The person who bought it, or support, can say more.
+- **"My gift says it has already been redeemed."** Someone has used the code. A gift can only be
+  redeemed once, and the page never says which account used it. If you did not redeem it, contact
+  support.
+- **"I can't take my gift as tokens" / "Why can't I take my gift as tokens?"** It depends on the
+  account, so check theirs first. **On the Free Trial** tokens cannot be added, so a pass gift is
+  offered as the pass only, and a token-pack gift waits until a plan is chosen (it never expires).
+  **On any other account** (Copper, Silver, Gold, or Platinum through a pass) the Redeem page offers
+  **Take tokens instead** next to the pass. **With a Platinum subscription** it offers only the tokens.
+  If they do not see the option they expect, check they are signed in to the account they mean to
+  use, and that the gift is a pass: a token-pack gift is already tokens.
+- **"I'm a Platinum subscriber and I can only take tokens."** Only for someone whose account shows
+  a Platinum **subscription**: a pass would give them nothing they do not already have, so the gift is
+  offered as tokens instead. Someone who is Platinum through a **pass** is not a Platinum subscriber
+  and gets both choices.
+- **"Will a gifted pass cancel my subscription?"** No. A Silver or Gold subscription is **paused**
+  while the pass runs and restarts by itself afterwards; a Platinum subscription is not touched at
+  all.
+- **"The gift went to the wrong email address," or "they never got it."** Ask them to check their
+  spam folder first. If the gift was dated, it is emailed at 9am Eastern on that day, not before.
+  If the address was wrong, contact support: the gift can be resent to the right address with a
+  new code, and the old one stops working. Remember that the receipt has the code on it too.
+- **"I redeemed the gift on the wrong account."** Once redeemed, a gift belongs to the account
+  that redeemed it and cannot be moved by the page. Contact support.
+- **"I can't buy another gift today."** There is a limit of three gifts a day per buyer. Try again
+  tomorrow, or contact support if you need more.
+- **"Can I get a refund on a gift?"** Payments are non-refundable under the Terms of Service except
+  where the law requires. Contact support if something has gone wrong; a gift that is refunded is
+  cancelled and its code stops working.
 
 ---
 
@@ -1932,11 +2091,27 @@ Friction points and what's actually going on.
   Narrative style window, with any of your characters as the Narrator. Every plan, every style.
 - **Can I write the story myself and let Campaignia draw?** Yes — the **Outline / I'll write it**
   narrative style gives you bullet points to write over. Every plan.
+- **I've already written my story. Will Campaignia change my words?** Not with the **Already
+  Written** narrative style: it splits your own text around the pictures, word for word, and writes
+  nothing new. Every plan.
 - **Can I draw all the pictures myself?** Yes — **I'll illustrate it myself** at the top of the Art
   style window. Campaignia draws nothing for that version and each panel shows an art brief to draw
   from. Every plan.
 - **What does "Self Illustrated" mean on a picture?** Somebody uploaded it rather than Campaignia
   drawing it.
+- **Can I give Campaignia as a present?** Yes: months of Platinum or a token pack, emailed now or
+  on a date you choose. See §4a.
+- **Do gifts expire?** No. Never, and there are no fees.
+- **Do I need an account to buy a gift?** No. You do need one to redeem it, and a free account is
+  enough.
+- **Can I take a gifted pass as tokens?** Yes, except on the Free Trial. The button shows how many,
+  and the choice cannot be undone.
+- **If I already have a pass, does a gifted one replace it?** No. The new months are added on to
+  the end of the pass you already have.
+- **Does a gifted pass affect my subscription?** Silver and Gold are paused while the pass runs and
+  restart by themselves. Platinum subscribers take the gift as tokens, and the subscription is not
+  affected.
+- **Can I use a promo code on a gift?** Not at the moment.
 
 ---
 

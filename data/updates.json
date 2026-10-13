@@ -1,5 +1,418 @@
 [
   {
+    "version": "3.1.64",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3164-help-gift-choices-computed",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant is now told exactly what the Redeem page offers your account for a gift, instead of working it out.",
+        "detail": "Ask: Why can't I take my gift as tokens? Erin (pass + live Gold): both choices; a pass pauses Gold, tokens leave it alone. Tamika (pass, Gold cancelling): both choices; the pass is added after hers. A real Free Trial: the pass only, no tokens. A Platinum subscriber: tokens only. Also check it no longer calls a pass holder a Platinum subscriber, and does not say a billing subscription restarts by itself.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.63",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3163-help-gift-answers-by-account",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant answers gift questions from your actual account, instead of assuming you are on the Free Trial or have a Platinum subscription.",
+        "detail": "Ask exactly: Why can't I take my gift as tokens? On an account that is Platinum through a pass (with or without a Silver/Gold subscription) it should say you can: the Redeem page offers Take tokens instead next to the pass. On a real Free Trial account it should say tokens cannot be added on the trial. On a Platinum subscriber it should say the gift is offered as tokens only. It must never call a pass holder a Platinum subscriber or say a paying account is on the Free Trial.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.62",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3162-gift-findable-in-stripe",
+        "kind": "change",
+        "public": false,
+        "summary": "Gift payments in Stripe now show the Purchase ID, what was bought, who it is for, and the last 4 characters of the gift code.",
+        "detail": "Buy a gift, then find the payment in the Stripe dashboard. Its description should read like: Campaignia gift GIFT-18 \u00b7 3 months of Platinum \u00b7 for Erin Bot \u00b7 code ending AS6A, and its metadata should include purchase_id and code_last4. The last 4 must match the end of the code in the gift email. Resend a gift from the dashboard Gifts tab: the Stripe description should change to the new code's last 4. The full code never appears in Stripe.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.61",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3161-help-pass-vs-subscription",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant now knows whether your Platinum comes from a subscription or a pass, so it no longer tells a pass holder that a gift can only be taken as tokens.",
+        "detail": "Signed in on an account that is Platinum through a pass (no Platinum subscription), ask: Why can I not take my gift as a pass? or Can I take my gift as Platinum months? It should say you get both choices and the months are added after your pass. On a Platinum subscriber it should still say tokens only. Also ask: Am I on a subscription or a pass? and When does my pass end?",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.60",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3160-gift-dispute-race",
+        "kind": "fix",
+        "public": false,
+        "summary": "A gift whose payment is disputed or refunded is now cancelled even when Stripe reports it within seconds of the purchase.",
+        "detail": "Buy a gift with the dispute test card 4000 0000 0000 0259 and do not redeem it. Within a minute or two its code must say This gift has been cancelled. Before this, a dispute that arrived before the purchase had been recorded was missed and the code kept working (found by the bots on GIFT-12). Also check: a disputed gift sends no gift email if the dispute came first.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3160-dispute-email",
+        "kind": "change",
+        "public": false,
+        "summary": "Every disputed payment, on any purchase, now emails support and the alert address with the amount, the reason, the evidence deadline and a link to it in Stripe.",
+        "detail": "Alerts are switched off on staging (ALERTS_ENABLED), so there a dispute writes a log line starting [alert suppressed: ALERTS_ENABLED!=true] Payment disputed instead. On production it emails both addresses. A disputed gift is named in the same email, with whether it was cancelled or already redeemed.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3160-brain-gifts",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now knows about gift certificates: giving one, redeeming one, and what a gifted pass does with each plan.",
+        "detail": "Ask the help assistant: how do I give Campaignia as a gift; do gifts expire; I am on Gold, will a gifted pass cancel my subscription; why can I not take my gift as tokens on the trial; my gift code is not recognised.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.59",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3159-gifts-comment",
+        "kind": "change",
+        "public": false,
+        "summary": "Internal: a code comment about gifted passes now says Silver and Gold subscriptions are paused.",
+        "detail": "Comment only, in services/gifts.js. Nothing anyone sees changes and there is nothing to test beyond the site still running.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.58",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3158-redeem-no-tokens-on-trial",
+        "kind": "change",
+        "public": false,
+        "summary": "On the Free Trial, the Redeem page no longer offers to take a pass gift as tokens, since the trial cannot hold them.",
+        "detail": "Redeem a pass gift on a Free Trial account: only the Redeem button shows, with its Platinum date and token total; there is no Take tokens instead button and no note under it. A Copper, Silver or Gold account still sees both choices. A token-pack gift on the trial still shows its button switched off with the reason.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.57",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3157-redeem-note-trim",
+        "kind": "change",
+        "public": false,
+        "summary": "The Redeem page's note under the two choices is shorter and no longer reads oddly for someone already on Platinum.",
+        "detail": "Redeem a pass gift as a Copper or Free Trial account: the note under the buttons reads only Choose one; it cannot be changed afterwards. Silver, Gold and Platinum subscribers keep their own notes, unchanged.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.56",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3156-redeem-small-print",
+        "kind": "change",
+        "public": false,
+        "summary": "Each choice on the Redeem page now says what you would have after it.",
+        "detail": "Redeem a pass gift signed in. The Redeem button's small print reads Platinum until <date> and your new token total; for a Silver or Gold subscriber it adds, then Gold again (or Silver). Take tokens instead reads Bringing you to <total> tokens. A Platinum subscriber sees only the tokens choice. On the Free Trial the tokens choice is switched off and says tokens cannot be added during the Free Trial; a token-pack gift is switched off the same way. The date comes from the same code that sets it when you click, so it should match the result exactly. The account box now reads Currently, your account.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.55",
+    "staged_on": "2026-10-12",
+    "entries": [
+      {
+        "id": "3155-redeem-your-account",
+        "kind": "change",
+        "public": false,
+        "summary": "Redeeming a gift now shows your current plan and token balance, with end dates, before you choose how to take it.",
+        "detail": "Redeem page, signed in, after Check code: a Your account box between the gift and the buttons. Copper reads Copper; a subscription reads e.g. Gold subscription, renews <date> (or ends, or paused until); a pass adds Platinum Pass until <date>; the Free Trial reads Free Trial, ends <date> (N days left). The token count matches the app header. After redeeming, the box moves under the result as Your account now and shows the new pass date or balance. Signed out, no box.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3155-gift-top-back-link",
+        "kind": "change",
+        "public": false,
+        "summary": "After buying a gift, a Back to Campaignia link sits right beside Want to send another?",
+        "detail": "Buy a gift and return from Stripe: the line under the title reads Want to send another? followed by Back to Campaignia. It goes to the same place as the link at the bottom: the app when signed in, otherwise the landing page you came from.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.54",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3154-gift-back-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Back to Campaignia on the Gift and Redeem pages takes you back where you were, and their field labels are easier to read.",
+        "detail": "Signed in, it opens the app. Signed out, it goes back to the page you came from: the storyteller page or the game page. That still works after a Stripe checkout or a sign-in. Opened from an email link, it goes to the home page. The name, email, message and gift code labels are also brighter on the dark background.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.53",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3153-help-thanks",
+        "kind": "fix",
+        "public": false,
+        "summary": "Saying thanks or perfect to the help assistant no longer shows Could not answer that right now.",
+        "detail": "With the end-of-help email switched on, the assistant sometimes answered a thank-you with only its hidden end marker, which left an empty reply and showed an error with your word put back in the box. It now says a short goodbye instead, and the end-of-help email is sent as intended (it was being skipped in exactly these cases). The assistant is also told to always write a closing line before the marker. Separately, when the email service refused a help transcript email, nothing said so and the page was told it had gone; a refusal is now logged with the reason and the address it was meant for.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.52",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3152-story-tab-readable",
+        "kind": "fix",
+        "public": false,
+        "summary": "The word counts and the help lines under the story and instructions boxes on the Story tab are readable now.",
+        "detail": "The word counts were dark brown on near-black and could not be seen; the help lines and the saves-automatically note were dim. All of them are lighter and a touch larger, each with a contrast of at least 4.5 to 1. The amber colour for a story past the Already Written limit is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.51",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3151-story-tab-styles",
+        "kind": "change",
+        "public": false,
+        "summary": "The Narrative and Art style buttons are on the Story tab too, beside Generate Story, so a style can be chosen before the first generation. Already Written now recommends a length and asks before generating a story longer than that.",
+        "detail": "On the Story tab the two buttons sit beside Generate Story, as on Review and Storyboard. With Already Written chosen, the word count under the story box adds: Already Written: up to 3,000 a session, and turns amber past it. Past it, Generate Story and Generate Narrative ask first (Continue anyway or Go back); nothing is refused and nothing is charged until you continue. The number is a dashboard setting: Dashboard > Settings > Generation charging > Already Written, recommended words per session (default 3,000, about a chapter). The Already Written card names the number. On a phone the two style buttons share Generate Story's row, showing just the style names (the full label is the tooltip). Also: the Import from file button is shorter, so the story box and the instructions box now start at the same height.",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.50",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3150-your-way",
+        "kind": "change",
+        "public": false,
+        "summary": "Both landing pages now say Campaignia can do it all, or you can: We do it all, Illustrate it yourself, Write it yourself.",
+        "detail": "A new band right after the features strip on the game page (Play it your way) and the storyteller page (Tell it your way), three across on a desktop and stacked on a phone, ending with: Artist, writer, or neither, we've got you covered. Each page has its own slant: an artist at the table and a DM's campaign journal on one; family photos, a child's drawings and an already-written story on the other. One new FAQ on each page, full width at the end. Write it yourself is the Already Written narrative style (3.1.49).",
+        "td": [
+          "TD-940"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.49",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3149-already-written",
+        "kind": "feature",
+        "public": false,
+        "summary": "A new narrative style, Already Written: your own finished story, kept word for word and split around the pictures. Campaignia writes nothing new.",
+        "detail": "Put a finished story in the Story / Session Transcript box, choose Narrative style > Already Written (last in the list, every plan), then Generate Story and Generate Narrative. Every narrative panel holds your own sentences, in order, each used once; cuts fall between sentences. A panel can be empty where two pictures come one after the other in the text. Narrative length and In first person are greyed out for this style and come back as they were on any other. It costs the usual Generate Narrative tokens. Also fixed: in the tall-picture layouts, a narrative panel that is empty no longer prints the picture's internal description in its place (that note is only used now when the book has no narrative at all).",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.48",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3148-gift-pin",
+        "kind": "change",
+        "public": false,
+        "summary": "On a phone the gift notice no longer adds a strip under the header: a small gift icon sits on the corner of the account button, and the account menu's first line says Someone gave you a gift.",
+        "detail": "Ian: it must not take up any more vertical space. On a phone (640px and narrower) the header has no room for the badge, so the gift is an icon pinned to the corner of the account button (tap it to redeem) and the top line of the account menu. The header is the same height and width as for an account with no gift. On a wider screen nothing changed: SOMEONE GAVE YOU A GIFT in the header, now also on the top line of the account menu.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.47",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3147-gift-badge",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gifts: the buyer's receipt carries the gift code, the buyer is emailed when the gift is redeemed, and the person it was sent to sees a Someone gave you a gift badge at the top of Campaignia until they redeem it.",
+        "detail": "Gifts must be switched on. Buy a gift (Stripe test card) for an address that has a Campaignia account: the receipt now shows the code, even for a gift dated in the future, and that same code is the one in the gift email on the day. The buyer's copy of the code says they will hear when it is redeemed. Sign in as the recipient once the gift's day has come: the header shows SOMEONE GAVE YOU A GIFT (GIFT on a phone); click it, redeem, and the badge is gone. The badge only counts the email address the account confirmed at sign-up, never one typed into the profile later. When the recipient redeems, the buyer gets an email saying so (not for free gifts, and not when the buyer redeems it). New email previews: Gift - buyer told it was redeemed.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.46",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3146-buy-gifts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gift certificates, part two: anyone can buy a Platinum Pass or a token pack as a gift from a Give Campaignia page, with a button below the tiers on both landing pages.",
+        "detail": "Gifts must be switched on (Dashboard > Gifts) or none of this shows. Test with a Stripe test card: open /gift signed out, pick a pass, fill in a recipient you can read, pay. You should get a receipt (no code on it), the recipient gets the gift email, and you get a copy of the code. Try a delivery date (paid now, sent at 9am Eastern that day). Try a 4th purchase from the same email within 24 hours (refused). On the Gifts tab a paid gift shows its price and Void & refund (refunds in Stripe and kills the code; refused once redeemed). Walking away from checkout marks the gift Checkout abandoned once Stripe expires the session. For refunds made in the Stripe dashboard to void a gift, the webhook endpoint must have charge.refunded and charge.dispute.created switched on. Also fixed: the pass panel on My Account no longer tells subscribers their subscription keeps billing.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.45",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3145-pass-pause",
+        "kind": "change",
+        "public": false,
+        "summary": "Buying a Platinum Pass no longer ends a Silver or Gold subscription: Platinum starts at once and the subscription is paused until the pass ends, then restarts by itself.",
+        "detail": "Test in Stripe test mode. Gold subscriber buys a pass: the dialog says Gold will be paused (Buy the pass / Not yet). After paying: Platinum now, My Account shows Billing paused until the pass end date, the Stripe subscription shows payment collection paused until that date (invoices voided), no Gold charge meanwhile, and the receipt says Gold paused until DATE. Buy a second pass while paused: the pause moves to the new end date. Platinum subscriber buys a pass: a confirmation that the subscription stops renewing (as before). A gifted pass redeemed by a Gold subscriber offers Platinum now (Gold paused) or the tokens. If Stripe refuses a pause, the pass is still granted and Ian gets an email.",
+        "td": [
+          "TD-938",
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.44",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3144-gift-other-account",
+        "kind": "feature",
+        "public": false,
+        "summary": "Redeeming a gift on an account with a different email from the one it was sent to now shows a warning, but still lets you redeem.",
+        "detail": "Send a free gift to one address, then open its Redeem link signed in as a different account: an amber note names the address it was sent to (masked, e.g. a***@example.com) and the account you are signed in as. Redeem still works. Signed in with the matching address (any capitals), no note. Signed out, nothing is shown.",
+        "td": [
+          "TD-934"
+        ]
+      },
+      {
+        "id": "3144-gift-pass-subscribers",
+        "kind": "change",
+        "public": false,
+        "summary": "A gifted pass now fits the subscription it lands on: Platinum subscribers take the tokens, Silver and Gold subscribers get Platinum starting today with their subscription untouched, and a gift never ends a subscription.",
+        "detail": "Test on staging with three accounts. Platinum subscriber: the Redeem page offers only Take tokens (the pass is refused even if forced). Gold subscriber: Platinum now for the pass's months plus its tokens, or the tokens; choosing Platinum makes them Platinum today, the Gold subscription is unchanged and keeps billing, and they return to Gold when the pass ends. No subscription, or one already set to cancel: the pass as before (it starts after any paid-up period). Pausing the subscription during a pass comes in 3.1.45.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.43",
+    "staged_on": "2026-10-01",
+    "entries": [
+      {
+        "id": "3143-gifts-dashboard",
+        "kind": "feature",
+        "public": false,
+        "summary": "Gift certificates, part one: a Gifts tab on the dashboard with an on/off switch, free gifts sent by email (now or on a date), and a Redeem page where a gifted pass can be kept or taken as tokens.",
+        "detail": "Gifts are OFF until switched on in Dashboard > Gifts, separately on each server. To test: switch on, send yourself a free 3-month pass, open the email's Redeem link, sign in and redeem; the pass and 200 tokens land on your account. Send another pass and choose Take tokens instead (list price divided by the Pass to tokens rate, 20 cents to start, e.g. 395 for the 3-month pass). Try the link again (already redeemed), a token pack on a Free Trial account (refused, gift kept), Resend (old code stops working), Void, and a dated gift (sent at 9am Eastern that day). Buying gifts comes in part two.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.42",
+    "staged_on": "2026-09-28",
+    "entries": [
+      {
+        "id": "3142-help-bold",
+        "kind": "fix",
+        "public": true,
+        "summary": "The help assistant's answers show bold and italics properly instead of stray asterisks.",
+        "detail": "",
+        "td": [
+          "TD-811"
+        ]
+      },
+      {
+        "id": "3142-story-box-words",
+        "kind": "change",
+        "public": true,
+        "summary": "The story box's placeholder and the line under it no longer assume a transcript.",
+        "detail": "It now invites a transcript, a written story, notes or an outline, and says your story and notes save automatically.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.41",
     "staged_on": "2026-09-28",
     "entries": [

@@ -823,7 +823,28 @@ function startPassCheckout(passId) {
   // direction for a warning.
   // v3.0.942 -- WAS TWO LINES OF THE SAME RULE WRITTEN OUT HERE. It is a function now, shared with
   // the account panel, because a rule in two places is a rule that will be updated in one of them.
-  if (hasBillingSubscription(_me) && typeof uiConfirm === 'function') {
+  // v3.1.45 -- TD-938. WHICH SUBSCRIPTION DECIDES WHAT IS SAID. Ian: "I really don't like passes
+  // ending existing subscriptions." Only a PLATINUM subscription is stopped by a pass now (the pass
+  // gives them nothing else). Silver and Gold are PAUSED until the pass ends and restart by themselves
+  // -- no choice to make; keeping both was dropped because it only buys tokens a pack sells cheaper.
+  // A subscription already set to cancel is ending anyway, so nothing is said. The server checks the
+  // same confirmations (409 until given), so this dialog can be skipped but never bypassed.
+  var _billing = hasBillingSubscription(_me) && !(_me && _me.cancelAtPeriodEnd);
+  if (_billing && (_acct === 'silver' || _acct === 'gold') && typeof uiConfirm === 'function') {
+    var _sName = (_all[_acct] && _all[_acct].name) || _acct;
+    var _pausedTo = (_me && _me.subPausedUntil && new Date(_me.subPausedUntil).getTime() > Date.now()) ? _cmpNiceDate(_me.subPausedUntil) : '';
+    uiConfirm(_pausedTo
+      ? ('Your ' + _sName + ' subscription is paused while your current pass runs.\n\n' +
+         'This pass is added on the end, and ' + _sName + ' stays paused until it finishes, then restarts by itself.')
+      : ('Platinum starts as soon as you pay.\n\n' +
+         'Your ' + _sName + ' subscription is paused while the pass runs, so you are not charged for it, ' +
+         'and it restarts by itself the day the pass ends. You are back on ' + _sName + ' then.'),
+      { title: _pausedTo ? 'Your subscription stays paused' : 'Your ' + _sName + ' subscription will be paused',
+        preserveLines: true, okText: 'Buy the pass', cancelText: 'Not yet' }
+    ).then(function (ok) { if (ok) _startPassCheckout(passId, { confirmPause: true }); });
+    return;
+  }
+  if (_billing && _acct === 'platinum' && typeof uiConfirm === 'function') {
     var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
     var _copperName = (_all.copper && _all.copper.name) || 'Copper';
     uiConfirm(
@@ -836,19 +857,20 @@ function startPassCheckout(passId) {
       'You would need to subscribe again or buy another pass.',
       { title: 'Your subscription will stop billing', preserveLines: true,
         okText: 'Buy the pass', cancelText: 'Not yet' }
-    ).then(function (ok) { if (ok) _startPassCheckout(passId); });
+    ).then(function (ok) { if (ok) _startPassCheckout(passId, { confirmEnd: true }); });
     return;
   }
-  _startPassCheckout(passId);
+  _startPassCheckout(passId, {});
 }
 
-function _startPassCheckout(passId) {
+// v3.1.45 -- extra carries the subscription confirmation: { confirmPause: true } or { confirmEnd: true }.
+function _startPassCheckout(passId, extra) {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
   fetch('/api/tokens/pass-checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passId: passId })
+    body: JSON.stringify(Object.assign({ passId: passId }, extra || {}))
   }).then(function(r) {
     if (r.status === 503) {
       show('Passes are being set up and will be available shortly.');
@@ -1846,6 +1868,9 @@ function checkAuth() {
       // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
       if (loneBadge) loneBadge.style.display = 'none';
+      // v3.1.47 -- TD-934. Someone gave you a gift: the badge sits there until it is redeemed. (In both
+      // checkAuth copies; the later declaration is the one that runs -- TD-853.)
+      try { refreshGiftBadge(); } catch (e) {}
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -2640,6 +2665,9 @@ function renderAccountStanding(me) {
       // the same false alarm v3.0.933 fixed one row up.
       html += row('Subscription ends', _when,
         pass ? 'billing stops \u2014 your pass carries on' : 'then your account moves to Copper');
+    } else if (me.subPausedUntil) {
+      // v3.1.45 -- TD-938. Paused for a pass: there is no next charge until it restarts.
+      html += row('Billing paused', 'until ' + _cmpNiceDate(me.subPausedUntil), 'restarts by itself when your pass ends');
     } else {
       html += row('Next billing date', _when);
     }
@@ -2693,9 +2721,14 @@ function renderAccountStanding(me) {
         ? ('You are on <b>' + escapeHtml(ownName) + '</b> from now until your pass ends. Your ' +
            escapeHtml(acctName) + ' subscription is <b>set to stop</b> at the end of the current ' +
            'period &mdash; it will not bill again, and nothing about your access changes when it does.')
-        : ('You have both a pass and a subscription, and <b>they do not stack</b> &mdash; your ' +
-           'subscription is billing you for access your pass already gives you. You can stop it ' +
-           'with Manage subscription &amp; billing below.')) +
+        : me.subPausedUntil
+        // v3.1.45 -- TD-938. The pause is the normal case for a Silver/Gold subscriber now.
+        ? ('You are on <b>' + escapeHtml(ownName) + '</b> until your pass ends. Your ' + escapeHtml(acctName) +
+           ' subscription is <b>paused</b> and is not billing; it restarts by itself on ' +
+           escapeHtml(_cmpNiceDate(me.subPausedUntil)) + ', and you are back on ' + escapeHtml(acctName) + '.')
+        : ('Your pass and your ' + escapeHtml(acctName) + ' subscription are <b>both billing</b>. When the pass ' +
+           'ends you are back on ' + escapeHtml(acctName) + '. If you would rather not pay for both, you can ' +
+           'stop the subscription with Manage subscription &amp; billing below.')) +
       '</div>';
   }
 
@@ -2737,9 +2770,20 @@ function renderAccountPasses(me, data) {
   var desc = document.getElementById('account-passes-desc');
   if (desc) {
     if (live) {
-      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. ' +
-        'Your subscription is not cancelled when you buy one \u2014 it keeps billing until you stop it ' +
-        'yourself. Any time you have already paid for is added to the pass rather than lost.';
+      // v3.1.46 -- THIS SENTENCE WAS WRONG SINCE v3.0.935 and more wrong after v3.1.45 (TD-938). It said
+      // the subscription keeps billing; a pass actually stops a Platinum subscription renewing, and
+      // pauses a Silver or Gold one until the pass ends.
+      var _acctL = (me && (me.accountTier || me.tier)) || '';
+      var _subName = (_acctL.charAt(0).toUpperCase() + _acctL.slice(1)) || 'Your';
+      if (me && me.cancelAtPeriodEnd) {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Your subscription is already set to end, so a pass simply takes over.';
+      } else if (_acctL === 'platinum') {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one stops your Platinum ' +
+          'subscription renewing; the pass starts when the time you have already paid for runs out.';
+      } else {
+        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one puts you on Platinum at once ' +
+          'and pauses your ' + _subName + ' subscription until the pass ends; it then restarts by itself.';
+      }
     } else if (hasPass) {
       // v3.0.930 -- WITH THE DATE, ONCE. Ian asked whether an expiry belongs under the pass
       // panels. It belongs in this sentence rather than on three cards: the question somebody
@@ -2754,6 +2798,13 @@ function renderAccountPasses(me, data) {
       desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
     }
   }
+
+  // v3.1.46 -- TD-934. The gift link under the passes, only while gifts are switched on.
+  try {
+    fetch('/api/gifts/status').then(function (r) { return r.json(); }).then(function (d) {
+      var gl = document.getElementById('account-gift-link'); if (gl) gl.style.display = (d && d.enabled) ? 'block' : 'none';
+    }).catch(function () {});
+  } catch (e) {}
 
   box.innerHTML = list.map(function (p) {
     var dollars = Number(p.price_cents) / 100;
@@ -4890,7 +4941,9 @@ function renderHelpThread() {
   } else {
     _helpThread.forEach(function(m){
       var cls = (m.role === 'user') ? 'help-msg-user' : 'help-msg-bot';
-      html += '<div class="help-msg ' + cls + '">' + escapeHtml(m.content) + '</div>';
+      // v3.1.42 -- TD-811. Answers came through with their **bold** markers showing. The assistant's replies
+      // get light formatting; what the reader typed is shown exactly as typed.
+      html += '<div class="help-msg ' + cls + '">' + (m.role === 'user' ? escapeHtml(m.content) : _helpFormat(m.content)) + '</div>';
     });
   }
   if (_helpPending) html += '<div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>';
@@ -5118,7 +5171,10 @@ var NARR_STYLE_META = [
   { id:'noir', name:'Noir', desc:'Gritty, moody, cynical fantasy-noir. Hard-boiled phrasing, shadows, and suspicion.', example:'The cave breathed cold air like a liar exhaling excuses, and the torchlight wasn\u2019t bright enough to chase off the truth.' },
   { id:'grim', name:'Dark Fantasy / Grim', desc:'Bleak, heavy, and visceral. Dread, decay, and the cost of every choice.', example:'Blood soaked into the stone, vanishing as if the earth itself were thirsty. Even hope felt like a dying ember.' },
   { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' },
-  { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' }   // v3.1.27 -- TD-920
+  { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' },   // v3.1.27 -- TD-920
+  // v3.1.49 -- TD-941. Ian: "takes pretty much exactly what is written... and slices it into the appropriate
+  // narrative and image panels". The server copies the author's sentences; nothing is rewritten.
+  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box: up to {words} words a session, about a chapter. Longer stories, one session per chapter.', example:'Your words, exactly as you wrote them.' }
 ];
 var STYLE_PICKER_KIND = null;
 
@@ -5134,10 +5190,12 @@ function refreshNarrStyleButtons() {
   // v3.1.32 -- 'anon' reads "First person"; on Calm & Literal (always first person) it adds nothing.
   var _anon = state.narrativeNarrator === 'anon';
   var label = 'Narrative: ' + narrStyleName(id) + ((state.narrativeNarrator && !(_anon && id === 'calm')) ? (' \u00b7 ' + ((!_anon && state.narrativeNarratorName) ? ('Narrator: ' + state.narrativeNarratorName) : 'First person')) : '');
-  ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
+  ['review-narr-style-btn', 'sb-narr-style-btn', 'story-narr-style-btn'].forEach(function(bid) {   // v3.1.51 -- and the Story tab
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
   });
+  _storyStyleLabel('story-narr-style-btn', 'Narrative: ', label);   // v3.1.51 -- phones drop the prefix
+  try { updateWordCounts(); } catch (e) {}   // v3.1.51 -- TD-941: the Already Written note follows the style
 }
 
 // Fetch the caller's EFFECTIVE tier + style locks for the current campaign so
@@ -5587,7 +5645,7 @@ function openStylePicker(kind) {
     var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
-      '<div class="style-card-desc">' + escapeHtml(s.desc) + '</div>' +
+      '<div class="style-card-desc">' + escapeHtml(String(s.desc).replace('{words}', _writtenLimit().toLocaleString())) + '</div>' +   // v3.1.51 -- TD-941
       eg +
       '</div>';
   }).join('');
@@ -5763,10 +5821,11 @@ function artStyleLabel(v, stampedName) {
 function refreshArtStyleButtons() {
   var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
   var label = 'Art: ' + (state.selfIllustrated ? 'Self Illustrated' : artStyleLabel(v));   // v3.1.30 -- TD-921
-  ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
+  ['review-art-style-btn', 'sb-art-style-btn', 'story-art-style-btn'].forEach(function (bid) {   // v3.1.51 -- and the Story tab
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
   });
+  _storyStyleLabel('story-art-style-btn', 'Art: ', label);   // v3.1.51 -- phones drop the prefix
 }
 
 // Was referenced on session load but never defined (a no-op). Now it sets the
@@ -5932,6 +5991,9 @@ function ensureGenFree() {
 
 function generateNarrativeAndImages() {
   if (!ensureGenFree()) return;
+  // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
+  if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
+  state._writtenLenOk = false;
   setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
   // v3.0.972 -- TD-865. No origLabel here either; narrButtonsIdle() reads data-idle.
@@ -6076,6 +6138,8 @@ function cancelNarr() {
 // confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
+  if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeOnly(); } }); return; }
   if (!state._sbSummaryAsked && state._sbSummaryEdited) {
     // v3.0.972 -- TD-864. THREE ANSWERS, AND FALSE IS THE ONE THAT DOES NOT RUN.
     //
@@ -6090,7 +6154,7 @@ function generateNarrativeOnly() {
     uiConfirm('You have edited the Summary For Next Session. Replace it with a newly written one?',
               { okText: 'Replace it', middleText: 'Keep mine', cancelText: "Don't generate" })
       .then(function (ans) {
-        if (ans === false) { state._sbSummaryAsked = false; return; }
+        if (ans === false) { state._sbSummaryAsked = false; state._writtenLenOk = false; return; }
         state._sbSummaryReplace = (ans === true);
         state._sbSummaryAsked = true;
         generateNarrativeOnly();
@@ -6098,6 +6162,7 @@ function generateNarrativeOnly() {
     return;
   }
   state._sbSummaryAsked = false;
+  state._writtenLenOk = false;
   setGenLock('Generate Narrative');
   // v3.0.972 -- TD-865. NO origLabel CAPTURE. The idle text is a data-idle attribute in
   // app.html and narrButtonsIdle() is the only thing that writes it back, so a button left
@@ -8684,6 +8749,7 @@ function _pollExtractJob(jobId, signal) {
 }
 
 async function extractMoments() {
+  if (!(await _writtenLengthCheck())) return;   // v3.1.51 -- TD-941: a long story for Already Written asks first
   if (!ensureGenFree()) return;
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
@@ -16546,6 +16612,9 @@ function checkAuth() {
       // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
       if (loneBadge) loneBadge.style.display = 'none';
+      // v3.1.47 -- TD-934. Someone gave you a gift: the badge sits there until it is redeemed. (In both
+      // checkAuth copies; the later declaration is the one that runs -- TD-853.)
+      try { refreshGiftBadge(); } catch (e) {}
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -17401,6 +17470,7 @@ function applyLayoutStyle(layout) {
 }
 
 async function extractMoments() {
+  if (!(await _writtenLengthCheck())) return;   // v3.1.51 -- TD-941: a long story for Already Written asks first
   if (!ensureGenFree()) return;
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
@@ -20580,7 +20650,7 @@ var TIER_FIELD_LABELS = {
 // else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
 // div, a button with its own check -- would be a second rule to keep in step with this one.
 // The route is gated independently; neither is load-bearing alone.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support', 'orders'];
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'orders'];   // v3.1.43 -- 'gifts' (TD-934)
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --
@@ -20677,6 +20747,7 @@ function switchSettingsTab(tab) {
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
   if (tab === 'promos') loadPromoCodes();
+  if (tab === 'gifts') loadGifts();   // v3.1.43 -- TD-934
   if (tab === 'orders') initAdminOrdersTab();
 }
 
@@ -21051,6 +21122,234 @@ function togglePromoCode(id) {
       else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
     })
     .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
+}
+
+// ============================================================
+// v3.1.43 -- TD-934. THE GIFTS TAB. Spec: claude/GIFT_CERTIFICATES_SPEC.md.
+// Every rule here is also enforced on the server (routes/gifts.js); this only draws and asks.
+// ============================================================
+var _giftCatalog = [];
+var GIFT_STATUS_LABEL = { pending_payment: 'Awaiting payment', paid: 'Not sent yet', delivered: 'Sent', redeemed: 'Redeemed', 'void': 'Void', abandoned: 'Checkout abandoned' };
+
+function giftDay(v) {
+  if (!v) return '';
+  try { return new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); } catch (e) { return String(v).slice(0, 10); }
+}
+// A DATE column arrives as UTC midnight; reading it in Eastern would show the day before.
+function giftDateOnly(v) { return v ? String(v).slice(0, 10) : ''; }
+
+function giftItemLabel(c) {
+  if (c.kind === 'pass') return c.name + ' (' + c.months + ' months + ' + c.tokens + ' tokens)';
+  return c.name + ' (' + c.tokens + ' tokens)';
+}
+
+function loadGifts() {
+  var box = document.getElementById('gift-list');
+  if (box) box.textContent = 'Loading...';
+  var st = (document.getElementById('gift-f-status') || {}).value || '';
+  var q = (document.getElementById('gift-f-q') || {}).value || '';
+  fetch('/api/gifts/admin/overview?status=' + encodeURIComponent(st) + '&q=' + encodeURIComponent(q))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (box) box.textContent = (d && d.error) || 'Could not load gifts.'; return; }
+      renderGiftSwitch(!!d.enabled);
+      _giftCatalog = d.catalog || [];
+      var ri = document.getElementById('gift-rate-input');
+      if (ri && document.activeElement !== ri) ri.value = d.convertRate;
+      renderGiftRatePreview();
+      var sel = document.getElementById('gift-item-input');
+      if (sel && !sel.options.length) {
+        sel.innerHTML = _giftCatalog.map(function (c) {
+          return '<option value="' + escapeHtml(c.kind + ':' + c.id) + '">' + escapeHtml(giftItemLabel(c)) + '</option>';
+        }).join('');
+      }
+      renderGifts(d.gifts || []);
+    })
+    .catch(function () { if (box) box.textContent = 'Could not load gifts.'; });
+}
+
+// What each pass would convert to at the rate in the box (the server does the real sum at redemption).
+function renderGiftRatePreview() {
+  var el = document.getElementById('gift-rate-preview');
+  var rate = parseFloat((document.getElementById('gift-rate-input') || {}).value);
+  if (!el) return;
+  if (!(rate > 0)) { el.textContent = ''; return; }
+  el.textContent = 'At ' + rate + ' cents: ' + _giftCatalog.filter(function (c) { return c.kind === 'pass'; }).map(function (c) {
+    return c.name + ' ($' + (c.price_cents / 100).toFixed(2).replace(/\.00$/, '') + ') = ' + Math.floor(c.price_cents / rate) + ' tokens';
+  }).join('; ') + '.';
+}
+
+function saveGiftRate() {
+  var msg = document.getElementById('gift-rate-msg');
+  var v = (document.getElementById('gift-rate-input') || {}).value;
+  giftPost('/api/gifts/admin/convert-rate', { cents: v }).then(function (res) {
+    if (msg) { msg.textContent = res.ok ? 'Saved.' : (res.j.error || 'Could not save the rate.'); msg.style.color = res.ok ? '' : 'var(--error)'; }
+  }).catch(function () { if (msg) { msg.textContent = 'Could not save the rate.'; msg.style.color = 'var(--error)'; } });
+}
+
+function renderGiftSwitch(on) {
+  var desc = document.getElementById('gift-switch-desc');
+  var btn = document.getElementById('gift-switch-btn');
+  if (desc) desc.innerHTML = on
+    ? 'Gifts are <b style="color:var(--gold);">ON</b> here. Customers can use gift links, and dated gifts are being sent.'
+    : 'Gifts are <b>OFF</b> here. Gift links do not work, nothing is sent, and no free gift can be issued. This switch is separate on staging and production.';
+  if (btn) { btn.style.display = ''; btn.textContent = on ? 'Switch off' : 'Switch on'; btn.setAttribute('data-on', on ? '1' : '0'); }
+}
+
+function toggleGiftsEnabled() {
+  var btn = document.getElementById('gift-switch-btn');
+  var msg = document.getElementById('gift-switch-msg');
+  var next = !(btn && btn.getAttribute('data-on') === '1');
+  if (btn) btn.disabled = true;
+  fetch('/api/gifts/admin/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: next }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (d && d.ok) { renderGiftSwitch(!!d.enabled); if (msg) msg.textContent = ''; }
+      else if (msg) msg.textContent = (d && d.error) || 'Could not save the switch.';
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not save the switch.'; });
+}
+
+function renderGifts(rows) {
+  var box = document.getElementById('gift-list');
+  if (!box) return;
+  if (!rows.length) { box.textContent = 'No gifts yet.'; return; }
+  box.innerHTML = rows.map(function (g) {
+    var item = g.item_kind === 'pass'
+      ? (g.item_name || 'Pass') + ' - ' + g.months + ' months + ' + g.tokens + ' tokens'
+      : (g.item_name || 'Token pack') + ' - ' + g.tokens + ' tokens';
+    var when = [];
+    if (g.status === 'paid') when.push(g.deliver_on ? ('sends ' + giftDateOnly(g.deliver_on) + ' at 9am ET') : 'not sent');
+    if (g.delivered_at) when.push('sent ' + giftDay(g.delivered_at));
+    if (g.redeemed_at) when.push('redeemed ' + giftDay(g.redeemed_at) + (g.redeemed_by_email ? ' by ' + g.redeemed_by_email : '') + (g.redeemed_as === 'tokens' ? ' as ' + g.redeemed_tokens + ' tokens' : ''));
+    if (g.voided_at) when.push('voided ' + giftDay(g.voided_at) + (g.void_reason ? ' (' + g.void_reason + ')' : ''));
+    var live = (g.status === 'paid' || g.status === 'delivered');
+    var acts = '';
+    if (live) acts += '<button class="btn btn-sm" onclick="resendGift(' + g.id + ')">' + (g.status === 'paid' ? 'Send now' : 'Resend') + '</button>';
+    if (g.status === 'paid') acts += '<button class="btn btn-sm" onclick="redateGift(' + g.id + ')">Change date</button>';
+    if (live && g.comp) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ')">Void</button>';
+    // v3.1.46 -- a paid gift is voided and refunded together, or not at all.
+    if (live && !g.comp && g.has_payment) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ', true)">Void &amp; refund</button>';
+    return '<div style="display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
+      '<strong class="adm-row-id">#' + g.id + '</strong>' +
+      '<span style="min-width:96px;color:' + (g.status === 'redeemed' ? 'var(--gold)' : g.status === 'void' ? 'var(--text-muted)' : 'inherit') + ';">' + escapeHtml(GIFT_STATUS_LABEL[g.status] || g.status) + '</span>' +
+      '<span style="min-width:230px;">' + escapeHtml(item) + (g.comp ? ' <span style="color:var(--text-muted);">(free)</span>' : ' <span style="color:var(--text-muted);">(paid $' + escapeHtml((Number(g.price_cents) / 100).toFixed(2)) + ')</span>') + '</span>' +
+      '<span>to ' + escapeHtml((g.recipient_name || '') + ' <' + g.recipient_email + '>') + '</span>' +
+      '<span>from ' + escapeHtml(g.buyer_name || g.buyer_email || '') + '</span>' +
+      (g.code_last4 ? '<span style="font-family:monospace;">code ...' + escapeHtml(g.code_last4) + '</span>' : '') +
+      '<span style="color:var(--text-muted);">' + escapeHtml(when.join(', ')) + '</span>' +
+      acts +
+      (g.last_error ? '<span style="flex-basis:100%;color:var(--error);">Last send failed (' + (g.delivery_attempts || 0) + ' tries): ' + escapeHtml(g.last_error) + '</span>' : '') +
+      (g.message ? '<span style="flex-basis:100%;color:var(--text-muted);font-style:italic;">' + escapeHtml(g.message) + '</span>' : '') +
+      '<span class="settings-section-desc" id="gift-row-msg-' + g.id + '" style="margin:0;flex-basis:100%;"></span>' +
+      '</div>';
+  }).join('');
+}
+
+function giftRowMsg(id, text, bad) {
+  var el = document.getElementById('gift-row-msg-' + id);
+  if (el) { el.textContent = text; el.style.color = bad ? 'var(--error)' : ''; }
+}
+
+function giftPost(url, body) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j && j.ok, j: j || {} }; }); });
+}
+
+function sendCompGift() {
+  var g = function (id) { return document.getElementById(id); };
+  var msg = g('gift-comp-msg');
+  var pick = String((g('gift-item-input') || {}).value || '').split(':');
+  var payload = {
+    item_kind: pick[0] || '', item_id: pick[1] || '',
+    recipient_name: (g('gift-to-name') || {}).value || '',
+    recipient_email: (g('gift-to-email') || {}).value || '',
+    from_name: (g('gift-from-name') || {}).value || '',
+    message: (g('gift-message') || {}).value || '',
+    deliver_on: (g('gift-deliver-on') || {}).value || ''
+  };
+  var btn = g('gift-comp-btn');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Sending...'; msg.style.color = ''; }
+  giftPost('/api/gifts/admin/comp', payload).then(function (res) {
+    if (btn) btn.disabled = false;
+    if (!res.ok) { if (msg) { msg.textContent = res.j.error || 'Could not create the gift.'; msg.style.color = 'var(--error)'; } return; }
+    ['gift-to-name', 'gift-to-email', 'gift-message', 'gift-deliver-on'].forEach(function (id) { if (g(id)) g(id).value = ''; });
+    if (msg) {
+      if (res.j.sent) msg.textContent = 'Gift #' + res.j.id + ' sent.';
+      else if (res.j.scheduled) msg.textContent = 'Gift #' + res.j.id + ' will be sent on ' + res.j.scheduled + ' at 9am Eastern.';
+      else { msg.textContent = 'Gift #' + res.j.id + ' was saved but not sent: ' + (res.j.error || 'unknown error') + ' Use Send now on its row.'; msg.style.color = 'var(--error)'; }
+    }
+    loadGifts();
+  }).catch(function () { if (btn) btn.disabled = false; if (msg) { msg.textContent = 'Could not create the gift.'; msg.style.color = 'var(--error)'; } });
+}
+
+function resendGift(id) {
+  uiPrompt('Send this gift', 'A new code is made and emailed; any earlier code for this gift stops working. Leave the address empty to use the one on file, or enter a corrected one.', '')
+    .then(function (email) {
+      if (email === null) return;
+      giftRowMsg(id, 'Sending...');
+      giftPost('/api/gifts/admin/' + id + '/resend', email ? { email: email } : {}).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not send.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not send.', true); });
+    });
+}
+
+function redateGift(id) {
+  uiPrompt('Change the delivery date', 'The new date, as YYYY-MM-DD. It is sent at 9am Eastern that day.', '')
+    .then(function (d) {
+      if (d === null) return;
+      giftPost('/api/gifts/admin/' + id + '/date', { deliver_on: d }).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not change the date.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not change the date.', true); });
+    });
+}
+
+// v3.1.47 -- TD-934. THE GIFT BADGE (Ian, 2026-10-01). Asks the server for gifts sent to this account's
+// confirmed email whose day has come and that are not redeemed yet; the server returns none while gifts
+// are switched off. One gift opens straight on it; several open the first, and the badge says how many.
+function refreshGiftBadge() {
+  // v3.1.48 -- the header badge (wide screens), the icon pinned to the account button (phones, where the
+  // header has no room) and the top line of the account menu (everywhere) all say the same thing.
+  var b = document.getElementById('gift-badge');
+  var pin = document.getElementById('gift-pin');
+  var mi = document.getElementById('gift-menu-item');
+  if (!b) return;
+  function hide() { b.style.display = 'none'; if (pin) pin.classList.remove('on'); if (mi) mi.style.display = 'none'; }
+  fetch('/api/gifts/mine', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : { gifts: [] }; })
+    .then(function (d) {
+      var list = (d && d.gifts) || [];
+      if (!list.length) { hide(); return; }
+      var href = '/redeem?gift=' + encodeURIComponent(list[0].id);
+      b.href = href;
+      var t = document.getElementById('gift-badge-text');
+      if (t) t.textContent = list.length > 1 ? ('SOMEONE GAVE YOU ' + list.length + ' GIFTS') : 'SOMEONE GAVE YOU A GIFT';
+      b.title = list[0].fromName ? (list[0].fromName + ' gave you a Campaignia gift. Click to redeem it.') : 'Someone gave you a Campaignia gift. Click to redeem it.';
+      b.style.display = 'inline-flex';
+      if (pin) { pin.href = href; pin.classList.add('on'); }
+      if (mi) {
+        mi.href = href;
+        var mt = document.getElementById('gift-menu-text');
+        if (mt) mt.textContent = list.length > 1 ? ('Someone gave you ' + list.length + ' gifts') : 'Someone gave you a gift';
+        mi.style.display = 'flex';
+      }
+    })
+    .catch(hide);
+}
+
+function voidGift(id, refund) {
+  uiConfirm(refund
+    ? ('Void gift #' + id + ' and refund the buyer in full? Its code stops working straight away. This cannot be undone.')
+    : ('Void gift #' + id + '? Its code stops working straight away. This cannot be undone.'),
+    { title: refund ? 'Void and refund this gift' : 'Void this gift', danger: true, okText: refund ? 'Void & refund' : 'Void' })
+    .then(function (yes) {
+      if (!yes) return;
+      giftPost('/api/gifts/admin/' + id + '/void', {}).then(function (res) {
+        if (res.ok) loadGifts(); else giftRowMsg(id, res.j.error || 'Could not void the gift.', true);
+      }).catch(function () { giftRowMsg(id, 'Could not void the gift.', true); });
+    });
 }
 
 // ============================================================
@@ -23256,7 +23555,63 @@ function updateWordCounts() {
     var v = (el.value || '').trim();
     var n = v ? v.split(/\s+/).length : 0;
     out.textContent = n + (n === 1 ? ' word' : ' words');
+    // v3.1.51 -- TD-941. On the story box, while Already Written is chosen: the recommended limit on the
+    // same line, amber once over it. A recommendation, not a rule (Ian).
+    if (pr[0] === 'transcript-input') {
+      out.style.color = '';
+      if (state.narrativeStyle === 'written') {
+        var lim = _writtenLimit();
+        out.textContent += ' \u00b7 Already Written: up to ' + lim.toLocaleString() + ' a session';
+        if (n > lim) out.style.color = '#e0a040';
+      }
+    }
   });
+}
+
+// v3.1.51 -- THE STORY TAB'S STYLE BUTTONS ON A PHONE. Ian: the two style buttons on the same row as Generate
+// Story. There is room for the style NAMES but not for "Narrative:" and "Art:" too, so the prefix is its
+// own span, hidden by the Story tab's phone rule; the full label stays as the tooltip. Text only, escaped.
+function _storyStyleLabel(id, prefix, label) {
+  var b = document.getElementById(id);
+  if (!b) return;
+  var rest = (label.indexOf(prefix) === 0) ? label.slice(prefix.length) : label;
+  b.textContent = '';
+  var pre = document.createElement('span'); pre.className = 'sty-pre'; pre.textContent = prefix;
+  b.appendChild(pre); b.appendChild(document.createTextNode(rest));
+  b.title = label;
+}
+
+// v3.1.51 -- TD-941. THE ALREADY WRITTEN WORD LIMIT, from the dashboard (GET /api/narrative/written-limit,
+// default 3000). Read once per page load; until it arrives the default stands in.
+var _writtenLim = { n: 3000, asked: false };
+function _writtenLimit() {
+  if (!_writtenLim.asked) {
+    _writtenLim.asked = true;
+    fetch('/api/narrative/written-limit', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.limit >= 100) { _writtenLim.n = d.limit; try { updateWordCounts(); } catch (e) {} } })
+      .catch(function () {});
+  }
+  return _writtenLim.n;
+}
+
+// v3.1.51 -- TD-941. BEFORE GENERATE STORY AND GENERATE NARRATIVE: with Already Written, a story past the
+// recommended length is a WARNING (Ian: "if they are close they can keep going but if they are way off...
+// they can choose to stop and make a new session"). Resolves true to go on, false to go back. Any other
+// style, or a story within the limit, resolves true at once with nothing shown.
+function _writtenLengthCheck() {
+  if (state.narrativeStyle !== 'written') return Promise.resolve(true);
+  var el = document.getElementById('transcript-input');
+  var t = el ? String(el.value || '') : String((state.currentSession && state.currentSession.transcript) || '');
+  t = t.trim();
+  var n = t ? t.split(/\s+/).length : 0;
+  var lim = _writtenLimit();
+  if (n <= lim) return Promise.resolve(true);
+  return uiConfirm('This session is ' + n.toLocaleString() + ' words. Already Written works best up to ' + lim.toLocaleString() +
+    ' words a session \u2014 about a chapter. It keeps every word, so a longer story puts a lot of text between the pictures.\n\n' +
+    'For a long story, make one session per chapter and paste a part into each. Or carry on with this one.',
+    { title: 'A long story for one session', okText: 'Continue anyway', cancelText: 'Go back', preserveLines: true })
+    .then(function (ok) { return ok === true; });
 }
 
 function loreCount(el, countId) {
@@ -23359,7 +23714,7 @@ function csHint(map, genresValue) {
 // reader is least likely to think of unprompted, and it is where consistency comes from.
 var CS_GENRE_HINTS = {
   _default: {
-    transcript: 'Paste your session transcript here...',
+    transcript: 'Type or paste your story here \u2014 a transcript, a written story, notes or an outline...',   // v3.1.42 -- not only transcripts
     notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing Zara betraying the party at the bridge\n\nEVERY MOMENT:\n- Make sure each moment has Theron\u2019s wolf Shadow somewhere in it\n\nVISUAL STYLE:\n- Keep it dark gothic throughout, candlelit crypts'
   },
   skillstory: {
@@ -26637,6 +26992,7 @@ function loadGenerationSettings() {
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
       if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
+      if (g('gen-written-max-words')) g('gen-written-max-words').value = (j.writtenMaxWords != null ? j.writtenMaxWords : 3000);   // v3.1.51 -- TD-941
     })
     .catch(function () {});
 }
@@ -26655,6 +27011,7 @@ function saveGenerationSettings() {
       narrativeFloor: iv('gen-narr-floor'),
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
       summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
+      writtenMaxWords: (function () { var n = parseInt((g('gen-written-max-words') || {}).value, 10); return (isFinite(n) && n >= 100) ? n : 3000; })(),   // v3.1.51 -- TD-941
       layoutLoopCostCents: (function () { var n = parseInt((g('layout-loop-cost') || {}).value, 10); return (isFinite(n) && n >= 1) ? n : 8; })()   // v3.0.356 -- never send 0
     })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -33491,6 +33848,12 @@ function _narratorRender() {
   cb.checked = on;
   cb.disabled = locked;
   pick.style.display = on ? '' : 'none';
+  // v3.1.49 -- TD-941. Already Written keeps the author's words, so neither the length nor the first
+  // person applies (Ian). Both controls are greyed and say why; their saved values are left alone, so
+  // switching back to another style finds them as they were.
+  var _written = (style === 'written');
+  _writtenControls(_written);
+  if (_written) { cb.checked = false; cb.disabled = true; pick.style.display = 'none'; }
   var cid = state.currentCampaign && state.currentCampaign.id;
   var list = (_narrCast.campaignId != null && String(_narrCast.campaignId) === String(cid)) ? _narrCast.list : [];
   // v3.1.31 -- on Calm & Literal the story is always "I", so NOBODY is a real choice, and it is shown
@@ -33522,6 +33885,30 @@ function _narratorRender() {
     'With Nobody in particular it is still told as \u201cI\u201d, but nobody is featured in the pictures \u2014 choose a character if you are in the story.';
   if (note) note.textContent = _nt;
   var _ni = document.getElementById('narrator-info'); if (_ni) _ni.title = _nt;
+}
+
+// v3.1.49 -- TD-941. Grey the Narrative length dial and the In first person box for Already Written, with
+// one line saying why. Called from _narratorRender, which runs whenever the narrative window opens.
+function _writtenControls(on) {
+  var vd = document.getElementById('verbosity-dial');
+  var np = document.getElementById('narrator-panel');
+  [vd, np].forEach(function (el) {
+    if (!el) return;
+    el.style.opacity = on ? '0.45' : '';
+    // The length buttons and the narrator list. The first-person box itself is set by _narratorRender.
+    var bs = el.querySelectorAll('button.vseg-btn, select');
+    for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on;
+  });
+  var note = document.getElementById('written-note');
+  if (!note && vd && vd.parentNode) {
+    note = document.createElement('div');
+    note.id = 'written-note';
+    note.style.cssText = 'display:none;font-size:12px;color:#e8c766;margin:0 0 8px;line-height:1.4;';
+    note.textContent = 'Already Written keeps your words exactly as you wrote them, so Narrative length and In first person do not apply.';
+    var row = document.getElementById('narr-settings-row') || vd;
+    row.parentNode.insertBefore(note, row.nextSibling);
+  }
+  if (note) note.style.display = on ? '' : 'none';
 }
 
 function _narratorToggle(checked) {
@@ -34332,4 +34719,16 @@ function _sessNavLabel(s) {
   if (s.name && String(s.name).trim()) return String(s.name).trim();
   var d = String(s.session_date || '').split('T')[0];
   return d || 'Untitled session';
+}
+
+function _helpFormat(text) {
+  // v3.1.42 -- TD-811. Escape FIRST, then turn a small set of markdown into tags, so nothing the answer
+  // contains can become markup of its own. **bold**, *italic*, "# Heading" lines as bold, "* item" as a dot.
+  // Markers never span a line, and a lone asterisk (5 * 3) is left as it is.
+  var s = escapeHtml(String(text == null ? '' : text));
+  s = s.replace(/^[ \t]*#{1,4}[ \t]+(.+)$/gm, '<strong>$1</strong>');
+  s = s.replace(/^([ \t]*)[*][ \t]+/gm, '$1\u2022 ');
+  s = s.replace(/[*][*]((?:[^*\n]|[*](?![*]))*?[^*\s\n])[*][*]/g, function (m, t) { return /^\s/.test(t) ? m : '<strong>' + t + '</strong>'; });
+  s = s.replace(/(^|[^\w*])[*]([^*\s\n](?:[^*\n]*[^*\s\n])?)[*](?![\w*])/g, '$1<em>$2</em>');
+  return s;
 }

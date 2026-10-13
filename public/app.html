@@ -82,9 +82,21 @@
     <!-- v3.0.676 -- TD-475. The lone-copper badge is retired: it said COPPER beside a tier badge
          already saying Copper. Its warning lives in the tier badge tooltip now. -->
     <span id="lone-badge" style="display:none;"></span>
+    <!-- v3.1.47 -- TD-934. SOMEONE GAVE YOU A GIFT (Ian, 2026-10-01). Shown from the gift's day until it is
+         redeemed, for gifts sent to this account's confirmed email. Filled by refreshGiftBadge(). -->
+    <a id="gift-badge" href="/redeem" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#e8c766;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;text-decoration:none;cursor:pointer;" title="Someone gave you a Campaignia gift. Click to redeem it."><span aria-hidden="true">&#127873;</span> <span id="gift-badge-text">SOMEONE GAVE YOU A GIFT</span></a>
+    <!-- v3.1.48 -- On a phone the header has no room for it (Ian: no extra height either), so the gift is a small
+         icon pinned to the corner of the account button (#gift-pin) and the top line of the account menu. -->
+    <style>
+      @media (max-width: 640px) { #gift-badge { display: none !important; } #gift-pin.on { display: flex !important; } }
+      #gift-pin { position: absolute; top: -6px; left: -9px; z-index: 5; width: 22px; height: 22px; border-radius: 50%;
+        background: #e8c766; box-shadow: 0 0 0 2px rgba(10,8,6,0.85); align-items: center; justify-content: center;
+        font-size: 12px; line-height: 1; text-decoration: none; }
+    </style>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
     <button id="help-fab" class="btn btn-sm help-nudge" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
     <div class="user-menu-wrap">
+      <a id="gift-pin" href="/redeem" style="display:none;" title="Someone gave you a gift. Tap to redeem it." aria-label="Someone gave you a gift. Tap to redeem it."><span aria-hidden="true">&#127873;</span></a>
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
         <span id="user-name">Loading...</span>
@@ -92,6 +104,7 @@
       </div>
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
+        <a class="user-menu-item" id="gift-menu-item" href="/redeem" style="display:none;font-weight:700;color:#e8c766;text-decoration:none;"><span aria-hidden="true">&#127873;</span> <span id="gift-menu-text">Someone gave you a gift</span></a>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">My Account</div>
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
@@ -1038,7 +1051,26 @@
             <span class="fr-result" id="fr-result"></span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-            <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+            <!-- v3.1.51 -- TD-941. The two style buttons, as on Review and Storyboard (Ian), so the narrative
+                 style -- Already Written above all -- can be chosen BEFORE the first Generate Story. -->
+            <!-- On a phone the three stay on ONE row (Ian): smaller type, no "Narrative:" / "Art:" prefix (the full
+                 label is the tooltip), and in the last resort a long name is cut short rather than pushing
+                 Generate Story onto a line of its own. -->
+            <style>
+              @media (max-width: 640px) {
+                .notes-toolbar > div:last-child { width: 100%; }
+                #story-style-row { flex-wrap: nowrap !important; gap: 6px !important; width: 100%; }
+                #story-style-row .btn { font-size: 11.5px; padding: 6px 8px; white-space: nowrap; }
+                #story-narr-style-btn, #story-art-style-btn { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+                #extract-btn { flex: 0 0 auto; }
+                #story-style-row .sty-pre { display: none; }
+              }
+            </style>
+            <div id="story-style-row" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;">
+              <button class="btn btn-sm dm-only" id="story-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
+              <button class="btn btn-sm dm-only" id="story-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
+              <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+            </div>
             <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
           </div>
         </div>
@@ -1050,31 +1082,43 @@
         </div>
 
         <!-- Transcript (left) and Notes (right), side by side -->
+        <!-- v3.1.52 -- Ian: the lines under the two boxes were hardly readable, and the word counts could not be seen
+             at all (#6b5f55 on near-black). Scoped to the Story tab. The counts take their colour from this rule, not
+             an inline style, so the amber "past the Already Written limit" colour set by updateWordCounts still wins. -->
+        <style>
+          #session-tab-notes .story-count { font-size: 12px; color: rgba(240,232,208,0.82); }
+          #session-tab-notes .form-hint { font-size: 12px; color: rgba(232,213,163,0.78); }
+          #session-tab-notes .story-sub { color: rgba(232,213,163,0.72); }
+          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(201,168,76,0.8); }
+        </style>
         <div class="notes-grid">
           <div class="form-group">
+            <!-- v3.1.51 -- Ian: line the story box up with the instructions box. The label takes the class's own
+                 margin, as the instructions label does, and the button is short enough (16px + 5px) never to make
+                 this row taller than that label: both boxes now start at the same height. -->
             <!-- v3.0.865 -- TD-733. The Import button rides the LABEL ROW: no new vertical space,
                  always visible, and it can never sit on top of the text. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-              <label class="form-label" style="margin-bottom:6px;">Story / Session Transcript</label>
-              <button class="btn btn-sm" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:6px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+              <label class="form-label">Story / Session Transcript</label>
+              <button class="btn btn-xs" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
             </div>
             <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
                  rather than a new class, so this batch touches no stylesheet. -->
             <div id="transcript-wrap" style="position:relative;">
-            <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Paste your session transcript here..."></textarea>
+            <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Type or paste your story here &mdash; a transcript, a written story, notes or an outline..."></textarea>
             </div>
-            <div id="transcript-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
+            <div id="transcript-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— director's instructions for the AI</span></label>
+            <label class="form-label">Story Notes and Instructions <span class="story-sub" style="font-weight:400;text-transform:none;letter-spacing:0;">— director's instructions for the AI</span></label>
             <textarea class="transcript-box" id="session-notes-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Tell Campaignia what to do. Write instructions, not notes...&#10;&#10;MANDATORY SCENES:&#10;- Make sure you have a moment showing Zara betraying the party at the bridge&#10;&#10;EVERY MOMENT:&#10;- Make sure each moment has Theron&#8217;s wolf Shadow somewhere in it&#10;&#10;VISUAL STYLE:&#10;- Keep it dark gothic throughout, candlelit crypts"></textarea>
-            <div id="session-notes-wordcount" style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:2px;">0 words</div>
+            <div id="session-notes-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
             <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
           </div>
         </div>
 
-        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Notes and transcript save automatically when you click away from the box, and again when you click Generate Story</div>
+        <div class="story-savenote" style="margin-top:6px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>
@@ -1575,6 +1619,10 @@
           <div class="settings-section-title" style="font-size:14px;">Platinum Passes</div>
           <div class="settings-section-desc" id="account-passes-desc">Months of Platinum access and a block of tokens, paid once. Nothing to cancel.</div>
           <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
+          <!-- v3.1.46 -- TD-934. Shown only while gifts are switched on. -->
+          <div id="account-gift-link" class="settings-section-desc" style="display:none;margin-top:12px;">
+            Know someone who would love this? <a href="/gift" target="_blank" rel="noopener" style="color:var(--gold);font-weight:600;">Give Campaignia as a gift</a>.
+          </div>
         </div>
       </div>
 
@@ -1673,6 +1721,8 @@
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
         <button class="settings-tab" id="settings-tab-promos" onclick="switchSettingsTab('promos')">Promo Codes</button>
+        <!-- v3.1.43 -- TD-934. Gift certificates. Admin only, by membership of SETTINGS_TABS_ALL. -->
+        <button class="settings-tab" id="settings-tab-gifts" onclick="switchSettingsTab('gifts')">Gifts</button>
         <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
              now reachable by testers and impersonation must never be. -->
         <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
@@ -1841,6 +1891,10 @@
             <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
             <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
             <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
+            <option value="gift">Gift &mdash; to the recipient</option>
+            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
+            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
+            <option value="gift_redeemed">Gift &mdash; buyer told it was redeemed</option>
             <option value="feedback">Feedback (to support)</option>
             <option value="trial_ending_soon">Trial &mdash; ending soon</option>
             <option value="trial_expired">Trial &mdash; expired</option>
@@ -1881,6 +1935,9 @@
           <!-- v3.0.967 -- TD-852. The model is told this number and writes to fit it. -->
           <label style="color:var(--gold);font-size:13px;">Summary For Next Session &mdash; character limit</label>
           <input type="number" min="200" step="50" id="gen-summary-limit" style="width:110px;" />
+          <!-- v3.1.51 -- TD-941. A warning, never a refusal: past this, Already Written asks before generating. -->
+          <label style="color:var(--gold);font-size:13px;" title="Already Written keeps every word, so a long story makes a wall of text between pictures. Past this many words in one session, people are warned and can still continue.">Already Written &mdash; recommended words per session</label>
+          <input type="number" min="100" step="100" id="gen-written-max-words" style="width:110px;" />
         </div>
         </div>
 
@@ -2104,6 +2161,68 @@
            The list keeps its OWN scroll box rather than growing the page, because the lazy load is
            driven by that element's scroll position -- letting the tab grow instead would need a
            window listener and a different mechanism for the same result. -->
+      <!-- v3.1.43 -- TD-934. GIFTS. Spec: claude/GIFT_CERTIFICATES_SPEC.md.
+           The switch is per server (staging and production each keep their own) and needs no deploy.
+           The list never shows a code: only its last four characters, because the full code is never
+           stored. Resend makes a NEW code, so the old one stops working. -->
+      <div class="settings-pane" id="settings-pane-gifts" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Gifts on this server</div>
+          <div class="settings-section-desc" id="gift-switch-desc">Loading...</div>
+          <button class="btn btn-sm" id="gift-switch-btn" onclick="toggleGiftsEnabled()" style="display:none;">Switch on</button>
+          <span class="settings-section-desc" id="gift-switch-msg" style="margin:0 0 0 8px;"></span>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Pass to tokens</div>
+          <div class="settings-section-desc">Anyone redeeming a gifted pass can take tokens instead of the months. They get the pass&#39;s list price divided by this rate, rounded down. The rate is read when the gift is redeemed, so a change here applies to every pass gift not yet redeemed, paid or free.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input class="form-input" id="gift-rate-input" type="number" min="0.01" step="0.01" style="width:110px;" oninput="renderGiftRatePreview()" />
+            <span style="font-size:13px;">cents per token</span>
+            <button class="btn btn-primary btn-sm" onclick="saveGiftRate()">Save rate</button>
+            <span class="settings-section-desc" id="gift-rate-msg" style="margin:0;"></span>
+          </div>
+          <div class="settings-section-desc" id="gift-rate-preview" style="margin-top:8px;"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Send a free gift</div>
+          <div class="settings-section-desc">For giveaways, influencers and apologies. Kept apart from sales. Leave the date empty to send it now; a date sends it at 9am Eastern that day.</div>
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;max-width:620px;">
+            <label style="color:var(--gold);font-size:13px;" for="gift-item-input">Gift</label>
+            <select class="form-input" id="gift-item-input"></select>
+            <label style="color:var(--gold);font-size:13px;" for="gift-to-name">Recipient&#39;s name</label>
+            <input class="form-input" id="gift-to-name" maxlength="80" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-to-email">Recipient&#39;s email</label>
+            <input class="form-input" id="gift-to-email" type="email" maxlength="254" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-from-name">From</label>
+            <input class="form-input" id="gift-from-name" maxlength="80" value="Campaignia" />
+            <label style="color:var(--gold);font-size:13px;" for="gift-message">Message <span style="color:var(--text-muted);">(optional)</span></label>
+            <textarea class="form-input" id="gift-message" maxlength="300" rows="3" style="resize:vertical;"></textarea>
+            <label style="color:var(--gold);font-size:13px;" for="gift-deliver-on">Deliver on <span style="color:var(--text-muted);">(optional)</span></label>
+            <input class="form-input" id="gift-deliver-on" type="date" style="width:180px;" />
+          </div>
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="gift-comp-btn" onclick="sendCompGift()">Send gift</button>
+            <span class="settings-section-desc" id="gift-comp-msg" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">All gifts</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;">
+            <select class="form-input" id="gift-f-status" style="width:170px;" onchange="loadGifts()">
+              <option value="">Every status</option>
+              <option value="pending_payment">Awaiting payment</option>
+              <option value="paid">Not sent yet</option>
+              <option value="delivered">Sent</option>
+              <option value="redeemed">Redeemed</option>
+              <option value="void">Void</option>
+              <option value="abandoned">Checkout abandoned</option>
+            </select>
+            <input class="form-input" id="gift-f-q" style="width:240px;" placeholder="name, email or last 4 of the code" onkeydown="if(event.key==='Enter')loadGifts()" />
+            <button class="btn btn-primary btn-sm" onclick="loadGifts()">Filter</button>
+          </div>
+          <div id="gift-list" class="settings-section-desc">Loading...</div>
+        </div>
+      </div>
       <div class="settings-pane" id="settings-pane-orders" style="display:none;">
         <div class="settings-section">
           <div class="settings-section-title">Orders &mdash; All Users</div>

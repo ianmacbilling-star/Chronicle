@@ -198,6 +198,11 @@ async function createPassCheckout(opts) {
       quoted_tier: String(pass.tier)
     }
   };
+  // v3.1.45 -- TD-938. What the buyer chose for their subscription (sub_choice) travels with the
+  // payment, so the webhook does what they agreed to on screen. Only string values, as Stripe wants.
+  if (opts.extraMetadata) {
+    Object.keys(opts.extraMetadata).forEach(function (k) { params.metadata[k] = String(opts.extraMetadata[k]); });
+  }
   Object.assign(params, buyerRef(opts), invoiceRef(opts, 'pass', { pass_id: String(pass.id) }));   // v3.0.945 -- TD-791, v3.0.946 invoice
   return await stripe.checkout.sessions.create(params);
 }
@@ -211,6 +216,87 @@ async function cancelSubscriptionAtPeriodEnd(subId) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
   return await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
+}
+
+// v3.1.46 -- TD-934 step 2. A GIFT PURCHASE. An ordinary one-time payment; everything that makes it a
+// gift lives in our gift_certificates row, whose id rides in the metadata. PROMO CODES ARE OFF
+// (Ian, 2026-10-01 -- TD-936 for later). The amount is the frozen quote saved on the row, never the
+// client's. A signed-in buyer pays as their own Stripe customer; a guest's email is prefilled from
+// the gift form, so the receipt and the daily limit both have an address.
+// STRIPE_PRODUCT_GIFTS, when set, points the line at its own Product so a future gift promo code can
+// target gifts alone without spilling onto passes (TD-936).
+// v3.1.62 -- FINDABLE IN STRIPE (Ian, 2026-10-13: "I can't see the Gift Code or the Gift ID... I'm just going
+// by email address and time"). Every gift payment carries, as its description (shown in Stripe's payments
+// list) and in metadata, the Purchase ID on the buyer's receipt, what it was, who it is for, and -- once it
+// exists -- the LAST 4 of the code, which is what a recipient can read out. NEVER the whole code: anyone
+// holding it can redeem the gift, and Stripe's description can appear on Stripe's own receipts.
+function giftPaymentDescription(g, last4) {
+  if (!g) return '';
+  const what = g.item_kind === 'pass' ? (g.months + ' months of Platinum') : ((g.tokens || 0) + ' tokens');
+  const em = String(g.recipient_email || ''); const at = em.lastIndexOf('@');
+  const who = g.recipient_name ? String(g.recipient_name) : (at > 0 ? em.charAt(0) + '***' + em.slice(at) : '');
+  return 'Campaignia gift GIFT-' + g.id + ' \u00b7 ' + what + (who ? ' \u00b7 for ' + who : '') + (last4 ? ' \u00b7 code ending ' + String(last4).toUpperCase() : '');
+}
+// After payment, and again whenever a gift gets a new code (a resend): the description and metadata with the
+// code's last 4. Stripe merges metadata keys, so kind and gift_id stay. Returns null when Stripe is not set up.
+async function labelGiftPayment(paymentIntentId, g, last4) {
+  const stripe = getClient();
+  if (!stripe || !paymentIntentId || !g) return null;
+  const md = { purchase_id: 'GIFT-' + g.id };
+  if (last4) md.code_last4 = String(last4).toUpperCase();
+  return await stripe.paymentIntents.update(paymentIntentId, { description: giftPaymentDescription(g, last4), metadata: md });
+}
+
+async function createGiftCheckout(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const g = opts.gift;
+  const params = {
+    mode: 'payment',
+    allow_promotion_codes: false,
+    line_items: [{
+      quantity: 1,
+      price_data: Object.assign({ currency: 'usd', unit_amount: g.price_cents },
+        productRef('STRIPE_PRODUCT_GIFTS', 'Campaignia gift -- ' + g.item_name))
+    }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    metadata: {
+      kind: 'gift',
+      gift_id: String(g.id),
+      item_kind: String(g.item_kind),
+      item_id: String(g.item_id),
+      quoted_price_cents: String(g.price_cents),
+      purchase_id: 'GIFT-' + g.id   // v3.1.62
+    },
+    // v3.1.62 -- the description and purchase_id make the payment findable in Stripe; see giftPaymentDescription.
+    payment_intent_data: { description: giftPaymentDescription(g, null), metadata: { kind: 'gift', gift_id: String(g.id), purchase_id: 'GIFT-' + g.id } }
+  };
+  if (opts.userId != null) { params.client_reference_id = String(opts.userId); params.metadata.user_id = String(opts.userId); }
+  Object.assign(params, buyerRef(opts), invoiceRef(opts, 'gift', { gift_id: String(g.id) }));
+  return await stripe.checkout.sessions.create(params);
+}
+
+// v3.1.46 -- refund a gift in full. Throws on failure, so the caller can put the gift back.
+async function refundPaymentIntent(paymentIntentId, reason) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  if (!paymentIntentId) throw new Error('no payment to refund');
+  return await stripe.refunds.create({ payment_intent: paymentIntentId, metadata: { reason: String(reason || 'gift voided') } });
+}
+
+// v3.1.45 -- TD-938. PAUSE A SUBSCRIPTION'S BILLING UNTIL A PASS ENDS.
+// Stripe docs (docs.stripe.com/billing/subscriptions/pause-payment, read 2026-10-01): with
+// pause_collection the subscription "remains active", invoices still generate, and with
+// behavior 'void' they are voided -- "No record of charges is created for these periods", and
+// Stripe sends no upcoming-invoice emails or webhooks for them. resumes_at (Unix seconds) restarts
+// collection by itself. Setting it again simply moves the date, which is how a second pass extends it.
+async function pauseSubscriptionCollection(subId, resumesAtUnix) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const t = parseInt(resumesAtUnix, 10);
+  if (!(t > Math.floor(Date.now() / 1000))) throw new Error('resumes_at must be in the future');
+  return await stripe.subscriptions.update(subId, { pause_collection: { behavior: 'void', resumes_at: t } });
 }
 
 // Create a hosted Checkout Session for a recurring tier SUBSCRIPTION. priceId is a
@@ -425,8 +511,42 @@ async function getPrice(priceId) {
   return await stripe.prices.retrieve(priceId);
 }
 
+// v3.1.60 -- TD-934. WHAT STRIPE KNOWS ABOUT A PAYMENT, for the gift dispute race and the dispute alert.
+// The payment's own metadata (a gift payment carries kind 'gift' and gift_id), whether its charge is
+// disputed or refunded, the payer's email and the description. opts.session also reads the checkout
+// session's metadata, which names what was bought for passes, packs and books. NULL ON ANY FAILURE:
+// every caller treats null as 'unknown' and changes nothing because of it.
+async function paymentDetails(paymentIntentId, opts) {
+  const stripe = getClient();
+  if (!stripe || !paymentIntentId) return null;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+    const ch = (pi && pi.latest_charge && typeof pi.latest_charge === 'object') ? pi.latest_charge : null;
+    let sessionMetadata = null;
+    if (opts && opts.session) {
+      try {
+        const list = await stripe.checkout.sessions.list({ payment_intent: paymentIntentId, limit: 1 });
+        const s = list && list.data && list.data[0];
+        sessionMetadata = s ? (s.metadata || {}) : null;
+      } catch (_) { sessionMetadata = null; }
+    }
+    return {
+      metadata: (pi && pi.metadata) || {},
+      sessionMetadata: sessionMetadata,
+      disputed: !!(ch && ch.disputed),
+      refunded: !!(ch && ch.refunded),
+      email: (ch && ch.billing_details && ch.billing_details.email) || (pi && pi.receipt_email) || null,
+      description: (pi && pi.description) || null
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
-  createPassCheckout, cancelSubscriptionAtPeriodEnd,
+  paymentDetails,   // v3.1.60
+  giftPaymentDescription, labelGiftPayment,   // v3.1.62
+  createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection, createGiftCheckout, refundPaymentIntent,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
   isConfigured,

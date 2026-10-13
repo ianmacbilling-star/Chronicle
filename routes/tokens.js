@@ -16,6 +16,7 @@ const { friendlyError } = require('../middleware/friendlyErrors');
 const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
 const { getPass, listPasses } = require('../services/billing/passes');   // v3.0.923 -- TD-780
+const subscriptionPause = require('../services/billing/subscriptionPause');   // v3.1.45 -- TD-938
 const stripeProvider = require('../services/billing/stripeProvider');
 const { ensureStripeCustomer, linkPaymentCustomer } = require('../services/billing/stripeCustomer');   // v3.0.945 -- TD-791
 const { logDebug } = require('./debug');
@@ -534,6 +535,25 @@ router.post('/pass-checkout', async function(req, res) {
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
   }
+  // v3.1.45 -- TD-938. THEY SEE WHAT HAPPENS TO THEIR SUBSCRIPTION BEFORE THEY PAY, AND THE SERVER
+  // CHECKS IT. Platinum: it stops renewing (confirmEnd). Silver/Gold: it pauses until the pass ends
+  // (confirmPause). This refuses to start a checkout until the right confirmation is in the request,
+  // so nobody reaches Stripe without having been told.
+  let _subPlan = null;
+  try {
+    const _db0 = await getDb();
+    const _row0 = await _db0.prepare('SELECT tier, stripe_subscription_id, subscription_status, cancel_at_period_end, current_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
+    _subPlan = subscriptionPause.planForPass(_row0 || {}, '');
+    if (_subPlan.sub === 'platinum' && _subPlan.action === 'cancel' && (req.body || {}).confirmEnd !== true) {
+      return res.status(409).json({ code: 'CONFIRM_SUBSCRIPTION_ENDS', error: 'Please confirm what happens to your Platinum subscription first.' });
+    }
+    if ((_subPlan.sub === 'silver' || _subPlan.sub === 'gold') && (req.body || {}).confirmPause !== true) {
+      return res.status(409).json({ code: 'CONFIRM_SUBSCRIPTION_PAUSE', sub: _subPlan.sub, error: 'Please confirm that your subscription will be paused while the pass runs.' });
+    }
+  } catch (e) {
+    console.error('pass checkout: could not read the subscription:', e && e.message);
+    return res.status(500).json({ error: "We couldn't check your subscription just now. Please try again." });
+  }
   try {
     const db = await getDb();
     let buyerEmail = null;
@@ -549,6 +569,9 @@ router.post('/pass-checkout', async function(req, res) {
       userId: req.session.userId,
       customerId: _buyerCustomerId,
       customerEmail: buyerEmail,
+      // v3.1.45 -- TD-938. Recorded for the support trail: 'pause' for a Silver/Gold subscriber, else empty.
+      // The webhook does not depend on it; it re-reads the account and applies the same rule.
+      extraMetadata: { sub_choice: (_subPlan && (_subPlan.sub === 'silver' || _subPlan.sub === 'gold')) ? 'pause' : '' },
       successUrl: base + '/app.html?pass=success',
       cancelUrl: base + '/app.html?pass=cancel'
     });
@@ -901,6 +924,15 @@ async function stripeWebhook(req, res) {
         // looks up md.pack_id, would find nothing, and would return having granted nothing at
         // all. Money taken, silence.
         _receipt = await fulfillPassCheckout(s, event.id);
+      } else if (s && s.metadata && s.metadata.kind === 'gift') {
+        // v3.1.46 -- TD-934 step 2. A GIFT, BEFORE THE PACK FALLBACK, for exactly the reason the pass
+        // branch above gives: fulfillCheckout would look for md.pack_id, find nothing, and return having
+        // recorded nothing. The gift sends its own receipt (to a buyer who may have no account) and its
+        // own delivery, so _receipt stays null here.
+        const _email = require('./email');
+        await require('../services/gifts').fulfillGiftCheckout(await getDb(), s, {
+          sendReceipt: _email.sendGiftReceiptEmail, sendGift: _email.sendGiftEmail
+        });
       } else if (s && s.metadata && s.metadata.kind === 'print_order') {
         // Paid book order: submit the job to the print vendor now (payment-first).
         // NO RECEIPT HERE EITHER, deliberately: fulfillPrintOrder sends its own confirmation
@@ -927,6 +959,28 @@ async function stripeWebhook(req, res) {
       // ?order=cancel fires only if the reader clicks back from Stripe; closing the tab, switching
       // apps or simply walking away produces nothing at all. This one always arrives.
       await markCheckoutExpired(event.data.object);
+    } else if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {
+      // v3.1.46 -- TD-934. A refund or dispute on a GIFT voids it if unused (its code stops working);
+      // a redeemed one is never clawed back -- Ian is emailed. Anything that is not a gift: no-op.
+      // These two events must be switched on for the webhook endpoint in the Stripe dashboard.
+      const _o = event.data.object || {};
+      const _pi = (_o.payment_intent && typeof _o.payment_intent === 'object') ? _o.payment_intent.id : (_o.payment_intent || null);
+      let _gift = null;
+      if (event.type === 'charge.dispute.created' || _o.refunded === true) {
+        try { _gift = await require('../services/gifts').handleGiftPaymentReversal(await getDb(), _pi, event.type === 'charge.dispute.created' ? 'dispute' : 'refund'); }
+        catch (gErr) { console.error('gift reversal failed (non-fatal):', gErr && gErr.message); }
+      }
+      // v3.1.60 -- EVERY DISPUTE EMAILS SUPPORT AND THE ALERT ADDRESS (Ian, 2026-10-12: "Email Support on
+      // every dispute... not just redeemed gifts"). Any purchase: a gift, a pass, tokens, a book, a
+      // subscription. Behind ALERTS_ENABLED like every alert (off on staging, where it writes a log line).
+      // Best effort: it can never fail the webhook.
+      if (event.type === 'charge.dispute.created') {
+        try {
+          let _det = null;
+          try { _det = await stripeProvider.paymentDetails(_pi, { session: true }); } catch (_) { _det = null; }
+          await require('./email').sendDisputeAlertEmail({ dispute: _o, paymentIntentId: _pi, details: _det, gift: _gift, livemode: !!event.livemode });
+        } catch (dErr) { console.error('dispute alert failed (non-fatal):', dErr && dErr.message); }
+      }
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       // Also the prorated charge for a mid-cycle upgrade, which gets a receipt but no grant.
@@ -1098,8 +1152,12 @@ async function fulfillPassCheckout(session, eventId) {
   ).run(userId, 'pass:' + pass.id, paid, tokens, sessionId, session.payment_intent || null);
   const purchaseId = (insRes && insRes.lastInsertRowid) ? insRes.lastInsertRowid : null;
 
-  const row = await db.prepare('SELECT pass_expires_at, current_period_end, stripe_subscription_id, subscription_status FROM users WHERE id = ?').get(userId);
-  const fromMs = passStackFrom(Date.now(), row && row.pass_expires_at, row && row.current_period_end);
+  const row = await db.prepare('SELECT tier, pass_expires_at, current_period_end, stripe_subscription_id, subscription_status, cancel_at_period_end, sub_paused_until FROM users WHERE id = ?').get(userId);
+  // v3.1.45 -- TD-938. The plan is read from the account AS IT IS NOW (it may have changed since the
+  // checkout started). A Silver/Gold subscriber's pass starts today and their billing pauses; anyone
+  // else's waits for a paid-up period that is ending, exactly as before.
+  const subPlan = subscriptionPause.planForPass(row || {}, '');
+  const fromMs = passStackFrom(Date.now(), row && row.pass_expires_at, subPlan.stackPeriodEnd);
   const until = passAddMonths(fromMs, months);
   await db.prepare('UPDATE users SET pass_tier = ?, pass_expires_at = ? WHERE id = ?')
     .run(passTier, until.toISOString(), userId);
@@ -1139,35 +1197,44 @@ async function fulfillPassCheckout(session, eventId) {
   // line 620 counts four, asks STRIPE rather than our DB, and answers a different question -- can
   // this subscription be re-priced. Folding them together would change behaviour in a billing read
   // this batch has no business touching. Recorded instead: the convergence is its own item.
+  // v3.1.45 -- TD-938. WHAT THE PASS DOES TO THE SUBSCRIPTION, from subPlan above:
+  //   'cancel' -- a Platinum subscriber (who confirmed it before paying), or a stray billing
+  //               subscription on a non-subscriber row: stop renewing at period end, as v3.0.935 did.
+  //   'pause'  -- Silver/Gold: Stripe stops billing until the pass ends, then restarts by itself.
+  // STILL LAST IN THIS FUNCTION, AND STILL UNABLE TO THROW PAST THIS POINT (v3.0.935's reasoning,
+  // unchanged): the pass and tokens are already written, so a Stripe failure here must leave the
+  // customer with their pass and a subscription that keeps billing -- visible and fixable -- and
+  // must not fail the webhook.
+  const subId = row && row.stripe_subscription_id;
   try {
-    const subId = row && row.stripe_subscription_id;
-    const st = (row && row.subscription_status) || '';
-    const canStillBill = ['active', 'trialing', 'past_due', 'unpaid', 'paused'].indexOf(st) !== -1;
-    if (subId && canStillBill) {
+    if (subPlan.action === 'cancel' && subId) {
       await stripeProvider.cancelSubscriptionAtPeriodEnd(subId);
-      // The local columns are NOT written here. customer.subscription.updated lands within
-      // seconds and syncSubscriptionToUser writes cancel_at_period_end from Stripe, and the
-      // account page calls /sync-subscription before it renders anyway. A write here would be a
-      // second source of truth for a field Stripe already owns.
       try {
-        await logDebug(userId, {
-          level: 'info', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
-          message: 'Pass bought while subscribed -- subscription set to cancel at period end',
-          detail: { subscription: subId, status: st, pass: pass.id }
-        });
+        await logDebug(userId, { level: 'info', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
+          message: 'Pass bought by a ' + subPlan.sub + ' subscriber -- subscription set to stop renewing at period end',
+          detail: { subscription: subId, pass: pass.id } });
+      } catch (_le) {}
+    } else if (subPlan.action === 'pause' && subId) {
+      await subscriptionPause.pauseForPass(db, userId, subId, until.toISOString());
+      try {
+        await logDebug(userId, { level: 'info', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
+          message: 'Pass bought by a ' + subPlan.sub + ' subscriber -- billing paused until the pass ends',
+          detail: { subscription: subId, pass: pass.id, resumes: until.toISOString(), extended: subPlan.alreadyPaused } });
       } catch (_le) {}
     }
   } catch (e) {
-    // LOUD IN THE LOG, SILENT TO STRIPE. Somebody is now holding a pass AND a live subscription,
-    // which is the state this batch exists to prevent, so it must be findable -- but the purchase
-    // succeeded and the webhook must still answer 200.
+    // LOUD IN THE LOG AND TO IAN, SILENT TO STRIPE. The purchase succeeded; the webhook must answer 200.
     try {
-      await logDebug(userId, {
-        level: 'error', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
-        message: 'COULD NOT CANCEL THE SUBSCRIPTION after a pass purchase -- this user is being',
-        detail: { error: e && e.message, subscription: row && row.stripe_subscription_id }
-      });
+      await logDebug(userId, { level: 'error', source: 'billing', page: 'Pass purchase', fn: 'fulfillPassCheckout',
+        message: 'COULD NOT ' + (subPlan.action === 'pause' ? 'PAUSE' : 'CANCEL') + ' THE SUBSCRIPTION after a pass purchase -- this user holds a pass and is still being billed',
+        detail: { error: e && e.message, subscription: subId, action: subPlan.action } });
     } catch (_le2) {}
+    try {
+      await require('./email').sendAlertEmail('Pass bought, but the subscription could not be ' + (subPlan.action === 'pause' ? 'paused' : 'stopped'),
+        'User ' + userId + ' bought ' + pass.id + '. Their ' + subPlan.sub + ' subscription ' + subId + ' could not be ' +
+        (subPlan.action === 'pause' ? 'paused until ' + until.toISOString().slice(0, 10) : 'set to stop at period end') +
+        ': ' + ((e && e.message) || 'unknown error') + String.fromCharCode(10) + 'Do it by hand in the Stripe dashboard.');
+    } catch (_ae) {}
   }
   // v3.0.961 -- TD-836. A pass receipt carries the two things a pass holder needs to keep:
   // which tier it grants and the date it runs to. `until` is the stacked expiry computed
@@ -1177,7 +1244,9 @@ async function fulfillPassCheckout(session, eventId) {
            itemName: pass.name || 'Platinum Pass',
            amountCents: paid, currency: session.currency,
            tokensGranted: tokens, tierLabel: passTier,
-           runsUntil: until.toISOString() };
+           runsUntil: until.toISOString(),
+           // v3.1.45 -- TD-938. One line on the receipt saying what happened to their subscription.
+           subscriptionNote: subscriptionPause.describePlan(subPlan, (subPlan.sub || '').charAt(0).toUpperCase() + (subPlan.sub || '').slice(1), until.toISOString()) };
 }
 
 // ------------------------------------------------------------
@@ -1319,10 +1388,22 @@ async function syncSubscriptionToUser(subscription) {
   if (!periodEnd && subscription.cancel_at) {
     try { periodEnd = new Date(subscription.cancel_at * 1000).toISOString(); } catch (e) {}
   }
+  // v3.1.45 -- TD-938. STRIPE OWNS THE PAUSE; WE MIRROR IT. pause_collection is set when a pass
+  // pauses billing (and by anyone using the Stripe dashboard), and cleared when it resumes. While it is
+  // set the subscription's status stays 'active' (Stripe docs), so nothing above changes the tier.
+  // Paused with no resume date (only possible from the dashboard) is stored as a far-future date so
+  // "paused" still reads true.
+  let pausedUntil = null;
+  try {
+    const pc = subscription.pause_collection;
+    if (pc && typeof pc === 'object') {
+      pausedUntil = pc.resumes_at ? new Date(pc.resumes_at * 1000).toISOString() : '2999-01-01T00:00:00.000Z';
+    }
+  } catch (e) { pausedUntil = null; }
   await db.prepare(
-    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, current_period_end = ?, cancel_at_period_end = ?, tier = ? WHERE id = ?"
-  ).run(customerId, subId, status, periodEnd, cancelAtEnd, nextTier, user.id);
-  return { skipped: false, userId: user.id, status: status, tier: nextTier, cancelAtPeriodEnd: cancelAtEnd, currentPeriodEnd: periodEnd };
+    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, current_period_end = ?, cancel_at_period_end = ?, tier = ?, sub_paused_until = ? WHERE id = ?"
+  ).run(customerId, subId, status, periodEnd, cancelAtEnd, nextTier, pausedUntil, user.id);
+  return { skipped: false, userId: user.id, status: status, tier: nextTier, cancelAtPeriodEnd: cancelAtEnd, currentPeriodEnd: periodEnd, pausedUntil: pausedUntil };
 }
 
 // ------------------------------------------------------------
@@ -1389,6 +1470,8 @@ async function markCheckoutExpired(session) {
   if (!session) return;
   try {
     const md = session.metadata || {};
+    // v3.1.46 -- a gift checkout walked away from: its row becomes 'abandoned'.
+    if (md.kind === 'gift') { await require('../services/gifts').markGiftCheckoutAbandoned(await getDb(), session); return; }
     if (md.kind !== 'print_order') return;   // token packs and subscriptions have no order row
     const orderId = parseInt(md.order_id, 10);
     if (!Number.isFinite(orderId)) return;
@@ -1680,5 +1763,10 @@ module.exports = {
   fulfillSubscriptionUpdate,
   syncSubscriptionToUser,
   linkSubscriptionCheckout,
-  stripeWebhook
+  stripeWebhook,
+  // v3.1.43 -- TD-934. A redeemed gift pass stacks by exactly the rule a bought one does.
+  passStackFrom,
+  passAddMonths,
+  // v3.1.45 -- exported so the batch tests can drive a pass purchase end to end with Stripe stubbed.
+  fulfillPassCheckout
 };

@@ -6,7 +6,7 @@ const { getDb, getAppSettingInt } = require('../database/db');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
-const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper, ownTier } = require('../middleware/tiers');
+const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper, ownTier, passIsLive, isOnFreeTrial } = require('../middleware/tiers');   // v3.1.61 -- passIsLive, isOnFreeTrial
 const { listPacks } = require('../services/billing/packs');
 const { sendHelpTranscriptEmail } = require('./email');
 
@@ -14,6 +14,24 @@ const { sendHelpTranscriptEmail } = require('./email');
 // clarifying question before answering. Short turns, so a lightweight model is
 // plenty; overridable via HELP_MODEL without a code change.
 const { HELP_MODEL } = require('../config/models');
+
+// v3.1.64 -- GIFT CHOICES, COMPUTED, NOT REASONED (bots, 2026-10-13). Asked "why can't I take my gift as
+// tokens?", the assistant told a pass holder paying for Gold that she had a Platinum subscription and could
+// only take tokens, and told another that the tokens button was missing while it was on her screen. It was
+// predicting the Redeem page from the plan, and predicting it wrong. This line is decided by the page's own
+// rule -- subscriptionState() in services/gifts.js, which lookup and redeem() both use -- so the assistant
+// repeats what the page will offer instead of working it out. Null if anything fails: no line, no guess.
+function giftChoicesLine(u, inFreeTrial, passUntil, nowMs) {
+  let sub = 'none';
+  try { sub = require('../services/gifts').subscriptionState(u); } catch (e) { return null; }
+  if (sub === 'platinum') return 'a pass gift is offered as TOKENS ONLY (their Platinum subscription already includes everything a pass gives); a token-pack gift adds its tokens.';
+  if (inFreeTrial) return 'a pass gift is offered as the PASS ONLY (Platinum starting today, its tokens included); tokens cannot be added on the Free Trial, so there is NO Take tokens instead, and a token-pack gift waits until they choose a plan.';
+  if (sub === 'silver' || sub === 'gold') return 'a pass gift offers BOTH choices: Platinum now (starting ' + (passUntil ? 'after their current pass ends on ' + passUntil : 'today') + '; their ' + sub + ' subscription is PAUSED until the new pass ends, then restarts by itself) OR Take tokens instead (their subscription is not affected); a token-pack gift adds its tokens.';
+  const pe = u && u.current_period_end ? new Date(u.current_period_end) : null;
+  const paidUntil = (u && u.cancel_at_period_end === true && pe && isFinite(pe.getTime()) && pe.getTime() > (nowMs || Date.now())) ? pe.toISOString().slice(0, 10) : null;
+  const start = passUntil ? ('added after their current pass ends on ' + passUntil) : (paidUntil ? ('starting when their paid period ends on ' + paidUntil) : 'Platinum starting today');
+  return 'a pass gift offers BOTH choices: the pass (' + start + ') OR Take tokens instead; a token-pack gift adds its tokens.';
+}
 const MAX_TURNS = 12;   // cap conversation history sent to the model
 
 // The Campaignia Brain is the knowledge base for this assistant. It is loaded
@@ -147,7 +165,7 @@ router.post('/ask', requireAuth, async function(req, res) {
               utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, email, tier, pass_tier, pass_expires_at, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, email, tier, pass_tier, pass_expires_at, subscription_status, stripe_subscription_id, cancel_at_period_end, sub_paused_until, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.email = u.email || null;
@@ -156,7 +174,17 @@ router.post('/ask', requireAuth, async function(req, res) {
       // Copper, confidently, in their own words.
       ctx.tier = (u.tier || u.pass_tier) ? ownTier(u) : 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
-      ctx.in_free_trial = (u.subscription_status === 'trialing');
+      // v3.1.61 -- the same Free Trial test the rest of the app uses (a live pass or a subscription wins),
+      // not the billing status: an account with a pass whose status still read 'trialing' was told it was
+      // on the trial while holding Platinum.
+      ctx.in_free_trial = isOnFreeTrial(u);
+      // v3.1.61 -- WHAT THE PLAN IS MADE OF. Told only 'platinum', the assistant told a pass holder that a
+      // gifted pass could only be taken as tokens -- the rule for a Platinum SUBSCRIPTION (bots, 2026-10-12).
+      ctx.account_tier = u.tier || null;
+      ctx.cancel_at_period_end = u.cancel_at_period_end === true;
+      ctx.paused_until = (u.sub_paused_until && new Date(u.sub_paused_until).getTime() > Date.now()) ? new Date(u.sub_paused_until).toISOString().slice(0, 10) : null;
+      ctx.pass = passIsLive(u) ? { tier: u.pass_tier, until: new Date(u.pass_expires_at).toISOString().slice(0, 10) } : null;
+      ctx.gift_choices = giftChoicesLine(u, ctx.in_free_trial, ctx.pass ? ctx.pass.until : null);   // v3.1.64
       ctx.vocab = u.vocab || 'ttrpg';
       ctx.trial_started_at = u.trial_started_at || null;
       ctx.current_period_end = u.current_period_end || null;
@@ -260,10 +288,23 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   // v3.0.859 -- the role preamble moved to SYSTEM_CACHED at module scope. Every
   // line left in here is per-user or per-turn and must stay OUT of the cached block.
+  // v3.1.61 -- the plan in three parts: what they can use now, the subscription behind it, and any pass.
+  // A Platinum pass holder and a Platinum subscriber look the same in 'Plan/tier' and are treated
+  // differently by gifts, renewals and passes, so the assistant is told which one it is talking to.
+  const _paidAccount = ['silver', 'gold', 'platinum'].indexOf(ctx.account_tier) >= 0;
+  const subLine = !_paidAccount ? ('none (account tier: ' + (ctx.account_tier || 'unknown') + ')')
+    : (ctx.account_tier + ' subscription, status ' + ctx.subscription_status +
+       (ctx.paused_until ? ', billing paused until ' + ctx.paused_until : (ctx.cancel_at_period_end ? ', set to cancel at the end of the billing period' : ', billing normally (NOT paused)')));   // v3.1.64 -- say when it is not paused
+  const passLine = ctx.pass ? (ctx.pass.tier + ' pass until ' + ctx.pass.until + ' (a pass, NOT a subscription)') : 'none';
   const header = [
     'WHO YOU ARE HELPING (these live values are authoritative -- use them for any tier/token/billing answer):',
     '- Name: ' + ctx.name,
-    '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
+    '- Tier they can use right now (subscription and pass combined -- this is NOT their subscription): ' + ctx.tier + (ctx.in_free_trial ? ' (on the Free Trial)' : ''),   // v3.1.64
+    '- Subscription: ' + subLine,
+    '- Pass: ' + passLine,
+    // v3.1.64 -- the Redeem page's answer, and the rule for using it.
+    (ctx.gift_choices ? '- Gift choices (authoritative, decided by the Redeem page\'s own rule): ' + ctx.gift_choices : ''),
+    (ctx.gift_choices ? '- For ANY question about what a gift offers them, or why an option is or is not there: answer from the Gift choices line. Never work it out from the tier, never contradict it, and never say they have a subscription the Subscription line does not show.' : ''),
     '- Tokens: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total',
     '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : ''),
     '- This user calls campaigns "' + vocabCampaign + '" and sessions "' + vocabSession + '" -- use those words regardless of how the Brain phrases them.',
@@ -295,7 +336,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
   if (_aiDoneOn && !_aiDoneAlready) {
-    system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
+    system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply -- always AFTER at least one short friendly sentence, never as the whole reply -- ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
   }
 
   try {
@@ -336,7 +377,12 @@ router.post('/ask', requireAuth, async function(req, res) {
     const rawAnswer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
     const _marker = '<<HELP_DONE>>';
     const _isDone = rawAnswer.indexOf(_marker) !== -1;
-    const answer = rawAnswer.split(_marker).join('').trim();
+    let answer = rawAnswer.split(_marker).join('').trim();
+    // v3.1.53 -- A THANK-YOU IS NOT A FAILURE. Ian, twice: "perfect" after a good answer came back as
+    // "Could not answer that right now", with his word put back in the box. With the session-end email on,
+    // the model answered a plain thank-you with the end marker and nothing else, so stripping the marker
+    // left an empty reply. The user said they are done: say a short goodbye, and the email still goes.
+    if (!answer && _isDone) answer = 'Glad that helped! If anything else comes up, just ask.';
     if (!answer) {
       console.error('help/ask empty answer:', response.status, JSON.stringify(data).slice(0, 400));
       return res.json({ ok: false, error: 'Could not answer that right now.' });
