@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.77",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3177-brain-style-name",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now says a custom art style appears under the name you gave it, in My Custom Styles, and explains the close question.",
+        "detail": "Ask the help assistant: How do custom art styles work? Where does my custom style show up? It should say: by the name you gave it, under My Custom Styles in the Art style window (never as High fantasy illustration). Ask: What happens if I close the style builder without saving?",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.76",
     "staged_on": "2026-10-13",
     "entries": [

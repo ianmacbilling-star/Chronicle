@@ -1716,8 +1716,18 @@ winner** swaps them. Until you pick a winner and save, your stories keep using t
 as it was last saved.
 
 **6. Save style** keeps everything: the answers, all three descriptions, every preview
-picture and the winner. Reopening the style shows it all. The style appears under the
-**Art style** button on the Review, Storyboard, and Preview screens.
+picture and the winner. Reopening the style shows it all.
+
+**Where it shows up:** the style is listed **by the name you gave it** (for example "Moody
+Ink Wash"), under **My Custom Styles** at the bottom of the **Art style** window on the
+Review, Storyboard, and Preview screens, with your first reference picture as its
+thumbnail. It is not one of the built-in styles and is never renamed after one (such as
+High fantasy illustration). Members of campaigns you run as Story Master can use it too,
+under **Campaign Styles (SM)**, while you stay on Platinum.
+
+**Closing the builder:** if you close it with changes that are not saved, it asks: **Save**,
+**Don't save** (the style stays as it was last saved), or **Keep editing**. Analyze, each
+preview picture, Use this one and Convert to questions save by themselves.
 
 **Getting it right:** the words decide the picture almost word for word, so fix the
 answer behind what looks wrong, then Rewrite. Too much going on behind the figures:
