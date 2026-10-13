@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.64",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3164-help-gift-choices-computed",
+        "kind": "fix",
+        "public": false,
+        "summary": "The help assistant is now told exactly what the Redeem page offers your account for a gift, instead of working it out.",
+        "detail": "Ask: Why can't I take my gift as tokens? Erin (pass + live Gold): both choices; a pass pauses Gold, tokens leave it alone. Tamika (pass, Gold cancelling): both choices; the pass is added after hers. A real Free Trial: the pass only, no tokens. A Platinum subscriber: tokens only. Also check it no longer calls a pass holder a Platinum subscriber, and does not say a billing subscription restarts by itself.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.63",
     "staged_on": "2026-10-13",
     "entries": [
