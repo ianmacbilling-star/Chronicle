@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.69",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3169-style-answers-one-line",
+        "kind": "change",
+        "public": false,
+        "summary": "The custom art style answers are now a plain list: one line per question, hover to read the whole answer, Edit to change it.",
+        "detail": "Open a custom style with answers. Eighteen lines in two columns (one on a phone), in question order, no boxes and no groups. A long answer ends in an ellipsis; hovering shows it all. Edit opens a box on that line only; Done closes it and the line shows the new answer. Rewrite descriptions uses the edited answers.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.68",
     "staged_on": "2026-10-13",
     "entries": [

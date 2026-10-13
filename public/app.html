@@ -3226,16 +3226,15 @@
 .cs-section-title{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}
 .cs-note{font-size:12px;color:var(--text-muted);margin:0 0 8px;line-height:1.45;}
 /* v3.1.68 -- grouped summaries you click to edit (Ian: the 18 boxes were "way too busy"); labels readable on white. */
-.cs-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;align-items:start;}
-.cs-group{border:1px solid rgba(107,79,18,0.25);border-radius:8px;background:rgba(201,168,76,0.06);}
-.cs-group.cs-open{grid-column:1 / -1;}
-.cs-group-head{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;background:none;border:0;padding:8px 10px 2px;cursor:pointer;text-align:left;}
-.cs-group-title{font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}
-.cs-group-edit{font-size:12px;color:#8a2b1e;text-decoration:underline;}
-.cs-group-sum{padding:2px 10px 9px;font-size:13px;line-height:1.45;color:#3a2c10;cursor:pointer;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
-.cs-group-body{padding:4px 10px 10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;}
-.cs-answer label{display:block;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6b4f12;margin:0 0 3px;cursor:help;}
-.cs-answer textarea{min-height:44px;font-size:13px;padding:6px 8px;}
+/* v3.1.69 -- one plain line per question (Ian), in order: down the first column, then the second. */
+.cs-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(9,auto);grid-auto-flow:column;column-gap:28px;}
+.cs-qrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:5px 0;border-bottom:1px solid rgba(107,79,18,0.12);}
+.cs-qlabel{flex:0 0 175px;font-size:12px;font-weight:700;color:#6b4f12;cursor:help;}
+.cs-qval{flex:1 1 auto;min-width:0;font-size:13px;color:#2e2410;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
+.cs-qval.cs-qempty{color:#8a7a5a;}
+.cs-qbtn{flex:0 0 auto;background:none;border:0;padding:0 2px;font-size:12px;color:#8a2b1e;text-decoration:underline;cursor:pointer;}
+.cs-qedit-on{align-items:flex-start;}
+.cs-qbox{flex:1 1 auto;min-width:0;min-height:44px;font-size:13px;padding:6px 8px;}
 #cs-options{position:relative;}
 .cs-opt{position:relative;border:1px solid rgba(201,168,76,0.25);border-radius:10px;padding:12px;margin-top:12px;}
 .cs-opt.cs-win{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
@@ -3260,8 +3259,8 @@
 .cs-gen{width:100%;margin-top:6px;}
 @media (max-width:760px){
   .cs-refs{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .cs-answers{grid-template-columns:1fr;}
-  .cs-group-body{grid-template-columns:1fr;}
+  .cs-answers{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row;}
+  .cs-qlabel{flex-basis:110px;}
   .cs-shots{grid-template-columns:1fr;}
   .cs-opt-btns{margin-left:0;}
 }
@@ -3365,7 +3364,7 @@
         <div class="cs-section-title">How the style is drawn</div>
         <button class="btn btn-sm" id="cs-rewrite-all-btn" onclick="csRewriteAll()">Rewrite descriptions (free)</button>
       </div>
-      <div class="cs-note">Analyze fills these in from your reference images. Click a group to change its answers, then Rewrite descriptions. &ldquo;None&rdquo; is a real answer: say so when the style has no outlines, no texture or no glows.</div>
+      <div class="cs-note">Analyze fills these in from your reference images. Hover over an answer to read it all; Edit to change it, then Rewrite descriptions. &ldquo;None&rdquo; is a real answer: say so when the style has no outlines, no texture or no glows.</div>
       <div class="cs-answers" id="cs-answers"></div>
     </div>
     <div class="cs-section">

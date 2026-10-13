@@ -5547,13 +5547,6 @@ function analyzeCustomStyle() {
 var CS = { questions: [], answers: {}, options: [], winner: null, disagree: '', legacy: false, open: {}, busy: {}, seeds: {}, original: false };
 var CS_SCENES = [['closeup', 'Close up'], ['outdoors', 'Outdoors'], ['group', 'Group']];
 var CS_VARIANTS = [['Faithful', 'the answers as written'], ['Bolder', 'every defining trait pushed further'], ['Softer', 'the same traits, gentler']];
-var CS_GROUPS = [
-  ['drawing', 'Drawing', ['tradition', 'medium', 'finish', 'line', 'texture']],
-  ['colour', 'Colour & light', ['tones', 'black', 'shading', 'colour', 'light', 'surfaces']],
-  ['scene', 'Scene', ['detail', 'background', 'edges', 'atmosphere']],
-  ['people', 'Characters & energy', ['figures', 'energy']],
-  ['other', 'Anything else', ['missed']]
-];
 function csBlankOption() { return { text: '', edited: false, previews: {} }; }
 function csNewSeeds() { CS.seeds = {}; CS_SCENES.forEach(function (s) { CS.seeds[s[0]] = 1 + Math.floor(Math.random() * 2147483000); }); }
 function csLoadQuestions(cb) {
@@ -5598,25 +5591,31 @@ function csFixedBars() {
   ['analyze', 'rewrite', 'convert'].forEach(function (k) { var el = document.getElementById('cs-bar-' + k); if (el) el.innerHTML = csBarHtml(k); });
 }
 
+// v3.1.69 -- Ian: "single line for each question... with a '...' that they can hover over to see the full answer
+// then.. with an edit button... Don't put each question in its own panel... I don't think questions should be
+// grouped together either." One plain line per question, in order: the name, the answer cut off with an
+// ellipsis (hover shows it all), and Edit, which opens a box on that line only.
 function csAnswersHtml() {
-  return CS_GROUPS.map(function (g) {
-    var open = !!CS.open[g[0]];
-    var parts = g[2].map(function (k) { return String(CS.answers[k] || '').trim(); }).filter(Boolean);
-    var summary = parts.length ? parts.join(' \u00b7 ') : (g[0] === 'other' ? 'Nothing else' : 'Not answered yet');
-    var body = g[2].map(function (k) {
-      var q = csQuestion(k) || { key: k, label: k, help: '' };
-      return '<div class="cs-answer"><label for="cs-ans-' + k + '" title="' + escapeHtml(q.help || '') + '">' + escapeHtml(q.label) + '</label>' +
-        '<textarea class="form-textarea" id="cs-ans-' + k + '" data-key="' + k + '" rows="2" oninput="csEditAnswer(this)" placeholder="' + escapeHtml(q.help || '') + '">' +
-        escapeHtml(CS.answers[k] || '') + '</textarea></div>';
-    }).join('');
-    return '<div class="cs-group' + (open ? ' cs-open' : '') + '" id="cs-group-' + g[0] + '">' +
-      '<button type="button" class="cs-group-head" onclick="csToggleGroup(\'' + g[0] + '\')" aria-expanded="' + (open ? 'true' : 'false') + '">' +
-        '<span class="cs-group-title">' + g[1] + '</span><span class="cs-group-edit">' + (open ? 'Done' : 'Edit') + '</span></button>' +
-      '<div class="cs-group-sum"' + (open ? ' style="display:none;"' : '') + '>' + escapeHtml(summary) + '</div>' +
-      '<div class="cs-group-body"' + (open ? '' : ' style="display:none;"') + '>' + body + '</div></div>';
+  return CS.questions.map(function (q) {
+    var k = q.key, v = String(CS.answers[k] || '').trim(), editing = !!CS.open[k];
+    var shown = v || (k === 'missed' ? 'Nothing else' : '\u2014');
+    return '<div class="cs-qrow' + (editing ? ' cs-qedit-on' : '') + '" id="cs-q-' + k + '">' +
+      '<span class="cs-qlabel" title="' + escapeHtml(q.help || '') + '">' + escapeHtml(q.label) + '</span>' +
+      (editing
+        ? '<textarea class="form-textarea cs-qbox" id="cs-ans-' + k + '" data-key="' + k + '" rows="2" oninput="csEditAnswer(this)" placeholder="' + escapeHtml(q.help || '') + '">' + escapeHtml(v) + '</textarea>' +
+          '<button type="button" class="cs-qbtn" onclick="csEditQ(\'' + k + '\')">Done</button>'
+        : '<span class="cs-qval' + (v ? '' : ' cs-qempty') + '" title="' + escapeHtml(v) + '">' + escapeHtml(shown) + '</span>' +
+          '<button type="button" class="cs-qbtn" onclick="csEditQ(\'' + k + '\')">Edit</button>') +
+      '</div>';
   }).join('');
 }
-function csToggleGroup(g) { csCurrentAnswers(); CS.open[g] = !CS.open[g]; var box = document.getElementById('cs-answers'); if (box) box.innerHTML = csAnswersHtml(); }
+function csEditQ(k) {
+  var el = document.getElementById('cs-ans-' + k);
+  if (el) CS.answers[k] = el.value;
+  CS.open[k] = !CS.open[k];
+  var box = document.getElementById('cs-answers'); if (box) box.innerHTML = csAnswersHtml();
+  if (CS.open[k]) { var t = document.getElementById('cs-ans-' + k); if (t) t.focus(); }
+}
 
 function csOptionTitle(i) {
   if (CS.legacy && CS.options.length === 1) return '<span class="cs-opt-title">Your style</span>';
