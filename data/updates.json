@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.71",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3171-prose-opening-as-before",
+        "kind": "change",
+        "public": false,
+        "summary": "Narrative styles other than Already Written write the Opening as they did before 3.1.65, so it no longer repeats itself.",
+        "detail": "Regenerate a prose narrative in a session that has a title picture (for example Epic Saga): the Opening should be one passage again, not a second paragraph restating the first. Already Written is unchanged: every sentence of the author's story still appears, the first ones in the Opening.",
+        "td": [
+          "TD-946"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.70",
     "staged_on": "2026-10-13",
     "entries": [

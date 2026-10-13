@@ -439,33 +439,6 @@ router.get('/written-limit', requireAuth, async function (req, res) {
 // Outline value helpers. narrative_outlines stores either a plain string (a
 // user-authored outline, the Stage-1 shape) or { text, edited }. A plain string
 // counts as user-edited; a seeded object carries edited:false.
-// v3.1.65 -- TD-946. THE TITLE PICTURE HAS NO TEXT OF ITS OWN. Ian, 2026-10-01: "get rid of the title Pic
-// before text or make that the opening paragraph... then append the title Pic after narrative to the end of
-// the opening paragraph"; "Don't touch old books. Only if they regenerate the Narrative." The Storyboard,
-// the book and the print file all skip a title picture's two blocks, so whatever the model wrote there was
-// paid for and never read. The prompt now asks for an empty "before"; this is the safety net, run on a
-// fresh generation only: the "before" is dropped, and the "after" is added as a new paragraph to the end
-// of the block shown before the title picture -- the intro at the top, otherwise the bridge of the panel
-// before it (further back past another title picture). Its outline line goes with it. Returns how many
-// title pictures held any text, for the log. Already Written never comes here: its words are never dropped.
-function foldTitleBlocks(parsed, titleAt) {
-  if (!parsed || !Array.isArray(parsed.sections) || !Array.isArray(titleAt)) return 0;
-  var secs = parsed.sections, folded = 0;
-  function join(a, b, sep) { a = String(a || '').trim(); b = String(b || '').trim(); return (a && b) ? (a + sep + b) : (a || b); }
-  for (var i = 0; i < secs.length; i++) {
-    if (!titleAt[i]) continue;
-    var sec = secs[i] || (secs[i] = {});
-    if (String(sec.before || '').trim() || String(sec.after || '').trim()) folded++;
-    var j = i - 1; while (j >= 0 && titleAt[j]) j--;
-    var add = String(sec.after || '').trim(), addS = String(sec.after_summary || '').trim();
-    if (j >= 0 && !secs[j]) secs[j] = {};
-    if (add) { if (j < 0) parsed.intro = join(parsed.intro, add, '\n\n'); else secs[j].after = join(secs[j].after, add, '\n\n'); }
-    if (addS) { if (j < 0) parsed.intro_summary = join(parsed.intro_summary, addS, ' '); else secs[j].after_summary = join(secs[j].after_summary, addS, ' '); }
-    sec.before = ''; sec.after = ''; sec.before_summary = ''; sec.after_summary = '';
-  }
-  return folded;
-}
-
 function outlineText(v) { return (v && typeof v === 'object') ? (v.text || '') : (v || ''); }
 function outlineEdited(v) { return (v && typeof v === 'object') ? !!v.edited : (typeof v === 'string' && v.length > 0); }
 
@@ -678,9 +651,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // block ("after") that carries the story from this moment to the next. The
   // chain reads intro -> moment(0) -> bridge(0) -> moment(1) -> bridge(1) ->
   // ... -> outro, each block resuming exactly where the previous one ended.
-  // v3.1.65 -- TD-941/TD-946. Which panels are the session's title picture: they show no text of their own.
+  // v3.1.65 -- TD-941. Which panels are the session's title picture: they show no text of their own. Used by
+  // Already Written only. v3.1.71 -- the prose-style change (TD-946) was taken back out (Ian, 2026-10-13: the
+  // Opening then repeated itself -- "It's redundant... put it back like it was... story wise [nothing] was
+  // ever missing"), so every other style is prompted and saved exactly as before v3.1.65.
   const _titleAt = moments.map(function (m) { return !!(m && m.kind === 'establishing'); });
-  const _hasTitle = _titleAt.some(function (t) { return t; });
   const beatsList = moments.map(function(m, i) {
     const isLast = (i === moments.length - 1);
     const prevRef = (i === 0) ? 'the intro' : 'the BRIDGE block of panel ' + i;
@@ -703,12 +678,6 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const aOutlineLine = outlineEdited(aOutline)
       ? '\n    REQUIRED CONTENT for this bridge (you MUST cover these facts, in your own prose): ' + outlineText(aOutline)
       : '';
-    // v3.1.65 -- TD-946. The title picture: no MOMENT block, and its BRIDGE ends the block before it.
-    if (_titleAt[i]) {
-      return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- the session\'s TITLE PICTURE. It has NO text of its own.\n' +
-        '  MOMENT block ("before"): leave it EMPTY (""). It is never shown.\n' +
-        '  BRIDGE block ("after"): it is joined straight onto the END of ' + prevRef + ' as its last paragraph, so write it as the closing lines of ' + prevRef + ', leading into ' + (isLast ? 'the end of the session' : nextLabel) + '. Do NOT describe the title picture.' + mDirLine + mOutlineLine + aDirLine + aOutlineLine;
-    }
     return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- THIS panel\'s image depicts: ' + m.description + '\n' +
       '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + mOutlineLine + '\n' +
       '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine + aOutlineLine;
@@ -769,7 +738,6 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'The blocks you need to write, panel by panel:\n\n' +
     beatsList + '\n\n' +
     'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n' +
-    (_hasTitle ? 'The intro sets up the current situation and leads the reader into the story. It does not describe the title picture.\n' : '') +   // v3.1.65 -- TD-946
     (outlineEdited(gapOutlines['opening']) ? 'REQUIRED CONTENT for the intro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['opening']) + '\n' : '') +
     (gapDirections['opening'] ? 'DIRECTOR STEERING for the intro (you MUST follow this): ' + gapDirections['opening'] + '\n' : '') +
     (outlineEdited(gapOutlines['closing']) ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['closing']) + '\n' : '') +
@@ -853,7 +821,6 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Every block picks up exactly where the previous block left off - no gaps, and do not restate what an earlier block already covered\n' +
     '- Keep events in chronological order; never place a later event before the panel that depicts it\n' +
     '- A BRIDGE block covers ONLY what happens between its panel\'s moment and the next panel\'s moment (travel, deliberation, side events the panels skip)\n' +
-    (_hasTitle ? '- EXCEPTION: the TITLE PICTURE\'s MOMENT block ("before") is EMPTY, as its entry above says. That overrides "REQUIRED and non-empty" below.\n' : '') +   // v3.1.65 -- TD-946
     '- If the transcript covers events the panels skip, those belong in the BRIDGE blocks\n\n' +
     // v3.0.711 -- TD-513. THE QUOTE CONTRACT, AND IT IS NOT A GERMAN PROBLEM.
     //
@@ -1166,10 +1133,6 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       delete parsed.outro_start;
       if (_wb.fixed) { try { console.warn('[narrative] Already Written: ' + _wb.fixed + ' block start(s) out of order or missing; those blocks were left empty'); } catch (_wf) {} }
       if (_wb.folded) { try { console.log('[narrative] Already Written: text placed beside ' + _wb.folded + ' title picture(s) kept in the block before it'); } catch (_wl) {} }
-    } else if (_hasTitle) {
-      // v3.1.65 -- TD-946. Every other style: the title picture's "before" is dropped and its "after" ends the intro.
-      const _tf = foldTitleBlocks(parsed, _titleAt);
-      if (_tf) { try { console.log('[narrative] title picture text folded into the block before it (' + _tf + ' panel(s))'); } catch (_tl) {} }
     }
 
     // Save to database — sections JSON already carries each panel's
