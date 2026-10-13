@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.72",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3172-style-preview-outdoors",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Outdoors style preview shows travellers on foot instead of wagons, which often came out with horses facing the wrong way.",
+        "detail": "Generate an Outdoors preview: three people walking a winding road through a wide valley toward a walled town on a far hill, under an evening sky. No wagons or horses.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.71",
     "staged_on": "2026-10-13",
     "entries": [

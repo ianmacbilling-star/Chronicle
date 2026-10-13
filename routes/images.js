@@ -2409,7 +2409,10 @@ const STYLE_PREVIEW_SCENES = {
   // that do not decide how a face is drawn -- hair, clothes, what they are doing -- and the close up is a man in
   // his thirties with no hood, so his hair shows, and a dramatic expression (Ian).
   closeup:  { shape: 'square', prompt: 'A close head-and-shoulders portrait of one person only: a man in his thirties with tousled shoulder-length dark brown hair and a deep green travelling coat, sitting alone at a small table lit by a single lamp, with a dramatic expression: eyes wide, brow tight, lips parted, as if he has just heard something terrible. No hood, no hat. No one else is in the picture.' },
-  outdoors: { shape: 'wide',   prompt: 'A small caravan of three covered wagons crosses a wide valley toward a walled town on a far hill, under a vast evening sky.' },
+  // v3.1.72 -- Ian: the wagons came out with horses facing the wrong way or harnessed to both ends. Animals in
+  // harness are the image model's weak spot, so the outdoors scene is people on foot; the valley, town and sky
+  // are still the subject.
+  outdoors: { shape: 'wide',   prompt: 'Three travellers on foot follow a winding road through a wide valley toward a walled town on a far hill, under a vast evening sky.' },
   group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map: a woman with short red hair in a leather coat, a man with a braided black beard in a brown jerkin, a young man with long silver hair in a blue robe, and a woman with grey curls and round spectacles.' }
 };
 
