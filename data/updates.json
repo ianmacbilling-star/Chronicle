@@ -1,5 +1,242 @@
 [
   {
+    "version": "3.1.78",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3178-style-ref-buttons",
+        "kind": "change",
+        "public": false,
+        "summary": "Replace and Remove under each reference image in the style builder now line up.",
+        "detail": "Open the style builder with reference pictures in place: Replace and Remove under each one are the same height, tops level.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.77",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3177-brain-style-name",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now says a custom art style appears under the name you gave it, in My Custom Styles, and explains the close question.",
+        "detail": "Ask the help assistant: How do custom art styles work? Where does my custom style show up? It should say: by the name you gave it, under My Custom Styles in the Art style window (never as High fantasy illustration). Ask: What happens if I close the style builder without saving?",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.76",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3176-style-close-asks",
+        "kind": "change",
+        "public": false,
+        "summary": "Closing the custom art style builder with unsaved changes now asks: Save, Don't save, or Keep editing.",
+        "detail": "Open a saved style, change an answer or a description (or click Rewrite), then close with the x: it asks. Keep editing leaves everything as it was on screen; Don't save closes and reopening shows the style as last saved; Save saves and closes. Open a style and close it without changing anything: it closes without asking. Generate a preview, then close: it does not ask (previews save themselves).",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.75",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3175-style-refs-enlarge",
+        "kind": "change",
+        "public": false,
+        "summary": "In the custom art style builder, click a reference image to see it larger. Replace sits beside Remove under each one.",
+        "detail": "Open the style builder. Click an empty reference box: the file picker opens. Click a box with a picture: it opens large, like pictures elsewhere; close it and nothing else has changed. Click Replace under a picture: the file picker opens and the new picture takes that box. Drag a picture onto a full box and onto an empty one: both take it. Open a saved style and check the same on its saved pictures.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.74",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3174-brain-style-questions",
+        "kind": "change",
+        "public": false,
+        "summary": "The help assistant now knows the new custom art style builder: the 18 questions, Faithful, Bolder and Softer, the three preview scenes, the winner, and Convert to questions.",
+        "detail": "Ask the help assistant: How do I make a custom art style? What do Faithful, Bolder and Softer mean? My custom style does not look like my samples. How much does a custom style cost? Can a custom style make comic pages with several panels? (It should say not yet.) What happens to a style I made before?",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.73",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3173-style-refs-fit",
+        "kind": "change",
+        "public": false,
+        "summary": "Reference images in the custom art style builder show whole, fitted inside their boxes instead of cropped.",
+        "detail": "Open the style builder and add a tall and a wide reference image: each shows in full, scaled to fit, with the four boxes the same size as before.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.72",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3172-style-preview-outdoors",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Outdoors style preview shows travellers on foot instead of wagons, which often came out with horses facing the wrong way.",
+        "detail": "Generate an Outdoors preview: three people walking a winding road through a wide valley toward a walled town on a far hill, under an evening sky. No wagons or horses.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.71",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3171-prose-opening-as-before",
+        "kind": "change",
+        "public": false,
+        "summary": "Narrative styles other than Already Written write the Opening as they did before 3.1.65, so it no longer repeats itself.",
+        "detail": "Regenerate a prose narrative in a session that has a title picture (for example Epic Saga): the Opening should be one passage again, not a second paragraph restating the first. Already Written is unchanged: every sentence of the author's story still appears, the first ones in the Opening.",
+        "td": [
+          "TD-946"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.70",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3170-style-preview-people",
+        "kind": "fix",
+        "public": false,
+        "summary": "Style previews draw their people in the style's own way again: no more weathered, realistic faces in an anime style.",
+        "detail": "Generate a Close up in an anime style: one man in his thirties, no hood, dark hair showing, a dramatic startled expression, drawn with the style's own faces and eyes. The Group's four people should look like the style too. Faithful, Bolder and Softer should still show much the same people.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.69",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3169-style-answers-one-line",
+        "kind": "change",
+        "public": false,
+        "summary": "The custom art style answers are now a plain list: one line per question, hover to read the whole answer, Edit to change it.",
+        "detail": "Open a custom style with answers. Eighteen lines in two columns (one on a phone), in question order, no boxes and no groups. A long answer ends in an ellipsis; hovering shows it all. Edit opens a box on that line only; Done closes it and the line shows the new answer. Rewrite descriptions uses the edited answers.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.68",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3168-style-builder-polish",
+        "kind": "change",
+        "public": true,
+        "summary": "The custom art style builder is easier to read: the answers are grouped summaries you click to edit, the three descriptions are Faithful, Bolder and Softer, and every wait shows a progress bar.",
+        "detail": "Open a custom style. The answers show as five groups (Drawing, Colour & light, Scene, Characters & energy, Anything else); click one to edit, Done to fold it. Labels are readable on white. The descriptions are labelled Faithful, Bolder and Softer and should look clearly different in strength. Generate a Close up: one person, closer in, in a square slot; Outdoors and Group in wide slots with no grey bars. The first Close up of Faithful, Bolder and Softer should show much the same man; Generate again draws a new one. Analyze, Rewrite, Convert and each picture show the red progress bar with a line of text.",
+        "td": [
+          "TD-964",
+          "TD-965"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.67",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3167-style-questions-screen",
+        "kind": "feature",
+        "public": true,
+        "summary": "Custom Art Styles have a new, bigger builder: 18 questions about how your style is drawn, three descriptions to compare, and preview pictures on three scenes for each.",
+        "detail": "Open Custom Art Styles. New style: add 2 to 4 reference images and Analyze (1 token). The 18 answers appear, then three descriptions, each with Close up, Outdoors and Group preview slots; Generate one picture at a time (1 token each, with the spinner). Use this one makes a description the winner: the other two grey out and freeze with their pictures, and Make this the winner swaps. Edit any answer and press Rewrite descriptions (free): if there is a winner it asks first. An older style opens with its paragraph and a Convert to questions button (free); nothing changes in your stories until you pick a winner. Close and reopen: everything is still there.",
+        "td": [
+          "TD-964",
+          "TD-965"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.66",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3166-style-questions-engine",
+        "kind": "change",
+        "public": false,
+        "summary": "Behind the scenes: Analyze now answers 18 questions about how your samples are drawn and writes three descriptions from them. The screen to use them comes next.",
+        "detail": "On the current Custom Art Style screen: Analyze a style. The description that appears is the first of three now written from the 18 answers; it should name the background, where the detail goes, the finish, faces and figures and the energy, and state outright what the style does not have (no outlines, no glows). Existing styles and every book draw exactly as before. Preview still draws the old knight scene on this screen; the three new scenes arrive with the new screen.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.65",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3165-title-picture-text",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story text written beside a session's title picture now ends up in the Opening instead of being lost.",
+        "detail": "Already Written: generate a session that has a title picture. Every sentence of the story must appear, in order, with the first ones in the Opening (bots: rerun the 18-sentence Alpha to Romeo test). Any other style: regenerate a session that has a title picture. The Opening should set up the situation and lead into the story without describing the title picture, and nothing should be missing between the Opening and the first picture after it. Books are untouched until their narrative is generated again.",
+        "td": [
+          "TD-941",
+          "TD-946"
+        ]
+      },
+      {
+        "id": "3165-written-no-narrator",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Narrative button no longer names a narrator for Already Written.",
+        "detail": "On a version set to In first person with a narrator, switch the narrative style to Already Written. The Narrative button on the Storyboard, Review and Story tabs should read Narrative: Already Written, with no narrator. Switch back to another style: the narrator shows again.",
+        "td": [
+          "TD-941"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.64",
     "staged_on": "2026-10-13",
     "entries": [

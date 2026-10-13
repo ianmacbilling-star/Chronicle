@@ -651,6 +651,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // block ("after") that carries the story from this moment to the next. The
   // chain reads intro -> moment(0) -> bridge(0) -> moment(1) -> bridge(1) ->
   // ... -> outro, each block resuming exactly where the previous one ended.
+  // v3.1.65 -- TD-941. Which panels are the session's title picture: they show no text of their own. Used by
+  // Already Written only. v3.1.71 -- the prose-style change (TD-946) was taken back out (Ian, 2026-10-13: the
+  // Opening then repeated itself -- "It's redundant... put it back like it was... story wise [nothing] was
+  // ever missing"), so every other style is prompted and saved exactly as before v3.1.65.
+  const _titleAt = moments.map(function (m) { return !!(m && m.kind === 'establishing'); });
   const beatsList = moments.map(function(m, i) {
     const isLast = (i === moments.length - 1);
     const prevRef = (i === 0) ? 'the intro' : 'the BRIDGE block of panel ' + i;
@@ -916,6 +921,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       '- outro_start: the first sentence after the last picture\'s passage -- the ending. Use ' + (_nU + 1) + ' if there is no ending left.\n' +
       '- Starts NEVER go backwards. A block may be EMPTY: give it the same start as the block after it -- for example when two pictures come one straight after the other in the text.\n' +
       '- Where it fits, start a block at the beginning of a paragraph.\n' +
+      // v3.1.65 -- TD-941. The title picture: its blocks start where the block after it starts, so the opening stays in the intro.
+      _titleAt.map(function (t, i) { return t ? ('- PANEL ' + (i + 1) + ' is the session\'s TITLE PICTURE: it never has text of its own. Give its before_start and after_start the same number as the start of the block after it, so the opening stays in the intro.\n') : ''; }).join('') +
       '- Sentence numbers run from 1 to ' + _nU + '; ' + (_nU + 1) + ' means "after the last sentence".\n\n' +
       'The short *_summary fields are a few words each describing what that block covers; they are never printed.\n' +
       'QUOTATION MARKS -- inside any string value never use the straight ASCII double quote; use typographic quotes.\n' +
@@ -1115,7 +1122,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     // v3.1.49 -- TD-941. ALREADY WRITTEN: the model gave sentence numbers; the blocks are the author's own
     // text copied between them. The summaries the model wrote are kept; the numbers are not stored.
     if (isWritten) {
-      const _wb = writtenSlices.buildBlocks(session.transcript, _wUnits, parsed, moments.length);
+      const _wb = writtenSlices.buildBlocks(session.transcript, _wUnits, parsed, moments.length, _titleAt);   // v3.1.65 -- the title picture folds into the block before it
       parsed.intro = _wb.intro;
       parsed.outro = _wb.outro;
       parsed.sections = parsed.sections.map(function (sec, i) {
@@ -1125,6 +1132,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       });
       delete parsed.outro_start;
       if (_wb.fixed) { try { console.warn('[narrative] Already Written: ' + _wb.fixed + ' block start(s) out of order or missing; those blocks were left empty'); } catch (_wf) {} }
+      if (_wb.folded) { try { console.log('[narrative] Already Written: text placed beside ' + _wb.folded + ' title picture(s) kept in the block before it'); } catch (_wl) {} }
     }
 
     // Save to database — sections JSON already carries each panel's

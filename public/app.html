@@ -3215,114 +3215,203 @@
   </div>
 </div>
 <!-- CUSTOM ART STYLE BUILDER MODAL -->
+<!-- v3.1.67 -- TD-964 build 2. The questions screen: reference pictures, the 18 answers, three
+     descriptions each with three preview pictures, and a winner (spec claude/CUSTOM_ART_STYLE_QUESTIONS_SPEC.md). -->
+<style>
+#cstyle-modal .modal.cs-modal{max-width:min(1240px,96vw);width:96vw;max-height:94vh;}
+#app-confirm-modal{z-index:130;}
+.cs-refs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+/* v3.1.73 -- Ian: reference images fit their boxes whole, never cropped; the boxes keep their size. */
+#cstyle-modal .cs-refs .slot-preview{object-fit:contain;height:200px;max-height:200px;background:transparent;}
+/* v3.1.75 -- Ian: a reference picture that is there enlarges on click; Replace sits beside Remove. The picture
+   itself takes no clicks, so every click lands on its box (csSlotClick), whether the picture was just chosen
+   or came saved with the style. Replace shows only while the box holds a picture. */
+#cstyle-modal .cs-refs .slot-preview{pointer-events:none;}
+#cstyle-modal .cs-refs .image-slot:has(.slot-preview:not(.hidden)){cursor:zoom-in;}
+#cstyle-modal .cs-refs > div:has(.slot-preview.hidden) .cs-replace{display:none;}
+/* v3.1.78 -- Ian: Remove sat a pixel or two off Replace (the two symbols are different heights). Same height, tops aligned. */
+#cstyle-modal .cs-refs .cs-replace,#cstyle-modal .cs-refs [id^="clear-cstyle_"]{vertical-align:top;height:26px;line-height:1;box-sizing:border-box;}
+.cs-section{margin-top:18px;position:relative;}
+.cs-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
+.cs-section-title{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}
+.cs-note{font-size:12px;color:var(--text-muted);margin:0 0 8px;line-height:1.45;}
+/* v3.1.68 -- grouped summaries you click to edit (Ian: the 18 boxes were "way too busy"); labels readable on white. */
+/* v3.1.69 -- one plain line per question (Ian), in order: down the first column, then the second. */
+.cs-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(9,auto);grid-auto-flow:column;column-gap:28px;}
+.cs-qrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:5px 0;border-bottom:1px solid rgba(107,79,18,0.12);}
+.cs-qlabel{flex:0 0 175px;font-size:12px;font-weight:700;color:#6b4f12;cursor:help;}
+.cs-qval{flex:1 1 auto;min-width:0;font-size:13px;color:#2e2410;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
+.cs-qval.cs-qempty{color:#8a7a5a;}
+.cs-qbtn{flex:0 0 auto;background:none;border:0;padding:0 2px;font-size:12px;color:#8a2b1e;text-decoration:underline;cursor:pointer;}
+.cs-qedit-on{align-items:flex-start;}
+.cs-qbox{flex:1 1 auto;min-width:0;min-height:44px;font-size:13px;padding:6px 8px;}
+#cs-options{position:relative;}
+.cs-opt{position:relative;border:1px solid rgba(201,168,76,0.25);border-radius:10px;padding:12px;margin-top:12px;}
+.cs-opt.cs-win{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.cs-opt.cs-frozen .cs-dim{opacity:0.45;filter:grayscale(0.6);}
+.cs-opt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.cs-opt-title{font-weight:700;font-size:15px;}
+.cs-opt-hint{font-size:12px;color:#5c4a28;}
+.cs-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#1a1208;}
+.cs-opt-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.cs-opt-text{min-height:90px;font-size:13px;}
+/* v3.1.68 -- slots shaped to their pictures: the close up is square, the others wide; 9:16:16 keeps the row level. */
+.cs-shots{display:grid;grid-template-columns:9fr 16fr 16fr;gap:10px;margin-top:10px;}
+.cs-shot-label{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;margin-bottom:4px;}
+.cs-shot-closeup .cs-shot-img{aspect-ratio:1/1;}
+.cs-shot-img.cs-busy{opacity:0.6;}
+.cs-bar{margin-top:6px;}
+.cs-bar .progress-bar{margin-bottom:3px;height:5px;}
+.cs-bar-msg{font-size:11px;color:#5c4a28;}
+.cs-shot-img{position:relative;aspect-ratio:16/9;background:rgba(0,0,0,0.3);border:1px dashed rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.cs-shot-img img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;}
+.cs-shot-empty{font-size:11px;color:var(--text-muted);}
+.cs-gen{width:100%;margin-top:6px;}
+@media (max-width:760px){
+  .cs-refs{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .cs-answers{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row;}
+  .cs-qlabel{flex-basis:110px;}
+  .cs-shots{grid-template-columns:1fr;}
+  .cs-opt-btns{margin-left:0;}
+}
+</style>
 <div class="modal-overlay hidden" id="cstyle-modal">
-  <div class="modal">
+  <div class="modal cs-modal">
     <div class="modal-header">
-      <div class="modal-title">Custom Art Style</div>
+      <div class="modal-title" id="cstyle-form-title">Create a new style</div>
       <button class="modal-close" onclick="closeCustomStyles()">&times;</button>
     </div>
     <div id="cstyle-error" class="alert alert-error hidden"></div>
-    <div style="margin-top:0;">
-      <div class="modal-title" id="cstyle-form-title" style="font-size:15px;margin-bottom:10px;">Create a new style</div>
-      <input type="hidden" id="cstyle-edit-id" />
-      <div class="form-group">
-        <label class="form-label">Style name</label>
-        <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
-      </div>
+    <input type="hidden" id="cstyle-edit-id" />
+    <div class="form-group">
+      <label class="form-label">Style name</label>
+      <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
+    </div>
       <div class="form-group">
         <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span> <button type="button" class="info-tip" id="cstyle-info-btn" aria-controls="cstyle-info" aria-expanded="false" aria-label="About reference images" title="The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others." onclick="_infoTipToggle(this, event)" style="vertical-align:middle;margin-left:2px;">i</button></label>
         <div id="cstyle-info" class="info-tip-pop" style="display:none;margin:0 0 8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="cs-refs">
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
+          <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_1"
-            onclick="document.getElementById('input-cstyle_1').click()"
+            onclick="csSlotClick('cstyle_1')"
             ondragover="handleSlotDragOver(event,'cstyle_1')"
             ondragleave="handleSlotDragLeave(event,'cstyle_1')"
-            ondrop="handleSlotDrop(event,'cstyle_1')"
+            ondrop="csSlotDrop(event,'cstyle_1')"
             style="padding:10px;">
             <img id="preview-cstyle_1" class="slot-preview slot-action hidden" alt="Reference 1" />
             <div class="slot-placeholder" id="placeholder-cstyle_1">
               <div style="font-size:20px;">&#127912;</div>
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:#7a6440;">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-cstyle_1" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_1')" />
+          <input type="file" id="input-cstyle_1" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_1')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_1" onclick="csSlotReplace('cstyle_1')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_1" onclick="clearSlot('cstyle_1')">&#10005; Remove</button>
         </div>
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 2</div>
+          <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 2</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_2"
-            onclick="document.getElementById('input-cstyle_2').click()"
+            onclick="csSlotClick('cstyle_2')"
             ondragover="handleSlotDragOver(event,'cstyle_2')"
             ondragleave="handleSlotDragLeave(event,'cstyle_2')"
-            ondrop="handleSlotDrop(event,'cstyle_2')"
+            ondrop="csSlotDrop(event,'cstyle_2')"
             style="padding:10px;">
             <img id="preview-cstyle_2" class="slot-preview slot-action hidden" alt="Reference 2" />
             <div class="slot-placeholder" id="placeholder-cstyle_2">
               <div style="font-size:20px;">&#127912;</div>
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:#7a6440;">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-cstyle_2" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_2')" />
+          <input type="file" id="input-cstyle_2" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_2')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_2" onclick="csSlotReplace('cstyle_2')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_2" onclick="clearSlot('cstyle_2')">&#10005; Remove</button>
         </div>
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 3</div>
+          <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 3</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_3"
-            onclick="document.getElementById('input-cstyle_3').click()"
+            onclick="csSlotClick('cstyle_3')"
             ondragover="handleSlotDragOver(event,'cstyle_3')"
             ondragleave="handleSlotDragLeave(event,'cstyle_3')"
-            ondrop="handleSlotDrop(event,'cstyle_3')"
+            ondrop="csSlotDrop(event,'cstyle_3')"
             style="padding:10px;">
             <img id="preview-cstyle_3" class="slot-preview slot-action hidden" alt="Reference 3" />
             <div class="slot-placeholder" id="placeholder-cstyle_3">
               <div style="font-size:20px;">&#127912;</div>
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:#7a6440;">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-cstyle_3" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_3')" />
+          <input type="file" id="input-cstyle_3" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_3')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_3" onclick="csSlotReplace('cstyle_3')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_3" onclick="clearSlot('cstyle_3')">&#10005; Remove</button>
         </div>
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 4</div>
+          <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 4</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_4"
-            onclick="document.getElementById('input-cstyle_4').click()"
+            onclick="csSlotClick('cstyle_4')"
             ondragover="handleSlotDragOver(event,'cstyle_4')"
             ondragleave="handleSlotDragLeave(event,'cstyle_4')"
-            ondrop="handleSlotDrop(event,'cstyle_4')"
+            ondrop="csSlotDrop(event,'cstyle_4')"
             style="padding:10px;">
             <img id="preview-cstyle_4" class="slot-preview slot-action hidden" alt="Reference 4" />
             <div class="slot-placeholder" id="placeholder-cstyle_4">
               <div style="font-size:20px;">&#127912;</div>
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:#7a6440;">Click or drop</div>
             </div>
           </div>
-          <input type="file" id="input-cstyle_4" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_4')" />
+          <input type="file" id="input-cstyle_4" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_4')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_4" onclick="csSlotReplace('cstyle_4')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
       </div>
       <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
-      <div class="form-group" style="margin-top:14px;">
-        <label class="form-label">Style description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; editable; this is what steers every panel</span></label>
-        <textarea class="form-textarea" id="cstyle-prompt" style="min-height:120px;" placeholder="Analyze your reference images to generate this, or write your own STYLE: description..."></textarea>
+    <div id="cs-bar-analyze"></div>
+    <div id="cs-disagree" class="alert alert-warning hidden" style="margin:12px 0 0;"></div>
+    <div id="cs-convert-wrap" class="cs-section hidden">
+      <div class="cs-note">This style was made before the questions. Convert it to see and edit how it is drawn, and get two more descriptions to compare with your own. Nothing changes in your stories until you choose a winner and save.</div>
+      <button class="btn" id="cs-convert-btn" onclick="csConvert()">Convert to questions (free)</button>
+      <div id="cs-bar-convert"></div>
+    </div>
+    <div class="cs-section" id="cs-answers-wrap">
+      <div class="cs-section-head">
+        <div class="cs-section-title">How the style is drawn</div>
+        <button class="btn btn-sm" id="cs-rewrite-all-btn" onclick="csRewriteAll()">Rewrite descriptions (free)</button>
       </div>
-      <div class="form-group">
-        <label class="form-checkbox-row">
-          <input type="checkbox" id="cstyle-fade" />
-          <span>Soft / faded edges <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; art thins to white at the panel edges instead of filling the frame</span></span>
-        </label>
-      </div>
-      <button class="btn" id="cstyle-preview-btn" onclick="previewCustomStyle()" style="width:100%;">Preview render (1 token)</button>
-      <div id="cstyle-preview-wrap" style="margin-top:10px;display:none;text-align:center;">
-        <img id="cstyle-preview-img" alt="Style preview" title="Click to enlarge" style="max-width:100%;border-radius:8px;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
-      </div>
+      <div class="cs-note">Analyze fills these in from your reference images. Hover over an answer to read it all; Edit to change it, then Rewrite descriptions. &ldquo;None&rdquo; is a real answer: say so when the style has no outlines, no texture or no glows.</div>
+      <div class="cs-answers" id="cs-answers"></div>
+    </div>
+    <div class="cs-section">
+      <div class="cs-section-head"><div class="cs-section-title">Descriptions</div></div>
+      <div class="cs-note" id="cs-win-note"></div>
+      <div id="cs-bar-rewrite"></div>
+      <div id="cs-options"></div>
+    </div>
+    <div class="form-group" style="margin-top:16px;">
+      <label class="form-checkbox-row">
+        <input type="checkbox" id="cstyle-fade" />
+        <span>Soft / faded edges <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; art thins to white at the panel edges instead of filling the frame</span></span>
+      </label>
     </div>
     <div id="cstyle-save-error" class="alert alert-error hidden" style="margin:14px 0 0;"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeCustomStyles()">Close</button>
       <button class="btn btn-primary" id="cstyle-save-btn" onclick="saveCustomStyle()">Save style</button>
+    </div>
+  </div>
+</div>
+<!-- v3.1.76 -- Ian: closing the style builder with unsaved changes asks first (Save / Don't save / Keep editing). -->
+<div class="modal-overlay hidden" id="cs-close-modal" style="z-index:130;" onclick="if(event.target===this)cstyleCloseKeep()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Save your changes?</div>
+      <button class="modal-close" onclick="cstyleCloseKeep()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:14px;">This style has changes that are not saved yet. If you don't save, they are lost and the style stays as it was last saved.</p>
+    <div class="modal-footer">
+      <button class="btn" id="cs-close-keep" onclick="cstyleCloseKeep()">Keep editing</button>
+      <button class="btn" id="cs-close-discard" onclick="cstyleCloseDiscard()">Don't save</button>
+      <button class="btn btn-primary" id="cs-close-save" onclick="cstyleCloseSave()">Save</button>
     </div>
   </div>
 </div>

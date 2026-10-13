@@ -545,6 +545,12 @@ async function initPostgres() {
     // flip (TD-219). One pattern across both facets and both tabs instead of two.
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS art_styles text[]',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
+    // v3.1.66 -- TD-964. The questions: the 18 answers (JSON), up to three options, each
+    // { text, edited, previews: { closeup, outdoors, group } } (JSON), and which one won (0-2, or null).
+    // style_prompt keeps the text story panels use, so nothing on the generation path reads these.
+    'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS style_answers TEXT',
+    'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS style_options TEXT',
+    'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS style_winner INTEGER',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
     // from-user records provenance for attribution / tombstone context.

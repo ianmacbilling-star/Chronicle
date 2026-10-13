@@ -2394,6 +2394,28 @@ webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
   } catch (e) { res.json({ error: friendlyError(e, 'Could not check image status.') }); }
 });
 
+// v3.1.66 -- TD-964. THE THREE PREVIEW SCENES (Ian, 2026-10-13: "One with people close up. One of
+// outside, big scene, one with several people in it mid distance."). The old preview drew one fixed
+// scene -- a lone knight before a misty forest, ruins and mountains -- which asked for a detailed landscape
+// whatever the style, and showed nothing of faces or groups. Each scene tests something different. They
+// go through generateImage like any panel, so a preview is what a story panel would get. A request with no
+// scene is the old one-picture screen and keeps the old scene and its saving, unchanged.
+const STYLE_PREVIEW_SCENES = {
+  // v3.1.68 -- Ian: the close up should have ONE person, about 15% tighter; and the people varied too much
+  // between previews, so each is described precisely (a specific description holds steadier than "four
+  // companions"). No reference pictures: they pull the drawing toward their own style.
+  // v3.1.70 -- Ian: v3.1.68's "weathered... in his fifties... scar... stocky bald... older" asked for realistic,
+  // lined faces and beat the style (Anime Fantasy lost its anime faces). People are described only by things
+  // that do not decide how a face is drawn -- hair, clothes, what they are doing -- and the close up is a man in
+  // his thirties with no hood, so his hair shows, and a dramatic expression (Ian).
+  closeup:  { shape: 'square', prompt: 'A close head-and-shoulders portrait of one person only: a man in his thirties with tousled shoulder-length dark brown hair and a deep green travelling coat, sitting alone at a small table lit by a single lamp, with a dramatic expression: eyes wide, brow tight, lips parted, as if he has just heard something terrible. No hood, no hat. No one else is in the picture.' },
+  // v3.1.72 -- Ian: the wagons came out with horses facing the wrong way or harnessed to both ends. Animals in
+  // harness are the image model's weak spot, so the outdoors scene is people on foot; the valley, town and sky
+  // are still the subject.
+  outdoors: { shape: 'wide',   prompt: 'Three travellers on foot follow a winding road through a wide valley toward a walled town on a far hill, under a vast evening sky.' },
+  group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map: a woman with short red hair in a leather coat, a man with a braided black beard in a brown jerkin, a young man with long silver hair in a blue robe, and a woman with grey curls and round spectacles.' }
+};
+
 // POST /api/images/custom-style-preview -- render ONE sample panel in a (possibly
 // unsaved) custom STYLE: paragraph so the builder can preview before saving.
 // Platinum-gated; costs one image token on success.
@@ -2413,13 +2435,20 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to preview a style.' });
     }
-    const SAMPLE_PROMPT = 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
-    const seed = crypto.randomInt(1, 2147483647);
-    const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, 'wide', null, isFade);
+    const _scene = (req.body && typeof req.body.scene === 'string' && Object.prototype.hasOwnProperty.call(STYLE_PREVIEW_SCENES, req.body.scene)) ? STYLE_PREVIEW_SCENES[req.body.scene] : null;   // v3.1.66
+    // v3.1.70 -- the style decides how people look (big anime eyes, ink-carved faces), never the scene text.
+    const SAMPLE_PROMPT = _scene ? (_scene.prompt + ' Draw every face, eye and body entirely in the required art style\'s own way; nothing in this description changes how people are drawn.') : 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
+    // v3.1.68 -- the screen sends one seed per scene so the three descriptions start from the same picture
+    // and differ in style, not in who is in it. Anything else gets a random seed, as before.
+    const _askSeed = (_scene && req.body) ? Number(req.body.seed) : NaN;
+    const seed = (Number.isInteger(_askSeed) && _askSeed >= 1 && _askSeed <= 2147483646) ? _askSeed : crypto.randomInt(1, 2147483647);
+    const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, _scene ? _scene.shape : 'wide', null, isFade);
     try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'custom_style_preview', tokens_redeemed: cost, quantity: 1, unit: 'images', model: (IMAGE_MODELS[modelKey] || modelKey) }); } catch (e) {}
     // Persist the preview to the style so reopening shows the last render.
-    const styleId = req.body && req.body.style_id;
+    // v3.1.66 -- only for the old one-picture screen: the questions screen stores each scene's picture
+    // under its option and saves it with the style, so writing preview_url here would fight it.
+    const styleId = _scene ? null : (req.body && req.body.style_id);
     if (styleId) {
       try {
         const srow = await db.prepare('SELECT id, preview_url FROM custom_art_styles WHERE id = ? AND owner_id = ?').get(styleId, req.session.userId);

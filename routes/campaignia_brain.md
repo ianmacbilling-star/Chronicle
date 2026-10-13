@@ -163,8 +163,8 @@ the same moment. If you had a few use-it-or-lose-it tokens left on the day, both
 correct and they will differ by exactly that many. Your carry-over tokens are never touched by
 any of this.
 
-**What spends tokens:** generating, regenerating, or retouching an image, plus analyzing or
-previewing a custom art style, **reading a character sheet from a file**, and **reading any file that
+**What spends tokens:** generating, regenerating, or retouching an image, plus analyzing a
+custom art style or generating one of its preview pictures, **reading a character sheet from a file**, and **reading any file that
 is only pictures** — a scan or a photographed page — where the cost is a token a page.
 **Free actions:** replacing a panel image from the Archive, locking an image, archiving an image,
 **importing a batch of asset images into the Asset Library**, **uploading your own picture onto a panel**,
@@ -1669,18 +1669,86 @@ the new way.
 ## 17. Custom Art Styles (Platinum)
 
 On the **Platinum** tier you can build your own art styles, under **Custom Art Styles**
-in the profile menu. Click **New style**, name it, and upload **2–4 reference images that
-share the look you want** (style, not subject). Hit **Analyze**: Campaignia studies the
-*artistic qualities* — line structure, color, shading, shadowing, blending — **not the
-content** — and builds an art-style prompt from them. **Preview render** shows the
-result; if it's off, edit the prompt and preview again until you're happy. Your style
-then appears under the **Art style** button on the Review, Storyboard, and Preview
-screens for use on your story moments.
+in the profile menu. Click **New style**, name it, and add **2–4 reference images that
+share the look you want** (style, not subject). You can choose several pictures at once:
+they fill the box you clicked and any empty boxes, and never replace a picture already
+there. Each picture shows whole in its box.
+
+**1. Analyze style (1 token).** Campaignia studies how the samples are *drawn*, never
+what is in them, and answers **18 questions** about the style: Tradition; Medium and
+technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Colour;
+Light and light effects; Surfaces; Texture; Detail, and where it goes; Background; Edges
+and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; and What
+the questions missed. If the samples don't all share one style, a warning says what
+differs. A style built from mixed samples comes out mixed, so removing the odd one out
+and analyzing again usually helps.
+
+**2. The answers** are listed one line each under **How the style is drawn**. Hover over
+an answer to read all of it, or click **Edit** to change it. **"None" is a real answer:**
+say so when the style has no outlines, no texture or no glows, because anything left
+unsaid lets the image model fall back on its own habits. After changing answers, click
+**Rewrite descriptions (free)**.
+
+**3. Three descriptions** are written from the answers, three takes on the same style:
+- **Faithful**: the answers as written.
+- **Bolder**: every defining trait pushed further.
+- **Softer**: the same traits, gentler.
+
+Each one can be edited by hand, or rewritten on its own with **Rewrite this one (free)**.
+A rewrite asks first if it would replace text you edited by hand, or your winner.
+
+**4. Preview pictures (1 token each).** Each description has three preview boxes, made
+one at a time with **Generate**:
+- **Close up**: one person, head and shoulders, with a dramatic expression. Shows faces,
+  eyes and shading.
+- **Outdoors**: travellers on a road through a wide valley under an evening sky. Shows
+  the background, atmosphere and colour.
+- **Group**: four companions around a table in a firelit hall. Shows several people at
+  mid distance and how firelight is drawn.
+
+The first picture of each scene starts from the same point for all three descriptions,
+so they are easy to compare side by side. **Generate again** draws a fresh take. A red
+progress bar shows while a picture is made (about 40 seconds).
+
+**5. Pick the winner.** **Use this one** marks the description your stories will use.
+The other two stay on screen with their pictures, greyed out and frozen; **Make this the
+winner** swaps them. Until you pick a winner and save, your stories keep using the style
+as it was last saved.
+
+**6. Save style** keeps everything: the answers, all three descriptions, every preview
+picture and the winner. Reopening the style shows it all.
+
+**Where it shows up:** the style is listed **by the name you gave it** (for example "Moody
+Ink Wash"), under **My Custom Styles** at the bottom of the **Art style** window on the
+Review, Storyboard, and Preview screens, with your first reference picture as its
+thumbnail. It is not one of the built-in styles and is never renamed after one (such as
+High fantasy illustration). Members of campaigns you run as Story Master can use it too,
+under **Campaign Styles (SM)**, while you stay on Platinum.
+
+**Closing the builder:** if you close it with changes that are not saved, it asks: **Save**,
+**Don't save** (the style stays as it was last saved), or **Keep editing**. Analyze, each
+preview picture, Use this one and Convert to questions save by themselves.
+
+**Getting it right:** the words decide the picture almost word for word, so fix the
+answer behind what looks wrong, then Rewrite. Too much going on behind the figures:
+**Background** and **Detail, and where it goes**. Washed-out colour: **Colour**. Faces
+drawn the wrong way: **Characters: faces, eyes and bodies**. **Soft / faded edges**
+(below the descriptions) makes the art thin out to white at the panel edges instead of
+filling the frame; Analyze sets it from the Edges answer and you can change it.
+
+**Styles made before the questions** keep working exactly as they were. Opening one
+shows its description and a **Convert to questions (free)** button: it fills in the 18
+answers from your description and saved samples, keeps your description as **Faithful**,
+and writes **Bolder** and **Softer** beside it. Nothing in your books changes until you
+pick a winner and save.
+
+**Not yet:** a style cannot yet draw a picture as a comic page of several panels, or add
+speech bubbles. Each story picture is one image.
 
 Notes: creating a style requires a **true Platinum subscription** (inheriting Platinum
-from a Story Master lets you *use* styles, not *build* them). **Analyze and Preview each
-cost a token.** If you later drop from Platinum, your existing styles stay usable — you
-just can't make new ones.
+from a Story Master lets you *use* styles, not *build* them). **Analyze and each preview
+picture cost a token. Rewrite and Convert to questions are free**, up to 20 a day. If you
+later drop from Platinum, your existing styles stay usable — you just can't make new ones.
 
 ---
 
@@ -1734,8 +1802,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   styles-by-tier block lists exactly which presets you have). For a specific look, the
   painterly presets are usually closest. **If you're on Platinum, the best route is the
   Custom Art Style Builder** (profile menu → Custom Art Styles): upload 2–4 reference
-  images in that look, click **Analyze**, and Campaignia builds a matching style you can
-  use on your moments. Campaignia makes *original* art inspired by an aesthetic
+  images in that look and click **Analyze style**. Campaignia answers 18 questions about
+  how they are drawn and writes three descriptions (Faithful, Bolder, Softer); preview
+  each, edit the answers if something is off, and pick a winner (section 17). Campaignia makes *original* art inspired by an aesthetic
   (post-impressionist, watercolor, cel-shaded), so a "Van Gogh feel" is fine — it just
   won't clone a specific copyrighted artwork.
 - **"My character looks wrong / keeps changing between panels."** Open the **Characters**
@@ -1877,6 +1946,12 @@ Friction points and what's actually going on.
 - **"Why can't I build a custom art style?"** It requires a **true Platinum
   subscription**. Inheriting Platinum from your Story Master lets you *use* styles, not
   *build* them.
+- **"My custom style doesn't look like my samples."** Open the style and read the
+  answers under **How the style is drawn**: find the one behind what looks wrong (for
+  example Background, Detail or Colour), click **Edit**, change it, then **Rewrite
+  descriptions** and generate a preview again. Say "none" outright for anything the style
+  doesn't have. If a warning says your samples don't share one style, remove the odd one
+  out and analyze again. Also compare **Bolder** and **Softer**: one is often closer.
 - **"Why are some panels skipped when I hit Generate Images?"** **Locked** panels are
   skipped on purpose. Unlock them to include them.
 - **"Why won't Generate Story run?"** It rebuilds from scratch and refuses to wipe
