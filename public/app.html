@@ -3279,6 +3279,7 @@
   <div class="modal cs-modal">
     <div class="modal-header">
       <div class="modal-title" id="cstyle-form-title">Create a new style</div>
+      <button class="btn btn-sm help-nudge" id="cstyle-help-btn" type="button" onclick="csOpenHelp()" title="Custom art style tips, and ask us anything" aria-label="Custom art style help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
       <button class="modal-close" onclick="closeCustomStyles()">&times;</button>
     </div>
     <div id="cstyle-error" class="alert alert-error hidden"></div>
@@ -3369,9 +3370,9 @@
     <div id="cs-bar-analyze"></div>
     <div id="cs-disagree" class="alert alert-warning hidden" style="margin:12px 0 0;"></div>
     <div id="cs-convert-wrap" class="cs-section hidden">
-      <div class="cs-note">This style was made before the questions. Convert it to see and edit how it is drawn, and get two more descriptions to compare with your own. Nothing changes in your stories until you choose a winner and save.</div>
-      <button class="btn" id="cs-convert-btn" onclick="csConvert()">Convert to questions (free)</button>
-      <div id="cs-bar-convert"></div>
+      <!-- v3.1.80 -- Ian: Convert to questions removed ("Nobody has really made any styles but me"). An older style
+           is brought onto the questions with Analyze style, from its saved reference pictures. -->
+      <div class="cs-note">This style was made before the questions. Click Analyze style above to get its answers and three descriptions from its reference pictures. Nothing changes in your stories until you choose a winner and save.</div>
     </div>
     <div class="cs-section" id="cs-answers-wrap">
       <div class="cs-section-head">

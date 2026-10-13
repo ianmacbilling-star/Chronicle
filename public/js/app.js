@@ -4927,6 +4927,8 @@ function _helpSendTranscriptOnLogout(done) {
 var _helpPending = false;  // a request is in flight
 var _helpError = '';       // transient error shown below the thread
 function _helpCurrentViewId() {
+  var _csm = document.getElementById('cstyle-modal');   // v3.1.81: the custom art style builder is open
+  if (_csm && !_csm.classList.contains('hidden')) return 'custom_style_builder';
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -4977,6 +4979,32 @@ function rgOpenHelp() {
   if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
 }
 
+// v3.1.79 -- Ian: "Can you put the ?s (ask the help) on the custom art style modal?" v3.1.81 -- Ian: "do it
+// exactly like the retouch... it has the hint text then you can ask a question... no common questions."
+// So: a few tips go into the thread, then help opens over the builder, as Retouch's ?s does. Help is also
+// told the builder is open (_helpCurrentViewId), so it answers about custom styles without asking which.
+var CS_HELP_INTRO = [
+  'A few things that make a custom art style come out well:',
+  '',
+  'Use 2 to 4 reference pictures drawn in one style. The subject does not matter; the way it is drawn does.',
+  '',
+  'Read the answers before you preview. If a picture looks wrong, fix the answer behind it, then Rewrite descriptions.',
+  '',
+  'Say "none" outright when the style has no outlines, no texture or no glows.',
+  '',
+  'Compare Bolder and Softer before you pick a winner. One of them is often closer.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+function csOpenHelp() {
+  try {
+    var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === CS_HELP_INTRO;
+    if (!seeded) _helpThread.push({ role: 'assistant', content: CS_HELP_INTRO });
+  } catch (e) { /* the tips are a courtesy; never block the builder */ }
+  openHelp();
+  var m = document.getElementById('help-panel');
+  if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
+}
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
   m.classList.remove('hidden');
