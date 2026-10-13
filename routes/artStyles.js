@@ -262,7 +262,7 @@ const STYLE_QUESTIONS = [
   ['detail', 'Detail, and where it goes', 'On the main figure only, evenly spread, or minimal everywhere; and how much.'],
   ['background', 'Background', 'A flat colour, solid black, simplified shapes, loose and suggestive, full scenery, or bare paper.'],
   ['edges', 'Edges and framing', 'Full bleed to every edge, fading to pure white, fading into paper, or a drawn border.'],
-  ['figures', 'Faces and figures', 'How eyes, faces and bodies are drawn: realistic or stylised, proportions, expression.'],
+  ['figures', 'Characters: faces, eyes and bodies', 'How people are drawn: eyes (size, shape, highlights), faces, proportions and body type, realistic or stylised, expression.'],   // v3.1.68 -- label made obvious (Ian: "how people should look... Anime... big eyes")
   ['energy', 'Energy and drama', 'Movement (still and calm, or sweeping and dynamic) and intensity (quiet and gentle, or charged and theatrical), described as how things are drawn, never as what happens.'],
   ['atmosphere', 'Atmosphere', 'Fog, smoke, rain, haze, particles, sparkle, or clear air.'],
   ['missed', 'What the questions missed', 'Anything else that makes these images look the way they do. Empty if nothing.']
@@ -296,12 +296,20 @@ const DESCRIPTION_RULES =
   'never events: a calm scene in a dramatic style gets dramatic treatment, not invented danger. ' +
   '(j) Roughly 6 to 10 sentences. Every word is a directive; no art criticism, no preamble.';
 
-// Three descriptions of ONE style. They differ in wording and emphasis, never in the style: one word
-// ("muted") was enough to drain the colour out of a test, so the user is given three wordings to compare.
+// v3.1.68 -- FAITHFUL, BOLDER, SOFTER (Ian, 2026-10-13: the three "seem pretty similar"; "those are good
+// options for choices. Label them as such"). Three wordings of the same answers looked alike, so the three
+// are now one style at three intensities. Each stays inside the answers: a style with no outlines does not
+// grow outlines in the bold one. The order is fixed; the screen labels them by position.
+const VARIANTS = [
+  'FAITHFUL: follow the answers exactly as written, at the strength they state.',
+  'BOLDER: the same answers with every defining trait pushed further -- harder contrast, more saturated colour, ' +
+    'stronger and more decisive line or brushwork, more drama in the light -- without adding anything the answers rule out.',
+  'SOFTER: the same answers rendered gentler -- lighter shadows, quieter and more harmonious colour, finer line, ' +
+    'more air and calm -- without removing any defining trait or adding anything the answers rule out.'
+];
 const THREE_WAYS =
-  'Write THREE descriptions of the SAME style from the same answers. They must agree on every answer; ' +
-  'they differ only in wording and in what they lead with: the first leads with medium, line and finish; ' +
-  'the second with colour and light; the third with tone, black, background and where the detail goes.';
+  'Write THREE descriptions of the SAME style from the same answers, in this order:\n' + VARIANTS.join('\n') + '\n' +
+  'All three must agree with every answer; they differ only in intensity.';
 
 const STYLE_ANALYZE_SYSTEM =
   'You are an art director turning reference images into a REUSABLE, CONTENT-FREE art-style directive. It ' +
@@ -337,9 +345,8 @@ const STYLE_CONVERT_SYSTEM =
   'images win. Answer EVERY question in one or two short, concrete phrases; say "none" outright when something ' +
   'is absent. No subjects, no objects, no places, no names.\n\n' +
   DESCRIPTION_RULES + '\n\n' +
-  'Then write TWO new descriptions from your answers, differing only in wording and emphasis (one leading with ' +
-  'colour and light, one with tone, black, background and where the detail goes). The user keeps their own ' +
-  'paragraph as the first option, so do not repeat it.\n\n' +
+  'Then write TWO new descriptions from your answers, in this order:\n' + VARIANTS[1] + '\n' + VARIANTS[2] + '\n' +
+  'The user keeps their own paragraph as the faithful first option, so do not repeat it.\n\n' +
   'Reply with ONLY this JSON, no markdown: {"answers": {' + STYLE_QUESTIONS.map(function (q) { return '"' + q[0] + '": "..."'; }).join(', ') + '}, ' +
   '"samples_disagree": "", "fade": false, "descriptions": ["STYLE: ...", "STYLE: ..."]}';
 
@@ -568,10 +575,11 @@ router.post('/custom/rewrite', requireAuth, requireTruePlatinum, async function 
     const filled = STYLE_QUESTIONS.filter(function (q) { return answers[q[0]]; }).length;
     if (filled < 3) return res.json({ error: 'Fill in more of the answers first.' });
     const count = (req.body && (req.body.count === 1 || req.body.count === '1')) ? 1 : 3;
+    const variant = (req.body && /^[012]$/.test(String(req.body.variant))) ? parseInt(req.body.variant, 10) : 0;   // v3.1.68
     if (!freeCallAllowed(req.session.userId)) return res.json({ error: 'That is ' + FREE_DAILY + ' free rewrites today. Try again tomorrow.' });
     const lines = STYLE_QUESTIONS.map(function (q) { return q[1] + ': ' + (answers[q[0]] || '(not answered)'); }).join('\n');
     const ask = 'The answers:\n' + lines + '\n\n' + (count === 1
-      ? 'Write ONE description that follows these answers exactly.'
+      ? ('Write ONE description: ' + VARIANTS[variant])
       : THREE_WAYS);
     let raw = '';
     try { raw = await askClaude(STYLE_REWRITE_SYSTEM, [{ type: 'text', text: ask }], 3000); }
@@ -609,6 +617,6 @@ router.post('/custom/:id/convert', requireAuth, requireTruePlatinum, async funct
 });
 
 // Exported for the guard; the router is what server.js mounts.
-router._td964 = { STYLE_QUESTIONS, cleanAnswers, cleanOptions, cleanWinner, chosenText, thumbOf, imagesOf, shapeReply, parseModelJson, normStyle, freeCallAllowed, releaseDropped, STYLE_ANALYZE_SYSTEM, STYLE_REWRITE_SYSTEM, STYLE_CONVERT_SYSTEM };
+router._td964 = { VARIANTS, STYLE_QUESTIONS, cleanAnswers, cleanOptions, cleanWinner, chosenText, thumbOf, imagesOf, shapeReply, parseModelJson, normStyle, freeCallAllowed, releaseDropped, STYLE_ANALYZE_SYSTEM, STYLE_REWRITE_SYSTEM, STYLE_CONVERT_SYSTEM };
 
 module.exports = router;

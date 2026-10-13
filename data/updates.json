@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.1.68",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3168-style-builder-polish",
+        "kind": "change",
+        "public": true,
+        "summary": "The custom art style builder is easier to read: the answers are grouped summaries you click to edit, the three descriptions are Faithful, Bolder and Softer, and every wait shows a progress bar.",
+        "detail": "Open a custom style. The answers show as five groups (Drawing, Colour & light, Scene, Characters & energy, Anything else); click one to edit, Done to fold it. Labels are readable on white. The descriptions are labelled Faithful, Bolder and Softer and should look clearly different in strength. Generate a Close up: one person, closer in, in a square slot; Outdoors and Group in wide slots with no grey bars. The first Close up of Faithful, Bolder and Softer should show much the same man; Generate again draws a new one. Analyze, Rewrite, Convert and each picture show the red progress bar with a line of text.",
+        "td": [
+          "TD-964",
+          "TD-965"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.67",
     "staged_on": "2026-10-13",
     "entries": [

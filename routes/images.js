@@ -2401,9 +2401,12 @@ webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
 // go through generateImage like any panel, so a preview is what a story panel would get. A request with no
 // scene is the old one-picture screen and keeps the old scene and its saving, unchanged.
 const STYLE_PREVIEW_SCENES = {
-  closeup:  { shape: 'square', prompt: 'Two travellers lean across a small table, faces close, one speaking quietly while the other listens.' },
-  outdoors: { shape: 'wide',   prompt: 'A small caravan crosses a wide valley toward a walled town on a far hill, under a vast evening sky.' },
-  group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map.' }
+  // v3.1.68 -- Ian: the close up should have ONE person, about 15% tighter; and the people varied too much
+  // between previews, so each is described precisely (a specific description holds steadier than "four
+  // companions"). No reference pictures: they pull the drawing toward their own style.
+  closeup:  { shape: 'square', prompt: 'A close head-and-shoulders portrait of one person only: a weathered traveller in his fifties with a short grey beard, a thin scar through his left eyebrow, and a dark green hooded cloak, sitting alone at a small table and looking down in thought, lit by a single lamp. No one else is in the picture.' },
+  outdoors: { shape: 'wide',   prompt: 'A small caravan of three covered wagons crosses a wide valley toward a walled town on a far hill, under a vast evening sky.' },
+  group:    { shape: 'wide',   prompt: 'Four companions gather around a table in a firelit hall, arguing over a map: a tall woman with short red hair in a leather coat, a stocky bald man with a braided black beard, a slim young man with long silver hair in a blue robe, and an older woman with grey curls and round spectacles.' }
 };
 
 // POST /api/images/custom-style-preview -- render ONE sample panel in a (possibly
@@ -2427,7 +2430,10 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     }
     const _scene = (req.body && typeof req.body.scene === 'string' && Object.prototype.hasOwnProperty.call(STYLE_PREVIEW_SCENES, req.body.scene)) ? STYLE_PREVIEW_SCENES[req.body.scene] : null;   // v3.1.66
     const SAMPLE_PROMPT = _scene ? _scene.prompt : 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
-    const seed = crypto.randomInt(1, 2147483647);
+    // v3.1.68 -- the screen sends one seed per scene so the three descriptions start from the same picture
+    // and differ in style, not in who is in it. Anything else gets a random seed, as before.
+    const _askSeed = (_scene && req.body) ? Number(req.body.seed) : NaN;
+    const seed = (Number.isInteger(_askSeed) && _askSeed >= 1 && _askSeed <= 2147483646) ? _askSeed : crypto.randomInt(1, 2147483647);
     const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, _scene ? _scene.shape : 'wide', null, isFade);
     try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'custom_style_preview', tokens_redeemed: cost, quantity: 1, unit: 'images', model: (IMAGE_MODELS[modelKey] || modelKey) }); } catch (e) {}
