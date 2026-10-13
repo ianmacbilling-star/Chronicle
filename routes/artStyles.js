@@ -181,7 +181,9 @@ router.put('/custom/:id', requireAuth, requireTruePlatinum, async function(req, 
     const sampleUrls = (req.body && Array.isArray(req.body.sample_urls))
       ? req.body.sample_urls.filter(function (u) { return typeof u === 'string' && /^https:\/\//.test(u); }).slice(0, 4)
       : null;
-    const chosen = hasOpts ? chosenText(options, winner) : '';
+    // v3.1.67 -- until a winner is chosen, stories keep the style as it was last saved (spec section 3):
+    // after Rewrite or Convert the old text stays in force, and only Use this one changes it.
+    const chosen = hasOpts ? ((winner === null && row.style_prompt) ? row.style_prompt : chosenText(options, winner)) : '';
     if (hasOpts && options && options.length) previewUrl = thumbOf(options, winner);   // always one of the options' pictures, or none
     if (!name) return res.json({ error: 'Please name your style.' });
     if (!stylePrompt && !chosen) return res.json({ error: 'The style description is empty.' });

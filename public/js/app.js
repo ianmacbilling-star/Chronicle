@@ -5416,14 +5416,14 @@ function cstyleSaveErr(msg) { var e = document.getElementById('cstyle-save-error
 function resetCustomStyleForm() {
   cstyleSamples = [];
   cstylePreviewUrl = '';
-  var vals = { 'cstyle-edit-id':'', 'cstyle-name':'', 'cstyle-prompt':'' };
+  CS.answers = {}; CS.options = [csBlankOption()]; CS.winner = null; CS.disagree = ''; CS.legacy = false;   // v3.1.67
+  var vals = { 'cstyle-edit-id':'', 'cstyle-name':'' };
   Object.keys(vals).forEach(function(k){ var el = document.getElementById(k); if (el) el.value = vals[k]; });
   var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = false;
-  var pw = document.getElementById('cstyle-preview-wrap'); if (pw) pw.style.display = 'none';
-  var pi = document.getElementById('cstyle-preview-img'); if (pi) pi.src = '';
   var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Create a new style';
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ clearSlot(k); slotFiles[k + '_clear'] = false; });
   cstyleErr(''); cstyleSaveErr('');
+  csLoadQuestions(csRender);
 }
 function openCustomStylesView() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
@@ -5492,57 +5492,250 @@ function analyzeCustomStyle() {
   cstyleErr('');
   var refs = collectCstyleRefs();
   if ((refs.files.length + refs.urls.length) < 2) { cstyleErr('Add at least 2 reference images first.'); return; }
-  var btn = document.getElementById('cstyle-analyze-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
-  var fd = new FormData();
-  refs.files.forEach(function(f){ fd.append('images', f); });
-  fd.append('sample_urls', JSON.stringify(refs.urls));
-  fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data.error) { cstyleErr(data.message || data.error); return; }
-      var pr = document.getElementById('cstyle-prompt'); if (pr) pr.value = data.style_prompt || '';
-      var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!data.is_fade;
-      cstyleSamples = Array.isArray(data.sample_urls) ? data.sample_urls : [];
-      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-      var _nm = document.getElementById('cstyle-name'); if (_nm && !_nm.value.trim()) _nm.value = 'Untitled Style';
-      saveCustomStyle({ keepOpen: true });
-    })
-    .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
-    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Analyze style (1 token)'; } });
+  function go() {
+    var btn = document.getElementById('cstyle-analyze-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Analyzing\u2026'; }
+    showBusyOverlay('cs-answers-wrap', 'Analyzing', 'Answering the 18 questions and writing three descriptions');
+    var fd = new FormData();
+    refs.files.forEach(function(f){ fd.append('images', f); });
+    fd.append('sample_urls', JSON.stringify(refs.urls));
+    fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.error) { cstyleErr(data.message || data.error); return; }
+        // v3.1.67 -- TD-964. Answers, three descriptions, no winner yet.
+        if (Array.isArray(data.questions) && data.questions.length) CS.questions = data.questions;
+        CS.answers = data.answers || {};
+        CS.disagree = data.samples_disagree || '';
+        CS.options = (Array.isArray(data.descriptions) && data.descriptions.length ? data.descriptions : [data.style_prompt || '']).map(function (t) { return { text: t, edited: false, previews: {} }; });
+        CS.winner = null;
+        CS.legacy = false;
+        var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!data.is_fade;
+        cstyleSamples = Array.isArray(data.sample_urls) ? data.sample_urls : [];
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        var _nm = document.getElementById('cstyle-name'); if (_nm && !_nm.value.trim()) _nm.value = 'Untitled Style';
+        csRender();
+        saveCustomStyle({ keepOpen: true });
+      })
+      .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
+      .then(function(){ hideBusyOverlay('cs-answers-wrap'); if (btn) { btn.disabled = false; btn.innerHTML = 'Analyze style <span class="btn-cost">(1 token)</span>'; } });
+  }
+  var hasWork = CS.options.some(function (o) { return o && (o.edited || Object.keys(o.previews || {}).length); }) || (CS.winner !== null && CS.winner !== undefined);
+  if (hasWork) {
+    appConfirm({ title: 'Analyze again?', body: 'This replaces the answers and all three descriptions, with their preview pictures.', note: 'Until you pick a new winner and save, your stories keep using this style as it was last saved.', okLabel: 'Analyze (1 token)', onOk: go });
+  } else go();
 }
-function previewCustomStyle() {
+// =====================================================================================================
+// v3.1.67 -- TD-964 build 2. THE QUESTIONS SCREEN (spec claude/CUSTOM_ART_STYLE_QUESTIONS_SPEC.md).
+// =====================================================================================================
+//
+// Ian, 2026-10-13: "after the reference pictures... we give the answers to the questions. Below that the
+// 3 individual prompts it generated as the 3 options. Then below each prompt the 3 images horizontally for
+// that prompt." Answers and descriptions can both be edited; Save keeps everything; one description is
+// the winner and the other two stay on screen with their pictures, greyed out and frozen.
+//
+// CS holds the screen. options[i] = { text, edited, previews: { closeup, outdoors, group } }. winner is the
+// index the user chose, or null. The server keeps style_prompt (what story panels read) as the winner's
+// text; until a winner is chosen it keeps the style as it was last saved.
+var CS = { questions: [], answers: {}, options: [], winner: null, disagree: '', legacy: false };
+var CS_SCENES = [['closeup', 'Close up'], ['outdoors', 'Outdoors'], ['group', 'Group']];
+function csBlankOption() { return { text: '', edited: false, previews: {} }; }
+function csLoadQuestions(cb) {
+  if (CS.questions.length) { if (cb) cb(); return; }
+  fetch('/api/art-styles/questions', { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (q) { if (Array.isArray(q)) CS.questions = q; })
+    .catch(function () {})
+    .then(function () { if (cb) cb(); });
+}
+function csHasAnswers() {
+  var k = Object.keys(CS.answers || {});
+  for (var i = 0; i < k.length; i++) if (CS.answers[k[i]]) return true;
+  return false;
+}
+function csFrozen(i) { return CS.winner !== null && CS.winner !== undefined && i !== CS.winner; }
+function csRender() {
+  // Answers
+  var aw = document.getElementById('cs-answers-wrap');
+  var cw = document.getElementById('cs-convert-wrap');
+  var showConvert = CS.legacy && !csHasAnswers();
+  if (cw) cw.classList.toggle('hidden', !showConvert);
+  if (aw) aw.classList.toggle('hidden', showConvert);
+  var box = document.getElementById('cs-answers');
+  if (box) {
+    box.innerHTML = CS.questions.map(function (q) {
+      return '<div class="cs-answer"><label for="cs-ans-' + q.key + '" title="' + escapeHtml(q.help || '') + '">' + escapeHtml(q.label) + '</label>' +
+        '<textarea class="form-textarea" id="cs-ans-' + q.key + '" data-key="' + q.key + '" rows="2" oninput="csEditAnswer(this)" placeholder="' + escapeHtml(q.help || '') + '">' +
+        escapeHtml(CS.answers[q.key] || '') + '</textarea></div>';
+    }).join('');
+  }
+  var dis = document.getElementById('cs-disagree');
+  if (dis) { dis.textContent = CS.disagree ? ('Your reference images don\u2019t all share one style: ' + CS.disagree + ' The answers follow the look most of them share.') : ''; dis.classList.toggle('hidden', !CS.disagree); }
+  // Descriptions
+  var note = document.getElementById('cs-win-note');
+  if (note) {
+    note.textContent = (CS.winner !== null && CS.winner !== undefined)
+      ? 'The winner is what your stories use. The others are kept for comparison; Make this the winner swaps them.'
+      : (CS.options.length > 1 ? 'Preview them, then choose one with Use this one. Until you do, your stories use this style as it was last saved.' : 'Write a description, or Analyze your reference images to get three.');
+  }
+  var ob = document.getElementById('cs-options');
+  if (!ob) return;
+  if (!CS.options.length) CS.options = [csBlankOption()];
+  ob.innerHTML = CS.options.map(function (o, i) {
+    var fr = csFrozen(i), win = (CS.winner === i);
+    var head = '<div class="cs-opt-head"><span class="cs-opt-title">Description ' + (i + 1) + '</span>' +
+      (win ? '<span class="cs-badge">Winner \u2014 used in your stories</span>' : '') +
+      '<span class="cs-opt-btns">' +
+        (fr ? '' : '<button class="btn btn-sm" id="cs-rw-' + i + '" onclick="csRewriteOne(' + i + ')"' + (csHasAnswers() ? '' : ' disabled') + '>Rewrite this one (free)</button>') +
+        (win ? '' : '<button class="btn btn-sm btn-primary cs-keep" id="cs-use-' + i + '" onclick="csUse(' + i + ')"' + (o.text ? '' : ' disabled') + '>' + (fr ? 'Make this the winner' : 'Use this one') + '</button>') +
+      '</span></div>';
+    var shots = CS_SCENES.map(function (sc) {
+      var url = (o.previews || {})[sc[0]];
+      return '<div class="cs-shot"><div class="cs-shot-label">' + sc[1] + '</div>' +
+        '<div class="cs-shot-img" id="cs-shot-' + i + '-' + sc[0] + '">' +
+          (url ? '<img src="' + escapeHtml(url) + '" alt="' + sc[1] + ' preview" onclick="openLightbox(this.src, this.alt)" />' : '<span class="cs-shot-empty">No preview yet</span>') +
+        '</div>' +
+        (fr ? '' : '<button class="btn btn-sm cs-gen" id="cs-gen-' + i + '-' + sc[0] + '" onclick="csGenerate(' + i + ',\'' + sc[0] + '\')"' + (o.text ? '' : ' disabled') + '>' + (url ? 'Generate again' : 'Generate') + ' (1 token)</button>') +
+      '</div>';
+    }).join('');
+    return '<div class="cs-opt' + (win ? ' cs-win' : '') + (fr ? ' cs-frozen' : '') + '" id="cs-opt-' + i + '">' + head +
+      '<div class="cs-dim"><textarea class="form-textarea cs-opt-text" id="cs-opt-text-' + i + '" rows="5" oninput="csEditOption(' + i + ', this)"' + (fr ? ' readonly' : '') +
+        ' placeholder="STYLE: ...">' + escapeHtml(o.text || '') + '</textarea>' +
+      '<div class="cs-shots">' + shots + '</div></div></div>';
+  }).join('');
+}
+function csEditAnswer(el) { if (!el) return; CS.answers[el.getAttribute('data-key')] = el.value; }
+function csEditOption(i, el) {
+  if (!CS.options[i] || csFrozen(i)) return;
+  CS.options[i].text = el.value;
+  CS.options[i].edited = true;
+  var u = document.getElementById('cs-use-' + i); if (u) u.disabled = !el.value.trim();
+  CS_SCENES.forEach(function (sc) { var g = document.getElementById('cs-gen-' + i + '-' + sc[0]); if (g) g.disabled = !el.value.trim(); });
+}
+function csUse(i) {
+  if (!CS.options[i] || !String(CS.options[i].text || '').trim()) return;
+  CS.winner = i;
+  csRender();
+  if ((document.getElementById('cstyle-edit-id') || {}).value) saveCustomStyle({ keepOpen: true });
+}
+function csCurrentAnswers() {
+  var out = {};
+  CS.questions.forEach(function (q) { var el = document.getElementById('cs-ans-' + q.key); out[q.key] = el ? el.value : (CS.answers[q.key] || ''); });
+  CS.answers = out;
+  return out;
+}
+function csRewriteAll() {
   cstyleErr('');
-  var pr = document.getElementById('cstyle-prompt');
-  var txt = pr ? pr.value.trim() : '';
-  if (!txt) { cstyleErr('Add a style description first (analyze or type one).'); return; }
+  var answers = csCurrentAnswers();
+  var anyEdited = CS.options.some(function (o) { return o && o.edited && o.text; });
+  function go() {
+    var btn = document.getElementById('cs-rewrite-all-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Rewriting\u2026'; }
+    showBusyOverlay('cs-options', 'Rewriting');
+    fetch('/api/art-styles/custom/rewrite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: answers, count: 3 }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.error) { cstyleErr((d && (d.message || d.error)) || 'Could not rewrite the descriptions.'); return; }
+        CS.options = d.descriptions.map(function (t) { return { text: t, edited: false, previews: {} }; });
+        CS.winner = null;
+        var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!d.is_fade;
+        csRender();
+      })
+      .catch(function (e) { cstyleErr('Could not rewrite the descriptions: ' + e.message); })
+      .then(function () { hideBusyOverlay('cs-options'); if (btn) { btn.disabled = false; btn.textContent = 'Rewrite descriptions (free)'; } });
+  }
+  if (CS.winner !== null && CS.winner !== undefined) {
+    appConfirm({ title: 'Rewrite all three?', body: 'Your winner will be replaced too, and you\u2019ll pick again. Their preview pictures go with them.',
+      note: 'Until you pick a new winner and save, your stories keep using the current one.', okLabel: 'Rewrite all three', onOk: go });
+  } else if (anyEdited) {
+    appConfirm({ title: 'Replace your edits?', body: 'Rewriting replaces all three descriptions, including the ones you edited by hand, and their preview pictures.', okLabel: 'Rewrite all three', onOk: go });
+  } else go();
+}
+function csRewriteOne(i) {
+  if (!CS.options[i] || csFrozen(i)) return;
+  cstyleErr('');
+  var answers = csCurrentAnswers();
+  function go() {
+    var btn = document.getElementById('cs-rw-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = 'Rewriting\u2026'; }
+    showBusyOverlay('cs-opt-' + i, 'Rewriting');
+    fetch('/api/art-styles/custom/rewrite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: answers, count: 1 }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.error) { cstyleErr((d && (d.message || d.error)) || 'Could not rewrite that description.'); return; }
+        CS.options[i] = { text: d.descriptions[0], edited: false, previews: {} };
+        csRender();
+      })
+      .catch(function (e) { cstyleErr('Could not rewrite that description: ' + e.message); })
+      .then(function () { hideBusyOverlay('cs-opt-' + i); var b = document.getElementById('cs-rw-' + i); if (b) { b.disabled = false; b.textContent = 'Rewrite this one (free)'; } });
+  }
+  var hasPics = Object.keys(CS.options[i].previews || {}).length > 0;
+  if (CS.options[i].edited || hasPics) {
+    appConfirm({ title: 'Rewrite description ' + (i + 1) + '?', body: 'This replaces ' + (CS.options[i].edited ? 'your edits' : 'this description') + (hasPics ? ' and its preview pictures.' : '.'), okLabel: 'Rewrite it', onOk: go });
+  } else go();
+}
+function csGenerate(i, scene) {
+  var o = CS.options[i];
+  if (!o || csFrozen(i)) return;
+  var txt = String(o.text || '').trim();
+  if (!txt) { cstyleErr('This description is empty.'); return; }
+  cstyleErr('');
   var fade = document.getElementById('cstyle-fade');
-  var btn = document.getElementById('cstyle-preview-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Rendering...'; }
+  var btn = document.getElementById('cs-gen-' + i + '-' + scene);
+  if (btn) btn.disabled = true;
+  var slot = 'cs-shot-' + i + '-' + scene;
+  showBusyOverlay(slot, 'Generating');
   fetch('/api/images/custom-style-preview', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked), style_id: (document.getElementById('cstyle-edit-id') || {}).value || null })
+    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked), scene: scene })
   })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data.error) { cstyleErr(data.message || data.error); return; }
-      var wrap = document.getElementById('cstyle-preview-wrap');
-      var img = document.getElementById('cstyle-preview-img');
-      if (img) img.src = data.image || '';
-      if (wrap) wrap.style.display = data.image ? 'block' : 'none';
-      cstylePreviewUrl = data.image || '';
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { cstyleErr((d && (d.message || d.error)) || 'Could not make the preview.'); return; }
+      if (CS.options[i] === o) { o.previews = o.previews || {}; o.previews[scene] = d.image; }
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      csRender();
+      // A paid picture is saved straight away, so closing the window cannot lose it.
+      if ((document.getElementById('cstyle-edit-id') || {}).value) saveCustomStyle({ keepOpen: true });
     })
-    .catch(function(e){ cstyleErr('Could not render the preview: ' + e.message); })
-    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Preview render (1 token)'; } });
+    .catch(function (e) { cstyleErr('Could not make the preview: ' + e.message); })
+    .then(function () { hideBusyOverlay(slot); var b = document.getElementById('cs-gen-' + i + '-' + scene); if (b) b.disabled = false; });
+}
+function csConvert() {
+  var id = (document.getElementById('cstyle-edit-id') || {}).value;
+  if (!id) return;
+  cstyleErr('');
+  var btn = document.getElementById('cs-convert-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Converting\u2026'; }
+  showBusyOverlay('cs-convert-wrap', 'Converting');
+  fetch('/api/art-styles/custom/' + id + '/convert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { cstyleErr((d && (d.message || d.error)) || 'Could not convert this style.'); return; }
+      CS.answers = d.answers || {};
+      CS.disagree = d.samples_disagree || '';
+      // The style's own paragraph stays first, with any pictures it already had.
+      var first = CS.options[0] && CS.options[0].text === d.descriptions[0] ? CS.options[0] : { text: d.descriptions[0], edited: false, previews: {} };
+      CS.options = [first].concat(d.descriptions.slice(1).map(function (t) { return { text: t, edited: false, previews: {} }; }));
+      CS.winner = null;
+      CS.legacy = false;
+      csRender();
+      saveCustomStyle({ keepOpen: true });
+    })
+    .catch(function (e) { cstyleErr('Could not convert this style: ' + e.message); })
+    .then(function () { hideBusyOverlay('cs-convert-wrap'); if (btn) { btn.disabled = false; btn.textContent = 'Convert to questions (free)'; } });
 }
 function saveCustomStyle(opts) {
   opts = opts || {};
   var keepOpen = !!opts.keepOpen;
   cstyleSaveErr('');
   var name = (document.getElementById('cstyle-name') || {}).value;
-  var prompt = (document.getElementById('cstyle-prompt') || {}).value;
-  name = (name || '').trim(); prompt = (prompt || '').trim();
+  name = (name || '').trim();
+  // v3.1.67 -- TD-964. Everything on the screen is saved: answers, every description and its pictures, the winner.
+  if (CS.questions.length && document.getElementById('cs-ans-' + CS.questions[0].key)) csCurrentAnswers();
+  var options = CS.options.map(function (o) { return { text: String(o.text || '').trim(), edited: !!o.edited, previews: o.previews || {} }; });
+  var w = (CS.winner !== null && CS.winner !== undefined && options[CS.winner] && options[CS.winner].text) ? CS.winner : null;
+  var prompt = w !== null ? options[w].text : ((options.filter(function (o) { return o.text; })[0] || {}).text || '');
   if (!name) { cstyleSaveErr('Please name your style.'); return; }
   if (!prompt) { cstyleSaveErr('The style description is empty. Analyze your samples or write one first.'); return; }
   var editEl = document.getElementById('cstyle-edit-id');
@@ -5553,7 +5746,7 @@ function saveCustomStyle(opts) {
   if (btn && !keepOpen) { btn.disabled = true; btn.textContent = 'Saving...'; }
   var url = editId ? ('/api/art-styles/custom/' + editId) : '/api/art-styles/custom';
   var method = editId ? 'PUT' : 'POST';
-  var body = editId ? { name: name, style_prompt: prompt, is_fade: isFade, preview_url: cstylePreviewUrl || null } : { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples, preview_url: cstylePreviewUrl || null };
+  var body = { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples, answers: CS.answers, options: options, winner: w };
   fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -5581,14 +5774,25 @@ function editCustomStyle(id) {
   resetCustomStyleForm();
   var eid = document.getElementById('cstyle-edit-id'); if (eid) eid.value = sObj.id;
   var nm = document.getElementById('cstyle-name'); if (nm) nm.value = sObj.name || '';
-  var pr = document.getElementById('cstyle-prompt'); if (pr) pr.value = sObj.style_prompt || '';
   var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!sObj.is_fade;
   var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style';
   cstyleSamples = Array.isArray(sObj.sample_urls) ? sObj.sample_urls : [];
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){ if (cstyleSamples[i]) paintSlotUrl(k, cstyleSamples[i]); });
   cstylePreviewUrl = sObj.preview_url || '';
-  var _pi = document.getElementById('cstyle-preview-img'); if (_pi) _pi.src = cstylePreviewUrl;
-  var _pw = document.getElementById('cstyle-preview-wrap'); if (_pw) _pw.style.display = cstylePreviewUrl ? 'block' : 'none';
+  // v3.1.67 -- TD-964. A style made with the questions opens with its answers, descriptions and winner. One
+  // made before them opens with its paragraph as description 1 (the winner, since stories use it) and a
+  // Convert to questions button.
+  if (Array.isArray(sObj.options) && sObj.options.length) {
+    CS.answers = sObj.answers || {};
+    CS.options = sObj.options.map(function (o) { return { text: o.text || '', edited: !!o.edited, previews: o.previews || {} }; });
+    CS.winner = (sObj.winner === null || sObj.winner === undefined) ? null : sObj.winner;
+  } else {
+    CS.answers = sObj.answers || {};
+    CS.options = [{ text: sObj.style_prompt || '', edited: false, previews: {} }];
+    CS.winner = 0;
+  }
+  CS.legacy = !csHasAnswers();   // no answers yet: offer Convert to questions
+  csLoadQuestions(csRender);
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
 function deleteCustomStyle(id) {

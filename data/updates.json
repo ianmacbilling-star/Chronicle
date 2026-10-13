@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.1.67",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3167-style-questions-screen",
+        "kind": "feature",
+        "public": true,
+        "summary": "Custom Art Styles have a new, bigger builder: 18 questions about how your style is drawn, three descriptions to compare, and preview pictures on three scenes for each.",
+        "detail": "Open Custom Art Styles. New style: add 2 to 4 reference images and Analyze (1 token). The 18 answers appear, then three descriptions, each with Close up, Outdoors and Group preview slots; Generate one picture at a time (1 token each, with the spinner). Use this one makes a description the winner: the other two grey out and freeze with their pictures, and Make this the winner swaps. Edit any answer and press Rewrite descriptions (free): if there is a winner it asks first. An older style opens with its paragraph and a Convert to questions button (free); nothing changes in your stories until you pick a winner. Close and reopen: everything is still there.",
+        "td": [
+          "TD-964",
+          "TD-965"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.66",
     "staged_on": "2026-10-13",
     "entries": [
