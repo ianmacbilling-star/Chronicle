@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.73",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3173-style-refs-fit",
+        "kind": "change",
+        "public": false,
+        "summary": "Reference images in the custom art style builder show whole, fitted inside their boxes instead of cropped.",
+        "detail": "Open the style builder and add a tall and a wide reference image: each shows in full, scaled to fit, with the four boxes the same size as before.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.72",
     "staged_on": "2026-10-13",
     "entries": [

@@ -3221,6 +3221,8 @@
 #cstyle-modal .modal.cs-modal{max-width:min(1240px,96vw);width:96vw;max-height:94vh;}
 #app-confirm-modal{z-index:130;}
 .cs-refs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+/* v3.1.73 -- Ian: reference images fit their boxes whole, never cropped; the boxes keep their size. */
+#cstyle-modal .cs-refs .slot-preview{object-fit:contain;height:200px;max-height:200px;background:transparent;}
 .cs-section{margin-top:18px;position:relative;}
 .cs-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
 .cs-section-title{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}
