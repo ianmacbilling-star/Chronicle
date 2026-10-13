@@ -5815,6 +5815,17 @@ function csPlaceRefs(files, slot) {
 }
 function csSlotShown(s) { var p = document.getElementById('preview-' + s); return !!(p && p.src && !p.classList.contains('hidden')); }
 function csSlotFileSelect(e, slot) { var t = e && e.target; if (!t || !t.files) return; csPlaceRefs(t.files, slot); t.value = ''; }
+// v3.1.75 -- Ian: "I want to be able to enlarge the original reference images... a replace button next to the
+// remove button... click on the image to enlarge it like other places in the system. If no image is there then
+// you can click on it to add something to it... drag and drop should work in both cases." A click on a box with
+// a picture opens it in the lightbox; on an empty box it opens the file picker. Replace opens the picker for
+// that box (csPlaceRefs puts the first file there; any others go to empty boxes). Drop is unchanged: it fills
+// the box it lands on, picture or not.
+function csSlotClick(slot) {
+  if (csSlotShown(slot)) { var p = document.getElementById('preview-' + slot); openLightbox(p.src, 'Reference ' + slot.slice(-1)); return; }
+  var i = document.getElementById('input-' + slot); if (i) i.click();
+}
+function csSlotReplace(slot) { var i = document.getElementById('input-' + slot); if (i) i.click(); }
 function csSlotDrop(e, slot) {
   e.preventDefault(); e.stopPropagation();
   var d = document.getElementById('drop-' + slot); if (d) d.classList.remove('drag-over');

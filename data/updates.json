@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.75",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3175-style-refs-enlarge",
+        "kind": "change",
+        "public": false,
+        "summary": "In the custom art style builder, click a reference image to see it larger. Replace sits beside Remove under each one.",
+        "detail": "Open the style builder. Click an empty reference box: the file picker opens. Click a box with a picture: it opens large, like pictures elsewhere; close it and nothing else has changed. Click Replace under a picture: the file picker opens and the new picture takes that box. Drag a picture onto a full box and onto an empty one: both take it. Open a saved style and check the same on its saved pictures.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.74",
     "staged_on": "2026-10-13",
     "entries": [

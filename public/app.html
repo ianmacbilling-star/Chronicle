@@ -3223,6 +3223,12 @@
 .cs-refs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
 /* v3.1.73 -- Ian: reference images fit their boxes whole, never cropped; the boxes keep their size. */
 #cstyle-modal .cs-refs .slot-preview{object-fit:contain;height:200px;max-height:200px;background:transparent;}
+/* v3.1.75 -- Ian: a reference picture that is there enlarges on click; Replace sits beside Remove. The picture
+   itself takes no clicks, so every click lands on its box (csSlotClick), whether the picture was just chosen
+   or came saved with the style. Replace shows only while the box holds a picture. */
+#cstyle-modal .cs-refs .slot-preview{pointer-events:none;}
+#cstyle-modal .cs-refs .image-slot:has(.slot-preview:not(.hidden)){cursor:zoom-in;}
+#cstyle-modal .cs-refs > div:has(.slot-preview.hidden) .cs-replace{display:none;}
 .cs-section{margin-top:18px;position:relative;}
 .cs-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
 .cs-section-title{font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6b4f12;}
@@ -3286,7 +3292,7 @@
         <div>
           <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_1"
-            onclick="document.getElementById('input-cstyle_1').click()"
+            onclick="csSlotClick('cstyle_1')"
             ondragover="handleSlotDragOver(event,'cstyle_1')"
             ondragleave="handleSlotDragLeave(event,'cstyle_1')"
             ondrop="csSlotDrop(event,'cstyle_1')"
@@ -3298,12 +3304,13 @@
             </div>
           </div>
           <input type="file" id="input-cstyle_1" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_1')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_1" onclick="csSlotReplace('cstyle_1')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_1" onclick="clearSlot('cstyle_1')">&#10005; Remove</button>
         </div>
         <div>
           <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 2</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_2"
-            onclick="document.getElementById('input-cstyle_2').click()"
+            onclick="csSlotClick('cstyle_2')"
             ondragover="handleSlotDragOver(event,'cstyle_2')"
             ondragleave="handleSlotDragLeave(event,'cstyle_2')"
             ondrop="csSlotDrop(event,'cstyle_2')"
@@ -3315,12 +3322,13 @@
             </div>
           </div>
           <input type="file" id="input-cstyle_2" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_2')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_2" onclick="csSlotReplace('cstyle_2')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_2" onclick="clearSlot('cstyle_2')">&#10005; Remove</button>
         </div>
         <div>
           <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 3</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_3"
-            onclick="document.getElementById('input-cstyle_3').click()"
+            onclick="csSlotClick('cstyle_3')"
             ondragover="handleSlotDragOver(event,'cstyle_3')"
             ondragleave="handleSlotDragLeave(event,'cstyle_3')"
             ondrop="csSlotDrop(event,'cstyle_3')"
@@ -3332,12 +3340,13 @@
             </div>
           </div>
           <input type="file" id="input-cstyle_3" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_3')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_3" onclick="csSlotReplace('cstyle_3')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_3" onclick="clearSlot('cstyle_3')">&#10005; Remove</button>
         </div>
         <div>
           <div style="font-size:11px;color:#6b4f12;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 4</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_4"
-            onclick="document.getElementById('input-cstyle_4').click()"
+            onclick="csSlotClick('cstyle_4')"
             ondragover="handleSlotDragOver(event,'cstyle_4')"
             ondragleave="handleSlotDragLeave(event,'cstyle_4')"
             ondrop="csSlotDrop(event,'cstyle_4')"
@@ -3349,6 +3358,7 @@
             </div>
           </div>
           <input type="file" id="input-cstyle_4" accept="image/*" multiple style="display:none;" onchange="csSlotFileSelect(event,'cstyle_4')" />
+          <button type="button" class="btn btn-sm cs-replace" style="margin-top:4px;font-size:10px;" id="replace-cstyle_4" onclick="csSlotReplace('cstyle_4')">&#8635; Replace</button>
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
