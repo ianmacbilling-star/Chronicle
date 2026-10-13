@@ -127,7 +127,10 @@ const VIEW_NAMES = {
   publish_view: 'Publish / Library',
   asset_library_view: 'Asset Library',
   archives_view: 'Archives',
-  account_view: 'Account / Billing'
+  account_view: 'Account / Billing',
+  // v3.1.81 -- sent while the Custom Art Style builder is open, so help answers about custom styles
+  // without first asking whether they mean a built-in style.
+  custom_style_builder: 'the Custom Art Style builder (they are making or editing one of their own custom art styles)'
 };
 
 // Normalize the client-sent chat history into a valid alternating message list

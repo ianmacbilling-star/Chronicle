@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.81",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3181-style-help-like-retouch",
+        "kind": "change",
+        "public": false,
+        "summary": "The style builder's ?s now works like Retouch's: a few tips, then ask anything. The ready-made questions are gone, and help knows you are in the builder.",
+        "detail": "Open the style builder and click ?s: the tips appear, then the box to ask; no common questions. Ask something about detail or colour: the answer is about your custom style, without asking whether you mean a built-in one.",
+        "td": [
+          "TD-964"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.80",
     "staged_on": "2026-10-13",
     "entries": [

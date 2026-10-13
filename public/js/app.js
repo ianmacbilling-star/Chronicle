@@ -4927,6 +4927,8 @@ function _helpSendTranscriptOnLogout(done) {
 var _helpPending = false;  // a request is in flight
 var _helpError = '';       // transient error shown below the thread
 function _helpCurrentViewId() {
+  var _csm = document.getElementById('cstyle-modal');   // v3.1.81: the custom art style builder is open
+  if (_csm && !_csm.classList.contains('hidden')) return 'custom_style_builder';
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -4950,7 +4952,6 @@ function renderHelpThread() {
   if (_helpError) html += '<div class="help-msg help-msg-error">' + escapeHtml(_helpError) + '</div>';
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
-  renderHelpTopics();   // v3.1.79: the builder's questions, greyed while an answer is on its way
 }
 var RG_HELP_HINTS = [
   'A few things that make retouching go well:',
@@ -4978,10 +4979,10 @@ function rgOpenHelp() {
   if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
 }
 
-// v3.1.79 -- Ian: "Can you put the ?s (ask the help) on the custom art style modal? With maybe some pre made
-// topics?" Like Retouch's ?s: a few tips go into the thread first, then ready-made questions sit above the
-// box you type in. A click asks that question exactly as if typed. The questions show only while help was
-// opened from the builder; closing help clears them, so the ordinary ?s never shows them.
+// v3.1.79 -- Ian: "Can you put the ?s (ask the help) on the custom art style modal?" v3.1.81 -- Ian: "do it
+// exactly like the retouch... it has the hint text then you can ask a question... no common questions."
+// So: a few tips go into the thread, then help opens over the builder, as Retouch's ?s does. Help is also
+// told the builder is open (_helpCurrentViewId), so it answers about custom styles without asking which.
 var CS_HELP_INTRO = [
   'A few things that make a custom art style come out well:',
   '',
@@ -4993,40 +4994,16 @@ var CS_HELP_INTRO = [
   '',
   'Compare Bolder and Softer before you pick a winner. One of them is often closer.',
   '',
-  'Pick a question below, or ask me anything about custom styles.'
+  'Ask me anything else about it below.'
 ].join('\n');
-var CS_HELP_TOPICS = [
-  'How do custom art styles work?',
-  'What makes good reference images?',
-  'What do Faithful, Bolder and Softer mean?',
-  'My previews don\'t look like my samples. What should I change?',
-  'What do the three preview scenes show?',
-  'What does a custom style cost?'
-];
-var _helpTopics = null;
 function csOpenHelp() {
   try {
     var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === CS_HELP_INTRO;
     if (!seeded) _helpThread.push({ role: 'assistant', content: CS_HELP_INTRO });
   } catch (e) { /* the tips are a courtesy; never block the builder */ }
-  _helpTopics = CS_HELP_TOPICS;
   openHelp();
   var m = document.getElementById('help-panel');
   if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
-}
-function renderHelpTopics() {
-  var box = document.getElementById('help-topics'); if (!box) return;
-  if (!_helpTopics || !_helpTopics.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-  box.innerHTML = '<div class="help-topics-label">Common questions</div>' + _helpTopics.map(function (t, i) {
-    return '<button type="button" class="help-topic" onclick="helpAskTopic(' + i + ')"' + (_helpPending ? ' disabled' : '') + '>' + escapeHtml(t) + '</button>';
-  }).join('');
-  box.classList.remove('hidden');
-}
-function helpAskTopic(i) {
-  if (_helpPending || !_helpTopics || !_helpTopics[i]) return;
-  var q = document.getElementById('help-question'); if (!q) return;
-  q.value = _helpTopics[i];
-  submitHelp();
 }
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
@@ -5037,7 +5014,6 @@ function openHelp() {
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
-  _helpTopics = null; renderHelpTopics();   // v3.1.79
   var m = document.getElementById('help-panel'); if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
