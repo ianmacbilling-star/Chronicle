@@ -277,6 +277,13 @@ async function issueAndSend(db, row, sendFn, opts) {
   ).run(hashCode(bare), bare.slice(-4), sealCode(bare), opts.newEmail || null, row.id);
   if (!r || !r.changes) return { ok: false, error: 'This gift can no longer be sent (it was redeemed or voided).' };
   const fresh = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(row.id);
+  // v3.1.62 -- A NEW CODE (a resend, or delivery having to make one) relabels the Stripe payment with its
+  // last 4, so Stripe never shows the ending of a code that no longer works. Free gifts have no payment.
+  // Best effort: a Stripe failure here never stops the gift being sent.
+  if (!storedCode(row) && fresh && fresh.stripe_payment_intent) {
+    try { await (opts.labelPayment || require('./billing/stripeProvider').labelGiftPayment)(fresh.stripe_payment_intent, fresh, fresh.code_last4); }
+    catch (e) { console.error('[gifts] could not label the Stripe payment for gift ' + row.id + ':', e && e.message); }
+  }
   try {
     await sendFn(fresh, formatCode(bare));
   } catch (e) {
@@ -603,6 +610,13 @@ async function fulfillGiftCheckout(db, session, deps) {
     if (c && c.changes) code = formatCode(bare);
   } catch (e) { console.error('[gifts] could not make the code for gift ' + id + ' at purchase:', e && e.message); }
   const row = await db.prepare('SELECT * FROM gift_certificates WHERE id = ?').get(id);
+  // v3.1.62 -- FINDABLE IN STRIPE (Ian, 2026-10-13): the receipt's Purchase ID and the code's last 4 on the
+  // Stripe payment, so a buyer quoting GIFT-17 or a recipient reading out a code ending AS6A can both be found
+  // there. Never the whole code. Best effort: a failure here never touches the gift.
+  if (piId) {
+    try { await (deps.labelPayment || require('./billing/stripeProvider').labelGiftPayment)(piId, row, row && row.code_last4); }
+    catch (e) { console.error('[gifts] could not label the Stripe payment for gift ' + id + ':', e && e.message); }
+  }
   try { if (deps.sendReceipt) await deps.sendReceipt(row, code); } catch (e) { console.error('[gifts] receipt failed for gift ' + id + ':', e && e.message); }
   if (isDue(row.deliver_on, deps.now || new Date())) {
     const sent = await issueAndSend(db, row, deps.sendGift);

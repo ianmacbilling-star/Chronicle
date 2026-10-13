@@ -225,6 +225,28 @@ async function cancelSubscriptionAtPeriodEnd(subId) {
 // the gift form, so the receipt and the daily limit both have an address.
 // STRIPE_PRODUCT_GIFTS, when set, points the line at its own Product so a future gift promo code can
 // target gifts alone without spilling onto passes (TD-936).
+// v3.1.62 -- FINDABLE IN STRIPE (Ian, 2026-10-13: "I can't see the Gift Code or the Gift ID... I'm just going
+// by email address and time"). Every gift payment carries, as its description (shown in Stripe's payments
+// list) and in metadata, the Purchase ID on the buyer's receipt, what it was, who it is for, and -- once it
+// exists -- the LAST 4 of the code, which is what a recipient can read out. NEVER the whole code: anyone
+// holding it can redeem the gift, and Stripe's description can appear on Stripe's own receipts.
+function giftPaymentDescription(g, last4) {
+  if (!g) return '';
+  const what = g.item_kind === 'pass' ? (g.months + ' months of Platinum') : ((g.tokens || 0) + ' tokens');
+  const em = String(g.recipient_email || ''); const at = em.lastIndexOf('@');
+  const who = g.recipient_name ? String(g.recipient_name) : (at > 0 ? em.charAt(0) + '***' + em.slice(at) : '');
+  return 'Campaignia gift GIFT-' + g.id + ' \u00b7 ' + what + (who ? ' \u00b7 for ' + who : '') + (last4 ? ' \u00b7 code ending ' + String(last4).toUpperCase() : '');
+}
+// After payment, and again whenever a gift gets a new code (a resend): the description and metadata with the
+// code's last 4. Stripe merges metadata keys, so kind and gift_id stay. Returns null when Stripe is not set up.
+async function labelGiftPayment(paymentIntentId, g, last4) {
+  const stripe = getClient();
+  if (!stripe || !paymentIntentId || !g) return null;
+  const md = { purchase_id: 'GIFT-' + g.id };
+  if (last4) md.code_last4 = String(last4).toUpperCase();
+  return await stripe.paymentIntents.update(paymentIntentId, { description: giftPaymentDescription(g, last4), metadata: md });
+}
+
 async function createGiftCheckout(opts) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
@@ -244,9 +266,11 @@ async function createGiftCheckout(opts) {
       gift_id: String(g.id),
       item_kind: String(g.item_kind),
       item_id: String(g.item_id),
-      quoted_price_cents: String(g.price_cents)
+      quoted_price_cents: String(g.price_cents),
+      purchase_id: 'GIFT-' + g.id   // v3.1.62
     },
-    payment_intent_data: { metadata: { kind: 'gift', gift_id: String(g.id) } }
+    // v3.1.62 -- the description and purchase_id make the payment findable in Stripe; see giftPaymentDescription.
+    payment_intent_data: { description: giftPaymentDescription(g, null), metadata: { kind: 'gift', gift_id: String(g.id), purchase_id: 'GIFT-' + g.id } }
   };
   if (opts.userId != null) { params.client_reference_id = String(opts.userId); params.metadata.user_id = String(opts.userId); }
   Object.assign(params, buyerRef(opts), invoiceRef(opts, 'gift', { gift_id: String(g.id) }));
@@ -521,6 +545,7 @@ async function paymentDetails(paymentIntentId, opts) {
 
 module.exports = {
   paymentDetails,   // v3.1.60
+  giftPaymentDescription, labelGiftPayment,   // v3.1.62
   createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection, createGiftCheckout, refundPaymentIntent,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791

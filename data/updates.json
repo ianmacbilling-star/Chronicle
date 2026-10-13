@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.62",
+    "staged_on": "2026-10-13",
+    "entries": [
+      {
+        "id": "3162-gift-findable-in-stripe",
+        "kind": "change",
+        "public": false,
+        "summary": "Gift payments in Stripe now show the Purchase ID, what was bought, who it is for, and the last 4 characters of the gift code.",
+        "detail": "Buy a gift, then find the payment in the Stripe dashboard. Its description should read like: Campaignia gift GIFT-18 \u00b7 3 months of Platinum \u00b7 for Erin Bot \u00b7 code ending AS6A, and its metadata should include purchase_id and code_last4. The last 4 must match the end of the code in the gift email. Resend a gift from the dashboard Gifts tab: the Stripe description should change to the new code's last 4. The full code never appears in Stripe.",
+        "td": [
+          "TD-934"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.61",
     "staged_on": "2026-10-12",
     "entries": [
