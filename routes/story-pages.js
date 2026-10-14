@@ -366,6 +366,7 @@ router.get('/sitemap-pages.xml', function (req, res) {
     '<url><loc>' + xmlEsc(base + '/') + '</loc></url>',
     '<url><loc>' + xmlEsc(base + '/library') + '</loc></url>',
     '<url><loc>' + xmlEsc(base + '/our-story') + '</loc></url>',
+    '<url><loc>' + xmlEsc(base + '/story') + '</loc></url>',   // v3.1.84 -- the storyteller landing page, now indexable
     '</urlset>'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.send(parts.join('\n'));

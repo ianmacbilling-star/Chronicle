@@ -193,8 +193,26 @@ const aiLimiter = rateLimit({
 var PROD_HOSTS = ['campaignia.com', 'www.campaignia.com'];
 function isProdHost(req) { return PROD_HOSTS.indexOf(String(req.hostname || '').toLowerCase()) !== -1; }
 
+// v3.1.82 -- TD-956. THE SIGNED-IN SIDE IS NEVER INDEXED, ON PRODUCTION EITHER.
+// Staging and every other host were already kept out entirely (above). On campaignia.com only the
+// public pages may be listed: the app, the login page, invitation links and password reset all
+// say noindex. A HEADER, not a meta tag, so one place covers the extensionless route, the .html
+// file express.static would also serve, and a page whose markup nobody remembers to edit. Not
+// robots.txt Disallow: a disallowed url can still be indexed from a link, and noindex only works
+// when the crawler is allowed to fetch the page and read it.
+// Express routes match case-insensitively and with or without a trailing slash, so the path is
+// folded the same way before it is compared, or /LOGIN/ would serve the page without the header.
+var NOINDEX_PATHS = ['/app', '/app.html', '/login', '/login.html', '/reset-password', '/reset-password.html', '/invite.html', '/offline.html'];
+function robotsHeaderFor(req) {
+  if (!isProdHost(req)) return 'noindex, nofollow';
+  var p = String(req.path || '').toLowerCase();
+  if (p.length > 1) p = p.replace(/\/+$/, '');
+  if (NOINDEX_PATHS.indexOf(p) !== -1 || p.indexOf('/invite/') === 0) return 'noindex';
+  return null;
+}
 app.use(function(req, res, next) {
-  if (!isProdHost(req)) res.set('X-Robots-Tag', 'noindex, nofollow');
+  var xr = robotsHeaderFor(req);
+  if (xr) res.set('X-Robots-Tag', xr);
   next();
 });
 
@@ -312,10 +330,9 @@ app.get('/our-story', function(req, res) {
 // see it... So remove the Admin Gating on it." / "The DnD one should really be the only live one
 // out there.")*
 //
-// TWO CONTROLS, AND ONLY ONE OF THEM IS BEING REMOVED. The gate decided WHO could open the page;
-// the noindex in story.html decides whether SEARCH can find it. Ian wants to hand the URL to
-// people and wants index.html to remain the only landing page Google lists, so the gate goes and
-// the noindex stays. Anyone changing that second control is changing a decision, not a detail.
+// v3.1.84 -- BOTH CONTROLS ARE NOW OFF. The gate decided WHO could open the page and went in
+// v3.0.908; the noindex in story.html decided whether SEARCH could find it, and Ian took it off
+// on 2026-10-14 so storytellers searching now can find this page. It is in sitemap-pages.xml.
 //
 // IT STILL LIVES OUTSIDE public/ and is still served only through this route. That was originally
 // because express.static would have handed a gated file to everyone; it stays that way because
