@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.83",
+    "staged_on": "2026-10-14",
+    "entries": [
+      {
+        "id": "3183-library-h1",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Library page heading is now a real page heading for search engines; it looks exactly the same.",
+        "detail": "Open /library on a computer and on a phone: The Public Library heading looks and sits exactly as before. View source: it is an h1. Once on production, Bing URL Inspection on /library should no longer report H1 tag missing.",
+        "td": [
+          "TD-950"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.82",
     "staged_on": "2026-10-14",
     "entries": [

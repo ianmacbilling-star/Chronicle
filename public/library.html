@@ -49,7 +49,9 @@
     .btn-nav:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
 
     .lib-head { text-align:center; padding:34px 18px 18px; max-width:760px; margin:0 auto; }
-    .lib-title { font-family:'Bangers',cursive; font-size:clamp(34px,6vw,56px); color:var(--gold); letter-spacing:2px; text-shadow:3px 3px 0 var(--ink); line-height:1; }
+    /* v3.1.83 -- the heading is an h1 now (Bing: H1 tag missing). margin and weight reset so it looks
+       exactly as the div did: an h1 brings its own margin, and Bangers has one weight, so bold would be faked. */
+    .lib-title { font-family:'Bangers',cursive; font-size:clamp(34px,6vw,56px); color:var(--gold); letter-spacing:2px; text-shadow:3px 3px 0 var(--ink); line-height:1; margin:0; font-weight:normal; }
     .lib-sub { font-style:italic; color:var(--gold-light); font-size:clamp(15px,2.2vw,18px); margin-top:10px; }
 
     .lib-filter { display:flex; justify-content:center; gap:10px; padding:6px 14px 22px; }
@@ -169,7 +171,7 @@
   </nav>
 
   <header class="lib-head">
-    <div class="lib-title">The Public Library</div>
+    <h1 class="lib-title">The Public Library</h1>
     <div class="lib-sub">From tabletop campaigns to family stories — made by other Story Masters. Take a look at what's possible.</div>
   </header>
 
