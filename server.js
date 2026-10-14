@@ -193,8 +193,26 @@ const aiLimiter = rateLimit({
 var PROD_HOSTS = ['campaignia.com', 'www.campaignia.com'];
 function isProdHost(req) { return PROD_HOSTS.indexOf(String(req.hostname || '').toLowerCase()) !== -1; }
 
+// v3.1.82 -- TD-956. THE SIGNED-IN SIDE IS NEVER INDEXED, ON PRODUCTION EITHER.
+// Staging and every other host were already kept out entirely (above). On campaignia.com only the
+// public pages may be listed: the app, the login page, invitation links and password reset all
+// say noindex. A HEADER, not a meta tag, so one place covers the extensionless route, the .html
+// file express.static would also serve, and a page whose markup nobody remembers to edit. Not
+// robots.txt Disallow: a disallowed url can still be indexed from a link, and noindex only works
+// when the crawler is allowed to fetch the page and read it.
+// Express routes match case-insensitively and with or without a trailing slash, so the path is
+// folded the same way before it is compared, or /LOGIN/ would serve the page without the header.
+var NOINDEX_PATHS = ['/app', '/app.html', '/login', '/login.html', '/reset-password', '/reset-password.html', '/invite.html', '/offline.html'];
+function robotsHeaderFor(req) {
+  if (!isProdHost(req)) return 'noindex, nofollow';
+  var p = String(req.path || '').toLowerCase();
+  if (p.length > 1) p = p.replace(/\/+$/, '');
+  if (NOINDEX_PATHS.indexOf(p) !== -1 || p.indexOf('/invite/') === 0) return 'noindex';
+  return null;
+}
 app.use(function(req, res, next) {
-  if (!isProdHost(req)) res.set('X-Robots-Tag', 'noindex, nofollow');
+  var xr = robotsHeaderFor(req);
+  if (xr) res.set('X-Robots-Tag', xr);
   next();
 });
 

@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.82",
+    "staged_on": "2026-10-14",
+    "entries": [
+      {
+        "id": "3182-noindex-signed-in",
+        "kind": "fix",
+        "public": false,
+        "summary": "Search engines are told not to list the signed-in app, the login page, invitation links or password reset.",
+        "detail": "Staging already tells search engines to stay away from every page, so this shows on production. After the promote, in the browser developer tools (Network tab, the page request), open campaignia.com/login, /app.html, /reset-password and an invite link: each response carries X-Robots-Tag: noindex. The home page, Library, Our Story and a public story page must NOT carry it.",
+        "td": [
+          "TD-956"
+        ]
+      },
+      {
+        "id": "3182-draft-link",
+        "kind": "fix",
+        "public": false,
+        "summary": "The admin-only DRAFT link is no longer in the home page for every visitor; it is added only when an admin is signed in.",
+        "detail": "Signed out, view the home page source: no DRAFT and no link to /story. Signed in as an admin, the home page menu shows DRAFT before SIGN IN and it opens the storyteller page. Signed in as anyone else: no DRAFT.",
+        "td": [
+          "TD-955"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.81",
     "staged_on": "2026-10-13",
     "entries": [

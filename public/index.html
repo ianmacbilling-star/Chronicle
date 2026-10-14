@@ -57,11 +57,8 @@
     <a href="/library?genre=fantasy,thriller,scifi,horror" class="nav-link">LIBRARY</a>
     <a href="#pricing" class="nav-link">PRICING</a>
     <a href="#faq" class="nav-link">FAQ</a>
-    <!-- v3.0.898 -- TD-770. Admin-only link to the draft storyteller landing page.
-         HIDDEN IN THE MARKUP, so the default -- no JavaScript, anonymous visitor, failed fetch --
-         is invisible. The page itself is gated at the route; this only decides whether the link is
-         worth showing, which is why it is safe for it to be decided in the browser. -->
-    <a href="/story" id="nav-story-draft" class="nav-link" style="display:none;font-size:9px;letter-spacing:1px;opacity:0.5;" title="Admin only: draft storyteller landing page">DRAFT</a>
+    <!-- v3.1.82 -- TD-955. The admin-only DRAFT link (TD-770) is no longer in this markup at all;
+         the script at the foot of the page adds it, for an admin only. -->
     <a href="/login" class="btn-nav">SIGN IN</a>
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="cmpToggleNav()">&#9776;</button>
   </div>
@@ -501,16 +498,31 @@
 })();
 </script>
 <script>
-// v3.0.898 -- TD-770. Reveal the DRAFT link for an admin and for nobody else. Fails closed by
-// doing nothing: the link is display:none in the markup, so an anonymous visitor, a blocked
-// request or no JavaScript at all all leave it hidden.
+// v3.1.82 -- TD-955 (link from v3.0.898, TD-770). THE DRAFT LINK IS BUILT HERE, FOR AN ADMIN ONLY.
+// It used to sit in the markup hidden with display:none, so every visitor, every crawler and
+// view-source received it. Now nothing is in the page unless the signed-in user is an admin.
+// Built in the browser rather than by the server on purpose: the home page is a static file that
+// an edge cache may hold, and a cached admin copy would show the link to everyone.
+// Fails closed: anonymous, a refused or failed request, or no JavaScript all add nothing.
+function cmpAddDraftLink(d){
+  if (!d || !d.is_admin) return;
+  if (document.getElementById('nav-story-draft')) return;
+  var signIn = document.querySelector('.nav-actions .btn-nav');
+  if (!signIn || !signIn.parentNode) return;
+  var a = document.createElement('a');
+  a.id = 'nav-story-draft';
+  a.className = 'nav-link';
+  a.href = '/story';
+  a.title = 'Admin only: draft storyteller landing page';
+  a.textContent = 'DRAFT';
+  a.style.cssText = 'font-size:9px;letter-spacing:1px;opacity:0.5;';
+  signIn.parentNode.insertBefore(a, signIn);
+}
 (function(){
   try {
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){
-        if (d && d.is_admin) { var a = document.getElementById('nav-story-draft'); if (a) a.style.display = ''; }
-      })
+      .then(cmpAddDraftLink)
       .catch(function(){});
   } catch (e) {}
 })();
