@@ -100,12 +100,62 @@ async function uploadFile(fileBuffer, filename, mimetype, prefix) {
   }
 }
 
+// v3.1.85 -- TD-954 (spec claude/IMAGE_DOMAIN_SPEC.md). ONE ANSWER TO "IS THIS URL ONE OF OURS?"
+// The bucket can be reached at more than one public address: R2_PUBLIC_URL is the one new uploads
+// are written under, and R2_LEGACY_PUBLIC_URLS (comma-separated) lists earlier ones whose URLs are
+// still stored all over the database. The r2.dev address stays switched on, so every old URL keeps
+// working; these helpers only make the code RECOGNISE both. Five places used to compare against
+// R2_PUBLIC_URL alone (keyFromUrl, persistToR2, the image proxy, the retouch marker check, the
+// printer file check); they all ask here now, so changing the address cannot leave one behind.
+// With R2_LEGACY_PUBLIC_URLS unset every function below behaves exactly as before.
+function r2PublicBases() {
+  var raw = [process.env.R2_PUBLIC_URL || ''].concat(String(process.env.R2_LEGACY_PUBLIC_URLS || '').split(','));
+  var out = [];
+  raw.forEach(function (b) {
+    b = String(b || '').trim().replace(/\/+$/, '');
+    if (b && out.indexOf(b) === -1) out.push(b);
+  });
+  return out;
+}
+function isOurPublicUrl(url) {
+  if (typeof url !== 'string' || !url) return false;
+  var bases = r2PublicBases();
+  for (var i = 0; i < bases.length; i++) { if (url.indexOf(bases[i] + '/') === 0) return true; }
+  return false;
+}
+// DISPLAY ONLY. Swap a legacy address for the current one in something about to be SHOWN on a
+// public page, so search engines credit campaignia.com. Never used on a write path or on anything
+// sent to the printer: what is stored stays exactly as it was written.
+function publicImageUrl(url) {
+  if (typeof url !== 'string' || !url) return url;
+  var cur = String(process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (!cur) return url;
+  var bases = r2PublicBases();
+  for (var i = 1; i < bases.length; i++) {
+    if (bases[i] !== cur && url.indexOf(bases[i] + '/') === 0) return cur + url.slice(bases[i].length);
+  }
+  return url;
+}
+function rewritePublicUrls(text) {
+  if (typeof text !== 'string' || !text) return text;
+  var cur = String(process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (!cur) return text;
+  var bases = r2PublicBases();
+  for (var i = 1; i < bases.length; i++) {
+    if (bases[i] !== cur) text = text.split(bases[i] + '/').join(cur + '/');
+  }
+  return text;
+}
+
 // Turn a stored public URL back into a bucket key. Lifted out of deleteFile, which had this inline,
 // so a read path can use the same derivation rather than a second copy that drifts.
 function keyFromUrl(fileUrl) {
   if (!fileUrl) return null;
-  const base = process.env.R2_PUBLIC_URL || '';
-  if (base && fileUrl.indexOf(base) === 0) return fileUrl.slice(base.length).replace(/^\/+/, '');
+  // v3.1.85 -- TD-954: every known public address, current first, not R2_PUBLIC_URL alone.
+  var bases = r2PublicBases();
+  for (var bi = 0; bi < bases.length; bi++) {
+    if (fileUrl.indexOf(bases[bi] + '/') === 0) return fileUrl.slice(bases[bi].length).replace(/^\/+/, '');
+  }
   // v3.0.492 -- `story` added. It is a real prefix (publish-story has written under it since
   // v3.0.341) and this derivation did not know it, so a published book could not be resolved
   // back to a key unless R2_PUBLIC_URL matched the URL. Keep this list in step with every
@@ -287,9 +337,9 @@ async function releaseImage(db, fileUrl) {
 // only images composited over one another. A scene image has a real background and must keep it.
 async function persistToR2(remoteUrl, opts) {
   if (!remoteUrl) return remoteUrl;
-  const base = process.env.R2_PUBLIC_URL || '';
-  // Already one of ours (R2 public URL or local upload)? Don't re-copy.
-  if ((base && remoteUrl.indexOf(base) === 0) || remoteUrl.indexOf('/uploads/') === 0) return remoteUrl;
+  // Already one of ours (R2 public URL or local upload)? Don't re-copy. v3.1.85 -- TD-954: any of our
+  // public addresses, so a picture stored under the old address is not copied a second time.
+  if (isOurPublicUrl(remoteUrl) || remoteUrl.indexOf('/uploads/') === 0) return remoteUrl;
   try {
     const axios = require('axios');
     const https = require('https');
@@ -360,4 +410,4 @@ async function restoreCopy(sourceUrl) {
   return await uploadFile(buf, filename, ct);
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls };   // last four: v3.1.85, TD-954

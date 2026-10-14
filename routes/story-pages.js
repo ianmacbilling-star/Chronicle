@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { getDb } = require('../database/db');
 const { buildNovelHTML } = require('./pdf');
+const { rewritePublicUrls } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
 
 const router = express.Router();
 
@@ -314,7 +315,9 @@ async function serveStoryPage(req, res) {
         footerCta + '</body></html>';
     }
     res.set('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
+    // v3.1.85 -- TD-954. Pictures stored under an older public address are SHOWN under the current
+    // one, so search engines credit campaignia.com. Display only; the snapshot is not touched.
+    res.send(rewritePublicUrls(html));
   } catch (e) {
     console.error('[story-page] failed:', e && e.message ? e.message : e);
     return notFound();

@@ -8,6 +8,7 @@ const artstyles = require('../services/artStyleCatalog');   // v3.0.845 -- TD-69
 const router = express.Router();
 const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrativeStyleAllowed, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
+const { publicImageUrl } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
 const { listPasses } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const { sendReportEmail } = require('./email');
 
@@ -269,7 +270,7 @@ router.get('/library', async function (req, res) {
       const rows = await stmt.all.apply(stmt, params);
       const hasMore = rows.length > limit;
       const slice = rows.slice(0, limit);
-      const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
+      const items = slice.map(function (r) { return { image_url: publicImageUrl(r.image_url), caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
       const nextCursor = slice.length ? slice[slice.length - 1].id : null;
       return res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
     }
@@ -295,7 +296,7 @@ router.get('/library', async function (req, res) {
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
-    const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
+    const items = slice.map(function (r) { return { image_url: publicImageUrl(r.image_url), caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
     const nextOffset = offset + slice.length;
     return res.json({ items: items, hasMore: hasMore, nextOffset: nextOffset });
   } catch (e) {
@@ -357,7 +358,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: publicImageUrl(r.cover_url || ''), pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

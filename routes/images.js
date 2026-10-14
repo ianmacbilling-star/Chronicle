@@ -5,7 +5,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, forkSelfIllustrated } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
-const { releaseImage, persistToR2, fetchFile } = require('../storage/storage');
+const { releaseImage, persistToR2, fetchFile, isOurPublicUrl } = require('../storage/storage');   // isOurPublicUrl: v3.1.85, TD-954
 const imageCrop = require('../services/imageCrop');
 const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
@@ -1739,8 +1739,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     var _markedUrl = String(req.body.marked_url || '').trim();
-    var _r2base = process.env.R2_PUBLIC_URL || '';
-    if (_markedUrl && (!_r2base || _markedUrl.indexOf(_r2base + '/') !== 0)) _markedUrl = '';
+    if (_markedUrl && !isOurPublicUrl(_markedUrl)) _markedUrl = '';   // v3.1.85 -- TD-954, any of our addresses
     // v3.0.773 -- CROP. When the reader marked a spot and asked for the change
     // to be confined to it, the model is sent a TILE, not the whole picture.
     // Everything outside the tile is then untouched by arithmetic rather than
@@ -2834,8 +2833,9 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
 router.get('/proxy', requireAuth, async function (req, res) {
   try {
     const u = String(req.query.u || '');
-    const base = process.env.R2_PUBLIC_URL || '';
-    if (!base || !u || u.indexOf(base + '/') !== 0) return res.status(400).send('bad url');
+    // v3.1.85 -- TD-954. Any of OUR public addresses, old or new: after the switch every picture stored
+    // before it still carries the old one, and refusing those would break every older panel.
+    if (!u || !isOurPublicUrl(u)) return res.status(400).send('bad url');
     const r = await fetch(u);
     if (!r.ok) return res.status(502).send('upstream ' + r.status);
     const buf = Buffer.from(await r.arrayBuffer());

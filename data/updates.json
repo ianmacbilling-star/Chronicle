@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.85",
+    "staged_on": "2026-10-14",
+    "entries": [
+      {
+        "id": "3185-image-domain-ready",
+        "kind": "change",
+        "public": false,
+        "summary": "Behind the scenes: Campaignia can now serve pictures from its own address (images.campaignia.com) while every existing picture keeps working. Nothing changes until it is switched on.",
+        "detail": "On its own this release changes nothing: every picture, upload, retouch, archive, publish and order should behave exactly as before. After Ian switches staging (R2_LEGACY_PUBLIC_URLS = the old r2.dev address, R2_PUBLIC_URL = https://images.campaignia.com): new pictures are stored under images.campaignia.com; old panels still show and still work in Retouch and anything that reads a picture; archive, restore and delete work on old and new pictures; a public story page and the Library show their pictures under images.campaignia.com; a sandbox print order passes the printer file check and Lulu accepts the files. Spec claude/IMAGE_DOMAIN_SPEC.md.",
+        "td": [
+          "TD-954"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.84",
     "staged_on": "2026-10-14",
     "entries": [
