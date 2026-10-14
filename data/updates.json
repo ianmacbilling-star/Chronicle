@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.84",
+    "staged_on": "2026-10-14",
+    "entries": [
+      {
+        "id": "3184-story-page-indexable",
+        "kind": "change",
+        "public": false,
+        "summary": "The storyteller landing page (/story) may now appear in search results, and it is listed in the sitemap.",
+        "detail": "View the source of /story: no robots noindex line. Open /sitemap-pages.xml: it lists /story after /our-story. Staging still keeps every page out of search, so the real check is on production after the promote: Search Console and Bing URL Inspection on campaignia.com/story should say indexing is allowed.",
+        "td": [
+          "TD-970"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.83",
     "staged_on": "2026-10-14",
     "entries": [
