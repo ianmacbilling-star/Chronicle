@@ -2988,6 +2988,11 @@ function showView(view) {
     var _curV = _visibleViewId();
     if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
+  // v3.1.86 -- the Custom Art Styles page remembers where it was opened from, for cstyleBack().
+  if (view === 'custom-styles') {
+    var _curCs = _visibleViewId();
+    if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -17090,6 +17095,11 @@ function showView(view) {
     var _curV = _visibleViewId();
     if (_curV !== 'orders') _ordersBackFrom = _curV || null;
   }
+  // v3.1.86 -- the Custom Art Styles page remembers where it was opened from, for cstyleBack().
+  if (view === 'custom-styles') {
+    var _curCs = _visibleViewId();
+    if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
+  }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -27570,7 +27580,11 @@ function _visibleViewId() {
   var ids = ['session-detail','sessions','characters','assets','novel','members','archives','campaigns','account','settings','orders'];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById('view-' + ids[i]);
-    if (el && el.style.display === 'block') return ids[i];
+    // v3.1.86 -- VISIBLE, NOT 'block'. showView has set a view's display to '' rather than 'block'
+    // since v3.0.600 (so #view-novel keeps its flex layout), and showCampaignSection goes through
+    // showView, so this found almost nothing: every Back button that relies on it (Archive, Asset
+    // Library, My Stuff, now Custom Art Styles) quietly fell back to its default. Ask the browser.
+    if (el && el.style.display !== 'none' && window.getComputedStyle(el).display !== 'none') return ids[i];
   }
   return null;
 }
@@ -27613,6 +27627,21 @@ var ORDERS_BACK_PLAIN = ['campaigns', 'account', 'settings'];
 function ordersBack() {
   var t = _ordersBackFrom;
   if (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
+}
+
+// v3.1.86 -- THE CUSTOM ART STYLES PAGE'S BACK BUTTON, the same rule as My Stuff's above: back to
+// the view it was opened from when that is known and can still be shown, otherwise My Campaigns.
+// The page opens from the profile menu, so it can start anywhere: a plain page (My Campaigns,
+// Account, Settings, My Stuff) is shown directly, a campaign page goes through sectionBack (which
+// also restores the campaign menu this page hides), and with no campaign loaded it goes home.
+// Named cstyle*, not cs*: app.js already has cs-prefixed names (section 9 of the rules).
+var _cstyleBackFrom = null;
+function cstyleBack() {
+  var t = _cstyleBackFrom;
+  if (t && (ORDERS_BACK_PLAIN.indexOf(t) !== -1 || t === 'orders')) { showView(t); return; }
   if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
   _sectionBackFrom = t;
   sectionBack();

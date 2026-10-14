@@ -660,7 +660,8 @@ function normalizeFileCheck(raw, idHint) {
 function fileCheckUrlOk(url) {
   if (!(typeof url === 'string' && /^https:\/\//i.test(url))) return false;
   var base = String(process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
-  return !base || url.indexOf(base + '/') === 0;
+  if (!base) return true;
+  return require('../storage/storage').isOurPublicUrl(url);   // v3.1.85 -- TD-954, old or new address
 }
 
 function logFileCheck(req, kind, phase, norm, raw) {
