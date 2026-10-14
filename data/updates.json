@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.86",
+    "staged_on": "2026-10-14",
+    "entries": [
+      {
+        "id": "3186-custom-styles-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Custom Art Styles page has a Back button, like the Archive, Asset Library and My Stuff pages.",
+        "detail": "Open Custom Art Styles from the profile menu while on My Campaigns, on your Account, inside a campaign (Characters, say) and inside a session: Back returns to each of those. Reload the page while on Custom Art Styles, then Back: it goes to My Campaigns. Inside a campaign, the campaign menu on the left comes back too.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.85",
     "staged_on": "2026-10-14",
     "entries": [

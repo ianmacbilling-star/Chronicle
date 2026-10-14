@@ -1274,6 +1274,11 @@
           <div class="page-title">Custom Art Styles</div>
           <div class="page-subtitle">Build your own art styles &mdash; used in your storyboard panels</div>
         </div>
+        <!-- v3.1.86 -- Ian: a Back button like the Archive, Asset Library and My Orders pages. Same
+             markup; cstyleBack() returns to wherever this page was opened from. -->
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="cstyleBack()">&larr; Back</button>
+        </div>
       </div>
       <div class="char-grid" id="cstyle-grid">
         <div class="add-char-card" onclick="openCustomStyles()"><div class="plus">+</div><span>New style</span></div>
