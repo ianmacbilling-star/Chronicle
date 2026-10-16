@@ -9,6 +9,7 @@ const router = express.Router();
 const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrativeStyleAllowed, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 const { publicImageUrl } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
+const { galleryAlt } = require('../services/altText');   // v3.1.89 -- TD-953
 const { listPasses } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const { sendReportEmail } = require('./email');
 
@@ -228,6 +229,13 @@ router.get('/tier-grid', function (req, res) {
 // opted them in. Returns ONLY image + caption per item (nothing identifying).
 // Newest first, keyset-paginated; defaults to the last 6 months, ?window=all
 // includes older entries. The cursor is a separate token, not per-image.
+// v3.1.89 -- TD-953. ONE item shape for BOTH pagination modes below (they were two identical
+// inline maps -- the twin rule). `alt` is the picture's label for search engines and screen readers:
+// its panel's scene description, art style and genre, computed here so every picture already in the
+// Library has it. Nothing identifying is added: the description is the panel's own published text.
+function galleryItem(r) {
+  return { image_url: publicImageUrl(r.image_url), caption: r.title || '', alt: galleryAlt(r), author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' };
+}
 router.get('/library', async function (req, res) {
   try {
     const db = await getDb();
@@ -254,7 +262,9 @@ router.get('/library', async function (req, res) {
     const filtered = genres.length > 0 || styles.length > 0;
     // v3.0.737 -- TD-536. img_w/img_h added so the page can reserve each image's exact space
     // before the bytes arrive. They are already stored on the row; only the SELECT was short.
-    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
+    // v3.1.89 -- TD-953: the moment's description (LEFT JOIN: a deleted panel leaves NULL and the label
+    // falls back to the title), plus the art style and genres the row already carries.
+    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, a.art_style, a.genres, m.description AS moment_description, m.title AS moment_title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN moments m ON m.id = a.moment_id WHERE a.public = TRUE';
     if (all) {
       // Show-all: newest-first, id-cursor pagination, no shuffle (unchanged).
       const beforeId = parseInt(req.query.beforeId, 10) || 0;
@@ -270,7 +280,7 @@ router.get('/library', async function (req, res) {
       const rows = await stmt.all.apply(stmt, params);
       const hasMore = rows.length > limit;
       const slice = rows.slice(0, limit);
-      const items = slice.map(function (r) { return { image_url: publicImageUrl(r.image_url), caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
+      const items = slice.map(galleryItem);
       const nextCursor = slice.length ? slice[slice.length - 1].id : null;
       return res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
     }
@@ -296,7 +306,7 @@ router.get('/library', async function (req, res) {
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
-    const items = slice.map(function (r) { return { image_url: publicImageUrl(r.image_url), caption: r.title || '', author: r.pen_name || '', w: r.img_w || 0, h: r.img_h || 0, shape: r.shape || '' }; });
+    const items = slice.map(galleryItem);
     const nextOffset = offset + slice.length;
     return res.json({ items: items, hasMore: hasMore, nextOffset: nextOffset });
   } catch (e) {

@@ -3,6 +3,7 @@ const path = require('path');
 const { getDb } = require('../database/db');
 const { buildNovelHTML } = require('./pdf');
 const { rewritePublicUrls } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
+const { fillStoryAlts } = require('../services/altText');   // v3.1.89 -- TD-953, alt text on every panel picture
 
 const router = express.Router();
 
@@ -286,6 +287,11 @@ async function serveStoryPage(req, res) {
     if (snap && snap.sessions) {
       const pageOpts = { publicMode: true, bookTitle: snap.bookTitle || title };
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
+      // v3.1.89 -- TD-953. Every panel picture is labelled from the snapshot's own scene description,
+      // art style and genre (services/altText.js). Done HERE, after the renderer, so the print and PDF
+      // routes -- which call buildNovelHTML directly -- can never see it, and computed per request, so
+      // every story published before this version gets it with nothing rewritten.
+      html = fillStoryAlts(html, snap, snap.bookTitle || title);
       // v3.0.435 -- ANCHOR ON SOMETHING THAT EXISTS, AND SHOUT WHEN IT DOES NOT.
       // This anchored on '<head><link rel="stylesheet" href="/css/fonts.css">'. buildNovelHTML emits a
       // BARE <head> -- it inlines the self-hosted fontCss() rather than linking the sheet (see the

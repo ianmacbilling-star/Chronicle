@@ -51,10 +51,25 @@ function stampLastActive(userId) {
 // own activity is not stamped either; they are not using their account, they are using someone
 // else's.
 var IMPERSONATION_MAX_MS = 30 * 60 * 1000;
+// v3.1.88 -- TD-960. THE 30 MINUTES COUNT FROM THE LAST ACTIVITY, NOT FROM THE START.
+// Ian, 2026-10-11: reading a customer's book in preview, the session ended under him with no warning,
+// because the clock ran from the start however busy he was. It now runs from
+// impersonateLastActiveAt, which ONLY POST /api/admin/impersonate/touch moves: the page sends it on a
+// page load and when the admin really clicks, types or scrolls (at most once a minute), and from the
+// banner's Stay button.
+// requireAuth DOES NOT MOVE IT, and that is the trap this avoids: the banner's status poll and the
+// app's other background polls all pass through requireAuth, and if they counted as activity a
+// forgotten tab would never idle out -- the one thing this expiry exists to prevent (spec 3.3).
+// impersonateStartedAt is left untouched: endImpersonation totals the tokens spent from it.
+// A session started before this version has no last-activity stamp and falls back to its start.
+function impersonationLastActive(req) {
+  if (!req || !req.session) return 0;
+  return Number(req.session.impersonateLastActiveAt || req.session.impersonateStartedAt || 0);
+}
 function impersonationExpired(req) {
   if (!req.session || !req.session.impersonatorId) return false;
-  var started = Number(req.session.impersonateStartedAt || 0);
-  return !started || (Date.now() - started) > IMPERSONATION_MAX_MS;
+  var last = impersonationLastActive(req);
+  return !last || (Date.now() - last) > IMPERSONATION_MAX_MS;
 }
 // THE TOKENS SPENT ARE COUNTED FROM token_ledger, NOT FROM A COUNTER.
 // Ian wants to hand tokens back after a support visit -- "give them back the tokens and even more
@@ -68,11 +83,25 @@ function endImpersonation(req, reason) {
   var rowId = req.session.impersonationRowId;
   var targetId = req.session.userId;
   var startedMs = Number(req.session.impersonateStartedAt || 0);
+  // v3.1.88 -- TD-960. SAY SO WHEN IT ENDS. An expiry leaves a one-time notice in the session; the
+  // next status call hands it to the page, which tells the admin instead of switching back silently.
+  // A manual exit leaves none, and clears any stale one.
+  if (String(reason || '') === 'expiry') {
+    req.session.impersonationEndedNotice = {
+      reason: 'expiry',
+      viewingAs: req.session.impersonateTargetEmail || null,
+      idleMinutes: Math.round(IMPERSONATION_MAX_MS / 60000),
+      at: Date.now()
+    };
+  } else {
+    delete req.session.impersonationEndedNotice;
+  }
   req.session.userId = req.session.impersonatorId;
   delete req.session.impersonatorId;
   delete req.session.impersonatorEmail;
   delete req.session.impersonateTargetEmail;
   delete req.session.impersonateStartedAt;
+  delete req.session.impersonateLastActiveAt;
   delete req.session.impersonationRowId;
   if (rowId) {
     (async function () {
@@ -384,5 +413,7 @@ module.exports = {
   memberSubquery,
   dmSubquery,
   // v3.0.589 -- TD-179 stage 2.
-  requireImpersonatorOrAdmin, impersonationExpired, endImpersonation, IMPERSONATION_MAX_MS
+  requireImpersonatorOrAdmin, impersonationExpired, endImpersonation, IMPERSONATION_MAX_MS,
+  // v3.1.88 -- TD-960.
+  impersonationLastActive
 };

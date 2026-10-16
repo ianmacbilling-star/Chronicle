@@ -288,7 +288,7 @@
       // placeholders visibly turn into pictures. Below the fold, lazy is still right.
       img.setAttribute('loading', _eager < 12 ? 'eager' : 'lazy');
       _eager++;
-      img.setAttribute('alt', item.caption || 'Campaignia creation');
+      img.setAttribute('alt', item.alt || item.caption || 'Campaignia creation');   // v3.1.89 -- TD-953
       // v3.0.738 -- TD-536(2). RESERVE THE RIGHT SHAPE, OR RESERVE NOTHING.
       //
       // Exact pixels first. Failing that the stored shape, which is knowable for nearly every

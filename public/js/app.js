@@ -1475,6 +1475,13 @@ function insufficientTokensHtml(message) {
 // that the next click lands on somebody else's account.
 // =================================================================================================
 var _impState = null, _impTimer = null;
+// v3.1.88 -- TD-960. Idle clock, warning and the ended notice.
+//   _impReceivedAt: when _impState arrived, so the countdown can be interpolated between polls
+//     (re-synced from the server on every poll and every touch; never wound on by itself).
+//   _impWasActive: this page was loaded inside a support session, so its data is the customer's.
+var _impReceivedAt = 0, _impTickTimer = null, _impLastTouch = 0, _impWasActive = false;
+var IMP_WARN_MS = 5 * 60 * 1000;          // countdown and Stay button in the last five minutes
+var IMP_TOUCH_EVERY_MS = 60 * 1000;       // activity reaches the server at most once a minute
 
 function _impMsg(id, text, good) {
   var el = document.getElementById(id);
@@ -1502,16 +1509,117 @@ function _impPaint() {
   var who = document.getElementById('imp-banner-who');
   if (who) who.textContent = 'Viewing as ' + (_impState.viewingAs || 'a user') + ' \u2014 you are not yourself.';
   var t = document.getElementById('imp-banner-time');
+  var stay = document.getElementById('imp-banner-stay');
+  var left = _impRemainingMs();
+  var warn = left <= IMP_WARN_MS;
   if (t) {
-    var mins = Math.max(0, Math.round((_impState.expiresInMs || 0) / 60000));
-    t.textContent = mins > 0 ? ('ends in ' + mins + ' min') : 'ending now';
+    if (!warn) {
+      var idleMin = Math.round(((_impState.idleLimitMs || 1800000) / 60000));
+      t.textContent = 'ends after ' + idleMin + ' min idle';
+      t.style.fontWeight = '';
+    } else {
+      var s = Math.max(0, Math.ceil(left / 1000));
+      var mm = Math.floor(s / 60), ss = s % 60;
+      t.textContent = s > 0 ? ('idle: ends in ' + mm + ':' + (ss < 10 ? '0' : '') + ss) : 'ending now';
+      t.style.fontWeight = '700';
+    }
   }
+  if (stay) stay.style.display = warn ? '' : 'none';
+  _impSyncTick(warn);
+}
+
+// v3.1.88 -- TD-960. Time left on the idle clock: the server's figure, less the time since it arrived.
+function _impRemainingMs() {
+  if (!_impState || !_impState.active) return 0;
+  var base = Number(_impState.expiresInMs || 0);
+  return Math.max(0, base - (Date.now() - (_impReceivedAt || Date.now())));
+}
+// A one-second tick runs ONLY inside the warning window; when it reaches zero the server is asked at
+// once, so the ended notice appears on time instead of up to a minute late.
+function _impSyncTick(on) {
+  if (on && !_impTickTimer) {
+    _impTickTimer = setInterval(function () {
+      if (!_impState || !_impState.active) { clearInterval(_impTickTimer); _impTickTimer = null; return; }
+      if (_impRemainingMs() <= 0) { clearInterval(_impTickTimer); _impTickTimer = null; impersonateRefresh(); return; }
+      _impPaint();
+    }, 1000);
+  } else if (!on && _impTickTimer) {
+    clearInterval(_impTickTimer); _impTickTimer = null;
+  }
+}
+
+// v3.1.88 -- TD-960. Every status or touch reply goes through here: it records the reply, repaints, and
+// says so when the session has ended instead of letting the banner vanish silently.
+function _impApply(d) {
+  var was = !!(_impState && _impState.active);
+  _impState = d || null;
+  _impReceivedAt = Date.now();
+  if (_impState && _impState.active) _impWasActive = true;
+  _impPaint();
+  if (d && !d.active && (d.ended || was)) _impShowEnded(d.ended || null);
+}
+
+// v3.1.88 -- TD-960. The ended notice. It covers the page because, if this page was loaded inside the
+// support session, everything on it is the customer's while the server now treats you as yourself;
+// OK reloads it as you. After a reload (page not loaded inside the session) OK just closes it.
+function _impShowEnded(ended) {
+  if (document.getElementById('imp-ended')) return;
+  var who = (ended && ended.viewingAs) ? (' (viewing as ' + ended.viewingAs + ')') : '';
+  var msg = (ended && ended.reason === 'expiry')
+    ? ('Your support session' + who + ' ended after ' + (ended.idleMinutes || 30) + ' minutes idle. You are back in your own account.')
+    : 'The support session has ended. You are back in your own account.';
+  var reload = _impWasActive;
+  var wrap = document.createElement('div');
+  wrap.id = 'imp-ended';
+  wrap.setAttribute('role', 'alertdialog');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'max-width:440px;width:100%;background:#1c1610;color:#f5efe2;border:2px solid #c2410c;border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
+  var h = document.createElement('div');
+  h.style.cssText = 'font-weight:700;letter-spacing:0.04em;color:#fdba74;margin-bottom:8px;';
+  h.textContent = 'SUPPORT SESSION ENDED';
+  var p = document.createElement('div');
+  p.id = 'imp-ended-msg';
+  p.textContent = msg;
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.id = 'imp-ended-ok';
+  b.textContent = reload ? 'OK, reload as me' : 'OK';
+  b.style.cssText = 'margin-top:14px;background:#c2410c;color:#fff;border:none;border-radius:5px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
+  b.onclick = function () {
+    if (reload) { window.location.href = '/app.html'; return; }
+    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+  };
+  box.appendChild(h); box.appendChild(p); box.appendChild(b);
+  wrap.appendChild(box);
+  document.body.appendChild(wrap);
+}
+
+// v3.1.88 -- TD-960. Tell the server the admin is really here. Sent on page load, on real activity
+// (throttled to once a minute) and by the Stay button. The status poll never does this.
+function _impTouch(cb) {
+  _impLastTouch = Date.now();
+  fetch('/api/admin/impersonate/touch', { method: 'POST', cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { if (d) _impApply(d); if (cb) cb(d); })
+    .catch(function () { if (cb) cb(null); });
+}
+function _impNoteActivity() {
+  if (!_impState || !_impState.active) return;
+  if (Date.now() - _impLastTouch < IMP_TOUCH_EVERY_MS) return;
+  _impTouch();
+}
+function impersonateStay() { _impTouch(); }
+if (typeof document !== 'undefined') {
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'mousemove', 'scroll'].forEach(function (ev) {
+    try { document.addEventListener(ev, _impNoteActivity, { capture: true, passive: true }); } catch (e) {}
+  });
 }
 
 function impersonateRefresh(cb) {
   fetch('/api/admin/impersonate/status', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (d) { _impState = d || null; _impPaint(); if (cb) cb(d); })
+    .then(function (d) { _impApply(d); if (cb) cb(d); })
     .catch(function () { if (cb) cb(null); });
 }
 
@@ -1608,7 +1716,7 @@ function impersonateLoadLog() {
 if (typeof document !== 'undefined') {
   var _impBoot = function () {
     impersonateRefresh(function (d) {
-      if (d && d.active) impersonateStartPolling();
+      if (d && d.active) { impersonateStartPolling(); _impTouch(); }   // v3.1.88 -- TD-960: a page load counts as activity
       try { impersonateSyncAdminPanel(); } catch (e) {}
     });
   };
