@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.89",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3189-picture-alt-text",
+        "kind": "change",
+        "public": false,
+        "summary": "Behind the scenes: every picture on a public story page and in the Library picture wall now carries a short description of what it shows, for search engines and screen readers. Nothing on screen changes.",
+        "detail": "Open a published story, right-click a panel picture and Inspect: its alt text is the panel scene description, then its art style and genre (for example: Two adventurers climb a ruined tower. Dark Fantasy illustration, Fantasy). Stories published before this version have it too. A custom style reads just illustration. On the Library picture wall, Inspect a picture: same kind of label. The printed book and the Download PDF are unchanged.",
+        "td": [
+          "TD-953"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.88",
     "staged_on": "2026-10-16",
     "entries": [
