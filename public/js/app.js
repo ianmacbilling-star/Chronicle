@@ -211,7 +211,7 @@ function _navRestore(st) {
       return;
     }
     if (state.currentSession && state.currentSession.id) {
-      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings'];
+      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
       ids.forEach(function (x) { var el = document.getElementById('view-' + x); if (el) el.style.display = 'none'; });
       var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
       state.currentView = 'session-detail';
@@ -3562,7 +3562,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -17573,7 +17573,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -27595,7 +27595,7 @@ function sectionBack() {
     // Asset/Archive view stacked above the session. The detail DOM is still
     // populated (it was only hidden), so just hide every view and reveal it.
     if (!(state.currentSession && state.currentSession.id)) { showCampaignSection('sessions'); return; }
-    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings'];
+    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
     ids.forEach(function(v){ var el = document.getElementById('view-' + v); if (el) el.style.display = 'none'; });
     var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
     state.currentView = 'session-detail';
