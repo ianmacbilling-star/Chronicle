@@ -301,6 +301,29 @@ async function rejectedReason(urls) {
   return null;
 }
 
+// v3.1.93 -- TD-979. Ian, 2026-10-16: "if some of the images are ok it just uses them and rejects the ones
+// it can't". Splits pictures into the clean ones (in their order) and the rejected ones, with the first
+// rejection as a sentence and the rejected ones in the shape the page marks. A failed lookup counts every
+// picture as clean (fails open, like every other part of this check). Never throws.
+async function splitRejected(urls) {
+  var list = (urls || []).filter(Boolean);
+  var out = { clean: [], rejected: [], reason: null, rights: [] };
+  if (!list.length) return out;
+  var found = await lookup(list);
+  list.forEach(function (u) {
+    var r = found[normUrl(u)];
+    if (r && r.verdict === 'reject') {
+      out.rejected.push(u);
+      if (!out.reason) {
+        var why = (r.reasons || []).filter(function (x) { return x && x.kind !== 'signature' && x.kind !== 'copyright'; })[0];
+        out.reason = (why && why.text) || 'This picture has a watermark.';
+      }
+      out.rights.push({ url: normUrl(u), verdict: 'reject', reasons: r.reasons || [] });
+    } else out.clean.push(u);
+  });
+  return out;
+}
+
 // v3.1.91 -- TD-979. Split a reply into its text and its RIGHTS: line (see RIGHTS_LINE_INSTRUCTION). Every
 // RIGHTS line is removed from the text, whether or not it parses, so it can never reach a prompt.
 function splitRightsLine(reply) {
@@ -331,6 +354,7 @@ module.exports = {
   rejectedReason: rejectedReason, splitRightsLine: splitRightsLine,                            // v3.1.91
   REMOVED_PICTURE: REMOVED_PICTURE, startRejectedCache: startRejectedCache, refreshRejected: refreshRejected,   // v3.1.92
   isRejectedSync: isRejectedSync, maskUrl: maskUrl, maskMoments: maskMoments, maskSession: maskSession,          // v3.1.92
+  splitRejected: splitRejected,                                                                                  // v3.1.93
   maskSessions: maskSessions, maskCharacters: maskCharacters, maskCampaign: maskCampaign,                      // v3.1.92
   _setFetch: function (f) { _fetch = f; }
 };

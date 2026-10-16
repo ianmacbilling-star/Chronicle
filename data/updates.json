@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.93",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3193-character-pictures-checked-at-upload",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character pictures are checked for watermarks as soon as they are saved, not only when the character is built. Building a character now leaves out any rejected picture and uses the others; it stops only when every picture is rejected. Whenever something is refused over a picture, a red note appears next to the button you pressed.",
+        "detail": "Upload a watermarked picture into a character slot and save: it is outlined in red with a red note under it straight away, and the Company page shows the Picture removed box for it. Add a clean picture to another slot and press Build: the character is built from the clean picture, and a note by the button says one picture was left out. With only the watermarked picture, Build stops with a red note by the button every time it is pressed, and nothing is charged. Replace the picture: the red outline and note go at once, as does an amber (signed) outline. The small icons on the reference picture slots are gone.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.92",
     "staged_on": "2026-10-16",
     "entries": [

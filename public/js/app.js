@@ -35274,39 +35274,145 @@ function _cmpRightsText(r) {
   return rs.map(function (x) { return x && x.text; }).filter(Boolean).join(' ');
 }
 
-function _cmpRightsAnnounce(items) {
+// v3.1.93 -- THE NOTE SITS BY THE BUTTON THAT WAS PRESSED. Ian, 2026-10-16: "Make sure it pops up near the
+// button that was clicked." The last button pressed is remembered (capture phase, so a handler that stops
+// the click cannot hide it from us); a note within two minutes of it is placed just under it, or above it
+// when there is no room below, and follows it if the screen scrolls. With no button to sit by, it goes at
+// the bottom of the screen as before. A button redrawn while the request ran is found again by its id.
+var _cmpRightsLastBtn = null, _cmpRightsLastBtnId = '', _cmpRightsLastBtnAt = 0;
+if (typeof document !== 'undefined' && document.addEventListener) {
   try {
+    document.addEventListener('click', function (e) {
+      var t = (e && e.target && e.target.closest) ? e.target.closest('button, .btn, .panel-pill, [role="button"], input[type="submit"], input[type="button"]') : null;
+      if (t) { _cmpRightsLastBtn = t; _cmpRightsLastBtnId = t.id || ''; _cmpRightsLastBtnAt = Date.now(); }
+    }, true);
+  } catch (e) {}
+}
+
+function _cmpRightsAnchorEl(box) {
+  var a = box && box._cmpAnchor;
+  if (a && a.isConnected) return a;
+  if (box && box._cmpAnchorId) { var b = document.getElementById(box._cmpAnchorId); if (b) { box._cmpAnchor = b; return b; } }
+  return null;
+}
+
+function _cmpRightsPlace(box) {
+  try {
+    var a = _cmpRightsAnchorEl(box);
+    var r = a ? a.getBoundingClientRect() : null;
+    if (!r || (!r.width && !r.height)) {
+      box.style.left = '50%'; box.style.top = 'auto'; box.style.bottom = '16px'; box.style.transform = 'translateX(-50%)';
+      return;
+    }
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var bw = box.offsetWidth, bh = box.offsetHeight;
+    var top = r.bottom + 8;
+    if (top + bh > vh - 8 && r.top - 8 - bh >= 8) top = r.top - 8 - bh;
+    top = Math.max(8, Math.min(top, vh - bh - 8));
+    var left = r.left + r.width / 2 - bw / 2;
+    left = Math.max(12, Math.min(left, vw - bw - 12));
+    box.style.transform = 'none'; box.style.bottom = 'auto';
+    box.style.left = Math.round(left) + 'px'; box.style.top = Math.round(top) + 'px';
+  } catch (e) {}
+}
+
+function _cmpRightsCloseBox() {
+  try {
+    var old = document.getElementById('cmp-rights-box');
+    if (!old) return;
+    if (old._cmpOff) old._cmpOff();
+    if (old.parentNode) old.parentNode.removeChild(old);
+  } catch (e) {}
+}
+
+// items: the `rights` of a reply. opts (v3.1.93): { red, text, heading } -- a refusal or a build that left a
+// picture out says its own sentence; without opts the note is about the pictures just uploaded.
+function _cmpRightsAnnounce(items, opts) {
+  try {
+    opts = opts || {};
     (items || []).forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
     var rej = (items || []).filter(function (i) { return i && i.verdict === 'reject'; });
     var warn = (items || []).filter(function (i) { return i && i.verdict === 'warn'; });
-    if (!rej.length && !warn.length) return;
-    var old = document.getElementById('cmp-rights-box');
-    if (old && old.parentNode) old.parentNode.removeChild(old);
+    if (!rej.length && !warn.length && !opts.text) return;
+    _cmpRightsCloseBox();
     var box = document.createElement('div');
     box.id = 'cmp-rights-box';
     box.setAttribute('role', 'alert');
-    var red = rej.length > 0;
-    box.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99998;max-width:520px;width:calc(100% - 24px);box-sizing:border-box;' +
+    box.setAttribute('data-urls', JSON.stringify((items || []).map(function (i) { return i && i.url ? _cmpRightsKey(i.url) : ''; }).filter(Boolean)));
+    var red = !!opts.red || rej.length > 0;
+    box.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99998;max-width:420px;width:calc(100% - 24px);box-sizing:border-box;' +
       'background:' + (red ? '#2a0f0f' : '#2a210c') + ';color:#f5efe2;border:2px solid ' + (red ? '#dc2626' : '#d97706') + ';border-radius:10px;' +
-      'padding:12px 36px 12px 14px;font-family:inherit;font-size:13px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,0.5);';
+      'padding:12px 36px 12px 14px;font-family:inherit;font-size:13px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:left;';
     var h = document.createElement('div');
     h.style.cssText = 'font-weight:700;margin-bottom:4px;color:' + (red ? '#fca5a5' : '#fcd34d') + ';';
-    h.textContent = red ? 'This picture can’t be used' : 'Check you have the rights to this picture';
+    h.textContent = opts.heading || (red ? 'This picture can’t be used' : 'Check you have the rights to this picture');
     var p = document.createElement('div');
     var first = red ? rej[0] : warn[0];
-    p.textContent = _cmpRightsText(first) + (red
+    p.textContent = opts.text ? opts.text : (_cmpRightsText(first) + (red
       ? ' It stays where you put it, marked in red, until you replace it with a picture you have the rights to.'
-      : ' You can keep using it if it’s yours or you have permission (for example art you commissioned).');
+      : ' You can keep using it if it’s yours or you have permission (for example art you commissioned).'));
     var x = document.createElement('button');
     x.type = 'button';
     x.setAttribute('aria-label', 'Close');
     x.innerHTML = '&times;';
     x.style.cssText = 'position:absolute;top:6px;right:8px;background:none;border:none;color:inherit;font-size:20px;line-height:1;cursor:pointer;opacity:0.7;';
-    x.onclick = function () { if (box.parentNode) box.parentNode.removeChild(box); };
+    x.onclick = function () { _cmpRightsCloseBox(); };
     box.appendChild(h); box.appendChild(p); box.appendChild(x);
+    var fresh = _cmpRightsLastBtn && (Date.now() - _cmpRightsLastBtnAt) < 120000;
+    box._cmpAnchor = fresh ? _cmpRightsLastBtn : null;
+    box._cmpAnchorId = fresh ? _cmpRightsLastBtnId : '';
     document.body.appendChild(box);
-    setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, red ? 20000 : 12000);
+    _cmpRightsPlace(box);
+    var place = function () { _cmpRightsPlace(box); };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    box._cmpOff = function () { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
+    // The screen may redraw the button just after the reply; place again once it has.
+    setTimeout(place, 60); setTimeout(place, 400);
+    setTimeout(function () { if (document.getElementById('cmp-rights-box') === box) _cmpRightsCloseBox(); }, red ? 20000 : 12000);
     _cmpRightsScan(document.body);
+  } catch (e) {}
+}
+
+// v3.1.93 -- REPLACED MEANS GONE. Ian, 2026-10-16: the red note "stayed there even when I swapped it out ...
+// make sure if the warning is there it doesn't linger." A picture's marks (red or amber outline, red note,
+// tooltip) are cleared whenever the element stops showing the marked picture: a new address, a preview
+// from the computer (data: or blob:), or an empty slot. The note under the picture goes with it, and the
+// note box about that picture goes once no picture on screen still shows it.
+function _cmpRightsOnScreen(key) {
+  try {
+    var imgs = document.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) if (_cmpRightsKey(imgs[i].getAttribute('src')) === key) return true;
+  } catch (e) {}
+  return false;
+}
+
+function _cmpRightsUnmark(img) {
+  try {
+    if (!img || !img.getAttribute) return;
+    var was = img.getAttribute('data-rights');
+    if (was === null) return;
+    var note = img.nextSibling;
+    if (note && note.nodeType === 1 && note.className === 'cmp-rights-note' && note.parentNode) note.parentNode.removeChild(note);
+    img.style.outline = ''; img.style.outlineOffset = '';
+    if (img.getAttribute('data-rights-title') !== null) { img.title = img.getAttribute('data-rights-title'); img.removeAttribute('data-rights-title'); }
+    img.removeAttribute('data-rights');
+    var parts = was.split('|'), verdict = parts[0], oldKey = parts.slice(1).join('|');
+    var box = document.getElementById('cmp-rights-box');
+    if (verdict && oldKey && box && (box.getAttribute('data-urls') || '').indexOf(JSON.stringify(oldKey)) !== -1 && !_cmpRightsOnScreen(oldKey)) _cmpRightsCloseBox();
+  } catch (e) {}
+}
+
+// A red note whose picture has gone (redrawn, removed, or no longer rejected) is removed.
+function _cmpRightsSweep() {
+  try {
+    var notes = document.querySelectorAll('.cmp-rights-note');
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i], p = n.previousSibling;
+      var ok = p && p.nodeType === 1 && p.tagName === 'IMG' && (p.getAttribute('data-rights') || '').indexOf('reject|') === 0;
+      if (!ok && n.parentNode) n.parentNode.removeChild(n);
+    }
   } catch (e) {}
 }
 
@@ -35314,18 +35420,17 @@ function _cmpRightsAnnounce(items) {
 function _cmpRightsMark(img) {
   try {
     if (!img || !img.getAttribute) return;
-    var key = _cmpRightsKey(img.currentSrc || img.src || img.getAttribute('src'));
+    var src = img.getAttribute('src');
+    if (!_cmpRightsWanted(src)) { _cmpRightsUnmark(img); return; }
+    var key = _cmpRightsKey(src);
     var r = _cmpRightsCache[key];
-    var was = img.getAttribute('data-rights') || '';
     var now = (r && r.verdict) || '';
+    var was = img.getAttribute('data-rights');
     if (was === now + '|' + key) return;
-    var note = img.nextSibling;
-    if (note && note.nodeType === 1 && note.className === 'cmp-rights-note') note.parentNode.removeChild(note);
-    img.style.outline = ''; img.style.outlineOffset = '';
-    if (img.getAttribute('data-rights-title') !== null) { img.title = img.getAttribute('data-rights-title'); img.removeAttribute('data-rights-title'); }
+    if (was !== null) _cmpRightsUnmark(img);
+    if (now !== 'reject' && now !== 'warn') return;
     img.setAttribute('data-rights', now + '|' + key);
-    if (!now) return;
-    if (img.getAttribute('data-rights-title') === null) img.setAttribute('data-rights-title', img.title || '');
+    img.setAttribute('data-rights-title', img.title || '');
     img.title = _cmpRightsText(r);
     img.style.outline = (now === 'reject' ? '3px solid #dc2626' : '3px solid #d97706');
     img.style.outlineOffset = '-3px';
@@ -35351,11 +35456,18 @@ function _cmpRightsScan(root) {
     var imgs = root.tagName === 'IMG' ? [root] : root.querySelectorAll('img');
     for (var i = 0; i < imgs.length; i++) {
       var src = imgs[i].getAttribute('src');
-      if (!_cmpRightsWanted(src)) continue;
+      // v3.1.93 -- a picture swapped for one from the computer (a data: or blob: preview) or emptied is
+      // no longer the marked picture, so its marks go now. Before this they stayed (Ian, 2026-10-16).
+      if (!_cmpRightsWanted(src)) { _cmpRightsUnmark(imgs[i]); continue; }
       var key = _cmpRightsKey(src);
       if (Object.prototype.hasOwnProperty.call(_cmpRightsCache, key)) _cmpRightsMark(imgs[i]);
-      else _cmpRightsPending[key] = true;
+      else {
+        // Not asked yet: whatever this element was marked for is not this picture, so clear it meanwhile.
+        if ((imgs[i].getAttribute('data-rights') || '').split('|').slice(1).join('|') !== key) _cmpRightsUnmark(imgs[i]);
+        _cmpRightsPending[key] = true;
+      }
     }
+    _cmpRightsSweep();
     if (Object.keys(_cmpRightsPending).length && !_cmpRightsTimer) _cmpRightsTimer = setTimeout(_cmpRightsAsk, 400);
   } catch (e) {}
 }
@@ -35390,8 +35502,15 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.f
             try {
               if (String(r.headers.get('content-type') || '').indexOf('json') < 0) return;
               r.clone().json().then(function (d) {
-                if (!d || !Array.isArray(d.rights) || !d.rights.length) return;
-                if (!d.error) { _cmpRightsAnnounce(d.rights); return; }
+                if (!d) return;
+                // v3.1.93 -- a REFUSAL over a picture's rights says so by the button pressed, every time,
+                // even when the screen's own message would look unchanged (Ian, 2026-10-16).
+                if (d.code === 'RIGHTS_REJECTED') {
+                  _cmpRightsAnnounce(Array.isArray(d.rights) ? d.rights : [], { red: true, text: String(d.error || 'This picture can\u2019t be used.') });
+                  return;
+                }
+                if (!Array.isArray(d.rights) || !d.rights.length) return;
+                if (!d.error) { _cmpRightsAnnounce(d.rights, d.rights_note ? { text: String(d.rights_note), heading: 'A picture was left out' } : null); return; }
                 d.rights.forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
                 var _imgs = document.querySelectorAll('img'); for (var _k = 0; _k < _imgs.length; _k++) _cmpRightsMark(_imgs[_k]);
               }).catch(function () {});
@@ -35410,6 +35529,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.f
           var rec = list[i];
           if (rec.type === 'attributes') { _cmpRightsScan(rec.target); continue; }
           for (var j = 0; j < rec.addedNodes.length; j++) if (rec.addedNodes[j].nodeType === 1) _cmpRightsScan(rec.addedNodes[j]);
+          if (rec.removedNodes && rec.removedNodes.length) _cmpRightsSweep();   // v3.1.93: no note outlives its picture
         }
       }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
     } catch (e) {}

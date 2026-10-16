@@ -729,10 +729,11 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
 
     // Edit FROM the current reference — session first, then canonical,
     // then an uploaded portrait — so amendments accumulate correctly.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
-    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
-    // rejected one (watermark or stock) is never sent to the image model.
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
     const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
     if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
@@ -798,11 +799,12 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
 
     // Retouch FROM the current reference - session draft first, then canonical,
     // then an uploaded portrait. There must be something to retouch.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
-    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
-    // rejected one (watermark or stock) is never sent to the image model.
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
     const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
     if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
@@ -979,11 +981,12 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
 
     // Restyle FROM the current reference - session snapshot first, then the
     // canonical, then an uploaded portrait. Same precedence as retouch.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
-    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
-    // rejected one (watermark or stock) is never sent to the image model.
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
     const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
     if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
