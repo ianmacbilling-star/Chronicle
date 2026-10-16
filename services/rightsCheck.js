@@ -26,10 +26,9 @@ var meta = require('./imageMetadata');
 var VISION_TIMEOUT_MS = 20000;
 var VISION_MAX_SIDE = 1568;   // the size Haiku looks at anyway; anything larger is shrunk by the API
 
-var VISION_SYSTEM =
-  'You check ONE uploaded picture for marks of ownership before it is used in a storybook. ' +
-  'Answer ONLY with a JSON object, no prose, no code fence: ' +
-  '{"watermark": true|false, "watermark_text": "...", "signature": true|false, "signature_text": "..."}. ' +
+// v3.1.91 -- WHAT A WATERMARK AND A SIGNATURE ARE, in one place: the upload check below, the character
+// prompt build (routes/characters.js) and style Analyze (routes/artStyles.js) all ask the same question.
+var RIGHTS_DEFINITIONS =
   'A WATERMARK is text or a logo laid over the picture to mark who owns it or where it came from: a stock ' +
   'library mark (Shutterstock, Getty Images, iStock, Adobe Stock, Alamy, Dreamstime, Depositphotos, 123RF and ' +
   'similar), a website address or social media handle stamped on the picture, a copyright notice, a ' +
@@ -37,7 +36,19 @@ var VISION_SYSTEM =
   'A SIGNATURE is an artist’s signature, initials or monogram drawn into the artwork, usually small and in a corner. ' +
   'NEITHER: writing that belongs to the scene (shop signs, book covers, labels on objects, speech bubbles, ' +
   'captions that are part of a comic page, game interface text), a camera date stamp, and a plain border. ' +
-  'If you are not reasonably sure, answer false. Put the words you can read in the _text fields, or "" if none.';
+  'If you are not reasonably sure, answer false.';
+
+var VISION_SYSTEM =
+  'You check ONE uploaded picture for marks of ownership before it is used in a storybook. ' +
+  'Answer ONLY with a JSON object, no prose, no code fence: ' +
+  '{"watermark": true|false, "watermark_text": "...", "signature": true|false, "signature_text": "..."}. ' +
+  RIGHTS_DEFINITIONS + ' Put the words you can read in the _text fields, or "" if none.';
+
+// v3.1.91 -- the line the character prompt build asks for after its description, one entry per picture.
+var RIGHTS_LINE_INSTRUCTION =
+  'Then, on ONE final line of its own, write RIGHTS: followed by a JSON array with one object per reference ' +
+  'image above, in the order given: {"watermark": true|false, "watermark_text": "", "signature": true|false, ' +
+  '"signature_text": ""}. ' + RIGHTS_DEFINITIONS + ' Nothing about this line goes into the description itself.';
 
 var _fetch = function () { return fetch.apply(null, arguments); };   // replaceable in tests
 
@@ -194,6 +205,35 @@ async function checkUpload(url, file, visionBuf, ctx) {
   return { verdict: r.verdict, reasons: r.reasons };
 }
 
+// v3.1.91 -- TD-979. The first rejection among these pictures, as a sentence, or null. For the routes that
+// send an uploaded picture to the image model (a character's prompt build and reference, and the session
+// edits that fall back to an uploaded portrait), so a rejected picture is never used.
+async function rejectedReason(urls) {
+  var list = (urls || []).filter(Boolean);
+  if (!list.length) return null;
+  var found = await lookup(list);
+  for (var i = 0; i < list.length; i++) {
+    var r = found[normUrl(list[i])];
+    if (r && r.verdict === 'reject') {
+      var why = (r.reasons || []).filter(function (x) { return x && x.kind !== 'signature' && x.kind !== 'copyright'; })[0];
+      return (why && why.text) || 'This picture has a watermark.';
+    }
+  }
+  return null;
+}
+
+// v3.1.91 -- TD-979. Split a reply into its text and its RIGHTS: line (see RIGHTS_LINE_INSTRUCTION). Every
+// RIGHTS line is removed from the text, whether or not it parses, so it can never reach a prompt.
+function splitRightsLine(reply) {
+  var keep = [], arr = null;
+  String(reply || '').split(/\r?\n/).forEach(function (l) {
+    var m = l.match(/^\s*\**\s*RIGHTS\s*:\s*(.*)$/i);
+    if (!m) { keep.push(l); return; }
+    try { var v = JSON.parse(m[1].replace(/^[\s*]+/, '').replace(/[\s*]+$/, '')); if (Array.isArray(v)) arr = v; } catch (e) { /* unreadable: unchecked */ }
+  });
+  return { text: keep.join('\n').trim(), rights: arr };
+}
+
 // The shape a route adds to its response: only pictures with something to say.
 function responseRights(map) {
   var items = [];
@@ -208,5 +248,7 @@ module.exports = {
   metadataCheck: metadataCheck, visionCheck: visionCheck, verdictFromAnswer: verdictFromAnswer, parseReply: parseReply,
   combine: combine, record: record, lookup: lookup, inherit: inherit, checkUpload: checkUpload,
   responseRights: responseRights, normUrl: normUrl, VISION_SYSTEM: VISION_SYSTEM,
+  RIGHTS_DEFINITIONS: RIGHTS_DEFINITIONS, RIGHTS_LINE_INSTRUCTION: RIGHTS_LINE_INSTRUCTION,   // v3.1.91
+  rejectedReason: rejectedReason, splitRightsLine: splitRightsLine,                            // v3.1.91
   _setFetch: function (f) { _fetch = f; }
 };

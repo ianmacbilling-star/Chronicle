@@ -652,6 +652,14 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     const imageUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
       .filter(function(u) { return u && /^https?:\/\//.test(u); });
 
+    // v3.1.91 -- TD-979. A picture already rejected (its file details named a stock library at upload)
+    // stops the build before any AI call: nothing is written, nothing generated, nothing charged.
+    const _preReject = await rightsCheck.rejectedReason(imageUrls);
+    if (_preReject) {
+      return res.json({ error: _preReject + ' Replace that picture with one you have the rights to, then build the character again. Nothing was charged.',
+        code: 'RIGHTS_REJECTED', rights: rightsCheck.responseRights(await rightsCheck.lookup(imageUrls)) });
+    }
+
     // Build the message content: the images first, then the instruction
     const content = [];
     imageUrls.forEach(function(url) {
@@ -674,7 +682,10 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
       'skin tone, signature outfit and its colors, and any notable gear or markings. ' +
       'Do NOT describe personality, backstory, pose, background, or art style — physical ' +
       'appearance only. 2-4 sentences, dense with concrete visual detail. ' +
-      'Return ONLY the description text, no preamble or labels.';
+      'Return ONLY the description text, no preamble or labels.' +
+      // v3.1.91 -- TD-979. The same look also answers the watermark/signature question, on its own last
+      // line (removed below before anything is saved). Only when there are pictures to look at.
+      (imageUrls.length ? ('\n\n' + rightsCheck.RIGHTS_LINE_INSTRUCTION) : '');
 
     content.push({ type: 'text', text: textInfo });
 
@@ -709,8 +720,26 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     const data = await response.json();
     if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
 
-    const promptText = data.content.map(function(b) { return b.text || ''; }).join('').trim();
+    // v3.1.91 -- TD-979. Split off the RIGHTS line; the description alone is the prompt.
+    const _split = rightsCheck.splitRightsLine(data.content.map(function(b) { return b.text || ''; }).join(''));
+    const promptText = _split.text;
     if (!promptText) return res.json({ error: 'No description was generated.' });
+    // Each picture's answer joins what its file details already said; a watermark stops the build.
+    // A missing or unreadable answer is 'unchecked' and stops nothing (fails open).
+    const _charRights = {};
+    for (let _i = 0; _i < imageUrls.length; _i++) {
+      const _vis = rightsCheck.verdictFromAnswer(_split.rights ? (_split.rights[_i] || null) : null);
+      const _prev = (await rightsCheck.lookup([imageUrls[_i]]))[rightsCheck.normUrl(imageUrls[_i])];
+      const _c = rightsCheck.combine(_prev, _vis);
+      await rightsCheck.record(imageUrls[_i], _c, { kind: 'character', userId: req.session.userId, campaignId: req.params.campaignId });
+      _charRights[imageUrls[_i]] = _c;
+    }
+    const _rejUrl = Object.keys(_charRights).filter(function (u) { return _charRights[u].verdict === 'reject'; })[0];
+    if (_rejUrl) {
+      const _why = _charRights[_rejUrl].reasons.filter(function (x) { return x.kind === 'watermark' || x.kind === 'stock'; })[0];
+      return res.json({ error: ((_why && _why.text) || 'One of the pictures has a watermark.') + ' Replace that picture with one you have the rights to, then build the character again. Nothing was charged.',
+        code: 'RIGHTS_REJECTED', rights: rightsCheck.responseRights(_charRights) });
+    }
 
     const now = new Date().toISOString();
     await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
@@ -736,7 +765,8 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
       console.error('Canonical reference image submit failed (non-fatal):', imgErr.message);
     }
 
-    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId });
+    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId,
+      rights: rightsCheck.responseRights(_charRights) });   // v3.1.91 -- TD-979: a signature warns here
   } catch(e) {
     console.error('Rebuild prompt error:', e.message);
     res.json({ error: friendlyAnthropicError(e) });
@@ -793,6 +823,9 @@ router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacte
     // Generate from the EXISTING prompt. A failure throws to the catch below,
     // so tokens are never spent on a failed generation.
     const portrait = char.image_portrait || char.image_fullbody || char.image || null;
+    // v3.1.91 -- TD-979. Never send a rejected uploaded picture to the image model.
+    const _portraitReject = portrait ? await rightsCheck.rejectedReason([portrait]) : null;
+    if (_portraitReject) return res.json({ error: _portraitReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const sub = await imageHelpers.submitReference(falKey, char.canonical_prompt, portrait, modelKey, webhookUrl);

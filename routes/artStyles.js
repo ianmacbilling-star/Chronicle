@@ -9,7 +9,7 @@ const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const { imageFileFilter, friendlyUploadMsg, ACCEPTED_MIME } = require('../middleware/uploadGuard');
-const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979 (and v3.1.91: inside Analyze)
 const path = require('path');
 
 // Custom Art Styles are account-wide and owned by the user. CREATE / manage is
@@ -325,9 +325,12 @@ const STYLE_ANALYZE_SYSTEM =
   DESCRIPTION_RULES + '\n\n' + THREE_WAYS + '\n\n' +
   'Set "fade" to true ONLY if the images characteristically fade to clean pure white (#ffffff) at the edges with ' +
   'no frame; otherwise false.\n\n' +
+  // v3.1.91 -- TD-979. The same look answers the watermark/signature question, one entry per image.
+  'Also fill "rights" with one object per reference image, in the order given. ' + rightsCheck.RIGHTS_DEFINITIONS + '\n\n' +
   'Reply with ONLY this JSON, no markdown, no preamble:\n' +
   '{"answers": {' + STYLE_QUESTIONS.map(function (q) { return '"' + q[0] + '": "..."'; }).join(', ') + '}, ' +
-  '"samples_disagree": "", "fade": false, "descriptions": ["STYLE: ...", "STYLE: ...", "STYLE: ..."]}';
+  '"samples_disagree": "", "fade": false, "descriptions": ["STYLE: ...", "STYLE: ...", "STYLE: ..."], ' +
+  '"rights": [{"watermark": false, "watermark_text": "", "signature": false, "signature_text": ""}]}';   // v3.1.91
 
 const STYLE_REWRITE_SYSTEM =
   'You write art-style directives for an image generator from a set of answers about how a style is drawn. ' +
@@ -514,12 +517,15 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
       if (_refusal) return res.json({ error: _refusal + ' Replace it with a picture you have the rights to. Nothing was charged.' });
       const content = [];
       const sampleUrls = [];
+      const _imgUrlOrder = [];   // v3.1.91 -- TD-979: the stored address of each image block, in order (null if not stored)
       for (const f of files) {
         content.push({ type: 'image', source: { type: 'base64', media_type: f.mimetype, data: f.buffer.toString('base64') } });
+        const _slot = _imgUrlOrder.push(null) - 1;   // v3.1.91
         try {
           const ext = path.extname(f.originalname) || '.jpg';
           const url = await uploadFile(f.buffer, 'style-sample-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext, f.mimetype);
           if (url) sampleUrls.push(url);
+          _imgUrlOrder[_slot] = url || null;   // v3.1.91
           if (url) await rightsCheck.record(url, _sampleRights[files.indexOf(f)], { kind: 'style-sample', userId: req.session.userId });   // v3.1.90 -- TD-979
         } catch (e) { console.error('sample upload failed:', e.message); }
       }
@@ -533,6 +539,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
           const mt = okTypes.indexOf(mt0) >= 0 ? mt0 : 'image/jpeg';
           content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: buf.toString('base64') } });
           sampleUrls.push(u);
+          _imgUrlOrder.push(u);   // v3.1.91
         } catch (e) { console.error('existing sample fetch failed:', e.message); }
       }
       if (content.filter(function(c){ return c.type === 'image'; }).length < 2) {
@@ -551,6 +558,21 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         try { console.warn('[art-styles] analyze reply unusable (len ' + raw.length + ')'); } catch (_w) {}
         return res.json({ error: 'The analysis came back in an unexpected shape. Nothing was charged; please try again.' });
       }
+
+      // v3.1.91 -- TD-979. Each sample's watermark/signature answer joins what its file details said. A
+      // watermark stops here, before the token is spent. A missing answer is unchecked and stops nothing.
+      const _rv = (parseModelJson(raw) || {}).rights;
+      let _styleRefusal = null;
+      for (let _i = 0; _i < _imgUrlOrder.length; _i++) {
+        const _v = rightsCheck.verdictFromAnswer(Array.isArray(_rv) ? (_rv[_i] || null) : null);
+        const _u = _imgUrlOrder[_i];
+        if (_u) {
+          const _prev = (await rightsCheck.lookup([_u]))[rightsCheck.normUrl(_u)];
+          await rightsCheck.record(_u, rightsCheck.combine(_prev, _v), { kind: 'style-sample', userId: req.session.userId });
+        }
+        if (!_styleRefusal && _v.verdict === 'reject') _styleRefusal = 'Sample ' + (_i + 1) + ': ' + _v.reasons[0].text;
+      }
+      if (_styleRefusal) return res.json({ error: _styleRefusal + ' Replace it with a picture you have the rights to. Nothing was charged.' });
 
       try { await spendTokens(req.session.userId, COST_ANALYZE, { source: 'custom_style_analyze', event_type: 'generation_spend' }); } catch (e) { console.error('analyze spend failed:', e.message); }
       try { await recordGeneration(req.session.userId, { event_type: 'custom_style_analyze', tokens_redeemed: COST_ANALYZE, quantity: 1, unit: 'analysis', model: TEXT_MODEL }); } catch (e) {}

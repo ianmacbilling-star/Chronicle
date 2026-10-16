@@ -9,6 +9,7 @@ const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllow
 // extra versions are a creative feature. Same rule the art styles use.
 const GOLD_RANK = 3;
 const imageHelpers = require('./images');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.91 -- TD-979
 const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
 // GET last used art style and layout style
@@ -730,6 +731,10 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     // then an uploaded portrait — so amendments accumulate correctly.
     const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
       ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
+    // rejected one (watermark or stock) is never sent to the image model.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
 
@@ -796,6 +801,10 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
       ch.image_portrait || ch.image_fullbody || ch.image || null;
     if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
+    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
+    // rejected one (watermark or stock) is never sent to the image model.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
 
@@ -973,6 +982,10 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
     const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
       ch.image_portrait || ch.image_fullbody || ch.image || null;
     if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
+    // v3.1.91 -- TD-979. With no generated reference yet, this falls back to an UPLOADED picture; a
+    // rejected one (watermark or stock) is never sent to the image model.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
     const cost = await getTokenCost(modelKey);

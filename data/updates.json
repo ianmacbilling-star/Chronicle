@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.91",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3191-rights-in-analysis",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character pictures and custom style samples are now checked for watermarks and signatures when they are analysed. A watermarked picture stops the character build or the style analysis, with nothing charged, until it is replaced.",
+        "detail": "Give a character a clearly watermarked picture (a stock preview with its logo across it) and press Build: it stops, says which picture, charges nothing, and the picture is marked red until replaced. A signed picture builds as normal with an amber reminder. Analyze a custom style with a watermarked sample: refused, names the sample, nothing charged. With a rejected uploaded picture and no reference image yet, Re-roll, Retouch, Restyle and amending a character in a session are refused too.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.90",
     "staged_on": "2026-10-16",
     "entries": [

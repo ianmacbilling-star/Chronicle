@@ -35254,8 +35254,10 @@ function _helpFormat(text) {
 // and a rejected picture "stays with a red note until replaced".
 //
 // TWO PIECES, BOTH GENERIC, so no upload screen needs its own copy (the twin rule, section 5c):
-//   1. Every upload is a FormData POST or PUT. When its JSON reply carries `rights`, say so at once
-//      (_cmpRightsAnnounce). One wrapper round window.fetch covers every upload screen, now and later.
+//   1. When a POST or PUT reply carries `rights`, say so at once (_cmpRightsAnnounce). One wrapper round
+//      window.fetch covers every screen, now and later. (v3.1.91: any POST or PUT, not only uploads,
+//      because the character build and style Analyze answer too; a reply that is an ERROR still updates
+//      the marks, without a second message on top of the error the screen already shows.)
 //   2. Any picture on screen whose address has a verdict is marked: a red outline and a red note under
 //      it for a rejected one, an amber outline for a warned one, with the reason as its tooltip. A
 //      MutationObserver finds pictures as they appear; verdicts are asked for in batches from
@@ -35383,12 +35385,15 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.f
       var p = _origFetch.apply(this, arguments);
       try {
         var m = String((init && init.method) || 'GET').toUpperCase();
-        if (init && (m === 'POST' || m === 'PUT') && typeof FormData !== 'undefined' && init.body instanceof FormData) {
+        if (init && (m === 'POST' || m === 'PUT')) {
           p.then(function (r) {
             try {
               if (String(r.headers.get('content-type') || '').indexOf('json') < 0) return;
               r.clone().json().then(function (d) {
-                if (d && !d.error && Array.isArray(d.rights) && d.rights.length) _cmpRightsAnnounce(d.rights);
+                if (!d || !Array.isArray(d.rights) || !d.rights.length) return;
+                if (!d.error) { _cmpRightsAnnounce(d.rights); return; }
+                d.rights.forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
+                var _imgs = document.querySelectorAll('img'); for (var _k = 0; _k < _imgs.length; _k++) _cmpRightsMark(_imgs[_k]);
               }).catch(function () {});
             } catch (e) {}
           }).catch(function () {});
