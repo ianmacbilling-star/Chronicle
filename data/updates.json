@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.88",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3188-install-chip-remembered",
+        "kind": "fix",
+        "public": true,
+        "summary": "On a phone, closing the Install Campaignia banner now keeps it closed, and it stops appearing once the app is installed.",
+        "detail": "On an Android phone in a browser tab: wait for the Install banner, press x, close the tab and come back the next day: no banner. Install the app from the banner, then open the site in that same browser: no banner. Open the installed app once, then the site in the same browser: no banner. The Install app item in the profile menu still appears whenever the browser offers an install. A different browser on the same phone cannot see an install made by another browser, so it may show the banner once until x is pressed.",
+        "td": [
+          "TD-957"
+        ]
+      },
+      {
+        "id": "3188-support-session-idle",
+        "kind": "change",
+        "public": false,
+        "summary": "Support sessions (Viewing as) now end after 30 minutes idle rather than 30 minutes from the start, warn in the last five minutes with a Stay button, and say so when they end.",
+        "detail": "Start a support session and keep working (clicking, scrolling, reading a book in preview) for more than 30 minutes: it stays open. Leave it untouched: about 25 minutes later the banner counts down with a Stay button; Stay resets it to 30 minutes. Leave it to run out: a notice says the session ended after 30 minutes idle, and OK reloads the page as yourself. Reload during a session: the clock starts again. Leave a support tab in the background for over 30 minutes: it ends (background checks do not count as activity). The Dashboard support log still records the end as expiry.",
+        "td": [
+          "TD-960"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.87",
     "staged_on": "2026-10-15",
     "entries": [

@@ -3,8 +3,10 @@
  *  - Registers the service worker (best-effort).
  *  - Drives the "Install app" item in the Profile menu on BOTH desktop and
  *    mobile (the menu item calls installApp()).
- *  - On MOBILE ONLY, also shows a gentle one-per-session install chip when the
- *    app is installable and not already installed. Desktop never auto-prompts.
+ *  - On MOBILE ONLY, also shows a gentle install chip when the app is
+ *    installable and not already installed. Desktop never auto-prompts.
+ *  - v3.1.88 (TD-957): the chip's x is remembered for 90 days, and an accepted
+ *    install (or opening the installed app) silences the chip for good.
  * Everything fails open -- if the browser cannot install, nothing shows.
  */
 (function () {
@@ -44,13 +46,39 @@
     return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
   }
 
-  // Dismissal is remembered for the current browser session only, so the prompt
-  // returns on the next visit until the app is actually installed.
-  function dismissed() {
-    try { return sessionStorage.getItem('cmpInstallDismiss') === '1'; } catch (e) { return false; }
+  // v3.1.88 -- TD-957. REMEMBERED IN localStorage, NOT sessionStorage.
+  // sessionStorage forgot the x at the end of every visit, so the chip came back each time,
+  // including for people who had installed the app from ANOTHER browser (Ian, Edge on Android:
+  // Edge fires beforeinstallprompt because Edge did not install it, and cannot see the install).
+  // Now: the x holds for DISMISS_DAYS; an accepted install, the appinstalled event, opening the
+  // installed app (display-mode standalone) or getInstalledRelatedApps() finding it holds for good.
+  // The Profile-menu "Install app" item is unaffected: it still appears whenever the browser
+  // offers an install, so anyone who dismissed the chip can still install.
+  var DISMISS_KEY = 'cmpInstallDismissAt';
+  var INSTALLED_KEY = 'cmpInstalledAt';
+  var DISMISS_DAYS = 90;
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  function chipSuppressed() {
+    if (lsGet(INSTALLED_KEY)) { return true; }
+    var at = Number(lsGet(DISMISS_KEY) || 0);
+    return at > 0 && (Date.now() - at) < DISMISS_DAYS * 24 * 60 * 60 * 1000;
   }
-  function setDismissed() {
-    try { sessionStorage.setItem('cmpInstallDismiss', '1'); } catch (e) { /* ignore */ }
+  function setDismissed() { lsSet(DISMISS_KEY, String(Date.now())); }
+  function setInstalled() { lsSet(INSTALLED_KEY, String(Date.now())); }
+
+  // Asks the browser whether this web app is already installed (manifest related_applications,
+  // platform webapp). Chromium on Android only, and only sees installs made by THIS browser.
+  // Resolves false on any doubt: an unanswered question must never hide the chip by itself.
+  function relatedAppInstalled() {
+    try {
+      if (!navigator.getInstalledRelatedApps) { return Promise.resolve(false); }
+      return navigator.getInstalledRelatedApps().then(function (apps) {
+        var found = !!(apps && apps.length);
+        if (found) { setInstalled(); }
+        return found;
+      }).catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
   }
 
   // ---- install chip (mobile only) ----------------------------------------
@@ -121,13 +149,16 @@
   }
 
   function maybeShowNativeChip() {
-    if (!isMobile() || isStandalone() || dismissed()) { return; }
+    if (!isMobile() || isStandalone() || chipSuppressed()) { return; }
     if (!deferred) { return; }
-    buildChip('native');
+    relatedAppInstalled().then(function (found) {
+      if (found || !deferred || chipSuppressed()) { return; }
+      buildChip('native');
+    });
   }
 
   function maybeShowIosChip() {
-    if (!isMobile() || isStandalone() || dismissed()) { return; }
+    if (!isMobile() || isStandalone() || chipSuppressed()) { return; }
     buildChip('ios');
   }
 
@@ -148,6 +179,13 @@
       hideItem();
       removeChip();
       p.prompt();
+      // v3.1.88 -- TD-957: an accepted install silences the chip in this browser for good.
+      try {
+        if (p.userChoice && p.userChoice.then) {
+          p.userChoice.then(function (c) { if (c && c.outcome === 'accepted') { setInstalled(); } })
+            .catch(function () { /* ignore */ });
+        }
+      } catch (e) { /* ignore */ }
       return;
     }
     // No native prompt available (e.g. iOS Safari): show instructions.
@@ -155,6 +193,7 @@
   };
 
   window.addEventListener('appinstalled', function () {
+    setInstalled();
     deferred = null;
     hideItem();
     removeChip();
@@ -163,6 +202,9 @@
   // iOS never fires beforeinstallprompt, so surface the option on load: reveal
   // the Profile-menu item and show the instructional chip once per session.
   window.addEventListener('load', function () {
+    // v3.1.88 -- TD-957: running as the installed app proves it is installed; the browser that
+    // owns this storage stops offering the chip.
+    if (isStandalone()) { setInstalled(); }
     if (isIOS() && !isStandalone()) {
       showItem();
       setTimeout(maybeShowIosChip, 1200);

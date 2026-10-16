@@ -6,7 +6,7 @@
 // ============================================================
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireAdmin, requireImpersonatorOrAdmin, endImpersonation, impersonationExpired, IMPERSONATION_MAX_MS } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireImpersonatorOrAdmin, endImpersonation, impersonationExpired, IMPERSONATION_MAX_MS, impersonationLastActive } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
 const passes = require('../services/billing/passes');
 const { getDb } = require('../database/db');
@@ -970,6 +970,8 @@ router.post('/impersonate', requireAuth, requireAdmin, async function (req, res)
     req.session.impersonatorEmail = me.email;
     req.session.impersonateTargetEmail = target.email;
     req.session.impersonateStartedAt = Date.now();
+    req.session.impersonateLastActiveAt = req.session.impersonateStartedAt;   // v3.1.88 -- TD-960
+    delete req.session.impersonationEndedNotice;
     req.session.impersonationRowId = rowId;
     req.session.userId = target.id;
     console.warn('[impersonate] ' + me.email + ' -> ' + target.email + (reason ? (' (' + reason + ')') : ''));
@@ -993,19 +995,42 @@ router.post('/impersonate/stop', requireAuth, async function (req, res) {
 
 // STATUS. Drives the banner, and it is deliberately the SAME session fields the deny list reads,
 // so the banner cannot say one thing while the guard enforces another (spec 6).
-router.get('/impersonate/status', requireAuth, function (req, res) {
-  if (!req.session || !req.session.impersonatorId) return res.json({ active: false });
+// v3.1.88 -- TD-960. One payload for status and touch. expiresInMs now counts from the LAST ACTIVITY
+// (impersonationLastActive), and when there is no session but an expiry notice is waiting, the notice
+// is returned ONCE as `ended` and then cleared, so the page can say what happened.
+function impersonationStatusPayload(req) {
+  if (!req.session || !req.session.impersonatorId) {
+    const notice = (req.session && req.session.impersonationEndedNotice) || null;
+    if (notice) delete req.session.impersonationEndedNotice;
+    return notice ? { active: false, ended: notice } : { active: false };
+  }
   const started = Number(req.session.impersonateStartedAt || 0);
-  return res.json({
+  const last = impersonationLastActive(req);
+  return {
     active: true,
     viewingAs: req.session.impersonateTargetEmail || null,
     adminEmail: req.session.impersonatorEmail || null,
     startedAt: started || null,
-    expiresInMs: Math.max(0, IMPERSONATION_MAX_MS - (Date.now() - started)),
+    lastActiveAt: last || null,
+    idleLimitMs: IMPERSONATION_MAX_MS,
+    expiresInMs: Math.max(0, IMPERSONATION_MAX_MS - (Date.now() - last)),
     // Not reported live: the total is computed from token_ledger when the session CLOSES.
     // A live figure would need a counter at every spend site -- see endImpersonation.
     tokensSpent: null
-  });
+  };
+}
+// The status poll NEVER counts as activity (see impersonationLastActive in middleware/auth.js).
+router.get('/impersonate/status', requireAuth, function (req, res) {
+  return res.json(impersonationStatusPayload(req));
+});
+
+// TOUCH -- v3.1.88, TD-960. The ONLY thing that moves the idle clock. The page sends it on load and
+// when the admin really clicks, types or scrolls (at most once a minute), and from the Stay button.
+// requireAuth runs first, so a session already past its idle limit is ended here rather than revived:
+// the reply is then { active: false, ended: ... } like the status poll's.
+router.post('/impersonate/touch', requireAuth, function (req, res) {
+  if (req.session && req.session.impersonatorId) req.session.impersonateLastActiveAt = Date.now();
+  return res.json(impersonationStatusPayload(req));
 });
 
 // GRANT TOKENS TO THE ACCOUNT YOU ARE VIEWING -- TD-179 stage 5, v3.0.590.
