@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.92",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3192-removed-picture-in-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo is never drawn in a book: the preview, the PDF, the print files and the public story page show a plain \u201cPicture removed\u201d box in its place until you replace it. It also no longer shows on the Library picture wall.",
+        "detail": "Put a watermarked picture on a panel with Upload your own (it is marked red on the Storyboard). Open Prep and Preview: that panel shows a grey \u201cPicture removed \u2013 watermark or stock picture\u201d box. Download the PDF: the same box. Replace the picture with a clean one: the preview shows the new picture. A rejected picture used as a front or back cover shows the box on the cover too. A rejected picture that was made public in the Library no longer appears on the picture wall. Warned (signed) pictures are drawn as normal.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.91",
     "staged_on": "2026-10-16",
     "entries": [

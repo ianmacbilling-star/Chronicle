@@ -159,8 +159,87 @@ async function record(url, result, ctx) {
       'INSERT INTO image_rights (image_url, verdict, reasons, user_id, campaign_id, kind, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?) ' +
       'ON CONFLICT (image_url) DO UPDATE SET verdict = EXCLUDED.verdict, reasons = EXCLUDED.reasons, checked_at = EXCLUDED.checked_at'
     ).run(u, result.verdict, JSON.stringify(result.reasons || []), ctx.userId || null, ctx.campaignId || null, ctx.kind || null, new Date().toISOString());
+    if (result.verdict === 'reject') _rejected.add(u); else _rejected.delete(u);   // v3.1.92: the books see it at once
   } catch (e) { console.error('[rights] could not record verdict for ' + u + ': ' + ((e && e.message) || e)); }
 }
+
+// ---------------------------------------------------------------- the book ------------------------
+// v3.1.92 -- TD-979. A REJECTED PICTURE IS NEVER DRAWN IN A BOOK. Ian, 2026-10-16, choosing between
+// blocking Publish and Order or blanking the picture: "Do number 2" -- the preview, the PDF, the print
+// interior, the print cover and the public story page all show a plain "Picture removed" box in its
+// place, so a book can never carry it, even as a download. The Storyboard still shows the real picture
+// with its red mark, so the person who uploaded it knows what to replace.
+//
+// THE RENDERERS ARE SYNCHRONOUS, so they ask a set held in memory: loaded at boot (server.js), refreshed
+// every minute, and updated at once by record() in this process (the upload and the render share it).
+// A failed load leaves the last good set, so a database blip shows pictures rather than blanking them.
+var REMOVED_PICTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">' +
+  '<rect width="400" height="300" fill="#e7e5e4"/>' +
+  '<text x="200" y="146" font-family="Georgia, serif" font-size="20" fill="#57534e" text-anchor="middle">Picture removed</text>' +
+  '<text x="200" y="170" font-family="Georgia, serif" font-size="13" fill="#78716c" text-anchor="middle">watermark or stock picture</text>' +
+  '</svg>');
+var _rejected = new Set();
+var _rejectedTimer = null;
+async function refreshRejected() {
+  try {
+    var d = await db();
+    var rows = await d.prepare("SELECT image_url FROM image_rights WHERE verdict = 'reject'").all();
+    var s = new Set();
+    (rows || []).forEach(function (r) { if (r && r.image_url) s.add(r.image_url); });
+    _rejected = s;
+  } catch (e) { console.error('[rights] could not load rejected pictures: ' + ((e && e.message) || e)); }
+}
+// Called once at boot, after the database is ready (server.js).
+async function startRejectedCache() {
+  await refreshRejected();
+  if (!_rejectedTimer) {
+    _rejectedTimer = setInterval(refreshRejected, 60000);
+    if (_rejectedTimer.unref) _rejectedTimer.unref();
+  }
+}
+function isRejectedSync(u) { return !!u && _rejected.has(normUrl(u)); }
+function maskUrl(u) { return isRejectedSync(u) ? REMOVED_PICTURE : u; }
+// Each mask returns the SAME object when nothing in it is rejected, and a shallow copy with the
+// picture swapped when something is, so a caller's data (a publish snapshot, say) is never changed.
+function maskFields(o, fields) {
+  if (!o || typeof o !== 'object' || !_rejected.size) return o;
+  var out = null;
+  fields.forEach(function (f) { if (o[f] && isRejectedSync(o[f])) { out = out || Object.assign({}, o); out[f] = REMOVED_PICTURE; } });
+  return out || o;
+}
+function maskMoments(moments) {
+  if (!Array.isArray(moments) || !_rejected.size) return moments;
+  var hit = false;
+  var out = moments.map(function (m) { var n = maskFields(m, ['image']); if (n !== m) hit = true; return n; });
+  return hit ? out : moments;
+}
+function maskSession(s) {
+  if (!s || typeof s !== 'object' || !_rejected.size) return s;
+  var mm = maskMoments(s.moments);
+  var n = maskFields(s, ['establishing_image']);
+  if (mm === s.moments && n === s) return s;
+  n = (n === s) ? Object.assign({}, s) : n;
+  n.moments = mm;
+  return n;
+}
+function maskSessions(sessions) {
+  if (!Array.isArray(sessions) || !_rejected.size) return sessions;
+  var hit = false;
+  var out = sessions.map(function (s) { var n = maskSession(s); if (n !== s) hit = true; return n; });
+  return hit ? out : sessions;
+}
+// Every picture the cast page can draw for a character (castRefFor in pdf.js). Only uploads are checked,
+// but a generated reference can carry a rejection by being a COPY of a rejected picture (inherit()).
+var CHARACTER_UPLOAD_FIELDS = ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other',
+  'canonical_reference_url', 'version_ref_newest', 'version_ref_oldest', 'version_ref_styled'];
+function maskCharacters(chars) {
+  if (!Array.isArray(chars) || !_rejected.size) return chars;
+  var hit = false;
+  var out = chars.map(function (c) { var n = maskFields(c, CHARACTER_UPLOAD_FIELDS); if (n !== c) hit = true; return n; });
+  return hit ? out : chars;
+}
+function maskCampaign(c) { return maskFields(c, ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'campaign_image_url']); }
 
 // url -> { verdict, reasons } for the ones that have a verdict. Never throws.
 async function lookup(urls) {
@@ -250,5 +329,8 @@ module.exports = {
   responseRights: responseRights, normUrl: normUrl, VISION_SYSTEM: VISION_SYSTEM,
   RIGHTS_DEFINITIONS: RIGHTS_DEFINITIONS, RIGHTS_LINE_INSTRUCTION: RIGHTS_LINE_INSTRUCTION,   // v3.1.91
   rejectedReason: rejectedReason, splitRightsLine: splitRightsLine,                            // v3.1.91
+  REMOVED_PICTURE: REMOVED_PICTURE, startRejectedCache: startRejectedCache, refreshRejected: refreshRejected,   // v3.1.92
+  isRejectedSync: isRejectedSync, maskUrl: maskUrl, maskMoments: maskMoments, maskSession: maskSession,          // v3.1.92
+  maskSessions: maskSessions, maskCharacters: maskCharacters, maskCampaign: maskCampaign,                      // v3.1.92
   _setFetch: function (f) { _fetch = f; }
 };

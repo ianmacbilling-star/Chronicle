@@ -264,7 +264,9 @@ router.get('/library', async function (req, res) {
     // before the bytes arrive. They are already stored on the row; only the SELECT was short.
     // v3.1.89 -- TD-953: the moment's description (LEFT JOIN: a deleted panel leaves NULL and the label
     // falls back to the title), plus the art style and genres the row already carries.
-    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, a.art_style, a.genres, m.description AS moment_description, m.title AS moment_title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN moments m ON m.id = a.moment_id WHERE a.public = TRUE';
+    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, a.art_style, a.genres, m.description AS moment_description, m.title AS moment_title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN moments m ON m.id = a.moment_id WHERE a.public = TRUE' +
+      // v3.1.92 -- TD-979. A rejected (watermarked or stock) picture never shows on the public wall.
+      ' AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = a.image_url AND ir.verdict = \'reject\')';
     if (all) {
       // Show-all: newest-first, id-cursor pagination, no shuffle (unchanged).
       const beforeId = parseInt(req.query.beforeId, 10) || 0;

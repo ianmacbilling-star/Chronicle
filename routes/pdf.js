@@ -30,6 +30,7 @@ const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { logDebug } = require('./debug');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.92 -- TD-979, a rejected picture is never drawn
 
 // Count pages in a rendered PDF buffer. Prefers pdf-lib (exact); if that module
 // is unavailable or throws, falls back to a structural scan of the PDF bytes
@@ -5055,6 +5056,10 @@ function previewScrollbarCss() {
   ].join("\n");
 }
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
+  // v3.1.92 -- TD-979. Rejected (watermarked or stock) pictures become a plain "Picture removed" box,
+  // here at the door, so no layout below can draw one. Copies only when something is swapped.
+  moments = rightsCheck.maskMoments(moments); session = rightsCheck.maskSession(session);
+  campaign = rightsCheck.maskCampaign(campaign); characters = rightsCheck.maskCharacters(characters);
   var co = opts || null;
   // v3.0.620 -- declared HERE as well as in buildNovelHTML. ESLint no-undef caught it missing:
   // the CSS line below references it in BOTH builders, and a variable declared in one and used
@@ -5625,6 +5630,10 @@ async function attachVersionReferences(db, characters, campaignId, versionId) {
 }
 
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
+  // v3.1.92 -- TD-979. The same door for the whole book: preview, PDF, print interior, saved and
+  // published books, and the public story page (which renders its snapshot through here).
+  campaign = rightsCheck.maskCampaign(campaign); sessions = rightsCheck.maskSessions(sessions);
+  characters = rightsCheck.maskCharacters(characters);
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
   var co = opts || null;
@@ -7285,6 +7294,7 @@ function coverGeometry(binding, totalWidthIn) {
 }
 
 function buildWrapCoverHTML(campaign, spec, dims, opts) {
+  campaign = rightsCheck.maskCampaign(campaign);   // v3.1.92 -- TD-979: the printed cover too
   opts = opts || {};
   var W = dims.widthIn, H = dims.heightIn;
   var geo = coverGeometry(spec.binding, W);
