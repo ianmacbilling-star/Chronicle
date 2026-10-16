@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const { uploadFile } = require('../storage/storage');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const { demoteBuiltTitle } = require('../services/titleTarget');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 
 // v3.0.507 -- ONE definition of the title cap, shared with routes/extract.js. A title typed by
 // hand must obey the same rule a generated one does, or the cap is decorative. Kept byte-identical
@@ -232,8 +233,14 @@ router.post('/:momentId/upload-image', requireAuth, verifyCampaignMember, guardU
       try { await releaseImage(db, moment.revert_image); } catch (e) {}
     }
     console.log('[own-image] moment ' + moment.id + ': ' + W + 'x' + H + ' -> ' + shape + ' ' + out.info.width + 'x' + out.info.height);
+    // v3.1.90 -- TD-979. A panel upload is never analysed afterwards, so it is checked here: the file
+    // details uploadGuard read from the ORIGINAL bytes (the JPEG saved above has none), and one small
+    // Haiku look at the crop that is actually on the panel. Ian: a rejected picture stays, marked red,
+    // until it is replaced.
+    const _rights = await rightsCheck.checkUpload(url, req.file, out.data, { kind: 'panel', userId: req.session.userId, campaignId: req.params.campaignId });
+    const _ri = {}; _ri[url] = _rights;
     res.json({ success: true, image_url: url, shape: shape, img_w: out.info.width, img_h: out.info.height,
-      small: Math.max(out.info.width, out.info.height) < OWN_SMALL_SIDE, locked: 1 });
+      small: Math.max(out.info.width, out.info.height) < OWN_SMALL_SIDE, locked: 1, rights: rightsCheck.responseRights(_ri) });
   } catch (e) {
     console.error('own-image upload error:', e && e.message);
     res.json({ error: 'Could not put that image on the panel. Please try again.' });

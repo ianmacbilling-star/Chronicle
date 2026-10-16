@@ -9,6 +9,7 @@ const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const { imageFileFilter, friendlyUploadMsg, ACCEPTED_MIME } = require('../middleware/uploadGuard');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 const path = require('path');
 
 // Custom Art Styles are account-wide and owned by the user. CREATE / manage is
@@ -503,6 +504,14 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
       if (!(await canAfford(req.session.userId, COST_ANALYZE))) {
         return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to analyze a style.' });
       }
+      // v3.1.90 -- TD-979. Samples whose file details name a stock library are refused before anything
+      // is stored or spent, and so is a saved sample already marked rejected. Warnings ride along.
+      const _sampleRights = files.map(function (f) { return rightsCheck.metadataCheck(f.buffer); });
+      const _savedRights = await rightsCheck.lookup(existingUrls);
+      let _refusal = null;
+      _sampleRights.forEach(function (r, i) { if (!_refusal && r.verdict === 'reject') _refusal = 'New sample ' + (i + 1) + ': ' + ((r.reasons[0] && r.reasons[0].text) || 'it has a watermark.'); });
+      existingUrls.forEach(function (u, i) { var r = _savedRights[rightsCheck.normUrl(u)]; if (!_refusal && r && r.verdict === 'reject') _refusal = 'Saved sample ' + (i + 1) + ': ' + ((r.reasons[0] && r.reasons[0].text) || 'it has a watermark.'); });
+      if (_refusal) return res.json({ error: _refusal + ' Replace it with a picture you have the rights to. Nothing was charged.' });
       const content = [];
       const sampleUrls = [];
       for (const f of files) {
@@ -511,6 +520,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
           const ext = path.extname(f.originalname) || '.jpg';
           const url = await uploadFile(f.buffer, 'style-sample-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext, f.mimetype);
           if (url) sampleUrls.push(url);
+          if (url) await rightsCheck.record(url, _sampleRights[files.indexOf(f)], { kind: 'style-sample', userId: req.session.userId });   // v3.1.90 -- TD-979
         } catch (e) { console.error('sample upload failed:', e.message); }
       }
       for (const u of existingUrls) {
@@ -552,6 +562,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         answers: shaped.answers,
         descriptions: shaped.descriptions,
         samples_disagree: shaped.samples_disagree,
+        rights: rightsCheck.responseRights(await rightsCheck.lookup(sampleUrls)),   // v3.1.90 -- TD-979
         questions: STYLE_QUESTIONS.map(function (q) { return { key: q[0], label: q[1], help: q[2] }; })
       });
     } catch (e) {

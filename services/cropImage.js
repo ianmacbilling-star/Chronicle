@@ -41,6 +41,8 @@ async function cutAndStore(url, o) {
                   : await pipe.flatten({ background: '#ffffff' }).jpeg({ quality: 92 }).toBuffer({ resolveWithObject: true });
   const name = o.name + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + (png ? '.png' : '.jpg');
   const stored = await uploadFile(out.data, name, png ? 'image/png' : 'image/jpeg');
+  // v3.1.90 -- TD-979. A cut-out of a rejected picture is still that picture.
+  try { await require('./rightsCheck').inherit(url, stored); } catch (e) { /* non-fatal */ }
   return { url: stored, width: out.info.width, height: out.info.height };
 }
 

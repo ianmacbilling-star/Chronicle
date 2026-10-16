@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.90",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3190-upload-rights-check",
+        "kind": "feature",
+        "public": true,
+        "summary": "Uploaded pictures are now checked for watermarks and stock-photo labels. A watermarked or stock picture is marked in red and left out of generations until you replace it; a signed picture gets a reminder to use only art you have the rights to.",
+        "detail": "Upload an asset or Upload your own onto a panel with a clearly watermarked picture (for example a stock photo preview with its logo across it): a red box says it cannot be used, and the picture shows a red outline and a red note until it is replaced; the asset is no longer used as a reference in new pictures. Upload a picture with an artist signature in a corner: an amber reminder, and the picture is used as normal. Upload a stock photo whose file details name Getty, Shutterstock, iStock or similar, as a character picture, an asset, a panel picture or a custom style sample: refused or marked the same way. A plain photo or drawing: nothing is said. The check costs no tokens.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.89",
     "staged_on": "2026-10-16",
     "entries": [

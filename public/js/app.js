@@ -35247,3 +35247,168 @@ function _helpFormat(text) {
   s = s.replace(/(^|[^\w*])[*]([^*\s\n](?:[^*\n]*[^*\s\n])?)[*](?![\w*])/g, '$1<em>$2</em>');
   return s;
 }
+
+// =================================================================================================
+// v3.1.90 -- TD-979. WATERMARKS, SIGNATURES AND PICTURE DETAILS ON UPLOADED PICTURES.
+// Spec: claude/UPLOAD_RIGHTS_CHECK_SPEC.md. Ian, 2026-10-16: watermarks are rejected, signatures warn,
+// and a rejected picture "stays with a red note until replaced".
+//
+// TWO PIECES, BOTH GENERIC, so no upload screen needs its own copy (the twin rule, section 5c):
+//   1. Every upload is a FormData POST or PUT. When its JSON reply carries `rights`, say so at once
+//      (_cmpRightsAnnounce). One wrapper round window.fetch covers every upload screen, now and later.
+//   2. Any picture on screen whose address has a verdict is marked: a red outline and a red note under
+//      it for a rejected one, an amber outline for a warned one, with the reason as its tooltip. A
+//      MutationObserver finds pictures as they appear; verdicts are asked for in batches from
+//      POST /api/images/rights and cached. A replaced picture has a new address, so its note goes.
+// =================================================================================================
+var _cmpRightsCache = {};          // address -> { verdict, reasons } or null (asked, nothing to say)
+var _cmpRightsPending = {};
+var _cmpRightsTimer = null;
+
+function _cmpRightsKey(u) { return String(u || '').split('#')[0].split('?')[0].trim(); }
+
+function _cmpRightsText(r) {
+  var rs = (r && r.reasons) || [];
+  return rs.map(function (x) { return x && x.text; }).filter(Boolean).join(' ');
+}
+
+function _cmpRightsAnnounce(items) {
+  try {
+    (items || []).forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
+    var rej = (items || []).filter(function (i) { return i && i.verdict === 'reject'; });
+    var warn = (items || []).filter(function (i) { return i && i.verdict === 'warn'; });
+    if (!rej.length && !warn.length) return;
+    var old = document.getElementById('cmp-rights-box');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var box = document.createElement('div');
+    box.id = 'cmp-rights-box';
+    box.setAttribute('role', 'alert');
+    var red = rej.length > 0;
+    box.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99998;max-width:520px;width:calc(100% - 24px);box-sizing:border-box;' +
+      'background:' + (red ? '#2a0f0f' : '#2a210c') + ';color:#f5efe2;border:2px solid ' + (red ? '#dc2626' : '#d97706') + ';border-radius:10px;' +
+      'padding:12px 36px 12px 14px;font-family:inherit;font-size:13px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,0.5);';
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:700;margin-bottom:4px;color:' + (red ? '#fca5a5' : '#fcd34d') + ';';
+    h.textContent = red ? 'This picture can’t be used' : 'Check you have the rights to this picture';
+    var p = document.createElement('div');
+    var first = red ? rej[0] : warn[0];
+    p.textContent = _cmpRightsText(first) + (red
+      ? ' It stays where you put it, marked in red, until you replace it with a picture you have the rights to.'
+      : ' You can keep using it if it’s yours or you have permission (for example art you commissioned).');
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Close');
+    x.innerHTML = '&times;';
+    x.style.cssText = 'position:absolute;top:6px;right:8px;background:none;border:none;color:inherit;font-size:20px;line-height:1;cursor:pointer;opacity:0.7;';
+    x.onclick = function () { if (box.parentNode) box.parentNode.removeChild(box); };
+    box.appendChild(h); box.appendChild(p); box.appendChild(x);
+    document.body.appendChild(box);
+    setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, red ? 20000 : 12000);
+    _cmpRightsScan(document.body);
+  } catch (e) {}
+}
+
+// Mark one picture from the cache. Safe to call again: it clears its own marks first.
+function _cmpRightsMark(img) {
+  try {
+    if (!img || !img.getAttribute) return;
+    var key = _cmpRightsKey(img.currentSrc || img.src || img.getAttribute('src'));
+    var r = _cmpRightsCache[key];
+    var was = img.getAttribute('data-rights') || '';
+    var now = (r && r.verdict) || '';
+    if (was === now + '|' + key) return;
+    var note = img.nextSibling;
+    if (note && note.nodeType === 1 && note.className === 'cmp-rights-note') note.parentNode.removeChild(note);
+    img.style.outline = ''; img.style.outlineOffset = '';
+    if (img.getAttribute('data-rights-title') !== null) { img.title = img.getAttribute('data-rights-title'); img.removeAttribute('data-rights-title'); }
+    img.setAttribute('data-rights', now + '|' + key);
+    if (!now) return;
+    if (img.getAttribute('data-rights-title') === null) img.setAttribute('data-rights-title', img.title || '');
+    img.title = _cmpRightsText(r);
+    img.style.outline = (now === 'reject' ? '3px solid #dc2626' : '3px solid #d97706');
+    img.style.outlineOffset = '-3px';
+    if (now === 'reject' && img.parentNode) {
+      var n = document.createElement('div');
+      n.className = 'cmp-rights-note';
+      n.setAttribute('role', 'note');
+      n.style.cssText = 'color:#fecaca;background:#7f1d1d;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+      n.textContent = 'Watermark or stock picture — replace this picture. ' + _cmpRightsText(r);
+      img.parentNode.insertBefore(n, img.nextSibling);
+    }
+  } catch (e) {}
+}
+
+function _cmpRightsWanted(src) {
+  var s = String(src || '');
+  return /^https?:\/\//i.test(s) && s.indexOf(location.origin + '/images/') !== 0;
+}
+
+function _cmpRightsScan(root) {
+  try {
+    if (!root || !root.querySelectorAll) return;
+    var imgs = root.tagName === 'IMG' ? [root] : root.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var src = imgs[i].getAttribute('src');
+      if (!_cmpRightsWanted(src)) continue;
+      var key = _cmpRightsKey(src);
+      if (Object.prototype.hasOwnProperty.call(_cmpRightsCache, key)) _cmpRightsMark(imgs[i]);
+      else _cmpRightsPending[key] = true;
+    }
+    if (Object.keys(_cmpRightsPending).length && !_cmpRightsTimer) _cmpRightsTimer = setTimeout(_cmpRightsAsk, 400);
+  } catch (e) {}
+}
+
+function _cmpRightsAsk() {
+  _cmpRightsTimer = null;
+  var urls = Object.keys(_cmpRightsPending).slice(0, 200);
+  urls.forEach(function (u) { delete _cmpRightsPending[u]; });
+  if (!urls.length) return;
+  fetch('/api/images/rights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: urls }) })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var v = (d && d.verdicts) || {};
+      urls.forEach(function (u) { _cmpRightsCache[u] = v[u] || null; });
+      var imgs = document.querySelectorAll('img');
+      for (var i = 0; i < imgs.length; i++) _cmpRightsMark(imgs[i]);
+      if (Object.keys(_cmpRightsPending).length && !_cmpRightsTimer) _cmpRightsTimer = setTimeout(_cmpRightsAsk, 400);
+    })
+    .catch(function () { urls.forEach(function (u) { _cmpRightsCache[u] = null; }); });
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.fetch && !window._cmpRightsWrapped) {
+  window._cmpRightsWrapped = true;
+  (function () {
+    var _origFetch = window.fetch;
+    window.fetch = function (input, init) {
+      var p = _origFetch.apply(this, arguments);
+      try {
+        var m = String((init && init.method) || 'GET').toUpperCase();
+        if (init && (m === 'POST' || m === 'PUT') && typeof FormData !== 'undefined' && init.body instanceof FormData) {
+          p.then(function (r) {
+            try {
+              if (String(r.headers.get('content-type') || '').indexOf('json') < 0) return;
+              r.clone().json().then(function (d) {
+                if (d && !d.error && Array.isArray(d.rights) && d.rights.length) _cmpRightsAnnounce(d.rights);
+              }).catch(function () {});
+            } catch (e) {}
+          }).catch(function () {});
+        }
+      } catch (e) {}
+      return p;
+    };
+  })();
+  var _cmpRightsBoot = function () {
+    try {
+      _cmpRightsScan(document.body);
+      new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var rec = list[i];
+          if (rec.type === 'attributes') { _cmpRightsScan(rec.target); continue; }
+          for (var j = 0; j < rec.addedNodes.length; j++) if (rec.addedNodes[j].nodeType === 1) _cmpRightsScan(rec.addedNodes[j]);
+        }
+      }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+    } catch (e) {}
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _cmpRightsBoot);
+  else _cmpRightsBoot();
+}

@@ -31,6 +31,7 @@ const path = require('path');
 const { versionsForCampaign } = require('../database/db');     // v3.1.23 -- TD-918 (second destructures; the lines above are untouched)
 const { getCampaignRole } = require('../middleware/auth');
 const { restoreCopy } = require('../storage/storage');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 
 // Use memory storage - we handle the upload ourselves via storage layer
 const upload = multer({
@@ -53,7 +54,12 @@ async function handleFileUpload(files, fieldname, oldUrl) {
   // Generate unique filename
   const ext = path.extname(file.originalname) || '.jpg';
   const filename = 'char-' + Date.now() + '-' + fieldname + ext;
-  return await uploadFile(file.buffer, filename, file.mimetype);
+  const url = await uploadFile(file.buffer, filename, file.mimetype);
+  // v3.1.90 -- TD-979. The file details only, read by uploadGuard from the original bytes. The visual
+  // check is part of the prompt build that already looks at these pictures (v3.1.91), so nothing is
+  // spent here. ONE place, so every character upload (create and update, all five slots) gets it.
+  if (url) await rightsCheck.checkUpload(url, file, null, { kind: 'character' });
+  return url;
 }
 
 // GET all characters
@@ -275,6 +281,8 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload
     ).run(req.params.campaignId, name.trim(), player_name || '', cls || '', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, parseHeightFt(req.body.height_ft), now, req.session.userId);
 
     const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+    // v3.1.90 -- TD-979. What the check found on the pictures uploaded just now; the page says so.
+    if (character) character.rights = rightsCheck.responseRights(await rightsCheck.lookup([image, image_portrait, image_fullbody, image_action, image_other]));
     res.json(character);
   } catch(e) {
     console.error('Character create error:', e.message);
@@ -349,6 +357,11 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
     }
 
     const updated = await db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
+    // v3.1.90 -- TD-979. Only the pictures uploaded in THIS request, so an old warning is not repeated.
+    if (updated) {
+      const _newUrls = imageFields.filter(function (f) { return req.files && req.files[f] && req.files[f][0]; }).map(function (f) { return images[f]; });
+      updated.rights = rightsCheck.responseRights(await rightsCheck.lookup(_newUrls));
+    }
     res.json(updated);
   } catch(e) {
     console.error('Character update error:', e.message);

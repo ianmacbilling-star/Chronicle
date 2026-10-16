@@ -363,7 +363,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
       'WHERE ch.campaign_id = ?'
     ).all(viewForkId, req.params.campaignId);
     await imageHelpers.attachPriorReferences(db, _refChars, session.id, req.params.campaignId, viewForkId);
-    const _refAssets = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+    const _refAssets = await db.prepare(imageHelpers.ASSET_REF_SQL).all(req.params.campaignId);   // v3.1.90 -- TD-979
 
     // One query for every explicit cast on this fork, rather than two per
     // panel: a session can hold a great many panels.
@@ -1221,9 +1221,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     ).all(viewForkId, campaignId);
     await imageHelpers.attachPriorReferences(db, chars, sessionId, campaignId);
 
-    const assets = await db.prepare(
-      'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
-    ).all(campaignId);
+    const assets = await db.prepare(imageHelpers.ASSET_REF_SQL).all(campaignId);   // v3.1.90 -- TD-979
 
     // Pass 2 — explicit per-panel casts for this version (only panels the user
     // has edited have rows; panels without rows fall back to name-match).
@@ -1500,7 +1498,7 @@ async function panelReferenceCast(db, moment, explicitIds) {
 // and the picker's own empty-state sentence already says as much.
 async function panelReferenceAssets(db, moment, explicitAssetIds) {
   try {
-    const rows = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(moment.campaign_id);
+    const rows = await db.prepare(imageHelpers.ASSET_REF_SQL).all(moment.campaign_id);   // v3.1.90 -- TD-979
     const row = await db.prepare('SELECT prompt, description, title FROM moments WHERE id = ?').get(moment.id);
     if (!row) return [];
     const text = (row.prompt || '') + ' ' + (row.description || '') + ' ' + (row.title || '');
