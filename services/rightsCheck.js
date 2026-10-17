@@ -122,7 +122,7 @@ async function visionCheck(buf, ctx) {
           model: model, max_tokens: 200, system: VISION_SYSTEM,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: small.toString('base64') } },
-            { type: 'text', text: 'Check this picture.' }
+            { type: 'text', text: 'Check this picture.' + (ctx.hint ? ' ' + ctx.hint : '') }   // v3.1.99: a hint for lettering references
           ] }]
         }),
         signal: ac ? ac.signal : undefined
@@ -339,6 +339,38 @@ async function refuseRejected(res, urls, tail) {
   } catch (e) { return false; }
 }
 
+// v3.1.99 -- TD-979. A TITLE BUILDER REFERENCE IS A PICTURE OF LETTERING. Ian, 2026-10-17: "These are going to be
+// pictures of Lettering. Can AI tell the difference between a watermark and actual Lettering?" Told what it is
+// looking at, yes: the lettering to copy is the subject; a watermark is laid over the picture to mark its owner.
+var LETTERING_HINT = 'This picture is a LETTERING REFERENCE: its main lettering is the subject the person wants copied, ' +
+  'and is never a watermark however large or styled. Only answer watermark true for text or a logo laid over the picture ' +
+  'to mark who owns it or where it came from: a stock library name, a web address, a social media handle, a copyright notice, ' +
+  'or a sample or preview stamp.';
+
+// v3.1.99 -- TD-979. Ian: the Title Builder looks at its reference "when they hit the button", not at upload. A
+// stored picture is looked at ONCE: a verdict already recorded is used as it is; a clean answer is remembered
+// for the life of the process; a look that failed (unchecked) is not remembered, so the next press asks again.
+// Returns { verdict, reasons } and records warn/reject. Fails open. Never throws.
+var _lookedOk = new Set();
+async function checkReference(url, ctx) {
+  ctx = ctx || {};
+  var u = normUrl(url);
+  if (!u) return { verdict: 'ok', reasons: [] };
+  try {
+    var found = (await lookup([u]))[u];
+    if (found) return found;
+    if (_lookedOk.has(u)) return { verdict: 'ok', reasons: [] };
+    var fetchBuf = ctx.fetchBuf || function (x) { return require('../storage/storage').fetchFile(x); };
+    var buf = await fetchBuf(u);
+    if (!buf || !buf.length) return { verdict: 'unchecked', reasons: [] };
+    var v = await visionCheck(buf, ctx);
+    var r = combine(metadataCheck(buf), v);
+    if (r.verdict === 'warn' || r.verdict === 'reject') await record(u, r, ctx);
+    else if (v.verdict === 'ok') _lookedOk.add(u);
+    return { verdict: (r.verdict === 'ok' && v.verdict === 'unchecked') ? 'unchecked' : r.verdict, reasons: r.reasons };
+  } catch (e) { return { verdict: 'unchecked', reasons: [] }; }
+}
+
 // v3.1.91 -- TD-979. Split a reply into its text and its RIGHTS: line (see RIGHTS_LINE_INSTRUCTION). Every
 // RIGHTS line is removed from the text, whether or not it parses, so it can never reach a prompt.
 function splitRightsLine(reply) {
@@ -371,6 +403,7 @@ module.exports = {
   isRejectedSync: isRejectedSync, maskUrl: maskUrl, maskMoments: maskMoments, maskSession: maskSession,          // v3.1.92
   splitRejected: splitRejected,                                                                                  // v3.1.93
   refuseRejected: refuseRejected,                                                                                // v3.1.96
+  checkReference: checkReference, LETTERING_HINT: LETTERING_HINT,                                                // v3.1.99
   maskSessions: maskSessions, maskCharacters: maskCharacters, maskCampaign: maskCampaign,                      // v3.1.92
   _setFetch: function (f) { _fetch = f; }
 };

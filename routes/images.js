@@ -2636,6 +2636,21 @@ router.post('/title-build', requireAuth, async function (req, res) {
     const description = String((req.body && req.body.description) || '').trim();
     const refUrl = String((req.body && req.body.referenceUrl) || '').trim();
 
+    // v3.1.99 -- TD-979. THE REFERENCE IS LOOKED AT HERE, when Generate is pressed (Ian), before the image model
+    // is called and before anything is charged. Told it is lettering, so the lettering is not taken for a
+    // watermark. A watermark refuses; a signature warns and the title is still drawn. Looked at once per picture.
+    let _refRights = [];
+    if (refUrl) {
+      const _rr = await rightsCheck.checkReference(refUrl, { kind: 'title-ref', userId: req.session.userId, campaignId: campaignId, hint: rightsCheck.LETTERING_HINT });
+      const _rk = rightsCheck.normUrl(refUrl);
+      if (_rr.verdict === 'reject') {
+        const _why = (_rr.reasons || []).filter(function (x) { return x && x.kind !== 'signature' && x.kind !== 'copyright'; })[0];
+        return res.json({ error: ((_why && _why.text) || 'This reference picture has a watermark.') + ' It can\u2019t be used as a reference. Choose another picture. Nothing was charged.',
+          code: 'RIGHTS_REJECTED', rights: [{ url: _rk, verdict: 'reject', reasons: _rr.reasons || [] }] });
+      }
+      if (_rr.verdict === 'warn') _refRights = [{ url: _rk, verdict: 'warn', reasons: _rr.reasons || [] }];
+    }
+
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
     const modelKey = await getSelectedModel(db);
@@ -2716,7 +2731,7 @@ router.post('/title-build', requireAuth, async function (req, res) {
       console.error('title-build: cut ran but the stored object has no alpha channel -- ' + cutRes.url);
     }
     const cutFinal = (cutOk === null) ? cutRes.cut : (cutRes.cut && cutOk);
-    return res.json({ image: cutRes.url, source: srcUrl, title: bookTitle, subtitle: subtitle, cut: cutFinal });
+    return res.json({ image: cutRes.url, source: srcUrl, title: bookTitle, subtitle: subtitle, cut: cutFinal, rights: _refRights });   // v3.1.99: a signed reference warns
   } catch (e) {
     console.error('title-build error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });

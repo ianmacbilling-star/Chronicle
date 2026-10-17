@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.99",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3199-title-builder-reference-check",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Title Builder now looks at your reference picture when you press Generate. One with a watermark (a stock library mark, a web address or social handle stamped on it, a copyright notice) is refused before anything is drawn or charged, and is marked red in its slot; a signed one is marked amber and still used. The lettering you want copied is never mistaken for a watermark.",
+        "detail": "Open the Title Builder, add a reference picture with a watermark across it and press Generate: a red note by the button says it can\u2019t be used and nothing was charged, the token balance does not move, and the picture in the slot is outlined red. Use clean decorative lettering instead: Generate draws the title as before. The same picture is looked at only once, so pressing Generate again costs nothing extra. Test pictures: 08 (clean lettering, should pass), 09 (lettering with a stock watermark, should be refused), 10 (lettering with a web address in a corner, should be refused) in the rights-test folder.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.98",
     "staged_on": "2026-10-17",
     "entries": [
