@@ -8120,13 +8120,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
 
   // Cover thumbnail: campaign cover image, else the first available panel image.
-  var coverUrl = campaign.cover_image_url || '';
-  if (!coverUrl) {
-    for (var si = 0; si < sessionsWithData.length && !coverUrl; si++) {
-      var ms = sessionsWithData[si].moments || [];
-      for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) { coverUrl = ms[mi].image; break; } }
-    }
+  // v3.1.96 -- TD-979. THE FIRST ONE THAT IS NOT REJECTED. The thumbnail is chosen here, apart from the book
+  // (which masks at render), and it is what the public page, its link preview, the Library and My Stuff show,
+  // so a rejected campaign cover or first panel was published as the story's face (testers, 2026-10-17). With
+  // no clean picture at all the story has no cover image, as a story with no pictures does today.
+  var _coverCands = [campaign.cover_image_url || ''];
+  for (var si = 0; si < sessionsWithData.length; si++) {
+    var ms = sessionsWithData[si].moments || [];
+    for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) _coverCands.push(ms[mi].image); }
   }
+  var coverUrl = (await rightsCheck.splitRejected(_coverCands.filter(Boolean))).clean[0] || '';
 
   var title = bookTitle || campaign._memberBookTitle || campaign.name;
   var authorName = '';
@@ -8295,7 +8298,7 @@ router.get('/my-stories', requireAuth, async function(req, res) {
     // the failure nobody thinks to test. visibility and share_token ride along so the
     // page can badge the state and offer the link that actually works for it.
     var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at }; });
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: rightsCheck.maskUrl(r.cover_url || ''), pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);

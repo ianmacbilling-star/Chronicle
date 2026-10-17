@@ -259,6 +259,7 @@ router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async func
       'SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?'
     ).get(archiveId, req.params.campaignId);
     if (!archive || !archive.image_url) return res.status(404).json({ error: 'Source image not found.' });
+    if (await rightsCheck.refuseRejected(res, [archive.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96 -- TD-979
 
     let imageUrl;
     const crop = cropMath.readFrac(req.body && req.body.crop);   // v3.1.17 -- none: copy as before

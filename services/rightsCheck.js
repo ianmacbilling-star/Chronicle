@@ -324,6 +324,21 @@ async function splitRejected(urls) {
   return out;
 }
 
+// v3.1.96 -- TD-979. Ian, 2026-10-17: "we shouldn't let them archive a flagged image. That way it can't be
+// used as a cover. Still stop it on a cover." Answers a request that would archive a rejected picture, or put
+// one somewhere (a cover, the campaign picture, a replacement), with the RIGHTS_REJECTED refusal every page
+// already shows by the button pressed, and returns true; false when nothing is rejected. Fails open.
+async function refuseRejected(res, urls, tail) {
+  try {
+    var list = (urls || []).filter(function (u) { return typeof u === 'string' && u; });
+    if (!list.length) return false;
+    var s = await splitRejected(list);
+    if (!s.rejected.length) return false;
+    res.json({ error: s.reason + ' ' + tail, code: 'RIGHTS_REJECTED', rights: s.rights });
+    return true;
+  } catch (e) { return false; }
+}
+
 // v3.1.91 -- TD-979. Split a reply into its text and its RIGHTS: line (see RIGHTS_LINE_INSTRUCTION). Every
 // RIGHTS line is removed from the text, whether or not it parses, so it can never reach a prompt.
 function splitRightsLine(reply) {
@@ -355,6 +370,7 @@ module.exports = {
   REMOVED_PICTURE: REMOVED_PICTURE, startRejectedCache: startRejectedCache, refreshRejected: refreshRejected,   // v3.1.92
   isRejectedSync: isRejectedSync, maskUrl: maskUrl, maskMoments: maskMoments, maskSession: maskSession,          // v3.1.92
   splitRejected: splitRejected,                                                                                  // v3.1.93
+  refuseRejected: refuseRejected,                                                                                // v3.1.96
   maskSessions: maskSessions, maskCharacters: maskCharacters, maskCampaign: maskCampaign,                      // v3.1.92
   _setFetch: function (f) { _fetch = f; }
 };

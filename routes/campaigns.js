@@ -6,6 +6,7 @@ const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = require('../storage/storage');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.96 -- TD-979, a rejected picture is never archived or made a cover
 const { flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422
 
@@ -122,6 +123,14 @@ router.put('/:id', requireAuth, async function(req, res) {
   if (!role || role.role !== 'dm') return res.status(403).json({ error: 'DM access required' });
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(req.params.id);
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  // v3.1.96 -- TD-979. A rejected picture cannot become a cover, the title page or the campaign picture. Only a
+  // CHANGED field is checked, so a save that leaves an older rejected picture where it was still goes through.
+  {
+    const _newPics = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'campaign_image_url']
+      .filter(function (f) { return typeof req.body[f] === 'string' && req.body[f] && req.body[f] !== campaign[f]; })
+      .map(function (f) { return req.body[f]; });
+    if (await rightsCheck.refuseRejected(res, _newPics, 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
+  }
   const now = new Date().toISOString();
   var _allowNovel = (req.body.allow_player_novel_access !== undefined)
     ? (req.body.allow_player_novel_access === true || req.body.allow_player_novel_access === 'true' || req.body.allow_player_novel_access === 1)
@@ -476,6 +485,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     }
     _curating = true;
   }
+  // v3.1.96 -- TD-979. Your own book's covers and title page: never a rejected picture.
+  if (await rightsCheck.refuseRejected(res, [b.cover_image_url, b.back_cover_image_url, b.title_image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
@@ -750,6 +761,7 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     if (t.error) return res.status(403).json({ error: t.error });
     const liveUrl = t.current.url;
     if (!liveUrl) return res.json({ error: 'There is no built title to archive yet.' });
+    if (await rightsCheck.refuseRejected(res, [liveUrl], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;   // v3.1.96
 
     // Same cap, same message, same tier as every other archive. Ian: "Fine for the count too."
     try {
@@ -813,6 +825,7 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
     const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.campaignId);
     if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });
     if (arch.image_type !== 'title') return res.json({ error: 'That archived image is not a title.' });
+    if (await rightsCheck.refuseRejected(res, [arch.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96
 
     const freshUrl = await restoreCopy(arch.image_url);
     let meta = {};
@@ -884,6 +897,7 @@ router.post('/:campaignId/my-book-meta/title-ref-from-archive', requireAuth, ver
 
     let meta = {};
     try { meta = arch.layout_meta ? (typeof arch.layout_meta === 'object' ? arch.layout_meta : JSON.parse(arch.layout_meta)) : {}; } catch (e) { meta = {}; }
+    if (await rightsCheck.refuseRejected(res, [arch.image_url, meta && meta.src], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96
     if (meta && meta.src) return res.json({ url: await restoreCopy(meta.src) });
 
     const axios = require('axios');

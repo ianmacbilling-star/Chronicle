@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.96",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3196-no-rejected-covers-or-archive",
+        "kind": "feature",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo can no longer be archived, or chosen from the Archive as a cover, campaign picture, title or replacement. A published story never uses one as its cover: publishing picks the first clean picture, and a story page, the Library, your Published Stories and your Bookshelf show a plain box instead of one already there. Link previews leave it out.",
+        "detail": "Press Archive on a rejected (red) panel or character picture: a red note by the button says it can\u2019t be archived, and nothing is added. A rejected picture already in the Archive shows red there; choosing it as the front or back cover, the campaign picture, a panel or character replacement, an asset or a title is refused the same way. Put a rejected picture on the first panel of a book with no campaign cover and publish: the story\u2019s cover is the next clean picture. A story published earlier with a rejected cover shows the grey Picture removed box on its page, in the Library, on Published Stories and on the Bookshelf, and its link preview has no picture. Signed (amber) pictures are unaffected.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.95",
     "staged_on": "2026-10-17",
     "entries": [

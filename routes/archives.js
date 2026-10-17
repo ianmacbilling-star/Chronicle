@@ -9,6 +9,7 @@ const { getEffectiveTier, getTier } = require('../middleware/tiers');
 const genresvc = require('../services/genres');   // v3.0.827 -- TD-664/TD-665, the sensitive-genre gate
 const cropMath = require('../services/cropMath');     // v3.1.18 -- TD-911
 const cropImage = require('../services/cropImage');   // v3.1.18
+const rightsCheck = require('../services/rightsCheck');   // v3.1.96 -- TD-979, a rejected picture is never archived or made a cover
 // The cover art frame in routes/pdf.js: .cover-image-layout pads an 8.5in page by 0.7in, so the frame
 // is 7.1in wide, and the print rule pins it 9.6in tall; the back cover uses the same frame. Matches
 // COVER_CROP_ASPECT in app.js (the guard proves both, and reads pdf.js for the numbers).
@@ -55,6 +56,7 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
         return res.status(403).json({ error: 'That moment is not in this campaign' });
       }
       if (!moment.image) return res.json({ error: 'This panel has no image to archive yet.' });
+      if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;   // v3.1.96
 
       const artStyle = moment.style || null;
       // Stamp the resolved display name for a custom style so the archive label
@@ -144,6 +146,7 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
         if (!ch.canonical_reference_url) return res.json({ error: 'This character has no reference image to archive yet.' });
         sourceUrl = ch.canonical_reference_url; prompt = ch.canonical_prompt;
       }
+      if (await rightsCheck.refuseRejected(res, [sourceUrl], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;   // v3.1.96
       const archivedUrl = await archiveCopy(sourceUrl);
       const now = new Date().toISOString();
       const result = await db.prepare(
@@ -373,6 +376,7 @@ router.post('/:archiveId/cover-crop', requireAuth, verifyCampaignMember, async f
       'SELECT id, image_url FROM campaign_archives WHERE id = ? AND campaign_id = ?'
     ).get(req.params.archiveId, req.params.campaignId);
     if (!archive || !archive.image_url) return res.json({ error: 'Archived image not found.' });
+    if (await rightsCheck.refuseRejected(res, [archive.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96: no rejected cover
     const c = req.body && req.body.crop;
     const frac = cropMath.readFrac(c && typeof c === 'object' ? { x: c.x, y: c.y, w: c.w, h: 1 } : null);
     if (!frac) return res.json({ error: 'No framing was sent. Please try again.' });
@@ -396,6 +400,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       'SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?'
     ).get(req.params.archiveId, req.params.campaignId);
     if (!archive || !archive.image_url) return res.json({ error: 'Archived image not found.' });
+    if (await rightsCheck.refuseRejected(res, [archive.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96: every target
     const targetType = req.body && req.body.target_type;
     const now = new Date().toISOString();
 

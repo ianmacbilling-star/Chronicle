@@ -6997,7 +6997,7 @@ function setCampaignCover(archiveId, cb) {
       showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the cover.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the cover.');
     }
   })
   .catch(function(){ showError('Could not update the campaign cover.'); });
@@ -7024,7 +7024,7 @@ function setCampaignBackCover(archiveId, cb) {
       showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the back cover.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the back cover.');
     }
   })
   .catch(function(){ showError('Could not update the back cover.'); });
@@ -7052,7 +7052,7 @@ function setCampaignTitleImage(archiveId, cb) {
       showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the title image.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the title image.');
     }
   })
   .catch(function(){ showError('Could not update the title-page image.'); });
@@ -10906,7 +10906,8 @@ function _prepMetaWrite(patch, cb) {
       // to read it out of the browser console. The two 403s this route can return say different
       // things -- wrong fork versus wrong version owner -- and neither was reaching the screen.
       .then(function (r) {
-        if (r.ok) return r.json();
+        // v3.1.96 -- a refusal over a picture's rights comes back 200 with code RIGHTS_REJECTED: a failed write.
+        if (r.ok) return r.json().then(function (j) { if (_cmpRightsRefused(j)) { state._prepRightsRefused = true; return null; } return j; });
         return r.json().catch(function () { return null; }).then(function (e) {
           var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
           try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
@@ -10931,7 +10932,8 @@ function _prepMetaWrite(patch, cb) {
         if (!m) {
           // Put the stored truth back on screen rather than leaving a value nothing accepted.
           if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
-          if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
+          if (state._prepRightsRefused) state._prepRightsRefused = false;   // v3.1.96: the note by the button said why
+          else if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
         }
         if (cb) cb(m);
         return m;
@@ -12541,7 +12543,7 @@ function _prepMemberSetImage(kind, url) {
     .then(function(r){ return r.json(); })
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
-    .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })
+    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.1.96: a refusal is not the new meta
     .catch(function(){ showError('Could not update your book image.'); });
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
@@ -16077,7 +16079,7 @@ function applyArchiveToTarget(archiveId) {
     fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody({ archiveId: archiveId }))
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
+      if (!d || d.error) { if (!_cmpRightsRefused(d)) alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
       closeReplacePicker();
       // v3.0.658 -- TD-452. THE READER STILL DESCRIBED THE OLD CONTRACT.
       //
@@ -16118,7 +16120,7 @@ function applyArchiveToTarget(archiveId) {
     fetch('/api/campaigns/' + cid + '/my-book-meta/title-ref-from-archive', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || d.error || !d.url) { alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
+      if (!d || d.error || !d.url) { if (!_cmpRightsRefused(d)) alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
       closeReplacePicker();
       _tbSetRef(d.url);
     }).catch(function (e) { alert('Could not use that as a reference: ' + e.message); });
@@ -16140,7 +16142,7 @@ function applyArchiveToTarget(archiveId) {
   fetch('/api/campaigns/' + cid + '/archives/' + archiveId + '/apply', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { alert(data.message || data.error); return; }
+    if (data && data.error) { if (!_cmpRightsRefused(data)) alert(data.message || data.error); return; }
     closeReplacePicker();
     if (ctx.mode === 'moment') { if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages(); }
     else if (ctx.mode === 'canonical') {
@@ -16705,7 +16707,7 @@ function toggleArchiveMoment(momentId) {
         showAlert(isArchived ? 'Removed from your Archive.' : 'Image saved to your Archive.');
         renderStoryboard();
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -16736,7 +16738,7 @@ function toggleArchiveCharSnapshot(characterId) {
           btn.textContent = r.archived ? 'Archived' : 'Archive';
         }
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -16765,7 +16767,7 @@ function toggleArchiveCharCanonical(charId) {
           btn.textContent = char.archived ? 'Archived' : 'Archive';
         }
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -35342,6 +35344,9 @@ var _cmpRightsPending = {};
 var _cmpRightsTimer = null;
 
 function _cmpRightsKey(u) { return String(u || '').split('#')[0].split('?')[0].trim(); }
+// v3.1.96 -- a reply refusing a picture over its rights. The note by the button already says why, so callers skip
+// their own alert or toast, and never treat the reply as a saved result.
+function _cmpRightsRefused(d) { return !!(d && d.code === 'RIGHTS_REJECTED'); }
 
 function _cmpRightsText(r) {
   var rs = (r && r.reasons) || [];
