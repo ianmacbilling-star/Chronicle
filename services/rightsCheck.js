@@ -371,6 +371,26 @@ async function checkReference(url, ctx) {
   } catch (e) { return { verdict: 'unchecked', reasons: [] }; }
 }
 
+// v3.2.00 -- TD-979. THE QUICK LOOK AT A PICTURE NOT STORED YET (a style reference straight from the computer). Ian,
+// 2026-10-17: the style refusal took seventeen seconds, inside the full analysis -- "can you do it quicker?". The
+// small Haiku look alone takes two or three. Remembered by the picture's bytes (sha256), so the same picture sent
+// again is not looked at again; a failed look (unchecked) is not remembered. Vision only: the caller combines it
+// with the file details. Never throws.
+var _quickCache = new Map();
+async function quickLook(buf, ctx) {
+  try {
+    if (!buf || !buf.length) return { verdict: 'unchecked', reasons: [] };
+    var h = require('crypto').createHash('sha256').update(buf).digest('hex');
+    if (_quickCache.has(h)) return _quickCache.get(h);
+    var v = await visionCheck(buf, ctx);
+    if (v.verdict !== 'unchecked') {
+      if (_quickCache.size >= 500) _quickCache.delete(_quickCache.keys().next().value);
+      _quickCache.set(h, v);
+    }
+    return v;
+  } catch (e) { return { verdict: 'unchecked', reasons: [] }; }
+}
+
 // v3.1.91 -- TD-979. Split a reply into its text and its RIGHTS: line (see RIGHTS_LINE_INSTRUCTION). Every
 // RIGHTS line is removed from the text, whether or not it parses, so it can never reach a prompt.
 function splitRightsLine(reply) {
@@ -404,6 +424,7 @@ module.exports = {
   splitRejected: splitRejected,                                                                                  // v3.1.93
   refuseRejected: refuseRejected,                                                                                // v3.1.96
   checkReference: checkReference, LETTERING_HINT: LETTERING_HINT,                                                // v3.1.99
+  quickLook: quickLook,                                                                                          // v3.2.00
   maskSessions: maskSessions, maskCharacters: maskCharacters, maskCampaign: maskCampaign,                      // v3.1.92
   _setFetch: function (f) { _fetch = f; }
 };

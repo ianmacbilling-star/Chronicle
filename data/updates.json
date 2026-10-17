@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.00",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3200-style-references-quick-look",
+        "kind": "fix",
+        "public": true,
+        "summary": "Analyze in the custom art style builder now refuses a watermarked reference picture in a few seconds instead of after the whole analysis, names it by its slot (Reference 1, Reference 2 and so on), and outlines that reference box in red with the reason until the picture is replaced. A signed reference gets an amber note and Analyze carries on.",
+        "detail": "In Custom Art Styles, start a new style, put a picture with a watermark in Reference 1 and a clean one in Reference 2, and press Analyze: within a few seconds a red note by the button says \u201cReference 1: This picture has a watermark\u2026 Nothing was charged.\u201d, the Reference 1 box is outlined red with the reason under it, and the token balance does not move. Replace the picture in Reference 1: the red outline and note go. Put a signed picture in a slot instead: it gets an amber note and the analysis runs as normal. Each picture is looked at once, so pressing Analyze again does not look again.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.99",
     "staged_on": "2026-10-17",
     "entries": [

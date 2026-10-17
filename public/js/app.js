@@ -5718,12 +5718,49 @@ function collectCstyleFiles() {
 }
 function collectCstyleRefs() {
   var files = []; var urls = [];
-  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){
-    if (slotFiles[k]) { files.push(slotFiles[k]); return; }
+  var fileSlots = []; var urlSlots = [];   // v3.2.00 -- which box each picture is in, so a refusal can name it
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){
+    if (slotFiles[k]) { files.push(slotFiles[k]); fileSlots.push(i + 1); return; }
     var pv = document.getElementById('preview-' + k);
-    if (pv && pv.src && /^https?:/i.test(pv.src) && !pv.classList.contains('hidden')) urls.push(pv.src);
+    if (pv && pv.src && /^https?:/i.test(pv.src) && !pv.classList.contains('hidden')) { urls.push(pv.src); urlSlots.push(i + 1); }
   });
-  return { files: files, urls: urls };
+  return { files: files, urls: urls, slots: fileSlots.concat(urlSlots) };
+}
+// v3.2.00 -- TD-979. A REFUSED OR SIGNED REFERENCE IS MARKED ON ITS BOX. The pictures in these boxes usually come
+// straight from the computer and are not stored yet, so the marks the rest of the app hangs on a stored picture
+// cannot reach them. The reply names the slot; the box is outlined (red for a watermark, amber for a
+// signature) with the reason under it, and the mark goes the moment that box's picture changes or is removed.
+function csRightsSlotClear(n) {
+  try {
+    var box = document.getElementById('drop-cstyle_' + n);
+    if (box) { box.style.outline = ''; box.style.outlineOffset = ''; if (box._csRightsObs) { box._csRightsObs.disconnect(); box._csRightsObs = null; } }
+    var note = document.getElementById('cs-rights-note-' + n);
+    if (note && note.parentNode) note.parentNode.removeChild(note);
+  } catch (e) {}
+}
+function csRightsSlotMark(list) {
+  try {
+    for (var n = 1; n <= 4; n++) csRightsSlotClear(n);
+    (list || []).forEach(function (it) {
+      var n = parseInt(it && it.slot, 10); if (!(n >= 1 && n <= 4)) return;
+      var box = document.getElementById('drop-cstyle_' + n); if (!box || !box.parentNode) return;
+      var red = it.verdict === 'reject';
+      box.style.outline = '3px solid ' + (red ? '#dc2626' : '#d97706'); box.style.outlineOffset = '-3px';
+      var note = document.createElement('div');
+      note.id = 'cs-rights-note-' + n; note.setAttribute('role', 'note');
+      note.style.cssText = (red ? 'color:#fecaca;background:#7f1d1d;' : 'color:#fde68a;background:#5c3d0a;') + 'font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+      var why = ((it.reasons || []).map(function (r) { return r && r.text; }).filter(Boolean)).join(' ');
+      note.textContent = red ? ('Watermark or stock picture \u2014 replace this picture. ' + why) : (why + ' Use it only if it\u2019s yours or you have permission.');
+      box.parentNode.insertBefore(note, box.nextSibling);
+      var pv = document.getElementById('preview-cstyle_' + n);
+      if (pv && typeof MutationObserver === 'function') {
+        var was = pv.getAttribute('src');
+        var obs = new MutationObserver(function () { if (pv.getAttribute('src') !== was || pv.classList.contains('hidden')) csRightsSlotClear(n); });
+        obs.observe(pv, { attributes: true, attributeFilter: ['src', 'class'] });
+        box._csRightsObs = obs;
+      }
+    });
+  } catch (e) {}
 }
 function analyzeCustomStyle() {
   cstyleErr('');
@@ -5737,9 +5774,12 @@ function analyzeCustomStyle() {
     var fd = new FormData();
     refs.files.forEach(function(f){ fd.append('images', f); });
     fd.append('sample_urls', JSON.stringify(refs.urls));
+    fd.append('slots', JSON.stringify(refs.slots || []));   // v3.2.00
+    csRightsSlotMark([]);
     fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
       .then(function(r){ return r.json(); })
       .then(function(data){
+        if (data && Array.isArray(data.rights_slots)) csRightsSlotMark(data.rights_slots);   // v3.2.00
         if (data.error) { cstyleErr(data.message || data.error); return; }
         // v3.1.67 -- TD-964. Answers, three descriptions, no winner yet.
         if (Array.isArray(data.questions) && data.questions.length) CS.questions = data.questions;
