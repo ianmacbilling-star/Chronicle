@@ -893,6 +893,7 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
       return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
     }
     if (!char.canonical_reference_url) return res.json({ error: 'There is no reference image to retouch yet.' });
+    if (await rightsCheck.refuseRejected(res, [char.canonical_reference_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
     const instruction = req.body.instruction;
     if (!instruction || !String(instruction).trim()) return res.json({ error: 'Describe the change you want.' });
     const falKey = process.env.FAL_API_KEY || req.body.fal_key;

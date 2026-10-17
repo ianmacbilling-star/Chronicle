@@ -1653,6 +1653,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'You can only retouch your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
   if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
   // v3.0.653 -- TD-444. A DRAWN TITLE IS NOT RETOUCHED FROM HERE.
   //
   // Ian, 2026-08-12: "the retouch option should not show... if the image in the panel came from
@@ -2225,6 +2226,10 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       }
       // No crop, or the composite failed: the original path, unchanged.
       if (!imageUrl) imageUrl = await persistToR2(falUrl, { cutWhite: _cutWhite });
+      // v3.1.98 -- TD-979. A RETOUCH IS AN EDIT OF ITS SOURCE, and keeps the source's rejection, as a copy does
+      // (inherit). The routes refuse a rejected source before charging; this is the net under them, so no edit
+      // can ever turn a rejected picture into an unmarked one. Never throws.
+      if ((job.kind === 'retouch' || job.kind === 'asset_retouch') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
@@ -2773,6 +2778,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const _rtDraft = (own.current && own.current.draft) || null;
     const _rtSrc = (_rtDraft && (_rtDraft.url || _rtDraft.src)) ? _rtDraft : own.current;
     if (!_rtSrc.url && !_rtSrc.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+    if (await rightsCheck.refuseRejected(res, [_rtSrc.src, _rtSrc.url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
 
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });

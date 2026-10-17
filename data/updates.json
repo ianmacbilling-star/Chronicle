@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.98",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3198-no-retouching-a-rejected-picture",
+        "kind": "fix",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo can no longer be retouched: Retouch on an asset, a story panel, a character\u2019s reference picture or a drawn title says why by the button and charges nothing. A retouched picture also keeps the rejection of the picture it was made from, so an edit can never clear the red mark.",
+        "detail": "On a red (rejected) asset, press Edit, then Retouch, type a change and press Retouch image: a red note by the button says it can\u2019t be retouched and nothing was charged; the token balance does not move. The same on a red story panel (Retouch on the Storyboard), on a character\u2019s reference picture and in the Title Builder. Regenerate still works on an asset with a description: it draws a fresh picture from the words, not from the rejected picture. Signed (amber) pictures can be retouched as before.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.97",
     "staged_on": "2026-10-17",
     "entries": [

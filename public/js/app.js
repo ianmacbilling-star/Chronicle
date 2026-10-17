@@ -15755,7 +15755,7 @@ function submitRetouch() {
         }
         hideBusyOverlay('asset-modal-image-body');
         if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
-        else { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }
+        else if (!_cmpRightsRefused(data)) { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }   // v3.1.98
       })
       .catch(function(e){ hideBusyOverlay('asset-modal-image-body'); alert('Could not retouch: ' + e.message); });
     return;
@@ -15852,6 +15852,8 @@ function submitRetouch() {
           if (data && data.error === 'INSUFFICIENT_TOKENS') {
             if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
             else alert(data.message || 'You are out of tokens.');
+          } else if (_cmpRightsRefused(data)) {
+            if (textEl) textEl.textContent = data.error;   // v3.1.98: the note by the button shows too; no alert
           } else {
             alert((data && (data.message || data.error)) || 'Could not retouch the reference image.');
           }

@@ -517,6 +517,9 @@ router.post('/:assetId/retouch', requireAuth, verifyCampaignAssetCreator, async 
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?').get(req.params.assetId, req.params.campaignId);
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
     if (!asset.image_url) return res.json({ error: 'This asset has no image to retouch yet.' });
+    // v3.1.98 -- TD-979. A retouch is an edit OF this picture: a rejected one is refused before anything is
+    // charged (testers, 2026-10-17: it ran, charged a token and handed back an unmarked copy, watermark and all).
+    if (await rightsCheck.refuseRejected(res, [asset.image_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;
     const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!falKey || !webhookUrl) return res.json({ error: 'Image generation is not configured.' });
