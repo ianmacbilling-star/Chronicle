@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.95",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3195-help-on-three-dialogs",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Title Builder, the character window and the campaign details window (new campaign and editing) now have a ?s button, like the Custom Art Style builder and Retouch: a few tips for that window, then ask us anything about it.",
+        "detail": "Open each window and press ?s at the top right: the help box opens over the window with tips for it at the top (Title Builder: the words come from the book, describe the lettering, a reference picture, a token per Generate; character: nicknames after a slash, looks and personality, more reference pictures, then Build; campaign: Lore, up to three genres, the Campaign Prompt, set up characters first). Ask a question there: the answer is about that window without being told which one. Pressing ?s again does not repeat the tips.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.94",
     "staged_on": "2026-10-17",
     "entries": [

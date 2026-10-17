@@ -5042,6 +5042,11 @@ var _helpError = '';       // transient error shown below the thread
 function _helpCurrentViewId() {
   var _csm = document.getElementById('cstyle-modal');   // v3.1.81: the custom art style builder is open
   if (_csm && !_csm.classList.contains('hidden')) return 'custom_style_builder';
+  // v3.1.95 -- the three windows that gained a ?s. The Title Builder first: it can open over the others.
+  var _open = function (id) { var e = document.getElementById(id); return !!(e && !e.classList.contains('hidden')); };
+  if (_open('title-build-modal')) return 'title_builder';
+  if (_open('char-modal')) return 'character_builder';
+  if (_open('campaign-settings-modal')) return 'campaign_details';
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -5118,6 +5123,60 @@ function csOpenHelp() {
   var m = document.getElementById('help-panel');
   if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
 }
+// v3.1.95 -- Ian: add the ?s to the Title Builder, the character window and the New Campaign window "like we
+// did for the custom Art builder and the Retouch dialogs". The same shape: the window's tips go into the
+// thread once, then help opens over the window. Tips approved by Ian 2026-10-17, taken from the Brain.
+var TB_HELP_INTRO = [
+  'A few things that make a drawn title come out well:',
+  '',
+  'Your title and subtitle come from the book, and the drawing uses those exact words. Change them on the screen before if they are not right.',
+  '',
+  'Describe how the lettering should look, for example emeralds set in iron, or carved in stone. That is what decides the style.',
+  '',
+  'Add a reference picture if you want the lettering to copy its style.',
+  '',
+  'Each Generate costs a token. Nothing reaches your book until you press Done & Use.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+var CHAR_HELP_INTRO = [
+  'A few things that make a character come out well:',
+  '',
+  'Add nicknames after a slash ("Theron Ashwood / Ash") so the story recognises them.',
+  '',
+  'Describe looks and personality. Looks shape the pictures, and personality shapes the story.',
+  '',
+  'More reference pictures give a more consistent character. Use only pictures you own or have the rights to.',
+  '',
+  'Then press Build to make the character\'s prompt and reference picture.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+var CAMP_HELP_INTRO = [
+  'A few things that make a campaign work well:',
+  '',
+  'Lore is your world: its places, factions, history and tone. Every session draws on it.',
+  '',
+  'Pick up to three genres, in order. They steer the writing and the pictures.',
+  '',
+  'The Campaign Prompt is your own standing direction, carried into every session.',
+  '',
+  'Set up your characters before generating stories, so Campaignia knows who\'s who.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+function _dlgOpenHelp(intro) {
+  try {
+    var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === intro;
+    if (!seeded) _helpThread.push({ role: 'assistant', content: intro });
+  } catch (e) { /* the tips are a courtesy; never block the window */ }
+  openHelp();
+  var m = document.getElementById('help-panel');
+  if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
+}
+function tbOpenHelp() { _dlgOpenHelp(TB_HELP_INTRO); }
+function charOpenHelp() { _dlgOpenHelp(CHAR_HELP_INTRO); }
+function campOpenHelp() { _dlgOpenHelp(CAMP_HELP_INTRO); }
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
   m.classList.remove('hidden');

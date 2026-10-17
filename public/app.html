@@ -2598,6 +2598,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Title Builder</div>
+      <button class="btn btn-sm help-nudge" id="title-build-help-btn" type="button" onclick="tbOpenHelp()" title="Title Builder tips, and ask us anything" aria-label="Title Builder help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
       <button class="modal-close" onclick="closeTitleBuilder()" title="Close without using this title">&times;</button>
     </div>
     <div id="title-build-error" class="alert alert-error hidden"></div>
@@ -2796,6 +2797,7 @@
       <div class="modal-title" id="char-modal-title">Add Character</div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm" type="button" id="char-import-btn" onclick="charImportFromFile()" title="Read a character sheet -- PDF, Word or text -- fill these fields from it, and build the character. Reading the sheet costs one token.">&#11014; Import a sheet</button>
+        <button class="btn btn-sm help-nudge" id="char-help-btn" type="button" onclick="charOpenHelp()" title="Character tips, and ask us anything" aria-label="Character help" style="flex:none;">?s</button>
         <button class="modal-close" onclick="closeCharModal()">&times;</button>
       </div>
     </div>
@@ -3506,6 +3508,7 @@
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">
       <div class="modal-title" id="campaign-settings-title">Campaign details</div>
+      <button class="btn btn-sm help-nudge" id="campaign-settings-help-btn" type="button" onclick="campOpenHelp()" title="Campaign tips, and ask us anything" aria-label="Campaign help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
       <button class="modal-close" onclick="closeCampaignSettings()">&times;</button>
     </div>
     <div id="campaign-settings-error" class="alert alert-error hidden"></div>
