@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.1.94",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3194-left-out-note-and-signed-note",
+        "kind": "feature",
+        "public": true,
+        "summary": "When building a character leaves out a rejected picture, the message now stays under the Build button until the next build, as well as showing beside it. A picture that looks signed, or whose file details name a creator, now has a written amber note under it, not only an amber outline, so it can be read on a phone.",
+        "detail": "Give a character a watermarked portrait and a clean full body picture, then press Build. The note by the button says one picture was left out, and the same sentence stays in the line under the button after the note goes and after the reference picture arrives. Press Build again: the line clears and is written again. Put a signed picture (or one whose file details name an artist) in a slot or in the asset library: an amber note under it says what was found and to use it only if it is yours or you have permission. Replace it: the note goes.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.93",
     "staged_on": "2026-10-16",
     "entries": [

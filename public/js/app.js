@@ -8143,6 +8143,12 @@ function renderCharModalPrompt(char) {
     : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
 
   body.innerHTML = buttons + inner + refImg;
+  // v3.1.94 -- TD-979. Every redraw puts back what the last build said about pictures it left out.
+  (function () {
+    var _rn = state._charRightsNote && state._charRightsNote[String(char.id)];
+    var _el = _rn ? document.getElementById('char-prompt-text-' + char.id) : null;
+    if (_el) { _el.textContent = _rn; _el.classList.remove('hidden'); }
+  })();
   // Repaint the marker if the prompt was edited earlier in this sitting.
   if (charPromptIsStale(char.id)) markCharRefStale(char.id);
 }
@@ -8389,6 +8395,10 @@ function saveCharFormSilently(charId, cb) {
 // save-first wrapper can call it after a successful save.
 function rebuildCharPromptCore(charId) {
   setCharGenBusy(charId);   // TF-09
+  // v3.1.94 -- TD-979. A new build clears what the last one said about pictures it left out.
+  if (state._charRightsNote) delete state._charRightsNote[String(charId)];
+  var _rnEl = document.getElementById('char-prompt-text-' + charId);
+  if (_rnEl && /left out of the build/.test(_rnEl.textContent || '')) { _rnEl.textContent = ''; _rnEl.classList.add('hidden'); }
   var btn = document.getElementById('char-prompt-rebuild-' + charId);
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
@@ -8430,6 +8440,11 @@ function rebuildCharPromptCore(charId) {
       clearInterval(ticker);
       if (data && data.success) {
         var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+        // v3.1.94 -- TD-979. A build that left a rejected picture out says so in the line under the
+        // button and KEEPS saying it until the next build (testers missed the note by the button, which
+        // goes after 20 seconds). Held here because the screen redraws when the reference arrives.
+        if (!state._charRightsNote) state._charRightsNote = {};
+        if (data.rights_note) state._charRightsNote[String(charId)] = String(data.rights_note);
         if (ch) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
@@ -35410,7 +35425,8 @@ function _cmpRightsSweep() {
     var notes = document.querySelectorAll('.cmp-rights-note');
     for (var i = 0; i < notes.length; i++) {
       var n = notes[i], p = n.previousSibling;
-      var ok = p && p.nodeType === 1 && p.tagName === 'IMG' && (p.getAttribute('data-rights') || '').indexOf('reject|') === 0;
+      var _dr = p && p.nodeType === 1 && p.tagName === 'IMG' ? (p.getAttribute('data-rights') || '') : '';
+      var ok = _dr.indexOf('reject|') === 0 || _dr.indexOf('warn|') === 0;   // v3.1.94: warned pictures have a note too
       if (!ok && n.parentNode) n.parentNode.removeChild(n);
     }
   } catch (e) {}
@@ -35434,12 +35450,19 @@ function _cmpRightsMark(img) {
     img.title = _cmpRightsText(r);
     img.style.outline = (now === 'reject' ? '3px solid #dc2626' : '3px solid #d97706');
     img.style.outlineOffset = '-3px';
-    if (now === 'reject' && img.parentNode) {
+    // v3.1.94 -- a WARNED picture (signed, or a creator named in its file details) gets a written amber
+    // note as well as its outline. The tooltip alone could not be read on a phone (testers, 2026-10-16).
+    if (img.parentNode) {
       var n = document.createElement('div');
       n.className = 'cmp-rights-note';
       n.setAttribute('role', 'note');
-      n.style.cssText = 'color:#fecaca;background:#7f1d1d;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
-      n.textContent = 'Watermark or stock picture — replace this picture. ' + _cmpRightsText(r);
+      if (now === 'reject') {
+        n.style.cssText = 'color:#fecaca;background:#7f1d1d;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.textContent = 'Watermark or stock picture — replace this picture. ' + _cmpRightsText(r);
+      } else {
+        n.style.cssText = 'color:#fde68a;background:#5c3d0a;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.textContent = _cmpRightsText(r) + ' Use it only if it’s yours or you have permission.';
+      }
       img.parentNode.insertBefore(n, img.nextSibling);
     }
   } catch (e) {}
