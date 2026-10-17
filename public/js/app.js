@@ -6180,16 +6180,24 @@ function editCustomStyle(id) {
   csLoadQuestions(csRender);
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
+// v3.2.01 -- Ian: "the delete custom art style modal needs to be one of our modals not a browser modal." Asked in
+// Campaignia's own window (appConfirm), as every other delete is; the delete itself is unchanged.
 function deleteCustomStyle(id) {
   var sObj = customStyleById(id);
-  if (!confirm('Delete the custom style "' + ((sObj && sObj.name) || 'this style') + '"? This cannot be undone.')) return;
-  fetch('/api/art-styles/custom/' + id, { method: 'DELETE' })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data && data.error) { cstyleErr(data.error); return; }
-      loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
-    })
-    .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
+  appConfirm({
+    title: 'Delete this custom style?',
+    body: '\u201c' + ((sObj && sObj.name) || 'This style') + '\u201d will be deleted. This cannot be undone.',
+    okLabel: 'Delete', cancelLabel: 'Keep it', danger: true,
+    onOk: function () {
+      fetch('/api/art-styles/custom/' + id, { method: 'DELETE' })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if (data && data.error) { cstyleErr(data.error); return; }
+          loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+        })
+        .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
+    }
+  });
 }
 
 function openStylePicker(kind) {
@@ -13557,7 +13565,8 @@ function bookshelfRemove(b) {
   appConfirm({
     title: 'Remove this book from your Bookshelf?',
     body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf' + (b.kind === 'library' ? '.' : ' and its saved copy deleted.'),
-    note: b.kind === 'library' ? 'The story stays in the Library.' : 'The book in the campaign itself is not touched.',
+    // v3.2.01 -- TD-982. A story already taken out of the Library is not said to stay there (testers).
+    note: b.kind === 'library' ? (b.gone ? 'The story is no longer in the Library.' : 'The story stays in the Library.') : 'The book in the campaign itself is not touched.',
     okLabel: 'Remove', cancelLabel: 'Keep it', danger: true,
     onOk: function () {
       fetch('/api/bookshelf/' + b.id, { method: 'DELETE' })

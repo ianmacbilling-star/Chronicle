@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.01",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3201-style-delete-confirm-and-shelf-note",
+        "kind": "fix",
+        "public": true,
+        "summary": "Deleting a custom art style now asks in Campaignia\u2019s own window instead of the browser\u2019s. Removing a Library story from your Bookshelf no longer says the story stays in the Library when it has already left.",
+        "detail": "Open Custom Art Styles and press Delete on a style: a Campaignia window asks \u201cDelete this custom style?\u201d with Delete and Keep it; Keep it changes nothing, Delete removes it. On the Bookshelf, remove a Library book whose story is still published: the note says it stays in the Library. Remove one whose story was taken out of the Library: the note says it is no longer in the Library.",
+        "td": [
+          "TD-982"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.00",
     "staged_on": "2026-10-17",
     "entries": [
