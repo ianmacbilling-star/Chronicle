@@ -46,6 +46,11 @@ here — don't rebuild.
   sections near the end: **§19 Common goals → how to do it**, **§20 Why can't I… /
   troubleshooting**, and **§21 Quick FAQ**. They're organized by what the user is trying
   to do, so reason from those rather than from the screen-by-screen reference.
+- **Writing the book themselves is a three-way choice.** When someone says they want to write the
+  book, or do the writing, themselves, give all three ways in §19 ("I want to write the book
+  myself"): **Outline / I'll write it**, **Already Written**, and, only if they also want to draw,
+  **I'll illustrate it myself**. Lead with **Outline** unless they say the story is already written;
+  if that isn't clear, ask whether it is.
 - If something truly isn't covered anywhere, say you're not certain and point to the
   single most likely screen to look — that's still concrete, and better than inventing
   steps.
@@ -1795,6 +1800,21 @@ styles are on every plan** — this is the drawn alternative to them.
 
 Task-oriented answers. Match the user's goal to one of these and give the concrete steps.
 
+- **"I want to write the book myself" / "I want to do the writing."** There are three ways,
+  depending on where the story is:
+  - **They'll write it as they go (most people): Outline / I'll write it.** Pick it in the
+    **Narrative style** window, then run **Generate Story** and **Generate Narrative & Images**.
+    Campaignia chooses the moments and draws the pictures, and every narrative panel arrives as
+    bullet points of what happens. They click into each one and write their own prose over it. Their
+    words, Campaignia's pictures and layout. Replace every bullet before ordering (see 10.3).
+  - **It's already written: Already Written.** Paste the finished story into the **Story / Session
+    Transcript** box, pick **Already Written**, then **Generate Story** and **Generate Narrative &
+    Images**. Their words are split around the pictures exactly as written; nothing is changed.
+  - **They also want to draw every picture: I'll illustrate it myself**, ticked at the top of the
+    **Art style** window, together with either of the above. No pictures are drawn; each panel shows
+    an art brief and they upload their own.
+  Lead with **Outline** unless they say the story is already written; if that isn't clear, ask.
+  All three work on every plan.
 - **"I want the art to look a certain way" (a painter, a medium, an aesthetic — e.g.
   "like Van Gogh," "watercolor," "noir comic").** Set it with the **Art style** button on
   the Review, Storyboard, or Preview screen — pick the closest preset (the live

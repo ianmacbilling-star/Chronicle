@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.1.97",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3197-write-it-yourself-help-and-archive-wording",
+        "kind": "fix",
+        "public": true,
+        "summary": "Asking help how to write a book yourself now gets all three ways, leading with Outline / I\u2019ll write it: write over bullet points while Campaignia draws, keep a story you have already written word for word, or draw the pictures too. The empty Archives page no longer mentions a treasure-chest button that isn\u2019t there; it says to press Archive on a picture.",
+        "detail": "Ask the help assistant \u201cI want to write a book where I do the writing. What is the best way to approach this in Campaignia?\u201d. The answer names Outline / I\u2019ll write it first, then Already Written for a story that is finished, and I\u2019ll illustrate it myself only for drawing the pictures too; if it is unclear, it asks whether the story is already written. Open the Archives page of a campaign with nothing archived: it reads \u201cNothing archived yet. Press Archive on any picture (a panel, a character\u2019s reference picture or a drawn title) to save a copy here.\u201d",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.1.96",
     "staged_on": "2026-10-17",
     "entries": [

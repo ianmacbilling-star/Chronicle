@@ -14372,7 +14372,7 @@ function toggleMomentLock(momentId) {
     .catch(function() { alert('Could not change the lock.'); });
 }
 
-// Treasure-chest icons. Closed lid = archived (in YOUR archive); open lid = not.
+// The Archive buttons read Archive / Archived (in YOUR archive). v3.1.97: the treasure-chest icons are long gone.
 // ============================================================
 // ARCHIVES (campaign-wide gallery of saved image copies)
 // ============================================================
@@ -16191,7 +16191,7 @@ function renderArchiveGrid() {
   var meId = (state.user && state.user.id) || null;
   var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
   if (!(state.archives || []).length) {
-    grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Use the treasure-chest button on any image to save a copy here.</div>';
+    grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Press Archive on any picture (a panel, a character\u2019s reference picture or a drawn title) to save a copy here.</div>';
     return;
   }
   var rows = getFilteredArchives();
