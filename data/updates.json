@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.07",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3207-email-change-from-noreply",
+        "kind": "fix",
+        "public": false,
+        "summary": "The email-change emails come from noreply again; the warning still tells you to email support@campaignia.com.",
+        "detail": "Start an email change on My Account. Both emails show From: Campaignia <noreply@campaignia.com> (the FROM_EMAIL setting), not support. The warning's last line still reads \u201cIf you can't sign in, email us at support@campaignia.com and we'll help.\u201d with the address as a link, and Reply still addresses support@campaignia.com.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.06",
     "staged_on": "2026-10-18",
     "entries": [

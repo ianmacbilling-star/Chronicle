@@ -33,9 +33,6 @@ async function sendEmail(to, subject, html, opts) {
     html: html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
-  // v3.2.06 -- opts.from: an email that should come from a real inbox rather than FROM_EMAIL (the
-  // email-change notices come from support, Ian 2026-10-18). Opt-in; every other email is unchanged.
-  if (opts && opts.from) payload.from = 'Campaignia <' + opts.from + '>';
   if (opts && opts.replyTo) payload.reply_to = opts.replyTo;
   const { data, error } = await resend.emails.send(payload);
 
@@ -1581,9 +1578,9 @@ function emailChangeShell(title, inner) {
 </body>
 </html>`;
 }
-// v3.2.06 -- Ian, 2026-10-18: these come FROM support, and the heads-up says in so many words to write
-// to support (noreply@ was the From, so "reply to this email" could land nowhere). Same fallback as the
-// other emails that name support.
+// v3.2.06/v3.2.07 -- Ian, 2026-10-18: these come from FROM_EMAIL (noreply@) like every other email, and the
+// heads-up says in so many words to email support rather than "reply to this email". Replies still go to
+// support. Same fallback as the other emails that name support.
 function emailChangeSupport() { return String(process.env.SUPPORT_EMAIL || 'support@campaignia.com').trim(); }
 function emailChangeEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
@@ -1606,10 +1603,10 @@ function emailChangeNoticeHTML(name, maskedNewEmail) {
 }
 
 async function sendEmailChangeConfirmEmail(name, newEmail, url) {
-  await sendEmail(newEmail, 'Confirm your new Campaignia email', emailChangeConfirmHTML(name, newEmail, url), { from: emailChangeSupport(), replyTo: emailChangeSupport() });
+  await sendEmail(newEmail, 'Confirm your new Campaignia email', emailChangeConfirmHTML(name, newEmail, url), { replyTo: emailChangeSupport() });
 }
 async function sendEmailChangeNoticeEmail(name, oldEmail, maskedNewEmail) {
-  await sendEmail(oldEmail, 'Your Campaignia email is being changed', emailChangeNoticeHTML(name, maskedNewEmail), { from: emailChangeSupport(), replyTo: emailChangeSupport() });
+  await sendEmail(oldEmail, 'Your Campaignia email is being changed', emailChangeNoticeHTML(name, maskedNewEmail), { replyTo: emailChangeSupport() });
 }
 
 module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
