@@ -1557,6 +1557,21 @@
               <label class="form-label">Email address</label>
               <input class="form-input" id="settings-email" type="email" autocomplete="email" placeholder="you@example.com" />
             </div>
+            <!-- v3.2.04 -- TD-939. A new email is confirmed by a link before it takes over. The password box
+                 appears only while the email box holds a different address (app.js cmpEmail*); the pending
+                 line shows while a change waits for its link. -->
+            <div id="settings-email-pw-wrap" class="form-group hidden">
+              <label class="form-label">Current password <span style="font-weight:400;color:#9b8e80;">(to change your email)</span></label>
+              <input class="form-input" id="settings-email-password" type="password" autocomplete="current-password" placeholder="Your current password" />
+              <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">We will send a link to the new address. Your email stays the same until you click it.</div>
+            </div>
+            <div id="settings-email-pending" class="hidden" style="margin:-4px 0 14px;padding:10px 12px;border:1px solid rgba(201,168,76,0.35);border-radius:8px;font-size:13px;line-height:1.5;color:#e8d5a3;">
+              Waiting for confirmation: <strong id="settings-email-pending-addr"></strong>. Click the link we sent there to switch to it. Until then your current email keeps working.
+              <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-sm" onclick="cmpEmailResend()">Resend link</button>
+                <button type="button" class="btn btn-sm" onclick="cmpEmailCancel()">Cancel change</button>
+              </div>
+            </div>
             <div class="form-group">
               <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
               <input class="form-input" id="settings-penname" maxlength="40" placeholder="The name you want on the cover" />

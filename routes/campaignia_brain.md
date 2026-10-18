@@ -347,6 +347,12 @@ Trial**: choose a plan first, then come back to the gift email. The gift waits; 
 - **Profile:** your name, email, and an optional **pen name** (your public author
   credit if you publish to the Library, and the "Chronicled-by" line in printed books;
   must be unique).
+- **Changing your email:** type the new address in the Profile email box; a **Current password**
+  box appears, fill it in and press **Save profile**. We send a link to the new address (it lasts
+  24 hours) and a heads-up to the old one. Nothing changes until the link is clicked: sign-in,
+  receipts and every email keep using the old address until then. While it waits, My Account shows
+  "Waiting for confirmation" with **Resend link** and **Cancel change**. Email addresses are not
+  case-sensitive. Support cannot change your email while helping you in your account.
 - **Change password:** current + new + confirm.
 - **Notifications:** opt in/out of three email types — promotions, new-feature updates,
   and campaign activity (an email when someone joins one of your campaigns). Account,

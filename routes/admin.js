@@ -790,7 +790,7 @@ router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async functi
     const db = await getDb();
     const email = ((req.body && req.body.email) || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ error: 'email required' });
-    const u = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const u = await db.prepare('SELECT id FROM users WHERE lower(email) = ? ORDER BY id LIMIT 1').get(email);   // v3.2.04 -- TD-939: without case
     if (!u) return res.status(404).json({ error: 'No user with that email' });
     const allow = ['tier', 'status', 'last_active_at', 'lone_since', 'last_purchase_at', 'idle_warned_at', 'suspended_at'];
     const sets = []; const vals = [];

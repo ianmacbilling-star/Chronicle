@@ -178,7 +178,9 @@ router.post('/forgot-password', async function(req, res) {
 
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+    // v3.2.04 -- TD-939. Without case; an exact match first if two old accounts differ only by case.
+    const _resetEmail = String(email).toLowerCase().trim();
+    const user = await db.prepare('SELECT * FROM users WHERE lower(email) = ? ORDER BY CASE WHEN email = ? THEN 0 ELSE 1 END, id LIMIT 1').get(_resetEmail, _resetEmail);
 
     // Always return success to prevent email enumeration
     if (!user) return res.json({ success: true });
@@ -236,7 +238,8 @@ router.post('/resend-verification', async function (req, res) {
     const email = String((req.body || {}).email || '').toLowerCase().trim();
     if (!email) return res.json({ success: true });
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, email_verified FROM users WHERE email = ?').get(email);
+    // v3.2.04 -- TD-939. Without case, exact match first.
+    const user = await db.prepare('SELECT id, name, email, email_verified FROM users WHERE lower(email) = ? ORDER BY CASE WHEN email = ? THEN 0 ELSE 1 END, id LIMIT 1').get(email, email);
     if (user && user.email_verified === false) {
       await sendVerificationEmail(user.id, user.name, user.email);
     }
@@ -1539,4 +1542,68 @@ async function sendDisputeAlertEmail(info) {
   return sendAlertEmail(t.subject, t.message, { alsoSupport: true });
 }
 
-module.exports = { disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+// v3.2.04 -- TD-939. CHANGING THE ACCOUNT EMAIL. Two emails, in the same dress as the sign-up
+// confirmation: the link to the NEW address (nothing switches until it is clicked), and a heads-up
+// to the OLD address so a change nobody asked for is noticed. Called from routes/auth.js.
+function emailChangeShell(title, inner) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
+  <style>
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .body { padding: 32px; }
+    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div class="body">
+      <div class="title">${title}</div>
+      ${inner}
+    </div>
+    <div class="footer">
+      campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+function emailChangeEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function emailChangeConfirmHTML(name, newEmail, url) {
+  return emailChangeShell('Confirm your new email', `
+      <div class="text">Greetings, ${emailChangeEsc(name || 'there')}.</div>
+      <div class="text">You asked to change the email on your Campaignia account to <strong>${emailChangeEsc(newEmail)}</strong>. Click below to confirm it. Until you do, your account keeps using your current email. This link expires in 24 hours.</div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${emailChangeEsc(url)}" class="btn">Confirm my new email</a>
+      </div>
+      <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">If you didn't ask for this, you can ignore this email and nothing will change.</div>`);
+}
+
+function emailChangeNoticeHTML(name, maskedNewEmail) {
+  return emailChangeShell('Your email is being changed', `
+      <div class="text">Greetings, ${emailChangeEsc(name || 'there')}.</div>
+      <div class="text">Someone signed in to your Campaignia account asked to change its email to <strong>${emailChangeEsc(maskedNewEmail)}</strong>. Nothing changes until the link sent to that address is clicked, and until then this address stays in charge of your account.</div>
+      <div class="text">If this was you, there is nothing more to do here.</div>
+      <div class="text">If it wasn't you, sign in and change your password straight away, then cancel the change on your My Account page. If you can't sign in, reply to this email and we'll help.</div>`);
+}
+
+async function sendEmailChangeConfirmEmail(name, newEmail, url) {
+  await sendEmail(newEmail, 'Confirm your new Campaignia email', emailChangeConfirmHTML(name, newEmail, url));
+}
+async function sendEmailChangeNoticeEmail(name, oldEmail, maskedNewEmail) {
+  const support = process.env.SUPPORT_EMAIL || null;
+  await sendEmail(oldEmail, 'Your Campaignia email is being changed', emailChangeNoticeHTML(name, maskedNewEmail), support ? { replyTo: support } : undefined);
+}
+
+module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

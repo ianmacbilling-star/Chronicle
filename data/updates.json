@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.04",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3204-confirmed-email-change",
+        "kind": "feature",
+        "public": true,
+        "summary": "Changing your email on My Account now sends a confirmation link to the new address, and your account keeps its current email until you click it. Email addresses are no longer case-sensitive, so you can sign in however you type the capitals.",
+        "detail": "On My Account, type a new address in the email box: a Current password box appears. Fill it in and press Save profile. The new address gets \u201cConfirm your new Campaignia email\u201d (link good for 24 hours) and the old address gets \u201cYour Campaignia email is being changed\u201d. Until the link is clicked, sign-in and receipts keep using the old address, and My Account shows \u201cWaiting for confirmation\u201d with Resend link and Cancel change. Click the link: you land back in Campaignia with \u201cYour email address has been changed\u201d (or on the sign-in page if that browser is not signed in). Also try: a wrong password (refused, nothing sent), an address another account already uses (refused), the same address in different capitals (it is already yours), Cancel change then the old link (not valid any more), and signing in with your email typed in capitals (works). While viewing as a customer, the email change is refused.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.03",
     "staged_on": "2026-10-18",
     "entries": [
