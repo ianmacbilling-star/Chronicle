@@ -1,5 +1,85 @@
 [
   {
+    "version": "3.2.07",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3207-email-change-from-noreply",
+        "kind": "fix",
+        "public": false,
+        "summary": "The email-change emails come from noreply again; the warning still tells you to email support@campaignia.com.",
+        "detail": "Start an email change on My Account. Both emails show From: Campaignia <noreply@campaignia.com> (the FROM_EMAIL setting), not support. The warning's last line still reads \u201cIf you can't sign in, email us at support@campaignia.com and we'll help.\u201d with the address as a link, and Reply still addresses support@campaignia.com.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.06",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3206-email-change-from-support",
+        "kind": "fix",
+        "public": true,
+        "summary": "The emails about changing your account email now come from support@campaignia.com, and the warning to your old address tells you to write to support@campaignia.com if you can't sign in.",
+        "detail": "Start an email change on My Account. Both emails (\u201cConfirm your new Campaignia email\u201d to the new address and \u201cYour Campaignia email is being changed\u201d to the old one) show From: Campaignia <support@campaignia.com>. The warning's last line reads \u201cIf you can't sign in, email us at support@campaignia.com and we'll help.\u201d with the address as a link, and pressing Reply addresses support@campaignia.com. Every other Campaignia email is unchanged.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.05",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3205-email-change-link-result",
+        "kind": "fix",
+        "public": true,
+        "summary": "Opening an email-change link that has already been used or cancelled now tells you your email was not changed, instead of opening Campaignia with no message.",
+        "detail": "Start an email change on My Account, press Cancel change, then open the link from the confirmation email while signed in: a Campaignia window says \u201cEmail not changed\u201d and why. Do the same with a link you have already used. Then do a real change and click its link: \u201cYour email address has been changed.\u201d appears, whichever address (with or without www) the link opens on. Signed out, the same results show on the sign-in page.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.04",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3204-confirmed-email-change",
+        "kind": "feature",
+        "public": true,
+        "summary": "Changing your email on My Account now sends a confirmation link to the new address, and your account keeps its current email until you click it. Email addresses are no longer case-sensitive, so you can sign in however you type the capitals.",
+        "detail": "On My Account, type a new address in the email box: a Current password box appears. Fill it in and press Save profile. The new address gets \u201cConfirm your new Campaignia email\u201d (link good for 24 hours) and the old address gets \u201cYour Campaignia email is being changed\u201d. Until the link is clicked, sign-in and receipts keep using the old address, and My Account shows \u201cWaiting for confirmation\u201d with Resend link and Cancel change. Click the link: you land back in Campaignia with \u201cYour email address has been changed\u201d (or on the sign-in page if that browser is not signed in). Also try: a wrong password (refused, nothing sent), an address another account already uses (refused), the same address in different capitals (it is already yours), Cancel change then the old link (not valid any more), and signing in with your email typed in capitals (works). While viewing as a customer, the email change is refused.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.03",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3203-leave-asks-in-our-window",
+        "kind": "fix",
+        "public": true,
+        "summary": "Pressing Back on your campaigns list now asks \u201cLeave Campaignia?\u201d in Campaignia\u2019s own window instead of the browser\u2019s.",
+        "detail": "On the campaigns list (the first page after you sign in), press the browser or phone Back button. A Campaignia window asks \u201cLeave Campaignia?\u201d (in the installed app: \u201cReturn to the Campaignia home screen?\u201d) with Stay and Leave. Stay keeps you on the campaigns list, and Back asks again. Leave takes you to the page you came from, or to the Campaignia home page if the app was the first page in that tab. Pressing Back again while the window is open keeps you in the app with just the one window showing.",
+        "td": [
+          "TD-986"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.02",
     "staged_on": "2026-10-17",
     "entries": [

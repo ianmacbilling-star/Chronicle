@@ -125,6 +125,15 @@ async function customerExists(customerId) {
   }
 }
 
+// v3.2.04 -- TD-939. When a customer confirms a new email, Stripe's copy follows, so its own invoices
+// and payment emails go to the new address. The caller treats any throw as non-fatal.
+async function updateCustomerEmail(customerId, email) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  if (!customerId || !email) return null;
+  return await stripe.customers.update(customerId, { email: email });
+}
+
 // Create a hosted Checkout Session for a one-time token-pack purchase. The
 // caller redirects the buyer to the returned session.url. Amount + description
 // come from the server pack -- never from the client.
@@ -549,6 +558,7 @@ module.exports = {
   createPassCheckout, cancelSubscriptionAtPeriodEnd, pauseSubscriptionCollection, createGiftCheckout, refundPaymentIntent,
   createCoupon, deleteCoupon, createPromotionCode, setPromotionCodeActive, findActivePromotionCode, getPrice,   // v3.0.947 -- TD-799
   createCustomer, customerExists,   // v3.0.945 -- TD-791
+  updateCustomerEmail,   // v3.2.04 -- TD-939
   isConfigured,
   cancelSubscription,
   changeSubscriptionPrice,

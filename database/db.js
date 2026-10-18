@@ -1157,6 +1157,9 @@ async function initPostgres() {
   // v3.1.90 -- TD-979. Verdicts on uploaded pictures. Its own table; nothing existing changes.
   await migrateImageRights(pool);
 
+  // v3.2.04 -- TD-939. Pending email changes, and one address per account whatever its case.
+  await migrateEmailChange(pool);
+
   // Scaling hardening — performance indexes on hot-path FK / filter
   // columns and the releaseImage() URL lookups. Runs LAST so every
   // referenced column already exists.
@@ -1164,6 +1167,29 @@ async function initPostgres() {
 
   console.log('  PostgreSQL schema ready!');
   return db;
+}
+
+// v3.2.04 -- TD-939. CONFIRMED EMAIL CHANGES, AND EMAILS WITHOUT CASE.
+// pending_email is the address waiting for its link to be clicked; pending_email_token is a sha256 of
+// that link's token (never the token itself); pending_email_expires is 24 hours on; pending_email_sent_at
+// paces Resend. All NULL when nothing is waiting.
+// The unique index on lower(email) makes "Ian@x.com" and "ian@x.com" one address for good. It is
+// created only when no two accounts already share an address apart from case; if some do, it is
+// skipped with a log line naming how many, so the boot never fails over it and the sign-in lookups
+// (which compare lower(email) and prefer an exact match) still work.
+async function migrateEmailChange(pool) {
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email TEXT');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_token TEXT');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_expires TIMESTAMP');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_sent_at TIMESTAMP');
+  try {
+    const dup = await pool.query('SELECT lower(email) AS e, COUNT(*) AS n FROM users WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*) > 1');
+    if (dup.rows.length) {
+      console.error('[email-change] ' + dup.rows.length + ' address(es) are shared by more than one account apart from case; the case-insensitive unique index was not created');
+    } else {
+      await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (lower(email))');
+    }
+  } catch (e) { console.error('[email-change] case-insensitive email index skipped this boot:', e && e.message); }
 }
 
 // SQLite support removed - this app is Postgres-only (see getDb()).

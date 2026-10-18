@@ -235,19 +235,46 @@ function _navIsStandalone() {
       || window.navigator.standalone === true;
 }
 
+// v3.2.03 -- NO BROWSER POP-UP A USER CAN SEE (TD-986). Ian, 2026-10-18: "There should be no user
+// facing browser modals." This was the last one. Back from the campaigns root asked "Leave
+// Campaignia?" with the browser's own confirm(), which the testers' tools cannot click (the page
+// froze for them) and which prints the site address in its header. It now asks in our own window,
+// uiConfirm, with Stay and Leave.
+//
+// THE ORDER MATTERS, because our window does not stop the page the way confirm() did. By the time
+// this runs the Back press has already moved the browser onto the '__leave__' sentinel. So the root
+// is re-seated FIRST and the question is asked from there:
+//   Stay  -- nothing more to do; the reader is on the campaigns root with the sentinel below it,
+//            exactly as before they pressed Back.
+//   Leave -- step back past BOTH the root and the sentinel: history.go(-2). pushState drops every
+//            entry ahead of the root, so history.length is exactly (pages before the app) + 2, and
+//            "more than 2" means there is a page to go back to. When the app is the first page in
+//            the tab there is none, so go to the landing page instead.
+// A second Back while our window is still open re-seats the root again and leaves the one window
+// where it is, rather than stacking a second copy of the question on top of it.
+var _navLeaveAsking = false;
+
 function _navLeave() {
-  if (window.history.length > 1) { window.history.back(); }
+  if (window.history.length > 2) { window.history.go(-2); }
   else { window.location.href = '/'; }
 }
 
-function _navLeaveGuard() {
-  var msg = _navIsStandalone() ? 'Return to the Campaignia home screen?' : 'Leave Campaignia?';
-  if (window.confirm(msg)) { _navLeave(); return; }
-  // Declined: stay in the app and re-seat the root.
+function _navReseatRoot() {
   try { history.pushState({ nav: { view: 'campaigns', root: true } }, ''); } catch (e) {}
   _navSilent = true;
   try { showView('campaigns'); } catch (e) {}
   _navSilent = false;
+}
+
+function _navLeaveGuard() {
+  _navReseatRoot();
+  if (_navLeaveAsking) return;
+  _navLeaveAsking = true;
+  var msg = _navIsStandalone() ? 'Return to the Campaignia home screen?' : 'Leave Campaignia?';
+  uiConfirm(msg, { okText: 'Leave', cancelText: 'Stay' }).then(function (yes) {
+    _navLeaveAsking = false;
+    if (yes === true) _navLeave();
+  }, function () { _navLeaveAsking = false; });
 }
 
 // ------------------------------------------------------------
@@ -2257,6 +2284,78 @@ function removeMyStory(storyId, card, btn) {
     })
     .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } billingToast('Could not remove.', 'error'); });
 }
+// v3.2.04 -- TD-939. CHANGING THE ACCOUNT EMAIL, CONFIRMED. saveProfile sends a changed email to
+// /api/auth/change-email; these draw the rest of it on My Account:
+//   - the Current password box appears only while the email box holds a different address;
+//   - "Waiting for confirmation: new@..." with Resend and Cancel while a change is pending
+//     (state.user.pendingEmail, from /me);
+//   - the note after the link is clicked (/app.html?email_change=done|taken|expired|invalid|error).
+// Emails are compared without case, the same as the server. Prefix cmpEmail* (cs* is taken).
+function cmpEmailNorm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+function cmpEmailShowPassword(on) {
+  var w = document.getElementById('settings-email-pw-wrap');
+  if (w) w.classList.toggle('hidden', !on);
+  if (!on) { var p = document.getElementById('settings-email-password'); if (p) p.value = ''; }
+}
+function cmpEmailRenderPending() {
+  var box = document.getElementById('settings-email-pending');
+  if (!box) return;
+  var pend = state.user && state.user.pendingEmail;
+  var addr = document.getElementById('settings-email-pending-addr');
+  if (addr) addr.textContent = pend || '';
+  box.classList.toggle('hidden', !pend);
+}
+function cmpEmailPost(path, done) {
+  fetch(path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && Object.prototype.hasOwnProperty.call(d, 'pendingEmail') && state.user) { state.user.pendingEmail = d.pendingEmail; cmpEmailRenderPending(); }
+      if (!d || d.error) { showSettingsError('profile-error', (d && (d.message || d.error)) || 'Something went wrong. Please try again.'); return; }
+      done(d);
+    })
+    .catch(function() { showSettingsError('profile-error', 'Could not reach the server. Please try again.'); });
+}
+function cmpEmailResend() {
+  document.getElementById('profile-error').classList.add('hidden');
+  cmpEmailPost('/api/auth/change-email/resend', function(d) {
+    billingToast('We sent a new link to ' + (d.pendingEmail || 'your new address') + '.', 'success');
+  });
+}
+function cmpEmailCancel() {
+  document.getElementById('profile-error').classList.add('hidden');
+  cmpEmailPost('/api/auth/change-email/cancel', function() {
+    if (state.user) state.user.pendingEmail = null;
+    cmpEmailRenderPending();
+    var ok = document.getElementById('profile-success'); if (ok) ok.classList.add('hidden');
+    billingToast('Email change cancelled. Your email is unchanged.', 'success');
+  });
+}
+// Typing in the email box: show the password box only for a different address. One listener for the
+// whole page, so it works however often My Account is drawn.
+document.addEventListener('input', function (e) {
+  var t = e && e.target;
+  if (!t || t.id !== 'settings-email') return;
+  cmpEmailShowPassword(cmpEmailNorm(t.value) !== cmpEmailNorm(state.user && state.user.email));
+});
+// Back from the link. The query string is cleared so a reload does not say it twice. A success is a
+// toast; a refusal is a window, because it asks the reader to do something (a toast confirms, a
+// modal refuses).
+(function cmpEmailChangeReturn() {
+  var r = '';
+  try { r = new URLSearchParams(window.location.search).get('email_change') || ''; } catch (e) { return; }
+  if (!r) return;
+  try { history.replaceState(history.state, '', window.location.pathname); } catch (e) {}
+  setTimeout(function () {
+    if (r === 'done') { billingToast('Your email address has been changed.', 'success'); return; }
+    var body = {
+      taken: 'That email address is now used by another account, so your email was not changed.',
+      expired: 'That confirmation link has expired. Your email was not changed. Enter the new address again on My Account to get a fresh link.',
+      invalid: 'That confirmation link is not valid any more (it may have been used already, or a newer one was sent). Your email was not changed.',
+      error: 'Something went wrong confirming your new email. Your email was not changed. Please try again.'
+    }[r] || 'Your email was not changed.';
+    appNotice('Email not changed', body);
+  }, 700);
+})();
 function loadAccount() {
   // v3.0.980 -- TD-901. My Published Stories is no longer on this page; it loads with its tab on My Stuff.
   // Profile fields moved here from Settings — populate name/email from state.
@@ -2266,6 +2365,9 @@ function loadAccount() {
   if (_pe) _pe.value = (state.user && state.user.email) || '';
   var _pp = document.getElementById('settings-penname');
   if (_pp) _pp.value = (state.user && state.user.penName) || '';
+  // v3.2.04 -- TD-939. The password box starts hidden; the pending line shows a change waiting for its link.
+  cmpEmailShowPassword(false);
+  cmpEmailRenderPending();
   // Reconcile live billing state from Stripe first (self-healing: reflects a cancel,
   // plan change, or payment problem made in the portal OR the Stripe dashboard), then
   // render. The endpoint no-ops server-side for users with no subscription on file.
@@ -13851,32 +13953,59 @@ function saveImageModel() {
 }
 
 function saveProfile() {
+  // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
+  // /api/auth/change-email with the current password, a link is sent to the new address, and the
+  // account keeps its current email until that link is clicked. Both copies of this function in
+  // app.js are identical on purpose (the later one runs); change them together.
   var name = document.getElementById('settings-name').value.trim();
   var email = document.getElementById('settings-email').value.trim();
   var pen_name = document.getElementById('settings-penname').value.trim();
   document.getElementById('profile-error').classList.add('hidden');
   document.getElementById('profile-success').classList.add('hidden');
   if (!name || !email) { showSettingsError('profile-error', 'Name and email are required.'); return; }
+  var curEmail = cmpEmailNorm(state.user && state.user.email);
+  var wantsEmail = cmpEmailNorm(email) !== curEmail;
+  var pwEl = document.getElementById('settings-email-password');
+  var pw = (wantsEmail && pwEl) ? pwEl.value : '';
+  if (wantsEmail && !pw) { cmpEmailShowPassword(true); showSettingsError('profile-error', 'Enter your current password to change your email.'); return; }
 
   fetch('/api/auth/profile', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, email:email, pen_name:pen_name})
+    body: JSON.stringify({name:name, pen_name:pen_name})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showSettingsError('profile-error', data.error); return; }
+    if (data.error) { showSettingsError('profile-error', data.message || data.error); return; }
     state.user.name = name;
-    state.user.email = email;
     state.user.penName = pen_name;
     document.getElementById('user-name').textContent = name;
-    document.getElementById('user-menu-email').textContent = email;
     var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     document.getElementById('user-avatar').textContent = initials;
-    document.getElementById('profile-success').textContent = 'Profile updated!';
-    document.getElementById('profile-success').classList.remove('hidden');
-    setTimeout(function() { document.getElementById('profile-success').classList.add('hidden'); }, 2500);
-  });
+    if (!wantsEmail) {
+      document.getElementById('profile-success').textContent = 'Profile updated!';
+      document.getElementById('profile-success').classList.remove('hidden');
+      setTimeout(function() { document.getElementById('profile-success').classList.add('hidden'); }, 2500);
+      return;
+    }
+    return fetch('/api/auth/change-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email: email, current_password: pw})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || d.error) { showSettingsError('profile-error', (d && (d.message || d.error)) || 'Could not start the email change.'); return; }
+      if (pwEl) pwEl.value = '';
+      state.user.pendingEmail = d.pendingEmail || cmpEmailNorm(email);
+      document.getElementById('settings-email').value = (state.user && state.user.email) || '';
+      cmpEmailShowPassword(false);
+      cmpEmailRenderPending();
+      document.getElementById('profile-success').textContent = 'Check ' + state.user.pendingEmail + ' for a confirmation link. Your email stays the same until you click it.';
+      document.getElementById('profile-success').classList.remove('hidden');
+    });
+  })
+  .catch(function() { showSettingsError('profile-error', 'Could not save. Please try again.'); });
 }
 
 function saveApiKey() {
@@ -19110,32 +19239,59 @@ function saveImageModel() {
 }
 
 function saveProfile() {
+  // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
+  // /api/auth/change-email with the current password, a link is sent to the new address, and the
+  // account keeps its current email until that link is clicked. Both copies of this function in
+  // app.js are identical on purpose (the later one runs); change them together.
   var name = document.getElementById('settings-name').value.trim();
   var email = document.getElementById('settings-email').value.trim();
   var pen_name = document.getElementById('settings-penname').value.trim();
   document.getElementById('profile-error').classList.add('hidden');
   document.getElementById('profile-success').classList.add('hidden');
   if (!name || !email) { showSettingsError('profile-error', 'Name and email are required.'); return; }
+  var curEmail = cmpEmailNorm(state.user && state.user.email);
+  var wantsEmail = cmpEmailNorm(email) !== curEmail;
+  var pwEl = document.getElementById('settings-email-password');
+  var pw = (wantsEmail && pwEl) ? pwEl.value : '';
+  if (wantsEmail && !pw) { cmpEmailShowPassword(true); showSettingsError('profile-error', 'Enter your current password to change your email.'); return; }
 
   fetch('/api/auth/profile', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, email:email, pen_name:pen_name})
+    body: JSON.stringify({name:name, pen_name:pen_name})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showSettingsError('profile-error', data.error); return; }
+    if (data.error) { showSettingsError('profile-error', data.message || data.error); return; }
     state.user.name = name;
-    state.user.email = email;
     state.user.penName = pen_name;
     document.getElementById('user-name').textContent = name;
-    document.getElementById('user-menu-email').textContent = email;
     var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     document.getElementById('user-avatar').textContent = initials;
-    document.getElementById('profile-success').textContent = 'Profile updated!';
-    document.getElementById('profile-success').classList.remove('hidden');
-    setTimeout(function() { document.getElementById('profile-success').classList.add('hidden'); }, 2500);
-  });
+    if (!wantsEmail) {
+      document.getElementById('profile-success').textContent = 'Profile updated!';
+      document.getElementById('profile-success').classList.remove('hidden');
+      setTimeout(function() { document.getElementById('profile-success').classList.add('hidden'); }, 2500);
+      return;
+    }
+    return fetch('/api/auth/change-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email: email, current_password: pw})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || d.error) { showSettingsError('profile-error', (d && (d.message || d.error)) || 'Could not start the email change.'); return; }
+      if (pwEl) pwEl.value = '';
+      state.user.pendingEmail = d.pendingEmail || cmpEmailNorm(email);
+      document.getElementById('settings-email').value = (state.user && state.user.email) || '';
+      cmpEmailShowPassword(false);
+      cmpEmailRenderPending();
+      document.getElementById('profile-success').textContent = 'Check ' + state.user.pendingEmail + ' for a confirmation link. Your email stays the same until you click it.';
+      document.getElementById('profile-success').classList.remove('hidden');
+    });
+  })
+  .catch(function() { showSettingsError('profile-error', 'Could not save. Please try again.'); });
 }
 
 function saveApiKey() {

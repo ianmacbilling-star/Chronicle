@@ -61,9 +61,14 @@ var DENY = [
   // --- Credentials. An account-takeover path if this is ever misused. ---
   { m: 'PUT',  p: '/api/auth/password',             why: 'change the password' },
   { m: 'POST', p: '/api/auth/password',             why: 'change the password' },
-  { m: 'POST', p: '/api/auth/change-email',         why: 'change the email' },
+  // v3.2.04 -- TD-939. prefix: the request, its Resend and its Cancel. The confirm link is a GET and
+  // stays open: it is the customer clicking a link in their own inbox, not a support action.
+  { m: 'POST', p: '/api/auth/change-email',         why: 'change the email', prefix: true },
   { m: 'POST', p: '/api/auth/forgot-password',      why: 'trigger a password reset' },
   { m: 'POST', p: '/api/auth/reset-password',       why: 'reset the password' },
+  // v3.2.04 -- the two above never matched anything: those routes live under /api/email.
+  { m: 'POST', p: '/api/email/forgot-password',     why: 'trigger a password reset' },
+  { m: 'POST', p: '/api/email/reset-password',      why: 'reset the password' },
 
   // --- Irreversible account actions. ---
   { m: 'POST',   p: '/api/auth/suspend',            why: 'suspend the account' },

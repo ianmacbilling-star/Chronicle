@@ -152,6 +152,7 @@
       <div class="auth-subtitle">Sign in to your campaigns</div>
       <div class="auth-divider"></div>
       <div id="login-error" class="alert-error hidden"></div>
+      <div id="login-success" class="alert-success hidden"></div>
       <div class="form-group">
         <label class="form-label">Email</label>
         <input class="form-input" type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
@@ -279,6 +280,12 @@ try {
   var _vq = _q.get('verify');
   if (_vq === 'expired') showError('login-error', 'That confirmation link has expired. Sign in below to resend it.');
   else if (_vq === 'invalid' || _vq === 'error') showError('login-error', 'That confirmation link was invalid. Sign in below to resend it.');
+  // v3.2.04 -- TD-939. Back from an email-change link, opened where this browser is not signed in.
+  var _ec = _q.get('email_change');
+  if (_ec === 'done') { var _ls = document.getElementById('login-success'); if (_ls) { _ls.textContent = 'Your email address has been changed. Sign in with your new address.'; _ls.classList.remove('hidden'); } }
+  else if (_ec === 'expired') showError('login-error', 'That email-change link has expired, so your email was not changed. Sign in and enter the new address again on My Account.');
+  else if (_ec === 'taken') showError('login-error', 'That email address is now used by another account, so your email was not changed.');
+  else if (_ec) showError('login-error', 'That email-change link is not valid any more, so your email was not changed.');
 } catch (e) {}
 
 // Prefill the signup email when arriving from an invite (?email=...), so the new
@@ -372,7 +379,19 @@ document.getElementById('forgot-btn').addEventListener('click', async function()
 });
 document.getElementById('forgot-email').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('forgot-btn').click(); });
 
-fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:'/app.html'); } });
+// v3.2.05 -- TD-939. Already signed in, so straight on to the app -- but CARRY an email-change result
+// with you. The confirm link lands here whenever it cannot match the signed-in person (a cancelled or
+// used link matches nobody, and a click can arrive without this browser's session), and going on to a bare
+// /app.html dropped the result, so the reader was told nothing (testers, 2026-10-18). Only the five
+// known results pass; anything else goes to the plain app.
+function _cmpAppLanding() {
+  try {
+    var ec = new URLSearchParams(window.location.search).get('email_change');
+    if (ec && /^(done|taken|expired|invalid|error)$/.test(ec)) return '/app.html?email_change=' + ec;
+  } catch (e) {}
+  return '/app.html';
+}
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:_cmpAppLanding()); } });
 </script>
 <script src="/js/pw-eye.js" defer></script>
 </body>

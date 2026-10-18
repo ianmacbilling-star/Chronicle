@@ -84,7 +84,8 @@ router.post('/register', async function(req, res) {
     if (!accept_upload) return res.json({ error: 'You must accept the content/copyright agreement to create an account.' });
 
     const db = await getDb();
-    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
+    // v3.2.04 -- TD-939. Emails without case: Ian@x.com and ian@x.com are one address.
+    const existing = await db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email.toLowerCase().trim());
     if (existing) return res.json({ error: 'An account with this email already exists' });
 
     const penRes = await resolvePenName(db, pen_name, 0);
@@ -309,7 +310,10 @@ router.post('/login', async function(req, res) {
     if (!email || !password) return res.json({ error: 'Email and password required' });
 
     const db = await getDb();
-    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+    // v3.2.04 -- TD-939. Without case, so an address once saved with a capital letter signs in again.
+    // An exact match first, in case two old accounts differ only by case.
+    const _loginEmail = String(email).toLowerCase().trim();
+    const user = await db.prepare('SELECT * FROM users WHERE lower(email) = ? ORDER BY CASE WHEN email = ? THEN 0 ELSE 1 END, id LIMIT 1').get(_loginEmail, _loginEmail);
     if (!user) return res.json({ error: 'Invalid email or password' });
 
     const match = await bcrypt.compare(password, user.password);
@@ -348,7 +352,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, sub_paused_until, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, pass_tier, pass_expires_at, trial_started_at, subscription_status, current_period_end, cancel_at_period_end, sub_paused_until, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity, pending_email, pending_email_expires FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
@@ -436,6 +440,8 @@ router.get('/me', async function(req, res) {
       layoutLoopCostCents: _layoutLoopCents,
       name: user.name,
       email: user.email,
+      // v3.2.04 -- TD-939. An email change waiting for its link, only while that link is still good.
+      pendingEmail: (user.pending_email && user.pending_email_expires && new Date(user.pending_email_expires).getTime() > Date.now()) ? user.pending_email : null,
       id: user.id,
       // v3.0.919 -- `tier` is what they HAVE, so existing readers stay correct with no change.
       // accountTier and pass are ADDITIVE, for the account card in Push 6: what is theirs by
@@ -670,23 +676,199 @@ router.post('/set-pass', requireAdminOrTester, async function(req, res) {
   }
 });
 
+// v3.2.04 -- TD-939. NAME AND PEN NAME ONLY. The email used to be written here straight from the
+// request: no check that it was a real address, no confirmation, and it kept its case, so an
+// address saved with a capital letter could never sign in again (sign-in lowercases). An email
+// change is now its own confirmed flow, below (POST /change-email). A page that still sends the
+// unchanged email is fine; one that sends a DIFFERENT email is refused and nothing is saved, so an
+// old cached page can never switch an address without the link.
 router.put('/profile', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { name, email, pen_name } = req.body;
+  const { name, email, pen_name } = req.body || {};
   const db = await getDb();
+  const cur = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  if (!cur) return res.status(401).json({ error: 'Not authenticated' });
+  if (email !== undefined && email !== null && normEmail(email) !== normEmail(cur.email)) {
+    return res.json({ error: 'Email changes now need confirming. Please reload the page and try again.' });
+  }
+  const cleanName = String(name == null ? '' : name).trim();
+  if (!cleanName) return res.json({ error: 'Your name is required.' });
   const now = new Date().toISOString();
   const penRes = await resolvePenName(db, pen_name, req.session.userId);
   if (!penRes.ok) return res.json({ error: penRes.error });
   if (penRes.value !== undefined) {
-    await db.prepare('UPDATE users SET name=?, email=?, pen_name=?, edited_at=?, edited_by=? WHERE id=?')
-      .run(name, email, penRes.value, now, req.session.userId, req.session.userId);
+    await db.prepare('UPDATE users SET name=?, pen_name=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(cleanName, penRes.value, now, req.session.userId, req.session.userId);
   } else {
-    await db.prepare('UPDATE users SET name=?, email=?, edited_at=?, edited_by=? WHERE id=?')
-      .run(name, email, now, req.session.userId, req.session.userId);
+    await db.prepare('UPDATE users SET name=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(cleanName, now, req.session.userId, req.session.userId);
   }
-  req.session.userName = name;
-  req.session.userEmail = email;
+  req.session.userName = cleanName;
   res.json({ success: true });
+});
+
+// =================================================================================================
+// v3.2.04 -- TD-939. CHANGING THE EMAIL ADDRESS, CONFIRMED (Ian, 2026-10-18).
+//
+//   1. POST /change-email { email, current_password }: the password must be right and the address
+//      must look real and belong to nobody else (case ignored). Nothing switches yet. The new address
+//      is held as pending_email with a 24-hour link sent to it, and the OLD address is told a change
+//      was asked for. Sign-in, receipts and every email keep using the old address until the click.
+//   2. GET /change-email/confirm?token=...: the click. Checked again that nobody took the address
+//      meanwhile, then email and verified_email (the gift badge address) become the new one and the
+//      Stripe customer email follows, so Stripe's own invoices go there too.
+//   3. POST /change-email/resend and /change-email/cancel, for the "Waiting for confirmation" line.
+//
+// Emails are compared without case everywhere, and stored lowercase from here on.
+// Support sessions cannot use any of this: the impersonation guard refuses /api/auth/change-email*
+// and each route checks again, so a guard edit alone can never open it.
+// Only a hash of the link token is stored, so a database read cannot be turned into a confirmation.
+// =================================================================================================
+const crypto = require('crypto');
+const EMAIL_CHANGE_HOURS = 24;
+const EMAIL_CHANGE_RESEND_SECS = 60;
+
+function normEmail(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+function looksLikeEmail(v) {
+  return typeof v === 'string' && v.length >= 6 && v.length <= 254 && /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/.test(v);
+}
+function hashEmailToken(t) { return crypto.createHash('sha256').update(String(t)).digest('hex'); }
+// "n***@example.com" for the heads-up to the old address: enough to recognise, not to harvest.
+function maskEmail(e) {
+  const s = normEmail(e); const at = s.indexOf('@');
+  if (at < 1) return s;
+  return s.charAt(0) + '***' + s.slice(at);
+}
+function inSupportSession(req) { return !!(req.session && req.session.impersonatorId); }
+function supportRefusal(res) {
+  return res.status(403).json({ error: 'impersonation_denied', message: 'Not available while viewing as another user (change the email). Exit the support session first.' });
+}
+function appBaseUrl() { return (process.env.APP_URL || 'https://campaignia.com').replace(/\/$/, ''); }
+
+// Makes a fresh link for the user's pending address and sends it. Returns the pending address.
+async function sendEmailChangeLink(db, user, newEmail) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + EMAIL_CHANGE_HOURS * 3600 * 1000).toISOString();
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE users SET pending_email = ?, pending_email_token = ?, pending_email_expires = ?, pending_email_sent_at = ? WHERE id = ?')
+    .run(newEmail, hashEmailToken(token), expires, now, user.id);
+  const url = appBaseUrl() + '/api/auth/change-email/confirm?token=' + token;
+  await require('./email').sendEmailChangeConfirmEmail(user.name, newEmail, url);
+  return newEmail;
+}
+
+router.post('/change-email', async function (req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  if (inSupportSession(req)) return supportRefusal(res);
+  try {
+    const body = req.body || {};
+    const newEmail = normEmail(body.email);
+    const pw = (body.current_password != null) ? String(body.current_password) : '';
+    if (!looksLikeEmail(newEmail)) return res.json({ error: 'That does not look like an email address.' });
+    if (!pw) return res.json({ error: 'Enter your current password to change your email.' });
+    const db = await getDb();
+    const user = await db.prepare('SELECT id, name, email, password FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    if (newEmail === normEmail(user.email)) return res.json({ error: 'That is already your email address.' });
+    const match = await bcrypt.compare(pw, user.password || '');
+    if (!match) return res.json({ error: 'Your current password is incorrect.' });
+    const taken = await db.prepare('SELECT id FROM users WHERE lower(email) = ? AND id <> ?').get(newEmail, user.id);
+    if (taken) return res.json({ error: 'That email address is already used by another account.' });
+    await sendEmailChangeLink(db, user, newEmail);
+    // The heads-up to the old address. Its own try: a failure here must not undo the request.
+    try { await require('./email').sendEmailChangeNoticeEmail(user.name, user.email, maskEmail(newEmail)); }
+    catch (e) { console.error('[email-change] heads-up to the old address failed for user ' + user.id + ':', e && e.message); }
+    res.json({ success: true, pendingEmail: newEmail });
+  } catch (e) {
+    console.error('[email-change] request failed:', e && e.message);
+    res.status(500).json({ error: 'Could not start the email change. Please try again.' });
+  }
+});
+
+router.post('/change-email/resend', async function (req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  if (inSupportSession(req)) return supportRefusal(res);
+  try {
+    const db = await getDb();
+    const user = await db.prepare('SELECT id, name, email, pending_email, pending_email_expires, pending_email_sent_at FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    if (!user.pending_email || !user.pending_email_expires || new Date(user.pending_email_expires).getTime() <= Date.now()) {
+      return res.json({ error: 'There is no email change waiting. Enter the new address again.' });
+    }
+    const last = user.pending_email_sent_at ? new Date(user.pending_email_sent_at).getTime() : 0;
+    if (last && Date.now() - last < EMAIL_CHANGE_RESEND_SECS * 1000) {
+      return res.json({ error: 'We sent a link a moment ago. Please wait a minute before asking again.' });
+    }
+    const taken = await db.prepare('SELECT id FROM users WHERE lower(email) = ? AND id <> ?').get(normEmail(user.pending_email), user.id);
+    if (taken) {
+      await db.prepare('UPDATE users SET pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL, pending_email_sent_at = NULL WHERE id = ?').run(user.id);
+      return res.json({ error: 'That email address is now used by another account.', pendingEmail: null });
+    }
+    await sendEmailChangeLink(db, user, normEmail(user.pending_email));
+    res.json({ success: true, pendingEmail: normEmail(user.pending_email) });
+  } catch (e) {
+    console.error('[email-change] resend failed:', e && e.message);
+    res.status(500).json({ error: 'Could not resend the link. Please try again.' });
+  }
+});
+
+router.post('/change-email/cancel', async function (req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  if (inSupportSession(req)) return supportRefusal(res);
+  try {
+    const db = await getDb();
+    await db.prepare('UPDATE users SET pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL, pending_email_sent_at = NULL WHERE id = ?').run(req.session.userId);
+    res.json({ success: true, pendingEmail: null });
+  } catch (e) {
+    console.error('[email-change] cancel failed:', e && e.message);
+    res.status(500).json({ error: 'Could not cancel. Please try again.' });
+  }
+});
+
+// The click. No sign-in needed (the link may be opened on another device); the token is the proof.
+// Lands in the app when this browser is signed in as the same person, otherwise on the sign-in page.
+router.get('/change-email/confirm', async function (req, res) {
+  const signedInAs = (req.session && req.session.userId) || null;
+  function land(result, userId) {
+    const here = (signedInAs && userId && String(signedInAs) === String(userId)) ? '/app.html' : '/login';
+    return res.redirect(here + '?email_change=' + result);
+  }
+  try {
+    const token = String((req.query || {}).token || '');
+    if (!/^[0-9a-f]{64}$/.test(token)) return land('invalid', null);
+    const db = await getDb();
+    const user = await db.prepare('SELECT id, email, pending_email, pending_email_expires, stripe_customer_id FROM users WHERE pending_email_token = ?').get(hashEmailToken(token));
+    if (!user || !user.pending_email) return land('invalid', null);
+    if (!user.pending_email_expires || new Date(user.pending_email_expires).getTime() <= Date.now()) return land('expired', user.id);
+    const newEmail = normEmail(user.pending_email);
+    const clear = 'UPDATE users SET pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL, pending_email_sent_at = NULL WHERE id = ?';
+    const taken = await db.prepare('SELECT id FROM users WHERE lower(email) = ? AND id <> ?').get(newEmail, user.id);
+    if (taken) { await db.prepare(clear).run(user.id); return land('taken', user.id); }
+    const now = new Date().toISOString();
+    try {
+      // Fenced on the token still being this one, so a second click or a newer link cannot apply twice.
+      await db.prepare('UPDATE users SET email = ?, verified_email = ?, pending_email = NULL, pending_email_token = NULL, pending_email_expires = NULL, pending_email_sent_at = NULL, edited_at = ?, edited_by = ? WHERE id = ? AND pending_email_token = ?')
+        .run(newEmail, newEmail, now, user.id, user.id, hashEmailToken(token));
+    } catch (e) {
+      // The case-insensitive unique index: someone took the address between the check and the write.
+      console.error('[email-change] confirm write refused for user ' + user.id + ':', e && e.message);
+      await db.prepare(clear).run(user.id);
+      return land('taken', user.id);
+    }
+    const after = await db.prepare('SELECT email FROM users WHERE id = ?').get(user.id);
+    if (!after || normEmail(after.email) !== newEmail) return land('invalid', user.id);
+    if (signedInAs && String(signedInAs) === String(user.id) && !inSupportSession(req)) req.session.userEmail = newEmail;
+    // Stripe follows. Never blocks the change: a failure is logged and the next checkout still works.
+    if (user.stripe_customer_id && stripeProvider.isConfigured()) {
+      try { await stripeProvider.updateCustomerEmail(user.stripe_customer_id, newEmail); }
+      catch (e) { console.error('[email-change] Stripe customer email not updated for user ' + user.id + ':', e && e.message); }
+    }
+    console.log('[email-change] user ' + user.id + ' changed their email');
+    return land('done', user.id);
+  } catch (e) {
+    console.error('[email-change] confirm failed:', e && e.message);
+    return land('error', null);
+  }
 });
 
 router.put('/password', async function(req, res) {
