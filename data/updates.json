@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.05",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3205-email-change-link-result",
+        "kind": "fix",
+        "public": true,
+        "summary": "Opening an email-change link that has already been used or cancelled now tells you your email was not changed, instead of opening Campaignia with no message.",
+        "detail": "Start an email change on My Account, press Cancel change, then open the link from the confirmation email while signed in: a Campaignia window says \u201cEmail not changed\u201d and why. Do the same with a link you have already used. Then do a real change and click its link: \u201cYour email address has been changed.\u201d appears, whichever address (with or without www) the link opens on. Signed out, the same results show on the sign-in page.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.04",
     "staged_on": "2026-10-18",
     "entries": [

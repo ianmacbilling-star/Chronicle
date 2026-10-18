@@ -379,7 +379,19 @@ document.getElementById('forgot-btn').addEventListener('click', async function()
 });
 document.getElementById('forgot-email').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('forgot-btn').click(); });
 
-fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:'/app.html'); } });
+// v3.2.05 -- TD-939. Already signed in, so straight on to the app -- but CARRY an email-change result
+// with you. The confirm link lands here whenever it cannot match the signed-in person (a cancelled or
+// used link matches nobody, and a click can arrive without this browser's session), and going on to a bare
+// /app.html dropped the result, so the reader was told nothing (testers, 2026-10-18). Only the five
+// known results pass; anything else goes to the plain app.
+function _cmpAppLanding() {
+  try {
+    var ec = new URLSearchParams(window.location.search).get('email_change');
+    if (ec && /^(done|taken|expired|invalid|error)$/.test(ec)) return '/app.html?email_change=' + ec;
+  } catch (e) {}
+  return '/app.html';
+}
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:_cmpAppLanding()); } });
 </script>
 <script src="/js/pw-eye.js" defer></script>
 </body>
