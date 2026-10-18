@@ -235,19 +235,46 @@ function _navIsStandalone() {
       || window.navigator.standalone === true;
 }
 
+// v3.2.03 -- NO BROWSER POP-UP A USER CAN SEE (TD-986). Ian, 2026-10-18: "There should be no user
+// facing browser modals." This was the last one. Back from the campaigns root asked "Leave
+// Campaignia?" with the browser's own confirm(), which the testers' tools cannot click (the page
+// froze for them) and which prints the site address in its header. It now asks in our own window,
+// uiConfirm, with Stay and Leave.
+//
+// THE ORDER MATTERS, because our window does not stop the page the way confirm() did. By the time
+// this runs the Back press has already moved the browser onto the '__leave__' sentinel. So the root
+// is re-seated FIRST and the question is asked from there:
+//   Stay  -- nothing more to do; the reader is on the campaigns root with the sentinel below it,
+//            exactly as before they pressed Back.
+//   Leave -- step back past BOTH the root and the sentinel: history.go(-2). pushState drops every
+//            entry ahead of the root, so history.length is exactly (pages before the app) + 2, and
+//            "more than 2" means there is a page to go back to. When the app is the first page in
+//            the tab there is none, so go to the landing page instead.
+// A second Back while our window is still open re-seats the root again and leaves the one window
+// where it is, rather than stacking a second copy of the question on top of it.
+var _navLeaveAsking = false;
+
 function _navLeave() {
-  if (window.history.length > 1) { window.history.back(); }
+  if (window.history.length > 2) { window.history.go(-2); }
   else { window.location.href = '/'; }
 }
 
-function _navLeaveGuard() {
-  var msg = _navIsStandalone() ? 'Return to the Campaignia home screen?' : 'Leave Campaignia?';
-  if (window.confirm(msg)) { _navLeave(); return; }
-  // Declined: stay in the app and re-seat the root.
+function _navReseatRoot() {
   try { history.pushState({ nav: { view: 'campaigns', root: true } }, ''); } catch (e) {}
   _navSilent = true;
   try { showView('campaigns'); } catch (e) {}
   _navSilent = false;
+}
+
+function _navLeaveGuard() {
+  _navReseatRoot();
+  if (_navLeaveAsking) return;
+  _navLeaveAsking = true;
+  var msg = _navIsStandalone() ? 'Return to the Campaignia home screen?' : 'Leave Campaignia?';
+  uiConfirm(msg, { okText: 'Leave', cancelText: 'Stay' }).then(function (yes) {
+    _navLeaveAsking = false;
+    if (yes === true) _navLeave();
+  }, function () { _navLeaveAsking = false; });
 }
 
 // ------------------------------------------------------------

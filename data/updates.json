@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.03",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3203-leave-asks-in-our-window",
+        "kind": "fix",
+        "public": true,
+        "summary": "Pressing Back on your campaigns list now asks \u201cLeave Campaignia?\u201d in Campaignia\u2019s own window instead of the browser\u2019s.",
+        "detail": "On the campaigns list (the first page after you sign in), press the browser or phone Back button. A Campaignia window asks \u201cLeave Campaignia?\u201d (in the installed app: \u201cReturn to the Campaignia home screen?\u201d) with Stay and Leave. Stay keeps you on the campaigns list, and Back asks again. Leave takes you to the page you came from, or to the Campaignia home page if the app was the first page in that tab. Pressing Back again while the window is open keeps you in the app with just the one window showing.",
+        "td": [
+          "TD-986"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.02",
     "staged_on": "2026-10-17",
     "entries": [
