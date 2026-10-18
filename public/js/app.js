@@ -2231,11 +2231,11 @@ function myStoryCard(it) {
   card.appendChild(visWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
-  var armed = false; var tmr = null;
+  // v3.2.02 -- TD-984. Asked in our own window (was click twice), and it says what happens to shared links.
   btn.onclick = function(){
-    if (!armed) { armed = true; btn.textContent = 'Click again to remove'; tmr = setTimeout(function(){ armed = false; btn.textContent = 'Remove from Library'; }, 3000); return; }
-    if (tmr) clearTimeout(tmr);
-    removeMyStory(it.id, card, btn);
+    uiConfirm('Links you have shared will stop working. To change a story without breaking its link, use Replace when you publish.',
+      { title: 'Remove \u201c' + (it.title || 'Untitled') + '\u201d from the Library?', okText: 'Remove it', cancelText: 'Keep it', danger: true })
+      .then(function (ok) { if (ok) removeMyStory(it.id, card, btn); });
   };
   card.appendChild(btn);
   return card;
@@ -5733,7 +5733,7 @@ function collectCstyleRefs() {
 function csRightsSlotClear(n) {
   try {
     var box = document.getElementById('drop-cstyle_' + n);
-    if (box) { box.style.outline = ''; box.style.outlineOffset = ''; if (box._csRightsObs) { box._csRightsObs.disconnect(); box._csRightsObs = null; } }
+    if (box) { box.style.outline = ''; box.style.outlineOffset = ''; box.removeAttribute('data-cs-rights'); if (box._csRightsObs) { box._csRightsObs.disconnect(); box._csRightsObs = null; } }
     var note = document.getElementById('cs-rights-note-' + n);
     if (note && note.parentNode) note.parentNode.removeChild(note);
   } catch (e) {}
@@ -5746,6 +5746,7 @@ function csRightsSlotMark(list) {
       var box = document.getElementById('drop-cstyle_' + n); if (!box || !box.parentNode) return;
       var red = it.verdict === 'reject';
       box.style.outline = '3px solid ' + (red ? '#dc2626' : '#d97706'); box.style.outlineOffset = '-3px';
+      box.setAttribute('data-cs-rights', red ? 'reject' : 'warn');   // v3.2.02 -- TD-983
       var note = document.createElement('div');
       note.id = 'cs-rights-note-' + n; note.setAttribute('role', 'note');
       note.style.cssText = (red ? 'color:#fecaca;background:#7f1d1d;' : 'color:#fde68a;background:#5c3d0a;') + 'font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
@@ -5755,12 +5756,21 @@ function csRightsSlotMark(list) {
       var pv = document.getElementById('preview-cstyle_' + n);
       if (pv && typeof MutationObserver === 'function') {
         var was = pv.getAttribute('src');
-        var obs = new MutationObserver(function () { if (pv.getAttribute('src') !== was || pv.classList.contains('hidden')) csRightsSlotClear(n); });
+        var obs = new MutationObserver(function () { if (pv.getAttribute('src') !== was || pv.classList.contains('hidden')) { csRightsSlotClear(n); if (red) csRightsBannerSweep(); } });
         obs.observe(pv, { attributes: true, attributeFilter: ['src', 'class'] });
         box._csRightsObs = obs;
       }
     });
   } catch (e) {}
+}
+// v3.2.02 -- TD-983. The refusal banner at the top named a picture that had already been replaced (testers). It is
+// cleared once no reference box is still refused; one still red keeps it, since it is then still true of that one.
+function csRightsBannerSweep() {
+  try {
+    for (var i = 1; i <= 4; i++) { var b = document.getElementById('drop-cstyle_' + i); if (b && b.getAttribute('data-cs-rights') === 'reject') return; }
+    var e = document.getElementById('cstyle-error');
+    if (e && /^Reference \d+:/.test(e.textContent || '')) cstyleErr('');
+  } catch (e2) {}
 }
 function analyzeCustomStyle() {
   cstyleErr('');
@@ -12915,11 +12925,18 @@ async function publishStory() {
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
-  if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
+  // v3.2.02 -- TD-984. Replacing asks first, in our own window, because the old version cannot be brought back.
+  var _replace = prepReplaceChosen();
+  if (_replace) {
+    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link, its place in the Library and its Bookshelf entries stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
+      { title: 'Replace \u201c' + (_replace.title || 'Untitled') + '\u201d?', okText: 'Replace it', cancelText: 'Cancel', danger: true, preserveLines: true });
+    if (!_okR) return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = _replace ? 'Replacing...' : 'Publishing...'; }
   // v3.0.492 -- no longer 'this can take a moment'. The optimized book is copied, not re-rendered
   // (TD-296), so the honest wording is short. The flow (admin Before) book still renders, but that
   // path is not reachable from the user UI.
-  if (st) { st.style.display = 'block'; st.textContent = 'Publishing your book...'; }
+  if (st) { st.style.display = 'block'; st.textContent = _replace ? 'Replacing your story...' : 'Publishing your book...'; }
   // v3.0.491 -- ROUTE THIS THROUGH novelAsUserQ() LIKE EVERY OTHER BOOK URL.
   // This call was the one book URL that did NOT, so the POST carried no as_user and
   // no as_version. The server then fell back to the canonical for EVERYTHING that
@@ -12937,6 +12954,7 @@ async function publishStory() {
   var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
   if (_wantUnlisted) _pubBody.visibility = 'unlisted';
   else if (_wantPublicConsent) { _pubBody.visibility = 'public'; _pubBody.consent = true; }   // v3.0.840 -- TD-686
+  if (_replace) _pubBody.replaceStoryId = _replace.id;   // v3.2.02 -- TD-984
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){
@@ -12950,6 +12968,7 @@ async function publishStory() {
         // only ways to reach Publish run through Optimize or Load Last Optimized File, both of
         // which already raise the amber warning. Ian: "They have already seen all that."
         var _msg = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
+        if (d.replaced) _msg = 'Replaced \u201c' + ((_replace && _replace.title) || 'your story') + '\u201d in the Library with this version. Its link stays the same.';   // v3.2.02 -- TD-984
         if (d.titleWarning) _msg += ' ' + d.titleWarning;
         if (st) st.textContent = _msg;
         // v3.0.495 -- the button stops being a Publish button. This is both the "do not let
@@ -12959,6 +12978,11 @@ async function publishStory() {
         if (d.storyUrl) novelPublishShowLibraryCta(d.storyUrl);
         else setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
+      } else if (d && d.code === 'replace_not_found') {
+        // v3.2.02 -- TD-984. The story left the Library; the list is read again so it is no longer offered.
+        if (btn) btn.textContent = 'Publish to Library';
+        if (st) { st.style.display = 'block'; st.textContent = d.error || 'That story is no longer in the Library.'; }
+        prepReloadReplace();
       } else if (d && d.error === 'optimize_required') {
         if (btn) btn.textContent = 'Publish to Library';
         if (st) { st.style.display = 'block'; st.textContent = d.message || 'Run Optimize on this book first, then publish the optimized layout.'; }
@@ -12977,26 +13001,8 @@ async function publishStory() {
     });
 }
 
-async function unpublishStory() {
-  if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (!await uiConfirm('Remove your story from the public Library?')) return;
-  var btn = document.getElementById('novel-publish-btn');
-  var st = document.getElementById('novel-publish-status');
-  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
-  fetch('/api/pdf/unpublish-story/' + state.currentCampaign.id, { method: 'POST' })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (btn) btn.disabled = false;
-      if (d && d.success) {
-        setStoryPublishedUI(false);
-        if (st) { st.style.display = 'block'; st.textContent = 'Removed from the Library.'; }
-      } else {
-        if (btn) btn.textContent = 'Unpublish from Library';
-        if (st) st.textContent = (d && d.error) || 'Could not remove.';
-      }
-    })
-    .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Unpublish from Library'; } if (st) st.textContent = 'Could not remove.'; });
-}
+// v3.2.02 -- TD-985. unpublishStory() stood here and is gone: nothing called it, and its route removed every story
+// the reader had published from the campaign at once. Stories are removed one at a time on Published Stories.
 
 function setStoryPublishedUI(published, url) {
   var btn = document.getElementById('novel-publish-btn');
@@ -13590,8 +13596,80 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
+    .then(function(d){ prepFillReplace(d && d.stories); if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Publishing makes a new Library entry unless you choose a story to replace under Publish as. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
     .catch(function(){});
+}
+
+// v3.2.02 -- TD-984. REPLACE A PUBLISHED STORY. The choice lists the reader's own stories from this campaign; the
+// server checks the same three things again (theirs, this campaign, still in the Library). Choosing one sets the
+// link-only box to that story's setting, which can still be changed, and puts its blurb in an empty blurb box;
+// choosing A new story puts both back as they were. Never unticks link only on a sensitive campaign, because
+// unticking there is a consent the reader gives by hand (prepUnlistedChanged).
+function prepFmtDate(v) {
+  try { var d = new Date(v); if (isNaN(d.getTime())) return ''; return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; }
+}
+function prepFillReplace(list) {
+  var wrap = document.getElementById('prep-replace-wrap');
+  var sel = document.getElementById('prep-replace');
+  if (!wrap || !sel) return;
+  if (state._prepReplaceKeep) { sel.value = ''; prepReplaceChanged(sel); }   // put the boxes back before the list is redrawn
+  state._prepReplaceList = Array.isArray(list) ? list : [];
+  state._prepReplaceKeep = null;
+  while (sel.options.length > 1) sel.remove(1);
+  sel.value = '';
+  state._prepReplaceList.forEach(function (s) {
+    var bits = [];
+    if (s.sessions) bits.push(s.sessions + (s.sessions === 1 ? ' session' : ' sessions'));
+    var when = prepFmtDate(s.created_at); if (when) bits.push('published ' + when);
+    if (s.visibility === 'unlisted') bits.push('link only');
+    var o = document.createElement('option');
+    o.value = String(s.id);
+    o.textContent = 'Replace \u201c' + (s.title || 'Untitled') + '\u201d' + (bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '');
+    sel.appendChild(o);
+  });
+  wrap.style.display = state._prepReplaceList.length ? '' : 'none';
+  var note = document.getElementById('prep-replace-note'); if (note) { note.style.display = 'none'; note.textContent = ''; }
+}
+function prepReplaceChosen() {
+  var sel = document.getElementById('prep-replace');
+  var v = sel ? String(sel.value || '') : '';
+  if (!v) return null;
+  var hit = (state._prepReplaceList || []).filter(function (s) { return String(s.id) === v; })[0];
+  return hit || null;
+}
+function prepReplaceChanged(sel) {
+  var s = prepReplaceChosen();
+  var un = document.getElementById('prep-unlisted');
+  var bl = document.getElementById('prep-blurb');
+  var note = document.getElementById('prep-replace-note');
+  if (s) {
+    if (!state._prepReplaceKeep) state._prepReplaceKeep = { unlisted: un ? !!un.checked : false, blurb: bl ? bl.value : '', filled: '' };
+    if (un) {
+      if (s.visibility === 'unlisted') un.checked = true;
+      else if (!prepCampaignSensitive()) un.checked = false;
+    }
+    if (bl && (!bl.value.trim() || bl.value === state._prepReplaceKeep.filled)) { bl.value = s.blurb || ''; state._prepReplaceKeep.filled = bl.value; }
+    if (note) {
+      note.style.display = 'block';
+      note.textContent = 'Its link, its place in the Library and its Bookshelf entries stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
+        ((s.visibility !== 'unlisted' && prepCampaignSensitive() && un && un.checked) ? ' It is listed in the Library now; untick link only to keep it listed.' : '');
+    }
+  } else {
+    var k = state._prepReplaceKeep;
+    if (k) {
+      if (un) un.checked = k.unlisted;
+      if (bl && bl.value === k.filled) bl.value = k.blurb;
+    }
+    state._prepReplaceKeep = null;
+    if (note) { note.style.display = 'none'; note.textContent = ''; }
+  }
+}
+function prepReloadReplace() {
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+  fetch('/api/pdf/story-status/' + state.currentCampaign.id)
+    .then(function (r) { return r.json(); })
+    .then(function (d) { prepFillReplace(d && d.stories); })
+    .catch(function () {});
 }
 
 function loadNovelSummary(cb) {

@@ -68,13 +68,13 @@ async function serveStoryPage(req, res) {
     let row = null;
     if (token) {
       row = await db.prepare(
-        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
+        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
       ).get(token);
     } else {
       const id = parseInt(req.params.id, 10);
       if (!id) return notFound();
       row = await db.prepare(
-        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
+        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
       ).get(id);
     }
     if (!row) return notFound();
@@ -153,6 +153,7 @@ async function serveStoryPage(req, res) {
     if (author) ld.author = { '@type': 'Person', name: author };
     if (cover) ld.image = cover;
     if (row.created_at) { try { ld.datePublished = new Date(row.created_at).toISOString(); } catch (e) {} }
+    if (row.updated_at) { try { ld.dateModified = new Date(row.updated_at).toISOString(); } catch (e) {} }   // v3.2.02 -- TD-984, a replaced story
 
     const seo =
       '<title>' + esc(title) + (author ? ' &mdash; by ' + esc(author) : '') + ' | Campaignia</title>' +

@@ -72,7 +72,6 @@ var DENY = [
   // --- Publication. Putting someone else's work in public, under their name. ---
   // Publishing is a SNAPSHOT and cannot be taken back cleanly, so it is the customer's decision.
   { m: 'POST', p: '/api/pdf/publish-story',         why: 'publish to the Library', prefix: true },
-  { m: 'POST', p: '/api/pdf/unpublish-story',       why: 'unpublish from the Library', prefix: true },
   { m: 'POST', p: '/api/pdf/story',                 why: 'unpublish from the Library', prefix: true, suffix: '/unpublish' },
 
   // --- The campaign's official book. v3.1.35 -- TD-928: Promote to Canonical changes what every member

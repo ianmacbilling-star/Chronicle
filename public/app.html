@@ -905,6 +905,13 @@
                  informed consent and not the enforcement. -->
             <label class="prep-attest"><input type="checkbox" id="prep-unlisted" onchange="prepUnlistedChanged(this)" /> <span>Publish as <strong>link only</strong> &mdash; anyone with the link can read it, but it will not be listed in the public Library or offered to search engines. You can change this later from your account page.</span></label>
             <div id="prep-unlisted-note" class="prep-hint" style="display:none;"></div>
+            <!-- v3.2.02 -- TD-984. Shown only when the reader already has stories from this campaign in the Library.
+                 Replacing keeps the story's link, its place in the Library and its Bookshelf entries. -->
+            <div id="prep-replace-wrap" style="display:none;">
+              <div class="prep-field-label">Publish as</div>
+              <select id="prep-replace" class="prep-textarea" style="min-height:0;resize:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
+              <div id="prep-replace-note" class="prep-hint" style="display:none;"></div>
+            </div>
             <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is
                  pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>

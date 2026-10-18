@@ -7825,6 +7825,22 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var _visRefusal = storyVisibilityRefusal(_pubSensitive, _pubVis === 'public', !!(req.body && req.body.consent === true));
   if (_visRefusal) return res.status(_visRefusal.status).json(_visRefusal.body);
 
+  // v3.2.02 -- TD-984. REPLACE A PUBLISHED STORY. Ian, 2026-10-17: fix something, run Optimize again, and put the
+  // new version in place of a story already in the Library, so its link, its Library number, its place in the
+  // Library and the Bookshelf entries pointing at it all stay. The old version goes and nothing brings it back
+  // (a saved copy on the Bookshelf is the author's own keepsake and is not touched).
+  // CHECKED HERE, BEFORE ANY WORK, and checked again at the write: only the caller's OWN story, from THIS
+  // campaign, still in the Library. Every other rule in this route (attestation, plan, visibility and consent,
+  // the page limit, the cover rights check) runs exactly as it does for a new story.
+  var _replaceAsk = (req.body && req.body.replaceStoryId != null && req.body.replaceStoryId !== '' && req.body.replaceStoryId !== 0);
+  var _replaceRow = null;
+  if (_replaceAsk) {
+    var _replaceId = Number(req.body.replaceStoryId);
+    if (!(_replaceId > 0) || Math.floor(_replaceId) !== _replaceId) return res.status(400).json({ error: 'That story could not be found to replace.', code: 'replace_not_found' });
+    _replaceRow = await db.prepare('SELECT id, pdf_url, share_token FROM public_stories WHERE id = ? AND user_id = ? AND campaign_id = ? AND public = TRUE').get(_replaceId, req.session.userId, campaign.id);
+    if (!_replaceRow) return res.status(404).json({ error: 'That story is no longer in the Library, so there is nothing to replace. Publish it as a new story instead.', code: 'replace_not_found' });
+  }
+
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
   const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
   // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
@@ -8190,11 +8206,27 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     }
     var _pubStyles = '{' + Object.keys(_styleSet).join(',') + '}';
     var _shareToken = makeShareToken();
-    var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, art_styles, visibility, share_token, safety_level, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?::text[], ?, ?, ?, TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubStyles, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
-    var _newStoryId = _ins ? _ins.lastInsertRowid : null;
+    if (_replaceRow) {
+      // v3.2.02 -- TD-984. THE SAME ROW, so id, created_at (the Library order) and share_token all stay. A story
+      // from before share tokens existed is given one now. user_id, campaign_id and public are in the WHERE, so a
+      // story unpublished since the check at the top is not written, and the new PDF is removed again.
+      if (_replaceRow.share_token) _shareToken = _replaceRow.share_token;
+      var _upd = await db.prepare(
+        'UPDATE public_stories SET author_name = ?, title = ?, pdf_url = ?, cover_url = ?, snapshot = ?::jsonb, slug = ?, blurb = ?, teaser = ?, genres = ?::text[], art_styles = ?::text[], visibility = ?, share_token = ?, safety_level = ?, updated_at = ? ' +
+        'WHERE id = ? AND user_id = ? AND campaign_id = ? AND public = TRUE'
+      ).run(authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubStyles, _pubVis, _shareToken, _pubSafety, nowIso, _replaceRow.id, req.session.userId, campaign.id);
+      if (!_upd || !_upd.changes) {
+        try { await deleteFile(pdfUrl); } catch (e3) {}
+        return res.status(409).json({ error: 'That story was taken out of the Library while this was publishing, so nothing was replaced. Publish it as a new story instead.', code: 'replace_not_found' });
+      }
+      var _newStoryId = _replaceRow.id;
+    } else {
+      var _ins = await db.prepare(
+        'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, art_styles, visibility, share_token, safety_level, public, created_at, updated_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], ?::text[], ?, ?, ?, TRUE, ?, ?)'
+      ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, _pubStyles, _pubVis, _shareToken, _pubSafety, nowIso, nowIso);
+      var _newStoryId = _ins ? _ins.lastInsertRowid : null;
+    }
     _ptLap('insertRow');
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
@@ -8243,6 +8275,17 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
 
   _ptLap('imageIndex');
+  // v3.2.02 -- TD-984. The replaced version's PDF is deleted only NOW, after the story points at the new one, so
+  // a failure anywhere above leaves the old version up and whole. Bookshelf entries pointing at this story take
+  // its new title, cover and link. Both are best-effort: the story itself is already right.
+  if (_replaceRow) {
+    if (_replaceRow.pdf_url && _replaceRow.pdf_url !== pdfUrl) { try { await deleteFile(_replaceRow.pdf_url); } catch (e4) { console.error('[publish-story] replaced PDF cleanup failed (non-fatal):', e4 && e4.message ? e4.message : e4); } }
+    try {
+      await db.prepare("UPDATE bookshelf_books SET campaign_name = ?, book_title = ?, cover_url = ?, story_url = ? WHERE kind = 'library' AND public_story_id = ?")
+        .run(authorName || '', title || '', coverUrl || '', '/library/story/s/' + _shareToken + '/' + (slug || 'story'), _replaceRow.id);
+    } catch (e5) { console.error('[publish-story] bookshelf refresh after replace failed (non-fatal):', e5 && e5.message ? e5.message : e5); }
+    try { console.log('[publish-story] replaced story ' + _replaceRow.id + ' in place (campaign ' + campaign.id + ')'); } catch (e6) {}
+  }
   // ONE line, always, whichever branch ran. If it shows `copy=` this took the v3.0.492
   // fast path; if it shows `renderFlattenUpload=` it did NOT, and that is the first thing
   // to look at before anything else is blamed for the wait.
@@ -8255,6 +8298,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var _outId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
     mismatch: _mismatch,                                        // v3.0.798 -- TD-608
+    replaced: !!_replaceRow,                                    // v3.2.02 -- TD-984
     storyId: _outId, slug: slug || null,
     // v3.0.832 -- THE TOKEN URL, because this link is handed to a person and it must
     // work for a story that was just published as link-only. The id url 404s for one.
@@ -8263,26 +8307,23 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       : (_outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null) });
 });
 
-// Unpublish the caller's OWN story for a campaign (admin moderation is separate).
-router.post('/unpublish-story/:campaignId', requireAuth, async function(req, res) {
-  const db = await getDb();
-  try {
-    var row = await db.prepare('SELECT pdf_url FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
-    await db.prepare('DELETE FROM public_stories WHERE campaign_id = ? AND user_id = ?').run(req.params.campaignId, req.session.userId);
-    if (row && row.pdf_url) { try { await deleteFile(row.pdf_url); } catch (e2) { console.error('[unpublish-story] R2 cleanup failed (non-fatal):', e2 && e2.message ? e2.message : e2); } }
-    return res.json({ success: true });
-  } catch (e) {
-    console.error('[unpublish-story] failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'Could not unpublish. Please try again.' });
-  }
-});
+// v3.2.02 -- TD-985. POST /unpublish-story/:campaignId stood here and is gone. It deleted EVERY story the caller had
+// published from the campaign, from when there could only be one; each story is removed by its own id below.
 
 // Whether the caller already has a published story for this campaign (button state).
 router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
     var row = await db.prepare('SELECT pdf_url, public, updated_at FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
-    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null });
+    // v3.2.02 -- TD-984. AND EVERY ONE OF THEM, for the Replace choice on the publish card. Newest first. The
+    // session count is read from the snapshot so a one-session story can be told from the whole book. A failure
+    // here only hides the choice; the publish card still publishes a new story.
+    var stories = [];
+    try {
+      var rs = await db.prepare("SELECT id, title, visibility, blurb, created_at, CASE WHEN jsonb_typeof(snapshot->'sessions') = 'array' THEN jsonb_array_length(snapshot->'sessions') ELSE 0 END AS n_sessions FROM public_stories WHERE campaign_id = ? AND user_id = ? AND public = TRUE ORDER BY created_at DESC, id DESC").all(req.params.campaignId, req.session.userId);
+      stories = (rs || []).map(function (r) { return { id: r.id, title: r.title || 'Untitled', visibility: r.visibility || 'public', blurb: r.blurb || '', created_at: r.created_at, sessions: Number(r.n_sessions) || 0 }; });
+    } catch (e2) { console.error('[story-status] story list failed (non-fatal):', e2 && e2.message ? e2.message : e2); }
+    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null, stories: stories });
   } catch (e) {
     return res.json({ published: false });
   }

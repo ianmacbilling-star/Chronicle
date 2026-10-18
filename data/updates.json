@@ -1,5 +1,32 @@
 [
   {
+    "version": "3.2.02",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3202-replace-published-story",
+        "kind": "feature",
+        "public": true,
+        "summary": "You can now replace a story you have already published with a new version. It keeps its link, its place in the Library and its Bookshelf entries, so links you have shared keep working.",
+        "detail": "Fix what you want, run Optimize, then go to Order & Publish. If you have already published from this campaign, choose which story to replace under Publish as, then press Publish to Library and confirm. The pages, cover, title and blurb become the new version; the old version is gone. Removing a story from Published Stories now asks in Campaignia\u2019s own window and says that links you have shared will stop working.",
+        "td": [
+          "TD-984",
+          "TD-985"
+        ]
+      },
+      {
+        "id": "3202-style-banner-clears",
+        "kind": "fix",
+        "public": true,
+        "summary": "In the custom art style builder, the message at the top about a refused reference picture now goes away as soon as you replace that picture.",
+        "detail": "Put a watermarked picture in a reference box and press Analyze: the box goes red and a message appears at the top. Replace the picture: the red box, the note under it and the message at the top all clear.",
+        "td": [
+          "TD-983"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.01",
     "staged_on": "2026-10-17",
     "entries": [
