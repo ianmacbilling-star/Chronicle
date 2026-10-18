@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.06",
+    "staged_on": "2026-10-18",
+    "entries": [
+      {
+        "id": "3206-email-change-from-support",
+        "kind": "fix",
+        "public": true,
+        "summary": "The emails about changing your account email now come from support@campaignia.com, and the warning to your old address tells you to write to support@campaignia.com if you can't sign in.",
+        "detail": "Start an email change on My Account. Both emails (\u201cConfirm your new Campaignia email\u201d to the new address and \u201cYour Campaignia email is being changed\u201d to the old one) show From: Campaignia <support@campaignia.com>. The warning's last line reads \u201cIf you can't sign in, email us at support@campaignia.com and we'll help.\u201d with the address as a link, and pressing Reply addresses support@campaignia.com. Every other Campaignia email is unchanged.",
+        "td": [
+          "TD-939"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.05",
     "staged_on": "2026-10-18",
     "entries": [

@@ -33,6 +33,9 @@ async function sendEmail(to, subject, html, opts) {
     html: html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
+  // v3.2.06 -- opts.from: an email that should come from a real inbox rather than FROM_EMAIL (the
+  // email-change notices come from support, Ian 2026-10-18). Opt-in; every other email is unchanged.
+  if (opts && opts.from) payload.from = 'Campaignia <' + opts.from + '>';
   if (opts && opts.replyTo) payload.reply_to = opts.replyTo;
   const { data, error } = await resend.emails.send(payload);
 
@@ -1578,6 +1581,10 @@ function emailChangeShell(title, inner) {
 </body>
 </html>`;
 }
+// v3.2.06 -- Ian, 2026-10-18: these come FROM support, and the heads-up says in so many words to write
+// to support (noreply@ was the From, so "reply to this email" could land nowhere). Same fallback as the
+// other emails that name support.
+function emailChangeSupport() { return String(process.env.SUPPORT_EMAIL || 'support@campaignia.com').trim(); }
 function emailChangeEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 function emailChangeConfirmHTML(name, newEmail, url) {
@@ -1595,15 +1602,14 @@ function emailChangeNoticeHTML(name, maskedNewEmail) {
       <div class="text">Greetings, ${emailChangeEsc(name || 'there')}.</div>
       <div class="text">Someone signed in to your Campaignia account asked to change its email to <strong>${emailChangeEsc(maskedNewEmail)}</strong>. Nothing changes until the link sent to that address is clicked, and until then this address stays in charge of your account.</div>
       <div class="text">If this was you, there is nothing more to do here.</div>
-      <div class="text">If it wasn't you, sign in and change your password straight away, then cancel the change on your My Account page. If you can't sign in, reply to this email and we'll help.</div>`);
+      <div class="text">If it wasn't you, sign in and change your password straight away, then cancel the change on your My Account page. If you can't sign in, email us at <a href="mailto:${emailChangeEsc(emailChangeSupport())}" style="color:#c9a84c;">${emailChangeEsc(emailChangeSupport())}</a> and we'll help.</div>`);
 }
 
 async function sendEmailChangeConfirmEmail(name, newEmail, url) {
-  await sendEmail(newEmail, 'Confirm your new Campaignia email', emailChangeConfirmHTML(name, newEmail, url));
+  await sendEmail(newEmail, 'Confirm your new Campaignia email', emailChangeConfirmHTML(name, newEmail, url), { from: emailChangeSupport(), replyTo: emailChangeSupport() });
 }
 async function sendEmailChangeNoticeEmail(name, oldEmail, maskedNewEmail) {
-  const support = process.env.SUPPORT_EMAIL || null;
-  await sendEmail(oldEmail, 'Your Campaignia email is being changed', emailChangeNoticeHTML(name, maskedNewEmail), support ? { replyTo: support } : undefined);
+  await sendEmail(oldEmail, 'Your Campaignia email is being changed', emailChangeNoticeHTML(name, maskedNewEmail), { from: emailChangeSupport(), replyTo: emailChangeSupport() });
 }
 
 module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
