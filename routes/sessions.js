@@ -9,6 +9,7 @@ const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllow
 // extra versions are a creative feature. Same rule the art styles use.
 const GOLD_RANK = 3;
 const imageHelpers = require('./images');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.91 -- TD-979
 const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
 // GET last used art style and layout style
@@ -363,7 +364,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
       'WHERE ch.campaign_id = ?'
     ).all(viewForkId, req.params.campaignId);
     await imageHelpers.attachPriorReferences(db, _refChars, session.id, req.params.campaignId, viewForkId);
-    const _refAssets = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId);
+    const _refAssets = await db.prepare(imageHelpers.ASSET_REF_SQL).all(req.params.campaignId);   // v3.1.90 -- TD-979
 
     // One query for every explicit cast on this fork, rather than two per
     // panel: a session can hold a great many panels.
@@ -728,8 +729,13 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
 
     // Edit FROM the current reference — session first, then canonical,
     // then an uploaded portrait — so amendments accumulate correctly.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
 
@@ -793,9 +799,14 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
 
     // Retouch FROM the current reference - session draft first, then canonical,
     // then an uploaded portrait. There must be something to retouch.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
 
@@ -970,9 +981,14 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
 
     // Restyle FROM the current reference - session snapshot first, then the
     // canonical, then an uploaded portrait. Same precedence as retouch.
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
-      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
+    const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
+    // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
+    const _baseReject = baseImage ? await rightsCheck.rejectedReason([baseImage]) : null;
+    if (_baseReject) return res.json({ error: _baseReject + ' Replace the character\u2019s uploaded picture with one you have the rights to.', code: 'RIGHTS_REJECTED' });
 
     const modelKey = await imageHelpers.getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
@@ -1221,9 +1237,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     ).all(viewForkId, campaignId);
     await imageHelpers.attachPriorReferences(db, chars, sessionId, campaignId);
 
-    const assets = await db.prepare(
-      'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
-    ).all(campaignId);
+    const assets = await db.prepare(imageHelpers.ASSET_REF_SQL).all(campaignId);   // v3.1.90 -- TD-979
 
     // Pass 2 — explicit per-panel casts for this version (only panels the user
     // has edited have rows; panels without rows fall back to name-match).
@@ -1500,7 +1514,7 @@ async function panelReferenceCast(db, moment, explicitIds) {
 // and the picker's own empty-state sentence already says as much.
 async function panelReferenceAssets(db, moment, explicitAssetIds) {
   try {
-    const rows = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(moment.campaign_id);
+    const rows = await db.prepare(imageHelpers.ASSET_REF_SQL).all(moment.campaign_id);   // v3.1.90 -- TD-979
     const row = await db.prepare('SELECT prompt, description, title FROM moments WHERE id = ?').get(moment.id);
     if (!row) return [];
     const text = (row.prompt || '') + ' ' + (row.description || '') + ' ' + (row.title || '');

@@ -9,6 +9,7 @@ const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const { imageFileFilter, friendlyUploadMsg, ACCEPTED_MIME } = require('../middleware/uploadGuard');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979 (and v3.1.91: inside Analyze)
 const path = require('path');
 
 // Custom Art Styles are account-wide and owned by the user. CREATE / manage is
@@ -324,9 +325,12 @@ const STYLE_ANALYZE_SYSTEM =
   DESCRIPTION_RULES + '\n\n' + THREE_WAYS + '\n\n' +
   'Set "fade" to true ONLY if the images characteristically fade to clean pure white (#ffffff) at the edges with ' +
   'no frame; otherwise false.\n\n' +
+  // v3.1.91 -- TD-979. The same look answers the watermark/signature question, one entry per image.
+  'Also fill "rights" with one object per reference image, in the order given. ' + rightsCheck.RIGHTS_DEFINITIONS + '\n\n' +
   'Reply with ONLY this JSON, no markdown, no preamble:\n' +
   '{"answers": {' + STYLE_QUESTIONS.map(function (q) { return '"' + q[0] + '": "..."'; }).join(', ') + '}, ' +
-  '"samples_disagree": "", "fade": false, "descriptions": ["STYLE: ...", "STYLE: ...", "STYLE: ..."]}';
+  '"samples_disagree": "", "fade": false, "descriptions": ["STYLE: ...", "STYLE: ...", "STYLE: ..."], ' +
+  '"rights": [{"watermark": false, "watermark_text": "", "signature": false, "signature_text": ""}]}';   // v3.1.91
 
 const STYLE_REWRITE_SYSTEM =
   'You write art-style directives for an image generator from a set of answers about how a style is drawn. ' +
@@ -503,14 +507,45 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
       if (!(await canAfford(req.session.userId, COST_ANALYZE))) {
         return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to analyze a style.' });
       }
+      // v3.1.90 -- TD-979. Samples whose file details name a stock library are refused before anything
+      // is stored or spent, and so is a saved sample already marked rejected. Warnings ride along.
+      // v3.2.00 -- AND THE QUICK LOOK, FIRST. Ian: the refusal took seventeen seconds inside the full analysis --
+      // "can you do it quicker?". Every reference gets the small Haiku look at once, side by side, before
+      // anything is stored or the analysis starts; a watermark refuses in a few seconds, nothing charged. The
+      // analysis still answers the question too (the second check). Each picture is looked at once.
+      // References are named by their SLOT (Reference 1-4), which the page sends: the slot is what the person
+      // sees, and "Sample 1" made them guess which of four boxes was meant (testers).
+      let _slots = [];
+      try { _slots = JSON.parse((req.body && req.body.slots) || '[]'); } catch (e) { _slots = []; }
+      if (!Array.isArray(_slots)) _slots = [];
+      const _slotNo = function (i) { var n = parseInt(_slots[i], 10); return (n >= 1 && n <= 4) ? n : (i + 1); };
+      const _why = function (r) { var x = (r.reasons || []).filter(function (y) { return y && y.kind !== 'signature' && y.kind !== 'copyright'; })[0]; return (x && x.text) || 'This picture has a watermark.'; };
+      const _sampleRights = files.map(function (f) { return rightsCheck.metadataCheck(f.buffer); });
+      const _lookCtx = { kind: 'style-sample', userId: req.session.userId };
+      const _quick = await Promise.all(files.map(function (f) { return rightsCheck.quickLook(f.buffer, _lookCtx); })
+        .concat(existingUrls.map(function (u) { return rightsCheck.checkReference(u, _lookCtx); })));
+      const _slotRights = [];
+      let _refusal = null;
+      for (let _k = 0; _k < files.length + existingUrls.length; _k++) {
+        const _r = _k < files.length ? rightsCheck.combine(_sampleRights[_k], _quick[_k]) : _quick[_k];
+        if (_r.verdict === 'warn' || _r.verdict === 'reject') _slotRights.push({ slot: _slotNo(_k), verdict: _r.verdict, reasons: _r.reasons || [] });
+        if (!_refusal && _r.verdict === 'reject') _refusal = 'Reference ' + _slotNo(_k) + ': ' + _why(_r);
+      }
+      if (_refusal) return res.json({ error: _refusal + ' Replace it with a picture you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights_slots: _slotRights });
       const content = [];
       const sampleUrls = [];
+      const _imgUrlOrder = [];   // v3.1.91 -- TD-979: the stored address of each image block, in order (null if not stored)
+      const _imgSlot = [];       // v3.2.00: and the slot each image block came from
       for (const f of files) {
         content.push({ type: 'image', source: { type: 'base64', media_type: f.mimetype, data: f.buffer.toString('base64') } });
+        const _slot = _imgUrlOrder.push(null) - 1;   // v3.1.91
+        _imgSlot.push(_slotNo(files.indexOf(f)));   // v3.2.00
         try {
           const ext = path.extname(f.originalname) || '.jpg';
           const url = await uploadFile(f.buffer, 'style-sample-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext, f.mimetype);
           if (url) sampleUrls.push(url);
+          _imgUrlOrder[_slot] = url || null;   // v3.1.91
+          if (url) await rightsCheck.record(url, rightsCheck.combine(_sampleRights[files.indexOf(f)], _quick[files.indexOf(f)]), { kind: 'style-sample', userId: req.session.userId });   // v3.1.90/v3.2.00 -- TD-979
         } catch (e) { console.error('sample upload failed:', e.message); }
       }
       for (const u of existingUrls) {
@@ -523,6 +558,8 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
           const mt = okTypes.indexOf(mt0) >= 0 ? mt0 : 'image/jpeg';
           content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: buf.toString('base64') } });
           sampleUrls.push(u);
+          _imgUrlOrder.push(u);   // v3.1.91
+          _imgSlot.push(_slotNo(files.length + existingUrls.indexOf(u)));   // v3.2.00
         } catch (e) { console.error('existing sample fetch failed:', e.message); }
       }
       if (content.filter(function(c){ return c.type === 'image'; }).length < 2) {
@@ -542,6 +579,22 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         return res.json({ error: 'The analysis came back in an unexpected shape. Nothing was charged; please try again.' });
       }
 
+      // v3.1.91 -- TD-979. Each sample's watermark/signature answer joins what its file details said. A
+      // watermark stops here, before the token is spent. A missing answer is unchecked and stops nothing.
+      const _rv = (parseModelJson(raw) || {}).rights;
+      let _styleRefusal = null;
+      for (let _i = 0; _i < _imgUrlOrder.length; _i++) {
+        const _v = rightsCheck.verdictFromAnswer(Array.isArray(_rv) ? (_rv[_i] || null) : null);
+        const _u = _imgUrlOrder[_i];
+        if (_u) {
+          const _prev = (await rightsCheck.lookup([_u]))[rightsCheck.normUrl(_u)];
+          await rightsCheck.record(_u, rightsCheck.combine(_prev, _v), { kind: 'style-sample', userId: req.session.userId });
+        }
+        if (_v.verdict === 'reject' && !_slotRights.some(function (x) { return x.slot === _imgSlot[_i]; })) _slotRights.push({ slot: _imgSlot[_i], verdict: 'reject', reasons: _v.reasons });   // v3.2.00
+        if (!_styleRefusal && _v.verdict === 'reject') _styleRefusal = 'Reference ' + (_imgSlot[_i] || (_i + 1)) + ': ' + _v.reasons[0].text;   // v3.2.00: the slot's name
+      }
+      if (_styleRefusal) return res.json({ error: _styleRefusal + ' Replace it with a picture you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights_slots: _slotRights });
+
       try { await spendTokens(req.session.userId, COST_ANALYZE, { source: 'custom_style_analyze', event_type: 'generation_spend' }); } catch (e) { console.error('analyze spend failed:', e.message); }
       try { await recordGeneration(req.session.userId, { event_type: 'custom_style_analyze', tokens_redeemed: COST_ANALYZE, quantity: 1, unit: 'analysis', model: TEXT_MODEL }); } catch (e) {}
 
@@ -552,6 +605,8 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         answers: shaped.answers,
         descriptions: shaped.descriptions,
         samples_disagree: shaped.samples_disagree,
+        rights: rightsCheck.responseRights(await rightsCheck.lookup(sampleUrls)),   // v3.1.90 -- TD-979
+        rights_slots: _slotRights,   // v3.2.00: a signed reference is noted on its box
         questions: STYLE_QUESTIONS.map(function (q) { return { key: q[0], label: q[1], help: q[2] }; })
       });
     } catch (e) {

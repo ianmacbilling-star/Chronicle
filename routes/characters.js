@@ -31,6 +31,7 @@ const path = require('path');
 const { versionsForCampaign } = require('../database/db');     // v3.1.23 -- TD-918 (second destructures; the lines above are untouched)
 const { getCampaignRole } = require('../middleware/auth');
 const { restoreCopy } = require('../storage/storage');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 
 // Use memory storage - we handle the upload ourselves via storage layer
 const upload = multer({
@@ -47,13 +48,27 @@ const uploadFields = upload.fields([
   { name: 'image_other', maxCount: 1 }
 ]);
 
-async function handleFileUpload(files, fieldname, oldUrl) {
+async function handleFileUpload(files, fieldname, oldUrl, ctx) {
   if (!files || !files[fieldname] || !files[fieldname][0]) return null;
   const file = files[fieldname][0];
   // Generate unique filename
   const ext = path.extname(file.originalname) || '.jpg';
   const filename = 'char-' + Date.now() + '-' + fieldname + ext;
-  return await uploadFile(file.buffer, filename, file.mimetype);
+  const url = await uploadFile(file.buffer, filename, file.mimetype);
+  // v3.1.90 -- TD-979. The file details, read by uploadGuard from the original bytes. ONE place, so every
+  // character upload (create and update, all five slots) gets it.
+  // v3.1.93 -- and the small Haiku look as well, as assets and panels already get (Ian, 2026-10-16: about
+  // 0.2 of a cent a picture, on the house). Waiting for the build left a watermarked picture unmarked,
+  // drawn on the Company page and usable by re-roll and the session edits until someone pressed Build.
+  // The build still looks again (a second check). With ctx.pending the looks run side by side and the
+  // route waits for them all, so a save with four pictures takes one look's time, not four.
+  if (url) {
+    const _rc = Object.assign({ kind: 'character' }, ctx || {});
+    delete _rc.pending;
+    const _p = rightsCheck.checkUpload(url, file, file.buffer, _rc).catch(function () { return null; });
+    if (ctx && ctx.pending) ctx.pending.push(_p); else await _p;
+  }
+  return url;
 }
 
 // GET all characters
@@ -263,11 +278,13 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload
     const db = await getDb();
     const now = new Date().toISOString();
 
-    const image = await handleFileUpload(req.files, 'image', null);
-    const image_portrait = await handleFileUpload(req.files, 'image_portrait', null);
-    const image_fullbody = await handleFileUpload(req.files, 'image_fullbody', null);
-    const image_action = await handleFileUpload(req.files, 'image_action', null);
-    const image_other = await handleFileUpload(req.files, 'image_other', null);
+    const _rc = { userId: req.session.userId, campaignId: req.params.campaignId, pending: [] };   // v3.1.93 -- TD-979
+    const image = await handleFileUpload(req.files, 'image', null, _rc);
+    const image_portrait = await handleFileUpload(req.files, 'image_portrait', null, _rc);
+    const image_fullbody = await handleFileUpload(req.files, 'image_fullbody', null, _rc);
+    const image_action = await handleFileUpload(req.files, 'image_action', null, _rc);
+    const image_other = await handleFileUpload(req.files, 'image_other', null, _rc);
+    await Promise.all(_rc.pending);
 
     const npcFlag = (is_npc === true || is_npc === 'true' || is_npc === 1 || is_npc === '1');
     const result = await db.prepare(
@@ -275,6 +292,8 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload
     ).run(req.params.campaignId, name.trim(), player_name || '', cls || '', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, parseHeightFt(req.body.height_ft), now, req.session.userId);
 
     const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+    // v3.1.90 -- TD-979. What the check found on the pictures uploaded just now; the page says so.
+    if (character) character.rights = rightsCheck.responseRights(await rightsCheck.lookup([image, image_portrait, image_fullbody, image_action, image_other]));
     res.json(character);
   } catch(e) {
     console.error('Character create error:', e.message);
@@ -303,17 +322,19 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
     const images = {};
     const oldImages = {};
 
+    const _rc = { userId: req.session.userId, campaignId: req.params.campaignId, pending: [] };   // v3.1.93 -- TD-979
     for (const field of imageFields) {
       if (req.body['clear_' + field] === 'true') {
         oldImages[field] = char[field];
         images[field] = null;
       } else if (req.files && req.files[field] && req.files[field][0]) {
         oldImages[field] = char[field];
-        images[field] = await handleFileUpload(req.files, field);
+        images[field] = await handleFileUpload(req.files, field, null, _rc);
       } else {
         images[field] = char[field];
       }
     }
+    await Promise.all(_rc.pending);
 
     // is_npc toggle stays DM-only — silently preserve the existing value
     // when a player is editing. NPC conversion is a campaign authoring
@@ -349,6 +370,11 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
     }
 
     const updated = await db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
+    // v3.1.90 -- TD-979. Only the pictures uploaded in THIS request, so an old warning is not repeated.
+    if (updated) {
+      const _newUrls = imageFields.filter(function (f) { return req.files && req.files[f] && req.files[f][0]; }).map(function (f) { return images[f]; });
+      updated.rights = rightsCheck.responseRights(await rightsCheck.lookup(_newUrls));
+    }
     res.json(updated);
   } catch(e) {
     console.error('Character update error:', e.message);
@@ -635,16 +661,32 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
       return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
     }
 
-    // Collect any uploaded reference images (public R2 URLs) for vision input
-    const imageUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
+    // v3.1.93 -- TD-979. Ian, 2026-10-16: "if some of the images are ok it just uses them and rejects the
+    // ones it can't". A REJECTED PICTURE IS LEFT OUT and the build goes on with the others. Only when every
+    // uploaded picture is rejected does it stop -- before any AI call, so nothing is written, generated or
+    // charged. (v3.1.91 stopped on any one rejected picture.)
+    const _allUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
       .filter(function(u) { return u && /^https?:\/\//.test(u); });
+    const _pre = await rightsCheck.splitRejected(_allUrls);
+    let imageUrls = _pre.clean;
+    const _leftOut = _pre.rights.slice();
+    if (_allUrls.length && !imageUrls.length) {
+      return res.json({ error: _pre.reason + ' Replace that picture with one you have the rights to, then build the character again. Nothing was charged.',
+        code: 'RIGHTS_REJECTED', rights: _leftOut });
+    }
 
+    let promptText = null;
+    let _charRights = {};
+    // AT MOST TWO LOOKS. The look below also answers the watermark question (the second check). If it finds
+    // a watermark the upload check missed, that picture has already been seen alongside the others, so the
+    // description is written again without it. If that leaves nothing, or the second look finds another,
+    // it stops; the picture is recorded, so the next press leaves it out before any call.
+    for (let _look = 0; _look < 2; _look++) {
     // Build the message content: the images first, then the instruction
     const content = [];
     imageUrls.forEach(function(url) {
       content.push({ type: 'image', source: { type: 'url', url: url } });
     });
-
     const textInfo =
       'Character name: ' + char.name + '\n' +
       // v3.0.746 -- TD-545. OMITTED when empty, not defaulted. 'Class/role: ' with nothing after
@@ -661,7 +703,10 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
       'skin tone, signature outfit and its colors, and any notable gear or markings. ' +
       'Do NOT describe personality, backstory, pose, background, or art style — physical ' +
       'appearance only. 2-4 sentences, dense with concrete visual detail. ' +
-      'Return ONLY the description text, no preamble or labels.';
+      'Return ONLY the description text, no preamble or labels.' +
+      // v3.1.91 -- TD-979. The same look also answers the watermark/signature question, on its own last
+      // line (removed below before anything is saved). Only when there are pictures to look at.
+      (imageUrls.length ? ('\n\n' + rightsCheck.RIGHTS_LINE_INSTRUCTION) : '');
 
     content.push({ type: 'text', text: textInfo });
 
@@ -696,8 +741,42 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     const data = await response.json();
     if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
 
-    const promptText = data.content.map(function(b) { return b.text || ''; }).join('').trim();
+    // v3.1.91 -- TD-979. Split off the RIGHTS line; the description alone is the prompt.
+    const _split = rightsCheck.splitRightsLine(data.content.map(function(b) { return b.text || ''; }).join(''));
+    promptText = _split.text;
     if (!promptText) return res.json({ error: 'No description was generated.' });
+    // Each picture's answer joins what its upload check already said.
+    // A missing or unreadable answer is 'unchecked' and stops nothing (fails open).
+    _charRights = {};
+    for (let _i = 0; _i < imageUrls.length; _i++) {
+      const _vis = rightsCheck.verdictFromAnswer(_split.rights ? (_split.rights[_i] || null) : null);
+      const _prev = (await rightsCheck.lookup([imageUrls[_i]]))[rightsCheck.normUrl(imageUrls[_i])];
+      const _c = rightsCheck.combine(_prev, _vis);
+      await rightsCheck.record(imageUrls[_i], _c, { kind: 'character', userId: req.session.userId, campaignId: req.params.campaignId });
+      _charRights[imageUrls[_i]] = _c;
+    }
+    const _rejNow = imageUrls.filter(function (u) { return _charRights[u].verdict === 'reject'; });
+    if (!_rejNow.length) break;
+    _rejNow.forEach(function (u) { _leftOut.push({ url: rightsCheck.normUrl(u), verdict: 'reject', reasons: _charRights[u].reasons || [] }); });
+    const _cleanNow = imageUrls.filter(function (u) { return _charRights[u].verdict !== 'reject'; });
+    if (!_cleanNow.length || _look === 1) {
+      const _why = _charRights[_rejNow[0]].reasons.filter(function (x) { return x.kind === 'watermark' || x.kind === 'stock'; })[0];
+      return res.json({ error: ((_why && _why.text) || 'One of the pictures has a watermark.') + (_cleanNow.length
+          ? ' That picture will be left out: press Build again to build from the others. Nothing was charged.'
+          : ' Replace that picture with one you have the rights to, then build the character again. Nothing was charged.'),
+        code: 'RIGHTS_REJECTED', rights: _leftOut });
+    }
+    imageUrls = _cleanNow;
+    }   // the two looks
+    // Pictures left out are named on the page; warned ones keep their amber note.
+    const _leftOutKeys = _leftOut.map(function (x) { return x.url; });
+    const _isLeftOut = function (u) { return !!u && _leftOutKeys.indexOf(rightsCheck.normUrl(u)) !== -1; };
+    const _rightsOut = _leftOut.concat(rightsCheck.responseRights(_charRights).filter(function (x) { return _leftOutKeys.indexOf(x.url) === -1; }));
+    const _rightsNote = _leftOut.length
+      ? (_leftOut.length === 1 ? '1 picture was left out of the build: ' : (_leftOut.length + ' pictures were left out of the build. ')) +
+        ((_leftOut[0].reasons || []).filter(function (x) { return x && (x.kind === 'watermark' || x.kind === 'stock'); }).map(function (x) { return x.text; })[0] || 'it has a watermark.') +
+        ' The character was built from the others. Replace it with a picture you have the rights to.'
+      : null;
 
     const now = new Date().toISOString();
     await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
@@ -710,7 +789,8 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     try {
       const webhookUrl = imageHelpers.falWebhookUrl();
       if (falKey && webhookUrl) {
-        const portrait = char.image_portrait || char.image_fullbody || char.image || null;
+        // v3.1.93 -- TD-979. The first uploaded picture that was not left out (a rejected one never goes).
+        const portrait = [char.image_portrait, char.image_fullbody, char.image].filter(function (u) { return u && !_isLeftOut(u); })[0] || null;
         const sub = await imageHelpers.submitReference(falKey, promptText, portrait, modelKey, webhookUrl);
         const ts = new Date().toISOString();
         const jobIns = await db.prepare(
@@ -723,7 +803,8 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
       console.error('Canonical reference image submit failed (non-fatal):', imgErr.message);
     }
 
-    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId });
+    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId,
+      rights: _rightsOut, rights_note: _rightsNote });   // v3.1.91/v3.1.93 -- TD-979: left out, or a signature warns
   } catch(e) {
     console.error('Rebuild prompt error:', e.message);
     res.json({ error: friendlyAnthropicError(e) });
@@ -779,7 +860,11 @@ router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacte
     }
     // Generate from the EXISTING prompt. A failure throws to the catch below,
     // so tokens are never spent on a failed generation.
-    const portrait = char.image_portrait || char.image_fullbody || char.image || null;
+    // v3.1.91 -- TD-979. Never send a rejected uploaded picture to the image model.
+    // v3.1.93 -- use the first one that is not rejected; refuse only when every one is.
+    const _ups = await rightsCheck.splitRejected([char.image_portrait, char.image_fullbody, char.image]);
+    const portrait = _ups.clean[0] || null;
+    if (!portrait && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const sub = await imageHelpers.submitReference(falKey, char.canonical_prompt, portrait, modelKey, webhookUrl);
@@ -808,6 +893,7 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
       return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
     }
     if (!char.canonical_reference_url) return res.json({ error: 'There is no reference image to retouch yet.' });
+    if (await rightsCheck.refuseRejected(res, [char.canonical_reference_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
     const instruction = req.body.instruction;
     if (!instruction || !String(instruction).trim()) return res.json({ error: 'Describe the change you want.' });
     const falKey = process.env.FAL_API_KEY || req.body.fal_key;

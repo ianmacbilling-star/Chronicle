@@ -2231,11 +2231,11 @@ function myStoryCard(it) {
   card.appendChild(visWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
-  var armed = false; var tmr = null;
+  // v3.2.02 -- TD-984. Asked in our own window (was click twice), and it says what happens to shared links.
   btn.onclick = function(){
-    if (!armed) { armed = true; btn.textContent = 'Click again to remove'; tmr = setTimeout(function(){ armed = false; btn.textContent = 'Remove from Library'; }, 3000); return; }
-    if (tmr) clearTimeout(tmr);
-    removeMyStory(it.id, card, btn);
+    uiConfirm('Links you have shared will stop working. To change a story without breaking its link, use Replace when you publish.',
+      { title: 'Remove \u201c' + (it.title || 'Untitled') + '\u201d from the Library?', okText: 'Remove it', cancelText: 'Keep it', danger: true })
+      .then(function (ok) { if (ok) removeMyStory(it.id, card, btn); });
   };
   card.appendChild(btn);
   return card;
@@ -5042,6 +5042,11 @@ var _helpError = '';       // transient error shown below the thread
 function _helpCurrentViewId() {
   var _csm = document.getElementById('cstyle-modal');   // v3.1.81: the custom art style builder is open
   if (_csm && !_csm.classList.contains('hidden')) return 'custom_style_builder';
+  // v3.1.95 -- the three windows that gained a ?s. The Title Builder first: it can open over the others.
+  var _open = function (id) { var e = document.getElementById(id); return !!(e && !e.classList.contains('hidden')); };
+  if (_open('title-build-modal')) return 'title_builder';
+  if (_open('char-modal')) return 'character_builder';
+  if (_open('campaign-settings-modal')) return 'campaign_details';
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -5118,6 +5123,60 @@ function csOpenHelp() {
   var m = document.getElementById('help-panel');
   if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
 }
+// v3.1.95 -- Ian: add the ?s to the Title Builder, the character window and the New Campaign window "like we
+// did for the custom Art builder and the Retouch dialogs". The same shape: the window's tips go into the
+// thread once, then help opens over the window. Tips approved by Ian 2026-10-17, taken from the Brain.
+var TB_HELP_INTRO = [
+  'A few things that make a drawn title come out well:',
+  '',
+  'Your title and subtitle come from the book, and the drawing uses those exact words. Change them on the screen before if they are not right.',
+  '',
+  'Describe how the lettering should look, for example emeralds set in iron, or carved in stone. That is what decides the style.',
+  '',
+  'Add a reference picture if you want the lettering to copy its style.',
+  '',
+  'Each Generate costs a token. Nothing reaches your book until you press Done & Use.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+var CHAR_HELP_INTRO = [
+  'A few things that make a character come out well:',
+  '',
+  'Add nicknames after a slash ("Theron Ashwood / Ash") so the story recognises them.',
+  '',
+  'Describe looks and personality. Looks shape the pictures, and personality shapes the story.',
+  '',
+  'More reference pictures give a more consistent character. Use only pictures you own or have the rights to.',
+  '',
+  'Then press Build to make the character\'s prompt and reference picture.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+var CAMP_HELP_INTRO = [
+  'A few things that make a campaign work well:',
+  '',
+  'Lore is your world: its places, factions, history and tone. Every session draws on it.',
+  '',
+  'Pick up to three genres, in order. They steer the writing and the pictures.',
+  '',
+  'The Campaign Prompt is your own standing direction, carried into every session.',
+  '',
+  'Set up your characters before generating stories, so Campaignia knows who\'s who.',
+  '',
+  'Ask me anything else about it below.'
+].join('\n');
+function _dlgOpenHelp(intro) {
+  try {
+    var seeded = _helpThread.length && _helpThread[_helpThread.length - 1].content === intro;
+    if (!seeded) _helpThread.push({ role: 'assistant', content: intro });
+  } catch (e) { /* the tips are a courtesy; never block the window */ }
+  openHelp();
+  var m = document.getElementById('help-panel');
+  if (m) m.style.zIndex = '120';   // above .modal-overlay at 100
+}
+function tbOpenHelp() { _dlgOpenHelp(TB_HELP_INTRO); }
+function charOpenHelp() { _dlgOpenHelp(CHAR_HELP_INTRO); }
+function campOpenHelp() { _dlgOpenHelp(CAMP_HELP_INTRO); }
 function openHelp() {
   var m = document.getElementById('help-panel'); if (!m) return;
   m.classList.remove('hidden');
@@ -5659,12 +5718,59 @@ function collectCstyleFiles() {
 }
 function collectCstyleRefs() {
   var files = []; var urls = [];
-  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){
-    if (slotFiles[k]) { files.push(slotFiles[k]); return; }
+  var fileSlots = []; var urlSlots = [];   // v3.2.00 -- which box each picture is in, so a refusal can name it
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){
+    if (slotFiles[k]) { files.push(slotFiles[k]); fileSlots.push(i + 1); return; }
     var pv = document.getElementById('preview-' + k);
-    if (pv && pv.src && /^https?:/i.test(pv.src) && !pv.classList.contains('hidden')) urls.push(pv.src);
+    if (pv && pv.src && /^https?:/i.test(pv.src) && !pv.classList.contains('hidden')) { urls.push(pv.src); urlSlots.push(i + 1); }
   });
-  return { files: files, urls: urls };
+  return { files: files, urls: urls, slots: fileSlots.concat(urlSlots) };
+}
+// v3.2.00 -- TD-979. A REFUSED OR SIGNED REFERENCE IS MARKED ON ITS BOX. The pictures in these boxes usually come
+// straight from the computer and are not stored yet, so the marks the rest of the app hangs on a stored picture
+// cannot reach them. The reply names the slot; the box is outlined (red for a watermark, amber for a
+// signature) with the reason under it, and the mark goes the moment that box's picture changes or is removed.
+function csRightsSlotClear(n) {
+  try {
+    var box = document.getElementById('drop-cstyle_' + n);
+    if (box) { box.style.outline = ''; box.style.outlineOffset = ''; box.removeAttribute('data-cs-rights'); if (box._csRightsObs) { box._csRightsObs.disconnect(); box._csRightsObs = null; } }
+    var note = document.getElementById('cs-rights-note-' + n);
+    if (note && note.parentNode) note.parentNode.removeChild(note);
+  } catch (e) {}
+}
+function csRightsSlotMark(list) {
+  try {
+    for (var n = 1; n <= 4; n++) csRightsSlotClear(n);
+    (list || []).forEach(function (it) {
+      var n = parseInt(it && it.slot, 10); if (!(n >= 1 && n <= 4)) return;
+      var box = document.getElementById('drop-cstyle_' + n); if (!box || !box.parentNode) return;
+      var red = it.verdict === 'reject';
+      box.style.outline = '3px solid ' + (red ? '#dc2626' : '#d97706'); box.style.outlineOffset = '-3px';
+      box.setAttribute('data-cs-rights', red ? 'reject' : 'warn');   // v3.2.02 -- TD-983
+      var note = document.createElement('div');
+      note.id = 'cs-rights-note-' + n; note.setAttribute('role', 'note');
+      note.style.cssText = (red ? 'color:#fecaca;background:#7f1d1d;' : 'color:#fde68a;background:#5c3d0a;') + 'font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+      var why = ((it.reasons || []).map(function (r) { return r && r.text; }).filter(Boolean)).join(' ');
+      note.textContent = red ? ('Watermark or stock picture \u2014 replace this picture. ' + why) : (why + ' Use it only if it\u2019s yours or you have permission.');
+      box.parentNode.insertBefore(note, box.nextSibling);
+      var pv = document.getElementById('preview-cstyle_' + n);
+      if (pv && typeof MutationObserver === 'function') {
+        var was = pv.getAttribute('src');
+        var obs = new MutationObserver(function () { if (pv.getAttribute('src') !== was || pv.classList.contains('hidden')) { csRightsSlotClear(n); if (red) csRightsBannerSweep(); } });
+        obs.observe(pv, { attributes: true, attributeFilter: ['src', 'class'] });
+        box._csRightsObs = obs;
+      }
+    });
+  } catch (e) {}
+}
+// v3.2.02 -- TD-983. The refusal banner at the top named a picture that had already been replaced (testers). It is
+// cleared once no reference box is still refused; one still red keeps it, since it is then still true of that one.
+function csRightsBannerSweep() {
+  try {
+    for (var i = 1; i <= 4; i++) { var b = document.getElementById('drop-cstyle_' + i); if (b && b.getAttribute('data-cs-rights') === 'reject') return; }
+    var e = document.getElementById('cstyle-error');
+    if (e && /^Reference \d+:/.test(e.textContent || '')) cstyleErr('');
+  } catch (e2) {}
 }
 function analyzeCustomStyle() {
   cstyleErr('');
@@ -5678,9 +5784,12 @@ function analyzeCustomStyle() {
     var fd = new FormData();
     refs.files.forEach(function(f){ fd.append('images', f); });
     fd.append('sample_urls', JSON.stringify(refs.urls));
+    fd.append('slots', JSON.stringify(refs.slots || []));   // v3.2.00
+    csRightsSlotMark([]);
     fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
       .then(function(r){ return r.json(); })
       .then(function(data){
+        if (data && Array.isArray(data.rights_slots)) csRightsSlotMark(data.rights_slots);   // v3.2.00
         if (data.error) { cstyleErr(data.message || data.error); return; }
         // v3.1.67 -- TD-964. Answers, three descriptions, no winner yet.
         if (Array.isArray(data.questions) && data.questions.length) CS.questions = data.questions;
@@ -6081,16 +6190,24 @@ function editCustomStyle(id) {
   csLoadQuestions(csRender);
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
+// v3.2.01 -- Ian: "the delete custom art style modal needs to be one of our modals not a browser modal." Asked in
+// Campaignia's own window (appConfirm), as every other delete is; the delete itself is unchanged.
 function deleteCustomStyle(id) {
   var sObj = customStyleById(id);
-  if (!confirm('Delete the custom style "' + ((sObj && sObj.name) || 'this style') + '"? This cannot be undone.')) return;
-  fetch('/api/art-styles/custom/' + id, { method: 'DELETE' })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data && data.error) { cstyleErr(data.error); return; }
-      loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
-    })
-    .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
+  appConfirm({
+    title: 'Delete this custom style?',
+    body: '\u201c' + ((sObj && sObj.name) || 'This style') + '\u201d will be deleted. This cannot be undone.',
+    okLabel: 'Delete', cancelLabel: 'Keep it', danger: true,
+    onOk: function () {
+      fetch('/api/art-styles/custom/' + id, { method: 'DELETE' })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if (data && data.error) { cstyleErr(data.error); return; }
+          loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+        })
+        .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
+    }
+  });
 }
 
 function openStylePicker(kind) {
@@ -6938,7 +7055,7 @@ function setCampaignCover(archiveId, cb) {
       showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the cover.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the cover.');
     }
   })
   .catch(function(){ showError('Could not update the campaign cover.'); });
@@ -6965,7 +7082,7 @@ function setCampaignBackCover(archiveId, cb) {
       showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the back cover.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the back cover.');
     }
   })
   .catch(function(){ showError('Could not update the back cover.'); });
@@ -6993,7 +7110,7 @@ function setCampaignTitleImage(archiveId, cb) {
       showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
       if (typeof cb === 'function') cb();
     } else {
-      showError((data && data.error) || 'Could not update the title image.');
+      if (!_cmpRightsRefused(data)) showError((data && data.error) || 'Could not update the title image.');
     }
   })
   .catch(function(){ showError('Could not update the title-page image.'); });
@@ -8143,6 +8260,12 @@ function renderCharModalPrompt(char) {
     : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
 
   body.innerHTML = buttons + inner + refImg;
+  // v3.1.94 -- TD-979. Every redraw puts back what the last build said about pictures it left out.
+  (function () {
+    var _rn = state._charRightsNote && state._charRightsNote[String(char.id)];
+    var _el = _rn ? document.getElementById('char-prompt-text-' + char.id) : null;
+    if (_el) { _el.textContent = _rn; _el.classList.remove('hidden'); }
+  })();
   // Repaint the marker if the prompt was edited earlier in this sitting.
   if (charPromptIsStale(char.id)) markCharRefStale(char.id);
 }
@@ -8389,6 +8512,10 @@ function saveCharFormSilently(charId, cb) {
 // save-first wrapper can call it after a successful save.
 function rebuildCharPromptCore(charId) {
   setCharGenBusy(charId);   // TF-09
+  // v3.1.94 -- TD-979. A new build clears what the last one said about pictures it left out.
+  if (state._charRightsNote) delete state._charRightsNote[String(charId)];
+  var _rnEl = document.getElementById('char-prompt-text-' + charId);
+  if (_rnEl && /left out of the build/.test(_rnEl.textContent || '')) { _rnEl.textContent = ''; _rnEl.classList.add('hidden'); }
   var btn = document.getElementById('char-prompt-rebuild-' + charId);
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
@@ -8430,6 +8557,11 @@ function rebuildCharPromptCore(charId) {
       clearInterval(ticker);
       if (data && data.success) {
         var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+        // v3.1.94 -- TD-979. A build that left a rejected picture out says so in the line under the
+        // button and KEEPS saying it until the next build (testers missed the note by the button, which
+        // goes after 20 seconds). Held here because the screen redraws when the reference arrives.
+        if (!state._charRightsNote) state._charRightsNote = {};
+        if (data.rights_note) state._charRightsNote[String(charId)] = String(data.rights_note);
         if (ch) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
@@ -10832,7 +10964,8 @@ function _prepMetaWrite(patch, cb) {
       // to read it out of the browser console. The two 403s this route can return say different
       // things -- wrong fork versus wrong version owner -- and neither was reaching the screen.
       .then(function (r) {
-        if (r.ok) return r.json();
+        // v3.1.96 -- a refusal over a picture's rights comes back 200 with code RIGHTS_REJECTED: a failed write.
+        if (r.ok) return r.json().then(function (j) { if (_cmpRightsRefused(j)) { state._prepRightsRefused = true; return null; } return j; });
         return r.json().catch(function () { return null; }).then(function (e) {
           var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
           try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
@@ -10857,7 +10990,8 @@ function _prepMetaWrite(patch, cb) {
         if (!m) {
           // Put the stored truth back on screen rather than leaving a value nothing accepted.
           if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
-          if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
+          if (state._prepRightsRefused) state._prepRightsRefused = false;   // v3.1.96: the note by the button said why
+          else if (typeof showAlert === 'function') showError('That change could not be saved. Switch to your own version to change the cover or the title.');
         }
         if (cb) cb(m);
         return m;
@@ -12467,7 +12601,7 @@ function _prepMemberSetImage(kind, url) {
     .then(function(r){ return r.json(); })
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
-    .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })
+    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.1.96: a refusal is not the new meta
     .catch(function(){ showError('Could not update your book image.'); });
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
@@ -12791,11 +12925,18 @@ async function publishStory() {
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
-  if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
+  // v3.2.02 -- TD-984. Replacing asks first, in our own window, because the old version cannot be brought back.
+  var _replace = prepReplaceChosen();
+  if (_replace) {
+    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link, its place in the Library and its Bookshelf entries stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
+      { title: 'Replace \u201c' + (_replace.title || 'Untitled') + '\u201d?', okText: 'Replace it', cancelText: 'Cancel', danger: true, preserveLines: true });
+    if (!_okR) return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = _replace ? 'Replacing...' : 'Publishing...'; }
   // v3.0.492 -- no longer 'this can take a moment'. The optimized book is copied, not re-rendered
   // (TD-296), so the honest wording is short. The flow (admin Before) book still renders, but that
   // path is not reachable from the user UI.
-  if (st) { st.style.display = 'block'; st.textContent = 'Publishing your book...'; }
+  if (st) { st.style.display = 'block'; st.textContent = _replace ? 'Replacing your story...' : 'Publishing your book...'; }
   // v3.0.491 -- ROUTE THIS THROUGH novelAsUserQ() LIKE EVERY OTHER BOOK URL.
   // This call was the one book URL that did NOT, so the POST carried no as_user and
   // no as_version. The server then fell back to the canonical for EVERYTHING that
@@ -12813,6 +12954,7 @@ async function publishStory() {
   var _pubBody = { source: _publishSource, title: _title, blurb: _blurb, attested: _attested };
   if (_wantUnlisted) _pubBody.visibility = 'unlisted';
   else if (_wantPublicConsent) { _pubBody.visibility = 'public'; _pubBody.consent = true; }   // v3.0.840 -- TD-686
+  if (_replace) _pubBody.replaceStoryId = _replace.id;   // v3.2.02 -- TD-984
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_pubBody) })
     .then(function(r){ return r.json(); })
     .then(function(d){
@@ -12826,6 +12968,7 @@ async function publishStory() {
         // only ways to reach Publish run through Optimize or Load Last Optimized File, both of
         // which already raise the amber warning. Ian: "They have already seen all that."
         var _msg = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
+        if (d.replaced) _msg = 'Replaced \u201c' + ((_replace && _replace.title) || 'your story') + '\u201d in the Library with this version. Its link stays the same.';   // v3.2.02 -- TD-984
         if (d.titleWarning) _msg += ' ' + d.titleWarning;
         if (st) st.textContent = _msg;
         // v3.0.495 -- the button stops being a Publish button. This is both the "do not let
@@ -12835,6 +12978,11 @@ async function publishStory() {
         if (d.storyUrl) novelPublishShowLibraryCta(d.storyUrl);
         else setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
+      } else if (d && d.code === 'replace_not_found') {
+        // v3.2.02 -- TD-984. The story left the Library; the list is read again so it is no longer offered.
+        if (btn) btn.textContent = 'Publish to Library';
+        if (st) { st.style.display = 'block'; st.textContent = d.error || 'That story is no longer in the Library.'; }
+        prepReloadReplace();
       } else if (d && d.error === 'optimize_required') {
         if (btn) btn.textContent = 'Publish to Library';
         if (st) { st.style.display = 'block'; st.textContent = d.message || 'Run Optimize on this book first, then publish the optimized layout.'; }
@@ -12853,26 +13001,8 @@ async function publishStory() {
     });
 }
 
-async function unpublishStory() {
-  if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (!await uiConfirm('Remove your story from the public Library?')) return;
-  var btn = document.getElementById('novel-publish-btn');
-  var st = document.getElementById('novel-publish-status');
-  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
-  fetch('/api/pdf/unpublish-story/' + state.currentCampaign.id, { method: 'POST' })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (btn) btn.disabled = false;
-      if (d && d.success) {
-        setStoryPublishedUI(false);
-        if (st) { st.style.display = 'block'; st.textContent = 'Removed from the Library.'; }
-      } else {
-        if (btn) btn.textContent = 'Unpublish from Library';
-        if (st) st.textContent = (d && d.error) || 'Could not remove.';
-      }
-    })
-    .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Unpublish from Library'; } if (st) st.textContent = 'Could not remove.'; });
-}
+// v3.2.02 -- TD-985. unpublishStory() stood here and is gone: nothing called it, and its route removed every story
+// the reader had published from the campaign at once. Stories are removed one at a time on Published Stories.
 
 function setStoryPublishedUI(published, url) {
   var btn = document.getElementById('novel-publish-btn');
@@ -13441,7 +13571,8 @@ function bookshelfRemove(b) {
   appConfirm({
     title: 'Remove this book from your Bookshelf?',
     body: '\u201c' + (b.bookTitle || b.campaignName || 'This book') + '\u201d will be removed from your shelf' + (b.kind === 'library' ? '.' : ' and its saved copy deleted.'),
-    note: b.kind === 'library' ? 'The story stays in the Library.' : 'The book in the campaign itself is not touched.',
+    // v3.2.01 -- TD-982. A story already taken out of the Library is not said to stay there (testers).
+    note: b.kind === 'library' ? (b.gone ? 'The story is no longer in the Library.' : 'The story stays in the Library.') : 'The book in the campaign itself is not touched.',
     okLabel: 'Remove', cancelLabel: 'Keep it', danger: true,
     onOk: function () {
       fetch('/api/bookshelf/' + b.id, { method: 'DELETE' })
@@ -13465,8 +13596,80 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
+    .then(function(d){ prepFillReplace(d && d.stories); if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Publishing makes a new Library entry unless you choose a story to replace under Publish as. Manage or remove your entries under My Stuff, on the Published Stories tab.'; } })
     .catch(function(){});
+}
+
+// v3.2.02 -- TD-984. REPLACE A PUBLISHED STORY. The choice lists the reader's own stories from this campaign; the
+// server checks the same three things again (theirs, this campaign, still in the Library). Choosing one sets the
+// link-only box to that story's setting, which can still be changed, and puts its blurb in an empty blurb box;
+// choosing A new story puts both back as they were. Never unticks link only on a sensitive campaign, because
+// unticking there is a consent the reader gives by hand (prepUnlistedChanged).
+function prepFmtDate(v) {
+  try { var d = new Date(v); if (isNaN(d.getTime())) return ''; return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; }
+}
+function prepFillReplace(list) {
+  var wrap = document.getElementById('prep-replace-wrap');
+  var sel = document.getElementById('prep-replace');
+  if (!wrap || !sel) return;
+  if (state._prepReplaceKeep) { sel.value = ''; prepReplaceChanged(sel); }   // put the boxes back before the list is redrawn
+  state._prepReplaceList = Array.isArray(list) ? list : [];
+  state._prepReplaceKeep = null;
+  while (sel.options.length > 1) sel.remove(1);
+  sel.value = '';
+  state._prepReplaceList.forEach(function (s) {
+    var bits = [];
+    if (s.sessions) bits.push(s.sessions + (s.sessions === 1 ? ' session' : ' sessions'));
+    var when = prepFmtDate(s.created_at); if (when) bits.push('published ' + when);
+    if (s.visibility === 'unlisted') bits.push('link only');
+    var o = document.createElement('option');
+    o.value = String(s.id);
+    o.textContent = 'Replace \u201c' + (s.title || 'Untitled') + '\u201d' + (bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '');
+    sel.appendChild(o);
+  });
+  wrap.style.display = state._prepReplaceList.length ? '' : 'none';
+  var note = document.getElementById('prep-replace-note'); if (note) { note.style.display = 'none'; note.textContent = ''; }
+}
+function prepReplaceChosen() {
+  var sel = document.getElementById('prep-replace');
+  var v = sel ? String(sel.value || '') : '';
+  if (!v) return null;
+  var hit = (state._prepReplaceList || []).filter(function (s) { return String(s.id) === v; })[0];
+  return hit || null;
+}
+function prepReplaceChanged(sel) {
+  var s = prepReplaceChosen();
+  var un = document.getElementById('prep-unlisted');
+  var bl = document.getElementById('prep-blurb');
+  var note = document.getElementById('prep-replace-note');
+  if (s) {
+    if (!state._prepReplaceKeep) state._prepReplaceKeep = { unlisted: un ? !!un.checked : false, blurb: bl ? bl.value : '', filled: '' };
+    if (un) {
+      if (s.visibility === 'unlisted') un.checked = true;
+      else if (!prepCampaignSensitive()) un.checked = false;
+    }
+    if (bl && (!bl.value.trim() || bl.value === state._prepReplaceKeep.filled)) { bl.value = s.blurb || ''; state._prepReplaceKeep.filled = bl.value; }
+    if (note) {
+      note.style.display = 'block';
+      note.textContent = 'Its link, its place in the Library and its Bookshelf entries stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
+        ((s.visibility !== 'unlisted' && prepCampaignSensitive() && un && un.checked) ? ' It is listed in the Library now; untick link only to keep it listed.' : '');
+    }
+  } else {
+    var k = state._prepReplaceKeep;
+    if (k) {
+      if (un) un.checked = k.unlisted;
+      if (bl && bl.value === k.filled) bl.value = k.blurb;
+    }
+    state._prepReplaceKeep = null;
+    if (note) { note.style.display = 'none'; note.textContent = ''; }
+  }
+}
+function prepReloadReplace() {
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+  fetch('/api/pdf/story-status/' + state.currentCampaign.id)
+    .then(function (r) { return r.json(); })
+    .then(function (d) { prepFillReplace(d && d.stories); })
+    .catch(function () {});
 }
 
 function loadNovelSummary(cb) {
@@ -14296,7 +14499,7 @@ function toggleMomentLock(momentId) {
     .catch(function() { alert('Could not change the lock.'); });
 }
 
-// Treasure-chest icons. Closed lid = archived (in YOUR archive); open lid = not.
+// The Archive buttons read Archive / Archived (in YOUR archive). v3.1.97: the treasure-chest icons are long gone.
 // ============================================================
 // ARCHIVES (campaign-wide gallery of saved image copies)
 // ============================================================
@@ -15679,7 +15882,7 @@ function submitRetouch() {
         }
         hideBusyOverlay('asset-modal-image-body');
         if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
-        else { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }
+        else if (!_cmpRightsRefused(data)) { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }   // v3.1.98
       })
       .catch(function(e){ hideBusyOverlay('asset-modal-image-body'); alert('Could not retouch: ' + e.message); });
     return;
@@ -15776,6 +15979,8 @@ function submitRetouch() {
           if (data && data.error === 'INSUFFICIENT_TOKENS') {
             if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
             else alert(data.message || 'You are out of tokens.');
+          } else if (_cmpRightsRefused(data)) {
+            if (textEl) textEl.textContent = data.error;   // v3.1.98: the note by the button shows too; no alert
           } else {
             alert((data && (data.message || data.error)) || 'Could not retouch the reference image.');
           }
@@ -16003,7 +16208,7 @@ function applyArchiveToTarget(archiveId) {
     fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody({ archiveId: archiveId }))
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
+      if (!d || d.error) { if (!_cmpRightsRefused(d)) alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
       closeReplacePicker();
       // v3.0.658 -- TD-452. THE READER STILL DESCRIBED THE OLD CONTRACT.
       //
@@ -16044,7 +16249,7 @@ function applyArchiveToTarget(archiveId) {
     fetch('/api/campaigns/' + cid + '/my-book-meta/title-ref-from-archive', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
     }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || d.error || !d.url) { alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
+      if (!d || d.error || !d.url) { if (!_cmpRightsRefused(d)) alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
       closeReplacePicker();
       _tbSetRef(d.url);
     }).catch(function (e) { alert('Could not use that as a reference: ' + e.message); });
@@ -16066,7 +16271,7 @@ function applyArchiveToTarget(archiveId) {
   fetch('/api/campaigns/' + cid + '/archives/' + archiveId + '/apply', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { alert(data.message || data.error); return; }
+    if (data && data.error) { if (!_cmpRightsRefused(data)) alert(data.message || data.error); return; }
     closeReplacePicker();
     if (ctx.mode === 'moment') { if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages(); }
     else if (ctx.mode === 'canonical') {
@@ -16115,7 +16320,7 @@ function renderArchiveGrid() {
   var meId = (state.user && state.user.id) || null;
   var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
   if (!(state.archives || []).length) {
-    grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Use the treasure-chest button on any image to save a copy here.</div>';
+    grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Press Archive on any picture (a panel, a character\u2019s reference picture or a drawn title) to save a copy here.</div>';
     return;
   }
   var rows = getFilteredArchives();
@@ -16631,7 +16836,7 @@ function toggleArchiveMoment(momentId) {
         showAlert(isArchived ? 'Removed from your Archive.' : 'Image saved to your Archive.');
         renderStoryboard();
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -16662,7 +16867,7 @@ function toggleArchiveCharSnapshot(characterId) {
           btn.textContent = r.archived ? 'Archived' : 'Archive';
         }
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -16691,7 +16896,7 @@ function toggleArchiveCharCanonical(charId) {
           btn.textContent = char.archived ? 'Archived' : 'Archive';
         }
       } else {
-        alert((data && data.error) || 'Could not update the Archive.');
+        if (!_cmpRightsRefused(data)) alert((data && data.error) || 'Could not update the Archive.');
       }
     })
     .catch(function(){ alert('Could not update the Archive.'); });
@@ -35246,4 +35451,305 @@ function _helpFormat(text) {
   s = s.replace(/[*][*]((?:[^*\n]|[*](?![*]))*?[^*\s\n])[*][*]/g, function (m, t) { return /^\s/.test(t) ? m : '<strong>' + t + '</strong>'; });
   s = s.replace(/(^|[^\w*])[*]([^*\s\n](?:[^*\n]*[^*\s\n])?)[*](?![\w*])/g, '$1<em>$2</em>');
   return s;
+}
+
+// =================================================================================================
+// v3.1.90 -- TD-979. WATERMARKS, SIGNATURES AND PICTURE DETAILS ON UPLOADED PICTURES.
+// Spec: claude/UPLOAD_RIGHTS_CHECK_SPEC.md. Ian, 2026-10-16: watermarks are rejected, signatures warn,
+// and a rejected picture "stays with a red note until replaced".
+//
+// TWO PIECES, BOTH GENERIC, so no upload screen needs its own copy (the twin rule, section 5c):
+//   1. When a POST or PUT reply carries `rights`, say so at once (_cmpRightsAnnounce). One wrapper round
+//      window.fetch covers every screen, now and later. (v3.1.91: any POST or PUT, not only uploads,
+//      because the character build and style Analyze answer too; a reply that is an ERROR still updates
+//      the marks, without a second message on top of the error the screen already shows.)
+//   2. Any picture on screen whose address has a verdict is marked: a red outline and a red note under
+//      it for a rejected one, an amber outline for a warned one, with the reason as its tooltip. A
+//      MutationObserver finds pictures as they appear; verdicts are asked for in batches from
+//      POST /api/images/rights and cached. A replaced picture has a new address, so its note goes.
+// =================================================================================================
+var _cmpRightsCache = {};          // address -> { verdict, reasons } or null (asked, nothing to say)
+var _cmpRightsPending = {};
+var _cmpRightsTimer = null;
+
+function _cmpRightsKey(u) { return String(u || '').split('#')[0].split('?')[0].trim(); }
+// v3.1.96 -- a reply refusing a picture over its rights. The note by the button already says why, so callers skip
+// their own alert or toast, and never treat the reply as a saved result.
+function _cmpRightsRefused(d) { return !!(d && d.code === 'RIGHTS_REJECTED'); }
+
+function _cmpRightsText(r) {
+  var rs = (r && r.reasons) || [];
+  return rs.map(function (x) { return x && x.text; }).filter(Boolean).join(' ');
+}
+
+// v3.1.93 -- THE NOTE SITS BY THE BUTTON THAT WAS PRESSED. Ian, 2026-10-16: "Make sure it pops up near the
+// button that was clicked." The last button pressed is remembered (capture phase, so a handler that stops
+// the click cannot hide it from us); a note within two minutes of it is placed just under it, or above it
+// when there is no room below, and follows it if the screen scrolls. With no button to sit by, it goes at
+// the bottom of the screen as before. A button redrawn while the request ran is found again by its id.
+var _cmpRightsLastBtn = null, _cmpRightsLastBtnId = '', _cmpRightsLastBtnAt = 0;
+if (typeof document !== 'undefined' && document.addEventListener) {
+  try {
+    document.addEventListener('click', function (e) {
+      var t = (e && e.target && e.target.closest) ? e.target.closest('button, .btn, .panel-pill, [role="button"], input[type="submit"], input[type="button"]') : null;
+      if (t) { _cmpRightsLastBtn = t; _cmpRightsLastBtnId = t.id || ''; _cmpRightsLastBtnAt = Date.now(); }
+    }, true);
+  } catch (e) {}
+}
+
+function _cmpRightsAnchorEl(box) {
+  var a = box && box._cmpAnchor;
+  if (a && a.isConnected) return a;
+  if (box && box._cmpAnchorId) { var b = document.getElementById(box._cmpAnchorId); if (b) { box._cmpAnchor = b; return b; } }
+  return null;
+}
+
+function _cmpRightsPlace(box) {
+  try {
+    var a = _cmpRightsAnchorEl(box);
+    var r = a ? a.getBoundingClientRect() : null;
+    if (!r || (!r.width && !r.height)) {
+      box.style.left = '50%'; box.style.top = 'auto'; box.style.bottom = '16px'; box.style.transform = 'translateX(-50%)';
+      return;
+    }
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var bw = box.offsetWidth, bh = box.offsetHeight;
+    var top = r.bottom + 8;
+    if (top + bh > vh - 8 && r.top - 8 - bh >= 8) top = r.top - 8 - bh;
+    top = Math.max(8, Math.min(top, vh - bh - 8));
+    var left = r.left + r.width / 2 - bw / 2;
+    left = Math.max(12, Math.min(left, vw - bw - 12));
+    box.style.transform = 'none'; box.style.bottom = 'auto';
+    box.style.left = Math.round(left) + 'px'; box.style.top = Math.round(top) + 'px';
+  } catch (e) {}
+}
+
+function _cmpRightsCloseBox() {
+  try {
+    var old = document.getElementById('cmp-rights-box');
+    if (!old) return;
+    if (old._cmpOff) old._cmpOff();
+    if (old.parentNode) old.parentNode.removeChild(old);
+  } catch (e) {}
+}
+
+// items: the `rights` of a reply. opts (v3.1.93): { red, text, heading } -- a refusal or a build that left a
+// picture out says its own sentence; without opts the note is about the pictures just uploaded.
+function _cmpRightsAnnounce(items, opts) {
+  try {
+    opts = opts || {};
+    (items || []).forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
+    var rej = (items || []).filter(function (i) { return i && i.verdict === 'reject'; });
+    var warn = (items || []).filter(function (i) { return i && i.verdict === 'warn'; });
+    if (!rej.length && !warn.length && !opts.text) return;
+    _cmpRightsCloseBox();
+    var box = document.createElement('div');
+    box.id = 'cmp-rights-box';
+    box.setAttribute('role', 'alert');
+    box.setAttribute('data-urls', JSON.stringify((items || []).map(function (i) { return i && i.url ? _cmpRightsKey(i.url) : ''; }).filter(Boolean)));
+    var red = !!opts.red || rej.length > 0;
+    box.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99998;max-width:420px;width:calc(100% - 24px);box-sizing:border-box;' +
+      'background:' + (red ? '#2a0f0f' : '#2a210c') + ';color:#f5efe2;border:2px solid ' + (red ? '#dc2626' : '#d97706') + ';border-radius:10px;' +
+      'padding:12px 36px 12px 14px;font-family:inherit;font-size:13px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:left;';
+    var h = document.createElement('div');
+    h.style.cssText = 'font-weight:700;margin-bottom:4px;color:' + (red ? '#fca5a5' : '#fcd34d') + ';';
+    h.textContent = opts.heading || (red ? 'This picture can’t be used' : 'Check you have the rights to this picture');
+    var p = document.createElement('div');
+    var first = red ? rej[0] : warn[0];
+    p.textContent = opts.text ? opts.text : (_cmpRightsText(first) + (red
+      ? ' It stays where you put it, marked in red, until you replace it with a picture you have the rights to.'
+      : ' You can keep using it if it’s yours or you have permission (for example art you commissioned).'));
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Close');
+    x.innerHTML = '&times;';
+    x.style.cssText = 'position:absolute;top:6px;right:8px;background:none;border:none;color:inherit;font-size:20px;line-height:1;cursor:pointer;opacity:0.7;';
+    x.onclick = function () { _cmpRightsCloseBox(); };
+    box.appendChild(h); box.appendChild(p); box.appendChild(x);
+    var fresh = _cmpRightsLastBtn && (Date.now() - _cmpRightsLastBtnAt) < 120000;
+    box._cmpAnchor = fresh ? _cmpRightsLastBtn : null;
+    box._cmpAnchorId = fresh ? _cmpRightsLastBtnId : '';
+    document.body.appendChild(box);
+    _cmpRightsPlace(box);
+    var place = function () { _cmpRightsPlace(box); };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    box._cmpOff = function () { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
+    // The screen may redraw the button just after the reply; place again once it has.
+    setTimeout(place, 60); setTimeout(place, 400);
+    setTimeout(function () { if (document.getElementById('cmp-rights-box') === box) _cmpRightsCloseBox(); }, red ? 20000 : 12000);
+    _cmpRightsScan(document.body);
+  } catch (e) {}
+}
+
+// v3.1.93 -- REPLACED MEANS GONE. Ian, 2026-10-16: the red note "stayed there even when I swapped it out ...
+// make sure if the warning is there it doesn't linger." A picture's marks (red or amber outline, red note,
+// tooltip) are cleared whenever the element stops showing the marked picture: a new address, a preview
+// from the computer (data: or blob:), or an empty slot. The note under the picture goes with it, and the
+// note box about that picture goes once no picture on screen still shows it.
+function _cmpRightsOnScreen(key) {
+  try {
+    var imgs = document.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) if (_cmpRightsKey(imgs[i].getAttribute('src')) === key) return true;
+  } catch (e) {}
+  return false;
+}
+
+function _cmpRightsUnmark(img) {
+  try {
+    if (!img || !img.getAttribute) return;
+    var was = img.getAttribute('data-rights');
+    if (was === null) return;
+    var note = img.nextSibling;
+    if (note && note.nodeType === 1 && note.className === 'cmp-rights-note' && note.parentNode) note.parentNode.removeChild(note);
+    img.style.outline = ''; img.style.outlineOffset = '';
+    if (img.getAttribute('data-rights-title') !== null) { img.title = img.getAttribute('data-rights-title'); img.removeAttribute('data-rights-title'); }
+    img.removeAttribute('data-rights');
+    var parts = was.split('|'), verdict = parts[0], oldKey = parts.slice(1).join('|');
+    var box = document.getElementById('cmp-rights-box');
+    if (verdict && oldKey && box && (box.getAttribute('data-urls') || '').indexOf(JSON.stringify(oldKey)) !== -1 && !_cmpRightsOnScreen(oldKey)) _cmpRightsCloseBox();
+  } catch (e) {}
+}
+
+// A red note whose picture has gone (redrawn, removed, or no longer rejected) is removed.
+function _cmpRightsSweep() {
+  try {
+    var notes = document.querySelectorAll('.cmp-rights-note');
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i], p = n.previousSibling;
+      var _dr = p && p.nodeType === 1 && p.tagName === 'IMG' ? (p.getAttribute('data-rights') || '') : '';
+      var ok = _dr.indexOf('reject|') === 0 || _dr.indexOf('warn|') === 0;   // v3.1.94: warned pictures have a note too
+      if (!ok && n.parentNode) n.parentNode.removeChild(n);
+    }
+  } catch (e) {}
+}
+
+// Mark one picture from the cache. Safe to call again: it clears its own marks first.
+function _cmpRightsMark(img) {
+  try {
+    if (!img || !img.getAttribute) return;
+    var src = img.getAttribute('src');
+    if (!_cmpRightsWanted(src)) { _cmpRightsUnmark(img); return; }
+    var key = _cmpRightsKey(src);
+    var r = _cmpRightsCache[key];
+    var now = (r && r.verdict) || '';
+    var was = img.getAttribute('data-rights');
+    if (was === now + '|' + key) return;
+    if (was !== null) _cmpRightsUnmark(img);
+    if (now !== 'reject' && now !== 'warn') return;
+    img.setAttribute('data-rights', now + '|' + key);
+    img.setAttribute('data-rights-title', img.title || '');
+    img.title = _cmpRightsText(r);
+    img.style.outline = (now === 'reject' ? '3px solid #dc2626' : '3px solid #d97706');
+    img.style.outlineOffset = '-3px';
+    // v3.1.94 -- a WARNED picture (signed, or a creator named in its file details) gets a written amber
+    // note as well as its outline. The tooltip alone could not be read on a phone (testers, 2026-10-16).
+    if (img.parentNode) {
+      var n = document.createElement('div');
+      n.className = 'cmp-rights-note';
+      n.setAttribute('role', 'note');
+      if (now === 'reject') {
+        n.style.cssText = 'color:#fecaca;background:#7f1d1d;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.textContent = 'Watermark or stock picture — replace this picture. ' + _cmpRightsText(r);
+      } else {
+        n.style.cssText = 'color:#fde68a;background:#5c3d0a;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.textContent = _cmpRightsText(r) + ' Use it only if it’s yours or you have permission.';
+      }
+      img.parentNode.insertBefore(n, img.nextSibling);
+    }
+  } catch (e) {}
+}
+
+function _cmpRightsWanted(src) {
+  var s = String(src || '');
+  return /^https?:\/\//i.test(s) && s.indexOf(location.origin + '/images/') !== 0;
+}
+
+function _cmpRightsScan(root) {
+  try {
+    if (!root || !root.querySelectorAll) return;
+    var imgs = root.tagName === 'IMG' ? [root] : root.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var src = imgs[i].getAttribute('src');
+      // v3.1.93 -- a picture swapped for one from the computer (a data: or blob: preview) or emptied is
+      // no longer the marked picture, so its marks go now. Before this they stayed (Ian, 2026-10-16).
+      if (!_cmpRightsWanted(src)) { _cmpRightsUnmark(imgs[i]); continue; }
+      var key = _cmpRightsKey(src);
+      if (Object.prototype.hasOwnProperty.call(_cmpRightsCache, key)) _cmpRightsMark(imgs[i]);
+      else {
+        // Not asked yet: whatever this element was marked for is not this picture, so clear it meanwhile.
+        if ((imgs[i].getAttribute('data-rights') || '').split('|').slice(1).join('|') !== key) _cmpRightsUnmark(imgs[i]);
+        _cmpRightsPending[key] = true;
+      }
+    }
+    _cmpRightsSweep();
+    if (Object.keys(_cmpRightsPending).length && !_cmpRightsTimer) _cmpRightsTimer = setTimeout(_cmpRightsAsk, 400);
+  } catch (e) {}
+}
+
+function _cmpRightsAsk() {
+  _cmpRightsTimer = null;
+  var urls = Object.keys(_cmpRightsPending).slice(0, 200);
+  urls.forEach(function (u) { delete _cmpRightsPending[u]; });
+  if (!urls.length) return;
+  fetch('/api/images/rights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: urls }) })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var v = (d && d.verdicts) || {};
+      urls.forEach(function (u) { _cmpRightsCache[u] = v[u] || null; });
+      var imgs = document.querySelectorAll('img');
+      for (var i = 0; i < imgs.length; i++) _cmpRightsMark(imgs[i]);
+      if (Object.keys(_cmpRightsPending).length && !_cmpRightsTimer) _cmpRightsTimer = setTimeout(_cmpRightsAsk, 400);
+    })
+    .catch(function () { urls.forEach(function (u) { _cmpRightsCache[u] = null; }); });
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.fetch && !window._cmpRightsWrapped) {
+  window._cmpRightsWrapped = true;
+  (function () {
+    var _origFetch = window.fetch;
+    window.fetch = function (input, init) {
+      var p = _origFetch.apply(this, arguments);
+      try {
+        var m = String((init && init.method) || 'GET').toUpperCase();
+        if (init && (m === 'POST' || m === 'PUT')) {
+          p.then(function (r) {
+            try {
+              if (String(r.headers.get('content-type') || '').indexOf('json') < 0) return;
+              r.clone().json().then(function (d) {
+                if (!d) return;
+                // v3.1.93 -- a REFUSAL over a picture's rights says so by the button pressed, every time,
+                // even when the screen's own message would look unchanged (Ian, 2026-10-16).
+                if (d.code === 'RIGHTS_REJECTED') {
+                  _cmpRightsAnnounce(Array.isArray(d.rights) ? d.rights : [], { red: true, text: String(d.error || 'This picture can\u2019t be used.') });
+                  return;
+                }
+                if (!Array.isArray(d.rights) || !d.rights.length) return;
+                if (!d.error) { _cmpRightsAnnounce(d.rights, d.rights_note ? { text: String(d.rights_note), heading: 'A picture was left out' } : null); return; }
+                d.rights.forEach(function (it) { if (it && it.url) _cmpRightsCache[_cmpRightsKey(it.url)] = { verdict: it.verdict, reasons: it.reasons || [] }; });
+                var _imgs = document.querySelectorAll('img'); for (var _k = 0; _k < _imgs.length; _k++) _cmpRightsMark(_imgs[_k]);
+              }).catch(function () {});
+            } catch (e) {}
+          }).catch(function () {});
+        }
+      } catch (e) {}
+      return p;
+    };
+  })();
+  var _cmpRightsBoot = function () {
+    try {
+      _cmpRightsScan(document.body);
+      new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var rec = list[i];
+          if (rec.type === 'attributes') { _cmpRightsScan(rec.target); continue; }
+          for (var j = 0; j < rec.addedNodes.length; j++) if (rec.addedNodes[j].nodeType === 1) _cmpRightsScan(rec.addedNodes[j]);
+          if (rec.removedNodes && rec.removedNodes.length) _cmpRightsSweep();   // v3.1.93: no note outlives its picture
+        }
+      }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+    } catch (e) {}
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _cmpRightsBoot);
+  else _cmpRightsBoot();
 }

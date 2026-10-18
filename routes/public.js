@@ -10,6 +10,7 @@ const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrat
 const { getDb } = require('../database/db');
 const { publicImageUrl } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
 const { galleryAlt } = require('../services/altText');   // v3.1.89 -- TD-953
+const rightsCheck = require('../services/rightsCheck');   // v3.1.96 -- TD-979, a rejected picture is never archived or made a cover
 const { listPasses } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const { sendReportEmail } = require('./email');
 
@@ -264,7 +265,9 @@ router.get('/library', async function (req, res) {
     // before the bytes arrive. They are already stored on the row; only the SELECT was short.
     // v3.1.89 -- TD-953: the moment's description (LEFT JOIN: a deleted panel leaves NULL and the label
     // falls back to the title), plus the art style and genres the row already carries.
-    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, a.art_style, a.genres, m.description AS moment_description, m.title AS moment_title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN moments m ON m.id = a.moment_id WHERE a.public = TRUE';
+    const SELECT = 'SELECT a.id, a.image_url, a.title, a.img_w, a.img_h, a.shape, a.art_style, a.genres, m.description AS moment_description, m.title AS moment_title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN moments m ON m.id = a.moment_id WHERE a.public = TRUE' +
+      // v3.1.92 -- TD-979. A rejected (watermarked or stock) picture never shows on the public wall.
+      ' AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = a.image_url AND ir.verdict = \'reject\')';
     if (all) {
       // Show-all: newest-first, id-cursor pagination, no shuffle (unchanged).
       const beforeId = parseInt(req.query.beforeId, 10) || 0;
@@ -368,7 +371,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: publicImageUrl(r.cover_url || ''), pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

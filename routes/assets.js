@@ -16,6 +16,7 @@ const { getCampaignRole } = require('../middleware/auth');
 const assetSuggest = require('../services/assetSuggestions');
 const cropImage = require('../services/cropImage');               // v3.1.18 -- TD-911: the cut is shared with the cover picks
 const cropMath = require('../services/cropMath');                 // v3.1.17
+const rightsCheck = require('../services/rightsCheck');           // v3.1.90 -- TD-979
 const CA_MIN_SIDE = 64;     // smallest framed area, in picture pixels (matches CA_MIN_SIDE in app.js)
 const CA_MAX_SIDE = 2048;   // stored no larger than this on the long side, like an uploaded panel
 
@@ -34,14 +35,20 @@ function cleanCategory(c) {
   return CATEGORIES.indexOf(c) !== -1 ? c : 'location';
 }
 
-async function handleAssetUpload(file, oldUrl) {
+async function handleAssetUpload(file, oldUrl, ctx) {
   if (!file) return null;
   if (oldUrl) {
     try { await deleteFile(oldUrl); } catch (e) { /* non-fatal */ }
   }
   const ext = path.extname(file.originalname) || '.jpg';
   const filename = 'asset-' + Date.now() + ext;
-  return await uploadFile(file.buffer, filename, file.mimetype);
+  const url = await uploadFile(file.buffer, filename, file.mimetype);
+  // v3.1.90 -- TD-979. An asset picture goes straight to the image model as a reference and is never
+  // analysed, so it is checked HERE: its file details (free) and one small Haiku look (free to the
+  // user, Ian 2026-10-16). A rejected one stays, marked, and is left out of generations
+  // (images.js ASSET_REF_SQL) until it is replaced.
+  if (url) await rightsCheck.checkUpload(url, file, file.buffer, Object.assign({ kind: 'asset' }, ctx || {}));
+  return url;
 }
 
 // GET all assets for a campaign.
@@ -118,13 +125,14 @@ router.post('/', requireAuth, verifyCampaignAssetCreator, guardUpload(uploadSing
     const capMsg = await assetCapBlock(db, req.session.userId, req.params.campaignId);
     if (capMsg) return res.json({ error: capMsg });
     let imageUrl = null;
-    if (req.file) imageUrl = await handleAssetUpload(req.file, null);
+    if (req.file) imageUrl = await handleAssetUpload(req.file, null, { userId: req.session.userId, campaignId: req.params.campaignId });
     const now = new Date().toISOString();
     const result = await db.prepare(
       'INSERT INTO campaign_assets (campaign_id, name, category, image_url, description, created_at, created_by) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(req.params.campaignId, name, category, imageUrl, description, now, req.session.userId);
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(result.lastInsertRowid);
+    if (asset && imageUrl) asset.rights = rightsCheck.responseRights(await rightsCheck.lookup([imageUrl]));   // v3.1.90 -- TD-979
     res.json(asset);
   } catch (e) {
     console.error('create asset error:', e.message);
@@ -251,6 +259,7 @@ router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async func
       'SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?'
     ).get(archiveId, req.params.campaignId);
     if (!archive || !archive.image_url) return res.status(404).json({ error: 'Source image not found.' });
+    if (await rightsCheck.refuseRejected(res, [archive.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;   // v3.1.96 -- TD-979
 
     let imageUrl;
     const crop = cropMath.readFrac(req.body && req.body.crop);   // v3.1.17 -- none: copy as before
@@ -508,6 +517,9 @@ router.post('/:assetId/retouch', requireAuth, verifyCampaignAssetCreator, async 
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?').get(req.params.assetId, req.params.campaignId);
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
     if (!asset.image_url) return res.json({ error: 'This asset has no image to retouch yet.' });
+    // v3.1.98 -- TD-979. A retouch is an edit OF this picture: a rejected one is refused before anything is
+    // charged (testers, 2026-10-17: it ran, charged a token and handed back an unmarked copy, watermark and all).
+    if (await rightsCheck.refuseRejected(res, [asset.image_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;
     const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!falKey || !webhookUrl) return res.json({ error: 'Image generation is not configured.' });
@@ -592,7 +604,7 @@ router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, guardUpload(upl
       : existing.category;
     const description = (req.body && typeof req.body.description === 'string') ? req.body.description.trim() : existing.description;
     let imageUrl = existing.image_url;
-    if (req.file) imageUrl = await handleAssetUpload(req.file, existing.image_url);
+    if (req.file) imageUrl = await handleAssetUpload(req.file, existing.image_url, { userId: req.session.userId, campaignId: req.params.campaignId });
 
     const now = new Date().toISOString();
     await db.prepare(
@@ -600,6 +612,7 @@ router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, guardUpload(upl
       'WHERE id = ?'
     ).run(name, category, imageUrl, description, now, req.session.userId, req.params.assetId);
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(req.params.assetId);
+    if (asset && req.file && imageUrl) asset.rights = rightsCheck.responseRights(await rightsCheck.lookup([imageUrl]));   // v3.1.90 -- TD-979
     res.json(asset);
   } catch (e) {
     console.error('update asset error:', e.message);

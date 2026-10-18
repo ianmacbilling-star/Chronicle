@@ -155,6 +155,12 @@ function guardUpload(mw, label, maxMb) {
       if (err) return reject(err);
       const files = filesOn(req);
       if (!files.length) return next();
+      // v3.1.90 -- TD-979. Read each picture's file details (copyright, artist, stock agency) from the
+      // ORIGINAL bytes, before the HEIC conversion below throws them away. Pure and free; the route
+      // decides what to do with it (services/rightsCheck.js). A fault here reads as nothing found.
+      files.forEach(function (f) {
+        try { f.rightsMeta = require('../services/imageMetadata').checkBuffer(f.buffer); } catch (e) { f.rightsMeta = null; }
+      });
       (async function () {
         for (let i = 0; i < files.length; i++) await convertHeicFile(files[i]);
       })().then(function () { next(); }, reject);

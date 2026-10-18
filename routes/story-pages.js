@@ -4,6 +4,7 @@ const { getDb } = require('../database/db');
 const { buildNovelHTML } = require('./pdf');
 const { rewritePublicUrls } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
 const { fillStoryAlts } = require('../services/altText');   // v3.1.89 -- TD-953, alt text on every panel picture
+const rightsCheck = require('../services/rightsCheck');   // v3.1.96 -- TD-979, a rejected picture is never archived or made a cover
 
 const router = express.Router();
 
@@ -67,13 +68,13 @@ async function serveStoryPage(req, res) {
     let row = null;
     if (token) {
       row = await db.prepare(
-        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
+        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
       ).get(token);
     } else {
       const id = parseInt(req.params.id, 10);
       if (!id) return notFound();
       row = await db.prepare(
-        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
+        "SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'"
       ).get(id);
     }
     if (!row) return notFound();
@@ -133,7 +134,10 @@ async function serveStoryPage(req, res) {
     const pageUrl = canonicalUrl;
     const title = row.title || 'Untitled';
     const author = row.author_name || '';
-    const cover = row.cover_url || '';
+    // v3.1.96 -- TD-979. A cover rejected (stock or watermarked) is never handed to a link preview, a search
+    // engine or the page: og/twitter/JSON-LD carry no picture, and the page draws the Picture removed box.
+    const _coverRej = !!row.cover_url && rightsCheck.isRejectedSync(row.cover_url);
+    const cover = _coverRej ? '' : (row.cover_url || '');
     const blurb = (row.blurb && String(row.blurb).trim()) ? String(row.blurb).trim() : '';
     const teaser = (row.teaser && String(row.teaser).trim()) ? String(row.teaser).trim() : '';
     let metaDesc = (blurb || teaser || ('A Campaignia chronicle' + (author ? ' by ' + author : ''))).replace(/\s+/g, ' ').trim();
@@ -149,6 +153,7 @@ async function serveStoryPage(req, res) {
     if (author) ld.author = { '@type': 'Person', name: author };
     if (cover) ld.image = cover;
     if (row.created_at) { try { ld.datePublished = new Date(row.created_at).toISOString(); } catch (e) {} }
+    if (row.updated_at) { try { ld.dateModified = new Date(row.updated_at).toISOString(); } catch (e) {} }   // v3.2.02 -- TD-984, a replaced story
 
     const seo =
       '<title>' + esc(title) + (author ? ' &mdash; by ' + esc(author) : '') + ' | Campaignia</title>' +
@@ -178,7 +183,7 @@ async function serveStoryPage(req, res) {
           '<a href="/?ref=story" style="color:rgba(201,168,76,0.85);text-decoration:none;font-size:12px;letter-spacing:0.04em;">Made with <strong style="color:#e8d5a3;">Campaignia</strong></a>' +
         '</div>' +
         '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin-top:14px;">' +
-          (cover ? '<img src="' + esc(cover) + '" alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
+          ((cover || _coverRej) ? '<img src="' + esc(cover || rightsCheck.REMOVED_PICTURE) + '" alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
           '<div style="flex:1;min-width:220px;">' +
             '<h1 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:26px;margin:0 0 6px;">' + esc(title) + '</h1>' +
             (author ? '<div style="color:#c9a84c;font-size:14px;margin-bottom:12px;">Chronicled by ' + esc(author) + '</div>' : '') +

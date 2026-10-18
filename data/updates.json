@@ -1,5 +1,220 @@
 [
   {
+    "version": "3.2.02",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3202-replace-published-story",
+        "kind": "feature",
+        "public": true,
+        "summary": "You can now replace a story you have already published with a new version. It keeps its link, its place in the Library and its Bookshelf entries, so links you have shared keep working.",
+        "detail": "Fix what you want, run Optimize, then go to Order & Publish. If you have already published from this campaign, choose which story to replace under Publish as, then press Publish to Library and confirm. The pages, cover, title and blurb become the new version; the old version is gone. Removing a story from Published Stories now asks in Campaignia\u2019s own window and says that links you have shared will stop working.",
+        "td": [
+          "TD-984",
+          "TD-985"
+        ]
+      },
+      {
+        "id": "3202-style-banner-clears",
+        "kind": "fix",
+        "public": true,
+        "summary": "In the custom art style builder, the message at the top about a refused reference picture now goes away as soon as you replace that picture.",
+        "detail": "Put a watermarked picture in a reference box and press Analyze: the box goes red and a message appears at the top. Replace the picture: the red box, the note under it and the message at the top all clear.",
+        "td": [
+          "TD-983"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.01",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3201-style-delete-confirm-and-shelf-note",
+        "kind": "fix",
+        "public": true,
+        "summary": "Deleting a custom art style now asks in Campaignia\u2019s own window instead of the browser\u2019s. Removing a Library story from your Bookshelf no longer says the story stays in the Library when it has already left.",
+        "detail": "Open Custom Art Styles and press Delete on a style: a Campaignia window asks \u201cDelete this custom style?\u201d with Delete and Keep it; Keep it changes nothing, Delete removes it. On the Bookshelf, remove a Library book whose story is still published: the note says it stays in the Library. Remove one whose story was taken out of the Library: the note says it is no longer in the Library.",
+        "td": [
+          "TD-982"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.00",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3200-style-references-quick-look",
+        "kind": "fix",
+        "public": true,
+        "summary": "Analyze in the custom art style builder now refuses a watermarked reference picture in a few seconds instead of after the whole analysis, names it by its slot (Reference 1, Reference 2 and so on), and outlines that reference box in red with the reason until the picture is replaced. A signed reference gets an amber note and Analyze carries on.",
+        "detail": "In Custom Art Styles, start a new style, put a picture with a watermark in Reference 1 and a clean one in Reference 2, and press Analyze: within a few seconds a red note by the button says \u201cReference 1: This picture has a watermark\u2026 Nothing was charged.\u201d, the Reference 1 box is outlined red with the reason under it, and the token balance does not move. Replace the picture in Reference 1: the red outline and note go. Put a signed picture in a slot instead: it gets an amber note and the analysis runs as normal. Each picture is looked at once, so pressing Analyze again does not look again.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.99",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3199-title-builder-reference-check",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Title Builder now looks at your reference picture when you press Generate. One with a watermark (a stock library mark, a web address or social handle stamped on it, a copyright notice) is refused before anything is drawn or charged, and is marked red in its slot; a signed one is marked amber and still used. The lettering you want copied is never mistaken for a watermark.",
+        "detail": "Open the Title Builder, add a reference picture with a watermark across it and press Generate: a red note by the button says it can\u2019t be used and nothing was charged, the token balance does not move, and the picture in the slot is outlined red. Use clean decorative lettering instead: Generate draws the title as before. The same picture is looked at only once, so pressing Generate again costs nothing extra. Test pictures: 08 (clean lettering, should pass), 09 (lettering with a stock watermark, should be refused), 10 (lettering with a web address in a corner, should be refused) in the rights-test folder.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.98",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3198-no-retouching-a-rejected-picture",
+        "kind": "fix",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo can no longer be retouched: Retouch on an asset, a story panel, a character\u2019s reference picture or a drawn title says why by the button and charges nothing. A retouched picture also keeps the rejection of the picture it was made from, so an edit can never clear the red mark.",
+        "detail": "On a red (rejected) asset, press Edit, then Retouch, type a change and press Retouch image: a red note by the button says it can\u2019t be retouched and nothing was charged; the token balance does not move. The same on a red story panel (Retouch on the Storyboard), on a character\u2019s reference picture and in the Title Builder. Regenerate still works on an asset with a description: it draws a fresh picture from the words, not from the rejected picture. Signed (amber) pictures can be retouched as before.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.97",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3197-write-it-yourself-help-and-archive-wording",
+        "kind": "fix",
+        "public": true,
+        "summary": "Asking help how to write a book yourself now gets all three ways, leading with Outline / I\u2019ll write it: write over bullet points while Campaignia draws, keep a story you have already written word for word, or draw the pictures too. The empty Archives page no longer mentions a treasure-chest button that isn\u2019t there; it says to press Archive on a picture.",
+        "detail": "Ask the help assistant \u201cI want to write a book where I do the writing. What is the best way to approach this in Campaignia?\u201d. The answer names Outline / I\u2019ll write it first, then Already Written for a story that is finished, and I\u2019ll illustrate it myself only for drawing the pictures too; if it is unclear, it asks whether the story is already written. Open the Archives page of a campaign with nothing archived: it reads \u201cNothing archived yet. Press Archive on any picture (a panel, a character\u2019s reference picture or a drawn title) to save a copy here.\u201d",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.96",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3196-no-rejected-covers-or-archive",
+        "kind": "feature",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo can no longer be archived, or chosen from the Archive as a cover, campaign picture, title or replacement. A published story never uses one as its cover: publishing picks the first clean picture, and a story page, the Library, your Published Stories and your Bookshelf show a plain box instead of one already there. Link previews leave it out.",
+        "detail": "Press Archive on a rejected (red) panel or character picture: a red note by the button says it can\u2019t be archived, and nothing is added. A rejected picture already in the Archive shows red there; choosing it as the front or back cover, the campaign picture, a panel or character replacement, an asset or a title is refused the same way. Put a rejected picture on the first panel of a book with no campaign cover and publish: the story\u2019s cover is the next clean picture. A story published earlier with a rejected cover shows the grey Picture removed box on its page, in the Library, on Published Stories and on the Bookshelf, and its link preview has no picture. Signed (amber) pictures are unaffected.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.95",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3195-help-on-three-dialogs",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Title Builder, the character window and the campaign details window (new campaign and editing) now have a ?s button, like the Custom Art Style builder and Retouch: a few tips for that window, then ask us anything about it.",
+        "detail": "Open each window and press ?s at the top right: the help box opens over the window with tips for it at the top (Title Builder: the words come from the book, describe the lettering, a reference picture, a token per Generate; character: nicknames after a slash, looks and personality, more reference pictures, then Build; campaign: Lore, up to three genres, the Campaign Prompt, set up characters first). Ask a question there: the answer is about that window without being told which one. Pressing ?s again does not repeat the tips.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.1.94",
+    "staged_on": "2026-10-17",
+    "entries": [
+      {
+        "id": "3194-left-out-note-and-signed-note",
+        "kind": "feature",
+        "public": true,
+        "summary": "When building a character leaves out a rejected picture, the message now stays under the Build button until the next build, as well as showing beside it. A picture that looks signed, or whose file details name a creator, now has a written amber note under it, not only an amber outline, so it can be read on a phone.",
+        "detail": "Give a character a watermarked portrait and a clean full body picture, then press Build. The note by the button says one picture was left out, and the same sentence stays in the line under the button after the note goes and after the reference picture arrives. Press Build again: the line clears and is written again. Put a signed picture (or one whose file details name an artist) in a slot or in the asset library: an amber note under it says what was found and to use it only if it is yours or you have permission. Replace it: the note goes.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.93",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3193-character-pictures-checked-at-upload",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character pictures are checked for watermarks as soon as they are saved, not only when the character is built. Building a character now leaves out any rejected picture and uses the others; it stops only when every picture is rejected. Whenever something is refused over a picture, a red note appears next to the button you pressed.",
+        "detail": "Upload a watermarked picture into a character slot and save: it is outlined in red with a red note under it straight away, and the Company page shows the Picture removed box for it. Add a clean picture to another slot and press Build: the character is built from the clean picture, and a note by the button says one picture was left out. With only the watermarked picture, Build stops with a red note by the button every time it is pressed, and nothing is charged. Replace the picture: the red outline and note go at once, as does an amber (signed) outline. The small icons on the reference picture slots are gone.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.92",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3192-removed-picture-in-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "A picture rejected for a watermark or as a stock photo is never drawn in a book: the preview, the PDF, the print files and the public story page show a plain \u201cPicture removed\u201d box in its place until you replace it. It also no longer shows on the Library picture wall.",
+        "detail": "Put a watermarked picture on a panel with Upload your own (it is marked red on the Storyboard). Open Prep and Preview: that panel shows a grey \u201cPicture removed \u2013 watermark or stock picture\u201d box. Download the PDF: the same box. Replace the picture with a clean one: the preview shows the new picture. A rejected picture used as a front or back cover shows the box on the cover too. A rejected picture that was made public in the Library no longer appears on the picture wall. Warned (signed) pictures are drawn as normal.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.91",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3191-rights-in-analysis",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character pictures and custom style samples are now checked for watermarks and signatures when they are analysed. A watermarked picture stops the character build or the style analysis, with nothing charged, until it is replaced.",
+        "detail": "Give a character a clearly watermarked picture (a stock preview with its logo across it) and press Build: it stops, says which picture, charges nothing, and the picture is marked red until replaced. A signed picture builds as normal with an amber reminder. Analyze a custom style with a watermarked sample: refused, names the sample, nothing charged. With a rejected uploaded picture and no reference image yet, Re-roll, Retouch, Restyle and amending a character in a session are refused too.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.1.90",
+    "staged_on": "2026-10-16",
+    "entries": [
+      {
+        "id": "3190-upload-rights-check",
+        "kind": "feature",
+        "public": true,
+        "summary": "Uploaded pictures are now checked for watermarks and stock-photo labels. A watermarked or stock picture is marked in red and left out of generations until you replace it; a signed picture gets a reminder to use only art you have the rights to.",
+        "detail": "Upload an asset or Upload your own onto a panel with a clearly watermarked picture (for example a stock photo preview with its logo across it): a red box says it cannot be used, and the picture shows a red outline and a red note until it is replaced; the asset is no longer used as a reference in new pictures. Upload a picture with an artist signature in a corner: an amber reminder, and the picture is used as normal. Upload a stock photo whose file details name Getty, Shutterstock, iStock or similar, as a character picture, an asset, a panel picture or a custom style sample: refused or marked the same way. A plain photo or drawing: nothing is said. The check costs no tokens.",
+        "td": [
+          "TD-979"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.1.89",
     "staged_on": "2026-10-16",
     "entries": [

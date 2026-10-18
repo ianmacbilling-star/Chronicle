@@ -528,6 +528,9 @@ getDb().then(async function() {
   // is the right way round -- a pass with a stale price still sells, a pass with no price
   // does not.
   try { await require('./services/billing/passes').loadPassConfig(); } catch (e) { console.error('pass_config load failed (using code defaults):', e.message); }
+  // v3.1.92 -- TD-979. The renderers ask an in-memory set of rejected pictures; load it before the first
+  // request and keep it fresh (services/rightsCheck.js). A failure shows pictures rather than blanking them.
+  try { await require('./services/rightsCheck').startRejectedCache(); } catch (e) { console.error('rejected-picture cache load failed:', e.message); }
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');

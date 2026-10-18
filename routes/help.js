@@ -130,7 +130,11 @@ const VIEW_NAMES = {
   account_view: 'Account / Billing',
   // v3.1.81 -- sent while the Custom Art Style builder is open, so help answers about custom styles
   // without first asking whether they mean a built-in style.
-  custom_style_builder: 'the Custom Art Style builder (they are making or editing one of their own custom art styles)'
+  custom_style_builder: 'the Custom Art Style builder (they are making or editing one of their own custom art styles)',
+  // v3.1.95 -- sent while each of these windows is open, from its ?s or the help button.
+  title_builder: 'the Title Builder (they are having a book or chapter title drawn as artwork)',
+  character_builder: 'the character window (they are adding or editing a character: name, role, description, reference pictures, Build)',
+  campaign_details: 'the campaign details window (they are creating a new campaign or editing one: name, description, lore, genres, Campaign Prompt, campaign image)'
 };
 
 // Normalize the client-sent chat history into a valid alternating message list

@@ -1154,6 +1154,9 @@ async function initPostgres() {
   // v3.1.43 -- TD-934. Gift certificates. Its own table; nothing existing changes.
   await migrateGifts(pool);
 
+  // v3.1.90 -- TD-979. Verdicts on uploaded pictures. Its own table; nothing existing changes.
+  await migrateImageRights(pool);
+
   // Scaling hardening — performance indexes on hot-path FK / filter
   // columns and the releaseImage() URL lookups. Runs LAST so every
   // referenced column already exists.
@@ -1164,6 +1167,27 @@ async function initPostgres() {
 }
 
 // SQLite support removed - this app is Postgres-only (see getDb()).
+
+// v3.1.90 -- TD-979 (spec claude/UPLOAD_RIGHTS_CHECK_SPEC.md). One row per uploaded picture that has
+// something to say: verdict 'warn' (a signature, or file details naming a creator) or 'reject' (a
+// watermark, or file details naming a stock library). Keyed on the picture's URL, so a replaced picture
+// (new URL) has no verdict -- "stays with a red note until replaced" with nothing to clear. No foreign
+// keys: it can never block or cascade into anything. id SERIAL because the db wrapper appends
+// RETURNING id to every INSERT (v3.0.991's lesson).
+async function migrateImageRights(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS image_rights (
+      id SERIAL PRIMARY KEY,
+      image_url TEXT NOT NULL UNIQUE,
+      verdict TEXT NOT NULL,
+      reasons TEXT,
+      user_id INTEGER,
+      campaign_id INTEGER,
+      kind TEXT,
+      checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
 
 // ============================================================
 // EXPORTED FUNCTIONS

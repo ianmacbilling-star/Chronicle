@@ -378,6 +378,13 @@ async function persistToR2(remoteUrl, opts) {
   }
 }
 
+// v3.1.90 -- TD-979. A COPY CARRIES ITS SOURCE'S VERDICT. A rejected (watermarked) picture copied to
+// the archive, restored onto a panel or copied to Assets would otherwise arrive at a fresh URL with no
+// verdict, and the check would be laundered by a copy. Never throws and never blocks the copy.
+async function inheritRights(srcUrl, dstUrl) {
+  try { await require('../services/rightsCheck').inherit(srcUrl, dstUrl); } catch (e) { /* non-fatal */ }
+}
+
 // archiveCopy: copy an existing image into the protected archives/ prefix
 // so it survives regen/cleanup forever. NOT fail-soft — if the copy fails
 // the archive must not be created (no point pointing it at a vanishing src).
@@ -391,7 +398,9 @@ async function archiveCopy(sourceUrl) {
   const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
   const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
   const filename = 'arch-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
-  return await uploadFile(buf, filename, ct, 'archives');
+  const archUrl = await uploadFile(buf, filename, ct, 'archives');
+  await inheritRights(sourceUrl, archUrl);   // v3.1.90 -- TD-979
+  return archUrl;
 }
 
 // restoreCopy: copy an archived image (a protected archives/ object) into the
@@ -407,7 +416,9 @@ async function restoreCopy(sourceUrl) {
   const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
   const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
   const filename = 'rest-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
-  return await uploadFile(buf, filename, ct);
+  const restUrl = await uploadFile(buf, filename, ct);
+  await inheritRights(sourceUrl, restUrl);   // v3.1.90 -- TD-979
+  return restUrl;
 }
 
 module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls };   // last four: v3.1.85, TD-954

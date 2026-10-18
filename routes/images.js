@@ -21,6 +21,14 @@ const { logDebug } = require('./debug');
 const multer = require('multer');
 const { uploadFile } = require('../storage/storage');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
+const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
+// v3.1.90 -- TD-979. THE ONE QUERY FOR ASSET REFERENCES. Six places loaded campaign assets with the same
+// SQL (three here, three in sessions.js); they now share this, so an asset whose picture is REJECTED
+// (a watermark or a stock picture, image_rights) comes back with no image_url. buildAssetBlock already
+// skips an asset with no picture, so it is left out of every generation and every reference picker
+// until its picture is replaced -- and the previews cannot disagree with what is generated.
+const ASSET_REF_SQL = "SELECT a.id, a.name, a.category, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS image_url " +
+  "FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ?";
 const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 // v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
 // on it, used by the image model as a LOCATION diagram only. Same multer shape.
@@ -1440,9 +1448,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
 
     // Asset library: name-match campaign assets (maps, NPCs, items) into
     // this panel. Characters fill reference slots first, then assets, cap 14.
-    const assets = await db.prepare(
-      'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
-    ).all(campId);
+    const assets = await db.prepare(ASSET_REF_SQL).all(campId);   // v3.1.90 -- TD-979
     const assetList = buildAssetBlock(assets, panelText, explicitAssetIds);
     // Roster of the explicit cast's names (authoritative WHO for this panel).
     let castNames = [];
@@ -1647,6 +1653,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'You can only retouch your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
   if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
   // v3.0.653 -- TD-444. A DRAWN TITLE IS NOT RETOUCHED FROM HERE.
   //
   // Ian, 2026-08-12: "the retouch option should not show... if the image in the panel came from
@@ -1697,7 +1704,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       explicitAssetIdsR = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
     }
     const charListR = buildCharacterBlock(charsR, panelTextR, moment.panel_order, explicitCharIdsR);
-    const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
+    const assetsR = await db.prepare(ASSET_REF_SQL).all(campIdR);   // v3.1.90 -- TD-979
     const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
     const refsR = combineRefs(charListR.refs, assetListR.refs);
     // v3.0.766 -- resolve {{REF:Name}} placeholders to the actual image number.
@@ -1971,9 +1978,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   await attachPriorReferences(db, chars, session_id, campaign_id, targetForkId);
 
   // Asset library: load campaign assets once; matched per-panel in the loop.
-  const assets = await db.prepare(
-    'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
-  ).all(campaign_id);
+  const assets = await db.prepare(ASSET_REF_SQL).all(campaign_id);   // v3.1.90 -- TD-979
 
   // Pass 2 — preload explicit casts for any panel the user cast manually
   // (cast_explicit). Panels without an explicit cast fall back to name-match.
@@ -2221,6 +2226,10 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       }
       // No crop, or the composite failed: the original path, unchanged.
       if (!imageUrl) imageUrl = await persistToR2(falUrl, { cutWhite: _cutWhite });
+      // v3.1.98 -- TD-979. A RETOUCH IS AN EDIT OF ITS SOURCE, and keeps the source's rejection, as a copy does
+      // (inherit). The routes refuse a rejected source before charging; this is the net under them, so no edit
+      // can ever turn a rejected picture into an unmarked one. Never throws.
+      if ((job.kind === 'retouch' || job.kind === 'asset_retouch') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
@@ -2627,6 +2636,21 @@ router.post('/title-build', requireAuth, async function (req, res) {
     const description = String((req.body && req.body.description) || '').trim();
     const refUrl = String((req.body && req.body.referenceUrl) || '').trim();
 
+    // v3.1.99 -- TD-979. THE REFERENCE IS LOOKED AT HERE, when Generate is pressed (Ian), before the image model
+    // is called and before anything is charged. Told it is lettering, so the lettering is not taken for a
+    // watermark. A watermark refuses; a signature warns and the title is still drawn. Looked at once per picture.
+    let _refRights = [];
+    if (refUrl) {
+      const _rr = await rightsCheck.checkReference(refUrl, { kind: 'title-ref', userId: req.session.userId, campaignId: campaignId, hint: rightsCheck.LETTERING_HINT });
+      const _rk = rightsCheck.normUrl(refUrl);
+      if (_rr.verdict === 'reject') {
+        const _why = (_rr.reasons || []).filter(function (x) { return x && x.kind !== 'signature' && x.kind !== 'copyright'; })[0];
+        return res.json({ error: ((_why && _why.text) || 'This reference picture has a watermark.') + ' It can\u2019t be used as a reference. Choose another picture. Nothing was charged.',
+          code: 'RIGHTS_REJECTED', rights: [{ url: _rk, verdict: 'reject', reasons: _rr.reasons || [] }] });
+      }
+      if (_rr.verdict === 'warn') _refRights = [{ url: _rk, verdict: 'warn', reasons: _rr.reasons || [] }];
+    }
+
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
     const modelKey = await getSelectedModel(db);
@@ -2707,7 +2731,7 @@ router.post('/title-build', requireAuth, async function (req, res) {
       console.error('title-build: cut ran but the stored object has no alpha channel -- ' + cutRes.url);
     }
     const cutFinal = (cutOk === null) ? cutRes.cut : (cutRes.cut && cutOk);
-    return res.json({ image: cutRes.url, source: srcUrl, title: bookTitle, subtitle: subtitle, cut: cutFinal });
+    return res.json({ image: cutRes.url, source: srcUrl, title: bookTitle, subtitle: subtitle, cut: cutFinal, rights: _refRights });   // v3.1.99: a signed reference warns
   } catch (e) {
     console.error('title-build error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });
@@ -2769,6 +2793,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const _rtDraft = (own.current && own.current.draft) || null;
     const _rtSrc = (_rtDraft && (_rtDraft.url || _rtDraft.src)) ? _rtDraft : own.current;
     if (!_rtSrc.url && !_rtSrc.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+    if (await rightsCheck.refuseRejected(res, [_rtSrc.src, _rtSrc.url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
 
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
@@ -2849,6 +2874,22 @@ router.get('/proxy', requireAuth, async function (req, res) {
 
 // POST /api/images/heic-to-jpeg -- v3.1.14, TD-909. Nothing is stored and no token is spent: the
 // converted bytes go straight back. A file that is not HEIC is refused rather than echoed.
+// v3.1.90 -- TD-979. VERDICTS FOR PICTURES ON SCREEN. The page sends the addresses it is showing and gets
+// back only those with something to say (warn or reject), to mark them. A verdict says nothing about
+// whose picture it is, and only addresses the caller already holds are answered.
+router.post('/rights', requireAuth, async function (req, res) {
+  try {
+    const raw = (req.body && Array.isArray(req.body.urls)) ? req.body.urls : [];
+    const urls = raw.filter(function (u) { return typeof u === 'string' && /^https?:\/\//i.test(u) && u.length < 2000; }).slice(0, 200);
+    const found = await rightsCheck.lookup(urls);
+    const verdicts = {};
+    urls.forEach(function (u) { var k = rightsCheck.normUrl(u); if (found[k]) verdicts[k] = found[k]; });
+    return res.json({ verdicts: verdicts });
+  } catch (e) {
+    return res.json({ verdicts: {} });
+  }
+});
+
 router.post('/heic-to-jpeg', requireAuth, guardUpload(heicUpload, 'heic-to-jpeg', 25), function (req, res) {
   if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'No image received.' });
   if (!req.file.heicConverted) {
@@ -2889,8 +2930,14 @@ router.post('/title-ref', requireAuth, guardUpload(titleRefUpload, 'title-ref'),
     const ct = req.file.mimetype || 'image/png';
     const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
     const name = 'titleref-' + req.session.userId + '-' + Date.now() + '.' + ext;
+    // v3.1.90 -- TD-979. A title reference whose file details name a stock library is refused before it
+    // is stored (it is only ever a transient reference, so there is no slot to leave it in).
+    const _tm = req.file.rightsMeta || rightsCheck.metadataCheck(req.file.buffer);
+    if (_tm && _tm.verdict === 'reject') return res.json({ error: ((_tm.reasons[0] && _tm.reasons[0].text) || 'That picture has a watermark.') + ' Please use a picture you have the rights to.' });
     const url = await uploadFile(req.file.buffer, name, ct);
-    return res.json({ url: url });
+    const _tr = await rightsCheck.checkUpload(url, req.file, null, { kind: 'title-ref', userId: req.session.userId });
+    const _tri = {}; _tri[url] = _tr;
+    return res.json({ url: url, rights: rightsCheck.responseRights(_tri) });
   } catch (e) {
     console.error('title-ref upload failed:', e && e.message);
     return res.json({ error: 'Could not store that image.' });
@@ -2969,3 +3016,4 @@ module.exports.submitRetouch = submitRetouch;
 //     prompt where it paints a background over the white reference staging.
 module.exports.resolveGenStyle = resolveGenStyle;
 module.exports.getStylePrefix = getStylePrefix;
+module.exports.ASSET_REF_SQL = ASSET_REF_SQL;   // v3.1.90 -- TD-979, shared with sessions.js

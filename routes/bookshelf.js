@@ -123,11 +123,15 @@ function makeHandlers(d) {
     var r = await db.prepare("SELECT COUNT(*) AS n FROM bookshelf_books WHERE user_id = ? AND kind = 'book'").get(uid);
     return Number(r && r.n) || 0;
   }
+  // v3.1.96 -- TD-979. A rejected cover shows the Picture removed box on the shelf. Fails open.
+  function shelfCover(u) {
+    try { var rc = require('../services/rightsCheck'); return rc.isRejectedSync(u) ? rc.REMOVED_PICTURE : u; } catch (e) { return u; }
+  }
   function shape(r) {
     return {
       id: r.id, kind: r.kind, campaignId: r.campaign_id, campaignName: r.campaign_name || '',
       versionId: r.version_id, versionLabel: r.version_label || '', arrange: r.arrange || '', layout: r.layout || '',
-      bookTitle: r.book_title || '', coverUrl: r.cover_url || '', pages: Number(r.pages) || 0,
+      bookTitle: r.book_title || '', coverUrl: shelfCover(r.cover_url || ''), pages: Number(r.pages) || 0,   // v3.1.96 -- TD-979
       savedAt: r.saved_at || null, createdAt: r.created_at || null, editable: !!r.body_url,
       storyUrl: r.story_url || '', gone: !!r._gone,
       // v3.1.8 -- what is in the book (Ian). Library books carry their story's genres and styles.
