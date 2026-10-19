@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.09",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3209-cover-follows-campaign-image",
+        "kind": "fix",
+        "public": true,
+        "summary": "A book with no cover chosen now uses the campaign's current picture everywhere: the preview, the printed cover and the published book show the same picture as the Cover tile.",
+        "detail": "On a campaign whose campaign image was changed after Prep & Preview was first opened, and whose book has no Cover chosen: the Cover tile, Refresh preview, the Order tab's cover and Publish all show the CURRENT campaign image. Before, the tile showed the new picture and the preview drew the old one (or nothing) until the Cover was removed and added again. A chosen Cover and a removed Cover are unchanged; a campaign with no campaign image still has a blank cover. Saving a book to the Bookshelf uses the same picture.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.08",
     "staged_on": "2026-10-19",
     "entries": [

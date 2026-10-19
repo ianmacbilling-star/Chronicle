@@ -244,11 +244,13 @@ function makeHandlers(d) {
       // v3.0.984 -- THE VERSION'S OWN FRONT COVER, not the campaign picture (Ian: two versions with
       // different covers showed the same one). Read the way the book reads it -- inherit on -- and
       // through the one rule for "no cover chosen" (db.coverFromPrefs).
-      var coverUrl = campaign.cover_image_url || campaign.campaign_image_url || '';
+      // v3.2.09 -- the same fallback as the book (pdf.js applyForkBookMeta): the campaign image as it is
+      // now, never the stale copy in campaigns.cover_image_url.
+      var coverUrl = campaign.campaign_image_url || '';
       var bp = null;
       try {
         bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
-        coverUrl = d.coverFromPrefs(bp, campaign.cover_image_url || campaign.campaign_image_url || '') || '';
+        coverUrl = d.coverFromPrefs(bp, campaign.campaign_image_url || '') || '';
       } catch (e) { /* keep the campaign picture */ }
       var ins = await db.prepare(
         'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at) ' +
