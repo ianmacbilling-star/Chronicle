@@ -291,6 +291,10 @@ async function serveStoryPage(req, res) {
     let html;
     if (snap && snap.sessions) {
       const pageOpts = { publicMode: true, bookTitle: snap.bookTitle || title };
+      // v3.2.12 -- TD-988. A snapshot recorded with a saved book carries the subtitle and title colour it was
+      // rendered with; older snapshots do not, and render exactly as before.
+      if (snap.subtitle != null) pageOpts.subtitle = String(snap.subtitle);
+      if (snap.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(String(snap.titleColor))) pageOpts.titleColor = String(snap.titleColor);
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
       // v3.1.89 -- TD-953. Every panel picture is labelled from the snapshot's own scene description,
       // art style and genre (services/altText.js). Done HERE, after the renderer, so the print and PDF

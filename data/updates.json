@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.12",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3212-reading-page-is-saved-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "A published story's online reading page now shows the saved book you published, not today's sessions and settings.",
+        "detail": "Optimize and save a book, then change it (untick a session, edit a scene, change the subtitle) and publish the saved book: the Library page reads exactly like the saved PDF. The same is true of a book brought back from the Bookshelf. Books saved before this version publish as they did before. The Publishing line on the Optimize tab names the loaded book's own title, and the Optimize page count now reads like \u201c18 pages including covers\u201d.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.11",
     "staged_on": "2026-10-19",
     "entries": [

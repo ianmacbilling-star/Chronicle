@@ -26159,6 +26159,7 @@ function orderMarkLoaded(source) {
       L.hasRecord = !!info.hasRecord; L.arrange = info.arrange || ''; L.since = res[1] || null;
       try { orderRecheckIfOpen(); } catch (e) {}
       try { updateNovelPublishGuard(); } catch (e) {}
+      try { finalizeUpdatePublishLink(); } catch (e) {}   // v3.2.12 -- the Publishing line names the loaded title
     });
 }
 function orderLoadLastClick() {
@@ -29277,7 +29278,10 @@ function finalizeUpdatePublishLink() {
     return;
   }
   var t = '';
-  try { var tEl = document.getElementById('prep-title'); if (tEl && tEl.value) t = tEl.value.trim(); } catch (e) {}
+  // v3.2.12 -- TD-988. A LOADED BOOK PUBLISHES UNDER ITS OWN SAVED TITLE, so the line names that one, not
+  // whatever the Title box says today (testers, 2026-10-19).
+  try { if (orderIsLoaded() && state._orderLoaded.title) t = String(state._orderLoaded.title).trim(); } catch (e) {}
+  if (!t) { try { var tEl = document.getElementById('prep-title'); if (tEl && tEl.value) t = tEl.value.trim(); } catch (e) {} }
   if (!t) { try { t = (state.currentCampaign.name || '').trim(); } catch (e) { t = ''; } }
   a.textContent = (t || 'the optimized book') + ' \u2014 optimized, with covers';
   a.href = '/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery();
@@ -32842,7 +32846,9 @@ var FINALIZE_FILL_GREEN = 78;   // density % at/above which the score reads "as 
 function finalizeFillPct(fills, total) { var w = finalizeWhitePct(fills, total); return (w == null) ? null : (100 - w); }
 function finalizeFillColor(f) { return (f != null && f >= FINALIZE_FILL_GREEN) ? '#8fd18f' : '#e0a0a0'; }
 function finalizeCountLabel(total, fillPct) {
-  var t = total + (total === 1 ? ' page' : ' pages');
+  // v3.2.12 -- Ian: the Optimize panes count the covers and Order & Publish counts interior pages only, so
+  // this says so ("18 pages including covers" here, "16 interior pages" there).
+  var t = total + (total === 1 ? ' page' : ' pages') + ' including covers';
   if (fillPct != null) t += ' \u00b7 <span style="color:' + finalizeFillColor(fillPct) + ';font-weight:600;">' + fillPct + '% full</span>';
   return t;
 }

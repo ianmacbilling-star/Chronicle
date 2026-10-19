@@ -2570,6 +2570,36 @@ function savedBookMetaFrom(built) {
       subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '' };
   } catch (e) { return null; }
 }
+// v3.2.12 -- TD-988 (option B). THE ONLINE READING PAGE IS RECORDED WITH THE SAVE, NOT AT PUBLISH.
+// The Library's story page is not the PDF: routes/story-pages.js re-renders it from public_stories.snapshot,
+// and publish-story built that snapshot from TODAY's sessions, ticks, characters and campaign. So a saved
+// book published a week later (or brought back from the Bookshelf) read online as today's book under the
+// saved cover (testers, 2026-10-19). Ian: "B... for sure."
+// Built from the SAME objects assembleNovelHtml rendered the saved PDF from, so the page and the file
+// cannot disagree. It rides inside the approved state in R2 (approvedStateSave), which the Bookshelf
+// already copies on shelve and Bring back, so it travels with the book at no extra cost.
+// The pen names are added here because publicMode masks real names with them and the render inputs do
+// not carry them (publish-story's own queries add the same two fields). Copies, never the render objects.
+// Returns null on any failure: the save goes ahead and publish falls back to today's data, as before.
+async function savedReadingSnapshotFrom(db, built, req, meta) {
+  try {
+    if (!built || !built.campaign || !Array.isArray(built.sessions) || !built.sessions.length) return null;
+    var c = Object.assign({}, built.campaign);
+    try { var _ow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(c.user_id); c.owner_pen_name = (_ow && _ow.pen_name) || null; } catch (e) {}
+    var pens = {};
+    try {
+      var _pr = await db.prepare('SELECT ch.id, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?').all(c.id);
+      (_pr || []).forEach(function (r) { pens[r.id] = r.player_pen_name || null; });
+    } catch (e) {}
+    var chars = (built.characters || []).map(function (ch) { return Object.assign({}, ch, { player_pen_name: (pens[ch.id] != null) ? pens[ch.id] : null }); });
+    var po = built.pageOpts || {};
+    return { v: 1, fromSave: true, layoutStyle: built.layoutStyle || 'Classic',
+      co: (req && req.query && req.query.co) ? parseCustomOpts(req.query.co) : null,   // publish's own co, NOT built.co (that carries the packed body)
+      bookTitle: String((meta && meta.book_title) || ''),
+      subtitle: (po.subtitle != null) ? String(po.subtitle) : null, titleColor: po.titleColor || '',
+      campaign: c, characters: chars, sessions: built.sessions };
+  } catch (e) { console.error('[save-optimized] reading snapshot not recorded: ' + ((e && e.message) || e)); return null; }
+}
 // Put a recorded book's cover fields onto a campaign object (and a pageOpts, when one is in hand),
 // overriding the current settings. Returns false, and changes nothing, when there is no record.
 function applySavedBookMeta(campaign, pageOpts, m) {
@@ -8117,6 +8147,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var html = null;
   let pdfUrl = null;
   var _titleWarning = null;
+  var _snapSave = null;   // v3.2.12 -- TD-988: the reading snapshot recorded with the saved book, when it has one
   if (_pubSrc === 'composed') {
     // ===== v3.0.492 -- TD-296. PUBLISH THE BOOK THAT ALREADY EXISTS. =========================
     // save-optimized has ALREADY rendered this exact layout with publicMode='1', flattened it,
@@ -8196,6 +8227,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // v3.2.10 -- TD-988. Ian: "Library card should match cover." The listing's title and picture come
     // from the saved book's record when it has one (a pre-v3.2.10 save has none: unchanged).
     var _savedMetaP = (_loE.meta && typeof _loE.meta === 'object') ? _loE.meta : null;
+    // v3.2.12 -- TD-988 (option B). THE READING PAGE IS THE SAVED BOOK TOO. A save from v3.2.12 on records
+    // the sessions, characters and campaign it rendered (savedReadingSnapshotFrom) in its approved state; the
+    // story page, the listing's fallback picture, the teaser, the art-style filter and the image index all
+    // read that instead of today's data. An older save has none and publishes exactly as before. A failed
+    // read is logged and falls back the same way -- it never blocks a publish.
+    if (_loE.bodyUrl) {
+      try {
+        var _stP = await approvedStateLoad(_loE.bodyUrl);
+        if (_stP && _stP.snapshot && Array.isArray(_stP.snapshot.sessions) && _stP.snapshot.sessions.length) _snapSave = _stP.snapshot;
+      } catch (e) { console.error('[publish-story] saved reading snapshot could not be read, using current data: ' + ((e && e.message) || e)); }
+      _ptLap('snapshot');
+    }
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
     // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
@@ -8286,8 +8329,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // so a rejected campaign cover or first panel was published as the story's face (testers, 2026-10-17). With
   // no clean picture at all the story has no cover image, as a story with no pictures does today.
   var _coverCands = [(_savedMetaP ? (_savedMetaP.cover_image_url || '') : (campaign.cover_image_url || ''))];   // v3.2.10 -- TD-988: the saved book's cover first
-  for (var si = 0; si < sessionsWithData.length; si++) {
-    var ms = sessionsWithData[si].moments || [];
+  // v3.2.12 -- TD-988. Everything below that describes the book reads the saved snapshot when there is one.
+  var _pubSess = _snapSave ? _snapSave.sessions : sessionsWithData;
+  var _pubChars = _snapSave ? (_snapSave.characters || []) : characters;
+  var _pubCamp = _snapSave ? (_snapSave.campaign || campaign) : campaign;
+  for (var si = 0; si < _pubSess.length; si++) {
+    var ms = _pubSess[si].moments || [];
     for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) _coverCands.push(ms[mi].image); }
   }
   var coverUrl = (await rightsCheck.splitRejected(_coverCands.filter(Boolean))).clean[0] || '';
@@ -8309,9 +8356,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     var slug = _slugify(title);
     var _firstPara = function(txt){ if (!txt) return ''; var t = String(txt).replace(/\r/g, '').trim(); if (!t) return ''; var idx = t.indexOf('\n\n'); var p = (idx > -1) ? t.slice(0, idx) : t; return p.trim(); };
     var teaser = '';
-    for (var _ti = 0; _ti < sessionsWithData.length && !teaser; _ti++) { teaser = _firstPara(sessionsWithData[_ti].narrative_intro); }
+    for (var _ti = 0; _ti < _pubSess.length && !teaser; _ti++) { teaser = _firstPara(_pubSess[_ti].narrative_intro); }   // v3.2.12
     if (teaser.length > 500) teaser = teaser.slice(0, 500);
-    var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
+    // v3.2.12 -- TD-988. The saved book's own reading snapshot when it has one (story-pages.js renders it).
+    var snapshotObj = _snapSave ? _snapSave : { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
     var snapshotJson = JSON.stringify(snapshotObj);
     // v3.0.487 -- GENRE SNAPSHOT. Frozen here, at publish time, and never re-read
     // from the campaign afterwards: a later edit to the campaign genre must not
@@ -8339,13 +8387,13 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // A custom style collapses to the single token 'custom' inside styleSlug(), so no
     // account's custom-style id can be read off a public query string.
     var _styleSet = {};
-    for (var _stx = 0; _stx < sessionsWithData.length; _stx++) {
-      var _stSess = sessionsWithData[_stx];
+    for (var _stx = 0; _stx < _pubSess.length; _stx++) {   // v3.2.12
+      var _stSess = _pubSess[_stx];
       var _stMoments = (_stSess && _stSess.moments) || [];
       for (var _sty = 0; _sty < _stMoments.length; _sty++) {
         var _stM = _stMoments[_sty];
         if (!_stM || !_stM.image) continue;
-        var _stSlug = artstyles.styleSlug(_stM.style || (_stSess && _stSess.art_style) || (campaign && campaign.art_style) || '');
+        var _stSlug = artstyles.styleSlug(_stM.style || (_stSess && _stSess.art_style) || (_pubCamp && _pubCamp.art_style) || '');   // v3.2.12
         if (_stSlug) _styleSet[_stSlug] = true;
       }
     }
@@ -8397,16 +8445,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
         'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'canonical_reference_url',
         'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'image'
       ];
-      for (var _cx = 0; _cx < (characters || []).length; _cx++) {
-        var _ch = characters[_cx];
+      for (var _cx = 0; _cx < (_pubChars || []).length; _cx++) {   // v3.2.12
+        var _ch = _pubChars[_cx];
         if (!_ch) continue;
         for (var _fx = 0; _fx < _PORTRAIT_FIELDS.length; _fx++) {
           var _u = _ch[_PORTRAIT_FIELDS[_fx]];
           if (_u && typeof _u === 'string') _imgSet[_u] = true;
         }
       }
-      for (var _sx = 0; _sx < sessionsWithData.length; _sx++) {
-        var _mz = sessionsWithData[_sx].moments || [];
+      for (var _sx = 0; _sx < _pubSess.length; _sx++) {   // v3.2.12
+        var _mz = _pubSess[_sx].moments || [];
         for (var _mx = 0; _mx < _mz.length; _mx++) { if (_mz[_mx] && _mz[_mx].image) _imgSet[_mz[_mx].image] = true; }
       }
       var _urls = Object.keys(_imgSet);
@@ -8750,7 +8798,8 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
   // v3.0.588 -- TD-370. The include set is resolved here already; handing it back means
   // save-optimized records the SAME computation the book was assembled from rather than
   // repeating it and risking a second answer.
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap), pageOpts: pageOpts };   // v3.2.10 -- pageOpts for savedBookMetaFrom
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap), pageOpts: pageOpts,   // v3.2.10 -- pageOpts for savedBookMetaFrom
+           sessions: sessionsWithData, characters: characters };   // v3.2.12 -- TD-988: what was rendered, for savedReadingSnapshotFrom
 }
 
 // PHASE 3 (page-packer) v1: render the packed book. Measure -> pack -> feed the packer's
@@ -14425,11 +14474,13 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
     // Stored FIRST, so a failure here costs an orphan object rather than a prefs row whose PDF and
     // layout describe different books. That disagreement is exactly what TD-214 was.
     var _stUrl = null;
+    var _readSnap = await savedReadingSnapshotFrom(await getDb(), built, req, savedBookMetaFrom(built));   // v3.2.12 -- TD-988
     try {
       _stUrl = await approvedStateSave(campaignId, arrange, {
         v: APPROVED_STATE_VERSION, arrange: arrange, layout: req.query.layout || '', co: req.query.co || '',
         campaignName: hit.campaignName || '', body: hit.body, planText: hit.planText || null,
-        moves: runMovesGet(_lookKey) || [], grows: runGrowsGetMap(_lookKey) || {}
+        moves: runMovesGet(_lookKey) || [], grows: runGrowsGetMap(_lookKey) || {},
+        snapshot: _readSnap   // v3.2.12 -- the online reading page; publish-story uses it (null: publish uses today's data)
       });
     } catch (e) { console.error('[save-optimized] layout store failed: ' + ((e && e.message) || e)); _stUrl = null; }
     if (!_stUrl) {
