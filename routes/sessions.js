@@ -220,7 +220,8 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // Players do not see the DM's Draft sessions unless they have already
   // made their own version of that session. The DM sees everything.
   var visFilter = '';
-  var listParams = [req.session.userId, req.session.userId, req.params.campaignId];
+  // v3.2.08 -- four ids now: two for the pinned-version step, two for the existing own-fork step.
+  var listParams = [req.session.userId, req.session.userId, req.session.userId, req.session.userId, req.params.campaignId];
   if (req.campaignRole !== 'dm') {
     visFilter = " AND ( (SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) = 'ready'" +
       " OR EXISTS (SELECT 1 FROM session_forks fo WHERE fo.session_id = s.id AND fo.user_id = ? AND fo.role = 'player') )";
@@ -256,16 +257,32 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // version, a member with one, canonical-only, panels-with-no-establishing, the legacy
   // establishing_image fallthrough and the NULL-kind ordering trap. The member's six answers are
   // byte-identical to the query this replaces; only the Story Master's row moved.
+  // v3.2.08 -- THE PINNED VERSION FIRST. Ian: "Their pinned first if it's there ... then their first or
+  // only version next." The pin (campaign_members.default_version_id, TD-927) is what the session page
+  // opens first, so the tile now reads it too: a pinned Canonical reads the dm fork; a pinned named
+  // version reads its fork on THIS session -- the caller's own, or anyone's once Ready, the same rule the
+  // picker uses -- and where it has none, the step yields NULL and the existing rule below decides, exactly
+  // as before. A pin on a version from another campaign matches nothing (pv.campaign_id).
+  const _pinForkSql =
+    "(SELECT CASE WHEN pv.is_canonical THEN (SELECT dpf.id FROM session_forks dpf WHERE dpf.session_id = s.id AND dpf.role = 'dm' LIMIT 1) " +
+           "ELSE (SELECT vf.id FROM session_forks vf WHERE vf.session_id = s.id AND vf.version_id = pv.id AND (vf.user_id = ? OR vf.player_access_status = 'ready') ORDER BY vf.id ASC LIMIT 1) END " +
+      "FROM campaign_members pcm JOIN campaign_versions pv ON pv.id = pcm.default_version_id AND pv.campaign_id = pcm.campaign_id " +
+      "WHERE pcm.campaign_id = s.campaign_id AND pcm.user_id = ? LIMIT 1)";
+  // v3.2.08 -- A REJECTED PICTURE IS NEVER A TILE (TD-979): watermarked stock is passed over for the next.
+  const _tileNotRejectedSql = " AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = m.image AND ir.verdict = 'reject')";
   const _tileForkSql =
-    "COALESCE(" +
+    "COALESCE(" + _pinForkSql + ", " +
       "CASE WHEN EXISTS (SELECT 1 FROM session_forks dmo WHERE dmo.session_id = s.id AND dmo.role = 'dm' AND dmo.user_id = ?) THEN NULL " +
            "ELSE (SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1) END, " +
       "(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1))";
   const sessions = await db.prepare(
     'SELECT s.*, ' +
-    "COALESCE(tm.image, s.establishing_image) AS title_image_url, " +
-    "tm.layout_meta AS title_layout_meta, " +
-    '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
+    // v3.2.08 -- the version's own opening picture, else the Canonical's (cn), else the legacy column.
+    // The meta travels with whichever picture won, so a drawn title is still fitted whole (TD-460).
+    "COALESCE(tm.image, cn.image, s.establishing_image) AS title_image_url, " +
+    "CASE WHEN tm.image IS NOT NULL THEN tm.layout_meta ELSE cn.layout_meta END AS title_layout_meta, " +
+    // v3.2.08 -- the page's last resort skips a rejected picture too (TD-979).
+    '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\'' + _tileNotRejectedSql + ' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
     // Deploy 4.0 — player_access_status now lives on the DM fork. This
     // aliased column comes AFTER s.* so it wins in the row object,
     // keeping the JSON key identical (frontend session-list untouched).
@@ -273,9 +290,14 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
     'FROM sessions s ' +
     "LEFT JOIN LATERAL (" +
       "SELECT m.image, m.layout_meta FROM moments m " +
-      "WHERE m.fork_id = " + _tileForkSql + " AND m.image IS NOT NULL AND m.image <> '' " +
+      "WHERE m.fork_id = " + _tileForkSql + " AND m.image IS NOT NULL AND m.image <> '' " + _tileNotRejectedSql + " " +
       "ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC " +
       "LIMIT 1) tm ON TRUE " +
+    "LEFT JOIN LATERAL (" +
+      "SELECT m.image, m.layout_meta FROM moments m " +
+      "WHERE m.fork_id = (SELECT cdf.id FROM session_forks cdf WHERE cdf.session_id = s.id AND cdf.role = 'dm' LIMIT 1) AND m.image IS NOT NULL AND m.image <> '' " + _tileNotRejectedSql + " " +
+      "ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC " +
+      "LIMIT 1) cn ON TRUE " +
     'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC'   // v3.1.37 -- same-date tie
   ).all(...listParams);
   res.json(sessions);

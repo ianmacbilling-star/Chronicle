@@ -20407,12 +20407,21 @@ var CAMPAIGNS_PAGE_PLAIN_BG = true;
 // THE WAY BACK: set this to false (and, for the very first paint, take views-plain-bg off <body>).
 var VIEWS_PLAIN_BG = true;
 try { if (document.body && document.body.classList) document.body.classList.toggle('views-plain-bg', !!VIEWS_PLAIN_BG); } catch (e) {}
+// v3.2.08 -- THE BOOK'S PICTURE, IN IAN'S ORDER. "If there is no campaign image... default to the first
+// image of the first session" -- the user's own book first (their pinned version, else their first or only
+// version), then the Canonical. Ian: "I don't like no image there at all. And people don't know to change
+// it." The chosen campaign image always wins, and the book's printed-cover picture is no longer borrowed
+// here (Ian, 2026-10-19). The default is worked out by the server (routes/campaigns.js campaignTilePicture)
+// each time the list is read and is NEVER STORED, so choosing a campaign image replaces it and the
+// default follows the book as its pictures change. A default that is a drawn chapter title is fitted
+// whole (cbook-title), never cropped.
 function campaignBookHtml(c) {
-  var pic = c.campaign_image_url || c.cover_image_url;
+  var pic = c.campaign_image_url || c.tile_image_url || '';
+  var picIsTitle = !c.campaign_image_url && !!c.tile_image_url && thumbIsBuiltTitle(c.tile_image_meta);
   return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
     (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
     '<div class="cbook-art">' +
-      (pic ? '<img src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
+      (pic ? '<img' + (picIsTitle ? ' class="cbook-title"' : '') + ' src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
            : '<img class="cbook-logo" src="/images/Campaignia_Logo.png" alt="" />') +
     '</div>' +
     '<div class="cbook-fade"></div>' +

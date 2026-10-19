@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.08",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3208-book-tiles-fill",
+        "kind": "change",
+        "public": true,
+        "summary": "Campaign and session books now show their picture from the top of the book down to the title, whatever its shape, and a campaign with no picture chosen shows the opening picture of its first session.",
+        "detail": "My Campaigns, a campaign's Sessions page and Order & Publish \u2192 Sessions: every picture fills the book from just under the gold line to just above its own words, with the fade under the gold line; a wide or tall picture is trimmed from its middle. A drawn chapter title (Title Builder) is never trimmed: it fits whole. A campaign with no campaign image shows the opening picture of the first session in your pinned version (or your first version), else the Canonical's; choosing a campaign image replaces it. The session list shows each session's picture from your pinned version, falling back to the Canonical's when your version has none. Order & Publish still shows the version picked at the top. A watermarked (rejected) picture is never used. The printed book cover is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.07",
     "staged_on": "2026-10-18",
     "entries": [

@@ -185,7 +185,7 @@
         body.text-halo .view .sess-tab, body.text-halo #view-session-detail .form-label {
           text-shadow:0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9); }
         #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(232,207,122,0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
-        .camp-books .campaign-book { position:relative; display:block; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
+        .camp-books .campaign-book { position:relative; display:flex; flex-direction:column; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
           border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;
           background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
           box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
@@ -193,17 +193,25 @@
         .camp-books .campaign-book::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
           background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
         .cbook-amb { position:absolute; inset:-24px; z-index:0; background-size:cover; background-position:center; filter:blur(18px) saturate(0.9); opacity:0.34; }
-        .cbook-art { position:absolute; top:14px; right:12px; bottom:24%; left:18px; z-index:1; display:flex; align-items:flex-start; justify-content:center; }   /* Ian: always at the top, the words on the dark below */
-        .cbook-art img { display:block; max-width:100%; max-height:100%; width:auto; height:auto;
-          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
-          -webkit-mask-composite:source-in; mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%), linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%);
-          mask-composite:intersect; }
-        .cbook-art img.cbook-logo { width:34%; max-width:96px; opacity:0.55; -webkit-mask-image:none; mask-image:none; align-self:center; }
-        .cbook-fade { position:absolute; inset:0; z-index:2; pointer-events:none;
-          background:linear-gradient(to bottom, rgba(12,7,3,0) 42%, rgba(12,7,3,0.72) 60%, rgba(12,7,3,0.94) 74%, #0c0703 100%); }
-        .cbook-frame { position:absolute; inset:8px 8px 8px 12px; z-index:3; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+        /* v3.2.08 -- Ian: "I want the picture to somehow fill from the top of the book to just above the
+           lettering. No matter what size picture they choose." The book is a COLUMN (above): the picture box
+           takes every bit of height the words leave, from just under the gold line down to where the
+           lettering starts, and the words' own fade (on .cbook-text) lies over the picture's foot. A
+           picture is CROPPED to that box from its middle; a drawn chapter title (.cbook-title) is FITTED
+           whole -- Ian: "Chapter titles need to fit entirely." The fade stays, just under the gold line.
+           The page-wide .cbook-fade is retired: a fade fixed at 42% of the book could not follow words
+           of different heights. The gold line now sits above the words' fade (z-index 5) so it still
+           runs the full height of the book. */
+        .cbook-art { position:relative; flex:1 1 0; min-height:0; margin:9px 9px 0 13px; z-index:1; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+        .cbook-art img { display:block; width:100%; height:100%; max-width:none; max-height:none; object-fit:cover; object-position:center;
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 9%, #000 100%); mask-image:linear-gradient(to bottom, transparent 0, #000 9%, #000 100%); }
+        .cbook-art img.cbook-title { object-fit:contain; box-sizing:border-box; padding:6px 4px; -webkit-mask-image:none; mask-image:none; }
+        .cbook-art img.cbook-logo { width:34%; height:auto; max-width:96px; object-fit:contain; opacity:0.55; -webkit-mask-image:none; mask-image:none; align-self:center; }
+        .cbook-fade { display:none; }
+        .cbook-frame { position:absolute; inset:8px 8px 8px 12px; z-index:5; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
           box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
-        .cbook-text { position:absolute; left:22px; right:16px; bottom:16px; z-index:4; display:flex; flex-direction:column; gap:4px; }
+        .cbook-text { position:relative; flex:0 0 auto; margin-top:-60px; padding:60px 16px 16px 22px; z-index:4; display:flex; flex-direction:column; gap:4px;
+          background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 48px, rgba(12,7,3,0.96) 78px, #0c0703 100%); }   /* v3.2.08 -- in the column, under the picture */
         .camp-books .campaign-book .campaign-card-name { color:#e8cf7a; font-size:15px; line-height:1.25; margin:0; text-shadow:0 1px 2px rgba(0,0,0,0.9); }
         .camp-books .campaign-book .campaign-card-desc { color:rgba(240,232,208,0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
         .camp-books .campaign-book .campaign-card-meta { color:rgba(232,207,122,0.6); }
@@ -219,7 +227,7 @@
            Publish. Same cover, binding, gold line, picture at the top and dark fade as the campaign
            books; the tile's own words sit on the fade. Only under .sess-books (SESSION_CARDS_AS_BOOKS). */
         .sess-books { gap:22px 18px; }
-        .sess-books .session-card { position:relative; display:block; aspect-ratio:17/22; overflow:hidden; border:none; border-radius:3px 6px 6px 3px;
+        .sess-books .session-card { position:relative; display:flex; flex-direction:column; aspect-ratio:17/22; overflow:hidden; border:none; border-radius:3px 6px 6px 3px;
           background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
           box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
         .sess-books .session-card:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
@@ -237,12 +245,20 @@
            from 18px outside the left edge, the line sits 12px in, so 31px comes off the left; it runs
            18px past the right edge, the line sits 8px in, so 27px comes off the right. The top and
            bottom still fade. */
-        .sess-books .session-card .session-card-img { position:absolute; z-index:1; top:38%; left:50%; transform:translate(-50%, -50%); width:calc(100% + 36px); height:auto; aspect-ratio:auto;
-          max-width:none; max-height:68%; object-fit:contain; padding:0; background:none; clip-path:inset(0 27px 0 31px);
-          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%);
-          mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 80%, transparent 100%); }
-        .sess-books .session-card .session-card-img-empty { top:34%; width:auto; clip-path:none; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
-        .sess-books .session-card .session-card-body { position:absolute; left:0; right:0; bottom:0; z-index:4; padding:70px 16px 16px 22px; gap:4px;
+        /* v3.2.08 -- Ian: "I want the picture to somehow fill from the top of the book to just above the
+           lettering. No matter what size picture they choose." Same rule as the campaign books: the tile is
+           a column, the picture takes all the height the words leave (from just under the gold line to
+           where the lettering starts) and the words' fade lies over its foot. A picture is cropped from
+           its middle (cover); a drawn chapter title is fitted whole (contain) and is never cropped. Each
+           tile's picture ends above ITS OWN words, so a two-line title gets a slightly shorter picture. */
+        .sess-books .session-card .session-card-img { position:relative; z-index:1; flex:1 1 0; min-height:0; display:block; margin:9px 9px 0 13px;
+          top:auto; left:auto; transform:none; width:auto; height:auto; max-width:none; max-height:none; aspect-ratio:auto;
+          object-fit:cover; object-position:center; padding:0; background:none; clip-path:none;
+          -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 9%, #000 100%);
+          mask-image:linear-gradient(to bottom, transparent 0, #000 9%, #000 100%); }
+        .sess-books .session-card .session-card-img.session-card-img-title { object-fit:contain; box-sizing:border-box; padding:6px 4px; -webkit-mask-image:none; mask-image:none; }
+        .sess-books .session-card .session-card-img-empty { display:flex; align-items:center; justify-content:center; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
+        .sess-books .session-card .session-card-body { position:relative; flex:0 0 auto; margin-top:-70px; z-index:4; padding:70px 16px 16px 22px; gap:4px;
           background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 55px, rgba(12,7,3,0.96) 90px, #0c0703 100%); }
         .sess-books .session-card .session-card-title { color:#e8cf7a; font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
         .sess-books .session-card .session-card-date { color:rgba(232,207,122,0.62); }
