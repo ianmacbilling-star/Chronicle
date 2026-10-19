@@ -265,7 +265,10 @@ function makeHandlers(d) {
       made = [];
       // v3.1.8 -- what is in the book, read now: the shelf keeps a snapshot, so it describes what the
       // book holds even if the version changes later. Best effort: the book is already shelved.
-      try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, bp, lo.inc)); } catch (e) { d.log('meta', e); }
+      // v3.2.16 -- TD-988. A saved book that recorded its subtitle is shelved with THAT one, not today's (testers: a
+      // book saved as "Issue 1" showed "ISSUE 2" on the shelf).
+      var _bpS = (lo.meta && typeof lo.meta === 'object') ? Object.assign({}, bp || {}, { subtitle: (lo.meta.subtitle != null ? lo.meta.subtitle : null) }) : bp;
+      try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, _bpS, lo.inc)); } catch (e) { d.log('meta', e); }
       return { ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit };
     } catch (e) {
       for (var i = 0; i < made.length; i++) { try { await d.deleteFile(made[i]); } catch (e2) {} }

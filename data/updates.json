@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.16",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3216-loaded-ready-shelf-subtitle-drawn-note",
+        "kind": "fix",
+        "public": true,
+        "summary": "A loaded book is ready to publish at once, the Bookshelf shows a book's saved subtitle, and a note says when a drawn title no longer matches the Title and Subtitle boxes.",
+        "detail": "The Publish card no longer says \u201cnothing yet \u2014 run Optimize first\u201d while a book is loaded. A book put on the Bookshelf shows the subtitle it was saved with. If your cover uses a title drawn with the Title Builder and you change the Title or Subtitle, a short note under the boxes says the drawing still shows the old words.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.15",
     "staged_on": "2026-10-19",
     "entries": [

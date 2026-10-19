@@ -22968,6 +22968,22 @@ function prepApplyOwnershipLock() {
 // NOT the size or the placement controls, which DO still apply -- builtTitleCss scales the artwork by
 // titleSize and the overlay is placed by titlePlace, so disabling them would be a lie in the other
 // direction.
+// v3.2.16 -- THE DRAWN TITLE KEEPS ITS OWN WORDS. Ian: if the title or subtitle is changed and the cover uses a
+// title drawn with the builder, "they need to get a small message under the text boxes after the edit". Shown
+// only when the boxes now differ from the words the drawing was made with (built_title_text / _sub, recorded
+// since v3.0.622); a drawing with no recorded words says nothing (Ian: don't worry about those).
+function prepRenderDrawnTitleNote() {
+  var el = document.getElementById('prep-drawn-title-note');
+  if (!el) return;
+  var bm = (state && state.bookMeta) || {}, msg = '';
+  if (bm.built_title_url && bm.built_title_text) {
+    var wasS = (bm.built_title_sub == null) ? '' : String(bm.built_title_sub).trim();
+    if (_tbTitle() !== String(bm.built_title_text).trim() || _tbSubtitle() !== wasS)
+      msg = 'Your drawn title still shows the old words. Update it in the Title Builder.';
+  }
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+}
 function prepApplyTitleModeLock() {
   try {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
@@ -23002,6 +23018,7 @@ function prepApplyTitleModeLock() {
     // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
     // the title text changes while the builder is open.
     if (typeof _tbRenderWarn === 'function') _tbRenderWarn();
+    prepRenderDrawnTitleNote();   // v3.2.16 -- and the note under the boxes
   } catch (e) {}
 }
 function prepLayoutLoad(){
@@ -29305,6 +29322,10 @@ function finalizeUpdatePublishLink() {
   if (a.parentNode && a.parentNode.style) a.parentNode.style.display = _own ? '' : 'none';
   // v3.0.973 -- TD-872. EITHER WITNESS WILL DO, and the server's is the better one.
   var ready = (_finalizeSavedReady || finalizeServerSavedBook()) && !!(state && state.currentCampaign);   // v3.0.392 -- see above
+  // v3.2.16 -- A LOADED BOOK IS READY NOW. Testers: "Publishing: nothing yet -- run Optimize first" for about twenty
+  // seconds beside "Loaded: saved Oct 19" while the Optimize tab's own check of the saved file caught up, which
+  // could cost someone 11 tokens re-optimizing a book they already had.
+  try { if (!ready && orderIsLoaded() && !state._orderLoaded.pending && state._orderLoaded.found) ready = true; } catch (e) {}
   if (!ready) {
     a.style.display = 'none';
     if (none) none.style.display = '';
