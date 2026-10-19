@@ -2531,7 +2531,16 @@ function applyForkBookMeta(campaign, fbm) {
   // they seed the campaign row for a book with no fork prefs at all, which is still the right
   // default. This line is the one that decides for a book that HAS prefs, and it is the only one
   // that ever saw the reader's choice.
-  campaign.cover_image_url = coverFromPrefs(_f, campaign.cover_image_url || campaign.campaign_image_url || '');
+  // v3.2.09 -- NO COVER CHOSEN MEANS THE CAMPAIGN IMAGE AS IT IS NOW, the same answer the Prep tile
+  // gives (my-book-meta: coverFromPrefs(cur, campaign_image_url)). This used to prefer
+  // campaigns.cover_image_url, a copy of the campaign image taken ONCE the first time Prep opened
+  // (prepSeedCoverFromCampaignImage) and never updated -- so after the campaign image changed, the
+  // tile showed the new picture while the preview, the print cover and publish drew the old one, or
+  // nothing if it was gone. Ian, 2026-10-19: it showed on the tile, not in the preview, until he
+  // removed and re-added it. The copy is still written (Ian: leave that code alone); nothing reads it.
+  // A campaign with no campaign image gets no cover here -- Ian: leave it blank, never a session
+  // picture. A chosen or deliberately removed cover is untouched (coverFromPrefs reads the key).
+  campaign.cover_image_url = coverFromPrefs(_f, campaign.campaign_image_url || '');
   campaign.back_cover_image_url = _f.back_cover_image_url || '';
   campaign.title_image_url = _f.title_image_url || '';
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
