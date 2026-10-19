@@ -3300,7 +3300,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); if (typeof novelLandOnEntry === 'function') novelLandOnEntry(); }   // v3.2.15
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -3365,6 +3365,7 @@ function setCampaignElements() {
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
+  state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
   // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
   // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
@@ -3376,6 +3377,7 @@ function selectCampaign(id) {
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988
+  state._novelLandedFor = null;   // v3.2.15
   if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
@@ -10013,6 +10015,7 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  state._novelLandPending = null;   // v3.2.15 -- any tab choice, by the reader or by code, overrides the landing rule
   // v3.0.584 -- FIRST, before any pane is hidden: an edit in progress belongs to the tab being left.
   if (typeof prepCommitFields === 'function') prepCommitFields();
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
@@ -17645,7 +17648,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); if (typeof novelLandOnEntry === 'function') novelLandOnEntry(); }   // v3.2.15
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -17710,6 +17713,7 @@ function setCampaignElements() {
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
+  state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
   // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
   // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
@@ -17721,6 +17725,7 @@ function selectCampaign(id) {
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988
+  state._novelLandedFor = null;   // v3.2.15
   if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
@@ -18792,6 +18797,7 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  state._novelLandPending = null;   // v3.2.15 -- any tab choice, by the reader or by code, overrides the landing rule
   // v3.0.584 -- FIRST, before any pane is hidden: an edit in progress belongs to the tab being left.
   if (typeof prepCommitFields === 'function') prepCommitFields();
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
@@ -26161,6 +26167,33 @@ function orderMarkLoaded(source) {
       try { updateNovelPublishGuard(); } catch (e) {}
       try { finalizeUpdatePublishLink(); } catch (e) {}   // v3.2.12 -- the Publishing line names the loaded title
     });
+}
+// v3.2.15 -- WHERE YOU LAND IN A CAMPAIGN'S BOOK (server rule: bookLandingFor in routes/pdf.js).
+// Only on the FIRST entry to the book area since the campaign was opened (or the page loaded): within the
+// same visit you go back to the tab you were on, with the book still loaded (Ian: "it should remain loaded
+// up"). Sessions at once; then Optimize if the server says the latest saved book is unfinished or a run is
+// going -- unless a tab has been chosen meanwhile (a click, a Reorder, a Bring back), which always wins.
+function novelLandOnEntry() {
+  if (!state.currentCampaign) return;
+  var cid = String(state.currentCampaign.id);
+  if (state._novelLandedFor === cid) return;
+  state._novelLandedFor = cid;
+  if (state._reorder && !state._reorder.applied) return;   // a reorder goes to Order & Publish
+  switchNovelTab('sessions');
+  var tok = {}; state._novelLandPending = tok;
+  var tries = 0;
+  (function wait() {
+    if (state._novelLandPending !== tok) return;
+    if (!state.novelVersionSettled && tries++ < 80) { setTimeout(wait, 100); return; }   // the version decides which book
+    fetch('/api/pdf/book-landing/' + cid + finalizeBookQuery(), { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      .then(function (j) {
+        if (state._novelLandPending !== tok) return;
+        state._novelLandPending = null;
+        if (!state.currentCampaign || String(state.currentCampaign.id) !== cid) return;
+        if (j && j.tab === 'finalize') switchNovelTab('finalize');
+      });
+  })();
 }
 function orderLoadLastClick() {
   var busy = (typeof workInFlightLabel === 'function') ? workInFlightLabel() : '';

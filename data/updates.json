@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.15",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3215-book-landing",
+        "kind": "change",
+        "public": true,
+        "summary": "Opening a campaign's book now starts on Sessions, or on Optimize when your last optimized book was never published or ordered.",
+        "detail": "A first book and the next book in a series both start by choosing sessions, so that is where you land. If you optimized a book and left before publishing or ordering it, you land on Optimize instead, where Load Last Optimized brings it back. Within the same visit you return to the tab you were on, with your book still loaded. Reorder still goes straight to Order & Publish.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.14",
     "staged_on": "2026-10-19",
     "entries": [

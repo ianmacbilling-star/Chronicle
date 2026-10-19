@@ -7933,6 +7933,63 @@ router.post('/book-since/:campaignId', requireAuth, async function (req, res) {
     return res.json(d);
   } catch (e) { log500('book-since', req, e); return res.status(500).json({ error: (e && e.message) || 'book-since failed' }); }
 });
+// =====================================================================================================
+// v3.2.15 -- WHERE YOU LAND IN A CAMPAIGN'S BOOK. Ian, 2026-10-19: "I think we always go to Sessions" --
+// a first book and the next episode of a series both start there -- except one case: "They started
+// Optimizing something... it finished and saved but we don't know if they are done... They left before
+// they were done... that's the case where we would want to put them back on the Optimize tab."
+//
+// UNFINISHED = the version's most recent saved book (any layout) has been neither published nor ordered.
+//   * Published: Publish stamps usedAt on the saved book it copied (stampSavedBookUsed). A save from this
+//     version on carries usedAt:null from the start; one saved before carries no key at all, and for that
+//     one a story published for this campaign by this reader after it was saved counts instead.
+//   * Ordered: a PAID (or refunded) print order for this campaign by this reader placed after it was saved.
+//     Read from print_orders, so the order and payment path is not touched at all.
+//   * It stays unfinished until it is used or replaced by a new save (Ian: no time limit).
+// An Optimize run going for this campaign also lands on Optimize. Landing never loads anything (Ian: "Let
+// them press the button").
+async function bookLandingFor(db, campaignId, userId, e) {
+  if (!e || !e.pdfUrl || !e.at) return { tab: 'sessions', reason: 'nothing_saved' };
+  if (e.usedAt) return { tab: 'sessions', reason: 'published', savedAt: e.at };
+  var savedMs = Date.parse(e.at);
+  if (!(savedMs > 0)) return { tab: 'sessions', reason: 'unknown' };
+  function after(v) { if (!v) return false; var t = (v instanceof Date) ? v.getTime() : Date.parse(String(v)); return t > 0 && t >= savedMs; }
+  var ords = await db.prepare("SELECT created_at FROM print_orders WHERE user_id = ? AND campaign_id = ? AND payment_status IN ('paid', 'refunded')").all(userId, campaignId);
+  for (var i = 0; i < (ords || []).length; i++) { if (after(ords[i].created_at)) return { tab: 'sessions', reason: 'ordered', savedAt: e.at }; }
+  if (!Object.prototype.hasOwnProperty.call(e, 'usedAt')) {
+    var pubs = await db.prepare('SELECT created_at, updated_at FROM public_stories WHERE user_id = ? AND campaign_id = ?').all(userId, campaignId);
+    for (var j = 0; j < (pubs || []).length; j++) { if (after(pubs[j].created_at) || after(pubs[j].updated_at)) return { tab: 'sessions', reason: 'published', savedAt: e.at }; }
+  }
+  return { tab: 'finalize', reason: 'unfinished', savedAt: e.at };
+}
+function newestSavedBook(lastOptimized) {
+  var lo = (lastOptimized && typeof lastOptimized === 'object') ? lastOptimized : {}, best = null;
+  Object.keys(lo).forEach(function (k) { var e = lo[k]; if (e && e.pdfUrl && e.at && (!best || Date.parse(e.at) > Date.parse(best.at))) best = e; });
+  return best;
+}
+async function stampSavedBookUsed(req, campaignId, arrange, pdfUrl) {
+  var db = await getDb();
+  var sc = await bookPrefsScope(db, req, campaignId);
+  var prefs = await getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: false, versionId: sc.versionId });
+  var lo = (prefs && prefs.lastOptimized && typeof prefs.lastOptimized === 'object') ? Object.assign({}, prefs.lastOptimized) : null;
+  if (!lo || !lo[arrange] || lo[arrange].pdfUrl !== pdfUrl) return false;   // replaced since: nothing to stamp
+  lo[arrange] = Object.assign({}, lo[arrange], { usedAt: new Date().toISOString() });
+  await setForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { lastOptimized: lo }, sc.versionId);
+  return true;
+}
+router.get('/book-landing/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var db = await getDb();
+    var cid = req.params.campaignId;
+    var mem = await db.prepare('SELECT role FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(cid, req.session.userId);
+    if (!mem) return res.status(403).json({ error: 'Access denied' });
+    var run = null; try { run = optimizeRunGet(req.session.userId); } catch (e) {}
+    if (run && String(run.campaignId) === String(cid)) return res.json({ tab: 'finalize', reason: 'running' });
+    var sc = await bookPrefsScope(db, req, cid);
+    var prefs = await getForkBookPrefs(db, sc.chooser, sc.fork, cid, { inherit: false, versionId: sc.versionId });
+    return res.json(await bookLandingFor(db, cid, req.session.userId, newestSavedBook(prefs && prefs.lastOptimized)));
+  } catch (e) { log500('book-landing', req, e); return res.json({ tab: 'sessions', reason: 'error' }); }
+});
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
   var _mismatch = null;   // v3.0.798 -- TD-608; which categories differ from the screen
   // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
@@ -8445,6 +8502,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
   }
 
+  // v3.2.15 -- the saved book this copied is now used, so the next visit lands on Sessions (bookLandingFor).
+  if (_pubSrc === 'composed' && _loE && _loE.pdfUrl) {
+    try { await stampSavedBookUsed(req, req.params.campaignId, _pubArr, _loE.pdfUrl); }
+    catch (e) { console.error('[publish-story] could not mark the saved book as published: ' + ((e && e.message) || e)); }
+  }
   try {
     var _storyId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
     if (_storyId) {
@@ -14548,6 +14610,7 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
                          inc: (built && built.incFp != null) ? built.incFp : null,
                          // v3.2.10 -- TD-988. The cover fields this PDF was rendered with (savedBookMetaFrom).
                          meta: savedBookMetaFrom(built),
+                         usedAt: null,   // v3.2.15 -- not yet published (stampSavedBookUsed); the landing rule reads it
                          flattened: !_quick };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
