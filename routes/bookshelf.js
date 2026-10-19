@@ -252,13 +252,16 @@ function makeHandlers(d) {
         bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
         coverUrl = d.coverFromPrefs(bp, campaign.campaign_image_url || '') || '';
       } catch (e) { /* keep the campaign picture */ }
+      // v3.2.10 -- TD-988. A saved book that recorded its cover shows THAT cover on the shelf.
+      if (lo.meta && typeof lo.meta === 'object') coverUrl = lo.meta.cover_image_url || '';
       var ins = await db.prepare(
-        'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at) ' +
-        "VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at, book_cover_meta) ' +
+        "VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(uid, campaign.id, campaign.name || '', sc.bookVersionId || null, Number(sc.versionId) || 0, vLabel,
         arrange, lo.layout || '', lo.co || '', (lo.inc == null ? null : String(lo.inc)), lo.bookTitle || campaign.name || '',
         coverUrl, pdfUrl, bodyUrl, Number(lo.pages) || 0,
-        (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''));
+        (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''),
+        (lo.meta && typeof lo.meta === 'object') ? JSON.stringify(lo.meta) : null);   // v3.2.10 -- TD-988: the saved book's cover record
       made = [];
       // v3.1.8 -- what is in the book, read now: the shelf keeps a snapshot, so it describes what the
       // book holds even if the version changes later. Best effort: the book is already shelved.
@@ -434,7 +437,9 @@ function makeHandlers(d) {
       lastOpt[arrange] = { pdfUrl: pdfUrl, at: row.saved_at || new Date(stamp).toISOString(), pages: Number(row.pages) || 0,
         bookTitle: row.book_title || '', bodyUrl: bodyUrl, co: row.co || '', layout: row.layout || '',
         frontCovers: (row.front_covers == null ? null : Number(row.front_covers)), backCovers: (row.back_covers == null ? null : Number(row.back_covers)),
-        inc: (row.inc == null ? null : row.inc), flattened: true, fromShelf: row.id };
+        inc: (row.inc == null ? null : row.inc), flattened: true, fromShelf: row.id,
+        // v3.2.10 -- TD-988. The cover record comes back with the book, so it orders with its own cover.
+        meta: (function () { try { var m = row.book_cover_meta ? JSON.parse(row.book_cover_meta) : null; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })() };
       var patch = { lastOptimized: lastOpt };
       // Only your own version reaches here with a different layout type (see above).
       var lay = (nowArr !== arrange && acc.own) ? coToLayoutOpts(row.co) : null;

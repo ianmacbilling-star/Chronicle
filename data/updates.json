@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.10",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3210-saved-book-self-contained",
+        "kind": "fix",
+        "public": true,
+        "summary": "A printed or published book now always carries the cover, title and subtitle it was optimized with, and the \u201cSessions don\u2019t match\u201d warning no longer appears by mistake on your own named versions.",
+        "detail": "Optimize and save a book, then change its cover picture, title or subtitle without optimizing again. Order: the cover preview shows the SAVED cover and title, matching the book's own first page. Publish: the Library card's picture and title are the saved book's. Bookshelf: save, change the cover, Bring back, order: the shelved cover. As Story Master on one of your own named versions whose Include in Print ticks differ from the Canonical's: Optimize, save, open Order & Publish: no \u201cSessions don\u2019t match\u201d. Books saved before this version keep using the current cover settings.",
+        "td": ["TD-929", "TD-974", "TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.09",
     "staged_on": "2026-10-19",
     "entries": [

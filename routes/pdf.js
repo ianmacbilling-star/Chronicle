@@ -2553,6 +2553,41 @@ function applyForkBookMeta(campaign, fbm) {
   if (_f.subtitle != null) campaign._memberSubtitle = String(_f.subtitle);
   if (_f.title_color) campaign._memberTitleColor = String(_f.title_color);
 }
+// v3.2.10 -- TD-988. A SAVED BOOK IS SELF-CONTAINED. Ian, 2026-10-19: "Saved books... should publish
+// exactly what is in those books... not what the current cover, title etc etc say." The save records
+// the cover fields the PDF was ACTUALLY rendered with -- read off the campaign object assembleNovelHtml
+// built, after applyForkBookMeta and the query overrides -- so the record cannot disagree with the
+// file. Order (the wrap cover), the interior's re-render fallback, the Publish listing and the
+// Bookshelf then use it instead of whatever the book is set to today. A save made before v3.2.10 has
+// no record and every reader falls back to the current settings, exactly as before (Ian: fine).
+function savedBookMetaFrom(built) {
+  try {
+    var c = (built && built.campaign) || null, po = (built && built.pageOpts) || {};
+    if (!c) return null;
+    var t = (po.bookTitle != null && String(po.bookTitle).trim()) ? String(po.bookTitle).trim() : String(c._memberBookTitle || c.name || '');
+    return { v: 1, cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '',
+      title_image_url: c.title_image_url || '', built_title_url: c.built_title_url || '', book_title: t,
+      subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '' };
+  } catch (e) { return null; }
+}
+// Put a recorded book's cover fields onto a campaign object (and a pageOpts, when one is in hand),
+// overriding the current settings. Returns false, and changes nothing, when there is no record.
+function applySavedBookMeta(campaign, pageOpts, m) {
+  if (!campaign || !m || typeof m !== 'object') return false;
+  campaign.cover_image_url = m.cover_image_url || '';
+  campaign.back_cover_image_url = m.back_cover_image_url || '';
+  campaign.title_image_url = m.title_image_url || '';
+  campaign.built_title_url = m.built_title_url || '';
+  if (m.book_title) campaign._memberBookTitle = String(m.book_title);
+  if (m.subtitle != null) campaign._memberSubtitle = String(m.subtitle); else delete campaign._memberSubtitle;
+  if (m.title_color) campaign._memberTitleColor = String(m.title_color); else delete campaign._memberTitleColor;
+  if (pageOpts) {
+    if (m.book_title) pageOpts.bookTitle = String(m.book_title);
+    if (m.subtitle != null) pageOpts.subtitle = String(m.subtitle); else delete pageOpts.subtitle;
+    if (m.title_color) pageOpts.titleColor = String(m.title_color); else delete pageOpts.titleColor;
+  }
+  return true;
+}
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
@@ -4380,8 +4415,14 @@ async function resolveBookMismatch(req, campaignId, coStr) {
     if (!campaign) return none;
     // Resolved exactly as publish-story and print-interior resolve it, because comparing against a
     // DIFFERENT include map than the one they use would warn about a book nobody is producing.
-    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+    // v3.2.10 -- TD-929 / TD-974. WHOSE TICKS ARE "NOW" IS DECIDED BY THE VERSION, NOT BY THE ROLE.
+    // This read `my_role === 'dm' ? null : me`, so a Story Master on one of his own NAMED versions was
+    // compared against the Canonical's Include in Print ticks (sessions.novel_include) while the book
+    // had been saved from the version's own (session_includes) -- "Sessions don't match" straight
+    // after a clean Optimize. Now the same rule assembleNovelHtml builds the book with, so the saved
+    // fingerprint and this one are one computation.
     var _bv = await resolveBookVersion(db, campaign.id, req);
+    var asUser = _bv ? _bv.asUser : ((req.query && req.query.as_user) ? Number(req.query.as_user) : null);
     var incMap = await effectiveIncludeMap(db, campaign.id, asUser,
       _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
     var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, nowCo);
@@ -7109,7 +7150,7 @@ async function printInteriorHandler(req, res) {
     } catch (e) { _stripped = null; }
     if (!_stripped) try {
       var _builtP = await assembleNovelHtml(req, req.params.campaignId, null,
-        { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body });
+        { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body }, (_loE && _loE.meta) || null);   // v3.2.10 -- TD-988: the saved title page
       html = _builtP && _builtP.html;
       // v3.0.423 -- SAY WHICH BOOK THIS IS, AND WHEN IT WAS APPROVED. v3.0.422 logged both refusal
       // paths and neither success path, so the one route being debugged had no way to report what it
@@ -7682,10 +7723,30 @@ async function printCoverHandler(req, res) {
     // so the presets, the size, the placement and the SUBTITLE all stopped at the screen. Same
     // query-first, stored-second rule the novel route uses, so a Prep panel edit previews before it
     // is saved and every other surface shows what the version actually holds.
+    // v3.2.10 -- TD-988. THE PRINTED COVER IS THE SAVED BOOK'S COVER. The interior is the saved book
+    // (print-interior strips its covers), so the wrap round it must be that book's too -- not today's
+    // cover picture, title and subtitle. Only for the layouts whose interior IS the saved book; a save
+    // with no record (made before v3.2.10) keeps the old behaviour below.
+    var _savedBook = null;
+    try {
+      if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
+        var _loCv = await lastOptimizedEntry(req, campaign.id, co.arrange);
+        if (_loCv && _loCv.meta && typeof _loCv.meta === 'object') _savedBook = _loCv;
+      }
+    } catch (e) { _savedBook = null; }
+    var html;
+    if (_savedBook) {
+      var _wm = _savedBook.meta;
+      var _wco = _savedBook.co ? parseCustomOpts(_savedBook.co) : co;   // the saved title style, size and placement
+      applySavedBookMeta(campaign, null, _wm);
+      try { console.log('[print-cover] campaign ' + campaign.id + ': using the cover recorded with the saved book of ' + (_savedBook.at || 'unknown') + ', not the current settings'); } catch (e) {}
+      html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: _wm.book_title || '', titleColor: _wm.title_color || '', subtitle: (_wm.subtitle != null ? String(_wm.subtitle) : null), co: _wco });
+    } else {
     var _wrapSub = null;
     if (req.query.subtitle != null) _wrapSub = String(req.query.subtitle);
     else if (campaign._memberSubtitle != null) _wrapSub = campaign._memberSubtitle;
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it
+    html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it
+    }
    // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
@@ -8060,6 +8121,9 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // they meant to. Naming what differs is the honest version of that protection.
     // v3.0.800 -- TD-610. Through the ONE resolver, which also does the logging.
     _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
+    // v3.2.10 -- TD-988. Ian: "Library card should match cover." The listing's title and picture come
+    // from the saved book's record when it has one (a pre-v3.2.10 save has none: unchanged).
+    var _savedMetaP = (_loE.meta && typeof _loE.meta === 'object') ? _loE.meta : null;
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
     // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
@@ -8092,9 +8156,9 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // by re-approving the layout. public_stories.title is a database column and is free to change
     // at any time. So a mismatch is reported once, in the response, and never blocks. No new data
     // is needed -- save-optimized already records the title it rendered under.
-    var _printedT = String(_loE.bookTitle || '').trim();
+    var _printedT = String((_savedMetaP && _savedMetaP.book_title) || _loE.bookTitle || '').trim();   // v3.2.10
     if (!_printedT) _printedT = String(campaign._memberBookTitle || campaign.name || '').trim();
-    var _listingT = String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();
+    var _listingT = (_savedMetaP && _savedMetaP.book_title) ? String(_savedMetaP.book_title).trim() : String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();   // v3.2.10
     if (_printedT && _listingT && _printedT !== _listingT) {
       _titleWarning = 'The cover of this book reads "' + _printedT + '" but the Library listing says "' + _listingT + '". Run Optimize again if you want them to match.';
       try { console.warn('[publish-story] title mismatch. printed: ' + _printedT + ' | listing: ' + _listingT); } catch (e) {}
@@ -8149,14 +8213,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // (which masks at render), and it is what the public page, its link preview, the Library and My Stuff show,
   // so a rejected campaign cover or first panel was published as the story's face (testers, 2026-10-17). With
   // no clean picture at all the story has no cover image, as a story with no pictures does today.
-  var _coverCands = [campaign.cover_image_url || ''];
+  var _coverCands = [(_savedMetaP ? (_savedMetaP.cover_image_url || '') : (campaign.cover_image_url || ''))];   // v3.2.10 -- TD-988: the saved book's cover first
   for (var si = 0; si < sessionsWithData.length; si++) {
     var ms = sessionsWithData[si].moments || [];
     for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) _coverCands.push(ms[mi].image); }
   }
   var coverUrl = (await rightsCheck.splitRejected(_coverCands.filter(Boolean))).clean[0] || '';
 
-  var title = bookTitle || campaign._memberBookTitle || campaign.name;
+  var title = (_savedMetaP && _savedMetaP.book_title) ? _savedMetaP.book_title : (bookTitle || campaign._memberBookTitle || campaign.name);   // v3.2.10 -- the card's title is the cover's
   var authorName = '';
   try {
     var meRow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(req.session.userId);
@@ -8476,7 +8540,7 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
 // re-derivation. Deliberately mirrors the /novel route's gathering and is kept as a
 // SEPARATE function (the live export route is left untouched) so the export path
 // carries zero risk from this feature. Reuses buildNovelHTML, so the HTML is identical.
-async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
+async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta) {   // v3.2.10 -- savedMeta: TD-988
   const db = await getDb();
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
@@ -8608,11 +8672,13 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.mzFloatShrunk === '1') { co = co || {}; co.mzFloatShrunk = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
+  // v3.2.10 -- TD-988. A recorded book's cover fields win over today's (print-interior's re-render).
+  if (savedMeta) applySavedBookMeta(campaign, pageOpts, savedMeta);
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   // v3.0.588 -- TD-370. The include set is resolved here already; handing it back means
   // save-optimized records the SAME computation the book was assembled from rather than
   // repeating it and risking a second answer.
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap) };
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap), pageOpts: pageOpts };   // v3.2.10 -- pageOpts for savedBookMetaFrom
 }
 
 // PHASE 3 (page-packer) v1: render the packed book. Measure -> pack -> feed the packer's
@@ -14325,6 +14391,8 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
                          // below test for PRESENCE before comparing -- an old approval must not
                          // start refusing to publish.
                          inc: (built && built.incFp != null) ? built.incFp : null,
+                         // v3.2.10 -- TD-988. The cover fields this PDF was rendered with (savedBookMetaFrom).
+                         meta: savedBookMetaFrom(built),
                          flattened: !_quick };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
