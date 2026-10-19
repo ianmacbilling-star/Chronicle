@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.14",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3214-publish-version-sessions",
+        "kind": "fix",
+        "public": true,
+        "summary": "A Story Master publishing his own named version no longer puts sessions unticked in that version into the online book, and the title note on publishing says it means the printed cover.",
+        "detail": "For a book saved before v3.2.12, the online reading page was built from the Canonical's Include in Print ticks rather than the named version's, so a session unticked in the version still appeared. It now follows the version on screen. When the printed cover and the Library listing carry different titles, the note now reads \u201cThe printed cover of this book reads \u2026, but the Library listing and the online book say \u2026\u201d.",
+        "td": ["TD-929", "TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.13",
     "staged_on": "2026-10-19",
     "entries": [

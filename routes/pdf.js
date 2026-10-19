@@ -8026,7 +8026,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
-  const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+  let asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);   // v3.2.14 -- see below the _bv line
   // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
   // never declared in this route, so publish-story threw a ReferenceError inside an
   // async handler on EVERY call. Nothing catches that, so the promise rejected, Node
@@ -8039,6 +8039,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // WHICH book publishes -- a bigger decision than fixing a crash. See TD-290.
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
+  // v3.2.14 -- TD-929's twin here. A Story Master publishing his own NAMED version was read as the Canonical
+  // (asUser null = sessions.novel_include), so a book saved before v3.2.12 published every Canonical-ticked
+  // session online, including ones unticked in the version on screen (testers, 2026-10-19: "a reader gets
+  // a chapter the author excluded"). The version decides, as in assembleNovelHtml -- but only for the
+  // caller's OWN book (the Story Master, or a version the caller owns), so who may publish what is unchanged.
+  if (_bv && (campaign.my_role === 'dm' || Number(_bv.asUser) === Number(req.session.userId))) asUser = _bv.asUser;
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare(
@@ -8287,7 +8293,8 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (!_printedT) _printedT = String(campaign._memberBookTitle || campaign.name || '').trim();
     var _listingT = (_savedMetaP && _savedMetaP.book_title) ? String(_savedMetaP.book_title).trim() : String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();   // v3.2.10
     if (_printedT && _listingT && _printedT !== _listingT) {
-      _titleWarning = 'The cover of this book reads "' + _printedT + '" but the Library listing says "' + _listingT + '". Run Optimize again if you want them to match.';
+      // v3.2.14 -- say WHICH cover (testers: the online book's cover reads the listing title, only the PDF reads the other).
+      _titleWarning = 'The printed cover of this book reads "' + _printedT + '", but the Library listing and the online book say "' + _listingT + '". Run Optimize again if you want them to match.';
       try { console.warn('[publish-story] title mismatch. printed: ' + _printedT + ' | listing: ' + _listingT); } catch (e) {}
     }
   } else {
