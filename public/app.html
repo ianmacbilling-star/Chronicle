@@ -737,8 +737,17 @@
         <div class="ord-wrap">
           <div id="print-msg" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
 
+          <!-- v3.2.11 -- TD-988. ORDER & PUBLISH SHOWS ONLY A BOOK YOU PUT THERE (spec SAVED_BOOK_SELF_CONTAINED_SPEC.md
+               stage 2). Ian: "A button at the top that says Load Last Optimized." The bar says what is loaded, or
+               offers the load; the two cards below stay hidden until a book is put there (orderPaintLoadBar). -->
+          <div id="ord-load-bar" class="ord-card" style="display:none;margin-bottom:14px;padding:10px 14px;">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <button type="button" id="ord-load-btn" class="btn btn-primary btn-sm" onclick="orderLoadLastClick()">Load Last Optimized</button>
+              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(245,232,200,0.8);"></div>
+            </div>
+          </div>
           <!-- ============================ CARD 1: PRINT ORDER ============================ -->
-          <div class="ord-cols">
+          <div class="ord-cols" id="ord-cols-books">
             <!-- LEFT: the print order, its own card. RIGHT: publishing, its own card beside the
                  address rather than nested inside the order border. -->
             <div class="ord-col ord-col-main">

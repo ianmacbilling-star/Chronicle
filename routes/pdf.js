@@ -4449,6 +4449,58 @@ async function resolveBookMismatch(req, campaignId, coStr) {
     return none;
   }
 }
+// v3.2.11 -- TD-988 STAGE 2. THE BOOK AS IT STANDS NOW: its Include in Print set (the same rule as
+// assembleNovelHtml and resolveBookMismatch after TD-929), its stored layout settings and its cover fields
+// (applyForkBookMeta over the prefs, as every render reads them). The Order & Publish tab asks for this when a
+// book is put there and keeps it; /book-since compares it with now, so the warning reports only what changed
+// AFTER the book was optimized or loaded. One computation for both sides.
+var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color'];
+async function bookStateNow(req, campaignId) {
+  var db = await getDb();
+  var campaign = await db.prepare(
+    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+  ).get(campaignId, req.session.userId);
+  if (!campaign) return null;
+  var _bv = await resolveBookVersion(db, campaign.id, req);
+  var asUser = _bv ? _bv.asUser : ((req.query && req.query.as_user) ? Number(req.query.as_user) : null);
+  var incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  var _sc = await bookPrefsScope(db, req, campaign.id);
+  var prefs = await getForkBookPrefs(db, _sc.chooser, _sc.fork, campaign.id, { inherit: true, versionId: _sc.versionId });
+  var c2 = Object.assign({}, campaign);
+  applyForkBookMeta(c2, prefs || {});
+  return { v: 1, inc: includeFingerprint(incMap), co: storedLayoutCo(prefs) || '',
+    cover: { cover_image_url: c2.cover_image_url || '', back_cover_image_url: c2.back_cover_image_url || '', title_image_url: c2.title_image_url || '',
+      built_title_url: c2.built_title_url || '', book_title: String(c2._memberBookTitle || c2.name || ''),
+      subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '' } };
+}
+function bookStateDiff(since, now) {
+  var out = { since: true, sessions: false, layout: false, titlecover: false, any: false, categories: [] };
+  if (!since || typeof since !== 'object' || !now) return out;
+  if (since.inc != null && String(since.inc) !== String(now.inc)) out.sessions = true;
+  try {
+    var m = bookMismatch(null, null, String(since.co || ''), String(now.co || ''));
+    if (m.layout) out.layout = true;
+    if (m.titlecover) out.titlecover = true;
+  } catch (e) {}
+  var a = since.cover || {}, b = now.cover || {};
+  BOOK_STATE_COVER_KEYS.forEach(function (k) {
+    if (String(a[k] == null ? '' : a[k]) !== String(b[k] == null ? '' : b[k])) out.titlecover = true;
+  });
+  if (out.sessions) out.categories.push('Sessions');
+  if (out.layout) out.categories.push('Layout options');
+  if (out.titlecover) out.categories.push('Title and cover');
+  out.any = out.categories.length > 0;
+  return out;
+}
+// Which sessions a saved book holds, as the numbers the Publish page shows (campaign order).
+async function savedSessionNumbers(db, campaignId, inc) {
+  try {
+    if (inc == null || inc === '') return null;
+    var rows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaignId);
+    var pos = {}; (rows || []).forEach(function (r, i) { pos[String(r.id)] = i + 1; });
+    return String(inc).split(',').map(function (s) { return pos[String(s).trim()]; }).filter(function (n) { return n > 0; }).sort(function (x, y) { return x - y; });
+  } catch (e) { return null; }
+}
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   // v3.0.454 -- as_version joins the key. Two versions belonging to ONE user share an as_user, so
@@ -7819,6 +7871,26 @@ router.get('/book-mismatch/:campaignId', requireAuth, async function (req, res) 
   return res.json(m);
 });
 
+// v3.2.11 -- TD-988. The book's state now (kept by the Order & Publish tab when a book is put there), and
+// what has changed since. Read-only; never blocks anything.
+router.get('/book-state/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var s = await bookStateNow(req, req.params.campaignId);
+    res.set('Cache-Control', 'no-store');
+    if (!s) return res.status(403).json({ error: 'Access denied' });
+    return res.json(s);
+  } catch (e) { log500('book-state', req, e); return res.status(500).json({ error: (e && e.message) || 'book-state failed' }); }
+});
+router.post('/book-since/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var now = await bookStateNow(req, req.params.campaignId);
+    res.set('Cache-Control', 'no-store');
+    if (!now) return res.status(403).json({ error: 'Access denied' });
+    var d = bookStateDiff(req.body && req.body.since, now);
+    if (d.any) { try { console.log('[book-since] campaign ' + req.params.campaignId + ' -> ' + d.categories.join('; ') + ' | then inc ' + ((req.body.since || {}).inc || '(none)') + ' now ' + now.inc); } catch (e) {} }
+    return res.json(d);
+  } catch (e) { log500('book-since', req, e); return res.status(500).json({ error: (e && e.message) || 'book-since failed' }); }
+});
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
   var _mismatch = null;   // v3.0.798 -- TD-608; which categories differ from the screen
   // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
@@ -14485,7 +14557,9 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
     // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last
     // Optimized File can pull both and say plainly when a pre-v3.0.422 save has only the PDF.
+    var _sNums = await savedSessionNumbers(db, campaignId, lastOpt.inc);   // v3.2.11 -- TD-988, for the Loaded line
     return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null,
+      title: String((lastOpt.meta && lastOpt.meta.book_title) || lastOpt.bookTitle || ''), hasRecord: !!(lastOpt.meta && typeof lastOpt.meta === 'object'), sessionNums: _sNums,   // v3.2.11
       hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && !coSettingsDiff(lastOpt.co, req.query.co).same),   // v3.0.977 -- TD-897
 
       // v3.0.430 -- THE INTERIOR PAGE COUNT, EXACTLY, WITHOUT RENDERING ANYTHING.

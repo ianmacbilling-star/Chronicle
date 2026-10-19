@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.11",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3211-order-publish-load",
+        "kind": "change",
+        "public": true,
+        "summary": "Order & Publish now shows only a book you put there: one you have just optimized, or one you load with Load Last Optimized. It says which book is loaded, and warns only if you change the book after that.",
+        "detail": "Open a campaign and go straight to Order & Publish: nothing is loaded, and a Load Last Optimized button sits at the top with when that book was saved. Press it: a Loaded line names the save time, the sessions, the title and the layout, and the order form and Publish appear. Optimize and save a book: it is loaded at once. Change a session tick, the layout or the cover afterwards: \u201cYou\u2019ve changed this book since it was optimized\u201d names what changed. Load an older book: no warning about how it differs from today. Leave the campaign or reload: nothing is loaded again. Reorder from My Orders is unchanged. The page count now reads like \u201c16 interior pages\u201d, and the Optimize tab's Sessions included count follows an Include in Print change straight away.",
+        "td": ["TD-974", "TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.10",
     "staged_on": "2026-10-19",
     "entries": [

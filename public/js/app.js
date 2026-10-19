@@ -3364,6 +3364,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
   // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
   // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
@@ -3374,6 +3375,7 @@ function selectCampaign(id) {
 
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988
   if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
@@ -10162,6 +10164,12 @@ function canEditFork() {
 // NOTHING IT SITS BESIDE IS EVER DISABLED.
 function bookMismatchHtml(m, verb) {
   if (!m || !m.any || !m.categories || !m.categories.length) return '';
+  // v3.2.11 -- TD-988. Ian: "if you optimize something.. then change something .. yes you should get a warning."
+  if (m.since) {
+    return '<b>You\u2019ve changed this book since it was optimized.</b>' +
+      '<ul>' + m.categories.map(function (c) { return '<li>' + escapeHtmlPrint(c) + '</li>'; }).join('') + '</ul>' +
+      '<div class="bm-foot">Those changes aren\u2019t in it.</div>';
+  }
   var items = m.categories.map(function (c) {
     return '<li>' + escapeHtmlPrint(c) + '</li>';
   }).join('');
@@ -10188,11 +10196,8 @@ function refreshPublishMismatch() {
   if (_au) _qs.push(_au);
   var _co = customOptsQ('novel', '');    // '' or 'co=..'
   if (_co) _qs.push(_co);
-  var url = '/api/pdf/book-mismatch/' + state.currentCampaign.id + (_qs.length ? ('?' + _qs.join('&')) : '');
-  fetch(url, { credentials: 'same-origin' })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (m) { renderBookMismatch('book-mismatch-publish', m, 'publish'); })
-    .catch(function () { renderBookMismatch('book-mismatch-publish', null, 'publish'); });
+  // v3.2.11 -- TD-988. The publish card shows the same since-answer as the order card (orderSinceRefresh).
+  try { orderSinceRefresh(); } catch (e) {}
 }
 function updateNovelPublishGuard() {
   var btn = document.getElementById('novel-publish-btn');
@@ -12986,6 +12991,7 @@ function refreshNovelPreview() {
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
+  if (typeof orderIsLoaded === 'function' && !orderIsLoaded()) { showError('Load a book first: press Load Last Optimized at the top of this tab, or run Optimize.'); return; }   // v3.2.11 -- TD-988
   // v3.0.971 -- TD-848. ASK THE SERVER, NOT THE VIEWER OWN TIER.
   //
   // This read `state.user.tier === 'trial'` and so refused every member of a paying Story
@@ -17703,6 +17709,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
   // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
   // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
@@ -17713,6 +17720,7 @@ function selectCampaign(id) {
 
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988
   if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
@@ -25402,7 +25410,7 @@ function updatePrintPageDisplay(n, exact) {
   var pe = document.getElementById('print-page-est');
   if (!pe) return;
   if (exact && n > 0) {
-    pe.textContent = 'Final length: ' + n + ' pages (used for pricing and the cover spine).';
+    pe.textContent = n + ' interior pages';   // v3.2.11 -- Ian: the saved book counts its covers, the printer does not
   } else if (n === 0) {
     pe.textContent = 'Calculating exact page count from the print file...';
   } else {
@@ -25553,7 +25561,7 @@ function prepareInteriorCount() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
-    try { renderBookMismatch('book-mismatch-order', printInteriorCache.mismatch, 'order'); } catch (e) {}
+    try { orderSinceRefresh(); } catch (e) {}   // v3.2.11 -- TD-988: changes since the book was put here
     updatePrintPageDisplay(printActualPages, true);
     refreshPrintOptions(printActualPages);
     return;
@@ -25584,7 +25592,7 @@ function prepareInteriorCount() {
       // v3.0.798 -- TD-608. print-interior builds the APPROVED book and now says when that is not
       // the book on screen. This is the tab-open path, so the notice is there before anything is
       // clicked; reviewPrintOrder re-renders it from the same field when Prepare runs.
-      try { renderBookMismatch('book-mismatch-order', res.j.mismatch, 'order'); } catch (e) {}
+      try { orderSinceRefresh(); } catch (e) {}   // v3.2.11 -- TD-988: changes since the book was put here
       if (res.j.pages && res.j.pages > 0) {
         printActualPages = res.j.pages;
         updatePrintPageDisplay(printActualPages, true);
@@ -26055,6 +26063,12 @@ function loadPrintTab() {
     if (_v) _pbt.value = _v;
   }
   if (!state.currentCampaign) return;
+  // v3.2.11 -- TD-988. NOTHING IS ORDERED OR PUBLISHED UNTIL A BOOK HAS BEEN PUT HERE: a fresh Optimize save,
+  // Load Last Optimized (either tab) or Bookshelf Bring back. A reorder goes straight through (Ian: "It's a
+  // reorder... It's assumed you aren't worried about continuity.").
+  var _ordReo = !!(state._reorder && !state._reorder.applied);
+  try { orderPaintLoadBar(_ordReo); } catch (e) {}
+  if (!_ordReo && !(orderIsLoaded() && !state._orderLoaded.pending && state._orderLoaded.found)) return;
   orderClearNameIfOtherBook();   // v3.0.978 -- TD-899
   wirePrintOrderLock();
   showPrintMsg('', null);
@@ -26102,6 +26116,123 @@ function loadPrintTab() {
 // v3.0.430 -- prefer the SAVED interior page count over the estimate for the first paint.
 // Never blocks: if the lookup fails or the book predates the stored cover counts, the estimate is
 // used exactly as before, and prepareInteriorCount still corrects it once the interior exists.
+// =====================================================================================================
+// v3.2.11 -- TD-988 STAGE 2. WHAT IS ON THE ORDER & PUBLISH TAB IS A BOOK YOU PUT THERE.
+// Spec claude/SAVED_BOOK_SELF_CONTAINED_SPEC.md. Ian, 2026-10-19: "It loads the last thing you worked on...
+// But that might not be what you are trying to publish now. So it tells you something is wrong."
+//
+// state._orderLoaded is the one book on the tab: { key, pending, found, at, pages, title, sessionNums,
+// hasRecord, arrange, since }. KEYED by campaign + version + owner + layout style, so a different version
+// or layout is simply "not loaded" -- nothing has to remember to clear it, and a version-list refresh
+// cannot wipe a book just saved. Cleared outright on entering a campaign (Ian: navigating away from the
+// campaign wipes it) and, being page state, by a reload. Put there by: a successful Optimize save
+// (finalizeSaveOptimized), Load Last Optimized on the Optimize tab (finalizeLoadLastOptimized, which is
+// also how Bookshelf Bring back finishes) and the button on this tab.
+//
+// `since` is the BOOK'S STATE AT THE MOMENT IT WAS PUT HERE, asked of the server (/book-state). The
+// warning compares that with now (/book-since), so it reports only changes made after the book was
+// optimized or loaded -- never how an older book you chose differs from today's settings.
+// =====================================================================================================
+function orderLoadedKey() {
+  var c = state.currentCampaign;
+  if (!c) return '';
+  var arr = (typeof customOpts !== 'undefined' && customOpts && customOpts.arrange) ? customOpts.arrange : '';
+  return String(c.id) + '|' + String(state.novelVersionId || '') + '|' + String(state.novelAsUser || '') + '|' + String(arr);
+}
+function orderIsLoaded() {
+  var L = state._orderLoaded;
+  return !!(L && L.key && L.key === orderLoadedKey());
+}
+function orderLoadedClear() { state._orderLoaded = null; state._orderSince = null; }
+function orderMarkLoaded(source) {
+  if (!state.currentCampaign) return;
+  var cid = state.currentCampaign.id, q = finalizeBookQuery();
+  var L = { key: orderLoadedKey(), source: source || '', pending: true };
+  state._orderLoaded = L; state._orderSince = null;
+  function getJson(u) { return fetch(u, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  Promise.all([getJson('/api/pdf/last-optimized/' + cid + q + '&_=' + Date.now()), getJson('/api/pdf/book-state/' + cid + q)])
+    .then(function (res) {
+      if (state._orderLoaded !== L) return;   // a newer load, or the campaign was left
+      var info = res[0] || {};
+      L.pending = false; L.found = !!info.found; L.at = info.at || null;
+      L.pages = info.interiorPages || 0; L.title = info.title || ''; L.sessionNums = info.sessionNums || null;
+      L.hasRecord = !!info.hasRecord; L.arrange = info.arrange || ''; L.since = res[1] || null;
+      try { orderRecheckIfOpen(); } catch (e) {}
+      try { updateNovelPublishGuard(); } catch (e) {}
+    });
+}
+function orderLoadLastClick() {
+  var busy = (typeof workInFlightLabel === 'function') ? workInFlightLabel() : '';
+  if (busy) { showError(busy + ' is still running. Let it finish, then load your book.'); return; }
+  orderMarkLoaded('load-order');
+  try { orderPaintLoadBar(false); } catch (e) {}
+}
+function orderShortDate(at) {
+  try { var d = new Date(at); if (!isNaN(d)) return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) {}
+  return '';
+}
+function orderLayoutName(a) { return a === 'paired' ? 'Picture Book' : (a === 'magazine' ? 'Magazine' : (a === 'gazette' ? 'Gazette' : '')); }
+// The bar, and the two cards under it. reorder: the cards show and the bar hides.
+function orderPaintLoadBar(reorder) {
+  var bar = document.getElementById('ord-load-bar'), txt = document.getElementById('ord-load-text');
+  var btn = document.getElementById('ord-load-btn'), cols = document.getElementById('ord-cols-books');
+  if (!bar || !txt) return;
+  function show(cards) { if (cols) cols.style.display = cards ? '' : 'none'; }
+  if (reorder) { bar.style.display = 'none'; show(true); return; }
+  bar.style.display = '';
+  var L = state._orderLoaded;
+  if (orderIsLoaded() && L.pending) { show(false); if (btn) btn.style.display = 'none'; txt.textContent = 'Loading your book\u2026'; return; }
+  if (orderIsLoaded()) {
+    show(true);
+    if (btn) { btn.style.display = ''; btn.className = 'btn btn-sm'; }
+    var bits = [];
+    var when = L.at ? orderShortDate(L.at) : '';
+    bits.push('Loaded: saved ' + (when || 'earlier'));
+    if (L.sessionNums && L.sessionNums.length) bits.push((L.sessionNums.length === 1 ? 'Session ' : 'Sessions ') + L.sessionNums.join(', '));
+    if (L.title) bits.push('\u201c' + L.title + '\u201d');
+    var ln = orderLayoutName(L.arrange); if (ln) bits.push(ln);
+    if (L.found && !L.hasRecord) bits.push('saved before covers were recorded, so the cover uses your current settings');
+    txt.textContent = L.found ? bits.join(' \u00b7 ') : 'Nothing has been optimized yet for this version and layout. Run Optimize first.';
+    if (!L.found) { show(false); if (btn) btn.style.display = 'none'; }
+    // Ian: show the saved title after a load.
+    var _pbt = document.getElementById('print-book-title'); if (_pbt && L.title) _pbt.value = L.title;
+    return;
+  }
+  show(false);
+  if (btn) { btn.style.display = ''; btn.className = 'btn btn-primary btn-sm'; btn.disabled = false; }
+  txt.textContent = 'Nothing is loaded to order or publish. Load the last book you optimized for this version, or run Optimize.';
+  var key = orderLoadedKey(), cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  fetch('/api/pdf/last-optimized/' + cid + finalizeBookQuery() + '&_=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (orderLoadedKey() !== key || orderIsLoaded()) return;
+      if (j && j.found) {
+        var w = j.at ? orderShortDate(j.at) : '';
+        txt.textContent = 'Nothing is loaded to order or publish. Last optimized' + (w ? ' ' + w : '') +
+          (j.interiorPages ? ' \u00b7 ' + j.interiorPages + ' interior pages' : '') + (j.title ? ' \u00b7 \u201c' + j.title + '\u201d' : '') + '.';
+      } else if (j) {
+        txt.textContent = 'Nothing has been optimized yet for this version and layout. Run Optimize first.';
+        if (btn) btn.style.display = 'none';
+      }
+    }).catch(function () {});
+}
+// The one warning, for both cards: changes made since the book was put here (server: /book-since).
+function orderSinceRefresh() {
+  function paint(m) {
+    state._orderSince = m || null;
+    try { renderBookMismatch('book-mismatch-order', m, 'order'); } catch (e) {}
+    try { renderBookMismatch('book-mismatch-publish', m, 'publish'); } catch (e) {}
+  }
+  var L = state._orderLoaded;
+  if (!state.currentCampaign || !orderIsLoaded() || L.pending || !L.since) { paint(null); return; }
+  var key = L.key;
+  fetch('/api/pdf/book-since/' + state.currentCampaign.id + finalizeBookQuery(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ since: L.since })
+  }).then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) { if (orderIsLoaded() && state._orderLoaded.key === key) paint(m); })
+    .catch(function () { paint(null); });
+}
 function finalizeSeedPrintPageCount(estimate) {
   // v3.0.665 -- TD-464. A REORDER ALREADY KNOWS ITS PAGE COUNT: the files exist and were printed
   // at it. Seeding from the estimate or from last-optimized would derive the binding list from a
@@ -27131,8 +27262,8 @@ function reviewPrintOrder() {
       // v3.0.798 -- TD-608. Carried onto the order body so renderPrintReview shows it above the
       // total. The tab-open notice is easy to scroll past; the review panel is the last thing read
       // before paying, and that is the moment this is actually for.
-      body.mismatch = intr.mismatch || null;
-      try { renderBookMismatch('book-mismatch-order', body.mismatch, 'order'); } catch (e) {}
+      body.mismatch = state._orderSince || null;   // v3.2.11 -- TD-988: the since-answer
+      try { orderSinceRefresh(); } catch (e) {}
       // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
       // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
       // with most of the ceiling already spent.
@@ -27752,7 +27883,17 @@ function toggleNovelInclude(sessionId, checked) {
   var q = (!onCanonical && state.novelVersionId) ? ('?as_version=' + encodeURIComponent(state.novelVersionId)) : '';
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + ep + q, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include: !!checked })
-  }).then(function () { loadNovelSummary(); })
+  }).then(function (r) {
+    // v3.2.11 -- the Optimize tab's "Sessions included: x of y" read the book as it was when the Optimize tab
+    // last loaded it, so straight after an untick it still said 5 of 5 (testers). Move it with the change.
+    try {
+      if (r && r.ok && _finalizeSessInc != null && _finalizeSessTotal != null) {
+        _finalizeSessInc = Math.max(0, Math.min(_finalizeSessTotal, _finalizeSessInc + (checked ? 1 : -1)));
+        if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader();
+      }
+    } catch (e) {}
+    loadNovelSummary();
+  })
     .catch(function () { loadNovelSummary(); });
 }
 
@@ -30851,6 +30992,9 @@ function finalizeSaveOptimized(quiet) {
         // existing helper collapses the review panel and sends the reader back to Prepare Your Order,
         // which is the honest state: those files have to be built again.
         try { if (typeof invalidatePreparedOrder === 'function') invalidatePreparedOrder(); } catch (e) {}
+        // v3.2.11 -- TD-988. Ian: "as soon as something is optimized it can be published." The real save only:
+        // the quiet one is the protective copy overwritten seconds later (the note above).
+        if (!quiet) { try { orderMarkLoaded('save'); } catch (e) {} }
         return true;
       }
       // v3.0.386 -- QUIET MEANS QUIET, FOR THE ONE FAILURE THAT IS EXPECTED.
@@ -30925,6 +31069,7 @@ function finalizeLoadLastOptimized(manual) {
             finalizeSyncPublishBtn();      // v3.0.383 -- same state as a completed run, same next step
             try { finalizeUpdatePublishLink(); } catch (e) {}
             finalizeRestoreSavedLayout(j);   // v3.0.422 -- pull the saved LAYOUT too, not just the PDF
+            try { orderMarkLoaded('load-optimize'); } catch (e) {}   // v3.2.11 -- TD-988: this is what Order & Publish now holds
           }
         } else {
           if (btn) btn.style.display = 'none';   // nothing saved yet
