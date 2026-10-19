@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.13",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3213-optimize-drawn-titles",
+        "kind": "fix",
+        "public": true,
+        "summary": "Drawn chapter titles in an optimized Picture Book are drawn like Prep & Preview: small, centred, transparent and unframed.",
+        "detail": "A session title made with the title builder used to come out full width, framed and as tall as a picture in the optimized Picture Book. It now takes half the column with no frame or caption, as it does in Prep & Preview, so those books can come out a little shorter. Run Optimize again to update a saved book.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.12",
     "staged_on": "2026-10-19",
     "entries": [

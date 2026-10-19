@@ -1700,6 +1700,18 @@ function coDropcap(html) {
 // EST_HEAD_PCT: how much of the text column a drawn chapter title is allowed. One number, and the
 // only one to touch if these want to be smaller or larger.
 var EST_HEAD_PCT = 50;
+// v3.2.13 -- THE HEIGHT estCell DRAWS A CHAPTER TITLE AT, AS A NUMBER, for the packer. Ian, 2026-10-19: on
+// the Optimize tab the title builder images were "big and framed" while Prep & Preview drew them right.
+// Same rule as estCell below (half the column, the trimmed artwork's own shape from its file name, never
+// taller than half a column at 21:9) so the planned page and the drawn page agree.
+function builtTitleHeightIn(m) {
+  var _dim = String((m && m.image) || '').split('?')[0].match(/-([0-9]{2,5})x([0-9]{2,5})\.png$/);
+  var _asp = _dim ? (Number(_dim[1]) / Number(_dim[2])) : shapeAspect('panoramic');
+  if (!(_asp > 0)) _asp = shapeAspect('panoramic');
+  var _w = CG_W * EST_HEAD_PCT / 100;
+  var _cap = _w / shapeAspect('panoramic');
+  return Math.round(Math.min(_cap, _w / _asp) * 1000) / 1000;
+}
 function estCell(m, opts) {
   if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
   // v3.0.646 -- THE HEIGHT MUST BE DECIDED BY CSS, BECAUSE THE MEASURE PASS NEVER SEES THE PICTURE.
@@ -8759,7 +8771,11 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
     var _est = (sd.moments || []).find(function (m) { return m && m.kind === 'establishing'; });
     var _estImg = (_est && _est.image) ? _est.image : sd.establishing_image;
     if (_estImg) {
-      var _tm = { image: _estImg, title: '', shape: (_est && _est.shape) || sd.establishing_shape || 'wide', img_w: (_est && _est.img_w) || sd.establishing_img_w || null, img_h: (_est && _est.img_h) || sd.establishing_img_h || null };
+      // v3.2.13 -- layout_meta TRAVELS WITH THE ROW, here too (the v3.0.645 lesson, which fixed Prep's two copies and
+      // missed this one). Without it lmIsBuiltTitle answers "photograph" and the Optimize book framed the drawn title
+      // and gave it a full picture's height. Only when the picture IS the establishing row's own.
+      var _tm = { image: _estImg, title: '', shape: (_est && _est.shape) || sd.establishing_shape || 'wide', img_w: (_est && _est.img_w) || sd.establishing_img_w || null, img_h: (_est && _est.img_h) || sd.establishing_img_h || null,
+                  layout_meta: (_est && _est.image && _est.image === _estImg) ? (_est.layout_meta || null) : null };
       beats.push({ idx: ++_ioIdx, kind: 'title', moment: _tm, shape: _tm.shape, aspect: (typeof momentAspect === 'function' ? (momentAspect(_tm) || 1) : 1), hasImage: true, before: '', after: '' });
     }
     if (sd.narrative_intro) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_intro, after: '' });
@@ -9212,6 +9228,8 @@ function pairedPlacementLabel(pl) {
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
 function beatImageHeight(beat, pageH) {
+  // v3.2.13 -- a drawn chapter title is a chapter head, not a picture: the height estCell draws it at.
+  if (beat && beat.kind === 'title' && beat.moment && lmIsBuiltTitle(beat.moment)) return builtTitleHeightIn(beat.moment);
   // Use the DISPLAY aspect (the ratio the image is actually rendered with by coMedia), not the
   // raw pixel aspect. The composer sizes the rendered box by dispAspect; if the packer computed
   // height from a different (pixel) aspect, the two disagree and the page clips. Prefer the
@@ -9479,6 +9497,13 @@ function composeBook(plan, beats, opts) {
             (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
           '</div></div>';
+      } else if (pl.kind === 'image' && m && m.image && b.kind === 'title' && lmIsBuiltTitle(m)) {
+        // v3.2.13 -- A DRAWN CHAPTER TITLE, drawn as estCell draws it in Prep & Preview: half the column, centred,
+        // transparent, no frame and no caption. The box is the packer's own height (fullH*scale), so the page
+        // holds exactly what was planned; object-fit:contain never crops the lettering.
+        var _btH = (pl.fullH != null ? pl.fullH : beatImageHeight(b, 9.16)) * (pl.scale != null ? pl.scale : 1);
+        inner += '<div class="session-title-image" style="margin:0.05in auto 0.13in;width:' + (CG_W * EST_HEAD_PCT / 100).toFixed(2) + 'in;height:' + _btH.toFixed(3) + 'in;line-height:0;break-inside:avoid;page-break-inside:avoid;">' +
+          '<img src="' + String(m.image).replace(/"/g, '&quot;') + '" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:none;" /></div>';
       } else if (pl.kind === 'image' && m && m.image) {
         // Size with the DISPLAY aspect (what coMedia's aspect-box actually renders with), so the
         // width we set produces exactly the packer's intended height. Using momentAspect (raw pixel
