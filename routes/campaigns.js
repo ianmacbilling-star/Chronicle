@@ -36,6 +36,55 @@ function decorateCampaign(c) {
   return c;
 }
 
+// v3.2.08 -- A CAMPAIGN BOOK WITH NO CHOSEN PICTURE STILL HAS ONE. Ian, 2026-10-19: "If there is no
+// campaign image. Then default to the first image... I don't like no image there at all. And people
+// don't know to change it. They can still change it." His order:
+//   1. the campaign image, when one was chosen (the caller never asks us then);
+//   2. the user's own book -- their PINNED version (TD-927), else their first or only version: the
+//      Story Master's is the Canonical, a member's is the lowest-numbered version they own;
+//   3. the Canonical.
+// "First image" is the opening scene / session title picture of the first session that has one, the
+// same precedence as the session tiles (establishing first, else the lowest panel). A rejected picture
+// (TD-979) is never used. READ ONLY AND NEVER STORED: worked out each time the list is read, so a chosen
+// campaign image always replaces it and the default follows the book. Nothing here touches the book's
+// printed cover, and prepSeedCoverFromCampaignImage (which copies only a STORED campaign image) is left
+// alone at Ian's request. Any failure answers "no default", which is exactly the tile as it was.
+const TILE_PICTURE_SQL =
+  "SELECT m.image, m.layout_meta FROM session_forks f " +
+  "JOIN sessions s ON s.id = f.session_id " +
+  "JOIN moments m ON m.fork_id = f.id " +
+  "WHERE s.campaign_id = ? AND m.image IS NOT NULL AND m.image <> '' " +
+  "AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = m.image AND ir.verdict = 'reject') ";
+const TILE_PICTURE_ORDER =
+  "ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC, f.id ASC, " +
+  "CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC LIMIT 1";
+async function campaignTilePicture(db, c, userId) {
+  try {
+    if (!c || c.campaign_image_url) return null;
+    var own = null;   // { canonical: true } or { versionId }
+    if (c.default_version_id != null && c.default_version_id !== '') {
+      var pv = await db.prepare('SELECT id, is_canonical FROM campaign_versions WHERE id = ? AND campaign_id = ?').get(c.default_version_id, c.id);
+      if (pv) own = pv.is_canonical ? { canonical: true } : { versionId: pv.id };
+    }
+    if (!own && c.my_role === 'dm') own = { canonical: true };
+    if (!own) {
+      var fv = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND NOT is_canonical ORDER BY id ASC LIMIT 1').get(c.id, userId);
+      if (fv) own = { versionId: fv.id };
+    }
+    var row = null;
+    if (own && own.versionId) {
+      // Its own sessions only -- the caller's, or anyone's once Ready (the picker's rule).
+      row = await db.prepare(TILE_PICTURE_SQL + "AND f.version_id = ? AND (f.user_id = ? OR f.player_access_status = 'ready') " + TILE_PICTURE_ORDER).get(c.id, own.versionId, userId);
+    }
+    if (!row) row = await db.prepare(TILE_PICTURE_SQL + "AND f.role = 'dm' " + TILE_PICTURE_ORDER).get(c.id);
+    if (!row || !row.image) return null;
+    return { url: row.image, meta: row.layout_meta || null };
+  } catch (e) {
+    try { console.warn('[campaign-tile] campaign ' + (c && c.id) + ': ' + ((e && e.message) || e)); } catch (_e) {}
+    return null;
+  }
+}
+
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
 // multi-user-aware: a player invited to a campaign sees it here too.
@@ -61,7 +110,14 @@ router.get('/', requireAuth, async function(req, res) {
   // PUT now uses as well. The sentence that stood here claiming thirteen of the fifteen genres
   // declare nothing stopped being true at v3.0.912 -- all fifteen carry a chain, so this runs
   // for every campaign, not almost none of them.
-  res.json((campaigns || []).map(decorateCampaign));
+  // v3.2.08 -- the default book picture, for the books with no chosen one (campaignTilePicture above).
+  const _rows = (campaigns || []).map(decorateCampaign);
+  await Promise.all(_rows.map(async function (c) {
+    var tp = await campaignTilePicture(db, c, req.session.userId);
+    c.tile_image_url = tp ? tp.url : null;
+    c.tile_image_meta = tp ? tp.meta : null;
+  }));
+  res.json(_rows);
 });
 
 // v3.0.862 -- TD-723. Can this account start a new campaign? Same middleware as the
