@@ -183,6 +183,32 @@ function makeHandlers(d) {
     });
     return out;
   }
+  // v3.2.18 -- THE SUBTITLE A SHELVED BOOK SHOWS IS THE ONE ON ITS COVER. Ian, 2026-10-19, on The Strangers:
+  // the open book read "Episode 1, Canonical cccccc" (the Subtitle box) while the cover's drawn title says
+  // "To Grimskull and Back, Again". A drawn title carries its own subtitle in the artwork, so:
+  //   * the saved book used a drawn title -> the subtitle it was drawn with: recorded with the save from v3.2.18,
+  //     else the version's drawn-title words IF that drawing is still the one on the version (same picture),
+  //     else unknown (keep what is stored);
+  //   * the saved book used a typed title -> the subtitle it was saved with;
+  //   * no record (saved before v3.2.10) -> keep what is stored. v3.2.18 took the version's drawn title as it is
+  //     NOW, and a series broke it at once: Ian's For ALL the Ages Book I, II and III all come from one version
+  //     whose drawing now reads Book III, so all three said Book III (v3.2.19). Which drawing an old book used
+  //     cannot be known, so it is not guessed.
+  // Returns the subtitle, or null for 'keep what is stored'.
+  function shelfSubtitle(meta, prefs) {
+    var m = (meta && typeof meta === 'object') ? meta : null, p = prefs || null;
+    function s(v) { return (v == null) ? '' : String(v).trim(); }
+    if (m) {
+      if (m.built_title_url) {
+        if (Object.prototype.hasOwnProperty.call(m, 'built_title_sub')) return s(m.built_title_sub);
+        if (p && p.built_title_url && p.built_title_url === m.built_title_url && p.built_title_text) return s(p.built_title_sub);
+        return null;
+      }
+      return s(m.subtitle);
+    }
+    return null;   // v3.2.19 -- no record: never guessed from the version as it is now
+  }
+  function parseMeta(v) { try { var m = v ? (typeof v === 'string' ? JSON.parse(v) : v) : null; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } }
   async function storeMeta(db, id, m) {
     await db.prepare('UPDATE bookshelf_books SET subtitle = ?, session_count = ?, art_styles = ?, narrative_styles = ?, genres = ?, meta_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(m.subtitle || '', (m.sessionCount == null ? null : m.sessionCount), JSON.stringify(m.art), JSON.stringify(m.narr), JSON.stringify(m.genres), id);
@@ -252,17 +278,24 @@ function makeHandlers(d) {
         bp = await d.getForkBookPrefs(db, sc.chooser, sc.fork, campaign.id, { inherit: true, versionId: sc.versionId });
         coverUrl = d.coverFromPrefs(bp, campaign.campaign_image_url || '') || '';
       } catch (e) { /* keep the campaign picture */ }
+      // v3.2.10 -- TD-988. A saved book that recorded its cover shows THAT cover on the shelf.
+      if (lo.meta && typeof lo.meta === 'object') coverUrl = lo.meta.cover_image_url || '';
       var ins = await db.prepare(
-        'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at) ' +
-        "VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, layout, co, inc, book_title, cover_url, pdf_url, body_url, pages, front_covers, back_covers, saved_at, book_cover_meta) ' +
+        "VALUES (?, 'book', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(uid, campaign.id, campaign.name || '', sc.bookVersionId || null, Number(sc.versionId) || 0, vLabel,
         arrange, lo.layout || '', lo.co || '', (lo.inc == null ? null : String(lo.inc)), lo.bookTitle || campaign.name || '',
         coverUrl, pdfUrl, bodyUrl, Number(lo.pages) || 0,
-        (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''));
+        (lo.frontCovers == null ? null : Number(lo.frontCovers)), (lo.backCovers == null ? null : Number(lo.backCovers)), String(lo.at || ''),
+        (lo.meta && typeof lo.meta === 'object') ? JSON.stringify(lo.meta) : null);   // v3.2.10 -- TD-988: the saved book's cover record
       made = [];
       // v3.1.8 -- what is in the book, read now: the shelf keeps a snapshot, so it describes what the
       // book holds even if the version changes later. Best effort: the book is already shelved.
-      try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, bp, lo.inc)); } catch (e) { d.log('meta', e); }
+      // v3.2.16 -- TD-988. A saved book that recorded its subtitle is shelved with THAT one, not today's (testers: a
+      // book saved as "Issue 1" showed "ISSUE 2" on the shelf).
+      var _subS = shelfSubtitle(lo.meta, bp);   // v3.2.18 -- the cover's subtitle (was v3.2.16's saved typed one)
+      var _bpS = (_subS != null) ? Object.assign({}, bp || {}, { subtitle: _subS }) : bp;
+      try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, _bpS, lo.inc)); } catch (e) { d.log('meta', e); }
       return { ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit };
     } catch (e) {
       for (var i = 0; i < made.length; i++) { try { await d.deleteFile(made[i]); } catch (e2) {} }
@@ -309,6 +342,26 @@ function makeHandlers(d) {
           rb.subtitle = mj.subtitle; rb.session_count = mj.sessionCount;
           rb.art_styles = JSON.stringify(mj.art); rb.narrative_styles = JSON.stringify(mj.narr); rb.genres = JSON.stringify(mj.genres);
         } catch (e) { d.log('meta-fill', e); }
+      }
+      // v3.2.18 -- books already on the shelf show the subtitle on their cover (shelfSubtitle). One prefs read per
+      // version, and a corrected value is stored so the open book and any later read agree.
+      var _verPrefs = {};
+      for (var k = 0; k < rows.length; k++) {
+        var rs = rows[k];
+        if (rs.kind !== 'book' || !rs.campaign_id) continue;
+        try {
+          var _vk = String(rs.campaign_id) + '|' + String(rs.version_id || '');
+          if (!(_vk in _verPrefs)) {
+            _verPrefs[_vk] = null;
+            var scs = await d.bookPrefsScope(db, { session: req.session, query: { as_version: rs.version_id ? String(rs.version_id) : '' }, body: {} }, rs.campaign_id);
+            if (scs && String(scs.chooser) === String(uid)) _verPrefs[_vk] = await d.getForkBookPrefs(db, scs.chooser, scs.fork, rs.campaign_id, { inherit: true, versionId: scs.versionId });
+          }
+          var _sub = shelfSubtitle(parseMeta(rs.book_cover_meta), _verPrefs[_vk]);
+          if (_sub != null && _sub !== String(rs.subtitle || '')) {
+            rs.subtitle = _sub;
+            await db.prepare('UPDATE bookshelf_books SET subtitle = ? WHERE id = ? AND user_id = ?').run(_sub, rs.id, uid);
+          }
+        } catch (e) { d.log('subtitle', e); }
       }
       var used = rows.filter(function (r) { return r.kind === 'book'; }).length;
       return res.json({ limit: t.limit, used: used, tier: t.key, tierName: t.name, plansText: shelfPlansText(), books: rows.map(shape) });
@@ -434,7 +487,9 @@ function makeHandlers(d) {
       lastOpt[arrange] = { pdfUrl: pdfUrl, at: row.saved_at || new Date(stamp).toISOString(), pages: Number(row.pages) || 0,
         bookTitle: row.book_title || '', bodyUrl: bodyUrl, co: row.co || '', layout: row.layout || '',
         frontCovers: (row.front_covers == null ? null : Number(row.front_covers)), backCovers: (row.back_covers == null ? null : Number(row.back_covers)),
-        inc: (row.inc == null ? null : row.inc), flattened: true, fromShelf: row.id };
+        inc: (row.inc == null ? null : row.inc), flattened: true, fromShelf: row.id,
+        // v3.2.10 -- TD-988. The cover record comes back with the book, so it orders with its own cover.
+        meta: (function () { try { var m = row.book_cover_meta ? JSON.parse(row.book_cover_meta) : null; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })() };
       var patch = { lastOptimized: lastOpt };
       // Only your own version reaches here with a different layout type (see above).
       var lay = (nowArr !== arrange && acc.own) ? coToLayoutOpts(row.co) : null;

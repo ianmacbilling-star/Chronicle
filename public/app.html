@@ -468,6 +468,8 @@
               <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown, or Summer at the Lake" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
               <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
+              <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
+              <div id="prep-drawn-title-note" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:4px 0 8px;"></div>
 
               <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
                    We will figure out a better way to explain this than a big message like this."
@@ -737,8 +739,17 @@
         <div class="ord-wrap">
           <div id="print-msg" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
 
+          <!-- v3.2.11 -- TD-988. ORDER & PUBLISH SHOWS ONLY A BOOK YOU PUT THERE (spec SAVED_BOOK_SELF_CONTAINED_SPEC.md
+               stage 2). Ian: "A button at the top that says Load Last Optimized." The bar says what is loaded, or
+               offers the load; the two cards below stay hidden until a book is put there (orderPaintLoadBar). -->
+          <div id="ord-load-bar" class="ord-card" style="display:none;margin-bottom:14px;padding:10px 14px;">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <button type="button" id="ord-load-btn" class="btn btn-primary btn-sm" onclick="orderLoadLastClick()">Load Last Optimized</button>
+              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(245,232,200,0.8);"></div>
+            </div>
+          </div>
           <!-- ============================ CARD 1: PRINT ORDER ============================ -->
-          <div class="ord-cols">
+          <div class="ord-cols" id="ord-cols-books">
             <!-- LEFT: the print order, its own card. RIGHT: publishing, its own card beside the
                  address rather than nested inside the order border. -->
             <div class="ord-col ord-col-main">
@@ -1493,6 +1504,10 @@
             .bspine-t { position:absolute; inset:30px 0 32px; display:flex; align-items:center; justify-content:center;
               writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:var(--font-display);
               font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
+            /* v3.2.18 -- title and subtitle side by side on the spine (column = across, in vertical writing). */
+            .bspine-t.bspine-two { flex-direction:column; gap:1px; }
+            .bspine-tt, .bspine-ts { display:block; max-height:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .bspine-ts { font-size:8px; letter-spacing:0.03em; opacity:0.78; }
             .bspine-ribbon { position:absolute; bottom:-4px; left:50%; width:8px; margin-left:-4px; height:28px; z-index:2; background:#a8322a;
               clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
             /* The open book. Below the app's own dialogs (z-index 100), so Remove can still ask first. */

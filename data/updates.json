@@ -1,5 +1,159 @@
 [
   {
+    "version": "3.2.20",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3220-drawn-note-clears",
+        "kind": "fix",
+        "public": true,
+        "summary": "The note under the Title and Subtitle boxes goes away once you draw the title again with the new words.",
+        "detail": "After changing the subtitle and using a freshly drawn title, the note saying the drawn title still shows the old words stayed on screen until the page was reloaded. It now updates as soon as the Title Builder closes.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.19",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3219-shelf-old-books-kept",
+        "kind": "fix",
+        "public": false,
+        "summary": "Books shelved before v3.2.10 keep the subtitle they were shelved with.",
+        "detail": "v3.2.18 gave old shelf books the subtitle from their version's drawn title as it is now, so a series shelved from one version (Book I, II, III) all showed the latest book's subtitle. An old book's cover was never recorded, so its subtitle is no longer changed.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.18",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3218-shelf-cover-subtitle",
+        "kind": "change",
+        "public": true,
+        "summary": "Books on the Bookshelf show the subtitle that is on their cover, now also in small text on the spine.",
+        "detail": "When a book's cover uses a title drawn with the Title Builder, its subtitle is part of the drawing, so the open book on the shelf now shows that subtitle rather than whatever is in the Subtitle box. Books already on the shelf are corrected the next time the shelf opens. The spine of a book with a subtitle shows it as a second, smaller line beside the title.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.17",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3217-ai-credits-not-owners",
+        "kind": "fix",
+        "public": true,
+        "summary": "Pictures made with AI tools are no longer flagged as naming a creator or copyright holder.",
+        "detail": "Image tools such as Google's write a credit like \u201cMade with Google AI\u201d into every picture they make, and the rights check read that as an owner \u2014 so even a title drawn with the Title Builder was flagged when used as a reference. AI tool credits no longer count, and warnings already given for that reason alone are cleared. A real name in a picture's details still warns, and stock-library pictures are still refused.",
+        "td": ["TD-979"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.16",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3216-loaded-ready-shelf-subtitle-drawn-note",
+        "kind": "fix",
+        "public": true,
+        "summary": "A loaded book is ready to publish at once, the Bookshelf shows a book's saved subtitle, and a note says when a drawn title no longer matches the Title and Subtitle boxes.",
+        "detail": "The Publish card no longer says \u201cnothing yet \u2014 run Optimize first\u201d while a book is loaded. A book put on the Bookshelf shows the subtitle it was saved with. If your cover uses a title drawn with the Title Builder and you change the Title or Subtitle, a short note under the boxes says the drawing still shows the old words.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.15",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3215-book-landing",
+        "kind": "change",
+        "public": true,
+        "summary": "Opening a campaign's book now starts on Sessions, or on Optimize when your last optimized book was never published or ordered.",
+        "detail": "A first book and the next book in a series both start by choosing sessions, so that is where you land. If you optimized a book and left before publishing or ordering it, you land on Optimize instead, where Load Last Optimized brings it back. Within the same visit you return to the tab you were on, with your book still loaded. Reorder still goes straight to Order & Publish.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.14",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3214-publish-version-sessions",
+        "kind": "fix",
+        "public": true,
+        "summary": "A Story Master publishing his own named version no longer puts sessions unticked in that version into the online book, and the title note on publishing says it means the printed cover.",
+        "detail": "For a book saved before v3.2.12, the online reading page was built from the Canonical's Include in Print ticks rather than the named version's, so a session unticked in the version still appeared. It now follows the version on screen. When the printed cover and the Library listing carry different titles, the note now reads \u201cThe printed cover of this book reads \u2026, but the Library listing and the online book say \u2026\u201d.",
+        "td": ["TD-929", "TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.13",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3213-optimize-drawn-titles",
+        "kind": "fix",
+        "public": true,
+        "summary": "Drawn chapter titles in an optimized Picture Book are drawn like Prep & Preview: small, centred, transparent and unframed.",
+        "detail": "A session title made with the title builder used to come out full width, framed and as tall as a picture in the optimized Picture Book. It now takes half the column with no frame or caption, as it does in Prep & Preview, so those books can come out a little shorter. Run Optimize again to update a saved book.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.12",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3212-reading-page-is-saved-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "A published story's online reading page now shows the saved book you published, not today's sessions and settings.",
+        "detail": "Optimize and save a book, then change it (untick a session, edit a scene, change the subtitle) and publish the saved book: the Library page reads exactly like the saved PDF. The same is true of a book brought back from the Bookshelf. Books saved before this version publish as they did before. The Publishing line on the Optimize tab names the loaded book's own title, and the Optimize page count now reads like \u201c18 pages including covers\u201d.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.11",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3211-order-publish-load",
+        "kind": "change",
+        "public": true,
+        "summary": "Order & Publish now shows only a book you put there: one you have just optimized, or one you load with Load Last Optimized. It says which book is loaded, and warns only if you change the book after that.",
+        "detail": "Open a campaign and go straight to Order & Publish: nothing is loaded, and a Load Last Optimized button sits at the top with when that book was saved. Press it: a Loaded line names the save time, the sessions, the title and the layout, and the order form and Publish appear. Optimize and save a book: it is loaded at once. Change a session tick, the layout or the cover afterwards: \u201cYou\u2019ve changed this book since it was optimized\u201d names what changed. Load an older book: no warning about how it differs from today. Leave the campaign or reload: nothing is loaded again. Reorder from My Orders is unchanged. The page count now reads like \u201c16 interior pages\u201d, and the Optimize tab's Sessions included count follows an Include in Print change straight away.",
+        "td": ["TD-974", "TD-988"]
+      }
+    ]
+  },
+  {
+    "version": "3.2.10",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3210-saved-book-self-contained",
+        "kind": "fix",
+        "public": true,
+        "summary": "A printed or published book now always carries the cover, title and subtitle it was optimized with, and the \u201cSessions don\u2019t match\u201d warning no longer appears by mistake on your own named versions.",
+        "detail": "Optimize and save a book, then change its cover picture, title or subtitle without optimizing again. Order: the cover preview shows the SAVED cover and title, matching the book's own first page. Publish: the Library card's picture and title are the saved book's. Bookshelf: save, change the cover, Bring back, order: the shelved cover. As Story Master on one of your own named versions whose Include in Print ticks differ from the Canonical's: Optimize, save, open Order & Publish: no \u201cSessions don\u2019t match\u201d. Books saved before this version keep using the current cover settings.",
+        "td": ["TD-929", "TD-974", "TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.09",
     "staged_on": "2026-10-19",
     "entries": [

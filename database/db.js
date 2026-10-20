@@ -2147,6 +2147,9 @@ async function migrateBookshelf(pool) {
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS narrative_styles TEXT');
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS genres TEXT');
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS meta_at TIMESTAMP');
+  // v3.2.10 -- TD-988. The saved book's cover record (JSON: cover, back, title-page and built-title
+  // pictures, title, subtitle, colour), so a book brought back orders with its own cover.
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS book_cover_meta TEXT');
   // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
   // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
   // into anything that touches an order.

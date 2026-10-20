@@ -1700,6 +1700,18 @@ function coDropcap(html) {
 // EST_HEAD_PCT: how much of the text column a drawn chapter title is allowed. One number, and the
 // only one to touch if these want to be smaller or larger.
 var EST_HEAD_PCT = 50;
+// v3.2.13 -- THE HEIGHT estCell DRAWS A CHAPTER TITLE AT, AS A NUMBER, for the packer. Ian, 2026-10-19: on
+// the Optimize tab the title builder images were "big and framed" while Prep & Preview drew them right.
+// Same rule as estCell below (half the column, the trimmed artwork's own shape from its file name, never
+// taller than half a column at 21:9) so the planned page and the drawn page agree.
+function builtTitleHeightIn(m) {
+  var _dim = String((m && m.image) || '').split('?')[0].match(/-([0-9]{2,5})x([0-9]{2,5})\.png$/);
+  var _asp = _dim ? (Number(_dim[1]) / Number(_dim[2])) : shapeAspect('panoramic');
+  if (!(_asp > 0)) _asp = shapeAspect('panoramic');
+  var _w = CG_W * EST_HEAD_PCT / 100;
+  var _cap = _w / shapeAspect('panoramic');
+  return Math.round(Math.min(_cap, _w / _asp) * 1000) / 1000;
+}
 function estCell(m, opts) {
   if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
   // v3.0.646 -- THE HEIGHT MUST BE DECIDED BY CSS, BECAUSE THE MEASURE PASS NEVER SEES THE PICTURE.
@@ -2546,12 +2558,82 @@ function applyForkBookMeta(campaign, fbm) {
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
   // byte-identical until v3.0.575; adding the field here is the whole reason it was consolidated.
   campaign.built_title_url = _f.built_title_url || '';
+  // v3.2.18 -- the words the drawn title was drawn with, so a saved book can record the subtitle its cover shows.
+  campaign._builtTitleText = _f.built_title_text || '';
+  campaign._builtTitleSub = (_f.built_title_sub == null) ? '' : String(_f.built_title_sub);
   if (_f.book_title) campaign._memberBookTitle = _f.book_title;
   // Subtitle: an empty string is a real stored value meaning "nothing under the title", so this
   // tests for null/undefined rather than for falsiness. Coercing '' away here would make a cleared
   // subtitle indistinguishable from one that was never set.
   if (_f.subtitle != null) campaign._memberSubtitle = String(_f.subtitle);
   if (_f.title_color) campaign._memberTitleColor = String(_f.title_color);
+}
+// v3.2.10 -- TD-988. A SAVED BOOK IS SELF-CONTAINED. Ian, 2026-10-19: "Saved books... should publish
+// exactly what is in those books... not what the current cover, title etc etc say." The save records
+// the cover fields the PDF was ACTUALLY rendered with -- read off the campaign object assembleNovelHtml
+// built, after applyForkBookMeta and the query overrides -- so the record cannot disagree with the
+// file. Order (the wrap cover), the interior's re-render fallback, the Publish listing and the
+// Bookshelf then use it instead of whatever the book is set to today. A save made before v3.2.10 has
+// no record and every reader falls back to the current settings, exactly as before (Ian: fine).
+function savedBookMetaFrom(built) {
+  try {
+    var c = (built && built.campaign) || null, po = (built && built.pageOpts) || {};
+    if (!c) return null;
+    var t = (po.bookTitle != null && String(po.bookTitle).trim()) ? String(po.bookTitle).trim() : String(c._memberBookTitle || c.name || '');
+    return { v: 1, cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '',
+      title_image_url: c.title_image_url || '', built_title_url: c.built_title_url || '', book_title: t,
+      subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '',
+      // v3.2.18 -- a drawn title carries its own subtitle in the artwork; recorded when its words are known.
+      built_title_sub: (c.built_title_url && c._builtTitleText) ? String(c._builtTitleSub || '') : undefined };
+  } catch (e) { return null; }
+}
+// v3.2.12 -- TD-988 (option B). THE ONLINE READING PAGE IS RECORDED WITH THE SAVE, NOT AT PUBLISH.
+// The Library's story page is not the PDF: routes/story-pages.js re-renders it from public_stories.snapshot,
+// and publish-story built that snapshot from TODAY's sessions, ticks, characters and campaign. So a saved
+// book published a week later (or brought back from the Bookshelf) read online as today's book under the
+// saved cover (testers, 2026-10-19). Ian: "B... for sure."
+// Built from the SAME objects assembleNovelHtml rendered the saved PDF from, so the page and the file
+// cannot disagree. It rides inside the approved state in R2 (approvedStateSave), which the Bookshelf
+// already copies on shelve and Bring back, so it travels with the book at no extra cost.
+// The pen names are added here because publicMode masks real names with them and the render inputs do
+// not carry them (publish-story's own queries add the same two fields). Copies, never the render objects.
+// Returns null on any failure: the save goes ahead and publish falls back to today's data, as before.
+async function savedReadingSnapshotFrom(db, built, req, meta) {
+  try {
+    if (!built || !built.campaign || !Array.isArray(built.sessions) || !built.sessions.length) return null;
+    var c = Object.assign({}, built.campaign);
+    try { var _ow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(c.user_id); c.owner_pen_name = (_ow && _ow.pen_name) || null; } catch (e) {}
+    var pens = {};
+    try {
+      var _pr = await db.prepare('SELECT ch.id, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?').all(c.id);
+      (_pr || []).forEach(function (r) { pens[r.id] = r.player_pen_name || null; });
+    } catch (e) {}
+    var chars = (built.characters || []).map(function (ch) { return Object.assign({}, ch, { player_pen_name: (pens[ch.id] != null) ? pens[ch.id] : null }); });
+    var po = built.pageOpts || {};
+    return { v: 1, fromSave: true, layoutStyle: built.layoutStyle || 'Classic',
+      co: (req && req.query && req.query.co) ? parseCustomOpts(req.query.co) : null,   // publish's own co, NOT built.co (that carries the packed body)
+      bookTitle: String((meta && meta.book_title) || ''),
+      subtitle: (po.subtitle != null) ? String(po.subtitle) : null, titleColor: po.titleColor || '',
+      campaign: c, characters: chars, sessions: built.sessions };
+  } catch (e) { console.error('[save-optimized] reading snapshot not recorded: ' + ((e && e.message) || e)); return null; }
+}
+// Put a recorded book's cover fields onto a campaign object (and a pageOpts, when one is in hand),
+// overriding the current settings. Returns false, and changes nothing, when there is no record.
+function applySavedBookMeta(campaign, pageOpts, m) {
+  if (!campaign || !m || typeof m !== 'object') return false;
+  campaign.cover_image_url = m.cover_image_url || '';
+  campaign.back_cover_image_url = m.back_cover_image_url || '';
+  campaign.title_image_url = m.title_image_url || '';
+  campaign.built_title_url = m.built_title_url || '';
+  if (m.book_title) campaign._memberBookTitle = String(m.book_title);
+  if (m.subtitle != null) campaign._memberSubtitle = String(m.subtitle); else delete campaign._memberSubtitle;
+  if (m.title_color) campaign._memberTitleColor = String(m.title_color); else delete campaign._memberTitleColor;
+  if (pageOpts) {
+    if (m.book_title) pageOpts.bookTitle = String(m.book_title);
+    if (m.subtitle != null) pageOpts.subtitle = String(m.subtitle); else delete pageOpts.subtitle;
+    if (m.title_color) pageOpts.titleColor = String(m.title_color); else delete pageOpts.titleColor;
+  }
+  return true;
 }
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
@@ -4380,8 +4462,14 @@ async function resolveBookMismatch(req, campaignId, coStr) {
     if (!campaign) return none;
     // Resolved exactly as publish-story and print-interior resolve it, because comparing against a
     // DIFFERENT include map than the one they use would warn about a book nobody is producing.
-    var asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+    // v3.2.10 -- TD-929 / TD-974. WHOSE TICKS ARE "NOW" IS DECIDED BY THE VERSION, NOT BY THE ROLE.
+    // This read `my_role === 'dm' ? null : me`, so a Story Master on one of his own NAMED versions was
+    // compared against the Canonical's Include in Print ticks (sessions.novel_include) while the book
+    // had been saved from the version's own (session_includes) -- "Sessions don't match" straight
+    // after a clean Optimize. Now the same rule assembleNovelHtml builds the book with, so the saved
+    // fingerprint and this one are one computation.
     var _bv = await resolveBookVersion(db, campaign.id, req);
+    var asUser = _bv ? _bv.asUser : ((req.query && req.query.as_user) ? Number(req.query.as_user) : null);
     var incMap = await effectiveIncludeMap(db, campaign.id, asUser,
       _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
     var m = bookMismatch(lo.inc, includeFingerprint(incMap), lo.co, nowCo);
@@ -4407,6 +4495,58 @@ async function resolveBookMismatch(req, campaignId, coStr) {
     try { console.warn('[book-mismatch] check failed: ' + ((e && e.message) || e)); } catch (_e) {}
     return none;
   }
+}
+// v3.2.11 -- TD-988 STAGE 2. THE BOOK AS IT STANDS NOW: its Include in Print set (the same rule as
+// assembleNovelHtml and resolveBookMismatch after TD-929), its stored layout settings and its cover fields
+// (applyForkBookMeta over the prefs, as every render reads them). The Order & Publish tab asks for this when a
+// book is put there and keeps it; /book-since compares it with now, so the warning reports only what changed
+// AFTER the book was optimized or loaded. One computation for both sides.
+var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color'];
+async function bookStateNow(req, campaignId) {
+  var db = await getDb();
+  var campaign = await db.prepare(
+    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+  ).get(campaignId, req.session.userId);
+  if (!campaign) return null;
+  var _bv = await resolveBookVersion(db, campaign.id, req);
+  var asUser = _bv ? _bv.asUser : ((req.query && req.query.as_user) ? Number(req.query.as_user) : null);
+  var incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  var _sc = await bookPrefsScope(db, req, campaign.id);
+  var prefs = await getForkBookPrefs(db, _sc.chooser, _sc.fork, campaign.id, { inherit: true, versionId: _sc.versionId });
+  var c2 = Object.assign({}, campaign);
+  applyForkBookMeta(c2, prefs || {});
+  return { v: 1, inc: includeFingerprint(incMap), co: storedLayoutCo(prefs) || '',
+    cover: { cover_image_url: c2.cover_image_url || '', back_cover_image_url: c2.back_cover_image_url || '', title_image_url: c2.title_image_url || '',
+      built_title_url: c2.built_title_url || '', book_title: String(c2._memberBookTitle || c2.name || ''),
+      subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '' } };
+}
+function bookStateDiff(since, now) {
+  var out = { since: true, sessions: false, layout: false, titlecover: false, any: false, categories: [] };
+  if (!since || typeof since !== 'object' || !now) return out;
+  if (since.inc != null && String(since.inc) !== String(now.inc)) out.sessions = true;
+  try {
+    var m = bookMismatch(null, null, String(since.co || ''), String(now.co || ''));
+    if (m.layout) out.layout = true;
+    if (m.titlecover) out.titlecover = true;
+  } catch (e) {}
+  var a = since.cover || {}, b = now.cover || {};
+  BOOK_STATE_COVER_KEYS.forEach(function (k) {
+    if (String(a[k] == null ? '' : a[k]) !== String(b[k] == null ? '' : b[k])) out.titlecover = true;
+  });
+  if (out.sessions) out.categories.push('Sessions');
+  if (out.layout) out.categories.push('Layout options');
+  if (out.titlecover) out.categories.push('Title and cover');
+  out.any = out.categories.length > 0;
+  return out;
+}
+// Which sessions a saved book holds, as the numbers the Publish page shows (campaign order).
+async function savedSessionNumbers(db, campaignId, inc) {
+  try {
+    if (inc == null || inc === '') return null;
+    var rows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaignId);
+    var pos = {}; (rows || []).forEach(function (r, i) { pos[String(r.id)] = i + 1; });
+    return String(inc).split(',').map(function (s) { return pos[String(s).trim()]; }).filter(function (n) { return n > 0; }).sort(function (x, y) { return x - y; });
+  } catch (e) { return null; }
 }
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
@@ -7109,7 +7249,7 @@ async function printInteriorHandler(req, res) {
     } catch (e) { _stripped = null; }
     if (!_stripped) try {
       var _builtP = await assembleNovelHtml(req, req.params.campaignId, null,
-        { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body });
+        { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body }, (_loE && _loE.meta) || null);   // v3.2.10 -- TD-988: the saved title page
       html = _builtP && _builtP.html;
       // v3.0.423 -- SAY WHICH BOOK THIS IS, AND WHEN IT WAS APPROVED. v3.0.422 logged both refusal
       // paths and neither success path, so the one route being debugged had no way to report what it
@@ -7682,10 +7822,30 @@ async function printCoverHandler(req, res) {
     // so the presets, the size, the placement and the SUBTITLE all stopped at the screen. Same
     // query-first, stored-second rule the novel route uses, so a Prep panel edit previews before it
     // is saved and every other surface shows what the version actually holds.
+    // v3.2.10 -- TD-988. THE PRINTED COVER IS THE SAVED BOOK'S COVER. The interior is the saved book
+    // (print-interior strips its covers), so the wrap round it must be that book's too -- not today's
+    // cover picture, title and subtitle. Only for the layouts whose interior IS the saved book; a save
+    // with no record (made before v3.2.10) keeps the old behaviour below.
+    var _savedBook = null;
+    try {
+      if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
+        var _loCv = await lastOptimizedEntry(req, campaign.id, co.arrange);
+        if (_loCv && _loCv.meta && typeof _loCv.meta === 'object') _savedBook = _loCv;
+      }
+    } catch (e) { _savedBook = null; }
+    var html;
+    if (_savedBook) {
+      var _wm = _savedBook.meta;
+      var _wco = _savedBook.co ? parseCustomOpts(_savedBook.co) : co;   // the saved title style, size and placement
+      applySavedBookMeta(campaign, null, _wm);
+      try { console.log('[print-cover] campaign ' + campaign.id + ': using the cover recorded with the saved book of ' + (_savedBook.at || 'unknown') + ', not the current settings'); } catch (e) {}
+      html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: _wm.book_title || '', titleColor: _wm.title_color || '', subtitle: (_wm.subtitle != null ? String(_wm.subtitle) : null), co: _wco });
+    } else {
     var _wrapSub = null;
     if (req.query.subtitle != null) _wrapSub = String(req.query.subtitle);
     else if (campaign._memberSubtitle != null) _wrapSub = campaign._memberSubtitle;
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it
+    html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it
+    }
    // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
@@ -7758,6 +7918,83 @@ router.get('/book-mismatch/:campaignId', requireAuth, async function (req, res) 
   return res.json(m);
 });
 
+// v3.2.11 -- TD-988. The book's state now (kept by the Order & Publish tab when a book is put there), and
+// what has changed since. Read-only; never blocks anything.
+router.get('/book-state/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var s = await bookStateNow(req, req.params.campaignId);
+    res.set('Cache-Control', 'no-store');
+    if (!s) return res.status(403).json({ error: 'Access denied' });
+    return res.json(s);
+  } catch (e) { log500('book-state', req, e); return res.status(500).json({ error: (e && e.message) || 'book-state failed' }); }
+});
+router.post('/book-since/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var now = await bookStateNow(req, req.params.campaignId);
+    res.set('Cache-Control', 'no-store');
+    if (!now) return res.status(403).json({ error: 'Access denied' });
+    var d = bookStateDiff(req.body && req.body.since, now);
+    if (d.any) { try { console.log('[book-since] campaign ' + req.params.campaignId + ' -> ' + d.categories.join('; ') + ' | then inc ' + ((req.body.since || {}).inc || '(none)') + ' now ' + now.inc); } catch (e) {} }
+    return res.json(d);
+  } catch (e) { log500('book-since', req, e); return res.status(500).json({ error: (e && e.message) || 'book-since failed' }); }
+});
+// =====================================================================================================
+// v3.2.15 -- WHERE YOU LAND IN A CAMPAIGN'S BOOK. Ian, 2026-10-19: "I think we always go to Sessions" --
+// a first book and the next episode of a series both start there -- except one case: "They started
+// Optimizing something... it finished and saved but we don't know if they are done... They left before
+// they were done... that's the case where we would want to put them back on the Optimize tab."
+//
+// UNFINISHED = the version's most recent saved book (any layout) has been neither published nor ordered.
+//   * Published: Publish stamps usedAt on the saved book it copied (stampSavedBookUsed). A save from this
+//     version on carries usedAt:null from the start; one saved before carries no key at all, and for that
+//     one a story published for this campaign by this reader after it was saved counts instead.
+//   * Ordered: a PAID (or refunded) print order for this campaign by this reader placed after it was saved.
+//     Read from print_orders, so the order and payment path is not touched at all.
+//   * It stays unfinished until it is used or replaced by a new save (Ian: no time limit).
+// An Optimize run going for this campaign also lands on Optimize. Landing never loads anything (Ian: "Let
+// them press the button").
+async function bookLandingFor(db, campaignId, userId, e) {
+  if (!e || !e.pdfUrl || !e.at) return { tab: 'sessions', reason: 'nothing_saved' };
+  if (e.usedAt) return { tab: 'sessions', reason: 'published', savedAt: e.at };
+  var savedMs = Date.parse(e.at);
+  if (!(savedMs > 0)) return { tab: 'sessions', reason: 'unknown' };
+  function after(v) { if (!v) return false; var t = (v instanceof Date) ? v.getTime() : Date.parse(String(v)); return t > 0 && t >= savedMs; }
+  var ords = await db.prepare("SELECT created_at FROM print_orders WHERE user_id = ? AND campaign_id = ? AND payment_status IN ('paid', 'refunded')").all(userId, campaignId);
+  for (var i = 0; i < (ords || []).length; i++) { if (after(ords[i].created_at)) return { tab: 'sessions', reason: 'ordered', savedAt: e.at }; }
+  if (!Object.prototype.hasOwnProperty.call(e, 'usedAt')) {
+    var pubs = await db.prepare('SELECT created_at, updated_at FROM public_stories WHERE user_id = ? AND campaign_id = ?').all(userId, campaignId);
+    for (var j = 0; j < (pubs || []).length; j++) { if (after(pubs[j].created_at) || after(pubs[j].updated_at)) return { tab: 'sessions', reason: 'published', savedAt: e.at }; }
+  }
+  return { tab: 'finalize', reason: 'unfinished', savedAt: e.at };
+}
+function newestSavedBook(lastOptimized) {
+  var lo = (lastOptimized && typeof lastOptimized === 'object') ? lastOptimized : {}, best = null;
+  Object.keys(lo).forEach(function (k) { var e = lo[k]; if (e && e.pdfUrl && e.at && (!best || Date.parse(e.at) > Date.parse(best.at))) best = e; });
+  return best;
+}
+async function stampSavedBookUsed(req, campaignId, arrange, pdfUrl) {
+  var db = await getDb();
+  var sc = await bookPrefsScope(db, req, campaignId);
+  var prefs = await getForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { inherit: false, versionId: sc.versionId });
+  var lo = (prefs && prefs.lastOptimized && typeof prefs.lastOptimized === 'object') ? Object.assign({}, prefs.lastOptimized) : null;
+  if (!lo || !lo[arrange] || lo[arrange].pdfUrl !== pdfUrl) return false;   // replaced since: nothing to stamp
+  lo[arrange] = Object.assign({}, lo[arrange], { usedAt: new Date().toISOString() });
+  await setForkBookPrefs(db, sc.chooser, sc.fork, campaignId, { lastOptimized: lo }, sc.versionId);
+  return true;
+}
+router.get('/book-landing/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var db = await getDb();
+    var cid = req.params.campaignId;
+    var mem = await db.prepare('SELECT role FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(cid, req.session.userId);
+    if (!mem) return res.status(403).json({ error: 'Access denied' });
+    var run = null; try { run = optimizeRunGet(req.session.userId); } catch (e) {}
+    if (run && String(run.campaignId) === String(cid)) return res.json({ tab: 'finalize', reason: 'running' });
+    var sc = await bookPrefsScope(db, req, cid);
+    var prefs = await getForkBookPrefs(db, sc.chooser, sc.fork, cid, { inherit: false, versionId: sc.versionId });
+    return res.json(await bookLandingFor(db, cid, req.session.userId, newestSavedBook(prefs && prefs.lastOptimized)));
+  } catch (e) { log500('book-landing', req, e); return res.json({ tab: 'sessions', reason: 'error' }); }
+});
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
   var _mismatch = null;   // v3.0.798 -- TD-608; which categories differ from the screen
   // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
@@ -7851,7 +8088,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
-  const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+  let asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);   // v3.2.14 -- see below the _bv line
   // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
   // never declared in this route, so publish-story threw a ReferenceError inside an
   // async handler on EVERY call. Nothing catches that, so the promise rejected, Node
@@ -7864,6 +8101,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // WHICH book publishes -- a bigger decision than fixing a crash. See TD-290.
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
+  // v3.2.14 -- TD-929's twin here. A Story Master publishing his own NAMED version was read as the Canonical
+  // (asUser null = sessions.novel_include), so a book saved before v3.2.12 published every Canonical-ticked
+  // session online, including ones unticked in the version on screen (testers, 2026-10-19: "a reader gets
+  // a chapter the author excluded"). The version decides, as in assembleNovelHtml -- but only for the
+  // caller's OWN book (the Story Master, or a version the caller owns), so who may publish what is unchanged.
+  if (_bv && (campaign.my_role === 'dm' || Number(_bv.asUser) === Number(req.session.userId))) asUser = _bv.asUser;
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare(
@@ -7984,6 +8227,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var html = null;
   let pdfUrl = null;
   var _titleWarning = null;
+  var _snapSave = null;   // v3.2.12 -- TD-988: the reading snapshot recorded with the saved book, when it has one
   if (_pubSrc === 'composed') {
     // ===== v3.0.492 -- TD-296. PUBLISH THE BOOK THAT ALREADY EXISTS. =========================
     // save-optimized has ALREADY rendered this exact layout with publicMode='1', flattened it,
@@ -8060,6 +8304,21 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // they meant to. Naming what differs is the honest version of that protection.
     // v3.0.800 -- TD-610. Through the ONE resolver, which also does the logging.
     _mismatch = await resolveBookMismatch(req, req.params.campaignId, req.query.co);
+    // v3.2.10 -- TD-988. Ian: "Library card should match cover." The listing's title and picture come
+    // from the saved book's record when it has one (a pre-v3.2.10 save has none: unchanged).
+    var _savedMetaP = (_loE.meta && typeof _loE.meta === 'object') ? _loE.meta : null;
+    // v3.2.12 -- TD-988 (option B). THE READING PAGE IS THE SAVED BOOK TOO. A save from v3.2.12 on records
+    // the sessions, characters and campaign it rendered (savedReadingSnapshotFrom) in its approved state; the
+    // story page, the listing's fallback picture, the teaser, the art-style filter and the image index all
+    // read that instead of today's data. An older save has none and publishes exactly as before. A failed
+    // read is logged and falls back the same way -- it never blocks a publish.
+    if (_loE.bodyUrl) {
+      try {
+        var _stP = await approvedStateLoad(_loE.bodyUrl);
+        if (_stP && _stP.snapshot && Array.isArray(_stP.snapshot.sessions) && _stP.snapshot.sessions.length) _snapSave = _stP.snapshot;
+      } catch (e) { console.error('[publish-story] saved reading snapshot could not be read, using current data: ' + ((e && e.message) || e)); }
+      _ptLap('snapshot');
+    }
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
     // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
@@ -8092,11 +8351,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // by re-approving the layout. public_stories.title is a database column and is free to change
     // at any time. So a mismatch is reported once, in the response, and never blocks. No new data
     // is needed -- save-optimized already records the title it rendered under.
-    var _printedT = String(_loE.bookTitle || '').trim();
+    var _printedT = String((_savedMetaP && _savedMetaP.book_title) || _loE.bookTitle || '').trim();   // v3.2.10
     if (!_printedT) _printedT = String(campaign._memberBookTitle || campaign.name || '').trim();
-    var _listingT = String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();
+    var _listingT = (_savedMetaP && _savedMetaP.book_title) ? String(_savedMetaP.book_title).trim() : String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();   // v3.2.10
     if (_printedT && _listingT && _printedT !== _listingT) {
-      _titleWarning = 'The cover of this book reads "' + _printedT + '" but the Library listing says "' + _listingT + '". Run Optimize again if you want them to match.';
+      // v3.2.14 -- say WHICH cover (testers: the online book's cover reads the listing title, only the PDF reads the other).
+      _titleWarning = 'The printed cover of this book reads "' + _printedT + '", but the Library listing and the online book say "' + _listingT + '". Run Optimize again if you want them to match.';
       try { console.warn('[publish-story] title mismatch. printed: ' + _printedT + ' | listing: ' + _listingT); } catch (e) {}
     }
   } else {
@@ -8149,14 +8409,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // (which masks at render), and it is what the public page, its link preview, the Library and My Stuff show,
   // so a rejected campaign cover or first panel was published as the story's face (testers, 2026-10-17). With
   // no clean picture at all the story has no cover image, as a story with no pictures does today.
-  var _coverCands = [campaign.cover_image_url || ''];
-  for (var si = 0; si < sessionsWithData.length; si++) {
-    var ms = sessionsWithData[si].moments || [];
+  var _coverCands = [(_savedMetaP ? (_savedMetaP.cover_image_url || '') : (campaign.cover_image_url || ''))];   // v3.2.10 -- TD-988: the saved book's cover first
+  // v3.2.12 -- TD-988. Everything below that describes the book reads the saved snapshot when there is one.
+  var _pubSess = _snapSave ? _snapSave.sessions : sessionsWithData;
+  var _pubChars = _snapSave ? (_snapSave.characters || []) : characters;
+  var _pubCamp = _snapSave ? (_snapSave.campaign || campaign) : campaign;
+  for (var si = 0; si < _pubSess.length; si++) {
+    var ms = _pubSess[si].moments || [];
     for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) _coverCands.push(ms[mi].image); }
   }
   var coverUrl = (await rightsCheck.splitRejected(_coverCands.filter(Boolean))).clean[0] || '';
 
-  var title = bookTitle || campaign._memberBookTitle || campaign.name;
+  var title = (_savedMetaP && _savedMetaP.book_title) ? _savedMetaP.book_title : (bookTitle || campaign._memberBookTitle || campaign.name);   // v3.2.10 -- the card's title is the cover's
   var authorName = '';
   try {
     var meRow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(req.session.userId);
@@ -8173,9 +8437,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     var slug = _slugify(title);
     var _firstPara = function(txt){ if (!txt) return ''; var t = String(txt).replace(/\r/g, '').trim(); if (!t) return ''; var idx = t.indexOf('\n\n'); var p = (idx > -1) ? t.slice(0, idx) : t; return p.trim(); };
     var teaser = '';
-    for (var _ti = 0; _ti < sessionsWithData.length && !teaser; _ti++) { teaser = _firstPara(sessionsWithData[_ti].narrative_intro); }
+    for (var _ti = 0; _ti < _pubSess.length && !teaser; _ti++) { teaser = _firstPara(_pubSess[_ti].narrative_intro); }   // v3.2.12
     if (teaser.length > 500) teaser = teaser.slice(0, 500);
-    var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
+    // v3.2.12 -- TD-988. The saved book's own reading snapshot when it has one (story-pages.js renders it).
+    var snapshotObj = _snapSave ? _snapSave : { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
     var snapshotJson = JSON.stringify(snapshotObj);
     // v3.0.487 -- GENRE SNAPSHOT. Frozen here, at publish time, and never re-read
     // from the campaign afterwards: a later edit to the campaign genre must not
@@ -8203,13 +8468,13 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // A custom style collapses to the single token 'custom' inside styleSlug(), so no
     // account's custom-style id can be read off a public query string.
     var _styleSet = {};
-    for (var _stx = 0; _stx < sessionsWithData.length; _stx++) {
-      var _stSess = sessionsWithData[_stx];
+    for (var _stx = 0; _stx < _pubSess.length; _stx++) {   // v3.2.12
+      var _stSess = _pubSess[_stx];
       var _stMoments = (_stSess && _stSess.moments) || [];
       for (var _sty = 0; _sty < _stMoments.length; _sty++) {
         var _stM = _stMoments[_sty];
         if (!_stM || !_stM.image) continue;
-        var _stSlug = artstyles.styleSlug(_stM.style || (_stSess && _stSess.art_style) || (campaign && campaign.art_style) || '');
+        var _stSlug = artstyles.styleSlug(_stM.style || (_stSess && _stSess.art_style) || (_pubCamp && _pubCamp.art_style) || '');   // v3.2.12
         if (_stSlug) _styleSet[_stSlug] = true;
       }
     }
@@ -8242,6 +8507,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
   }
 
+  // v3.2.15 -- the saved book this copied is now used, so the next visit lands on Sessions (bookLandingFor).
+  if (_pubSrc === 'composed' && _loE && _loE.pdfUrl) {
+    try { await stampSavedBookUsed(req, req.params.campaignId, _pubArr, _loE.pdfUrl); }
+    catch (e) { console.error('[publish-story] could not mark the saved book as published: ' + ((e && e.message) || e)); }
+  }
   try {
     var _storyId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
     if (_storyId) {
@@ -8261,16 +8531,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
         'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'canonical_reference_url',
         'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'image'
       ];
-      for (var _cx = 0; _cx < (characters || []).length; _cx++) {
-        var _ch = characters[_cx];
+      for (var _cx = 0; _cx < (_pubChars || []).length; _cx++) {   // v3.2.12
+        var _ch = _pubChars[_cx];
         if (!_ch) continue;
         for (var _fx = 0; _fx < _PORTRAIT_FIELDS.length; _fx++) {
           var _u = _ch[_PORTRAIT_FIELDS[_fx]];
           if (_u && typeof _u === 'string') _imgSet[_u] = true;
         }
       }
-      for (var _sx = 0; _sx < sessionsWithData.length; _sx++) {
-        var _mz = sessionsWithData[_sx].moments || [];
+      for (var _sx = 0; _sx < _pubSess.length; _sx++) {   // v3.2.12
+        var _mz = _pubSess[_sx].moments || [];
         for (var _mx = 0; _mx < _mz.length; _mx++) { if (_mz[_mx] && _mz[_mx].image) _imgSet[_mz[_mx].image] = true; }
       }
       var _urls = Object.keys(_imgSet);
@@ -8476,7 +8746,7 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
 // re-derivation. Deliberately mirrors the /novel route's gathering and is kept as a
 // SEPARATE function (the live export route is left untouched) so the export path
 // carries zero risk from this feature. Reuses buildNovelHTML, so the HTML is identical.
-async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
+async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta) {   // v3.2.10 -- savedMeta: TD-988
   const db = await getDb();
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
@@ -8575,7 +8845,11 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
     var _est = (sd.moments || []).find(function (m) { return m && m.kind === 'establishing'; });
     var _estImg = (_est && _est.image) ? _est.image : sd.establishing_image;
     if (_estImg) {
-      var _tm = { image: _estImg, title: '', shape: (_est && _est.shape) || sd.establishing_shape || 'wide', img_w: (_est && _est.img_w) || sd.establishing_img_w || null, img_h: (_est && _est.img_h) || sd.establishing_img_h || null };
+      // v3.2.13 -- layout_meta TRAVELS WITH THE ROW, here too (the v3.0.645 lesson, which fixed Prep's two copies and
+      // missed this one). Without it lmIsBuiltTitle answers "photograph" and the Optimize book framed the drawn title
+      // and gave it a full picture's height. Only when the picture IS the establishing row's own.
+      var _tm = { image: _estImg, title: '', shape: (_est && _est.shape) || sd.establishing_shape || 'wide', img_w: (_est && _est.img_w) || sd.establishing_img_w || null, img_h: (_est && _est.img_h) || sd.establishing_img_h || null,
+                  layout_meta: (_est && _est.image && _est.image === _estImg) ? (_est.layout_meta || null) : null };
       beats.push({ idx: ++_ioIdx, kind: 'title', moment: _tm, shape: _tm.shape, aspect: (typeof momentAspect === 'function' ? (momentAspect(_tm) || 1) : 1), hasImage: true, before: '', after: '' });
     }
     if (sd.narrative_intro) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_intro, after: '' });
@@ -8608,11 +8882,14 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.mzFloatShrunk === '1') { co = co || {}; co.mzFloatShrunk = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
+  // v3.2.10 -- TD-988. A recorded book's cover fields win over today's (print-interior's re-render).
+  if (savedMeta) applySavedBookMeta(campaign, pageOpts, savedMeta);
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   // v3.0.588 -- TD-370. The include set is resolved here already; handing it back means
   // save-optimized records the SAME computation the book was assembled from rather than
   // repeating it and risking a second answer.
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap) };
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap), pageOpts: pageOpts,   // v3.2.10 -- pageOpts for savedBookMetaFrom
+           sessions: sessionsWithData, characters: characters };   // v3.2.12 -- TD-988: what was rendered, for savedReadingSnapshotFrom
 }
 
 // PHASE 3 (page-packer) v1: render the packed book. Measure -> pack -> feed the packer's
@@ -9025,6 +9302,8 @@ function pairedPlacementLabel(pl) {
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
 function beatImageHeight(beat, pageH) {
+  // v3.2.13 -- a drawn chapter title is a chapter head, not a picture: the height estCell draws it at.
+  if (beat && beat.kind === 'title' && beat.moment && lmIsBuiltTitle(beat.moment)) return builtTitleHeightIn(beat.moment);
   // Use the DISPLAY aspect (the ratio the image is actually rendered with by coMedia), not the
   // raw pixel aspect. The composer sizes the rendered box by dispAspect; if the packer computed
   // height from a different (pixel) aspect, the two disagree and the page clips. Prefer the
@@ -9292,6 +9571,13 @@ function composeBook(plan, beats, opts) {
             (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
           '</div></div>';
+      } else if (pl.kind === 'image' && m && m.image && b.kind === 'title' && lmIsBuiltTitle(m)) {
+        // v3.2.13 -- A DRAWN CHAPTER TITLE, drawn as estCell draws it in Prep & Preview: half the column, centred,
+        // transparent, no frame and no caption. The box is the packer's own height (fullH*scale), so the page
+        // holds exactly what was planned; object-fit:contain never crops the lettering.
+        var _btH = (pl.fullH != null ? pl.fullH : beatImageHeight(b, 9.16)) * (pl.scale != null ? pl.scale : 1);
+        inner += '<div class="session-title-image" style="margin:0.05in auto 0.13in;width:' + (CG_W * EST_HEAD_PCT / 100).toFixed(2) + 'in;height:' + _btH.toFixed(3) + 'in;line-height:0;break-inside:avoid;page-break-inside:avoid;">' +
+          '<img src="' + String(m.image).replace(/"/g, '&quot;') + '" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:none;" /></div>';
       } else if (pl.kind === 'image' && m && m.image) {
         // Size with the DISPLAY aspect (what coMedia's aspect-box actually renders with), so the
         // width we set produces exactly the packer's intended height. Using momentAspect (raw pixel
@@ -14287,11 +14573,13 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
     // Stored FIRST, so a failure here costs an orphan object rather than a prefs row whose PDF and
     // layout describe different books. That disagreement is exactly what TD-214 was.
     var _stUrl = null;
+    var _readSnap = await savedReadingSnapshotFrom(await getDb(), built, req, savedBookMetaFrom(built));   // v3.2.12 -- TD-988
     try {
       _stUrl = await approvedStateSave(campaignId, arrange, {
         v: APPROVED_STATE_VERSION, arrange: arrange, layout: req.query.layout || '', co: req.query.co || '',
         campaignName: hit.campaignName || '', body: hit.body, planText: hit.planText || null,
-        moves: runMovesGet(_lookKey) || [], grows: runGrowsGetMap(_lookKey) || {}
+        moves: runMovesGet(_lookKey) || [], grows: runGrowsGetMap(_lookKey) || {},
+        snapshot: _readSnap   // v3.2.12 -- the online reading page; publish-story uses it (null: publish uses today's data)
       });
     } catch (e) { console.error('[save-optimized] layout store failed: ' + ((e && e.message) || e)); _stUrl = null; }
     if (!_stUrl) {
@@ -14325,6 +14613,9 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
                          // below test for PRESENCE before comparing -- an old approval must not
                          // start refusing to publish.
                          inc: (built && built.incFp != null) ? built.incFp : null,
+                         // v3.2.10 -- TD-988. The cover fields this PDF was rendered with (savedBookMetaFrom).
+                         meta: savedBookMetaFrom(built),
+                         usedAt: null,   // v3.2.15 -- not yet published (stampSavedBookUsed); the landing rule reads it
                          flattened: !_quick };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
@@ -14417,7 +14708,9 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
     // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last
     // Optimized File can pull both and say plainly when a pre-v3.0.422 save has only the PDF.
+    var _sNums = await savedSessionNumbers(db, campaignId, lastOpt.inc);   // v3.2.11 -- TD-988, for the Loaded line
     return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null,
+      title: String((lastOpt.meta && lastOpt.meta.book_title) || lastOpt.bookTitle || ''), hasRecord: !!(lastOpt.meta && typeof lastOpt.meta === 'object'), sessionNums: _sNums,   // v3.2.11
       hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && !coSettingsDiff(lastOpt.co, req.query.co).same),   // v3.0.977 -- TD-897
 
       // v3.0.430 -- THE INTERIOR PAGE COUNT, EXACTLY, WITHOUT RENDERING ANYTHING.
