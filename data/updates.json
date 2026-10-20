@@ -1,5 +1,32 @@
 [
   {
+    "version": "3.2.21",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3221-dark-fantasy-grounded",
+        "kind": "feature",
+        "public": true,
+        "summary": "Dark Fantasy now paints a grounded, realistic world with dramatic light at any time of day, instead of turning every scene into night.",
+        "detail": "The Dark Fantasy art style was rewritten (Ian's tested 'Grounded 2' wording). It now takes the time of day from the scene: a scene that does not name its hour should come out as day, not sunset or night, and a scene that says midday should look like midday. Indoors and underground it stays moody, with any fire, torch or lamp glowing warm. Test: regenerate an outdoor daytime panel and an indoor torchlit panel in Dark Fantasy; neither should look like night unless the scene is set at night. Existing pictures do not change until regenerated. The card in the Art Style window has a new description.",
+        "td": [
+          "TD-641",
+          "TD-642"
+        ]
+      },
+      {
+        "id": "3221-panel-style-label",
+        "kind": "fix",
+        "public": true,
+        "summary": "A panel's art style label now updates as soon as you regenerate it in a different style, and Revert brings back the old label with the old picture.",
+        "detail": "On the Storyboard, the line under each panel (style, type, shape) kept the style the picture had before a Regenerate until the page was reloaded, e.g. Self Illustrated after an uploaded picture was regenerated in a custom style. It now changes when the new picture lands. Revert after a Regenerate also puts back the previous picture's style label. Test: upload a picture onto a panel, Regenerate it in another style (label changes without a reload), then Revert (label goes back).",
+        "td": [
+          "TD-995"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.20",
     "staged_on": "2026-10-19",
     "entries": [

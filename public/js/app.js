@@ -5517,7 +5517,12 @@ function loadTierInfo(campaignId) {
 }
 
 // Apply a finished regenerated image to its panel and refresh the views.
-function applyRegenResult(momentId, imageUrl) {
+// v3.2.21 -- TD-995. THE PANEL'S LABEL FOLLOWS ITS PICTURE. Ian, 2026-10-20: "they should show the art
+// style of the picture... The art style on the moment didn't change when I regenerated." The server always
+// wrote the new style; this page kept the old one in memory until a reload. newStyle comes from the job
+// (moment_style); when it is not given -- a retouch from an older server, a direct image_url -- the label
+// is left as it is rather than guessed.
+function applyRegenResult(momentId, imageUrl, newStyle) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (moment) {
     // One-deep Revert: mirror the server's armed slot locally (the prior image is
@@ -5528,6 +5533,7 @@ function applyRegenResult(momentId, imageUrl) {
       moment.revert_img_h = moment.img_h || null;
     }
     moment.image = imageUrl; moment.archived = false;
+    if (newStyle !== undefined) moment.style = newStyle;   // v3.2.21 -- TD-995
   }
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
   renderStoryboard();
@@ -5548,7 +5554,7 @@ function pollImageJob(jobId, momentId) {
           if (Date.now() - started > MAX_MS) { showPanelError(momentId, 'Could not regenerate: ' + ((j && j.error) || 'timed out')); return; }
           setTimeout(tick, INTERVAL); return;
         }
-        if (j.status === 'done' && j.image_url) { applyRegenResult(momentId, j.image_url); return; }
+        if (j.status === 'done' && j.image_url) { applyRegenResult(momentId, j.image_url, j.moment_style); return; }   // v3.2.21 -- TD-995
         if (j.status === 'failed') {
           if (j.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(j.message || 'You are out of tokens.'), true);
           else showPanelError(momentId, 'Could not regenerate: ' + (j.error || 'generation failed'));
@@ -6510,7 +6516,7 @@ var ART_STYLE_META = [
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
-  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Dense, near-monochrome oils lit by one warm source in deep gloom \u2014 etched detail, no linework. Suits taverns, caves and night scenes.' }
+  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Grounded, realistic oils with weight and drama \u2014 raking light, weathered detail and a brooding mood, with no linework. More realistic and heavier than High fantasy, and it takes its time of day from your scene.' }   // v3.2.21 -- TD-642, grounded rewrite
 ];
 
 function artStyleName(v) {

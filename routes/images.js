@@ -1016,62 +1016,44 @@ function getStylePrefix(style) {
     'Comic book cel-shaded': 'STYLE: EXTREME comic-book cel-shaded art in the style of Borderlands. VERY THICK, heavy black ink outlines: bold brush-inked contours around every character, prop, and shape, plus strong interior ink linework. HARD cel shading with flat blocks of light and shadow, razor-sharp shadow edges and NO smooth gradients, dramatic high-contrast lighting. Visible halftone dots and crosshatching in the shadow areas. Punchy, saturated graphic-novel colors. Heavy hand-painted marker texture with visible strokes and sketch lines. Exaggerated silhouettes, dynamic angles, expressive faces, stylized proportions. Loud, graphic, over-the-top comic-book energy.',
     'Fantasy pastel': 'STYLE: Fantasy pastel and soft-chalk art in the great pastel tradition of Edgar Degas and Mary Cassatt. BOLD, large chalk and pastel strokes with thick, visible, grainy chalk marks and broad soft-pastel sweeps, generous smudging, and the texture of chalk dragged across rough paper. Soft, blended pastel colors with gentle gradients and a dreamy, magical atmosphere. Warm light, glowing highlights, a whimsical airy feeling. Lightly stylized, ethereal, expressive characters. The chalk and pastel work fades into loose, feathered strokes toward the edges and does NOT reach the frame; everywhere the chalk does not cover is PURE WHITE (#ffffff), with NO rectangular frame or border, like a drawing set straight onto a clean white page.',
     'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.',
-    // v3.0.815 -- TD-642. Approved by Ian on 2026-09-01 from a ONE-PASS
-    // analysis of a wolf-rider reference ("Very Usable!"); shipped exactly as
-    // tested. is_fade NO -- this one runs full bleed. KNOWN CONSTRAINT: it
-    // needs a single warm source in gloom, so taverns, caves and night camps
-    // suit it and a bright afternoon meadow fights it (TD-641). KNOWN AND
-    // UNTESTED: dropping the word "oils" and cooling the palette is the
-    // round-2 edit -- the reference has no canvas weave and this does.
-    // v3.0.821 -- TD-651 (the drama clause) and TD-655 (the atmosphere clause).
+    // v3.2.21 -- TD-641 / TD-642. DARK FANTASY IS GROUNDED, NOT DARK. REWRITTEN FROM IAN'S OWN TESTS.
     //
-    // THE DRAMA CLAUSE. Six traits are common to every reference Ian gathered on
-    // 2026-09-01 and he confirmed them line by line. Five are written in below.
-    // THE SIXTH IS DELIBERATELY ABSENT: "a dark foreground that reads as a
-    // silhouette" is true of all seven references because in them the near-black
-    // shape is FRAMING -- foliage, a hooded back. Campaignia puts the PARTY in the
-    // foreground, so that rule would turn the characters into featureless black
-    // shapes and the product is people looking at their own characters. Written as
-    // darkest-values-toward-the-EDGES instead: same depth, faces intact. Same
-    // reason composition never goes in a style paragraph (spec, invariant 1).
+    // Ian, 2026-10-20: "My original intention for Dark Fantasy was a more realistic, heavier style
+    // than High Fantasy which looks more comic like. Not necessarily darker in color" -- and "more
+    // moody and dramatic", and "it just shouldn't look like everything is night time".
     //
-    // MEASURED BEFORE IT SHIPPED, AND IT IS A CONDITIONAL WIN. drama-test.js, six
-    // images: on GRIMSKULL, whose scene text names no light source, Ian called it
-    // "way better". On TAVERN, already "lamplit... a fire off to one side", he
-    // called it "about even". LOAD-BEARING WHERE THE SCENE DOES NOT DESCRIBE ITS
-    // OWN LIGHT, REDUNDANT WHERE IT DOES. Do not assume it lifts every panel.
+    // THE OLD PARAGRAPH (v3.0.815, v3.0.821) read DARK as DARK VALUES: "low-key with deep near-black
+    // shadow occupying most of the value range", "let everything it does not reach fall away into
+    // gloom", and a near-monochrome palette with amber-gold the only colour. Wherever a scene did not
+    // name its own hour, those three clauses chose night. Measured, not argued: on The Long Way Down
+    // (a farm road, no hour named) it painted sunset twice, and on Free Fall Joy, whose scene text says
+    // "bright midday sun in a clear blue sky", it drew a blazing sun in a black sky over a dim field.
+    // That was TD-641's "this style needs gloom", and it was the wording, not the subject.
     //
-    // 'WARM' IS GONE FROM THE LIGHT CLAUSE, AND THAT IS THE WHOLE DIFFERENCE FROM
-    // THE UNSHIPPED v3.0.820. That build said "a single dominant WARM source".
-    // Ian disproved it with one reference -- an image saturated end to end in hot
-    // pink, fully rendered, deep atmosphere, no outlines, more surface detail than
-    // anything we produce: "The color is not necessarily the problem." The hue of
-    // the dominant source belongs to the SCENE. The palette line below is
-    // untouched on purpose -- an earlier diagnosis blamed it for the off-style
-    // panels and was WRONG (TD-653); the real fault is ink arriving from the
-    // reference image, and it is not fixed in here.
+    // HOW THIS ONE WAS CHOSEN. Ian ran five candidates as custom styles (same slot in the prompt as a
+    // preset: getStylePrefix passes a custom STYLE: paragraph through unchanged) against the built-in
+    // on seven real panels: The Frozen Hall, Three Walkers and a Blue Light, The Last Cultist Falls,
+    // The Handoff, The Brass Bird Speaks, The Long Way Down and Free Fall Joy. This paragraph
+    // ("Grounded 2") was the only one that never defaulted to night and still read as heavy, real and
+    // dramatic indoors, underground and outdoors. Shipped word for word as Ian tested it.
     //
-    // THE ATMOSPHERE CLAUSE (TD-655). Ian has asked for the same thing four ways:
-    // "the thing they all have in common is DETAIL", "more artisticness", "no
-    // where near as good as those", and "more things floating in the air, smoke,
-    // snow, ash, dust, leaves, debris, whisps". Our panels have clean empty air
-    // between the figures and the background; every reference he admires has
-    // matter suspended in the light. INVARIANT 2 IS THE DIFFICULTY: naming snow
-    // puts snow in the tavern, exactly as 'bark grain' quietly asked for trees.
-    // So the clause names the CLASS and hands the choice to the scene, with an
-    // explicit brake against inventing matter the scene would not have.
-    // SCOPED TO DARK FANTASY by Ian's decision, though it is content rather than
-    // medium and would carry to the other nine if it proves out here.
+    // WHAT CARRIES THE LOOK NOW: realism of form (anatomy, faces with age, gear with weight), the
+    // scene's own light painted directionally with full tonal range, the surface-history clause and
+    // the airborne-matter clause from v3.0.821 (kept verbatim), and the darkest values at the frame
+    // edges. Drama comes from the DIRECTION and CONTRAST of light, not from its absence.
     //
-    // AND HALF OF "DETAIL" IS NOT IN THIS PARAGRAPH AT ALL -- it is TD-635. At
-    // resolution '1K' there are not enough pixels to hold a dust mote, a hair or a
-    // scratch, and asking harder yields mush. Do not read a weak result here as
-    // the wording failing until that is settled.
+    // TWO CLAUSES ARE WORDED TO ADD NOTHING TO A SCENE (TD-552 rule 4, the model adds what it is
+    // told about): the flame clause applies only to "any flame the scene itself contains", and the
+    // daylight clause speaks of "whatever stands in the light" rather than naming trees or walls.
     //
-    // STILL TRUE (TD-641): this style needs gloom. A bright afternoon meadow
-    // fights it and the drama clause leans the same way -- same failure mode as
-    // before, slightly stronger, not a new one.
-    'Dark Fantasy': 'STYLE: Paint in dense, opaque dark-fantasy oils, keeping the whole image low-key with deep near-black shadow occupying most of the value range. Light every scene from a single dominant source, its colour taken from whatever is actually giving off that light in the scene, and let everything it does not reach fall away into gloom. Render every surface to a fine, dry-brushed, almost etched precision, and give every surface a history \u2014 individual strands of hair and fur, worn, pitted and scratched metal, damp skin, frayed and torn cloth, grain in wood and stone \u2014 so nothing looks new or clean. Fill the air with fine suspended matter, whatever this particular scene\'s own air would carry, caught and lit by the scene\'s own light and thickening with distance; never add airborne matter the scene would not have. Use an extremely limited near-monochrome palette of charcoal, soot black, cold grey and warm brown, with amber-gold the only true colour anywhere. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through. Separate near, middle and far with smoke and atmospheric haze, the darkest values gathering toward the edges of the frame and the far distance dissolving entirely.'
+    // KNOWN LIMITS, SEEN IN THE SAME TESTS: at a scene that literally asks for bright noon the colour
+    // runs louder than the rest of the style (Ian chose the tested wording over an untested mute
+    // line); and small-folk characters whose reference pictures are rounded still come out storybook
+    // in every style (TD-124 -- the reference, not this paragraph). The ink-outline fault (TD-653)
+    // did not appear in any of the seven Grounded 2 panels but is not proven gone.
+    //
+    // is_fade NO -- full bleed, as before. Name, id, tier (Gold, TD-659) and catalog entry unchanged.
+    'Dark Fantasy': 'STYLE: Paint in rich, opaque oils with the weight, realism and drama of a classical history painting brought into a fantasy world. Give every figure believable anatomy and natural proportions, faces with age, character and weathering, and armour, cloth and gear that hang with real weight and show wear, mending and use. Take the time of day, the weather and the light from the scene itself, and paint that light dramatically: strong and directional, raking across forms, carving them out with bold contrast between lit planes and deep shadow, light breaking through haze, dust or smoke, and skies that carry weather and movement. Keep the drama in full daylight too: sunlight slanting through hazy air, shifting patches of light and shade across the land, and deep shade cast by whatever stands in the light. Keep the full tonal range, from luminous highlights to rich, deep shadows, at every hour. Any flame the scene itself contains, a fire, a torch, a lamp or a candle, glows warm and golden against the cooler world around it. Render every surface to a fine, dry-brushed, almost etched precision, and give every surface a history \u2014 individual strands of hair and fur, worn, pitted and scratched metal, damp skin, frayed and torn cloth, grain in wood and stone \u2014 so nothing looks new or clean. Fill the air with fine suspended matter, whatever this particular scene\'s own air would carry, caught and lit by the scene\'s own light and thickening with distance; never add airborne matter the scene would not have. Use grounded, naturalistic colour, earthy and slightly muted, true to the materials and the hour, with the light itself carrying the strongest colour in the picture. Build every form from paint and tonal value alone: no ink outlines, no contour lines, no linework, no sketch showing through. Keep the mood brooding, cinematic and heavy: a lived-in, dangerous, real world caught at a moment that matters. Separate near, middle and far with atmospheric haze, the darkest values gathering toward the edges of the frame and the far distance softening into the air.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
@@ -2243,7 +2225,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       } catch (_me) { /* keep existing imgW/imgH */ }
       if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
-        const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image, shape FROM moments WHERE id = ?').get(job.moment_id);
+        const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image, shape, style FROM moments WHERE id = ?').get(job.moment_id);   // v3.2.21 -- style too (TD-995)
         if (job.kind === 'retouch') {
           await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
@@ -2310,6 +2292,23 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
             var _rw = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_w : null;
             var _rh = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_h : null;
             await db.prepare('UPDATE moments SET revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?').run(job.prev_image, _rw || null, _rh || null, job.moment_id);
+            // v3.2.21 -- TD-995. THE UNDO SLOT REMEMBERS WHICH STYLE ITS PICTURE WAS DRAWN IN.
+            // A Regenerate writes the NEW style onto the moment (above) and moves the old picture into
+            // revert_image -- but nothing recorded the old picture's style, so Revert brought the old
+            // picture back still labelled with the new style. revert-moment already swaps the label
+            // when layout_meta.prev_shape describes the picture in the slot (v3.1.30, for uploads);
+            // this writes that same record for a Regenerate. Only a regenerate ('moment'): a retouch
+            // keeps the style it started with, so its undo slot has nothing to swap.
+            if (job.kind === 'moment' && _priorM && _priorM.image === job.prev_image) {
+              try {
+                var _psRow = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(job.moment_id);
+                var _psMeta = null;
+                try { _psMeta = (_psRow && _psRow.layout_meta) ? (typeof _psRow.layout_meta === 'object' ? _psRow.layout_meta : JSON.parse(_psRow.layout_meta)) : null; } catch (_pe) { _psMeta = null; }
+                if (!_psMeta || typeof _psMeta !== 'object' || Array.isArray(_psMeta)) _psMeta = {};
+                _psMeta.prev_shape = { shape: _priorM.shape || 'standard', image: job.prev_image, style: (_priorM.style == null ? null : _priorM.style) };
+                await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_psMeta), job.moment_id);
+              } catch (_pse) { console.error('recording the undo slot style failed (Revert keeps the current label):', _pse && _pse.message); }
+            }
           } else {
             await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
           }
@@ -2398,7 +2397,20 @@ webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
     const job = await db.prepare('SELECT id, status, image_url, error, moment_id FROM image_jobs WHERE id = ? AND user_id = ?')
       .get(req.params.id, req.session.userId);
     if (!job) return res.status(404).json({ error: 'job not found' });
-    res.json({ status: job.status, image_url: job.image_url || null, error: job.error || null, moment_id: job.moment_id });
+    // v3.2.21 -- TD-995. A FINISHED MOMENT JOB ALSO SAYS WHICH STYLE THE PANEL NOW CARRIES, read from the
+    // moment itself -- the same value the Archive copies -- so the Storyboard can relabel the panel the
+    // moment its new picture lands, instead of showing the style it had before until a reload. Absent
+    // (never null-for-unknown) when there is nothing to report, so an older page simply ignores it.
+    var _jobStyle;
+    if (job.status === 'done' && job.moment_id) {
+      try {
+        var _jm = await db.prepare('SELECT style FROM moments WHERE id = ?').get(job.moment_id);
+        if (_jm) _jobStyle = (_jm.style == null ? null : _jm.style);
+      } catch (_je) { /* the picture still lands; only the label waits for a reload */ }
+    }
+    var _jobOut = { status: job.status, image_url: job.image_url || null, error: job.error || null, moment_id: job.moment_id };
+    if (_jobStyle !== undefined) _jobOut.moment_style = _jobStyle;
+    res.json(_jobOut);
   } catch (e) { res.json({ error: friendlyError(e, 'Could not check image status.') }); }
 });
 
