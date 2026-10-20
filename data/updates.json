@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.24",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3224-style-wording-no-names",
+        "kind": "feature",
+        "public": true,
+        "summary": "Seven art styles were refreshed. Pastel has a new, softer chalk look, and Charcoal and Pen and ink now fade cleanly to a white edge.",
+        "detail": "Dark and gritty, Fantasy oil, Cel-shaded, Watercolor, Pastel, Charcoal and Pen and ink describe their look in their own words instead of naming artists or games (TD-997). Each was tested on the group scene and keeps its character; Pastel was reworked into a paler, powdery, chalkier style. The seven style card pictures were redrawn to match. Existing pictures do not change until regenerated. The old wording is kept so a book can be finished in its original look with a custom style. Test: open the Art Style window (seven new pictures) and regenerate one panel in Pastel.",
+        "td": [
+          "TD-997"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.23",
     "staged_on": "2026-10-20",
     "entries": [

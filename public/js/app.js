@@ -6544,7 +6544,7 @@ var ART_STYLE_META = [
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
   { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
-  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' },
+  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy colour and loose strokes that melt into a white edge.' },   // v3.2.24
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
@@ -6555,7 +6555,7 @@ var ART_STYLE_META = [
 // eleven -- the custom-style preview's group scene (Everyday life and Anime in a modern cafe, since both take
 // their setting from the scene) -- drawn by Ian on staging and stored as fixed files in public/images/styles.
 // The ?v= changes whenever the pictures do, so the edge cache never serves an old one under the same name.
-var ART_STYLE_PIC_VER = '3222';
+var ART_STYLE_PIC_VER = '3224';   // v3.2.24 -- seven pictures redrawn with the name-free wording
 var ART_STYLE_PICS = {
   'High fantasy illustration': 'high-fantasy-illustration.jpg',
   'Everyday life illustration': 'everyday-life-illustration.jpg',
