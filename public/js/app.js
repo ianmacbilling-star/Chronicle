@@ -11856,6 +11856,11 @@ function closeTitleBuilder() {
   state._tbSessionCur = null;
   var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
   try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
+  // v3.2.20 -- THE NOTE UNDER THE TITLE BOXES FOLLOWS THE DRAWING. Ian: changed the subtitle, drew the title again
+  // and used it, and "Your drawn title still shows the old words" stayed. Generate repaints while the new drawing is
+  // only a draft (the live words are still the old ones); Done & Use, Stash and Remove then land here and nothing
+  // repainted. Every exit from the builder now re-reads the title mode, which repaints the note.
+  try { if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock(); } catch (e) {}
 }
 function _tbShowResult(url) {
   // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper

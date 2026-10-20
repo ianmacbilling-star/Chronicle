@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.20",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3220-drawn-note-clears",
+        "kind": "fix",
+        "public": true,
+        "summary": "The note under the Title and Subtitle boxes goes away once you draw the title again with the new words.",
+        "detail": "After changing the subtitle and using a freshly drawn title, the note saying the drawn title still shows the old words stayed on screen until the page was reloaded. It now updates as soon as the Title Builder closes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.19",
     "staged_on": "2026-10-19",
     "entries": [
