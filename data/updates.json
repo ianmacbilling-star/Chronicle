@@ -1,5 +1,35 @@
 [
   {
+    "version": "3.2.22",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3222-style-card-pictures",
+        "kind": "feature",
+        "public": true,
+        "summary": "Every included art style now shows a sample picture in the Art Style window, so you can see each look before you choose it.",
+        "detail": "The eleven included style cards carry a picture strip like the custom cards: the same group scene in every style (Everyday life and Anime in a modern cafe). Custom style cards now show the chosen description's Group preview when one was made, otherwise the first reference picture as before. Test: open the Art Style window; every included card has a picture; a custom style with a chosen winner and a Group preview shows that preview.",
+        "td": []
+      },
+      {
+        "id": "3222-anime-refresh",
+        "kind": "feature",
+        "public": true,
+        "summary": "Anime has a new look: big sparkling eyes on every character, soft painted shading and glowing, dreamy light.",
+        "detail": "The Anime art style was rewritten from Ian's examples and tested over a dozen runs. It is no longer treated as a comic style, so it paints rather than inks. Existing pictures do not change until regenerated. Test: regenerate a close panel and a group panel in Anime; every face, including older characters, should have large anime eyes.",
+        "td": []
+      },
+      {
+        "id": "3222-watercolor-soft-edges",
+        "kind": "fix",
+        "public": true,
+        "summary": "Watercolor pictures now fade out to a clean white edge, as the style always promised.",
+        "detail": "Watercolor joined the soft-edge styles and its description gained the edge sentence Ian tested. Existing Watercolor pictures stay full bleed until regenerated. Test: regenerate any panel in Watercolor; the paint should thin out to white before the edges.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.21",
     "staged_on": "2026-10-20",
     "entries": [

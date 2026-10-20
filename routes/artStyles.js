@@ -46,6 +46,7 @@ function rowOut(r) {
     answers: parseJsonCol(r.style_answers),          // v3.1.66 -- TD-964
     options: parseJsonCol(r.style_options),
     winner: (r.style_winner === null || r.style_winner === undefined) ? null : r.style_winner,
+    group_url: winnerGroupUrl(r),   // v3.2.22
     created_at: r.created_at,
     updated_at: r.updated_at
   };
@@ -79,9 +80,21 @@ router.get('/custom', requireAuth, async function(req, res) {
 // styles. Lean output (no style_prompt) so the SM's directive text isn't exposed
 // to members; the picker only needs id/name/thumbnail. shared_by_sm flags the
 // SM group in the UI.
+// v3.2.22 -- the card picture. Ian, 2026-10-20: show the CHOSEN winner's group preview if one was made, else
+// fall back to the first reference picture (the page does the fallback). Winner only: an unchosen option's
+// preview is not the style. URL-checked like every stored preview. No style text goes out with it.
+function winnerGroupUrl(r) {
+  try {
+    const opts = parseJsonCol(r && r.style_options);
+    const w = (r && r.style_winner !== null && r.style_winner !== undefined) ? Number(r.style_winner) : NaN;
+    if (!Array.isArray(opts) || !Number.isInteger(w) || w < 0 || w >= opts.length) return null;
+    const o = opts[w] || {};
+    return cleanPreviewUrl(o.previews && o.previews.group);
+  } catch (e) { return null; }
+}
 function pickRowOut(r, sharedBySm) {
   if (!r) return r;
-  return { id: r.id, name: r.name, is_fade: r.is_fade ? 1 : 0, sample_urls: parseSamples(r.sample_urls), shared_by_sm: sharedBySm ? 1 : 0 };
+  return { id: r.id, name: r.name, is_fade: r.is_fade ? 1 : 0, sample_urls: parseSamples(r.sample_urls), shared_by_sm: sharedBySm ? 1 : 0, group_url: winnerGroupUrl(r) };
 }
 
 router.get('/custom/available/:campaignId', requireAuth, async function(req, res) {

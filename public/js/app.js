@@ -6363,7 +6363,9 @@ function openStylePicker(kind) {
     var badge = (!_locked && s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
     if (_locked) badge = ' <span class="style-card-current" style="background:#6b7280;">' + (TLABEL[_min] || 'Upgrade') + ' only</span>';
     var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
+    var _pic = (STYLE_PICKER_KIND === 'art') ? styleCardThumbHtml(artStylePicUrl(s.id), s.name) : '';   // v3.2.22
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
+      _pic +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
       '<div class="style-card-desc">' + escapeHtml(String(s.desc).replace('{words}', _writtenLimit().toLocaleString())) + '</div>' +   // v3.1.51 -- TD-941
       eg +
@@ -6381,7 +6383,9 @@ function openStylePicker(kind) {
         var on2 = (cid === cur) ? ' is-selected' : '';
         var badge2 = (cid === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
         var _d = s.is_fade ? 'Soft, faded edges.' : (s.shared_by_sm ? "Shared by your campaign's SM." : 'Your custom art style.');
-        var _samp = (Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '';
+        // v3.2.22 -- the winner's group preview when there is one (it matches the included cards' scene), else the
+        // first reference picture as before (Ian, 2026-10-20).
+        var _samp = s.group_url ? s.group_url : ((Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '');
         var _thumb = _samp
           ? '<div class="style-card-thumb" style="width:100%;height:84px;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#000;"><img src="' + _samp + '" alt="' + escapeHtml(s.name || '') + '" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>'
           : '';
@@ -6508,16 +6512,44 @@ function selectStyleCard(kind, id) {
 var ART_STYLE_META = [
   { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
   { id:'Everyday life illustration', name:'Everyday life', desc:'The same rich, painterly illustration as High fantasy, set in the real world \u2014 ordinary places, clothes and objects, with no fantasy styling. The period comes from your story.' },
-  { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
+  { id:'Anime manga style', name:'Anime / manga', desc:'Glossy, glowing modern anime \u2014 big sparkling eyes, soft painted shading and dreamy, coloured light.' },   // v3.2.22
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
   { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
   { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' },
-  { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
+  { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
   { id:'Dark Fantasy', name:'Dark fantasy', desc:'Grounded, realistic oils with weight and drama \u2014 raking light, weathered detail and a brooding mood, with no linework. More realistic and heavier than High fantasy, and it takes its time of day from your scene.' }   // v3.2.21 -- TD-642, grounded rewrite
 ];
+
+// v3.2.22 -- A PICTURE ON EVERY INCLUDED STYLE CARD, like the custom cards (Ian, 2026-10-20). One scene for all
+// eleven -- the custom-style preview's group scene (Everyday life and Anime in a modern cafe, since both take
+// their setting from the scene) -- drawn by Ian on staging and stored as fixed files in public/images/styles.
+// The ?v= changes whenever the pictures do, so the edge cache never serves an old one under the same name.
+var ART_STYLE_PIC_VER = '3222';
+var ART_STYLE_PICS = {
+  'High fantasy illustration': 'high-fantasy-illustration.jpg',
+  'Everyday life illustration': 'everyday-life-illustration.jpg',
+  'Anime manga style': 'anime-manga-style.jpg',
+  'Dark gritty comic book': 'dark-gritty-comic-book.jpg',
+  'Classic pen and ink': 'classic-pen-and-ink.jpg',
+  'Fantasy oil painting': 'fantasy-oil-painting.jpg',
+  'Fantasy pastel': 'fantasy-pastel.jpg',
+  'Watercolor painterly': 'watercolor-painterly.jpg',
+  'Charcoal drawing': 'charcoal-drawing.jpg',
+  'Comic book cel-shaded': 'comic-book-cel-shaded.jpg',
+  'Dark Fantasy': 'dark-fantasy.jpg'
+};
+function artStylePicUrl(id) {
+  var f = Object.prototype.hasOwnProperty.call(ART_STYLE_PICS, id) ? ART_STYLE_PICS[id] : '';
+  return f ? ('/images/styles/' + f + '?v=' + ART_STYLE_PIC_VER) : '';
+}
+// The same strip the custom cards use, so the two kinds of card match. A picture that fails to load hides its box.
+function styleCardThumbHtml(src, alt) {
+  if (!src) return '';
+  return '<div class="style-card-thumb" style="width:100%;height:84px;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#000;"><img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt || '') + '" loading="lazy" onerror="this.parentNode.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>';
+}
 
 function artStyleName(v) {
   if (typeof v === 'string' && v.indexOf('custom:') === 0) { var _cs = customStyleById(v); return _cs ? (_cs.name || 'Custom style') : 'Custom style'; }
