@@ -190,8 +190,10 @@ function makeHandlers(d) {
   //     else the version's drawn-title words IF that drawing is still the one on the version (same picture),
   //     else unknown (keep what is stored);
   //   * the saved book used a typed title -> the subtitle it was saved with;
-  //   * no record (saved before v3.2.10) -> the version's drawn-title words when it has a drawn title, the same
-  //     'from the version as it is now' rule the v3.1.8 fill uses; otherwise keep what is stored.
+  //   * no record (saved before v3.2.10) -> keep what is stored. v3.2.18 took the version's drawn title as it is
+  //     NOW, and a series broke it at once: Ian's For ALL the Ages Book I, II and III all come from one version
+  //     whose drawing now reads Book III, so all three said Book III (v3.2.19). Which drawing an old book used
+  //     cannot be known, so it is not guessed.
   // Returns the subtitle, or null for 'keep what is stored'.
   function shelfSubtitle(meta, prefs) {
     var m = (meta && typeof meta === 'object') ? meta : null, p = prefs || null;
@@ -204,8 +206,7 @@ function makeHandlers(d) {
       }
       return s(m.subtitle);
     }
-    if (p && p.built_title_url && p.built_title_text) return s(p.built_title_sub);
-    return null;
+    return null;   // v3.2.19 -- no record: never guessed from the version as it is now
   }
   function parseMeta(v) { try { var m = v ? (typeof v === 'string' ? JSON.parse(v) : v) : null; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } }
   async function storeMeta(db, id, m) {

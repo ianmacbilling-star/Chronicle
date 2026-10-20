@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.19",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3219-shelf-old-books-kept",
+        "kind": "fix",
+        "public": false,
+        "summary": "Books shelved before v3.2.10 keep the subtitle they were shelved with.",
+        "detail": "v3.2.18 gave old shelf books the subtitle from their version's drawn title as it is now, so a series shelved from one version (Book I, II, III) all showed the latest book's subtitle. An old book's cover was never recorded, so its subtitle is no longer changed.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.18",
     "staged_on": "2026-10-19",
     "entries": [
