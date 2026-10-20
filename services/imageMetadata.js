@@ -81,6 +81,31 @@ function namesSomeone(v) {
   return true;
 }
 
+// v3.2.17 -- AN AI TOOL'S CREDIT IS NOT AN OWNER. Ian, 2026-10-19, on his own Title Builder lettering being
+// warned about: "All AI tools should be exempt. AI tool credits aren't owners." Google's image models write
+// "Made with Google AI" into the credit field of every picture they make (Campaignia's Title Builder uses one),
+// and other tools do the same. A value counts as a tool credit only when, after an optional "made / created /
+// generated ... with / by / using", NOTHING is left but tool names and filler -- so "Jane Doe, made with
+// Midjourney" still names Jane Doe and still warns. Stock agencies are judged before this and are untouched.
+var AI_TOOLS = [
+  /google\s*ai/g, /google\s*gemini/g, /gemini/g, /imagen/g, /nano[\s-]*banana/g, /openai/g, /dall[\s\-\u00b7.]*e(?:\s*\d)?/g,
+  /chat\s*gpt/g, /gpt[\s-]*\d*o?/g, /sora/g, /adobe\s*firefly/g, /firefly/g, /midjourney/g, /stable\s*diffusion/g,
+  /stability\s*ai/g, /dream\s*studio/g, /sdxl/g, /meta\s*ai/g, /bing\s*image\s*creator/g, /image\s*creator/g,
+  /microsoft\s*designer/g, /copilot/g, /leonardo(?:\.ai)?/g, /ideogram/g, /flux(?:\.\d)?/g, /black\s*forest\s*labs/g,
+  /runway(?:ml)?/g, /grok/g, /aurora/g, /recraft/g, /playground(?:\s*ai)?/g, /canva(?:\s*ai)?/g, /novel\s*ai/g,
+  /artbreeder/g, /krea/g, /fal(?:\.ai)?/g, /\ba\.?i\.?\b/g, /artificial\s*intelligence/g
+];
+var AI_FILLER = /\b(?:google|adobe|microsoft|meta|generative|generated|image|images|model|models|tool|tools|the|and|with|by|using|in|via|version|v\d+|xl|pro|ultra|turbo|flash|preview|beta|alpha|lite|mini|max|plus|edit|editor|studio|app|\d+(?:\.\d+)*)\b|[&,;:+\/()\-\u2013\u2014.\u00a9]/g;
+function isAiToolCredit(v) {
+  var s = cleanVal(v).toLowerCase();
+  if (!s) return false;
+  s = s.replace(/^(?:\u00a9|\(c\)|copyright)\s*/, '').replace(/^(?:made|created|generated|edited|produced|rendered|drawn|designed|enhanced|modified)\s+(?:with|by|using|in|via)\s+/, '');
+  var hit = false;
+  AI_TOOLS.forEach(function (re) { s = s.replace(re, function () { hit = true; return ' '; }); });
+  if (!hit) return false;
+  return s.replace(AI_FILLER, ' ').replace(/[^a-z\u00c0-\u024f]/g, '') === '';
+}
+
 // ---------------------------------------------------------------- TIFF (EXIF) ----------------
 function readTiff(buf) {
   var out = { artist: [], copyright: [] };
@@ -291,7 +316,7 @@ function checkBuffer(buf) {
   if (agency) {
     reasons.push({ source: 'metadata', kind: 'stock', text: 'The picture’s file details say it comes from ' + agency + ', a stock photo library.' });
   } else {
-    var named = [].concat(f.artist, f.copyright, f.credit).filter(namesSomeone);
+    var named = [].concat(f.artist, f.copyright, f.credit).filter(namesSomeone).filter(function (v) { return !isAiToolCredit(v); });   // v3.2.17
     if (named.length) {
       reasons.push({ source: 'metadata', kind: 'copyright', text: 'The picture’s file details name a creator or copyright holder: ' + named[0].slice(0, 120) + '.' });
     }
@@ -300,4 +325,4 @@ function checkBuffer(buf) {
   return { verdict: verdict, reasons: reasons, fields: { artist: f.artist, copyright: f.copyright, credit: f.credit, source: f.source, usage: f.usage, c2pa: !!f.c2pa } };
 }
 
-module.exports = { checkBuffer: checkBuffer, readFields: readFields, agencyIn: agencyIn, namesSomeone: namesSomeone, STOCK_AGENCIES: STOCK_AGENCIES };
+module.exports = { checkBuffer: checkBuffer, readFields: readFields, agencyIn: agencyIn, namesSomeone: namesSomeone, STOCK_AGENCIES: STOCK_AGENCIES, isAiToolCredit: isAiToolCredit };

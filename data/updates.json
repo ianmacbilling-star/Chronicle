@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.17",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3217-ai-credits-not-owners",
+        "kind": "fix",
+        "public": true,
+        "summary": "Pictures made with AI tools are no longer flagged as naming a creator or copyright holder.",
+        "detail": "Image tools such as Google's write a credit like \u201cMade with Google AI\u201d into every picture they make, and the rights check read that as an owner \u2014 so even a title drawn with the Title Builder was flagged when used as a reference. AI tool credits no longer count, and warnings already given for that reason alone are cleared. A real name in a picture's details still warns, and stock-library pictures are still refused.",
+        "td": ["TD-979"]
+      }
+    ]
+  },
+  {
     "version": "3.2.16",
     "staged_on": "2026-10-19",
     "entries": [

@@ -242,6 +242,16 @@ function maskCharacters(chars) {
 function maskCampaign(c) { return maskFields(c, ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'campaign_image_url']); }
 
 // url -> { verdict, reasons } for the ones that have a verdict. Never throws.
+// v3.2.17 -- A WARNING STORED BEFORE AI TOOL CREDITS WERE EXEMPT. Ian: "clear the warning if it sees it." A
+// stored reason whose only complaint is a file credit naming an AI tool (imageMetadata.isAiToolCredit) is dropped;
+// a warning left with no reason is not reported and its row is deleted. Anything else is kept exactly as stored.
+var COPYRIGHT_PREFIX = 'The picture\u2019s file details name a creator or copyright holder: ';
+function isAiCreditReason(x) {
+  if (!x || x.source !== 'metadata' || x.kind !== 'copyright') return false;
+  var t = String(x.text || '');
+  if (t.indexOf(COPYRIGHT_PREFIX) !== 0) return false;
+  return meta.isAiToolCredit(t.slice(COPYRIGHT_PREFIX.length).replace(/\.\s*$/, ''));
+}
 async function lookup(urls) {
   var out = {};
   var list = (urls || []).map(normUrl).filter(Boolean);
@@ -253,11 +263,23 @@ async function lookup(urls) {
       'SELECT image_url, verdict, reasons FROM image_rights WHERE image_url IN (' + uniq.map(function () { return '?'; }).join(',') + ')'
     );
     var rows = await _st.all.apply(_st, uniq);
+    var _cleared = [];   // v3.2.17 -- warnings that only named an AI tool
     (rows || []).forEach(function (r) {
       var reasons = [];
       try { reasons = typeof r.reasons === 'string' ? JSON.parse(r.reasons) : (r.reasons || []); } catch (e) { reasons = []; }
+      if (r.verdict === 'warn' && reasons.some(isAiCreditReason)) {   // v3.2.17
+        reasons = reasons.filter(function (x) { return !isAiCreditReason(x); });
+        if (!reasons.length) {
+          _cleared.push(r.image_url);
+          return;
+        }
+      }
       out[r.image_url] = { verdict: r.verdict, reasons: reasons };
     });
+    // v3.2.17 -- the cleared rows go, so nothing else reads them either. Best effort.
+    for (var _ci = 0; _ci < _cleared.length; _ci++) {
+      try { await d.prepare("DELETE FROM image_rights WHERE image_url = ? AND verdict = 'warn'").run(_cleared[_ci]); } catch (e) { /* stays filtered here anyway */ }
+    }
   } catch (e) { console.error('[rights] lookup failed: ' + ((e && e.message) || e)); }
   return out;
 }
