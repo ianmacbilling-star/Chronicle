@@ -5798,6 +5798,31 @@ function cstyleCloseNow() {
   if (m) m.classList.add('hidden');
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ slotFiles[k] = null; slotFiles[k + '_clear'] = false; });
 }
+// v3.2.23 -- PICTURE CARDS FOR CHARACTERS AND CUSTOM STYLES (Ian, 2026-10-20: "make the images... bigger... They
+// both have the small circle"). The picture fills the top of the card edge to edge, as the Asset Library cards
+// do, and the buttons sit on it as pills. Characters: a 3:4 box showing the WHOLE figure (references are full
+// body on pure white, so a fill crop would cut off legs). Custom styles: 16:9, filled, the shape of the previews.
+// Injected from app.js rather than written into style.css: app.js is version-stamped on every deploy and
+// style.css is not, so a CSS-file change could sit behind the edge cache. Opt-in by class (char-card--pic), so
+// any other .char-card is untouched. The #ids beat the .char-grid rule without editing it.
+function charPicCss() {
+  if (document.getElementById('char-pic-css')) return;
+  var st = document.createElement('style');
+  st.id = 'char-pic-css';
+  st.textContent =
+    '#char-grid,#cstyle-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}' +
+    '@media (max-width:600px){#char-grid,#cstyle-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}}' +
+    '.char-card--pic{overflow:hidden;}' +
+    '.char-card--pic .char-card-header{display:block;position:relative;margin:-12px -12px 10px;}' +
+    '.char-card--pic .char-avatar{width:100%;height:auto;aspect-ratio:3/4;border-radius:0;border:0;border-bottom:1px solid rgba(201,168,76,0.18);}' +
+    '.char-card--wide .char-avatar{aspect-ratio:16/9;}' +
+    '.char-card--pic .char-avatar>span{font-size:44px !important;}' +
+    '.char-card--pic .char-actions{position:absolute;top:8px;right:8px;z-index:2;}' +
+    '.char-card--pic .char-btn{background:rgba(20,14,6,0.78);color:#f0e8d0;border-color:rgba(201,168,76,0.45);font-size:11px;padding:4px 9px;}' +
+    '.char-card--pic .char-btn:hover{background:rgba(201,168,76,0.92);color:#1a120c;}' +
+    '.char-card--pic .char-btn-delete:hover{background:rgba(139,26,26,0.92);color:#fff;border-color:rgba(240,149,149,0.6);}';
+  document.head.appendChild(st);
+}
 function renderCustomStyleCards() {
   var grid = document.getElementById('cstyle-grid');
   if (!grid) return;
@@ -5805,10 +5830,12 @@ function renderCustomStyleCards() {
   var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
   var html = list.map(function(s, i) {
     var bg = colors[i % colors.length];
-    var thumb = (Array.isArray(s.sample_urls) && s.sample_urls[0])
-      ? '<img src="' + s.sample_urls[0] + '" style="width:100%;height:100%;object-fit:cover;" alt="' + escapeHtml(s.name || '') + '" />'
+    // v3.2.23 -- the same picture as the picker card: the chosen description's Group preview, else the first reference.
+    var _cpic = s.group_url ? s.group_url : ((Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '');
+    var thumb = _cpic
+      ? '<img src="' + escapeHtml(_cpic) + '" style="width:100%;height:100%;object-fit:cover;" alt="' + escapeHtml(s.name || '') + '" />'
       : '<span style="font-size:22px;">&#127912;</span>';
-    return '<div class="char-card" style="cursor:pointer;" onclick="editCustomStyle(\'' + s.id + '\')">' +
+    return '<div class="char-card char-card--pic char-card--wide" style="cursor:pointer;" onclick="editCustomStyle(\'' + s.id + '\')">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + thumb + '</div>' +
         '<div class="char-actions">' +
@@ -5821,6 +5848,7 @@ function renderCustomStyleCards() {
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCustomStyles()"><div class="plus">+</div><span>New style</span></div>';
+  charPicCss();   // v3.2.23
   grid.innerHTML = html;
 }
 function collectCstyleFiles() {
@@ -8937,7 +8965,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:' + (refImg ? 'contain' : 'cover') + ';object-position:' + (refImg ? 'center bottom' : 'center top') + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -8957,9 +8985,9 @@ function renderCharacters() {
       }
     }
 
-    return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
+    return '<div class="char-card char-card-drop char-card--pic" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
-        '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
+        '<div class="char-avatar" style="background:' + (refImg ? '#fff' : bg) + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
           (function() {
             // Phase 3 Deploy 3 — per-card edit visibility.
@@ -8992,6 +9020,7 @@ function renderCharacters() {
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
   html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
+  charPicCss();   // v3.2.23
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -18213,7 +18242,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:' + (refImg ? 'contain' : 'cover') + ';object-position:' + (refImg ? 'center bottom' : 'center top') + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -18233,9 +18262,9 @@ function renderCharacters() {
       }
     }
 
-    return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
+    return '<div class="char-card char-card-drop char-card--pic" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
-        '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
+        '<div class="char-avatar" style="background:' + (refImg ? '#fff' : bg) + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
           (function() {
             // Phase 3 Deploy 3 — per-card edit visibility.
@@ -18268,6 +18297,7 @@ function renderCharacters() {
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
   html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
+  charPicCss();   // v3.2.23
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }

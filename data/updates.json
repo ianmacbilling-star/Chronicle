@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.23",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3223-picture-cards",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character cards and your custom art style cards now show a big picture across the top instead of a small circle.",
+        "detail": "Characters show their whole figure in a tall picture at the top of the card (click to enlarge); custom style cards show a wide picture (the chosen Group preview, else the first reference). Edit and Delete sit on the picture. Test: open Characters and Custom Art Styles on a laptop and a phone; drag a picture onto a character card to replace its portrait.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.22",
     "staged_on": "2026-10-20",
     "entries": [
