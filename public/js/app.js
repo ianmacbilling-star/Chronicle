@@ -13425,7 +13425,18 @@ function bookshelfSpine(b, isLib, leather, i) {
   sp.style.filter = 'brightness(' + (0.85 + ((Number(i) || 0) % 3) * 0.1).toFixed(2) + ')';
   var t = document.createElement('span');
   t.className = 'bspine-t';
-  t.textContent = b.bookTitle || 'Untitled';
+  // v3.2.18 -- Ian: the subtitle on the spine "in small text". A second, smaller line beside the title; a book with
+  // no subtitle is drawn exactly as before. Both lines end in an ellipsis when long, and the tooltip has the whole.
+  var _bsub = String(b.subtitle || '').trim();
+  if (_bsub && !isLib) {
+    t.className = 'bspine-t bspine-two';
+    var t1 = document.createElement('span'); t1.className = 'bspine-tt'; t1.textContent = b.bookTitle || 'Untitled';
+    var t2 = document.createElement('span'); t2.className = 'bspine-ts'; t2.textContent = _bsub;
+    t.appendChild(t1); t.appendChild(t2);
+    sp.title = (b.bookTitle || 'Untitled book') + ': ' + _bsub + (b.pages ? ' -- ' + b.pages + ' pages' : '');
+  } else {
+    t.textContent = b.bookTitle || 'Untitled';
+  }
   sp.appendChild(t);
   if (isLib) { var rb = document.createElement('span'); rb.className = 'bspine-ribbon'; sp.appendChild(rb); }
   sp.onclick = function () { bookshelfShowCard(b, isLib); };

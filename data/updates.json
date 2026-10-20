@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.18",
+    "staged_on": "2026-10-19",
+    "entries": [
+      {
+        "id": "3218-shelf-cover-subtitle",
+        "kind": "change",
+        "public": true,
+        "summary": "Books on the Bookshelf show the subtitle that is on their cover, now also in small text on the spine.",
+        "detail": "When a book's cover uses a title drawn with the Title Builder, its subtitle is part of the drawing, so the open book on the shelf now shows that subtitle rather than whatever is in the Subtitle box. Books already on the shelf are corrected the next time the shelf opens. The spine of a book with a subtitle shows it as a second, smaller line beside the title.",
+        "td": ["TD-988"]
+      }
+    ]
+  },
+  {
     "version": "3.2.17",
     "staged_on": "2026-10-19",
     "entries": [

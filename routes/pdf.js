@@ -2558,6 +2558,9 @@ function applyForkBookMeta(campaign, fbm) {
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
   // byte-identical until v3.0.575; adding the field here is the whole reason it was consolidated.
   campaign.built_title_url = _f.built_title_url || '';
+  // v3.2.18 -- the words the drawn title was drawn with, so a saved book can record the subtitle its cover shows.
+  campaign._builtTitleText = _f.built_title_text || '';
+  campaign._builtTitleSub = (_f.built_title_sub == null) ? '' : String(_f.built_title_sub);
   if (_f.book_title) campaign._memberBookTitle = _f.book_title;
   // Subtitle: an empty string is a real stored value meaning "nothing under the title", so this
   // tests for null/undefined rather than for falsiness. Coercing '' away here would make a cleared
@@ -2579,7 +2582,9 @@ function savedBookMetaFrom(built) {
     var t = (po.bookTitle != null && String(po.bookTitle).trim()) ? String(po.bookTitle).trim() : String(c._memberBookTitle || c.name || '');
     return { v: 1, cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '',
       title_image_url: c.title_image_url || '', built_title_url: c.built_title_url || '', book_title: t,
-      subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '' };
+      subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '',
+      // v3.2.18 -- a drawn title carries its own subtitle in the artwork; recorded when its words are known.
+      built_title_sub: (c.built_title_url && c._builtTitleText) ? String(c._builtTitleSub || '') : undefined };
   } catch (e) { return null; }
 }
 // v3.2.12 -- TD-988 (option B). THE ONLINE READING PAGE IS RECORDED WITH THE SAVE, NOT AT PUBLISH.

@@ -183,6 +183,31 @@ function makeHandlers(d) {
     });
     return out;
   }
+  // v3.2.18 -- THE SUBTITLE A SHELVED BOOK SHOWS IS THE ONE ON ITS COVER. Ian, 2026-10-19, on The Strangers:
+  // the open book read "Episode 1, Canonical cccccc" (the Subtitle box) while the cover's drawn title says
+  // "To Grimskull and Back, Again". A drawn title carries its own subtitle in the artwork, so:
+  //   * the saved book used a drawn title -> the subtitle it was drawn with: recorded with the save from v3.2.18,
+  //     else the version's drawn-title words IF that drawing is still the one on the version (same picture),
+  //     else unknown (keep what is stored);
+  //   * the saved book used a typed title -> the subtitle it was saved with;
+  //   * no record (saved before v3.2.10) -> the version's drawn-title words when it has a drawn title, the same
+  //     'from the version as it is now' rule the v3.1.8 fill uses; otherwise keep what is stored.
+  // Returns the subtitle, or null for 'keep what is stored'.
+  function shelfSubtitle(meta, prefs) {
+    var m = (meta && typeof meta === 'object') ? meta : null, p = prefs || null;
+    function s(v) { return (v == null) ? '' : String(v).trim(); }
+    if (m) {
+      if (m.built_title_url) {
+        if (Object.prototype.hasOwnProperty.call(m, 'built_title_sub')) return s(m.built_title_sub);
+        if (p && p.built_title_url && p.built_title_url === m.built_title_url && p.built_title_text) return s(p.built_title_sub);
+        return null;
+      }
+      return s(m.subtitle);
+    }
+    if (p && p.built_title_url && p.built_title_text) return s(p.built_title_sub);
+    return null;
+  }
+  function parseMeta(v) { try { var m = v ? (typeof v === 'string' ? JSON.parse(v) : v) : null; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } }
   async function storeMeta(db, id, m) {
     await db.prepare('UPDATE bookshelf_books SET subtitle = ?, session_count = ?, art_styles = ?, narrative_styles = ?, genres = ?, meta_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(m.subtitle || '', (m.sessionCount == null ? null : m.sessionCount), JSON.stringify(m.art), JSON.stringify(m.narr), JSON.stringify(m.genres), id);
@@ -267,7 +292,8 @@ function makeHandlers(d) {
       // book holds even if the version changes later. Best effort: the book is already shelved.
       // v3.2.16 -- TD-988. A saved book that recorded its subtitle is shelved with THAT one, not today's (testers: a
       // book saved as "Issue 1" showed "ISSUE 2" on the shelf).
-      var _bpS = (lo.meta && typeof lo.meta === 'object') ? Object.assign({}, bp || {}, { subtitle: (lo.meta.subtitle != null ? lo.meta.subtitle : null) }) : bp;
+      var _subS = shelfSubtitle(lo.meta, bp);   // v3.2.18 -- the cover's subtitle (was v3.2.16's saved typed one)
+      var _bpS = (_subS != null) ? Object.assign({}, bp || {}, { subtitle: _subS }) : bp;
       try { await storeMeta(db, ins && ins.lastInsertRowid, await bookMeta(db, campaign.id, sc.bookVersionId, _bpS, lo.inc)); } catch (e) { d.log('meta', e); }
       return { ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit };
     } catch (e) {
@@ -315,6 +341,26 @@ function makeHandlers(d) {
           rb.subtitle = mj.subtitle; rb.session_count = mj.sessionCount;
           rb.art_styles = JSON.stringify(mj.art); rb.narrative_styles = JSON.stringify(mj.narr); rb.genres = JSON.stringify(mj.genres);
         } catch (e) { d.log('meta-fill', e); }
+      }
+      // v3.2.18 -- books already on the shelf show the subtitle on their cover (shelfSubtitle). One prefs read per
+      // version, and a corrected value is stored so the open book and any later read agree.
+      var _verPrefs = {};
+      for (var k = 0; k < rows.length; k++) {
+        var rs = rows[k];
+        if (rs.kind !== 'book' || !rs.campaign_id) continue;
+        try {
+          var _vk = String(rs.campaign_id) + '|' + String(rs.version_id || '');
+          if (!(_vk in _verPrefs)) {
+            _verPrefs[_vk] = null;
+            var scs = await d.bookPrefsScope(db, { session: req.session, query: { as_version: rs.version_id ? String(rs.version_id) : '' }, body: {} }, rs.campaign_id);
+            if (scs && String(scs.chooser) === String(uid)) _verPrefs[_vk] = await d.getForkBookPrefs(db, scs.chooser, scs.fork, rs.campaign_id, { inherit: true, versionId: scs.versionId });
+          }
+          var _sub = shelfSubtitle(parseMeta(rs.book_cover_meta), _verPrefs[_vk]);
+          if (_sub != null && _sub !== String(rs.subtitle || '')) {
+            rs.subtitle = _sub;
+            await db.prepare('UPDATE bookshelf_books SET subtitle = ? WHERE id = ? AND user_id = ?').run(_sub, rs.id, uid);
+          }
+        } catch (e) { d.log('subtitle', e); }
       }
       var used = rows.filter(function (r) { return r.kind === 'book'; }).length;
       return res.json({ limit: t.limit, used: used, tier: t.key, tierName: t.name, plansText: shelfPlansText(), books: rows.map(shape) });

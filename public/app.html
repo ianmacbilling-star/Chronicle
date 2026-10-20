@@ -1504,6 +1504,10 @@
             .bspine-t { position:absolute; inset:30px 0 32px; display:flex; align-items:center; justify-content:center;
               writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:var(--font-display);
               font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
+            /* v3.2.18 -- title and subtitle side by side on the spine (column = across, in vertical writing). */
+            .bspine-t.bspine-two { flex-direction:column; gap:1px; }
+            .bspine-tt, .bspine-ts { display:block; max-height:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .bspine-ts { font-size:8px; letter-spacing:0.03em; opacity:0.78; }
             .bspine-ribbon { position:absolute; bottom:-4px; left:50%; width:8px; margin-left:-4px; height:28px; z-index:2; background:#a8322a;
               clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
             /* The open book. Below the app's own dialogs (z-index 100), so Remove can still ask first. */
