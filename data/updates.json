@@ -1,5 +1,106 @@
 [
   {
+    "version": "3.2.25",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3225-dark-fantasy-card-text",
+        "kind": "fix",
+        "public": false,
+        "summary": "Shorter Dark Fantasy description in the Art Style window.",
+        "detail": "The Dark Fantasy card no longer ends with 'and it takes its time of day from your scene' (Ian: it is implied). Card text only; the style itself is unchanged. Test: open the Art Style window and read the Dark fantasy card.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.24",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3224-style-wording-no-names",
+        "kind": "feature",
+        "public": true,
+        "summary": "Seven art styles were refreshed. Pastel has a new, softer chalk look, and Charcoal and Pen and ink now fade cleanly to a white edge.",
+        "detail": "Dark and gritty, Fantasy oil, Cel-shaded, Watercolor, Pastel, Charcoal and Pen and ink describe their look in their own words instead of naming artists or games (TD-997). Each was tested on the group scene and keeps its character; Pastel was reworked into a paler, powdery, chalkier style. The seven style card pictures were redrawn to match. Existing pictures do not change until regenerated. The old wording is kept so a book can be finished in its original look with a custom style. Test: open the Art Style window (seven new pictures) and regenerate one panel in Pastel.",
+        "td": [
+          "TD-997"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.23",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3223-picture-cards",
+        "kind": "feature",
+        "public": true,
+        "summary": "Character cards and your custom art style cards now show a big picture across the top instead of a small circle.",
+        "detail": "Characters show their whole figure in a tall picture at the top of the card (click to enlarge); custom style cards show a wide picture (the chosen Group preview, else the first reference). Edit and Delete sit on the picture. Test: open Characters and Custom Art Styles on a laptop and a phone; drag a picture onto a character card to replace its portrait.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.22",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3222-style-card-pictures",
+        "kind": "feature",
+        "public": true,
+        "summary": "Every included art style now shows a sample picture in the Art Style window, so you can see each look before you choose it.",
+        "detail": "The eleven included style cards carry a picture strip like the custom cards: the same group scene in every style (Everyday life and Anime in a modern cafe). Custom style cards now show the chosen description's Group preview when one was made, otherwise the first reference picture as before. Test: open the Art Style window; every included card has a picture; a custom style with a chosen winner and a Group preview shows that preview.",
+        "td": []
+      },
+      {
+        "id": "3222-anime-refresh",
+        "kind": "feature",
+        "public": true,
+        "summary": "Anime has a new look: big sparkling eyes on every character, soft painted shading and glowing, dreamy light.",
+        "detail": "The Anime art style was rewritten from Ian's examples and tested over a dozen runs. It is no longer treated as a comic style, so it paints rather than inks. Existing pictures do not change until regenerated. Test: regenerate a close panel and a group panel in Anime; every face, including older characters, should have large anime eyes.",
+        "td": []
+      },
+      {
+        "id": "3222-watercolor-soft-edges",
+        "kind": "fix",
+        "public": true,
+        "summary": "Watercolor pictures now fade out to a clean white edge, as the style always promised.",
+        "detail": "Watercolor joined the soft-edge styles and its description gained the edge sentence Ian tested. Existing Watercolor pictures stay full bleed until regenerated. Test: regenerate any panel in Watercolor; the paint should thin out to white before the edges.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.21",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3221-dark-fantasy-grounded",
+        "kind": "feature",
+        "public": true,
+        "summary": "Dark Fantasy now paints a grounded, realistic world with dramatic light at any time of day, instead of turning every scene into night.",
+        "detail": "The Dark Fantasy art style was rewritten (Ian's tested 'Grounded 2' wording). It now takes the time of day from the scene: a scene that does not name its hour should come out as day, not sunset or night, and a scene that says midday should look like midday. Indoors and underground it stays moody, with any fire, torch or lamp glowing warm. Test: regenerate an outdoor daytime panel and an indoor torchlit panel in Dark Fantasy; neither should look like night unless the scene is set at night. Existing pictures do not change until regenerated. The card in the Art Style window has a new description.",
+        "td": [
+          "TD-641",
+          "TD-642"
+        ]
+      },
+      {
+        "id": "3221-panel-style-label",
+        "kind": "fix",
+        "public": true,
+        "summary": "A panel's art style label now updates as soon as you regenerate it in a different style, and Revert brings back the old label with the old picture.",
+        "detail": "On the Storyboard, the line under each panel (style, type, shape) kept the style the picture had before a Regenerate until the page was reloaded, e.g. Self Illustrated after an uploaded picture was regenerated in a custom style. It now changes when the new picture lands. Revert after a Regenerate also puts back the previous picture's style label. Test: upload a picture onto a panel, Regenerate it in another style (label changes without a reload), then Revert (label goes back).",
+        "td": [
+          "TD-995"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.20",
     "staged_on": "2026-10-19",
     "entries": [

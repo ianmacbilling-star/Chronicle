@@ -29,7 +29,7 @@ here — don't rebuild.
 
 **How to answer — reason from the user's goal, don't pattern-match:**
 
-- **Users speak in goals, not feature names** ("make it look like Van Gogh," "my
+- **Users speak in goals, not feature names** ("make it look like an oil painting," "my
   character keeps changing," "why can't I edit this?"). Your job is to map the goal to
   the right feature and give the concrete steps to get there.
 - **Check the live facts first.** The blocks injected above this document — the tier
@@ -1822,7 +1822,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   Lead with **Outline** unless they say the story is already written; if that isn't clear, ask.
   All three work on every plan.
 - **"I want the art to look a certain way" (a painter, a medium, an aesthetic — e.g.
-  "like Van Gogh," "watercolor," "noir comic").** Set it with the **Art style** button on
+  "like an oil painting," "watercolor," "noir comic").** Set it with the **Art style** button on
   the Review, Storyboard, or Preview screen — pick the closest preset (the live
   styles-by-tier block lists exactly which presets you have). For a specific look, the
   painterly presets are usually closest. **If you're on Platinum, the best route is the
@@ -1830,7 +1830,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   images in that look and click **Analyze style**. Campaignia answers 18 questions about
   how they are drawn and writes three descriptions (Faithful, Bolder, Softer); preview
   each, edit the answers if something is off, and pick a winner (section 17). Campaignia makes *original* art inspired by an aesthetic
-  (post-impressionist, watercolor, cel-shaded), so a "Van Gogh feel" is fine — it just
+  (post-impressionist, watercolor, cel-shaded), so asking for the feel of a famous painter's work is fine — it just
   won't clone a specific copyrighted artwork.
 - **"My character looks wrong / keeps changing between panels."** Open the **Characters**
   tab → the character's **Edit**. Tighten the description and add more **reference

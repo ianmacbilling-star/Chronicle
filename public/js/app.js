@@ -5517,7 +5517,12 @@ function loadTierInfo(campaignId) {
 }
 
 // Apply a finished regenerated image to its panel and refresh the views.
-function applyRegenResult(momentId, imageUrl) {
+// v3.2.21 -- TD-995. THE PANEL'S LABEL FOLLOWS ITS PICTURE. Ian, 2026-10-20: "they should show the art
+// style of the picture... The art style on the moment didn't change when I regenerated." The server always
+// wrote the new style; this page kept the old one in memory until a reload. newStyle comes from the job
+// (moment_style); when it is not given -- a retouch from an older server, a direct image_url -- the label
+// is left as it is rather than guessed.
+function applyRegenResult(momentId, imageUrl, newStyle) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (moment) {
     // One-deep Revert: mirror the server's armed slot locally (the prior image is
@@ -5528,6 +5533,7 @@ function applyRegenResult(momentId, imageUrl) {
       moment.revert_img_h = moment.img_h || null;
     }
     moment.image = imageUrl; moment.archived = false;
+    if (newStyle !== undefined) moment.style = newStyle;   // v3.2.21 -- TD-995
   }
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
   renderStoryboard();
@@ -5548,7 +5554,7 @@ function pollImageJob(jobId, momentId) {
           if (Date.now() - started > MAX_MS) { showPanelError(momentId, 'Could not regenerate: ' + ((j && j.error) || 'timed out')); return; }
           setTimeout(tick, INTERVAL); return;
         }
-        if (j.status === 'done' && j.image_url) { applyRegenResult(momentId, j.image_url); return; }
+        if (j.status === 'done' && j.image_url) { applyRegenResult(momentId, j.image_url, j.moment_style); return; }   // v3.2.21 -- TD-995
         if (j.status === 'failed') {
           if (j.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(j.message || 'You are out of tokens.'), true);
           else showPanelError(momentId, 'Could not regenerate: ' + (j.error || 'generation failed'));
@@ -5792,6 +5798,31 @@ function cstyleCloseNow() {
   if (m) m.classList.add('hidden');
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ slotFiles[k] = null; slotFiles[k + '_clear'] = false; });
 }
+// v3.2.23 -- PICTURE CARDS FOR CHARACTERS AND CUSTOM STYLES (Ian, 2026-10-20: "make the images... bigger... They
+// both have the small circle"). The picture fills the top of the card edge to edge, as the Asset Library cards
+// do, and the buttons sit on it as pills. Characters: a 3:4 box showing the WHOLE figure (references are full
+// body on pure white, so a fill crop would cut off legs). Custom styles: 16:9, filled, the shape of the previews.
+// Injected from app.js rather than written into style.css: app.js is version-stamped on every deploy and
+// style.css is not, so a CSS-file change could sit behind the edge cache. Opt-in by class (char-card--pic), so
+// any other .char-card is untouched. The #ids beat the .char-grid rule without editing it.
+function charPicCss() {
+  if (document.getElementById('char-pic-css')) return;
+  var st = document.createElement('style');
+  st.id = 'char-pic-css';
+  st.textContent =
+    '#char-grid,#cstyle-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}' +
+    '@media (max-width:600px){#char-grid,#cstyle-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}}' +
+    '.char-card--pic{overflow:hidden;}' +
+    '.char-card--pic .char-card-header{display:block;position:relative;margin:-12px -12px 10px;}' +
+    '.char-card--pic .char-avatar{width:100%;height:auto;aspect-ratio:3/4;border-radius:0;border:0;border-bottom:1px solid rgba(201,168,76,0.18);}' +
+    '.char-card--wide .char-avatar{aspect-ratio:16/9;}' +
+    '.char-card--pic .char-avatar>span{font-size:44px !important;}' +
+    '.char-card--pic .char-actions{position:absolute;top:8px;right:8px;z-index:2;}' +
+    '.char-card--pic .char-btn{background:rgba(20,14,6,0.78);color:#f0e8d0;border-color:rgba(201,168,76,0.45);font-size:11px;padding:4px 9px;}' +
+    '.char-card--pic .char-btn:hover{background:rgba(201,168,76,0.92);color:#1a120c;}' +
+    '.char-card--pic .char-btn-delete:hover{background:rgba(139,26,26,0.92);color:#fff;border-color:rgba(240,149,149,0.6);}';
+  document.head.appendChild(st);
+}
 function renderCustomStyleCards() {
   var grid = document.getElementById('cstyle-grid');
   if (!grid) return;
@@ -5799,10 +5830,12 @@ function renderCustomStyleCards() {
   var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
   var html = list.map(function(s, i) {
     var bg = colors[i % colors.length];
-    var thumb = (Array.isArray(s.sample_urls) && s.sample_urls[0])
-      ? '<img src="' + s.sample_urls[0] + '" style="width:100%;height:100%;object-fit:cover;" alt="' + escapeHtml(s.name || '') + '" />'
+    // v3.2.23 -- the same picture as the picker card: the chosen description's Group preview, else the first reference.
+    var _cpic = s.group_url ? s.group_url : ((Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '');
+    var thumb = _cpic
+      ? '<img src="' + escapeHtml(_cpic) + '" style="width:100%;height:100%;object-fit:cover;" alt="' + escapeHtml(s.name || '') + '" />'
       : '<span style="font-size:22px;">&#127912;</span>';
-    return '<div class="char-card" style="cursor:pointer;" onclick="editCustomStyle(\'' + s.id + '\')">' +
+    return '<div class="char-card char-card--pic char-card--wide" style="cursor:pointer;" onclick="editCustomStyle(\'' + s.id + '\')">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + thumb + '</div>' +
         '<div class="char-actions">' +
@@ -5815,6 +5848,7 @@ function renderCustomStyleCards() {
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCustomStyles()"><div class="plus">+</div><span>New style</span></div>';
+  charPicCss();   // v3.2.23
   grid.innerHTML = html;
 }
 function collectCstyleFiles() {
@@ -6357,7 +6391,9 @@ function openStylePicker(kind) {
     var badge = (!_locked && s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
     if (_locked) badge = ' <span class="style-card-current" style="background:#6b7280;">' + (TLABEL[_min] || 'Upgrade') + ' only</span>';
     var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
+    var _pic = (STYLE_PICKER_KIND === 'art') ? styleCardThumbHtml(artStylePicUrl(s.id), s.name) : '';   // v3.2.22
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
+      _pic +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
       '<div class="style-card-desc">' + escapeHtml(String(s.desc).replace('{words}', _writtenLimit().toLocaleString())) + '</div>' +   // v3.1.51 -- TD-941
       eg +
@@ -6375,7 +6411,9 @@ function openStylePicker(kind) {
         var on2 = (cid === cur) ? ' is-selected' : '';
         var badge2 = (cid === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
         var _d = s.is_fade ? 'Soft, faded edges.' : (s.shared_by_sm ? "Shared by your campaign's SM." : 'Your custom art style.');
-        var _samp = (Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '';
+        // v3.2.22 -- the winner's group preview when there is one (it matches the included cards' scene), else the
+        // first reference picture as before (Ian, 2026-10-20).
+        var _samp = s.group_url ? s.group_url : ((Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '');
         var _thumb = _samp
           ? '<div class="style-card-thumb" style="width:100%;height:84px;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#000;"><img src="' + _samp + '" alt="' + escapeHtml(s.name || '') + '" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>'
           : '';
@@ -6502,16 +6540,44 @@ function selectStyleCard(kind, id) {
 var ART_STYLE_META = [
   { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
   { id:'Everyday life illustration', name:'Everyday life', desc:'The same rich, painterly illustration as High fantasy, set in the real world \u2014 ordinary places, clothes and objects, with no fantasy styling. The period comes from your story.' },
-  { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
+  { id:'Anime manga style', name:'Anime / manga', desc:'Glossy, glowing modern anime \u2014 big sparkling eyes, soft painted shading and dreamy, coloured light.' },   // v3.2.22
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
   { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
-  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' },
-  { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
+  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy colour and loose strokes that melt into a white edge.' },   // v3.2.24
+  { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
-  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Dense, near-monochrome oils lit by one warm source in deep gloom \u2014 etched detail, no linework. Suits taverns, caves and night scenes.' }
+  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Grounded, realistic oils with weight and drama \u2014 raking light, weathered detail and a brooding mood, with no linework. More realistic and heavier than High fantasy.' }   // v3.2.21 -- TD-642, grounded rewrite; v3.2.25 time-of-day clause dropped (Ian: implied)
 ];
+
+// v3.2.22 -- A PICTURE ON EVERY INCLUDED STYLE CARD, like the custom cards (Ian, 2026-10-20). One scene for all
+// eleven -- the custom-style preview's group scene (Everyday life and Anime in a modern cafe, since both take
+// their setting from the scene) -- drawn by Ian on staging and stored as fixed files in public/images/styles.
+// The ?v= changes whenever the pictures do, so the edge cache never serves an old one under the same name.
+var ART_STYLE_PIC_VER = '3224';   // v3.2.24 -- seven pictures redrawn with the name-free wording
+var ART_STYLE_PICS = {
+  'High fantasy illustration': 'high-fantasy-illustration.jpg',
+  'Everyday life illustration': 'everyday-life-illustration.jpg',
+  'Anime manga style': 'anime-manga-style.jpg',
+  'Dark gritty comic book': 'dark-gritty-comic-book.jpg',
+  'Classic pen and ink': 'classic-pen-and-ink.jpg',
+  'Fantasy oil painting': 'fantasy-oil-painting.jpg',
+  'Fantasy pastel': 'fantasy-pastel.jpg',
+  'Watercolor painterly': 'watercolor-painterly.jpg',
+  'Charcoal drawing': 'charcoal-drawing.jpg',
+  'Comic book cel-shaded': 'comic-book-cel-shaded.jpg',
+  'Dark Fantasy': 'dark-fantasy.jpg'
+};
+function artStylePicUrl(id) {
+  var f = Object.prototype.hasOwnProperty.call(ART_STYLE_PICS, id) ? ART_STYLE_PICS[id] : '';
+  return f ? ('/images/styles/' + f + '?v=' + ART_STYLE_PIC_VER) : '';
+}
+// The same strip the custom cards use, so the two kinds of card match. A picture that fails to load hides its box.
+function styleCardThumbHtml(src, alt) {
+  if (!src) return '';
+  return '<div class="style-card-thumb" style="width:100%;height:84px;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#000;"><img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt || '') + '" loading="lazy" onerror="this.parentNode.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>';
+}
 
 function artStyleName(v) {
   if (typeof v === 'string' && v.indexOf('custom:') === 0) { var _cs = customStyleById(v); return _cs ? (_cs.name || 'Custom style') : 'Custom style'; }
@@ -8899,7 +8965,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:' + (refImg ? 'contain' : 'cover') + ';object-position:' + (refImg ? 'center bottom' : 'center top') + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -8919,9 +8985,9 @@ function renderCharacters() {
       }
     }
 
-    return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
+    return '<div class="char-card char-card-drop char-card--pic" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
-        '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
+        '<div class="char-avatar" style="background:' + (refImg ? '#fff' : bg) + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
           (function() {
             // Phase 3 Deploy 3 — per-card edit visibility.
@@ -8954,6 +9020,7 @@ function renderCharacters() {
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
   html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
+  charPicCss();   // v3.2.23
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -18175,7 +18242,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:' + (refImg ? 'contain' : 'cover') + ';object-position:' + (refImg ? 'center bottom' : 'center top') + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -18195,9 +18262,9 @@ function renderCharacters() {
       }
     }
 
-    return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
+    return '<div class="char-card char-card-drop char-card--pic" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
-        '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
+        '<div class="char-avatar" style="background:' + (refImg ? '#fff' : bg) + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
           (function() {
             // Phase 3 Deploy 3 — per-card edit visibility.
@@ -18230,6 +18297,7 @@ function renderCharacters() {
   html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   // v3.1.23 -- TD-918. Ian: "Add a Import from Another Campaign tile after the Add Character tile."
   html += '<div class="add-char-card dm-only" onclick="openCharImport()"><div class="plus">&#8595;</div><span>Import from another campaign</span></div>';
+  charPicCss();   // v3.2.23
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
