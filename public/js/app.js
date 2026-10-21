@@ -6548,7 +6548,7 @@ var ART_STYLE_META = [
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
-  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Grounded, realistic oils with weight and drama \u2014 raking light, weathered detail and a brooding mood, with no linework. More realistic and heavier than High fantasy, and it takes its time of day from your scene.' }   // v3.2.21 -- TD-642, grounded rewrite
+  { id:'Dark Fantasy', name:'Dark fantasy', desc:'Grounded, realistic oils with weight and drama \u2014 raking light, weathered detail and a brooding mood, with no linework. More realistic and heavier than High fantasy.' }   // v3.2.21 -- TD-642, grounded rewrite; v3.2.25 time-of-day clause dropped (Ian: implied)
 ];
 
 // v3.2.22 -- A PICTURE ON EVERY INCLUDED STYLE CARD, like the custom cards (Ian, 2026-10-20). One scene for all

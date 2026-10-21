@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.25",
+    "staged_on": "2026-10-20",
+    "entries": [
+      {
+        "id": "3225-dark-fantasy-card-text",
+        "kind": "fix",
+        "public": false,
+        "summary": "Shorter Dark Fantasy description in the Art Style window.",
+        "detail": "The Dark Fantasy card no longer ends with 'and it takes its time of day from your scene' (Ian: it is implied). Card text only; the style itself is unchanged. Test: open the Art Style window and read the Dark fantasy card.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.24",
     "staged_on": "2026-10-20",
     "entries": [
