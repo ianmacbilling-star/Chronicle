@@ -14,6 +14,10 @@ const LAYOUT_MODEL = process.env.LAYOUT_MODEL || 'claude-sonnet-4-6';
 // image model can follow. Short, structured, high volume -- Haiku by default.
 // Raise it to Sonnet via RETOUCH_MODEL in Railway if the wording disappoints.
 const RETOUCH_MODEL = process.env.RETOUCH_MODEL || HELP_MODEL;
+// v3.2.27 -- TD-999 writing tools. WRITING_MODEL runs Feedback, Show me and one-box Regen; WRITING_FAST_MODEL is for
+// the lighter tools of stage 2 (Rewrite, Describe, Expand, Tighten, Word) if Haiku holds up in the side-by-side test.
+const WRITING_MODEL = process.env.WRITING_MODEL || TEXT_MODEL;
+const WRITING_FAST_MODEL = process.env.WRITING_FAST_MODEL || HELP_MODEL;
 
 // fal.ai image models. IMAGE_MODELS = base (text-to-image) endpoint per key;
 // IMAGE_EDIT_MODELS = the /edit (reference-image) endpoint for keys that have one.
@@ -25,4 +29,4 @@ const IMAGE_EDIT_MODELS = {
   nano2: 'fal-ai/nano-banana-2/edit'
 };
 
-module.exports = { TEXT_MODEL, HELP_MODEL, LAYOUT_MODEL, RETOUCH_MODEL, IMAGE_MODELS, IMAGE_EDIT_MODELS };
+module.exports = { TEXT_MODEL, HELP_MODEL, LAYOUT_MODEL, RETOUCH_MODEL, WRITING_MODEL, WRITING_FAST_MODEL, IMAGE_MODELS, IMAGE_EDIT_MODELS };

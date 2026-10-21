@@ -2955,3 +2955,41 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .sc-style-chip-stale { border-color:rgba(224,122,95,0.65); color:#e07a5f; }
 .sc-style-retouch { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .sc-style-retouch .form-input { flex:1 1 200px; font-size:12px; padding:5px 8px; }
+/* v3.2.27 -- TD-999 WRITING TOOLS. The pill row above each Narrative box (the .panel-pill look, a touch
+   smaller and always visible; no icons, no colour) and the Writing coach panel, which copies the help
+   panel's frame (white sheet on the right, gold title) so the two read as one family. */
+.wt-row{display:flex;gap:5px;align-items:center;padding:5px 10px;border-bottom:1px solid rgba(201,168,76,0.08);overflow-x:auto;white-space:nowrap;scrollbar-width:none;}
+.wt-row::-webkit-scrollbar{display:none;}
+.wt-pill{flex:0 0 auto;padding:2px 7px;font-size:10px;line-height:1.4;background:rgba(0,0,0,0.45);color:rgba(201,168,76,0.85);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s;}
+.wt-pill:hover{background:rgba(0,0,0,0.8);color:var(--gold);border-color:var(--gold);}
+.wt-pill.is-locked{opacity:0.55;}
+.wt-gold{font-size:8px;letter-spacing:0.06em;text-transform:uppercase;margin-left:4px;opacity:0.85;}
+.wc-panel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:92vw;z-index:97;background:#ffffff;color:#1f2430;display:none;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);}
+.wc-head{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e6e1d6;background:#faf8f3;}
+.wc-title{font-family:var(--font-display);font-size:17px;color:#7a5c12;}
+.wc-sub{font-size:12px;color:#6b7280;margin-top:2px;}
+.wc-close{background:none;border:none;font-size:24px;line-height:1;color:#6b7280;cursor:pointer;padding:0 4px;}
+.wc-close:hover{color:#1f2430;}
+.wc-uses{font-size:11px;color:#6b7280;padding:6px 16px;border-bottom:1px solid #efebe2;min-height:14px;}
+.wc-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 24px;font-size:13px;line-height:1.55;}
+.wc-text{margin:0 0 12px;}
+.wc-note{font-size:11px;color:#6b7280;margin:8px 0;}
+.wc-wait{color:#7a5c12;font-style:italic;}
+.wc-err{color:#a23b2a;}
+.wc-points{margin:0;padding-left:20px;}
+.wc-point{margin:0 0 16px;}
+.wc-quote{font-family:Georgia,serif;font-style:italic;color:#5b5348;border-left:2px solid #e2d6b5;padding-left:8px;margin-bottom:4px;}
+.wc-issue{font-weight:600;margin-bottom:2px;}
+.wc-why{color:#4b5563;margin-bottom:6px;}
+.wc-show{margin-top:6px;}
+.wc-ba,.wc-opt{border:1px solid #e6e1d6;border-radius:8px;padding:10px;background:#fdfcf9;}
+.wc-ba-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#7a5c12;margin-top:4px;}
+.wc-ba-text,.wc-opt-text{font-family:Georgia,serif;white-space:pre-wrap;margin:2px 0 6px;}
+.wc-ba-text{color:#6b7280;}
+.wc-ba-after{color:#1f2430;}
+.wc-acts{display:flex;gap:6px;margin-top:6px;}
+.wc-btn{padding:3px 10px;font-size:12px;background:#faf8f3;color:#7a5c12;border:1px solid #d9c690;border-radius:6px;cursor:pointer;}
+.wc-btn:hover{background:#f3ecd8;border-color:#c9a84c;}
+.wc-btn-main{background:#7a5c12;color:#fff;border-color:#7a5c12;}
+.wc-btn-main:hover{background:#5f470e;border-color:#5f470e;}
+@media (max-width:600px){.wc-panel{width:100vw;max-width:100vw;}}

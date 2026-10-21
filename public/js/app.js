@@ -9813,98 +9813,19 @@ function saveInlineNarrative(silent) {
 }
 
 function regenNarrativeSection(type, panelIndex) {
-  var key = getApiKey() || 'platform';  // Platform key used server-side
-
-  // Save current state first
-  saveInlineNarrative();
-
-  // The textarea we write the result into, plus the panel container the
-  // spinner overlay anchors to (same gold spinner the storyboard image
-  // panels use, via showBusyOverlay).
-  var boxId = type === 'opening' ? 'narrative-intro-box'
+  // v3.2.27 -- TD-998. ONE BOX, AND NOTHING SAVED UNTIL USE THIS.
+  // This used to start the whole Generate Narrative job, which rewrote and SAVED every
+  // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
+  // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
+  // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
     : 'narrative-between-box-' + panelIndex;
-  var panelId = type === 'opening' ? 'narrative-opening'
-    : type === 'closing' ? 'narrative-closing'
-    : type === 'moment' ? 'narrative-moment-' + panelIndex
-    : 'narrative-between-' + panelIndex;
-
-  var box = document.getElementById(boxId);
-  // Non-destructive: leave the existing prose visible-but-dimmed under the
-  // overlay and lock editing while the regenerate is in flight. The original
-  // text stays put on failure (we never blank it).
-  if (box) box.disabled = true;
-  showBusyOverlay(panelId, 'Regenerating');
-
-  // v3.0.483 -- THE GENERATE ENDPOINT IS ASYNC AND THIS FUNCTION DID NOT KNOW.
-  // It inserts a narrative_jobs row, responds { job_id } in milliseconds, and
-  // writes the prose in a background job that must be collected from
-  // GET /api/narrative/job/:id. This read data.intro / data.sections / data.outro
-  // straight off the job_id response -- all undefined -- so every Regen button
-  // on the storyboard spun briefly, reported no error, BLANKED its box and wiped
-  // state.narrativeData, while the background job quietly saved the real prose.
-  // The full-narrative caller carries a comment describing this exact fault and
-  // its fix; this caller was missed, in both of its copies. Same fix, same shape.
-  var _regenEnd = function(ok, msg) {
-    hideBusyOverlay(panelId);
-    if (box) box.disabled = false;
-    if (!ok && msg) showError(msg);
-  };
-
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({key: key})
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
-    if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
-    var jobId = data.job_id;
-    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
-    // closure, which is part of why cancel could never do anything but abort a finished fetch.
-    state.narrJobId = jobId;
-    var tries = 0;
-    var poll = function() {
-      // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
-      if (tries++ > 100) { _regenEnd(false, 'The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
-      fetch('/api/narrative/job/' + jobId)
-        .then(function(r) { return r.json(); })
-        .then(function(j) {
-          if (!j) { setTimeout(poll, 3000); return; }
-          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (j.status === 'error') { _regenEnd(false, 'Could not generate narrative: ' + (j.error || 'unknown error')); return; }
-
-          state.narrativeData = {
-            intro: j.intro || '',
-            sections: j.sections || [],
-            outro: j.outro || ''
-          };
-
-          // Update just the relevant box. The job regenerated the WHOLE
-          // narrative and saved it; only the requested section is painted
-          // here, deliberately, so a regenerate cannot stomp an unsaved edit
-          // sitting in a neighbouring box.
-          if (type === 'opening' && box) box.value = j.intro || '';
-          else if (type === 'closing' && box) box.value = j.outro || '';
-          else if (type === 'moment' && box) {
-            var msec = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-            box.value = msec ? (msec.before || '') : '';
-          }
-          else if (type === 'between' && box) {
-            var section = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-            box.value = section ? (section.after || '') : '';
-          }
-          _regenEnd(true);
-        })
-        .catch(function() { setTimeout(poll, 3000); });
-    };
-    poll();
-  })
-  .catch(function(e) {
-    _regenEnd(false, 'Error: ' + e.message);
-  });
+  var box = type === 'opening' ? 'opening'
+    : type === 'closing' ? 'closing'
+    : (type === 'moment' ? 'moment:' : 'between:') + panelIndex;
+  wtOpen('regen', box, ta);
 }
 
 // Re-fetch the current session from the server and re-render the storyboard
@@ -17358,9 +17279,8 @@ function renderStoryboard() {
   }
 
   function buildNarrative(id, label, textareaId, placeholder, value, regenCall, autosave) {
-    var regenBtn = canEditNarr
-      ? '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>'
-      : '';
+    // v3.2.27 -- TD-999. Regen moved out of this header into the writing-tools row above the box (wtPillsHtml).
+    var regenBtn = '';
     // Option A — the gap's "prompt" is its Direction. Mirror the image panels'
     // prompt block (same .moment-prompt-* classes): show the Direction text with
     // an "Edit prompt" button that opens the Direction modal. Always reflects the
@@ -17391,6 +17311,7 @@ function renderStoryboard() {
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
         regenBtn +
       '</div>' +
+      (canEditNarr ? wtPillsHtml(gapKey, textareaId, label, regenCall) : '') +   // v3.2.27 -- TD-999
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
@@ -18625,101 +18546,217 @@ function saveInlineNarrative(silent) {
   });
 }
 
+// =================================================================================================
+// v3.2.27 -- TD-999 stage 1 (WRITING TOOLS) and TD-998 (ONE-BOX REGEN). Spec: claude/WRITING_TOOLS_SPEC.md.
+//
+// A row of small text pills sits above every Narrative box the person can edit: Feedback, Regen, and
+// an Undo that appears after Use this. They open the Writing coach panel on the right. NOTHING IS
+// SAVED UNTIL USE THIS: the panel only shows suggestions; Use this puts text in the box and the
+// normal autosave (scheduleNarrativeSave) saves it, exactly as if the person had typed it.
+//
+// Regen used to run the whole Generate Narrative job and save every box and the Summary (TD-998). It
+// now writes ONE box, on the server's /api/narrative/writing/regen, and shows the result here first.
+// =================================================================================================
+var WT_STATE = { box: null, ta: null, label: '', tool: '', busy: false, seq: 0, points: [], opts: [], undo: {} };
+
+function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank >= 3); }
+
+function wtPillsHtml(box, ta, label, regenCall) {
+  var lock = !wtGoldOk();
+  return '<div class="wt-row" id="wt-row-' + ta + '" data-box="' + box + '" data-label="' + escapeHtml(label || '') + '">' +
+    '<button type="button" class="wt-pill' + (lock ? ' is-locked' : '') + '" onclick="wtOpen(\'feedback\',\'' + box + '\',\'' + ta + '\')" title="' +
+      (lock ? 'Feedback comes with Gold and Platinum' : 'Tips to make this text stronger') + '">Feedback' + (lock ? '<span class="wt-gold">Gold</span>' : '') + '</button>' +
+    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">Regen</button>' : '') +
+    '<button type="button" class="wt-pill wt-undo" id="wt-undo-' + ta + '" style="display:none;" onclick="wtUndo(\'' + ta + '\')" title="Put back the text this box had before Use this">Undo</button>' +
+  '</div>';
+}
+
+function wtPanelEnsure() {
+  var p = document.getElementById('wc-panel');
+  if (p) return p;
+  p = document.createElement('div');
+  p.id = 'wc-panel';
+  p.className = 'wc-panel';
+  p.setAttribute('role', 'dialog');
+  p.setAttribute('aria-label', 'Writing coach');
+  p.innerHTML =
+    '<div class="wc-head"><div><div class="wc-title">Writing coach</div><div class="wc-sub" id="wc-sub"></div></div>' +
+    '<button type="button" class="wc-close" onclick="wtClose()" aria-label="Close">&times;</button></div>' +
+    '<div class="wc-uses" id="wc-uses"></div>' +
+    '<div class="wc-body" id="wc-body"></div>';
+  document.body.appendChild(p);
+  if (!window._wtEscWired) {
+    window._wtEscWired = true;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('wc-panel') && document.getElementById('wc-panel').style.display !== 'none') wtClose(); });
+  }
+  return p;
+}
+function wtClose() { var p = document.getElementById('wc-panel'); if (p) p.style.display = 'none'; WT_STATE.seq++; WT_STATE.busy = false; }
+function wtBody(html) { var b = document.getElementById('wc-body'); if (b) b.innerHTML = html; }
+function wtUsesLine(d) {
+  var el = document.getElementById('wc-uses');
+  if (!el || !d || d.uses_left == null) return;
+  var per = d.uses_per_token || 4;
+  el.textContent = (d.uses_left > 0
+    ? (d.uses_left + ' use' + (d.uses_left === 1 ? '' : 's') + ' left · 1 token buys ' + per + ' more')
+    : ('No uses left · your next use spends 1 token for ' + per)) +
+    (d.balance != null ? (' · ' + d.balance + ' token' + (d.balance === 1 ? '' : 's')) : '');
+}
+function wtLockedHtml() {
+  return '<p class="wc-text">Feedback reads this box and gives you 3 to 5 tips to make it stronger, each with a <b>Show me</b> that rewrites just that part. ' +
+    'It comes with <b>Gold</b> and <b>Platinum</b>, and with the Free Trial.</p>' +
+    '<button type="button" class="btn btn-primary btn-sm" onclick="wtClose(); goToPlans();">See plans</button>' +
+    '<p class="wc-note">Regen works on every plan.</p>';
+}
+
+function wtOpen(tool, box, ta) {
+  var el = document.getElementById(ta);
+  if (!el) return;
+  var row = document.getElementById('wt-row-' + ta);
+  WT_STATE.box = box; WT_STATE.ta = ta; WT_STATE.tool = tool;
+  WT_STATE.label = row ? (row.getAttribute('data-label') || '') : '';
+  WT_STATE.points = []; WT_STATE.opts = []; WT_STATE.seq++; WT_STATE.busy = false;
+  var p = wtPanelEnsure();
+  p.style.display = 'flex';
+  var sub = document.getElementById('wc-sub');
+  if (sub) sub.textContent = (tool === 'regen' ? 'Regen' : 'Feedback') + (WT_STATE.label ? (' · ' + WT_STATE.label) : '');
+  var u = document.getElementById('wc-uses'); if (u) u.textContent = '';
+  if (state.currentCampaign) {
+    fetch('/api/narrative/writing/status/' + state.currentCampaign.id).then(function (r) { return r.json(); }).then(wtUsesLine).catch(function () {});
+  }
+  if (tool !== 'regen' && !wtGoldOk()) { wtBody(wtLockedHtml()); return; }
+  if (tool === 'feedback' && !String(el.value || '').trim()) { wtBody('<p class="wc-text">Write something in this box first, then ask for feedback on it.</p>'); return; }
+  wtRun(tool, { text: el.value });
+}
+
+function wtRun(tool, extra) {
+  if (WT_STATE.busy) return;
+  if (!state.currentCampaign || !state.currentSession) return;
+  var mySeq = ++WT_STATE.seq;
+  WT_STATE.busy = true;
+  var showSlot = (tool === 'showme') ? document.getElementById('wc-show-' + extra.index) : null;
+  var wait = '<p class="wc-wait">' + (tool === 'regen' ? 'Writing a fresh version of this box…' : tool === 'showme' ? 'Rewriting that part…' : 'Reading your text…') + '</p>';
+  if (showSlot) showSlot.innerHTML = wait; else wtBody(wait);
+  var body = { box: WT_STATE.box, text: extra.text || '' };
+  if (tool === 'showme') { body.quote = extra.quote || ''; body.issue = extra.issue || ''; }
+  fetch('/api/narrative/writing/' + tool + '/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+  .then(function (r) { return r.json().catch(function () { return { error: 'The writing service did not answer (' + r.status + '). Nothing was charged.' }; }); })
+  .then(function (d) {
+    if (mySeq !== WT_STATE.seq) return;   // closed, or another box opened meanwhile
+    WT_STATE.busy = false;
+    wtUsesLine(d);
+    var put = function (h) { if (showSlot) showSlot.innerHTML = h; else wtBody(h); };
+    if (!d || d.error) {
+      if (d && d.error === 'INSUFFICIENT_TOKENS') { put(insufficientTokensHtml(d.message)); return; }
+      if (d && d.error === 'WRITING_LOCKED') { put(wtLockedHtml()); return; }
+      put('<p class="wc-err">' + escapeHtml((d && d.error) || 'Something went wrong. Nothing was charged.') + '</p>');
+      return;
+    }
+    if (tool === 'feedback') { wtRenderPoints(d.points || []); return; }
+    var k = WT_STATE.opts.length;
+    if (tool === 'showme') {
+      WT_STATE.opts.push({ before: d.before || '', after: d.after || '' });
+      put('<div class="wc-ba"><div class="wc-ba-label">Before</div><div class="wc-ba-text">' + escapeHtml(d.before || '') + '</div>' +
+        '<div class="wc-ba-label">After</div><div class="wc-ba-text wc-ba-after">' + escapeHtml(d.after || '') + '</div>' +
+        '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k + ')">Use this</button>' +
+        '<button type="button" class="wc-btn" onclick="wtCopy(' + k + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k + '"></div></div>');
+      return;
+    }
+    // regen
+    var t = (d.options && d.options[0]) || '';
+    WT_STATE.opts.push({ before: null, after: t });
+    put('<div class="wc-opt"><div class="wc-opt-text">' + escapeHtml(t) + '</div>' +
+      '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k + ')">Use this</button>' +
+      '<button type="button" class="wc-btn" onclick="wtCopy(' + k + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k + '"></div></div>' +
+      '<p class="wc-note">Nothing changes until you press Use this. Your box is untouched.</p>' +
+      '<button type="button" class="wc-btn" onclick="wtAgain()">Try again (1 use)</button>');
+  })
+  .catch(function (e) {
+    if (mySeq !== WT_STATE.seq) return;
+    WT_STATE.busy = false;
+    var h = '<p class="wc-err">Could not reach the writing service. Nothing was charged.</p>';
+    if (showSlot) showSlot.innerHTML = h; else wtBody(h);
+  });
+}
+
+function wtRenderPoints(points) {
+  WT_STATE.points = points;
+  if (!points.length) { wtBody('<p class="wc-text">No suggestions came back. Try again in a moment.</p>'); return; }
+  wtBody('<ol class="wc-points">' + points.map(function (pt, i) {
+    return '<li class="wc-point">' +
+      (pt.quote ? ('<div class="wc-quote">“' + escapeHtml(pt.quote) + '”</div>') : '') +
+      '<div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' +
+      (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') +
+      '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part (1 use)">Show me</button>' +
+      '<div class="wc-show" id="wc-show-' + i + '"></div>' +
+    '</li>';
+  }).join('') + '</ol><p class="wc-note">Show me rewrites just that part, and costs one use.</p>');
+}
+
+function wtShowMe(i) {
+  var pt = WT_STATE.points[i]; var el = document.getElementById(WT_STATE.ta);
+  if (!pt || !el) return;
+  wtRun('showme', { index: i, text: el.value, quote: pt.quote, issue: pt.issue });
+}
+function wtAgain() { var el = document.getElementById(WT_STATE.ta); if (el) wtRun('regen', { text: el.value }); }
+
+function wtUse(k) {
+  var o = WT_STATE.opts[k]; var el = document.getElementById(WT_STATE.ta);
+  var msg = document.getElementById('wc-msg-' + k);
+  if (!o || !el) { if (msg) msg.textContent = 'That box is no longer on the page.'; return; }
+  var old = el.value;
+  var next;
+  if (o.before == null || o.before === old) next = o.after;
+  else {
+    var at = old.indexOf(o.before);
+    if (at < 0) { if (msg) msg.textContent = 'That part of the box has changed since, so it was not replaced. Use Copy instead.'; return; }
+    next = old.slice(0, at) + o.after + old.slice(at + o.before.length);
+  }
+  el.value = next;
+  wtSetUndo(WT_STATE.ta, old);
+  if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+  if (msg) msg.textContent = 'Done. Undo is beside the box until you type in it.';
+}
+function wtCopy(k) {
+  var o = WT_STATE.opts[k]; var msg = document.getElementById('wc-msg-' + k);
+  if (!o) return;
+  try { navigator.clipboard.writeText(o.after).then(function () { if (msg) msg.textContent = 'Copied.'; }, function () { if (msg) msg.textContent = 'Could not copy.'; }); }
+  catch (e) { if (msg) msg.textContent = 'Could not copy.'; }
+}
+function wtSetUndo(ta, old) {
+  WT_STATE.undo[ta] = old;
+  var b = document.getElementById('wt-undo-' + ta); if (b) b.style.display = '';
+  var el = document.getElementById(ta);
+  if (el && !el._wtUndoWired) {
+    el._wtUndoWired = true;
+    el.addEventListener('input', function () { delete WT_STATE.undo[ta]; var u = document.getElementById('wt-undo-' + ta); if (u) u.style.display = 'none'; });
+  }
+}
+function wtUndo(ta) {
+  var el = document.getElementById(ta);
+  if (!el || !(ta in WT_STATE.undo)) return;
+  el.value = WT_STATE.undo[ta];
+  delete WT_STATE.undo[ta];
+  var b = document.getElementById('wt-undo-' + ta); if (b) b.style.display = 'none';
+  if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+}
+
 function regenNarrativeSection(type, panelIndex) {
-  var key = getApiKey() || 'platform';  // Platform key used server-side
-
-  // Save current state first
-  saveInlineNarrative();
-
-  // The textarea we write the result into, plus the panel container the
-  // spinner overlay anchors to (same gold spinner the storyboard image
-  // panels use, via showBusyOverlay).
-  var boxId = type === 'opening' ? 'narrative-intro-box'
+  // v3.2.27 -- TD-998. ONE BOX, AND NOTHING SAVED UNTIL USE THIS.
+  // This used to start the whole Generate Narrative job, which rewrote and SAVED every
+  // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
+  // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
+  // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
     : 'narrative-between-box-' + panelIndex;
-  var panelId = type === 'opening' ? 'narrative-opening'
-    : type === 'closing' ? 'narrative-closing'
-    : type === 'moment' ? 'narrative-moment-' + panelIndex
-    : 'narrative-between-' + panelIndex;
-
-  var box = document.getElementById(boxId);
-  // Non-destructive: leave the existing prose visible-but-dimmed under the
-  // overlay and lock editing while the regenerate is in flight. The original
-  // text stays put on failure (we never blank it).
-  if (box) box.disabled = true;
-  showBusyOverlay(panelId, 'Regenerating');
-
-  // v3.0.483 -- THE GENERATE ENDPOINT IS ASYNC AND THIS FUNCTION DID NOT KNOW.
-  // It inserts a narrative_jobs row, responds { job_id } in milliseconds, and
-  // writes the prose in a background job that must be collected from
-  // GET /api/narrative/job/:id. This read data.intro / data.sections / data.outro
-  // straight off the job_id response -- all undefined -- so every Regen button
-  // on the storyboard spun briefly, reported no error, BLANKED its box and wiped
-  // state.narrativeData, while the background job quietly saved the real prose.
-  // The full-narrative caller carries a comment describing this exact fault and
-  // its fix; this caller was missed, in both of its copies. Same fix, same shape.
-  var _regenEnd = function(ok, msg) {
-    hideBusyOverlay(panelId);
-    // v3.0.970 -- a per-gap Regen re-runs the whole narrative job, so the Summary moved too.
-    try { if (typeof sbSummaryLoad === "function") sbSummaryLoad(); } catch (e) {}
-    if (box) box.disabled = false;
-    if (!ok && msg) showError(msg);
-  };
-
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({key: key})
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
-    if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
-    var jobId = data.job_id;
-    // v3.0.715 -- TD-517. Parked on state so cancelNarr can reach it. It lived only inside this
-    // closure, which is part of why cancel could never do anything but abort a finished fetch.
-    state.narrJobId = jobId;
-    var tries = 0;
-    var poll = function() {
-      // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
-      if (tries++ > 100) { _regenEnd(false, 'The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
-      fetch('/api/narrative/job/' + jobId)
-        .then(function(r) { return r.json(); })
-        .then(function(j) {
-          if (!j) { setTimeout(poll, 3000); return; }
-          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (j.status === 'error') { _regenEnd(false, 'Could not generate narrative: ' + (j.error || 'unknown error')); return; }
-
-          state.narrativeData = {
-            intro: j.intro || '',
-            sections: j.sections || [],
-            outro: j.outro || ''
-          };
-
-          // Update just the relevant box. The job regenerated the WHOLE
-          // narrative and saved it; only the requested section is painted
-          // here, deliberately, so a regenerate cannot stomp an unsaved edit
-          // sitting in a neighbouring box.
-          if (type === 'opening' && box) box.value = j.intro || '';
-          else if (type === 'closing' && box) box.value = j.outro || '';
-          else if (type === 'moment' && box) {
-            var msec = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-            box.value = msec ? (msec.before || '') : '';
-          }
-          else if (type === 'between' && box) {
-            var section = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-            box.value = section ? (section.after || '') : '';
-          }
-          _regenEnd(true);
-        })
-        .catch(function() { setTimeout(poll, 3000); });
-    };
-    poll();
-  })
-  .catch(function(e) {
-    _regenEnd(false, 'Error: ' + e.message);
-  });
+  var box = type === 'opening' ? 'opening'
+    : type === 'closing' ? 'closing'
+    : (type === 'moment' ? 'moment:' : 'between:') + panelIndex;
+  wtOpen('regen', box, ta);
 }
 
 async function generateAllImages(fromChain) {

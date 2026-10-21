@@ -458,9 +458,9 @@
           "placement": "auto"
         },
         {
-          "selector": ".narrative-regen-btn",
+          "selector": ".wt-regen",
           "title": "Narrative",
-          "text": "Regenerate the narrative if you do not like it, or simply retype it yourself.",
+          "text": "Regen writes a fresh version of just this box, and you see it before anything changes. Or simply retype it yourself. Feedback gives you tips to make it stronger.",
           "placement": "auto"
         }
       ]

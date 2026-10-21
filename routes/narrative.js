@@ -6,7 +6,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
-const { TEXT_MODEL } = require('../config/models');
+const { TEXT_MODEL, WRITING_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -1590,5 +1590,404 @@ router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, 
 
   res.json({ success: true, narrator: ch ? String(ch.id) : (store === 'anon' ? 'anon' : ''), narrator_name: ch ? (ch.name || '') : '' });
 });
+
+// =====================================================================================================
+// v3.2.27 -- TD-999 stage 1 (WRITING TOOLS) and TD-998 (ONE-BOX REGEN). Spec: claude/WRITING_TOOLS_SPEC.md.
+// =====================================================================================================
+//
+// Ian, 2026-10-21: "give would-be writers some tools to help make them better." Small text pills above
+// every Narrative box on the Storyboard open the Writing coach panel. Stage 1 has two tools:
+//
+//   feedback  3-5 specific things that would make THIS box stronger, each with a why. (Gold and up.)
+//   showme    one feedback point, rewritten: just that passage, before and after.   (Gold and up.)
+//   regen     a fresh version of THIS box only.                                     (every plan)
+//
+// TD-998, WHAT REGEN USED TO DO: one box's Regen ran the WHOLE Generate Narrative job -- it rewrote and
+// SAVED the intro, every panel, the closing and the Summary for Next Session, charged a full narrative,
+// and painted only the clicked box. The rest sat on screen with their old text until the next keystroke
+// autosaved them back; a reload without typing showed prose nobody asked for. Now Regen writes one box,
+// SAVES NOTHING, and the new text only lands when the person presses Use this (then the normal autosave).
+//
+// REGEN STAYS ON EVERY PLAN. It was on every plan before this release; taking it away from Copper and
+// Silver to make it a Gold tool would be a regression nobody asked for. Feedback and Show me are Gold
+// and up. The Free Trial counts as Gold here because accessRank gives it 4 (Ian, 2026-10-21: "Free
+// Trial gets to use it"). A member follows the Story Master's plan through getEffectiveTier, and spends
+// their OWN tokens (Ian: "Members can inherit the story Masters rules. Still costs tokens.").
+//
+// ONE TOKEN BUYS FOUR USES (Ian, 2026-10-21). users.writing_uses_left counts them. A use is taken ONLY
+// AFTER the model has answered and the answer has been read -- a failed call costs nothing. The token
+// is checked BEFORE the call so an empty balance refuses without spending anything on the API.
+//
+// THE VOICE IS RESOLVED THE SAME WAY Generate Narrative resolves it (directorNotes, the version's own
+// style with the genre default, verbosity, In first person). That code is not shared with the generate
+// route on purpose: refactoring the live narrative job to serve a new tool is the wrong blast radius.
+// The guard pins the pieces both must agree on, so a change to one shows up as a failed build.
+// =====================================================================================================
+const WRITING_TOOLS = { feedback: { gold: true }, showme: { gold: true }, regen: { gold: false } };
+const WRITING_USES_PER_TOKEN = 4;
+const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4})$/;
+const WRITING_TEXT_MAX = 12000;            // characters of box text the tools will read
+const WRITING_TRANSCRIPT_WINDOW = 40000;   // characters of transcript Regen reads, centred on its panel
+const WRITING_TIMEOUT_MS = 90 * 1000;
+
+function wtStr(v, max) { return String(v == null ? '' : v).slice(0, max); }
+
+// The parts of the chain the page shows, in reading order -- the same order renderStoryboard draws:
+// Opening, then each panel's moment and the bridge after it (no bridge after the last panel), Closing.
+// A title picture (kind 'establishing') shows the Opening in place of its own moment text.
+function wtChain(moments) {
+  const out = ['opening'];
+  moments.forEach(function (m, i) {
+    if (!(m && m.kind === 'establishing')) out.push('moment:' + i);
+    if (i < moments.length - 1) out.push('between:' + i);
+  });
+  out.push('closing');
+  return out;
+}
+function wtBoxText(box, intro, sections, outro) {
+  if (box === 'opening') return intro || '';
+  if (box === 'closing') return outro || '';
+  const i = parseInt(box.split(':')[1], 10);
+  const s = (sections || []).find(function (x) { return x && x.panel_index === i; }) || {};
+  return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
+}
+function wtBoxName(box, moments) {
+  if (box === 'opening') return 'the Opening (before the first picture)';
+  if (box === 'closing') return 'the Closing (after the last picture)';
+  const i = parseInt(box.split(':')[1], 10);
+  const m = moments[i] || {};
+  if (box.indexOf('moment:') === 0) return 'the text for PANEL ' + (i + 1) + ' ("' + (m.title || 'untitled') + '"), which tells what that picture shows';
+  return 'the bridge between PANEL ' + (i + 1) + ' and PANEL ' + (i + 2) + ', which carries the story from one picture to the next';
+}
+
+// Everything a tool needs to know about this version, read from the database (never from the page).
+async function writingContext(db, req, session, targetForkId) {
+  const fk = await db.prepare('SELECT role, fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity, narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(targetForkId);
+  let directorNotes = session.session_notes || '';
+  let gapDirections = {}, gapOutlines = {}, sections = [];
+  if (fk) {
+    if (fk.role !== 'dm') directorNotes = fk.fork_notes || '';   // TD-508: the version owns its instructions
+    try { gapDirections = JSON.parse(fk.narrative_directions || '{}') || {}; } catch (e) { gapDirections = {}; }
+    try { gapOutlines = JSON.parse(fk.narrative_outlines || '{}') || {}; } catch (e) { gapOutlines = {}; }
+    try { sections = JSON.parse(fk.narrative_sections || '[]') || []; } catch (e) { sections = []; }
+  }
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+  let gdVoice = null;
+  if (!(fk && fk.narrative_style)) {
+    try {
+      const gd = genresvc.genreDefaults(campaign);
+      if (gd && gd.narrative && gd.narrative.length) {
+        const effR = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+        for (let i = 0; i < gd.narrative.length; i++) {
+          const cid = gd.narrative[i];
+          if (NARRATIVE_STYLES[cid] && narrativeStyleAllowed(effR, cid)) { gdVoice = cid; break; }
+        }
+      }
+    } catch (e) { gdVoice = null; }
+  }
+  const narrStyleId = (fk && fk.narrative_style) ? fk.narrative_style : (gdVoice || 'classic');
+  const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
+  const vraw = (fk && typeof fk.narrative_verbosity === 'string') ? fk.narrative_verbosity.toLowerCase() : 'med';
+  const verbosity = (vraw === 'low' || vraw === 'med') ? vraw : 'high';
+  const narrator = await forkNarrator(db, targetForkId);
+  const fpAnon = (!narrator && narrStyleId !== 'calm') ? await forkFirstPersonAnon(db, targetForkId) : false;
+  if (directorNotes && (narrator || fpAnon)) {
+    directorNotes = directorNotes + '\n(POINT OF VIEW EXCEPTION, set for this version: the story is told IN THE FIRST PERSON' +
+      (narrator ? (', by ' + narratorNameParts(narrator.name).canon) : ', by a narrator who is not named') +
+      '. Where the instructions above ask for the third person, an invisible narrator, or never using “I”, ignore that part only. Follow everything else they say.)';
+  }
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
+  const charList = characters.map(function (c) {
+    const toks = String(c.name || '').split('/').map(function (t) { return t.trim(); }).filter(function (t) { return t.length; });
+    const canon = toks.length ? toks[0] : String(c.name || '').trim();
+    return canon + (toks.length > 1 ? ' (also known as: ' + toks.slice(1).join(', ') + ')' : '') + ' — ' + (c.cls || '') + ': ' + String(c.description || '').slice(0, 300);
+  }).join('\n');
+  const moments = await db.prepare('SELECT id, title, description, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+  return {
+    campaign, charList, directorNotes, gapDirections, gapOutlines, narrStyleId, styleBundle, verbosity, narrator, fpAnon, moments,
+    intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : ''
+  };
+}
+
+// The shared background block: who and what the story is, so suggestions stay in character, genre and voice.
+function wtBackground(ctx, session) {
+  const genre = genresvc.genreSteering(ctx.campaign && ctx.campaign.genres, 'prose');
+  const campPrompt = genresvc.campaignPrompt(ctx.campaign && ctx.campaign.campaign_prompt);
+  return 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n' +
+    'Session: ' + (session.name || '') + '\n\n' +
+    (ctx.charList ? ('Characters:\n' + ctx.charList + '\n\n') : '') +
+    (genre ? (genre + '\n\n') : '') +
+    'NARRATIVE VOICE chosen for this version:\n' + ctx.styleBundle.voice + '\n\n' +
+    (ctx.narrator ? narratorProseBlock(ctx.narrator) : (ctx.fpAnon ? narratorAnonBlock() : '')) +
+    (campPrompt ? ('GENERAL CAMPAIGN PROMPT from the author:\n' + campPrompt + '\n\n') : '') +
+    (ctx.directorNotes ? ('STORY INSTRUCTIONS from the author (they apply to the prose):\n' + ctx.directorNotes + '\n\n') : '');
+}
+
+function wtNeighbours(ctx, box) {
+  const chain = wtChain(ctx.moments);
+  const at = chain.indexOf(box);
+  const prev = at > 0 ? chain[at - 1] : null;
+  const next = (at >= 0 && at < chain.length - 1) ? chain[at + 1] : null;
+  const pt = prev ? wtBoxText(prev, ctx.intro, ctx.sections, ctx.outro) : '';
+  const nt = next ? wtBoxText(next, ctx.intro, ctx.sections, ctx.outro) : '';
+  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (for flow only, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
+    (nt ? ('THE TEXT JUST AFTER THIS BOX (for flow only, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
+}
+
+function wtPanels(ctx, box) {
+  const n = ctx.moments.length;
+  const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
+  if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
+  if (box === 'closing') return n ? ('The last picture: ' + show(n - 1) + '\n\n') : '';
+  const i = parseInt(box.split(':')[1], 10);
+  if (box.indexOf('moment:') === 0) return 'THIS box\'s picture: ' + show(i) + '\n\n';
+  return 'The picture before: ' + show(i) + '\nThe picture after: ' + show(i + 1) + '\n\n';
+}
+
+const WT_RULES =
+  'RULES: write no names, products, places or facts the writer did not give you. Use US spelling. ' +
+  'Inside any JSON string, never use the straight ASCII double quote; use typographic quotes “ ” for speech.\n';
+
+function wtPrompt(tool, ctx, session, box, text, body) {
+  const bg = wtBackground(ctx, session);
+  const name = wtBoxName(box, ctx.moments);
+  if (tool === 'feedback') {
+    return {
+      max_tokens: 1200,
+      system: 'You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.',
+      prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+        'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
+        'Give 3 to 5 specific, practical suggestions that would make THIS passage stronger for a reader: clarity, vivid detail, pacing, word choice, ' +
+        'dialogue, showing rather than telling, flow from the text before it into the text after it. Lead with the one that matters most. ' +
+        'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose. ' +
+        'Do not praise filler and do not invent problems; if the passage is already strong, say what would make it stronger still.\n' +
+        'Write the suggestions in the same language as the passage.\n' + WT_RULES +
+        'Return ONLY valid JSON, no markdown:\n' +
+        '{ "points": [ { "quote": "the exact words from the passage this is about, copied character for character, at most 25 words, or an empty string if it is about the whole passage", ' +
+        '"issue": "what to change, in one plain sentence", "why": "why that makes it stronger, in one short sentence" } ] }'
+    };
+  }
+  if (tool === 'showme') {
+    const quote = wtStr(body.quote, 600), issue = wtStr(body.issue, 600);
+    const whole = !quote || text.indexOf(quote) < 0;
+    return {
+      max_tokens: 900,
+      system: 'You are a writing coach showing a new writer how one suggestion looks in practice. You return only the rewritten words, with no commentary.',
+      prompt: bg + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
+        'THE SUGGESTION: ' + issue + '\n\n' +
+        (whole
+          ? 'Rewrite the whole passage applying ONLY this suggestion. Keep everything else -- facts, names, voice, point of view, length -- as it is.\n'
+          : 'Rewrite ONLY this part of it, applying ONLY this suggestion:\n' + quote + '\n' +
+            'Your rewrite will replace exactly those words inside the passage, so it must read naturally in their place. Keep the facts, names, voice and point of view.\n') +
+        'Use US spelling, and typographic quotes “ ” for speech. Return ONLY the rewritten words: no quotation marks around them, no label, no explanation.',
+      before: whole ? text : quote
+    };
+  }
+  // regen
+  const key = box;
+  const dir = ctx.gapDirections[key];
+  const outl = ctx.gapOutlines[key];
+  const isOutline = ctx.narrStyleId === 'outline', isDialogue = ctx.narrStyleId === 'dialogue';
+  const ends = (box === 'opening' || box === 'closing');
+  const v = ctx.verbosity;
+  // The same lengths Generate Narrative asks for (_vBlock / _vEnds there).
+  const len = isOutline ? ((v === 'low') ? '1-2 bullet points' : (v === 'med') ? '2-4 bullet points' : '3-6 bullet points')
+    : (v === 'low') ? '1 sentence' : (v === 'med') ? '1-2 sentences' : (ends ? '2-3 sentences' : '2-4 sentences');
+  // Regen reads the transcript around ITS panel, so a long session costs the same as a short one.
+  const tr = String(session.transcript || '');
+  let window = tr;
+  if (tr.length > WRITING_TRANSCRIPT_WINDOW) {
+    const n = Math.max(1, ctx.moments.length);
+    const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
+    let start = Math.round(pos * tr.length - WRITING_TRANSCRIPT_WINDOW / 2);
+    start = Math.max(0, Math.min(tr.length - WRITING_TRANSCRIPT_WINDOW, start));
+    window = (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + WRITING_TRANSCRIPT_WINDOW) +
+      (start + WRITING_TRANSCRIPT_WINDOW < tr.length ? '\n[…later part of the transcript left out…]' : '');
+  }
+  return {
+    max_tokens: isDialogue ? 1600 : 1100,
+    system: (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
+      buildNarrativeSystem(ctx.styleBundle.system, ctx.campaign, ctx.directorNotes) +
+      '\n\nFor THIS request you return plain text, not JSON: only the new text for one block of the story.',
+    prompt: 'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n\n' +
+      bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      'The session transcript (what actually happened):\n' + window + '\n\n' +
+      'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
+      (outlineEdited(outl) ? ('REQUIRED CONTENT for this block (you MUST cover these facts, in your own prose): ' + outlineText(outl) + '\n') : '') +
+      (dir ? ('DIRECTOR STEERING for this block (you MUST follow this): ' + dir + '\n') : '') +
+      'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
+      (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
+      (box.indexOf('between:') === 0 ? 'Cover only what happens between the picture before and the picture after. ' : '') +
+      (isOutline ? 'Write bullet points, one per line, each starting with • and a space. ' : '') +
+      (isDialogue ? 'Put each spoken line on its own line, led by the speaker\'s name and a colon. ' : '') +
+      'Use typographic quotes “ ” for speech.\n' +
+      'COPYRIGHT — keep the names from the transcript exactly as written, write entirely original prose, and never reproduce text from any published source.\n' +
+      'Return ONLY the new text for this block: no label, no quotation marks around it, no explanation.'
+  };
+}
+
+async function wtCallModel(key, model, system, prompt, maxTokens) {
+  const ac = new AbortController();
+  const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, WRITING_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: model, max_tokens: maxTokens, system: system, messages: [{ role: 'user', content: prompt }] }),
+      signal: ac.signal
+    });
+    const data = await r.json();
+    if (!data || data.error || !Array.isArray(data.content)) return { error: (data && data.error && data.error.message) || 'The writing service did not answer.' };
+    return {
+      text: data.content.map(function (b) { return b.text || ''; }).join('').trim(),
+      usage: data.usage || {},
+      truncated: data.stop_reason === 'max_tokens'
+    };
+  } catch (e) {
+    return { error: (e && e.name === 'AbortError') ? 'The writing service took too long to answer.' : 'The writing service could not be reached.' };
+  } finally { clearTimeout(t); }
+}
+
+function wtParseFeedback(raw) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  let p = null;
+  try { p = JSON.parse(clean); } catch (e) {
+    try { const f = repairUnescapedQuotes(clean); if (f.fixes > 0) p = JSON.parse(f.text); } catch (e2) { p = null; }
+  }
+  if (!p || !Array.isArray(p.points)) return null;
+  const pts = p.points.filter(function (x) { return x && typeof x.issue === 'string' && x.issue.trim(); }).slice(0, 6).map(function (x) {
+    return { quote: wtStr(x.quote, 600).trim(), issue: wtStr(x.issue, 600).trim(), why: wtStr(x.why, 600).trim() };
+  });
+  return pts.length ? pts : null;
+}
+function wtCleanText(raw) {
+  let s = String(raw || '').replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
+  // A model that wraps its whole answer in one pair of quotes: take them off.
+  if (s.length > 1 && /^["“]/.test(s) && /["”]$/.test(s) && s.slice(1, -1).indexOf('“') < 0 && s.slice(1, -1).indexOf('"') < 0) s = s.slice(1, -1).trim();
+  return s;
+}
+
+async function wtUsesLeft(db, userId) {
+  const r = await db.prepare('SELECT writing_uses_left FROM users WHERE id = ?').get(userId);
+  return (r && Number.isFinite(parseInt(r.writing_uses_left, 10))) ? parseInt(r.writing_uses_left, 10) : 0;
+}
+
+// Take one use. Returns { ok, refilled } -- refilled when this use bought a new set of four with a token.
+// THE ORDER IS THE PROMISE: the caller only reaches this after the model answered and the answer read.
+async function wtTakeUse(db, userId, campaignId) {
+  const took = await db.prepare('UPDATE users SET writing_uses_left = writing_uses_left - 1 WHERE id = ? AND writing_uses_left > 0').run(userId);
+  if (took && took.changes > 0) return { ok: true, refilled: false };
+  try {
+    await spendTokens(userId, 1, { source: 'writing_tools', event_type: 'generation_spend', related_campaign_id: campaignId });
+  } catch (e) {
+    // The balance was checked before the call; it emptied in between (another tab). The answer was
+    // already paid for on our side, so the person keeps it -- one use is not worth a lost result.
+    return { ok: false, refilled: false };
+  }
+  await db.prepare('UPDATE users SET writing_uses_left = COALESCE(writing_uses_left, 0) + ? WHERE id = ?').run(WRITING_USES_PER_TOKEN - 1, userId);
+  return { ok: true, refilled: true };
+}
+
+async function wtAccess(req, tool) {
+  if (!WRITING_TOOLS[tool].gold) return true;
+  try { return accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3; } catch (e) { return false; }
+}
+
+// The panel header: uses left, the balance, and whether the Gold tools are open to this person here.
+router.get('/writing/status/:campaignId', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const role = await getCampaignRole(req.session.userId, req.params.campaignId);
+    if (!role) return res.status(403).json({ error: 'Access denied' });
+    const bal = await getBalance(req.session.userId);
+    res.json({ uses_left: await wtUsesLeft(db, req.session.userId), balance: bal.total, uses_per_token: WRITING_USES_PER_TOKEN,
+      gold_tools: accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3 });
+  } catch (e) { res.status(500).json({ error: 'Could not read your writing uses.' }); }
+});
+
+router.post('/writing/:tool/:campaignId/:sessionId', requireAuth, async function (req, res) {
+  try { await writingToolHandler(req, res); }
+  catch (e) {
+    try { console.error('[writing] tool failed:', e && e.message); } catch (_e) {}
+    if (!res.headersSent) res.status(500).json({ error: 'The writing tool hit a problem. Nothing was charged. Please try again.' });
+  }
+});
+async function writingToolHandler(req, res) {
+  const tool = String(req.params.tool || '');
+  if (!Object.prototype.hasOwnProperty.call(WRITING_TOOLS, tool)) return res.status(404).json({ error: 'Unknown writing tool.' });
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.json({ error: 'AI service not configured. Please contact support.' });
+  const body = req.body || {};
+  const box = String(body.box || '');
+  if (!WRITING_BOX_RE.test(box)) return res.status(400).json({ error: 'Unknown box.' });
+  const text = wtStr(body.text, WRITING_TEXT_MAX);
+  if (tool !== 'regen' && !text.trim()) return res.json({ error: 'Write something in this box first.' });
+
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND s.campaign_id = ?'
+  ).get(req.params.sessionId, req.session.userId, req.params.campaignId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  if (!(await wtAccess(req, tool))) {
+    return res.json({ error: 'WRITING_LOCKED', message: 'Feedback and the other writing tools come with Gold and Platinum (and the Free Trial). Regen works on every plan.' });
+  }
+
+  const ctx = await writingContext(db, req, session, targetForkId);
+  if (tool === 'regen') {
+    if (ctx.narrStyleId === 'written') return res.json({ error: 'This version uses Already Written, so the words are your own and Regen has nothing to write. Edit the text, or use Generate Narrative to split your story again.' });
+    if (!session.transcript) return res.json({ error: 'This session has nothing in its Story / Session Transcript box yet, so there is nothing to write from.' });
+    const bi = box.indexOf(':') > 0 ? parseInt(box.split(':')[1], 10) : 0;
+    if (box !== 'opening' && box !== 'closing' && !(bi >= 0 && bi < ctx.moments.length)) return res.status(400).json({ error: 'That panel is no longer on the storyboard. Reload the page.' });
+  }
+
+  // Before the call: a use in hand, or a token to buy four. Nothing is spent here.
+  const usesBefore = await wtUsesLeft(db, req.session.userId);
+  if (usesBefore <= 0) {
+    const bal = await getBalance(req.session.userId);
+    if (bal.total < 1) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'The writing tools use 1 token for every ' + WRITING_USES_PER_TOKEN + ' uses, and you are out of tokens.' });
+  }
+
+  const P = wtPrompt(tool, ctx, session, box, text, body);
+  const model = WRITING_MODEL;
+  const out = await wtCallModel(key, model, P.system, P.prompt, P.max_tokens);
+  if (out.error) {
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Writing coach', fn: 'POST /narrative/writing/' + tool, message: 'Writing tool failed: ' + out.error }); } catch (e) {}
+    return res.json({ error: out.error + ' Nothing was charged.' });
+  }
+
+  let result = null;
+  if (tool === 'feedback') {
+    const pts = wtParseFeedback(out.text);
+    if (!pts) return res.json({ error: 'The feedback came back in a form we could not read. Nothing was charged. Please try again.' });
+    result = { points: pts };
+  } else if (tool === 'showme') {
+    const after = wtCleanText(out.text);
+    if (!after || out.truncated) return res.json({ error: 'The example came back incomplete. Nothing was charged. Please try again.' });
+    result = { before: P.before, after: after };
+  } else {
+    const t2 = wtCleanText(out.text);
+    if (!t2 || out.truncated) return res.json({ error: 'The new text came back incomplete. Nothing was charged. Please try again.' });
+    result = { options: [t2] };
+  }
+
+  const use = await wtTakeUse(db, req.session.userId, req.params.campaignId);
+  const u = out.usage || {};
+  try {
+    await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, use.refilled ? 1 : 0);
+  } catch (e) { try { console.warn('[writing] use log failed (non-fatal):', e && e.message); } catch (_e) {} }
+  try { await recordGeneration(req.session.userId, { event_type: 'writing_tool', tokens_redeemed: use.refilled ? 1 : 0, quantity: 1, unit: tool, model: model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
+
+  const bal2 = await getBalance(req.session.userId);
+  result.uses_left = await wtUsesLeft(db, req.session.userId);
+  result.balance = bal2.total;
+  result.uses_per_token = WRITING_USES_PER_TOKEN;
+  res.json(result);
+}
 
 module.exports = router;

@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.2.27",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3227-writing-coach-feedback",
+        "kind": "feature",
+        "public": true,
+        "summary": "Writing coach: press Feedback above any Narrative box for 3 to 5 tips that make it stronger, each with a Show me.",
+        "detail": "New pill row above every Narrative box you can edit on the Storyboard. Feedback (Gold, Platinum and the Free Trial; members follow the Story Master's plan) reads that one box with its neighbours and the campaign's characters, genre, voice and Story Instructions, and returns 3 to 5 suggestions with a why. Show me rewrites just that part, before and after, with Use this and Copy. Uses: 1 token buys 4 uses; Feedback and each Show me are one use; a use is taken only after the answer arrives. Below Gold the pill shows a Gold tag and explains the plans. Test: Gold account, Feedback on a panel; Show me; Use this then Undo; uses count down 4 per token; Silver sees the Gold tag.",
+        "td": [
+          "TD-999"
+        ]
+      },
+      {
+        "id": "3227-regen-one-box",
+        "kind": "fix",
+        "public": true,
+        "summary": "Regen on a Narrative box now rewrites only that box, shows you the new text first, and costs one writing use.",
+        "detail": "Regen used to run the whole Generate Narrative job: it saved new text into every box and the Summary for Next Session and charged a full narrative, though only the clicked box changed on screen (TD-998). Now it writes that box alone in the same voice, length, narrator and steering, shows it in the Writing coach with Use this, Copy and Try again, and saves nothing until Use this. Every plan keeps Regen. Generate Narrative is unchanged. Test: Regen one box, reload without pressing Use this (nothing changed); Use this, reload (only that box changed, Summary untouched); one use charged.",
+        "td": [
+          "TD-998"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.26",
     "staged_on": "2026-10-21",
     "entries": [
