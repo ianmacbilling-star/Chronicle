@@ -1041,10 +1041,10 @@ Where the story comes together as alternating image panels and narrative.
   characters/assets, then Regenerate), plus a **Prominence** dropdown that controls size
   at publish/print: set it **high** to make that image as large as possible in the book.
 - **Narrative panels** sit **below and between** the images. Edit the narrative prompt
-  and **Regen**, or click into the text and type changes directly. Above each box is a row of
-  small writing pills. **Regen** (every plan) writes a fresh version of **that one box only**; the
+  and **Regen**, or click into the text and type changes directly. Under each box, beside **Edit prompt**, is
+  a row of small writing pills. **Regen** (every plan) writes a fresh version of **that one box only**; the
   new text opens in the **Writing coach** panel and nothing changes until you press **Use this**
-  (then **Undo** sits beside the box until you type in it). Regen no longer rewrites the other boxes
+  (then **Revert** sits under the box until you type in it). Regen no longer rewrites the other boxes
   or the Summary for Next Session. **Feedback** (Gold, Platinum and the Free Trial) reads that box
   and gives 3 to 5 tips to make it stronger, each with a **Show me** that rewrites just that part.
   Each Regen, Feedback or Show me is one **writing use**; **1 token buys 4 uses**, and a use is only

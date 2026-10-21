@@ -8073,7 +8073,7 @@ function renderAssetModalImage(asset) {
   var hasDesc = !!(asset.description && asset.description.trim());
   if (hasImg) {
     var pills = '';
-    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description">Regenerate</button>';
+    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description">&#8635; Regen</button>';
     pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing">Retouch</button>';
     if (asset.revert_image_url) pills += '<button class="panel-pill" onclick="revertAsset(' + aid + ')" title="Undo the last retouch or regenerate">Revert</button>';
     pills += '<button class="panel-pill" onclick="openReplacePicker(\'asset\', ' + aid + ')" title="Replace with an image from the Archive">Replace</button>';
@@ -8421,7 +8421,7 @@ function renderCharModalPrompt(char) {
           '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
           'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
           '<div class="panel-img-actions">' +
-            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
+            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">&#8635; Regen</button>' +
             '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
             (char.revert_reference_url ? '<button class="panel-pill" onclick="revertCharRef(' + char.id + ')" title="Undo the last retouch or regenerate - restore the previous reference">Revert</button>' : '') +
             '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
@@ -8476,7 +8476,7 @@ function markCharRefStale(charId) {
     var note = document.createElement('div');
     note.id = 'char-ref-stale-' + charId;
     note.className = 'char-ref-stale';
-    note.innerHTML = '&#9888; This picture was drawn from the previous prompt. Regenerate to redraw it.';
+    note.innerHTML = '&#9888; This picture was drawn from the previous prompt. Regen to redraw it.';
     wrap.insertBefore(note, wrap.firstChild);
   }
 }
@@ -17197,8 +17197,8 @@ function renderStoryboard() {
       lockBtn = '<span class="panel-pill pp-lock is-on is-static" title="Locked by the version owner">Locked</span>';
     }
     var regenBtn = state.selfIllustrated ? '' : m.locked   // v3.1.30 -- TD-921: nothing to regenerate
-      ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
-      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+      ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">&#8635; Regen</button>'
+      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">&#8635; Regen</button>';
     // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
     // marked it there on a screenshot. Hidden while locked for the same reason the others are
     // disabled: a locked panel is one the reader has decided is finished.
@@ -17299,9 +17299,12 @@ function renderStoryboard() {
       ? '<button class="moment-prompt-edit-btn dm-only" id="narr-dir-btn-' + domKey + '" ' +
         'onclick="openNarrDirection(\'' + gapKey + '\', \'' + escapeHtmlReview(label) + '\')">&#9998; Edit prompt</button>'
       : '';
+    // v3.2.28 -- the writing pills sit on ONE row with Edit prompt, under the box (Ian, 2026-10-21). With no
+    // direction set, the "No direction set" line is hidden by CSS (.narr-dir-empty), not left out: the
+    // direction editor patches narr-dir-text-* in place, so the element must exist to show a new direction.
     var dirBlock = '<div class="moment-prompt-wrap narr-dir-wrap" id="narr-dir-' + domKey + '">' +
       '<div class="moment-prompt-text narr-dir-text' + (dirText ? '' : ' narr-dir-empty') + '" id="narr-dir-text-' + domKey + '">' + dirBody + '</div>' +
-      dirEditBtn +
+      (canEditNarr ? ('<div class="narr-tools-row">' + dirEditBtn + wtPillsHtml(gapKey, textareaId, label, regenCall) + '</div>') : '') +
     '</div>';
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
@@ -17311,7 +17314,6 @@ function renderStoryboard() {
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
         regenBtn +
       '</div>' +
-      (canEditNarr ? wtPillsHtml(gapKey, textareaId, label, regenCall) : '') +   // v3.2.27 -- TD-999
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
@@ -18563,12 +18565,12 @@ function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank 
 
 function wtPillsHtml(box, ta, label, regenCall) {
   var lock = !wtGoldOk();
-  return '<div class="wt-row" id="wt-row-' + ta + '" data-box="' + box + '" data-label="' + escapeHtml(label || '') + '">' +
+  return '<span class="wt-pills" id="wt-row-' + ta + '" data-box="' + box + '" data-label="' + escapeHtml(label || '') + '">' +
     '<button type="button" class="wt-pill' + (lock ? ' is-locked' : '') + '" onclick="wtOpen(\'feedback\',\'' + box + '\',\'' + ta + '\')" title="' +
       (lock ? 'Feedback comes with Gold and Platinum' : 'Tips to make this text stronger') + '">Feedback' + (lock ? '<span class="wt-gold">Gold</span>' : '') + '</button>' +
-    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">Regen</button>' : '') +
-    '<button type="button" class="wt-pill wt-undo" id="wt-undo-' + ta + '" style="display:none;" onclick="wtUndo(\'' + ta + '\')" title="Put back the text this box had before Use this">Undo</button>' +
-  '</div>';
+    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">&#8635; Regen</button>' : '') +
+    '<button type="button" class="wt-pill wt-undo" id="wt-undo-' + ta + '" style="display:none;" onclick="wtUndo(\'' + ta + '\')" title="Put back the text this box had before Use this">Revert</button>' +
+  '</span>';
 }
 
 function wtPanelEnsure() {
@@ -18717,7 +18719,7 @@ function wtUse(k) {
   el.value = next;
   wtSetUndo(WT_STATE.ta, old);
   if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
-  if (msg) msg.textContent = 'Done. Undo is beside the box until you type in it.';
+  if (msg) msg.textContent = 'Done. Revert is under the box until you type in it.';
 }
 function wtCopy(k) {
   var o = WT_STATE.opts[k]; var msg = document.getElementById('wc-msg-' + k);

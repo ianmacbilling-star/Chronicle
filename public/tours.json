@@ -195,7 +195,7 @@
         {
           "selector": "#asset-modal-image-body",
           "title": "Generate or upload",
-          "text": "Generate an image from your description, or upload one. Once it's there you can Retouch it, Regenerate a fresh take, Revert your last change, or Replace it with an image from your Archive.",
+          "text": "Generate an image from your description, or upload one. Once it's there you can Retouch it, Regen for a fresh take, Revert your last change, or Replace it with an image from your Archive.",
           "placement": "auto"
         }
       ]
@@ -411,12 +411,12 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-edit",
           "title": "Edit prompt",
-          "text": "Edit the image prompt here, then Regenerate to apply it.",
+          "text": "Edit the image prompt here, then Regen to apply it.",
           "placement": "auto"
         },
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-regen",
-          "title": "Regenerate",
+          "title": "Regen",
           "text": "Makes a fresh image from the prompt.",
           "placement": "auto"
         },
@@ -447,7 +447,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .moment-opts-btn",
           "title": "Cast for this Moment",
-          "text": "Open these options to add or remove characters and assets for this Moment — just like the Review tab. Make your changes, then Regenerate.",
+          "text": "Open these options to add or remove characters and assets for this Moment — just like the Review tab. Make your changes, then Regen.",
           "placement": "auto",
           "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
         },

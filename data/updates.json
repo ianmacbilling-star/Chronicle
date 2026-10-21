@@ -1,5 +1,29 @@
 [
   {
+    "version": "3.2.28",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3228-narrative-tools-row",
+        "kind": "fix",
+        "public": true,
+        "summary": "Narrative boxes are tidier: Edit prompt, Feedback and Regen sit on one small row under the text, and the empty direction line is gone.",
+        "detail": "The writing pills moved from above the box to the row under it, beside Edit prompt, all the same small size. With no direction set, the 'No direction set' line is hidden (it appears again as soon as a direction is set). Undo after Use this is now called Revert, like on pictures. The uses line in the Writing coach is in smaller print. Test: Storyboard narrative box with and without a direction; Use this then Revert.",
+        "td": [
+          "TD-999"
+        ]
+      },
+      {
+        "id": "3228-regen-pill-name",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Regenerate pill on pictures is now ↻ Regen, the same as on narrative boxes.",
+        "detail": "Storyboard panels, character reference pictures and asset pictures. Shorter, so the pill row is less likely to wrap. The tours and the prompt editor's note say Regen too. Test: a storyboard panel's pill row; a character and an asset picture.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.27",
     "staged_on": "2026-10-21",
     "entries": [
