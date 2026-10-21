@@ -245,7 +245,7 @@
         {
           "selector": "#prep-title",
           "title": "Title",
-          "text": "Give your book a title. Each version keeps its own, along with its subtitle and colour.",
+          "text": "Give your book a title. Each version keeps its own, along with its subtitle and color.",
           "placement": "auto",
           "open": "#prep-acc-cover .prep-acc-head"
         },

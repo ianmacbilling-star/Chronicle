@@ -6540,11 +6540,11 @@ function selectStyleCard(kind, id) {
 var ART_STYLE_META = [
   { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
   { id:'Everyday life illustration', name:'Everyday life', desc:'The same rich, painterly illustration as High fantasy, set in the real world \u2014 ordinary places, clothes and objects, with no fantasy styling. The period comes from your story.' },
-  { id:'Anime manga style', name:'Anime / manga', desc:'Glossy, glowing modern anime \u2014 big sparkling eyes, soft painted shading and dreamy, coloured light.' },   // v3.2.22
+  { id:'Anime manga style', name:'Anime / manga', desc:'Glossy, glowing modern anime \u2014 big sparkling eyes, soft painted shading and dreamy, colored light.' },   // v3.2.22
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
-  { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
+  { id:'Classic pen and ink', name:'Pen and ink', desc:'Fine pen-and-ink linework and crosshatching with warm sepia washes, fading out to a clean white edge.' },   // v3.2.26
   { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
-  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy colour and loose strokes that melt into a white edge.' },   // v3.2.24
+  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy color and loose strokes that melt into a white edge.' },   // v3.2.24
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
@@ -11088,7 +11088,7 @@ function prepSyncTitle() {
   if (_cEl) {
     _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
     _cEl.disabled = !_ownV;   // v3.0.579 -- see the note above the subtitle
-    _cEl.title = _ownV ? '' : 'This is someone else s version. Switch to your own version to change the title colour.';
+    _cEl.title = _ownV ? '' : 'This is someone else s version. Switch to your own version to change the title color.';
   }
 }
 // Persist the title color per user (campaign + user) via /my-book-meta, mirroring the title text.
@@ -11453,7 +11453,7 @@ function openTitleBuilder(target) {
     return;
   }
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen colour, size and placement.');
+    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen color, size and placement.');
     return;
   }
   _tbErr('');
@@ -23095,7 +23095,7 @@ function prepApplyTitleModeLock() {
       // would 'restore' the explanation this function itself put there.
       if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
       el.title = built
-        ? 'Your title is drawn artwork right now, so the title styles and colour do not apply. Remove the drawn title in the Title Builder to use them again.'
+        ? 'Your title is drawn artwork right now, so the title styles and color do not apply. Remove the drawn title in the Title Builder to use them again.'
         : (el.getAttribute('data-title-orig') || '');
     });
     // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
@@ -25994,7 +25994,7 @@ function reorderApplySelections() {
     return false;
   }
   if (!pick('print-binding', R.binding, 'the binding')) return;
-  if (!pick('print-color', R.colorTier, 'the colour option')) return;
+  if (!pick('print-color', R.colorTier, 'the color option')) return;
   if (!pick('print-finish', R.coverFinish, 'the cover finish')) return;
   // v3.0.667 -- TD-465. Only when the order recorded one: an order placed before the paper column
   // existed must keep the page default rather than be told cream is unavailable.
@@ -26516,7 +26516,7 @@ function refreshPrintOptions(pageCount) {
         try {
           showPrintBtnMsg('Your paper is now ' + ((_lost && _lost.label) || 'White') +
             '. Cream stock is only made for black & white interiors, so it is not available with the ' +
-            'colour setting you just chose.', 'info');
+            'color setting you just chose.', 'info');
         } catch (e) {}
       } else if (pp && _wasPaper && _paperStillOffered) {
         pp.value = _wasPaper;

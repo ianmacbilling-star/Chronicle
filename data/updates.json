@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.26",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3226-pen-ink-card-us-spelling",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Pen and ink style card now describes its sepia washes, and the app spells color the American way.",
+        "detail": "Pen and ink card: 'Fine pen-and-ink linework and crosshatching with warm sepia washes, fading out to a clean white edge.' (it is not black and white only). Customer-facing text changed from colour to color: the Anime and Pastel cards, title color notes and tooltip, the print color messages, the cover tour step, the custom style builder's question labels and hints, and the help assistant's guide. Image prompts are unchanged. Test: Art Style window cards; custom style builder shows Color; ask help about title color.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.25",
     "staged_on": "2026-10-20",
     "entries": [

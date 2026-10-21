@@ -882,7 +882,7 @@ way:**
   cannot render detail the reference does not have. That is why it is drawn at high
   detail even though it is never printed.
 
-Keeping it neutral is what lets the same character be re-rendered into watercolour,
+Keeping it neutral is what lets the same character be re-rendered into watercolor,
 charcoal or oil equally well. **If someone asks why their character sheet suddenly looks
 different from how it used to, this is why** — the reference wording was improved so the
 picture carries more real surface detail, which raises the ceiling on every panel that
@@ -1133,7 +1133,7 @@ character or an asset, that is the reason — it is not a fault and nothing is m
 - **"What are you changing?"** — a list of the kinds of change the panel knows how to phrase:
   Move a character, Add a character, Add a person or object, Remove something, Add an effect, Change where someone is looking, Turn a character's body, Change an expression, Fix a body part, Change a pose or gesture, Move a hand or foot, Turn an object the right way round, Change an object, Make someone or something match its reference, Change how someone looks, Change the background, Change time of day or weather, and Fix or reapply the art style. Pick the one that fits and the panel asks only for what that change
   needs. Choose **I'll type it below** if none of them fit.
-- **The text box** is for the detail — the colour, the amount, the specific thing. You do not
+- **The text box** is for the detail — the color, the amount, the specific thing. You do not
   have to describe the whole picture.
 - **See the final prompt** shows exactly what will be sent, and you can edit it before it
   goes. Useful for understanding why something came out the way it did.
@@ -1220,7 +1220,7 @@ one.
 **What a version holds**
 
 - **The cover and title block** — **the book title is the version's own**, not the campaign's;
-  switch versions and the title on screen changes with it. Plus subtitle, title colour, title
+  switch versions and the title on screen changes with it. Plus subtitle, title color, title
   style, placement and size, and the cover, back cover and title-page images.
 - **The layout** — layout style, picture borders and frames, caption style, body font, drop
   cap, running page header, session dividers and whether each session starts on a fresh
@@ -1367,7 +1367,7 @@ the art style and the narrative too.
 **What's saved, and when**
 
 **Everything on the Prep & Preview tab saves automatically** — there's no Save button for
-cover and layout settings. Change the title and click away; pick a border; choose a colour;
+cover and layout settings. Change the title and click away; pick a border; choose a color;
 each is written to your version as you make it. The first time you open Prep & Preview on a
 version, its settings are written in as they stand, so the version genuinely owns them and
 the book you branched from can be restyled later without yours changing underneath you. The
@@ -1576,7 +1576,7 @@ Beside **Go to Publish** you will also find **Download PDF**, and on plans with 
 
 **Tab 4 — Order & Publish**
 
-*Order a printed copy* — binding (softcover, hardcover, comic), colour (premium
+*Order a printed copy* — binding (softcover, hardcover, comic), color (premium
 recommended), cover finish, shipping speed and address. **Get price** quotes from your
 options and page count. **Prepare Your Order** generates the final interior and cover
 PDFs, and you must tick **"I have reviewed both the interior and cover PDFs"** before
@@ -1687,7 +1687,7 @@ there. Each picture shows whole in its box.
 
 **1. Analyze style (1 token).** Campaignia studies how the samples are *drawn*, never
 what is in them, and answers **18 questions** about the style: Tradition; Medium and
-technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Colour;
+technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Color;
 Light and light effects; Surfaces; Texture; Detail, and where it goes; Background; Edges
 and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; and What
 the questions missed. If the samples don't all share one style, a warning says what
@@ -1713,7 +1713,7 @@ one at a time with **Generate**:
 - **Close up**: one person, head and shoulders, with a dramatic expression. Shows faces,
   eyes and shading.
 - **Outdoors**: travellers on a road through a wide valley under an evening sky. Shows
-  the background, atmosphere and colour.
+  the background, atmosphere and color.
 - **Group**: four companions around a table in a firelit hall. Shows several people at
   mid distance and how firelight is drawn.
 
@@ -1742,7 +1742,7 @@ preview picture and Use this one save by themselves.
 
 **Getting it right:** the words decide the picture almost word for word, so fix the
 answer behind what looks wrong, then Rewrite. Too much going on behind the figures:
-**Background** and **Detail, and where it goes**. Washed-out colour: **Colour**. Faces
+**Background** and **Detail, and where it goes**. Washed-out color: **Color**. Faces
 drawn the wrong way: **Characters: faces, eyes and bodies**. **Soft / faded edges**
 (below the descriptions) makes the art thin out to white at the panel edges instead of
 filling the frame; Analyze sets it from the Edges answer and you can change it.
@@ -1973,7 +1973,7 @@ Friction points and what's actually going on.
   *build* them.
 - **"My custom style doesn't look like my samples."** Open the style and read the
   answers under **How the style is drawn**: find the one behind what looks wrong (for
-  example Background, Detail or Colour), click **Edit**, change it, then **Rewrite
+  example Background, Detail or Color), click **Edit**, change it, then **Rewrite
   descriptions** and generate a preview again. Say "none" outright for anything the style
   doesn't have. If a warning says your samples don't share one style, remove the odd one
   out and analyze again. Also compare **Bolder** and **Softer**: one is often closer.
