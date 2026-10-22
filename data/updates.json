@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.2.31",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3231-pastels-and-oils-renamed",
+        "kind": "change",
+        "public": true,
+        "summary": "Fantasy pastel is now Soft pastels, and Fantasy oil is now Oil painting. They are mediums, so they suit any kind of story.",
+        "detail": "New names on the art style cards, in the Library's art style filter, on Bookshelf books and in picture alt text. Nothing else changes: books and pictures already made in these styles keep them, and the pictures are drawn exactly as before. Test: open the art style picker (Soft pastels and Oil painting, same pictures and descriptions); a campaign already set to either style shows the new name; the Library art style filter lists the new names and still finds the old pictures.",
+        "td": [
+          "TD-1004"
+        ]
+      },
+      {
+        "id": "3231-version-tour-step",
+        "kind": "fix",
+        "public": true,
+        "summary": "The tour's \"Whose version?\" step now points at the version picker instead of a spot beside it.",
+        "detail": "Since the version picker was redrawn with pins, the real dropdown underneath is hidden as a 1-pixel box, and the tour was outlining that box (next to the New Version button). Both version steps (session and Publish) now point at the picker you see, falling back to the old one if it is not drawn yet. The Storyboard tour's Replace step now also says you can replace a picture with your own. Test: run the session tour; step 4 outlines the version picker. Run the Publish tour; Whose version? outlines its picker. The Storyboard tour's Replace step mentions your own image.",
+        "td": [
+          "TD-1005"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.30",
     "staged_on": "2026-10-21",
     "entries": [

@@ -47,6 +47,25 @@ var PRESET_NAMES = [
   'Dark Fantasy'
 ];
 
+// v3.2.31 -- TD-1004. WHAT READERS SEE FOR A PRESET, WHERE IT DIFFERS FROM THE STORED NAME.
+// Ian, 2026-10-22: pastels and oils are mediums, not fantasy -- "Fantasy" in the name made them
+// look off-limits for a Family Story or a sci-fi campaign. The STORED name (moments.style,
+// campaign_archives.art_style, the key of getStylePrefix in images.js) is left exactly as it was,
+// so every saved book, archive row, slug and Library link keeps working; only the words shown change.
+// The app's style cards carry the same two names in ART_STYLE_META (public/js/app.js).
+var DISPLAY_LABELS = {
+  'Fantasy oil painting': 'Oil painting',
+  'Fantasy pastel': 'Soft pastels'
+};
+function labelFor(name) {
+  return Object.prototype.hasOwnProperty.call(DISPLAY_LABELS, name) ? DISPLAY_LABELS[name] : name;
+}
+// slug -> what a reader sees; null where nameForSlug is null.
+function labelForSlug(slug) {
+  var n = nameForSlug(slug);
+  return n ? labelFor(n) : null;
+}
+
 // The bucket every custom style shares. Ian, 2026-09-10: "anything custom just
 // call Custom." One bucket is also the only version that is safe to publish --
 // see the note above.
@@ -118,7 +137,7 @@ var BY_SLUG = {};
 var PRESETS = PRESET_NAMES.map(function (n) {
   var s = slugify(n);
   BY_SLUG[s] = n;
-  return { slug: s, label: n, name: n };
+  return { slug: s, label: labelFor(n), name: n };   // v3.2.31 -- label is what readers see
 });
 BY_SLUG[SELF_SLUG] = SELF_NAME;   // v3.1.30 -- known to nameForSlug / styleSlug / isStyleSlug; listed after the presets
 
@@ -172,5 +191,7 @@ module.exports = {
   isFacetSlug: isFacetSlug,
   nameForSlug: nameForSlug,
   styleSlug: styleSlug,
-  slugify: slugify
+  slugify: slugify,
+  labelFor: labelFor,           // v3.2.31
+  labelForSlug: labelForSlug    // v3.2.31
 };

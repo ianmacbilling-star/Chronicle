@@ -224,7 +224,7 @@
           "placement": "auto"
         },
         {
-          "selector": "#novel-version-select",
+          "selector": "#novel-version-select-vpick, #novel-version-select",
           "title": "Whose version?",
           "text": "Choose whose version you want to publish — your version, or one of your members' versions.",
           "placement": "auto"
@@ -429,7 +429,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-replace",
           "title": "Replace",
-          "text": "Pull a different image in from your Archive.",
+          "text": "Pull a different image in from your Archive, or replace it with your own personal image.",
           "placement": "auto"
         },
         {
@@ -543,7 +543,7 @@
           "placement": "auto"
         },
         {
-          "selector": "#session-fork-select",
+          "selector": "#session-fork-select-vpick, #session-fork-select",
           "title": "Whose version?",
           "text": "A {session} can have more than one version. Switch between them here — each keeps its own story, pictures and settings.",
           "placement": "auto"

@@ -6543,8 +6543,8 @@ var ART_STYLE_META = [
   { id:'Anime manga style', name:'Anime / manga', desc:'Glossy, glowing modern anime \u2014 big sparkling eyes, soft painted shading and dreamy, colored light.' },   // v3.2.22
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Fine pen-and-ink linework and crosshatching with warm sepia washes, fading out to a clean white edge.' },   // v3.2.26
-  { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
-  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy color and loose strokes that melt into a white edge.' },   // v3.2.24
+  { id:'Fantasy oil painting', name:'Oil painting', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
+  { id:'Fantasy pastel', name:'Soft pastels', desc:'Soft, powdery chalk pastel \u2014 pale, dreamy color and loose strokes that melt into a white edge.' },   // v3.2.24; v3.2.31 names: a medium, not a genre (TD-1004)
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes that bloom out to a clean white edge.' },   // v3.2.22
   { id:'Charcoal drawing', name:'Charcoal', desc:'Traditional charcoal on rough paper \u2014 deep blacks, smudged mid-tones, and bold, expressive shadows.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },

@@ -698,7 +698,7 @@ function H() {
     getDb: db.getDb, bookPrefsScope: db.bookPrefsScope, getForkBookPrefs: db.getForkBookPrefs, setForkBookPrefs: db.setForkBookPrefs,
     ownsBookVersion: db.ownsBookVersion, coverFromPrefs: db.coverFromPrefs, getTier: tiers.getTier, ownTier: tiers.ownTier,
     genreLabels: require('../services/genres').genreLabels,                 // v3.1.8
-    artNameForSlug: require('../services/artStyleCatalog').nameForSlug,     // v3.1.8
+    artNameForSlug: require('../services/artStyleCatalog').labelForSlug,    // v3.1.8; v3.2.31 the name readers see (TD-1004)
     copyObject: storage.copyObject, deleteFile: storage.deleteFile, fetchFile: storage.fetchFile, uploadFile: storage.uploadFile,
     renderFirstPage: renderFirstPageJpeg,
     // Loaded late: pdf.js is the one parser of the co string, and a second copy would drift.
