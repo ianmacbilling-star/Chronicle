@@ -2985,15 +2985,22 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .wc-edit:focus{outline:none;border-color:#c9a84c;background:#fff;}
 .wc-edit::selection{background:#f1dfa6;}
 .wc-edit-note{font-size:10px;color:#8a8f99;margin-top:4px;}
-.wc-tools{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px;border-bottom:1px solid #efebe2;}
-.wc-tool{padding:4px 11px;font-size:12px;background:#faf8f3;color:#7a5c12;border:1px solid #d9c690;border-radius:6px;cursor:pointer;}
-.wc-tool:hover{background:#f3ecd8;border-color:#c9a84c;}
-.wc-tool.is-on{background:#7a5c12;color:#fff;border-color:#7a5c12;}
+.wc-tools{display:flex;align-items:flex-end;gap:2px;padding:6px 16px 0;border-bottom:1px solid #e2d6b5;}   /* v3.2.38 -- TABS, not buttons (Ian: "I keep hitting them thinking they should do something") */
+.wc-tool{padding:8px 12px 7px;margin-bottom:-1px;font-size:13px;background:none;color:#8a7d66;border:none;border-bottom:3px solid transparent;border-radius:0;cursor:pointer;}
+.wc-tool:hover{color:#7a5c12;border-bottom-color:#eadfbf;}
+.wc-tool.is-on{color:#7a5c12;font-weight:700;border-bottom-color:#c9a84c;}
 .wc-tool.is-locked{opacity:0.55;}
 .wc-tool .wt-gold{color:inherit;}
-.wc-revert{margin-left:auto;}
+.wc-revert{margin-left:auto;align-self:center;padding:4px 2px;font-size:12px;background:none;border:none;color:#7a5c12;text-decoration:underline;cursor:pointer;}
+.wc-revert:hover{color:#5f470e;}
 /* v3.2.35 -- tabs that keep their results; the changed-text note; the leave-with-suggestions question */
-.wc-tool.is-on{box-shadow:0 1px 0 #7a5c12;}
+.wc-tool.is-on{box-shadow:none;}
+.wc-verdict{border-radius:8px;padding:8px 10px;margin:0 0 12px;border:1px solid #e6e1d6;background:#faf8f3;}   /* v3.2.38 -- Feedback's verdict */
+.wc-v-great{background:#eef8ee;border-color:#a8d5a8;}
+.wc-v-close{background:#fff8e6;border-color:#ecd28f;}
+.wc-v-head{font-weight:600;color:#1f2430;}
+.wc-v-great .wc-v-head,.wc-v-mark{color:#2f7a32;}
+.wc-v-working{font-size:12px;color:#4b5563;margin-top:3px;}
 .wc-stale{font-size:11px;color:#8a5a00;background:#fff6dd;border:1px solid #f0dca0;border-radius:6px;padding:4px 8px;margin:0 0 10px;}
 .wc-warn{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 16px;background:#fff6dd;border-bottom:1px solid #f0dca0;font-size:12px;color:#5b4300;}
 .wc-warn span{flex:1 1 200px;}

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.38",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3238-feedback-verdict",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Feedback now gives an honest verdict first: when your writing is truly great it says “I wouldn’t change a thing!”, when you’re close it says so with one or two small tips, and only real problems get a full list.",
+        "detail": "The writing coach judges each passage blind, against what a good illustrated story needs (not perfection): true to your original story, specific, in your voice, and free of stock phrases. It names what already works. The coach's Regen, Feedback, Rewrite and Word now look like tabs, so it is clear they switch views; the buttons inside each tab do the work. It no longer invents new tips after you have taken its earlier ones. Test: ask for Feedback on a rough box (Needs work, 3 to 5 tips); take its suggestions and ask again (Close or Great); a Great answer shows the green verdict and no tips.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.37",
     "staged_on": "2026-10-22",
     "entries": [

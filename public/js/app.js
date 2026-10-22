@@ -18572,7 +18572,7 @@ var WT_STATE = { box: null, ta: null, label: '', cur: 'regen', gen: 0, opts: [],
 // the title line with Previous / Next; the panel is wider; the mouse wheel over the coach scrolls only the coach.
 var WT_TABS = [
   { id: 'regen', name: '&#8635; Regen', gold: false, tip: 'A fresh version of this whole box, written from the story' },
-  { id: 'feedback', name: 'Feedback', gold: true, tip: '3 to 5 tips to make this text stronger' },
+  { id: 'feedback', name: 'Feedback', gold: true, tip: 'An honest verdict on this text, and tips only where they help' },
   { id: 'rewrite', name: 'Rewrite', gold: true, tip: 'Rework the selected words, or the whole box' },
   { id: 'word', name: 'Word', gold: true, tip: 'Better choices for a selected word or short phrase (free)' }
 ];
@@ -18688,7 +18688,7 @@ function wtUsesLine(d) {
   el.title = '1 token buys ' + per + ' uses of the writing coach. Word is free.';
 }
 function wtLockedHtml() {
-  return '<p class="wc-text">The writing coach reads your text and helps you make it stronger: <b>Feedback</b> gives you 3 to 5 tips, each with a <b>Show me</b>; ' +
+  return '<p class="wc-text">The writing coach reads your text and helps you make it stronger: <b>Feedback</b> gives an honest verdict and tips where they help, each with a <b>Show me</b>; ' +
     '<b>Rewrite</b> offers new versions to choose from (clearer, more vivid, more dramatic, simpler, more detail, longer, shorter, or your own way); <b>Word</b> finds a better word. ' +
     'It comes with <b>Gold</b> and <b>Platinum</b>, and with the Free Trial.</p>' +
     '<button type="button" class="btn btn-primary btn-sm" onclick="wtClose(); goToPlans();">See plans</button>' +
@@ -18755,10 +18755,10 @@ function wtToolsHtml() {
   var lock = !wtGoldOk();
   return wtTabsHere().map(function (t) {
     var locked = t.gold && lock;
-    return '<button type="button" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.cur === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTab(\'' + t.id + '\')" title="' +
+    return '<button type="button" role="tab" aria-selected="' + (WT_STATE.cur === t.id ? 'true' : 'false') + '" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.cur === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTab(\'' + t.id + '\')" title="' +
       (locked ? 'Comes with Gold and Platinum' : t.tip) + '">' + t.name + (locked ? '<span class="wt-gold">Gold</span>' : '') + '</button>';
   }).join('') +
-  '<button type="button" class="wc-tool wc-revert" id="wc-revert" style="display:none;" onmousedown="event.preventDefault()" onclick="wtUndo(WT_STATE.ta)" title="Put back the text this box had before Use this">Revert</button>';
+  '<button type="button" class="wc-revert" id="wc-revert" style="display:none;" onmousedown="event.preventDefault()" onclick="wtUndo(WT_STATE.ta)" title="Put back the text this box had before Use this">&#8634; Revert</button>';   // v3.2.38 -- a link, not a tab
 }
 function wtPaintTools() { var t = document.getElementById('wc-tools'); if (t) t.innerHTML = wtToolsHtml(); wtRevertSync(); }
 // "Your text has changed since": on a tab with results made from different text. Goes away when the tab runs again.
@@ -18773,10 +18773,10 @@ function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
   if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
-  if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">3 to 5 tips that would make your story stronger, each with a <b>Show me</b>. ' +
+  if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">An honest verdict on this part of your story, and tips (each with a <b>Show me</b>) only where they would make it better. ' +
     'Feedback reads up to about 6,000 words: the words you select, or the part around your cursor.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
-  if (id === 'feedback') return '<p class="wc-text">3 to 5 tips that would make this box stronger, each with a <b>Show me</b>.</p>' +
+  if (id === 'feedback') return '<p class="wc-text">An honest verdict on this box \u2014 sometimes \u201cI wouldn\u2019t change a thing!\u201d \u2014 and tips (each with a <b>Show me</b>) only where they would make it better.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';
@@ -18958,7 +18958,7 @@ function wtRun(tool, extra, sel) {
     }
     if (tool !== 'showme') { s.ran = true; s.textAt = textAt; s.winStart = extra.winStart || 0; }
     s.pending = true;
-    if (tool === 'feedback') { wtRenderPoints(d.points || []); }
+    if (tool === 'feedback') { wtRenderPoints(d.points || [], d); }
     else if (tool === 'showme') {
       var k0 = WT_STATE.opts.length;
       var at0 = (typeof extra.winStart === 'number' && d.before) ? extra.text.indexOf(d.before) : -1;   // v3.2.36 -- in the story: where in the whole text
@@ -19001,11 +19001,25 @@ function wtRun(tool, extra, sel) {
   });
 }
 
-function wtRenderPoints(points) {
+// v3.2.38 -- the verdict comes first: Great ("I wouldn't change a thing!"), Close, or Needs work (Ian).
+function wtVerdictHtml(d) {
+  var v = (d && d.verdict) || '';
+  if (v !== 'great' && v !== 'close' && v !== 'work') return '';
+  return '<div class="wc-verdict wc-v-' + v + '">' + (v === 'great' ? '<span class="wc-v-mark">&#10003;</span> ' : '') +
+    '<span class="wc-v-head">' + escapeHtml(d.headline || '') + '</span>' +
+    (d.working ? ('<div class="wc-v-working">' + escapeHtml(d.working) + '</div>') : '') + '</div>';
+}
+function wtRenderPoints(points, d) {
   var s = wtTabState('feedback');
   s.points = points;
+  var head = wtVerdictHtml(d);
+  if (!points.length && d && d.verdict === 'great') {
+    s.pending = false;   // nothing to use, so nothing to warn about when moving on
+    wtTabHtml('feedback', head + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">Get new feedback (1 use)</button>');
+    return;
+  }
   if (!points.length) { s.pending = false; wtTabHtml('feedback', '<p class="wc-text">No suggestions came back. Try again in a moment.</p>' + wtStartHtml('feedback')); return; }
-  wtTabHtml('feedback', '<ol class="wc-points">' + points.map(function (pt, i) {
+  wtTabHtml('feedback', head + '<ol class="wc-points">' + points.map(function (pt, i) {
     return '<li class="wc-point">' +
       (pt.quote ? ('<div class="wc-quote">“' + escapeHtml(pt.quote) + '”</div>') : '') +
       '<div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' +

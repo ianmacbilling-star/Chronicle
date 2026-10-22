@@ -1792,13 +1792,32 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       system: 'You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.',
       prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
-        'Give 3 to 5 specific, practical suggestions that would make THIS passage stronger for a reader: clarity, vivid detail, pacing, word choice, ' +
-        'dialogue, showing rather than telling, flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). Lead with the one that matters most. ' +
-        'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose. ' +
-        'Do not praise filler and do not invent problems; if the passage is already strong, say what would make it stronger still.\n' +
-        'Write the suggestions in the same language as the passage.\n' + WT_RULES +
+        // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
+        // Feedback used to give 3 to 5 tips every time, so a writer who took every suggestion and asked again got three
+        // more: it could never say "you've got it". Now it judges the passage against what a good illustrated story needs
+        // (not perfection), says so plainly, and gives tips only when they matter.
+        // v3.2.38 -- A BLIND TASTE TEST (Ian): the coach is never told who wrote the passage -- often it is prose Generate
+        // Narrative wrote -- and judges only the text in front of it. It reads the ORIGINAL STORY around this part (as Regen
+        // does), so a passage that reads beautifully but gets the session wrong cannot be "great".
+        (box !== 'story' ? wtTranscriptBlock(ctx, session, box) : '') +
+        'First judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
+        'A great passage is TRUE to the original story (names, who did what, the order of events, nothing invented that contradicts it), SPECIFIC (concrete details from this session, not vague mood), ' +
+        'IN VOICE (the chosen narrative voice and this campaign, not generic filler), and free of stock phrasing: clichés and stock phrases (“a testament to”, “the air hung heavy”, “little did they know”), ' +
+        'repeated sentence shapes, piled-up em dashes and vague grandeur all count against it, however smooth it reads. Choose ONE verdict:\n' +
+        '- "great": it does its job well; the only changes you could suggest are matters of taste. Say so plainly (\u201cI wouldn\u2019t change a thing!\u201d) and give NO suggestions.\n' +
+        '- "close": it works, with one or two small things that would genuinely improve it. Give 1 or 2 suggestions.\n' +
+        '- "work": it has real problems a reader would notice. Give 3 to 5 suggestions, leading with the one that matters most.\n' +
+        'Do not invent problems to have something to say, and do not praise to be kind: praise must name the actual words or choices that work. ' +
+        'If the writer has clearly already applied earlier suggestions and the passage now does its job, the verdict is "great".\n' +
+        'Suggestions cover faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
+        'flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). ' +
+        'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose.\n' +
+        'Write everything in the same language as the passage.\n' + WT_RULES +
         'Return ONLY valid JSON, no markdown:\n' +
-        '{ "points": [ { "quote": "the exact words from the passage this is about, copied character for character, at most 25 words, or an empty string if it is about the whole passage", ' +
+        '{ "verdict": "great" or "close" or "work", ' +
+        '"headline": "one short line for the writer, e.g. \u201cI wouldn\u2019t change a thing!\u201d, \u201cYou\u2019re close.\u201d or \u201cA good start, with a few things to fix.\u201d", ' +
+        '"working": "one specific sentence on what already works, naming the words or choices", ' +
+        '"points": [ { "quote": "the exact words from the passage this is about, copied character for character, at most 25 words, or an empty string if it is about the whole passage", ' +
         '"issue": "what to change, in one plain sentence", "why": "why that makes it stronger, in one short sentence" } ] }'
     };
   }
@@ -1873,16 +1892,8 @@ function wtPrompt(tool, ctx, session, box, text, body) {
   const len = isOutline ? ((v === 'low') ? '1-2 bullet points' : (v === 'med') ? '2-4 bullet points' : '3-6 bullet points')
     : (v === 'low') ? '1 sentence' : (v === 'med') ? '1-2 sentences' : (ends ? '2-3 sentences' : '2-4 sentences');
   // Regen reads the transcript around ITS panel, so a long session costs the same as a short one.
-  const tr = String(session.transcript || '');
-  let window = tr;
-  if (tr.length > WRITING_TRANSCRIPT_WINDOW) {
-    const n = Math.max(1, ctx.moments.length);
-    const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
-    let start = Math.round(pos * tr.length - WRITING_TRANSCRIPT_WINDOW / 2);
-    start = Math.max(0, Math.min(tr.length - WRITING_TRANSCRIPT_WINDOW, start));
-    window = (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + WRITING_TRANSCRIPT_WINDOW) +
-      (start + WRITING_TRANSCRIPT_WINDOW < tr.length ? '\n[…later part of the transcript left out…]' : '');
-  }
+  // v3.2.38 -- the window is cut by wtTranscriptWindow, which Feedback now uses too (one copy, same rule).
+  const window = wtTranscriptWindow(ctx, session, box, WRITING_TRANSCRIPT_WINDOW);
   return {
     max_tokens: isDialogue ? 1600 : 1100,
     system: (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
@@ -1933,11 +1944,19 @@ function wtParseFeedback(raw) {
   try { p = JSON.parse(clean); } catch (e) {
     try { const f = repairUnescapedQuotes(clean); if (f.fixes > 0) p = JSON.parse(f.text); } catch (e2) { p = null; }
   }
-  if (!p || !Array.isArray(p.points)) return null;
-  const pts = p.points.filter(function (x) { return x && typeof x.issue === 'string' && x.issue.trim(); }).slice(0, 6).map(function (x) {
+  if (!p || typeof p !== 'object') return null;
+  const pts = (Array.isArray(p.points) ? p.points : []).filter(function (x) { return x && typeof x.issue === 'string' && x.issue.trim(); }).slice(0, 6).map(function (x) {
     return { quote: wtStr(x.quote, 600).trim(), issue: wtStr(x.issue, 600).trim(), why: wtStr(x.why, 600).trim() };
   });
-  return pts.length ? pts : null;
+  // v3.2.38 -- the verdict. "great" carries no tips (any that came back are dropped: the model said it would not
+  // change a thing); "close" at most two; "work" as many as came. An answer with no verdict and no tips is unreadable.
+  let verdict = String(p.verdict || '').toLowerCase().trim();
+  if (verdict !== 'great' && verdict !== 'close' && verdict !== 'work') verdict = pts.length ? (pts.length <= 2 ? 'close' : 'work') : '';
+  if (!verdict) return null;
+  const keep = verdict === 'great' ? [] : verdict === 'close' ? pts.slice(0, 2) : pts;
+  if (verdict !== 'great' && !keep.length) return null;
+  const fallback = { great: 'I wouldn\u2019t change a thing!', close: 'You\u2019re close.', work: 'A good start, with a few things to fix.' }[verdict];
+  return { verdict: verdict, headline: wtStr(p.headline, 200).trim() || fallback, working: wtStr(p.working, 400).trim(), points: keep };
 }
 // v3.2.33 -- { "options": [ ... ] } from the polishing tools. Same quote repair as Feedback (TD-515).
 function wtParseJson(raw) {
@@ -1963,6 +1982,23 @@ function wtParseWords(raw, sel) {
     .map(function (x) { return { word: wtStr(x.word, 80).trim(), note: wtStr(x.note, 120).trim() }; })
     .filter(function (x) { const k = x.word.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 8);
   return out.length ? out : null;
+}
+// v3.2.38 -- the part of the original story (transcript) around a box, centred on its panel; the whole story when
+// it is short. Regen reads WRITING_TRANSCRIPT_WINDOW characters; Feedback reads WRITING_FEEDBACK_WINDOW.
+function wtTranscriptWindow(ctx, session, box, size) {
+  const tr = String(session.transcript || '');
+  if (tr.length <= size) return tr;
+  const n = Math.max(1, ctx.moments.length);
+  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
+  let start = Math.round(pos * tr.length - size / 2);
+  start = Math.max(0, Math.min(tr.length - size, start));
+  return (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + size) +
+    (start + size < tr.length ? '\n[…later part of the transcript left out…]' : '');
+}
+const WRITING_FEEDBACK_WINDOW = 24000;   // v3.2.38 -- characters of the original story Feedback reads (Regen reads 40,000)
+function wtTranscriptBlock(ctx, session, box) {
+  const w = wtTranscriptWindow(ctx, session, box, WRITING_FEEDBACK_WINDOW);
+  return w.trim() ? ('THE ORIGINAL STORY / SESSION TRANSCRIPT around this part (what actually happened; the passage must be true to it):\n' + w + '\n\n') : '';
 }
 function wtCleanText(raw) {
   let s = String(raw || '').replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
@@ -2083,9 +2119,9 @@ async function writingToolHandler(req, res) {
 
   let result = null;
   if (tool === 'feedback') {
-    const pts = wtParseFeedback(out.text);
-    if (!pts) return res.json({ error: 'The feedback came back in a form we could not read. Nothing was charged. Please try again.' });
-    result = { points: pts };
+    const fb = wtParseFeedback(out.text);
+    if (!fb) return res.json({ error: 'The feedback came back in a form we could not read. Nothing was charged. Please try again.' });
+    result = { points: fb.points, verdict: fb.verdict, headline: fb.headline, working: fb.working };   // v3.2.38
   } else if (tool === 'showme') {
     const after = wtCleanText(out.text);
     if (!after || out.truncated) return res.json({ error: 'The example came back incomplete. Nothing was charged. Please try again.' });
