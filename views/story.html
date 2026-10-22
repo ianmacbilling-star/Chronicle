@@ -30,7 +30,7 @@
        second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
        extension and index.html cannot stamp itself the way app.html does. -->
   <link rel="stylesheet" href="/css/tier-grid.css?v=3.0.896">
-  <script src="/js/tier-grid.js?v=3.0.896" defer></script>
+  <script src="/js/tier-grid.js?v=3.2.43" defer></script>
   <!-- v3.0.897 -- TD-770. THE LANDING PAGE STYLESHEET MOVED OUT, UNCHANGED.
        900 lines lived here. A second landing page needs the same rules, and two copies of one
        stylesheet is the fault this project keeps paying for -- so they are in one file that every
@@ -109,7 +109,7 @@
           <a href="#pricing" class="btn-ghost">See Plans</a>
         </div>
         <div class="hero-trial">30-day free trial · No credit card required to explore<br>
-        AI storyboards · Custom image generation · Print-ready PDF export · Cancel anytime</div>
+        AI storyboards · Your own art or words, if you like · Print-ready PDF export · Cancel anytime</div>
       </div>
     </div>
 
@@ -194,7 +194,15 @@
            that name directly above this banner. -->
       <div class="features-strip-title">CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
     </div>
-    <div class="features-strip-body">
+  <!-- v3.2.43 -- TD-999. A fifth Arsenal card, the Writing Coach (Ian, 2026-10-22). landing.css lays the strip out in
+       four columns; this block makes it five on a wide screen, two with the coach across the bottom at 900px, and one
+       at 600px (the media rules are repeated here because this class outranks landing.css's own). -->
+  <style>
+    .features-strip-body.arsenal-5 { grid-template-columns: repeat(5, 1fr); }
+    @media (max-width: 900px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr 1fr; } .features-strip-body.arsenal-5 .feature-cell.arsenal-wide { grid-column: 1 / -1; } }
+    @media (max-width: 600px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr; } .features-strip-body.arsenal-5 .feature-cell { border-right: none; } }
+  </style>
+    <div class="features-strip-body arsenal-5">
       <div class="feature-cell">
         <div class="feature-title">AI IMAGE GENERATION</div>
         <div class="feature-desc">Every panel gets a unique AI illustration. Storybook, watercolor, pen and ink, everyday life — choose the style that matches your story. You control the prompts, you control the scenes.</div>
@@ -210,6 +218,10 @@
       <div class="feature-cell">
         <div class="feature-title">MULTIPLE LAYOUT STYLES</div>
         <div class="feature-desc">Many layout styles and options available. Preview any style before you print — what you see is what you get.</div>
+      </div>
+      <div class="feature-cell arsenal-wide">
+        <div class="feature-title">WRITING COACH</div>
+        <div class="feature-desc">Want to polish your prose? The coach gives an honest verdict on any passage, offers rewrites, and finds the better word. It reads your whole story too, and tells you how it holds together.</div>
       </div>
     </div>
   </div>
@@ -387,7 +399,7 @@
           <img src="/images/Gold_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Gold" />
           <div class="tier-info">
             <div class="tier-name-row">GOLD</div>
-            <div class="tier-perks">3 stories · unlimited chapters · unlimited characters · more free tokens · more moments · more styling options · multiple versions</div>
+            <div class="tier-perks">3 stories · unlimited chapters · unlimited characters · more free tokens · more moments · more styling options · multiple versions · writing coach</div>
           </div>
           <div class="tier-price-tag" data-tier="gold">$15<small>per month</small></div>
           <a href="/login?signup&amp;plan=gold" class="btn-tier">GET GOLD</a>
@@ -397,7 +409,7 @@
           <img src="/images/Platinum_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Platinum" />
           <div class="tier-info">
             <div class="tier-name-row">PLATINUM</div>
-            <div class="tier-perks">unlimited stories · unlimited chapters · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles · multiple versions</div>
+            <div class="tier-perks">unlimited stories · unlimited chapters · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles · multiple versions · writing coach</div>
           </div>
           <div class="tier-price-tag" data-tier="platinum">$22<small>per month</small></div>
           <a href="/login?signup&amp;plan=platinum" class="btn-tier">GO PLATINUM</a>

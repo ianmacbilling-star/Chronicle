@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.43",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3243-landing-coach-and-your-own",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The landing pages and Compare the Tiers now show the Writing Coach, and say you can use your own art or words.",
+        "detail": "Both landing pages: the line under the Start buttons reads \"Your own art or words, if you like\"; the Arsenal strip has a fifth card, Writing Coach; Gold and Platinum list \"writing coach\". Compare the Tiers has a Writing Coach row (Silver: Regen only; Gold and Platinum: a tick, read from the same rule the coach uses) and a footnote: on every plan you can put your own art in the book or write it yourself. Test: open the home page and the storyteller page, wide and narrow (five cards; two with the coach across the bottom; one); open Compare the Tiers on each.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.42",
     "staged_on": "2026-10-22",
     "entries": [
