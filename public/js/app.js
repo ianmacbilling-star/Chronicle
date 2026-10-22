@@ -18639,7 +18639,7 @@ function wtPanelEnsure() {
       '<button type="button" class="wc-navbtn" id="wc-next" onclick="wtNav(1)" title="Next box">Next &#8250;</button></div>' +
       '<button type="button" class="wc-close" onclick="wtClose()" aria-label="Close">&times;</button></div>' +
     '<div class="wc-warn" id="wc-warn" style="display:none;"></div>' +
-    '<div class="wc-uses" id="wc-uses"></div>' +
+    '<div class="wc-uses" id="wc-uses"><span class="wc-uses-text" id="wc-uses-text"></span><span class="wc-intent" id="wc-intent"></span></div>' +   // v3.2.39 -- Prompt and Direction on the uses line (Ian)
     '<div class="wc-editwrap"><textarea class="wc-edit" id="wc-edit" oninput="wtEditInput()" placeholder="This box is empty. Write here, or use Regen."></textarea>' +
       '<div class="wc-edit-note">Typing here edits your story. Select words to work on just those.</div></div>' +
     '<div class="wc-tools" id="wc-tools"></div>' +
@@ -18676,7 +18676,7 @@ function wtClose() {
   if (busy) WT_STATE.ta = null;
 }
 function wtUsesLine(d) {
-  var el = document.getElementById('wc-uses');
+  var el = document.getElementById('wc-uses-text');
   if (!el || !d || d.uses_left == null) return;
   var per = d.uses_per_token || 4;
   // v3.2.33 -- Ian, 2026-10-22: show the token being used up as a fraction ("1/4 used") rather than a sentence.
@@ -18793,6 +18793,7 @@ function wtRewriteChoicesHtml() {
 // Show a tab. Never spends anything: an empty tab shows its start button.
 function wtTab(id) {
   if (!WT_TAB_OF[id]) return;
+  wtIntentPaint();   // v3.2.39
   WT_STATE.cur = id;
   WT_TABS.forEach(function (t) { var el = wtTabEl(t.id); if (el) el.style.display = (t.id === id) ? '' : 'none'; });
   var s = wtTabState(id);
@@ -18860,13 +18861,62 @@ function wtCoach(box, ta, force) {
   if (sub) sub.textContent = WT_STATE.label || '';
   var e = wtEditEl(); if (e) e.value = el.value;
   if (fresh && p.scrollTop) p.scrollTop = 0;
-  var u = document.getElementById('wc-uses'); if (u && fresh) u.textContent = '';
+  var u = document.getElementById('wc-uses-text'); if (u && fresh) u.textContent = '';
   if (state.currentCampaign) {
     fetch('/api/narrative/writing/status/' + state.currentCampaign.id).then(function (r) { return r.json(); }).then(wtUsesLine).catch(function () {});
   }
   wtTab(WT_STATE.cur);
   wtNavPaint();
+  wtIntentLoad();   // v3.2.39
   if (fresh && other) { try { if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }
+}
+
+// v3.2.39 -- THE BOX'S PROMPT AND DIRECTION, on the uses line (Ian: "Prompt and direction buttons on the same line as
+// the token count"). Prompt is the Narrative Outline (what this part covers), Direction is how it is written -- the same
+// two the Review tab edits, opened in the same windows. Each shows a tick when set. The Story box has neither.
+function wtIntentPaint() {
+  var h = document.getElementById('wc-intent');
+  if (!h) return;
+  if (!WT_STATE.box || WT_STATE.box === 'story') { h.innerHTML = ''; return; }
+  var k = WT_STATE.box;
+  var hasP = !!(state.reviewData && state.reviewData.outlines && String((function (v) { return (v && typeof v === 'object') ? (v.text || '') : (v || ''); })(state.reviewData.outlines[k])).trim());
+  var hasD = !!(state.narrativeDirections && String(state.narrativeDirections[k] || '').trim());
+  h.innerHTML = '<button type="button" class="wc-intent-btn' + (hasP ? ' is-set' : '') + '" onclick="wtEditPrompt()" title="What this part should cover (its Narrative Outline)">&#9998; Prompt' + (hasP ? ' &#10003;' : '') + '</button>' +
+    '<button type="button" class="wc-intent-btn' + (hasD ? ' is-set' : '') + '" onclick="wtEditDirection()" title="How this part should be written (its Narrative Direction)">&#9998; Direction' + (hasD ? ' &#10003;' : '') + '</button>';
+}
+// Repaint the ticks once the edit window closes (its own save reloads the data).
+function wtWatchModal(id) {
+  var m = document.getElementById(id);
+  if (!m || typeof MutationObserver === 'undefined') return;
+  var ob = new MutationObserver(function () {
+    if (m.classList.contains('hidden')) { ob.disconnect(); setTimeout(wtIntentPaint, 700); setTimeout(wtIntentPaint, 1600); }
+  });
+  ob.observe(m, { attributes: true, attributeFilter: ['class'] });
+}
+function wtEditPrompt() {
+  var k = WT_STATE.box, label = WT_STATE.label;
+  if (!k || k === 'story' || typeof openGapOutline !== 'function') return;
+  // The outline window shows what Review loaded: load it first, so an existing prompt is never shown (and saved) blank.
+  var go = function () {
+    var raw = (state.reviewData && state.reviewData.outlines) || {};
+    state.reviewOutlines = state.reviewOutlines || {};
+    Object.keys(raw).forEach(function (kk) { var v = raw[kk]; state.reviewOutlines[kk] = (v && typeof v === 'object') ? (v.text || '') : (v || ''); });
+    openGapOutline(k, label);
+    wtWatchModal('outline-modal');
+    wtIntentPaint();
+  };
+  if (typeof ensureReviewData === 'function') ensureReviewData(go); else go();
+}
+function wtEditDirection() {
+  var k = WT_STATE.box;
+  if (!k || k === 'story' || typeof openNarrDirection !== 'function') return;
+  openNarrDirection(k, WT_STATE.label);
+  wtWatchModal('narr-direction-modal');
+}
+// The ticks need the Review data (outlines); fetch it quietly when the coach opens on a box.
+function wtIntentLoad() {
+  if (WT_STATE.box && WT_STATE.box !== 'story' && typeof ensureReviewData === 'function') ensureReviewData(wtIntentPaint);
+  else wtIntentPaint();
 }
 
 // Kept under its old name: the box's own Regen pill (regenNarrativeSection) calls wtOpen('regen', ...), which

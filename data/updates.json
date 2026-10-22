@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.39",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3239-coach-prompt-direction",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach now knows each box's Prompt (what it should cover) and Direction (how it should be written), and you can edit both from the coach.",
+        "detail": "Prompt and Direction buttons sit on the coach's top line, with a tick when set; they open the same windows as the Review tab. Feedback judges whether the box covers its prompt and follows its direction (a box that misses either can't be Great) and never suggests undoing them; Show me and Rewrite stay within them. Test: set a direction on a box, then Feedback on text that ignores it (it says so); the Prompt button shows the outline Review shows.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.38",
     "staged_on": "2026-10-22",
     "entries": [

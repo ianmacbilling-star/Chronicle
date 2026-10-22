@@ -1756,6 +1756,17 @@ function wtBackground(ctx, session) {
     (ctx.directorNotes ? ('STORY INSTRUCTIONS from the author (they apply to the prose):\n' + ctx.directorNotes + '\n\n') : '');
 }
 
+// v3.2.39 -- THE INTENT OF THIS PART (Ian, 2026-10-22: "so it knows what exactly was the intent of that narrative
+// section"). The box's PROMPT (its Narrative Outline: what it should cover) and DIRECTION (how it should be written),
+// which only Regen used to read. Feedback judges against them, Show me and the polishing tools stay within them.
+function wtIntentBlock(ctx, box) {
+  if (box === 'story') return '';
+  const outl = outlineText(ctx.gapOutlines && ctx.gapOutlines[box]).trim();
+  const dir = String((ctx.gapDirections && ctx.gapDirections[box]) || '').trim();
+  return (outl ? ('THE PROMPT for this part -- what it is meant to cover: ' + wtStr(outl, 2000) + '\n') : '') +
+    (dir ? ('THE DIRECTION for this part -- how the author wants it written: ' + wtStr(dir, 2000) + '\n') : '') +
+    ((outl || dir) ? '\n' : '');
+}
 function wtNeighbours(ctx, box) {
   if (box === 'story') return '';   // v3.2.36 -- the story has no boxes either side
   const chain = wtChain(ctx.moments);
@@ -1790,7 +1801,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     return {
       max_tokens: 1200,
       system: 'You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.',
-      prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
         // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
         // Feedback used to give 3 to 5 tips every time, so a writer who took every suggestion and asked again got three
@@ -1812,6 +1823,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         'Suggestions cover faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
         'flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). ' +
         'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose.\n' +
+        'If THE PROMPT or THE DIRECTION for this part is given above, the passage must cover the prompt and follow the direction: one that does not cannot be "great", say which part it misses, and never suggest undoing either.\n' +
         'Write everything in the same language as the passage.\n' + WT_RULES +
         'Return ONLY valid JSON, no markdown:\n' +
         '{ "verdict": "great" or "close" or "work", ' +
@@ -1827,7 +1839,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     return {
       max_tokens: 900,
       system: 'You are a writing coach showing a new writer how one suggestion looks in practice. You return only the rewritten words, with no commentary.',
-      prompt: bg + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
+      prompt: bg + wtIntentBlock(ctx, box) + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +   // v3.2.39
         'THE SUGGESTION: ' + issue + '\n\n' +
         (whole
           ? 'Rewrite the whole passage applying ONLY this suggestion. Keep everything else -- facts, names, voice, point of view, length -- as it is.\n'
@@ -1872,11 +1884,11 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     return {
       max_tokens: 1600,
       system: 'You are a skilled editor helping a new writer improve their own illustrated story. You keep their story and their voice, and you return only valid JSON.',
-      prompt: bg + wtNeighbours(ctx, box) +
+      prompt: bg + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- stay within its prompt and direction
         'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
         (part ? ('WORK ON ONLY THIS PART of the passage. Your text will replace exactly these words inside it, so it must read naturally in their place:\n' + part + '\n\n')
               : 'WORK ON the whole passage.\n\n') +
-        job + ' Keep the names, facts, voice, tense and point of view as they are. Write in the same language as the passage.\n' + WT_RULES +
+        job + ' Keep the names, facts, voice, tense and point of view as they are, and stay within this part\'s prompt and direction if they are given above. Write in the same language as the passage.\n' + WT_RULES +
         'Give 3 different versions. Return ONLY valid JSON, no markdown: { "options": [ "first version", "second version", "third version" ] }',
       before: part || text
     };
