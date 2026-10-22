@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.30",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3230-minimum-age-18",
+        "kind": "change",
+        "public": true,
+        "summary": "You now need to be 18 or older to open a Campaignia account. Children are still welcome in the stories you make.",
+        "detail": "Sign-up, the server check, Terms of Service §2 and the Privacy Policy's children section now say 18 (or the age of majority where you live, if older), in line with the terms of the AI services that draw the pictures. Existing accounts are unchanged. Terms and Privacy are now Version 1.2, October 21, 2026. Test: sign up with a date of birth 17 years ago (refused, message says 18) and 18 years ago (allowed); read Terms §2 and Privacy §12.",
+        "td": [
+          "TD-1001"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.29",
     "staged_on": "2026-10-21",
     "entries": [
