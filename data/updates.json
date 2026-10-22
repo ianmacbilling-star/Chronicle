@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.32",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3232-coach-knows-lore-and-story-so-far",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Writing coach now knows your campaign's lore and the story so far, so Feedback and Regen stay true to your world and to what already happened.",
+        "detail": "Feedback, Show me and Regen now read the campaign's World / Lore and the previous session's Summary For Next Session, the same background Generate Narrative uses. They are told to stay consistent with both and not to retell them. Very long lore is trimmed for the coach (about 8,000 characters), so a use costs the same. Test: in a campaign with lore and a second session whose first session has a summary, press Feedback on a box that contradicts the lore (a wrong name or place) and see it pointed out; Regen a box and see it fit what came before.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.31",
     "staged_on": "2026-10-22",
     "entries": [

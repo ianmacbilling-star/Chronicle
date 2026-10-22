@@ -1631,6 +1631,7 @@ const WRITING_TRANSCRIPT_WINDOW = 40000;   // characters of transcript Regen rea
 const WRITING_TIMEOUT_MS = 90 * 1000;
 
 function wtStr(v, max) { return String(v == null ? '' : v).slice(0, max); }
+const WT_LORE_MAX = 8000, WT_SOFAR_MAX = 6000;   // v3.2.32 -- characters of lore and of the story so far the coach reads
 
 // The parts of the chain the page shows, in reading order -- the same order renderStoryboard draws:
 // Opening, then each panel's moment and the bridge after it (no bridge after the last panel), Closing.
@@ -1672,6 +1673,14 @@ async function writingContext(db, req, session, targetForkId) {
     try { sections = JSON.parse(fk.narrative_sections || '[]') || []; } catch (e) { sections = []; }
   }
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+  // v3.2.32 -- THE COACH KNOWS THE WORLD AND WHAT HAPPENED BEFORE (Ian, 2026-10-22). Generate Narrative
+  // has always been given the campaign lore and the previous session's Summary For Next Session; the
+  // writing tools were given neither, so Feedback could praise a name the lore spells differently and
+  // Regen could write as if the last session never happened. Same lookup Generate Narrative uses
+  // (inheritedSummary: this version's copy of the previous session first, then the caller's, then the
+  // Story Master's), so the coach and the narrative carry the same memory. Never fatal: it returns
+  // null on any failure and the tools simply go without it.
+  const inh = await inheritedSummary(db, session, req.session.userId, targetForkId);
   let gdVoice = null;
   if (!(fk && fk.narrative_style)) {
     try {
@@ -1705,7 +1714,9 @@ async function writingContext(db, req, session, targetForkId) {
   const moments = await db.prepare('SELECT id, title, description, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   return {
     campaign, charList, directorNotes, gapDirections, gapOutlines, narrStyleId, styleBundle, verbosity, narrator, fpAnon, moments,
-    intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : ''
+    intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : '',
+    lore: (campaign && campaign.lore) ? String(campaign.lore).trim() : '',                      // v3.2.32
+    storySoFar: (inh && inh.text) ? inh.text : '', storySoFarFrom: (inh && inh.sessionName) ? inh.sessionName : ''   // v3.2.32
   };
 }
 
@@ -1715,6 +1726,13 @@ function wtBackground(ctx, session) {
   const campPrompt = genresvc.campaignPrompt(ctx.campaign && ctx.campaign.campaign_prompt);
   return 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n' +
     'Session: ' + (session.name || '') + '\n\n' +
+    // v3.2.32 -- lore and the story so far, worded as Generate Narrative words them: background for
+    // continuity, never events of this passage. Capped so a very long lore costs a use the same as a
+    // short one (Generate Narrative sends it whole; a use is a quarter of a token).
+    (ctx.lore ? ('WORLD / LORE (background for consistency across sessions; NOT events of this passage):\n' + wtStr(ctx.lore, WT_LORE_MAX) + '\n\n') : '') +
+    (ctx.storySoFar ? ('THE STORY SO FAR (carried forward from the previous session' + (ctx.storySoFarFrom ? (', \u201c' + ctx.storySoFarFrom + '\u201d') : '') + '):\n' +
+      wtStr(ctx.storySoFar, WT_SOFAR_MAX) + '\n' +
+      'This has already happened in the story. Treat it as true and stay consistent with it, but it is NOT part of this passage: do not retell it or suggest retelling it.\n\n') : '') +
     (ctx.charList ? ('Characters:\n' + ctx.charList + '\n\n') : '') +
     (genre ? (genre + '\n\n') : '') +
     'NARRATIVE VOICE chosen for this version:\n' + ctx.styleBundle.voice + '\n\n' +
@@ -1758,7 +1776,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
         'Give 3 to 5 specific, practical suggestions that would make THIS passage stronger for a reader: clarity, vivid detail, pacing, word choice, ' +
-        'dialogue, showing rather than telling, flow from the text before it into the text after it. Lead with the one that matters most. ' +
+        'dialogue, showing rather than telling, flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). Lead with the one that matters most. ' +
         'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose. ' +
         'Do not praise filler and do not invent problems; if the passage is already strong, say what would make it stronger still.\n' +
         'Write the suggestions in the same language as the passage.\n' + WT_RULES +
