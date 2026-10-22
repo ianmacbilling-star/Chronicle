@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.29",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3229-image-model-variables",
+        "kind": "change",
+        "public": false,
+        "summary": "The picture model can now be switched with two Railway variables.",
+        "detail": "FAL_IMAGE_MODEL and FAL_IMAGE_EDIT_MODEL (unset = Nano Banana 2, as before). For Nano Banana 2.1 set google/nano-banana-2.1 and google/nano-banana-2.1/edit, and NANO_THINKING_LEVEL=minimal. A side-by-side of all 11 styles showed the same look and speed at about half the cost per picture. A value that is not a fal endpoint path is ignored. Test: set the three on staging, generate a panel, a reference, a retouch and a title; unset to go back.",
+        "td": [
+          "TD-1002"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.28",
     "staged_on": "2026-10-21",
     "entries": [
