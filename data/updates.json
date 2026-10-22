@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.33",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3233-writing-coach-stage-2",
+        "kind": "feature",
+        "public": true,
+        "summary": "Five new writing tools under every Narrative box: Rewrite, Describe, Expand, Tighten and Word. Select some words to work on just those, or use the whole box.",
+        "detail": "Rewrite offers Clearer, More vivid, More dramatic, Simpler, or your own instruction. Describe adds sight, sound and smell; Expand gives a rushed passage room; Tighten trims a wordy one. Each gives 3 versions to choose from, replaces only the words you selected (or the whole box), costs one writing use, and changes nothing until Use this. Word gives better choices for a selected word or short phrase and is free. Gold, Platinum and the Free Trial. Several Use this in a row: Revert goes back to before the first. The coach's uses line now reads like “Token: 1/4 used · 182 tokens left”. Test: select a sentence and press Rewrite > More vivid; Use this replaces only that sentence; select one word and press Word, click a choice, then another; Revert.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.32",
     "staged_on": "2026-10-22",
     "entries": [

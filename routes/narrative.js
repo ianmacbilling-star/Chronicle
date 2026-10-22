@@ -6,7 +6,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
-const { TEXT_MODEL, WRITING_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
+const { TEXT_MODEL, WRITING_MODEL, WRITING_FAST_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -1623,7 +1623,16 @@ router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, 
 // route on purpose: refactoring the live narrative job to serve a new tool is the wrong blast radius.
 // The guard pins the pieces both must agree on, so a change to one shows up as a failed build.
 // =====================================================================================================
-const WRITING_TOOLS = { feedback: { gold: true }, showme: { gold: true }, regen: { gold: false } };
+const WRITING_TOOLS = { feedback: { gold: true }, showme: { gold: true }, regen: { gold: false },
+  // v3.2.33 -- TD-999 stage 2. The polishing tools work on the words the writer selected, or the whole box, and
+  // run on the FAST model (WRITING_FAST_MODEL, Haiku by default; Ian, 2026-10-22: "build it on the cheaper model").
+  // Swap it with the WRITING_FAST_MODEL Railway variable if the writing feels weak. Word is free (Ian): no use is
+  // taken and no token is needed, but it is still Gold and up, and still logged so its real cost can be read.
+  rewrite: { gold: true, fast: true }, describe: { gold: true, fast: true }, expand: { gold: true, fast: true }, tighten: { gold: true, fast: true },
+  word: { gold: true, fast: true, free: true } };
+const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more vivid', dramatic: 'more dramatic', simpler: 'simpler, in plainer words' };
+const WT_WORD_MAX = 60;           // characters a Word selection may have
+const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
 const WRITING_USES_PER_TOKEN = 4;
 const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4})$/;
 const WRITING_TEXT_MAX = 12000;            // characters of box text the tools will read
@@ -1723,6 +1732,7 @@ async function writingContext(db, req, session, targetForkId) {
 // The shared background block: who and what the story is, so suggestions stay in character, genre and voice.
 function wtBackground(ctx, session) {
   const genre = genresvc.genreSteering(ctx.campaign && ctx.campaign.genres, 'prose');
+  ctx.genreLine = genre || '';   // v3.2.33 -- Word reads only this, not the whole background
   const campPrompt = genresvc.campaignPrompt(ctx.campaign && ctx.campaign.campaign_prompt);
   return 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n' +
     'Session: ' + (session.name || '') + '\n\n' +
@@ -1799,6 +1809,50 @@ function wtPrompt(tool, ctx, session, box, text, body) {
             'Your rewrite will replace exactly those words inside the passage, so it must read naturally in their place. Keep the facts, names, voice and point of view.\n') +
         'Use US spelling, and typographic quotes “ ” for speech. Return ONLY the rewritten words: no quotation marks around them, no label, no explanation.',
       before: whole ? text : quote
+    };
+  }
+  // v3.2.33 -- Word: better words for one selected word or short phrase, from the sentence around it.
+  if (tool === 'word') {
+    const sel = wtStr(body.selection, WT_WORD_MAX);
+    const at = text.indexOf(sel);
+    const around = text.slice(Math.max(0, at - 600), at) + '[[' + sel + ']]' + text.slice(at + sel.length, at + sel.length + 600);
+    return {
+      max_tokens: 600,
+      system: 'You are a thesaurus that understands context, helping a writer find the right word. You return only valid JSON.',
+      prompt: (ctx.genreLine ? (ctx.genreLine + '\n\n') : '') +
+        'THE TEXT, with the word or phrase to replace marked [[like this]]:\n' + around + '\n\n' +
+        'Give 6 to 8 alternatives for ' + JSON.stringify(sel) + ' that fit exactly that spot in the sentence, in the same voice and tense, each with a note of a few words on what it adds. ' +
+        'Keep the same part of speech so the sentence still reads. Use US spelling. Write in the same language as the text.\n' +
+        'Return ONLY valid JSON, no markdown: { "words": [ { "word": "the alternative", "note": "a few words" } ] }',
+      before: sel
+    };
+  }
+  // v3.2.33 -- Rewrite, Describe, Expand, Tighten: three versions of the selected words, or of the whole box.
+  if (WRITING_TOOLS[tool] && WRITING_TOOLS[tool].fast) {
+    const sel = wtStr(body.selection, WRITING_TEXT_MAX);
+    const part = (sel && text.indexOf(sel) >= 0) ? sel : '';
+    let job;
+    if (tool === 'rewrite') {
+      const own = wtStr(body.instruction, WT_INSTRUCTION_MAX).trim();
+      job = own ? ('Rewrite it the way the writer asks: \u201c' + own.replace(/["\u201c\u201d]/g, '') + '\u201d. Follow that request only as far as it is about how the words read.')
+        : ('Rewrite it to make it ' + WT_REWRITE_HOWS[body.how] + '.');
+    } else if (tool === 'describe') {
+      job = 'Add sensory detail (what can be seen, heard, smelled, felt, tasted) so the reader can picture it, without slowing the story and without adding events.';
+    } else if (tool === 'expand') {
+      job = 'It feels rushed. Expand it: slow down and give it room, with more of what is seen, felt and happening, about half again to twice as long. Add no new events.';
+    } else {
+      job = 'Tighten it: cut wordiness and repetition so it reads faster, keeping its meaning. Make it noticeably shorter.';
+    }
+    return {
+      max_tokens: 1600,
+      system: 'You are a skilled editor helping a new writer improve their own illustrated story. You keep their story and their voice, and you return only valid JSON.',
+      prompt: bg + wtNeighbours(ctx, box) +
+        'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
+        (part ? ('WORK ON ONLY THIS PART of the passage. Your text will replace exactly these words inside it, so it must read naturally in their place:\n' + part + '\n\n')
+              : 'WORK ON the whole passage.\n\n') +
+        job + ' Keep the names, facts, voice, tense and point of view as they are. Write in the same language as the passage.\n' + WT_RULES +
+        'Give 3 different versions. Return ONLY valid JSON, no markdown: { "options": [ "first version", "second version", "third version" ] }',
+      before: part || text
     };
   }
   // regen
@@ -1878,6 +1932,31 @@ function wtParseFeedback(raw) {
   });
   return pts.length ? pts : null;
 }
+// v3.2.33 -- { "options": [ ... ] } from the polishing tools. Same quote repair as Feedback (TD-515).
+function wtParseJson(raw) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(clean); } catch (e) {
+    try { const f = repairUnescapedQuotes(clean); if (f.fixes > 0) return JSON.parse(f.text); } catch (e2) {}
+  }
+  return null;
+}
+function wtParseOptions(raw) {
+  const p = wtParseJson(raw);
+  if (!p || !Array.isArray(p.options)) return null;
+  const seen = {};
+  const out = p.options.filter(function (x) { return typeof x === 'string'; }).map(function (x) { return wtCleanText(wtStr(x, WRITING_TEXT_MAX)); })
+    .filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; }).slice(0, 3);
+  return out.length ? out : null;
+}
+function wtParseWords(raw, sel) {
+  const p = wtParseJson(raw);
+  if (!p || !Array.isArray(p.words)) return null;
+  const seen = {}; seen[String(sel || '').toLowerCase()] = 1;
+  const out = p.words.filter(function (x) { return x && typeof x.word === 'string' && x.word.trim(); })
+    .map(function (x) { return { word: wtStr(x.word, 80).trim(), note: wtStr(x.note, 120).trim() }; })
+    .filter(function (x) { const k = x.word.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 8);
+  return out.length ? out : null;
+}
 function wtCleanText(raw) {
   let s = String(raw || '').replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
   // A model that wraps its whole answer in one pair of quotes: take them off.
@@ -1940,6 +2019,16 @@ async function writingToolHandler(req, res) {
   if (!WRITING_BOX_RE.test(box)) return res.status(400).json({ error: 'Unknown box.' });
   const text = wtStr(body.text, WRITING_TEXT_MAX);
   if (tool !== 'regen' && !text.trim()) return res.json({ error: 'Write something in this box first.' });
+  // v3.2.33 -- what the stage-2 tools need before anything is looked up or paid for.
+  if (tool === 'word') {
+    const ws = String(body.selection || '');
+    if (!ws.trim() || ws.length > WT_WORD_MAX || ws.trim().split(/\s+/).length > 6 || text.indexOf(ws) < 0) {
+      return res.json({ error: 'Select a word or a short phrase in the box first (up to 6 words), then press Word.' });
+    }
+  }
+  if (tool === 'rewrite' && !Object.prototype.hasOwnProperty.call(WT_REWRITE_HOWS, String(body.how || '')) && !String(body.instruction || '').trim()) {
+    return res.json({ error: 'Choose how to rewrite it, or type your own way.' });
+  }
 
   const db = await getDb();
   const session = await db.prepare(
@@ -1964,14 +2053,15 @@ async function writingToolHandler(req, res) {
   }
 
   // Before the call: a use in hand, or a token to buy four. Nothing is spent here.
+  const free = !!WRITING_TOOLS[tool].free;   // v3.2.33 -- Word: no use, no token
   const usesBefore = await wtUsesLeft(db, req.session.userId);
-  if (usesBefore <= 0) {
+  if (!free && usesBefore <= 0) {
     const bal = await getBalance(req.session.userId);
     if (bal.total < 1) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'The writing tools use 1 token for every ' + WRITING_USES_PER_TOKEN + ' uses, and you are out of tokens.' });
   }
 
   const P = wtPrompt(tool, ctx, session, box, text, body);
-  const model = WRITING_MODEL;
+  const model = WRITING_TOOLS[tool].fast ? WRITING_FAST_MODEL : WRITING_MODEL;   // v3.2.33
   const out = await wtCallModel(key, model, P.system, P.prompt, P.max_tokens);
   if (out.error) {
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Writing coach', fn: 'POST /narrative/writing/' + tool, message: 'Writing tool failed: ' + out.error }); } catch (e) {}
@@ -1987,13 +2077,21 @@ async function writingToolHandler(req, res) {
     const after = wtCleanText(out.text);
     if (!after || out.truncated) return res.json({ error: 'The example came back incomplete. Nothing was charged. Please try again.' });
     result = { before: P.before, after: after };
+  } else if (tool === 'word') {
+    const ws = wtParseWords(out.text, P.before);
+    if (!ws) return res.json({ error: 'No words came back in a form we could read. Please try again.' });
+    result = { before: P.before, words: ws };
+  } else if (WRITING_TOOLS[tool].fast) {
+    const os = out.truncated ? null : wtParseOptions(out.text);
+    if (!os) return res.json({ error: 'The new versions came back incomplete. Nothing was charged. Please try again.' });
+    result = { before: P.before, options: os };
   } else {
     const t2 = wtCleanText(out.text);
     if (!t2 || out.truncated) return res.json({ error: 'The new text came back incomplete. Nothing was charged. Please try again.' });
     result = { options: [t2] };
   }
 
-  const use = await wtTakeUse(db, req.session.userId, req.params.campaignId);
+  const use = free ? { ok: true, refilled: false } : await wtTakeUse(db, req.session.userId, req.params.campaignId);   // v3.2.33 -- Word takes nothing
   const u = out.usage || {};
   try {
     await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
