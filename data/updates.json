@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.34",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3234-one-writing-coach",
+        "kind": "change",
+        "public": true,
+        "summary": "One Writing Coach button under each Narrative box. The coach shows the box's text at the top, so you can see what you are working on wherever the box is, with every tool and Previous / Next box.",
+        "detail": "The row under each box is now Edit prompt, Regen, Writing Coach, Revert. The coach panel shows the box's text at the top; you can type there (it edits your story) and select words to work on just those. Below it: Regen, Feedback, Rewrite and Word, plus Revert. Rewrite's choices are Clearer, More vivid, More dramatic, Simpler, Add detail, Longer, Shorter, or your own way. Previous box and Next box move through the session without closing the coach. Results no longer repeat your text. Test: open the coach on the last box on the right of the page; type in the panel and see the box change; select a sentence, Rewrite > Shorter, Use this; Next box; Word on a selected word; Revert from the panel and from under the box.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.33",
     "staged_on": "2026-10-22",
     "entries": [
