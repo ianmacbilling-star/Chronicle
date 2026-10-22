@@ -48,7 +48,7 @@ function styleText(stored) {
   if (!v || /^custom:/i.test(v)) return 'illustration';
   if (v === artstyles.SELF_NAME) return "the author's own artwork";
   var slug = artstyles.styleSlug(v);
-  var name = slug ? (artstyles.nameForSlug(slug) || v) : '';
+  var name = slug ? artstyles.labelFor(artstyles.nameForSlug(slug) || v) : '';   // v3.2.31 -- the name readers see (TD-1004)
   if (!name) return 'illustration';
   return /illustration|painting|drawing|painterly|ink|style|comic book/i.test(name) ? name : name + ' illustration';
 }

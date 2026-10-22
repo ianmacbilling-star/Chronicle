@@ -262,19 +262,19 @@ const COST_ANALYZE = 1;
 // and is stated outright, because silence is where the image model falls back on its own habits.
 // The keys are stored with the style (custom_art_styles.style_answers); never rename one.
 const STYLE_QUESTIONS = [
-  ['tradition', 'Tradition', 'The broad genre or tradition it belongs to (for example comic ink, anime, watercolour illustration, oil painting, cinematic concept art, collage). Never an artist, studio, franchise or title.'],
-  ['medium', 'Medium and technique', 'What it is made with: ink, watercolour, oil, digital paint, pencil, woodcut, mixed media, collage, photographic.'],
+  ['tradition', 'Tradition', 'The broad genre or tradition it belongs to (for example comic ink, anime, watercolor illustration, oil painting, cinematic concept art, collage). Never an artist, studio, franchise or title.'],
+  ['medium', 'Medium and technique', 'What it is made with: ink, watercolor, oil, digital paint, pencil, woodcut, mixed media, collage, photographic.'],
   ['finish', 'Finish', 'Polished, crisp, sketchy, loose, or deliberately unfinished.'],
-  ['line', 'Line work', 'Outlines or none; thick, thin, even or varied; the colour of the line. If edges are made by light against shadow rather than by lines, say so.'],
+  ['line', 'Line work', 'Outlines or none; thick, thin, even or varied; the color of the line. If edges are made by light against shadow rather than by lines, say so.'],
   ['tones', 'Tonal range', 'Two-tone (black and white only), limited, or full; high-key (mostly light) or low-key (mostly dark).'],
-  ['black', 'Black and the darkest areas', 'Large solid masses, small accents, or none; if not black, what the darkest colour is.'],
+  ['black', 'Black and the darkest areas', 'Large solid masses, small accents, or none; if not black, what the darkest color is.'],
   ['shading', 'Shading', 'Flat hard shapes, cel steps, hatching, soft blending, washes, or none.'],
-  ['colour', 'Colour', 'The colours by name; bright and saturated or muted; how many; laid flat, washed or textured. If there is no colour, say so.'],
-  ['light', 'Light and light effects', 'Where light comes from and its colour; its effects (glows, rim light, rays, flares, neon, bloom) and HOW they are drawn (flat shapes or soft gradients), or none.'],
+  ['colour', 'Color', 'The colors by name; bright and saturated or muted; how many; laid flat, washed or textured. If there is no color, say so.'],
+  ['light', 'Light and light effects', 'Where light comes from and its color; its effects (glows, rim light, rays, flares, neon, bloom) and HOW they are drawn (flat shapes or soft gradients), or none.'],
   ['surfaces', 'Surfaces', 'Wet, glossy, matte, reflective, translucent.'],
   ['texture', 'Texture', 'Paper grain, brush marks, halftone, grit, or perfectly clean.'],
   ['detail', 'Detail, and where it goes', 'On the main figure only, evenly spread, or minimal everywhere; and how much.'],
-  ['background', 'Background', 'A flat colour, solid black, simplified shapes, loose and suggestive, full scenery, or bare paper.'],
+  ['background', 'Background', 'A flat color, solid black, simplified shapes, loose and suggestive, full scenery, or bare paper.'],
   ['edges', 'Edges and framing', 'Full bleed to every edge, fading to pure white, fading into paper, or a drawn border.'],
   ['figures', 'Characters: faces, eyes and bodies', 'How people are drawn: eyes (size, shape, highlights), faces, proportions and body type, realistic or stylised, expression.'],   // v3.1.68 -- label made obvious (Ian: "how people should look... Anime... big eyes")
   ['energy', 'Energy and drama', 'Movement (still and calm, or sweeping and dynamic) and intensity (quiet and gentle, or charged and theatrical), described as how things are drawn, never as what happens.'],

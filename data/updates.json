@@ -1,5 +1,319 @@
 [
   {
+    "version": "3.2.43",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3243-landing-coach-and-your-own",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The landing pages and Compare the Tiers now show the Writing Coach, and say you can use your own art or words.",
+        "detail": "Both landing pages: the line under the Start buttons reads \"Your own art or words, if you like\"; the Arsenal strip has a fifth card, Writing Coach; Gold and Platinum list \"writing coach\". Compare the Tiers has a Writing Coach row (Silver: Regen only; Gold and Platinum: a tick, read from the same rule the coach uses) and a footnote: on every plan you can put your own art in the book or write it yourself. Test: open the home page and the storyteller page, wide and narrow (five cards; two with the coach across the bottom; one); open Compare the Tiers on each.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.42",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3242-coach-tours-and-help",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Storyboard and Story tours now show the Writing Coach, and the Help assistant knows all about it.",
+        "detail": "The Storyboard tour has a Writing Coach step after the Narrative step, and the Narrative step no longer mentions Feedback under the box. The Story tour has a Writing Coach step after the Story box, for the Story Master. Help can now answer questions about the coach: where it is, what each tool does, Story box Feedback, plans and cost. Test: run the Storyboard tour (Narrative, then Writing Coach); run the Story tour as the Story Master (Writing Coach after Your story) and as a member (no coach step); ask Help \"what does the writing coach cost?\" and \"what is the difference between Regen and Rewrite?\".",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.41",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3241-coach-closes-and-remembers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach closes itself when you leave the page its box is on, and remembers where you were: press Writing Coach on the same box and your tabs are back.",
+        "detail": "Switch to another session tab and the coach closes; come back and press Writing Coach on the same box and its Feedback, Rewrite versions and words are still there. An answer that was still on its way lands in its tab meanwhile. Closing with × keeps them too. Moving to another session, version or campaign starts fresh. Test: Feedback on a box, switch to the Story tab (the coach closes), back to the Storyboard, Writing Coach on the same box (Feedback still there); open another session (fresh).",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.40",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3240-story-big-picture-feedback",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Feedback on the Story box now reads your whole story and looks at the big picture: what it is (notes, a game transcript or a written story; one chapter or the whole thing), its shape, pacing, clarity and gaps.",
+        "detail": "It reads the whole Story box and your Story Notes and Instructions, says what it reads as, then gives a verdict (Ready to build your book from, Close, or Needs work) with big-picture points, not line edits; transcripts are allowed to be messy. Show me is gone from the Story box; Rewrite and Word stay for working on the words. It costs one use for every 10,000 words, shown on the button. Test: a short story (1 use) and a long transcript (2+ uses on the button); the answer starts with Reads as.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.39",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3239-coach-prompt-direction",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach now knows each box's Prompt (what it should cover) and Direction (how it should be written), and you can edit both from the coach.",
+        "detail": "Prompt and Direction buttons sit on the coach's top line, with a tick when set; they open the same windows as the Review tab. Feedback judges whether the box covers its prompt and follows its direction (a box that misses either can't be Great) and never suggests undoing them; Show me and Rewrite stay within them. Test: set a direction on a box, then Feedback on text that ignores it (it says so); the Prompt button shows the outline Review shows.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.38",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3238-feedback-verdict",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Feedback now gives an honest verdict first: when your writing is truly great it says “I wouldn’t change a thing!”, when you’re close it says so with one or two small tips, and only real problems get a full list.",
+        "detail": "The writing coach judges each passage blind, against what a good illustrated story needs (not perfection): true to your original story, specific, in your voice, and free of stock phrases. It names what already works. The coach's Regen, Feedback, Rewrite and Word now look like tabs, so it is clear they switch views; the buttons inside each tab do the work. It no longer invents new tips after you have taken its earlier ones. Test: ask for Feedback on a rough box (Needs work, 3 to 5 tips); take its suggestions and ask again (Close or Great); a Great answer shows the green verdict and no tips.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.37",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3237-regen-cleans-up",
+        "kind": "fix",
+        "public": false,
+        "summary": "Regen deletes the picture it no longer needs again, instead of leaving it in storage.",
+        "detail": "Since v3.2.21 every Regen past the first left the picture leaving the Revert slot in storage, because the panel's own note about that slot still named it when the clean-up ran. Now the slot and its note move on first, then the old picture is released. Pictures still used anywhere (archived, on another version, published) are kept as before. Test: Regen one panel three times; the log shows “R2 deleted: 204” after the second and third; Revert still brings back the previous picture with its style.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.36",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3236-coach-on-story",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Writing Coach now works on your Story / Session Transcript too: Feedback, Rewrite and Word, right under the story box.",
+        "detail": "Press Writing Coach under the Story box (Story Masters). Feedback reads up to about 6,000 words: the words you select, or the part around your cursor. Rewrite (all its choices) and Word work on the words you select, up to about 2,000 words at a time. Typing in the coach edits your story and saves it, as typing in the box does. Regen and Previous / Next stay with the Narrative boxes. Test: a long story, cursor near the end, Get feedback (tips about the end); select a paragraph, Rewrite > Clearer, Use this; reload the page and see the change kept.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.35",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3235-coach-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach has tabs that keep their results, a wider panel, and the box name, Previous and Next on one line at the top.",
+        "detail": "Regen, Feedback, Rewrite and Word are tabs: each keeps its results while you look at the others, and clicking a tab never spends a use (each has its own start button). A tab whose results came before you edited the text says “Your text has changed since these suggestions” until you run it again. Words you select in the coach stay selected through Rewrite, and the new words are selected after Use this. Previous / Next clears the tabs, and asks first if any tab has suggestions you haven’t used. The mouse wheel over the coach scrolls only the coach. Test: Feedback, then Rewrite > Shorter on a selection, then back to Feedback (still there); edit the text (the note appears); Next with unused suggestions (asked); wheel over the coach at its end (the storyboard stays put).",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.34",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3234-one-writing-coach",
+        "kind": "change",
+        "public": true,
+        "summary": "One Writing Coach button under each Narrative box. The coach shows the box's text at the top, so you can see what you are working on wherever the box is, with every tool and Previous / Next box.",
+        "detail": "The row under each box is now Edit prompt, Regen, Writing Coach, Revert. The coach panel shows the box's text at the top; you can type there (it edits your story) and select words to work on just those. Below it: Regen, Feedback, Rewrite and Word, plus Revert. Rewrite's choices are Clearer, More vivid, More dramatic, Simpler, Add detail, Longer, Shorter, or your own way. Previous box and Next box move through the session without closing the coach. Results no longer repeat your text. Test: open the coach on the last box on the right of the page; type in the panel and see the box change; select a sentence, Rewrite > Shorter, Use this; Next box; Word on a selected word; Revert from the panel and from under the box.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.33",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3233-writing-coach-stage-2",
+        "kind": "feature",
+        "public": true,
+        "summary": "Five new writing tools under every Narrative box: Rewrite, Describe, Expand, Tighten and Word. Select some words to work on just those, or use the whole box.",
+        "detail": "Rewrite offers Clearer, More vivid, More dramatic, Simpler, or your own instruction. Describe adds sight, sound and smell; Expand gives a rushed passage room; Tighten trims a wordy one. Each gives 3 versions to choose from, replaces only the words you selected (or the whole box), costs one writing use, and changes nothing until Use this. Word gives better choices for a selected word or short phrase and is free. Gold, Platinum and the Free Trial. Several Use this in a row: Revert goes back to before the first. The coach's uses line now reads like “Token: 1/4 used · 182 tokens left”. Test: select a sentence and press Rewrite > More vivid; Use this replaces only that sentence; select one word and press Word, click a choice, then another; Revert.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.32",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3232-coach-knows-lore-and-story-so-far",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Writing coach now knows your campaign's lore and the story so far, so Feedback and Regen stay true to your world and to what already happened.",
+        "detail": "Feedback, Show me and Regen now read the campaign's World / Lore and the previous session's Summary For Next Session, the same background Generate Narrative uses. They are told to stay consistent with both and not to retell them. Very long lore is trimmed for the coach (about 8,000 characters), so a use costs the same. Test: in a campaign with lore and a second session whose first session has a summary, press Feedback on a box that contradicts the lore (a wrong name or place) and see it pointed out; Regen a box and see it fit what came before.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.31",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3231-pastels-and-oils-renamed",
+        "kind": "change",
+        "public": true,
+        "summary": "Fantasy pastel is now Soft pastels, and Fantasy oil is now Oil painting. They are mediums, so they suit any kind of story.",
+        "detail": "New names on the art style cards, in the Library's art style filter, on Bookshelf books and in picture alt text. Nothing else changes: books and pictures already made in these styles keep them, and the pictures are drawn exactly as before. Test: open the art style picker (Soft pastels and Oil painting, same pictures and descriptions); a campaign already set to either style shows the new name; the Library art style filter lists the new names and still finds the old pictures.",
+        "td": [
+          "TD-1004"
+        ]
+      },
+      {
+        "id": "3231-version-tour-step",
+        "kind": "fix",
+        "public": true,
+        "summary": "The tour's \"Whose version?\" step now points at the version picker instead of a spot beside it.",
+        "detail": "Since the version picker was redrawn with pins, the real dropdown underneath is hidden as a 1-pixel box, and the tour was outlining that box (next to the New Version button). Both version steps (session and Publish) now point at the picker you see, falling back to the old one if it is not drawn yet. The Storyboard tour's Replace step now also says you can replace a picture with your own. Test: run the session tour; step 4 outlines the version picker. Run the Publish tour; Whose version? outlines its picker. The Storyboard tour's Replace step mentions your own image.",
+        "td": [
+          "TD-1005"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.30",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3230-minimum-age-18",
+        "kind": "change",
+        "public": true,
+        "summary": "You now need to be 18 or older to open a Campaignia account. Children are still welcome in the stories you make.",
+        "detail": "Sign-up, the server check, Terms of Service §2 and the Privacy Policy's children section now say 18 (or the age of majority where you live, if older), in line with the terms of the AI services that draw the pictures. Existing accounts are unchanged. Terms and Privacy are now Version 1.2, October 21, 2026. Test: sign up with a date of birth 17 years ago (refused, message says 18) and 18 years ago (allowed); read Terms §2 and Privacy §12.",
+        "td": [
+          "TD-1001"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.29",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3229-image-model-variables",
+        "kind": "change",
+        "public": false,
+        "summary": "The picture model can now be switched with two Railway variables.",
+        "detail": "FAL_IMAGE_MODEL and FAL_IMAGE_EDIT_MODEL (unset = Nano Banana 2, as before). For Nano Banana 2.1 set google/nano-banana-2.1 and google/nano-banana-2.1/edit, and NANO_THINKING_LEVEL=minimal. A side-by-side of all 11 styles showed the same look and speed at about half the cost per picture. A value that is not a fal endpoint path is ignored. Test: set the three on staging, generate a panel, a reference, a retouch and a title; unset to go back.",
+        "td": [
+          "TD-1002"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.28",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3228-narrative-tools-row",
+        "kind": "fix",
+        "public": true,
+        "summary": "Narrative boxes are tidier: Edit prompt, Feedback and Regen sit on one small row under the text, and the empty direction line is gone.",
+        "detail": "The writing pills moved from above the box to the row under it, beside Edit prompt, all the same small size. With no direction set, the 'No direction set' line is hidden (it appears again as soon as a direction is set). Undo after Use this is now called Revert, like on pictures. The uses line in the Writing coach is in smaller print. Test: Storyboard narrative box with and without a direction; Use this then Revert.",
+        "td": [
+          "TD-999"
+        ]
+      },
+      {
+        "id": "3228-regen-pill-name",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Regenerate pill on pictures is now ↻ Regen, the same as on narrative boxes.",
+        "detail": "Storyboard panels, character reference pictures and asset pictures. Shorter, so the pill row is less likely to wrap. The tours and the prompt editor's note say Regen too. Test: a storyboard panel's pill row; a character and an asset picture.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.27",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3227-writing-coach-feedback",
+        "kind": "feature",
+        "public": true,
+        "summary": "Writing coach: press Feedback above any Narrative box for 3 to 5 tips that make it stronger, each with a Show me.",
+        "detail": "New pill row above every Narrative box you can edit on the Storyboard. Feedback (Gold, Platinum and the Free Trial; members follow the Story Master's plan) reads that one box with its neighbours and the campaign's characters, genre, voice and Story Instructions, and returns 3 to 5 suggestions with a why. Show me rewrites just that part, before and after, with Use this and Copy. Uses: 1 token buys 4 uses; Feedback and each Show me are one use; a use is taken only after the answer arrives. Below Gold the pill shows a Gold tag and explains the plans. Test: Gold account, Feedback on a panel; Show me; Use this then Undo; uses count down 4 per token; Silver sees the Gold tag.",
+        "td": [
+          "TD-999"
+        ]
+      },
+      {
+        "id": "3227-regen-one-box",
+        "kind": "fix",
+        "public": true,
+        "summary": "Regen on a Narrative box now rewrites only that box, shows you the new text first, and costs one writing use.",
+        "detail": "Regen used to run the whole Generate Narrative job: it saved new text into every box and the Summary for Next Session and charged a full narrative, though only the clicked box changed on screen (TD-998). Now it writes that box alone in the same voice, length, narrator and steering, shows it in the Writing coach with Use this, Copy and Try again, and saves nothing until Use this. Every plan keeps Regen. Generate Narrative is unchanged. Test: Regen one box, reload without pressing Use this (nothing changed); Use this, reload (only that box changed, Summary untouched); one use charged.",
+        "td": [
+          "TD-998"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.26",
+    "staged_on": "2026-10-21",
+    "entries": [
+      {
+        "id": "3226-pen-ink-card-us-spelling",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Pen and ink style card now describes its sepia washes, and the app spells color the American way.",
+        "detail": "Pen and ink card: 'Fine pen-and-ink linework and crosshatching with warm sepia washes, fading out to a clean white edge.' (it is not black and white only). Customer-facing text changed from colour to color: the Anime and Pastel cards, title color notes and tooltip, the print color messages, the cover tour step, the custom style builder's question labels and hints, and the help assistant's guide. Image prompts are unchanged. Test: Art Style window cards; custom style builder shows Color; ask help about title color.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.25",
     "staged_on": "2026-10-20",
     "entries": [

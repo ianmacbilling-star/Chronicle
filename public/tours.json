@@ -195,7 +195,7 @@
         {
           "selector": "#asset-modal-image-body",
           "title": "Generate or upload",
-          "text": "Generate an image from your description, or upload one. Once it's there you can Retouch it, Regenerate a fresh take, Revert your last change, or Replace it with an image from your Archive.",
+          "text": "Generate an image from your description, or upload one. Once it's there you can Retouch it, Regen for a fresh take, Revert your last change, or Replace it with an image from your Archive.",
           "placement": "auto"
         }
       ]
@@ -224,7 +224,7 @@
           "placement": "auto"
         },
         {
-          "selector": "#novel-version-select",
+          "selector": "#novel-version-select-vpick, #novel-version-select",
           "title": "Whose version?",
           "text": "Choose whose version you want to publish — your version, or one of your members' versions.",
           "placement": "auto"
@@ -245,7 +245,7 @@
         {
           "selector": "#prep-title",
           "title": "Title",
-          "text": "Give your book a title. Each version keeps its own, along with its subtitle and colour.",
+          "text": "Give your book a title. Each version keeps its own, along with its subtitle and color.",
           "placement": "auto",
           "open": "#prep-acc-cover .prep-acc-head"
         },
@@ -315,6 +315,13 @@
           "selector": "#transcript-input",
           "title": "Your story",
           "text": "This is your story. Whatever you have — an actual story, a transcript, journal entries, session notes — we'll take it and use it. This is also the one field owned by the Story Master — if you've joined a campaign as a member, you'll be able to read it but not edit it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#story-coach-row .wt-coach",
+          "dmOnly": true,
+          "title": "Writing Coach",
+          "text": "The coach can read your whole story and tell you how it holds together: the order of events, pacing, clarity and gaps. It costs one use for every 10,000 words. Select a passage to Rewrite it, or a word to find a better one. The line-by-line polish happens later, on the Storyboard.",
           "placement": "auto"
         },
         {
@@ -411,12 +418,12 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-edit",
           "title": "Edit prompt",
-          "text": "Edit the image prompt here, then Regenerate to apply it.",
+          "text": "Edit the image prompt here, then Regen to apply it.",
           "placement": "auto"
         },
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-regen",
-          "title": "Regenerate",
+          "title": "Regen",
           "text": "Makes a fresh image from the prompt.",
           "placement": "auto"
         },
@@ -429,7 +436,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .pp-replace",
           "title": "Replace",
-          "text": "Pull a different image in from your Archive.",
+          "text": "Pull a different image in from your Archive, or replace it with your own personal image.",
           "placement": "auto"
         },
         {
@@ -447,7 +454,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .moment-opts-btn",
           "title": "Cast for this Moment",
-          "text": "Open these options to add or remove characters and assets for this Moment — just like the Review tab. Make your changes, then Regenerate.",
+          "text": "Open these options to add or remove characters and assets for this Moment — just like the Review tab. Make your changes, then Regen.",
           "placement": "auto",
           "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
         },
@@ -458,9 +465,15 @@
           "placement": "auto"
         },
         {
-          "selector": ".narrative-regen-btn",
+          "selector": "#session-tab-storyboard .wt-regen",
           "title": "Narrative",
-          "text": "Regenerate the narrative if you do not like it, or simply retype it yourself.",
+          "text": "Click into the text to change it yourself, or Regen to write a fresh version of just this box. You see it before anything changes.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-tab-storyboard .wt-coach",
+          "title": "Writing Coach",
+          "text": "Opens a coach beside the storyboard with this box's text at the top. Feedback gives an honest verdict and tips, Rewrite reworks your words, and Word finds a better word. Select some words first to work on just those. Nothing changes until you click Use this, and Previous and Next take you through the boxes. One token buys four uses; Word is free.",
           "placement": "auto"
         }
       ]
@@ -543,7 +556,7 @@
           "placement": "auto"
         },
         {
-          "selector": "#session-fork-select",
+          "selector": "#session-fork-select-vpick, #session-fork-select",
           "title": "Whose version?",
           "text": "A {session} can have more than one version. Switch between them here — each keeps its own story, pictures and settings.",
           "placement": "auto"

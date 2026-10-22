@@ -107,8 +107,9 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
 - **Silver** — 1 campaign, unlimited sessions, unlimited characters, monthly free
   tokens, a capped number of moments per session, and more art styles than the floor.
 - **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
-  Silver, more moments per session, more art *and* narrative style options, and
-  **multiple versions of a book**.
+  Silver, more moments per session, more art *and* narrative style options,
+  **multiple versions of a book**, and the full **Writing Coach** (Feedback, Rewrite and Word; see
+  10.9). Platinum and the Free Trial have it too; Regen works on every plan.
 - **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
   grant, the highest moment caps, all styling options, **multiple versions of a book**,
   and the ability to build **custom art styles**.
@@ -178,6 +179,10 @@ character from another campaign**, and
 **importing text from a file into the Story or Lore boxes**, which happens in your browser with no AI
 involved at all. Generation is **spend-on-success** — if an image fails, you are **not** charged,
 and a file the AI reads but finds nothing in is not charged either.
+
+**Writing is counted in uses, not tokens.** The **Writing Coach** and narrative **Regen** spend
+**writing uses**: **1 token buys 4 uses**, taken one at a time when an answer arrives. **Word** is free.
+See **10.9**.
 
 **Anything that reads pictures asks first.** It tells you how many pages and what the total will be
 before a token is spent, and typing or pasting the same text in yourself is always free.
@@ -882,7 +887,7 @@ way:**
   cannot render detail the reference does not have. That is why it is drawn at high
   detail even though it is never printed.
 
-Keeping it neutral is what lets the same character be re-rendered into watercolour,
+Keeping it neutral is what lets the same character be re-rendered into watercolor,
 charcoal or oil equally well. **If someone asks why their character sheet suddenly looks
 different from how it used to, this is why** — the reference wording was improved so the
 picture carries more real surface detail, which raises the ceiling on every panel that
@@ -904,6 +909,11 @@ Two big text areas side by side:
 - **Story Notes and Instructions** — director's notes to Campaignia: mandatory scenes,
   atmosphere, character directions ("always show Theron with his wolf"). The AI follows
   these precisely. Members **can** edit their own notes here.
+
+**Writing Coach** sits under the **Story / Session Transcript** box for the Story Master. Its
+**Feedback** reads the whole story and your notes and looks at the big picture (the shape, pacing,
+clarity and gaps, not single sentences), at one writing use for every 10,000 words. **Rewrite** and
+**Word** work on a passage you select. See **10.9**.
 
 **Find / Replace** sits above the transcript (Find next / Replace / Replace all) — handy
 for fixing a wrong name everywhere at once.
@@ -1040,8 +1050,15 @@ Where the story comes together as alternating image panels and narrative.
 - **The panel's ⋯ (moment options)** — the same casting controls as Review (add/remove
   characters/assets, then Regenerate), plus a **Prominence** dropdown that controls size
   at publish/print: set it **high** to make that image as large as possible in the book.
-- **Narrative panels** sit **below and between** the images. Edit the narrative prompt
-  and Regenerate, or click into the text and type changes directly.
+- **Narrative panels** sit **below and between** the images. Click into the text and type changes
+  directly, or use the row under each box: **Edit prompt** (how this box should be written: its
+  Narrative Direction), **↻ Regen**, **Writing Coach** and **Revert**. **Regen** (every plan) writes a
+  fresh version of **that one box only**; the new text opens in the **Writing Coach** and nothing
+  changes until you press **Use this** (then **Revert** sits under the box until you type in it).
+  Regen does not rewrite the other boxes or the Summary for Next Session. **Writing Coach** opens the
+  coach on that box: an honest verdict and tips (**Feedback**), new versions of your words
+  (**Rewrite**), and a better word (**Word**). See **10.9** for the whole coach. **1 token buys 4
+  writing uses**; Word is free; members use their own tokens.
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
 you already have — your own drawing, a photo, a painting — onto that panel instead of one Campaignia
@@ -1133,7 +1150,7 @@ character or an asset, that is the reason — it is not a fault and nothing is m
 - **"What are you changing?"** — a list of the kinds of change the panel knows how to phrase:
   Move a character, Add a character, Add a person or object, Remove something, Add an effect, Change where someone is looking, Turn a character's body, Change an expression, Fix a body part, Change a pose or gesture, Move a hand or foot, Turn an object the right way round, Change an object, Make someone or something match its reference, Change how someone looks, Change the background, Change time of day or weather, and Fix or reapply the art style. Pick the one that fits and the panel asks only for what that change
   needs. Choose **I'll type it below** if none of them fit.
-- **The text box** is for the detail — the colour, the amount, the specific thing. You do not
+- **The text box** is for the detail — the color, the amount, the specific thing. You do not
   have to describe the whole picture.
 - **See the final prompt** shows exactly what will be sent, and you can edit it before it
   goes. Useful for understanding why something came out the way it did.
@@ -1202,6 +1219,80 @@ The line under the box says which one it is carrying.
 
 **The first session of a campaign inherits nothing** and simply writes its own.
 
+### 10.9 The Writing Coach — help with the words
+
+The **Writing Coach** helps you make the writing stronger without rewriting it for you. It opens as
+a panel on the right of the screen, beside your Storyboard or Story, so the box you are working on
+stays in view.
+
+**Where it is**
+- **On the Storyboard:** a **Writing Coach** button under every narrative box (the row reads
+  **Edit prompt**, **↻ Regen**, **Writing Coach**, **Revert**). It appears only on boxes you can
+  edit.
+- **On the Story tab:** a **Writing Coach** button under the **Story / Session Transcript** box,
+  for the Story Master (the only person who can edit that box).
+
+**How the panel works**
+- **The box's text sits at the top, and you can type there.** Typing in the coach edits your story,
+  exactly as if you typed in the box.
+- **Select some words first to work on just those.** With nothing selected, the tools work on the
+  whole box. **Use this** replaces only what you selected, and the selection stays selected.
+- **The tools are tabs: Regen, Feedback, Rewrite and Word.** Each keeps its results while you look
+  at the others, and clicking a tab costs nothing: each has its own button to start it.
+- **If you change the text after a tool ran**, a small note says the text has changed since.
+- **Previous / Next** (on the Storyboard) moves the coach to the box before or after, so you can work
+  through a whole session. Moving to another box clears the tabs, and asks first if you have
+  suggestions you haven't used.
+- **Prompt and Direction buttons** on the line above the text edit the box's **Prompt** (its
+  Narrative Outline: what it should cover) and **Direction** (how it should be written). The coach
+  reads both, so it knows what the box was meant to do.
+- **Nothing changes until you press Use this.** Then the box saves itself as usual, and **Revert**
+  under the box puts back what was there before (it disappears once you type in the box).
+- **Closing the coach loses nothing.** Close it with ×, or leave the page its box is on and it closes
+  itself. Press **Writing Coach** on the same box and your tabs are back. Another session or version
+  starts fresh.
+
+**What each tool does**
+- **Feedback** gives an honest verdict first: **"I wouldn't change a thing!"** when the writing is
+  truly great, **close** with one or two small tips, or a few tips when it needs work. It says what
+  already works. It judges the text blind: it does not know who wrote it, so the narrative Campaignia
+  wrote gets no free pass. It checks the box against your original story, your Lore and the story so
+  far, and it counts stock phrases and clichés against it. Each tip has a **Show me** that rewrites
+  just that part.
+- **Rewrite** reworks your words while keeping your meaning: **Clearer**, **More vivid**, **More
+  dramatic**, **Simpler**, **Add detail** (sight, sound, smell), **Longer** (gives a rushed bit room),
+  **Shorter** (trims a wordy bit), or say how in your own words. You get three versions to choose
+  from.
+- **Word** (in the coach only): select a word or a short phrase (up to 6 words) and get better
+  choices; click one to swap it in. **Word is free.**
+- **Regen** writes a fresh version of the whole box from the story: the picture, your transcript,
+  the boxes either side, your Lore, the story so far and the box's Direction. Not on **Already
+  Written**, and not on the Story box.
+- **Regen or Rewrite?** Regen *replaces*: it writes the box fresh from what happened. Rewrite
+  *polishes*: it keeps what you wrote and reworks the words.
+
+**On the Story box, Feedback looks at the big picture.** It reads the whole Story box and your
+**Story Notes and Instructions**, says what it reads as (notes, a game transcript or a written story;
+one chapter or the whole thing), and looks at the shape of the story: the order of events, pacing,
+clarity and gaps, not single sentences. It goes easy on a transcript, which is meant to be messy.
+Line-by-line polishing belongs on the Storyboard, where each narrative box has its own coach. It
+costs **one use for every 10,000 words**, and the button shows how many before you start. **Rewrite**
+and **Word** work on what you select (up to about 2,000 words). There is no Show me or Regen on the
+Story box.
+
+**What the coach knows:** your characters, the genre, the narrative style and point of view, your
+Story Notes and Instructions, the campaign Lore, the previous session's Summary For Next Session, the
+boxes either side, your original story around that picture, and the box's own Prompt and Direction.
+
+**Plans and cost**
+- **Feedback, Show me, Rewrite and Word** come with **Gold**, **Platinum** and the **Free Trial**.
+  **Regen works on every plan.** On Copper and Silver the coach still opens, explains what it does,
+  and offers Regen. Members follow the Story Master's plan and spend their own tokens.
+- **1 token buys 4 writing uses.** Each Regen, Feedback, Show me and Rewrite is one use (Story box
+  Feedback is one use per 10,000 words). **Word is free.** A use is only taken when the answer
+  arrives, so a failed try costs nothing. The coach's top line shows where you are, for example
+  **"Token: 1/4 used"**, and your token balance.
+
 ---
 
 ## 11. Versions — your own edition of the book
@@ -1220,7 +1311,7 @@ one.
 **What a version holds**
 
 - **The cover and title block** — **the book title is the version's own**, not the campaign's;
-  switch versions and the title on screen changes with it. Plus subtitle, title colour, title
+  switch versions and the title on screen changes with it. Plus subtitle, title color, title
   style, placement and size, and the cover, back cover and title-page images.
 - **The layout** — layout style, picture borders and frames, caption style, body font, drop
   cap, running page header, session dividers and whether each session starts on a fresh
@@ -1367,7 +1458,7 @@ the art style and the narrative too.
 **What's saved, and when**
 
 **Everything on the Prep & Preview tab saves automatically** — there's no Save button for
-cover and layout settings. Change the title and click away; pick a border; choose a colour;
+cover and layout settings. Change the title and click away; pick a border; choose a color;
 each is written to your version as you make it. The first time you open Prep & Preview on a
 version, its settings are written in as they stand, so the version genuinely owns them and
 the book you branched from can be restyled later without yours changing underneath you. The
@@ -1576,7 +1667,7 @@ Beside **Go to Publish** you will also find **Download PDF**, and on plans with 
 
 **Tab 4 — Order & Publish**
 
-*Order a printed copy* — binding (softcover, hardcover, comic), colour (premium
+*Order a printed copy* — binding (softcover, hardcover, comic), color (premium
 recommended), cover finish, shipping speed and address. **Get price** quotes from your
 options and page count. **Prepare Your Order** generates the final interior and cover
 PDFs, and you must tick **"I have reviewed both the interior and cover PDFs"** before
@@ -1687,7 +1778,7 @@ there. Each picture shows whole in its box.
 
 **1. Analyze style (1 token).** Campaignia studies how the samples are *drawn*, never
 what is in them, and answers **18 questions** about the style: Tradition; Medium and
-technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Colour;
+technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Color;
 Light and light effects; Surfaces; Texture; Detail, and where it goes; Background; Edges
 and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; and What
 the questions missed. If the samples don't all share one style, a warning says what
@@ -1713,7 +1804,7 @@ one at a time with **Generate**:
 - **Close up**: one person, head and shoulders, with a dramatic expression. Shows faces,
   eyes and shading.
 - **Outdoors**: travellers on a road through a wide valley under an evening sky. Shows
-  the background, atmosphere and colour.
+  the background, atmosphere and color.
 - **Group**: four companions around a table in a firelit hall. Shows several people at
   mid distance and how firelight is drawn.
 
@@ -1742,7 +1833,7 @@ preview picture and Use this one save by themselves.
 
 **Getting it right:** the words decide the picture almost word for word, so fix the
 answer behind what looks wrong, then Rewrite. Too much going on behind the figures:
-**Background** and **Detail, and where it goes**. Washed-out colour: **Colour**. Faces
+**Background** and **Detail, and where it goes**. Washed-out color: **Color**. Faces
 drawn the wrong way: **Characters: faces, eyes and bodies**. **Soft / faded edges**
 (below the descriptions) makes the art thin out to white at the panel edges instead of
 filling the frame; Analyze sets it from the Edges answer and you can change it.
@@ -1805,6 +1896,16 @@ styles are on every plan** — this is the drawn alternative to them.
 ## 19. Common goals — how to do it
 
 Task-oriented answers. Match the user's goal to one of these and give the concrete steps.
+
+- **"I want help making the narrative better" / "Is my writing any good?"** On the **Storyboard**,
+  press **Writing Coach** under the box. **Feedback** gives an honest verdict ("I wouldn't change a
+  thing!", close, or a few tips) with a **Show me** for each tip; **Rewrite** offers three new
+  versions (clearer, more vivid, more dramatic, simpler, more detail, longer, shorter, or your own
+  way); **Word** finds a better word, free. Select words first to work on just those. Nothing changes
+  until **Use this**. **Previous / Next** walks through every box. See 10.9.
+- **"Does my story hang together?"** On the **Story** tab, press **Writing Coach** under the Story box
+  (Story Master only) and run **Feedback**: it reads the whole story and your notes and comments on
+  the shape, pacing, clarity and gaps. One use per 10,000 words.
 
 - **"I want to write the book myself" / "I want to do the writing."** There are three ways,
   depending on where the story is:
@@ -1944,6 +2045,20 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 
 Friction points and what's actually going on.
 
+- **"The Writing Coach only offers Regen" / "Feedback says to see plans."** Feedback, Show me,
+  Rewrite and Word come with **Gold**, **Platinum** and the **Free Trial**; Regen works on every plan.
+  A member follows the Story Master's plan.
+- **"I don't see Writing Coach under a box."** It only appears where you can edit the box. On the
+  Story tab, only the Story Master can edit the Story box, so only they get its coach.
+- **"The Writing Coach closed by itself."** It closes when you leave the page its box is on (another
+  tab, session or screen). Nothing is lost: press **Writing Coach** on the same box and your tabs are
+  back.
+- **"Feedback keeps finding things even after I used its suggestion."** When the writing is truly
+  great it says **"I wouldn't change a thing!"**, and when it is close it says so. Small tips on a
+  box that is close are optional.
+- **"Why did Story Feedback cost more than one use?"** On the Story box it reads the whole story,
+  at one use for every 10,000 words. The button shows the cost before you start.
+
 - **"Why can't I create a campaign or session?"** You're on **Copper** (or your trial
   ended / you downgraded). Copper can join and build one version of its own inside a paid
   Story Master's campaign, but can't create its own campaigns or sessions. Subscribe to
@@ -1973,7 +2088,7 @@ Friction points and what's actually going on.
   *build* them.
 - **"My custom style doesn't look like my samples."** Open the style and read the
   answers under **How the style is drawn**: find the one behind what looks wrong (for
-  example Background, Detail or Colour), click **Edit**, change it, then **Rewrite
+  example Background, Detail or Color), click **Edit**, change it, then **Rewrite
   descriptions** and generate a preview again. Say "none" outright for anything the style
   doesn't have. If a warning says your samples don't share one style, remove the odd one
   out and analyze again. Also compare **Bolder** and **Softer**: one is often closer.
@@ -2102,6 +2217,14 @@ Friction points and what's actually going on.
 ---
 
 ## 21. Quick FAQ
+
+- **What is the Writing Coach?** A panel that helps with the words in any narrative box, and with the
+  whole story on the Story tab: **Feedback**, **Rewrite**, **Word** and **Regen**. Gold, Platinum and
+  the Free Trial; Regen on every plan. See 10.9.
+- **What does the Writing Coach cost?** **1 token buys 4 uses.** Each Feedback, Show me, Rewrite and
+  Regen is one use; **Word is free**; a failed try costs nothing.
+- **Does the coach know Campaignia wrote the narrative?** No. It judges the text blind, so
+  Campaignia's own writing gets no free pass.
 
 - **What is the Canonical?** The campaign's official book: what members read, what every other
   version shows on sessions it hasn't made its own, and where new sessions begin. It belongs to

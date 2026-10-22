@@ -6,7 +6,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
-const { TEXT_MODEL } = require('../config/models');
+const { TEXT_MODEL, WRITING_MODEL, WRITING_FAST_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -1590,5 +1590,630 @@ router.put('/narrator/:campaignId/:sessionId', requireAuth, async function(req, 
 
   res.json({ success: true, narrator: ch ? String(ch.id) : (store === 'anon' ? 'anon' : ''), narrator_name: ch ? (ch.name || '') : '' });
 });
+
+// =====================================================================================================
+// v3.2.27 -- TD-999 stage 1 (WRITING TOOLS) and TD-998 (ONE-BOX REGEN). Spec: claude/WRITING_TOOLS_SPEC.md.
+// =====================================================================================================
+//
+// Ian, 2026-10-21: "give would-be writers some tools to help make them better." Small text pills above
+// every Narrative box on the Storyboard open the Writing coach panel. Stage 1 has two tools:
+//
+//   feedback  3-5 specific things that would make THIS box stronger, each with a why. (Gold and up.)
+//   showme    one feedback point, rewritten: just that passage, before and after.   (Gold and up.)
+//   regen     a fresh version of THIS box only.                                     (every plan)
+//
+// TD-998, WHAT REGEN USED TO DO: one box's Regen ran the WHOLE Generate Narrative job -- it rewrote and
+// SAVED the intro, every panel, the closing and the Summary for Next Session, charged a full narrative,
+// and painted only the clicked box. The rest sat on screen with their old text until the next keystroke
+// autosaved them back; a reload without typing showed prose nobody asked for. Now Regen writes one box,
+// SAVES NOTHING, and the new text only lands when the person presses Use this (then the normal autosave).
+//
+// REGEN STAYS ON EVERY PLAN. It was on every plan before this release; taking it away from Copper and
+// Silver to make it a Gold tool would be a regression nobody asked for. Feedback and Show me are Gold
+// and up. The Free Trial counts as Gold here because accessRank gives it 4 (Ian, 2026-10-21: "Free
+// Trial gets to use it"). A member follows the Story Master's plan through getEffectiveTier, and spends
+// their OWN tokens (Ian: "Members can inherit the story Masters rules. Still costs tokens.").
+//
+// ONE TOKEN BUYS FOUR USES (Ian, 2026-10-21). users.writing_uses_left counts them. A use is taken ONLY
+// AFTER the model has answered and the answer has been read -- a failed call costs nothing. The token
+// is checked BEFORE the call so an empty balance refuses without spending anything on the API.
+//
+// THE VOICE IS RESOLVED THE SAME WAY Generate Narrative resolves it (directorNotes, the version's own
+// style with the genre default, verbosity, In first person). That code is not shared with the generate
+// route on purpose: refactoring the live narrative job to serve a new tool is the wrong blast radius.
+// The guard pins the pieces both must agree on, so a change to one shows up as a failed build.
+// =====================================================================================================
+const WRITING_TOOLS = { feedback: { gold: true }, showme: { gold: true }, regen: { gold: false },
+  // v3.2.33 -- TD-999 stage 2. The polishing tools work on the words the writer selected, or the whole box, and
+  // run on the FAST model (WRITING_FAST_MODEL, Haiku by default; Ian, 2026-10-22: "build it on the cheaper model").
+  // Swap it with the WRITING_FAST_MODEL Railway variable if the writing feels weak. Word is free (Ian): no use is
+  // taken and no token is needed, but it is still Gold and up, and still logged so its real cost can be read.
+  rewrite: { gold: true, fast: true }, describe: { gold: true, fast: true }, expand: { gold: true, fast: true }, tighten: { gold: true, fast: true },
+  word: { gold: true, fast: true, free: true } };
+const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more vivid', dramatic: 'more dramatic', simpler: 'simpler, in plainer words' };
+const WT_WORD_MAX = 60;           // characters a Word selection may have
+const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
+const WRITING_USES_PER_TOKEN = 4;
+const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|story)$/;   // v3.2.36 -- 'story': the Story / Session Transcript box
+// v3.2.36 -- TD-999 stage 3. The coach on the Story box reads a WINDOW of a long story (the page sends about
+// 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
+// tools there need a selection, capped like a Narrative box. Regen is for the Narrative boxes only.
+const WRITING_STORY_MAX = 40000;
+// v3.2.40 -- STORY FEEDBACK READS THE WHOLE BOX (Ian: "Read the whole box"), so a long transcript costs more to read:
+// one use for every 10,000 words (Ian agreed), shown on the button before it is pressed. Capped at 60,000 words.
+const WRITING_STORY_FULL_MAX = 400000;   // characters
+const WRITING_STORY_WORDS_PER_USE = 10000;
+function wtStoryFeedbackUses(text) {
+  const t = String(text || '').trim();
+  const words = t ? t.split(/\s+/).length : 0;
+  return Math.max(1, Math.ceil(words / WRITING_STORY_WORDS_PER_USE));
+}
+const WRITING_TEXT_MAX = 12000;            // characters of box text the tools will read
+const WRITING_TRANSCRIPT_WINDOW = 40000;   // characters of transcript Regen reads, centred on its panel
+const WRITING_TIMEOUT_MS = 90 * 1000;
+
+function wtStr(v, max) { return String(v == null ? '' : v).slice(0, max); }
+const WT_LORE_MAX = 8000, WT_SOFAR_MAX = 6000;   // v3.2.32 -- characters of lore and of the story so far the coach reads
+
+// The parts of the chain the page shows, in reading order -- the same order renderStoryboard draws:
+// Opening, then each panel's moment and the bridge after it (no bridge after the last panel), Closing.
+// A title picture (kind 'establishing') shows the Opening in place of its own moment text.
+function wtChain(moments) {
+  const out = ['opening'];
+  moments.forEach(function (m, i) {
+    if (!(m && m.kind === 'establishing')) out.push('moment:' + i);
+    if (i < moments.length - 1) out.push('between:' + i);
+  });
+  out.push('closing');
+  return out;
+}
+function wtBoxText(box, intro, sections, outro) {
+  if (box === 'opening') return intro || '';
+  if (box === 'closing') return outro || '';
+  const i = parseInt(box.split(':')[1], 10);
+  const s = (sections || []).find(function (x) { return x && x.panel_index === i; }) || {};
+  return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
+}
+function wtBoxName(box, moments) {
+  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
+  if (box === 'opening') return 'the Opening (before the first picture)';
+  if (box === 'closing') return 'the Closing (after the last picture)';
+  const i = parseInt(box.split(':')[1], 10);
+  const m = moments[i] || {};
+  if (box.indexOf('moment:') === 0) return 'the text for PANEL ' + (i + 1) + ' ("' + (m.title || 'untitled') + '"), which tells what that picture shows';
+  return 'the bridge between PANEL ' + (i + 1) + ' and PANEL ' + (i + 2) + ', which carries the story from one picture to the next';
+}
+
+// Everything a tool needs to know about this version, read from the database (never from the page).
+async function writingContext(db, req, session, targetForkId) {
+  const fk = await db.prepare('SELECT role, fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity, narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(targetForkId);
+  let directorNotes = session.session_notes || '';
+  let gapDirections = {}, gapOutlines = {}, sections = [];
+  if (fk) {
+    if (fk.role !== 'dm') directorNotes = fk.fork_notes || '';   // TD-508: the version owns its instructions
+    try { gapDirections = JSON.parse(fk.narrative_directions || '{}') || {}; } catch (e) { gapDirections = {}; }
+    try { gapOutlines = JSON.parse(fk.narrative_outlines || '{}') || {}; } catch (e) { gapOutlines = {}; }
+    try { sections = JSON.parse(fk.narrative_sections || '[]') || []; } catch (e) { sections = []; }
+  }
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+  // v3.2.32 -- THE COACH KNOWS THE WORLD AND WHAT HAPPENED BEFORE (Ian, 2026-10-22). Generate Narrative
+  // has always been given the campaign lore and the previous session's Summary For Next Session; the
+  // writing tools were given neither, so Feedback could praise a name the lore spells differently and
+  // Regen could write as if the last session never happened. Same lookup Generate Narrative uses
+  // (inheritedSummary: this version's copy of the previous session first, then the caller's, then the
+  // Story Master's), so the coach and the narrative carry the same memory. Never fatal: it returns
+  // null on any failure and the tools simply go without it.
+  const inh = await inheritedSummary(db, session, req.session.userId, targetForkId);
+  let gdVoice = null;
+  if (!(fk && fk.narrative_style)) {
+    try {
+      const gd = genresvc.genreDefaults(campaign);
+      if (gd && gd.narrative && gd.narrative.length) {
+        const effR = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+        for (let i = 0; i < gd.narrative.length; i++) {
+          const cid = gd.narrative[i];
+          if (NARRATIVE_STYLES[cid] && narrativeStyleAllowed(effR, cid)) { gdVoice = cid; break; }
+        }
+      }
+    } catch (e) { gdVoice = null; }
+  }
+  const narrStyleId = (fk && fk.narrative_style) ? fk.narrative_style : (gdVoice || 'classic');
+  const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
+  const vraw = (fk && typeof fk.narrative_verbosity === 'string') ? fk.narrative_verbosity.toLowerCase() : 'med';
+  const verbosity = (vraw === 'low' || vraw === 'med') ? vraw : 'high';
+  const narrator = await forkNarrator(db, targetForkId);
+  const fpAnon = (!narrator && narrStyleId !== 'calm') ? await forkFirstPersonAnon(db, targetForkId) : false;
+  if (directorNotes && (narrator || fpAnon)) {
+    directorNotes = directorNotes + '\n(POINT OF VIEW EXCEPTION, set for this version: the story is told IN THE FIRST PERSON' +
+      (narrator ? (', by ' + narratorNameParts(narrator.name).canon) : ', by a narrator who is not named') +
+      '. Where the instructions above ask for the third person, an invisible narrator, or never using “I”, ignore that part only. Follow everything else they say.)';
+  }
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
+  const charList = characters.map(function (c) {
+    const toks = String(c.name || '').split('/').map(function (t) { return t.trim(); }).filter(function (t) { return t.length; });
+    const canon = toks.length ? toks[0] : String(c.name || '').trim();
+    return canon + (toks.length > 1 ? ' (also known as: ' + toks.slice(1).join(', ') + ')' : '') + ' — ' + (c.cls || '') + ': ' + String(c.description || '').slice(0, 300);
+  }).join('\n');
+  const moments = await db.prepare('SELECT id, title, description, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+  return {
+    campaign, charList, directorNotes, gapDirections, gapOutlines, narrStyleId, styleBundle, verbosity, narrator, fpAnon, moments,
+    intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : '',
+    lore: (campaign && campaign.lore) ? String(campaign.lore).trim() : '',                      // v3.2.32
+    storySoFar: (inh && inh.text) ? inh.text : '', storySoFarFrom: (inh && inh.sessionName) ? inh.sessionName : ''   // v3.2.32
+  };
+}
+
+// The shared background block: who and what the story is, so suggestions stay in character, genre and voice.
+function wtBackground(ctx, session) {
+  const genre = genresvc.genreSteering(ctx.campaign && ctx.campaign.genres, 'prose');
+  ctx.genreLine = genre || '';   // v3.2.33 -- Word reads only this, not the whole background
+  const campPrompt = genresvc.campaignPrompt(ctx.campaign && ctx.campaign.campaign_prompt);
+  return 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n' +
+    'Session: ' + (session.name || '') + '\n\n' +
+    // v3.2.32 -- lore and the story so far, worded as Generate Narrative words them: background for
+    // continuity, never events of this passage. Capped so a very long lore costs a use the same as a
+    // short one (Generate Narrative sends it whole; a use is a quarter of a token).
+    (ctx.lore ? ('WORLD / LORE (background for consistency across sessions; NOT events of this passage):\n' + wtStr(ctx.lore, WT_LORE_MAX) + '\n\n') : '') +
+    (ctx.storySoFar ? ('THE STORY SO FAR (carried forward from the previous session' + (ctx.storySoFarFrom ? (', \u201c' + ctx.storySoFarFrom + '\u201d') : '') + '):\n' +
+      wtStr(ctx.storySoFar, WT_SOFAR_MAX) + '\n' +
+      'This has already happened in the story. Treat it as true and stay consistent with it, but it is NOT part of this passage: do not retell it or suggest retelling it.\n\n') : '') +
+    (ctx.charList ? ('Characters:\n' + ctx.charList + '\n\n') : '') +
+    (genre ? (genre + '\n\n') : '') +
+    'NARRATIVE VOICE chosen for this version:\n' + ctx.styleBundle.voice + '\n\n' +
+    (ctx.narrator ? narratorProseBlock(ctx.narrator) : (ctx.fpAnon ? narratorAnonBlock() : '')) +
+    (campPrompt ? ('GENERAL CAMPAIGN PROMPT from the author:\n' + campPrompt + '\n\n') : '') +
+    (ctx.directorNotes ? ('STORY INSTRUCTIONS from the author (they apply to the prose):\n' + ctx.directorNotes + '\n\n') : '');
+}
+
+// v3.2.39 -- THE INTENT OF THIS PART (Ian, 2026-10-22: "so it knows what exactly was the intent of that narrative
+// section"). The box's PROMPT (its Narrative Outline: what it should cover) and DIRECTION (how it should be written),
+// which only Regen used to read. Feedback judges against them, Show me and the polishing tools stay within them.
+function wtIntentBlock(ctx, box) {
+  if (box === 'story') return '';
+  const outl = outlineText(ctx.gapOutlines && ctx.gapOutlines[box]).trim();
+  const dir = String((ctx.gapDirections && ctx.gapDirections[box]) || '').trim();
+  return (outl ? ('THE PROMPT for this part -- what it is meant to cover: ' + wtStr(outl, 2000) + '\n') : '') +
+    (dir ? ('THE DIRECTION for this part -- how the author wants it written: ' + wtStr(dir, 2000) + '\n') : '') +
+    ((outl || dir) ? '\n' : '');
+}
+function wtNeighbours(ctx, box) {
+  if (box === 'story') return '';   // v3.2.36 -- the story has no boxes either side
+  const chain = wtChain(ctx.moments);
+  const at = chain.indexOf(box);
+  const prev = at > 0 ? chain[at - 1] : null;
+  const next = (at >= 0 && at < chain.length - 1) ? chain[at + 1] : null;
+  const pt = prev ? wtBoxText(prev, ctx.intro, ctx.sections, ctx.outro) : '';
+  const nt = next ? wtBoxText(next, ctx.intro, ctx.sections, ctx.outro) : '';
+  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (for flow only, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
+    (nt ? ('THE TEXT JUST AFTER THIS BOX (for flow only, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
+}
+
+function wtPanels(ctx, box) {
+  if (box === 'story') return '';   // v3.2.36
+  const n = ctx.moments.length;
+  const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
+  if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
+  if (box === 'closing') return n ? ('The last picture: ' + show(n - 1) + '\n\n') : '';
+  const i = parseInt(box.split(':')[1], 10);
+  if (box.indexOf('moment:') === 0) return 'THIS box\'s picture: ' + show(i) + '\n\n';
+  return 'The picture before: ' + show(i) + '\nThe picture after: ' + show(i + 1) + '\n\n';
+}
+
+const WT_RULES =
+  'RULES: write no names, products, places or facts the writer did not give you. Use US spelling. ' +
+  'Inside any JSON string, never use the straight ASCII double quote; use typographic quotes “ ” for speech.\n';
+
+function wtPrompt(tool, ctx, session, box, text, body) {
+  const bg = wtBackground(ctx, session);
+  const name = wtBoxName(box, ctx.moments);
+  // v3.2.40 -- FEEDBACK ON THE STORY BOX IS BIG PICTURE (Ian, 2026-10-22). The Story box may hold notes, a game
+  // transcript or a story the writer wrote, and may be one chapter or a whole story: the coach says which, then judges
+  // the composition -- shape, pacing, clarity, gaps, consistency -- not sentences ("The individual paragraphs can be
+  // edited in the storyboard"). Transcripts are messy by nature, so it goes easy on the mess. It reads the whole box and
+  // the author's Story Notes and Instructions (in the background block, as STORY INSTRUCTIONS). No Show me here.
+  if (tool === 'feedback' && box === 'story') {
+    return {
+      max_tokens: 1600,
+      system: 'You are an experienced story editor reading the source material a writer will turn into an illustrated story. You look at the big picture, not the sentences, and you always return valid JSON.',
+      prompt: bg +
+        'THE WRITER\'S STORY BOX -- the source text for this session (the whole of it):\n' + text + '\n\n' +
+        'First decide what this is: a game TRANSCRIPT (players and a game master at a table, with table talk), NOTES or an outline, a written STORY, or a MIX; ' +
+        'and whether it reads as ONE CHAPTER of something longer or a WHOLE story. Say so plainly in "reads_as". If STORY INSTRUCTIONS are given above, they are the author\'s intent for this session: judge against them.\n' +
+        'Then judge the COMPOSITION, not the sentences: the shape (a clear start, build, turning point and ending, or a chapter that does its job), pacing (where it drags or rushes, scenes to merge or split), ' +
+        'clarity (who is who, where we are, what each character wants), gaps (moments skipped or impossible to follow, threads left hanging), and consistency with the world / lore and the story so far above. ' +
+        'Tune it to what it is: for a TRANSCRIPT, go easy on the mess -- table talk, rules chatter and half-sentences are normal and will be cleaned up when the narrative is written; look for whether the key moments and turns are in there and clear enough to build from. ' +
+        'For NOTES, check there is enough in each scene to build pictures and narrative from. For a written STORY, look at structure, point of view and arc.\n' +
+        'Do not give line edits or rewrite sentences: the final narrative is polished later, box by box, on the Storyboard. Choose ONE verdict:\n' +
+        '- "great": ready to build the book from. Headline \u201cReady to build your book from.\u201d and NO points.\n' +
+        '- "close": nearly there. 1 or 2 big-picture points.\n' +
+        '- "work": it has real gaps. 3 to 5 big-picture points, the one that matters most first.\n' +
+        'Do not invent problems or praise to be kind; name what already works. Write in the same language as the story.\n' + WT_RULES +
+        'Return ONLY valid JSON, no markdown:\n' +
+        '{ "reads_as": "e.g. A game transcript \u00b7 one chapter of a longer story", "verdict": "great" or "close" or "work", "headline": "one short line", ' +
+        '"working": "one specific sentence on what already works", "points": [ { "issue": "the big-picture change, in one plain sentence", "why": "why it matters to the finished story, in one short sentence" } ] }'
+    };
+  }
+  if (tool === 'feedback') {
+    return {
+      max_tokens: 1200,
+      system: 'You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.',
+      prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
+        'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
+        // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
+        // Feedback used to give 3 to 5 tips every time, so a writer who took every suggestion and asked again got three
+        // more: it could never say "you've got it". Now it judges the passage against what a good illustrated story needs
+        // (not perfection), says so plainly, and gives tips only when they matter.
+        // v3.2.38 -- A BLIND TASTE TEST (Ian): the coach is never told who wrote the passage -- often it is prose Generate
+        // Narrative wrote -- and judges only the text in front of it. It reads the ORIGINAL STORY around this part (as Regen
+        // does), so a passage that reads beautifully but gets the session wrong cannot be "great".
+        (box !== 'story' ? wtTranscriptBlock(ctx, session, box) : '') +
+        'First judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
+        'A great passage is TRUE to the original story (names, who did what, the order of events, nothing invented that contradicts it), SPECIFIC (concrete details from this session, not vague mood), ' +
+        'IN VOICE (the chosen narrative voice and this campaign, not generic filler), and free of stock phrasing: clichés and stock phrases (“a testament to”, “the air hung heavy”, “little did they know”), ' +
+        'repeated sentence shapes, piled-up em dashes and vague grandeur all count against it, however smooth it reads. Choose ONE verdict:\n' +
+        '- "great": it does its job well; the only changes you could suggest are matters of taste. Say so plainly (\u201cI wouldn\u2019t change a thing!\u201d) and give NO suggestions.\n' +
+        '- "close": it works, with one or two small things that would genuinely improve it. Give 1 or 2 suggestions.\n' +
+        '- "work": it has real problems a reader would notice. Give 3 to 5 suggestions, leading with the one that matters most.\n' +
+        'Do not invent problems to have something to say, and do not praise to be kind: praise must name the actual words or choices that work. ' +
+        'If the writer has clearly already applied earlier suggestions and the passage now does its job, the verdict is "great".\n' +
+        'Suggestions cover faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
+        'flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). ' +
+        'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose.\n' +
+        'If THE PROMPT or THE DIRECTION for this part is given above, the passage must cover the prompt and follow the direction: one that does not cannot be "great", say which part it misses, and never suggest undoing either.\n' +
+        'Write everything in the same language as the passage.\n' + WT_RULES +
+        'Return ONLY valid JSON, no markdown:\n' +
+        '{ "verdict": "great" or "close" or "work", ' +
+        '"headline": "one short line for the writer, e.g. \u201cI wouldn\u2019t change a thing!\u201d, \u201cYou\u2019re close.\u201d or \u201cA good start, with a few things to fix.\u201d", ' +
+        '"working": "one specific sentence on what already works, naming the words or choices", ' +
+        '"points": [ { "quote": "the exact words from the passage this is about, copied character for character, at most 25 words, or an empty string if it is about the whole passage", ' +
+        '"issue": "what to change, in one plain sentence", "why": "why that makes it stronger, in one short sentence" } ] }'
+    };
+  }
+  if (tool === 'showme') {
+    const quote = wtStr(body.quote, 600), issue = wtStr(body.issue, 600);
+    const whole = !quote || text.indexOf(quote) < 0;
+    return {
+      max_tokens: 900,
+      system: 'You are a writing coach showing a new writer how one suggestion looks in practice. You return only the rewritten words, with no commentary.',
+      prompt: bg + wtIntentBlock(ctx, box) + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +   // v3.2.39
+        'THE SUGGESTION: ' + issue + '\n\n' +
+        (whole
+          ? 'Rewrite the whole passage applying ONLY this suggestion. Keep everything else -- facts, names, voice, point of view, length -- as it is.\n'
+          : 'Rewrite ONLY this part of it, applying ONLY this suggestion:\n' + quote + '\n' +
+            'Your rewrite will replace exactly those words inside the passage, so it must read naturally in their place. Keep the facts, names, voice and point of view.\n') +
+        'Use US spelling, and typographic quotes “ ” for speech. Return ONLY the rewritten words: no quotation marks around them, no label, no explanation.',
+      before: whole ? text : quote
+    };
+  }
+  // v3.2.33 -- Word: better words for one selected word or short phrase, from the sentence around it.
+  if (tool === 'word') {
+    const sel = wtStr(body.selection, WT_WORD_MAX);
+    const at = text.indexOf(sel);
+    const around = text.slice(Math.max(0, at - 600), at) + '[[' + sel + ']]' + text.slice(at + sel.length, at + sel.length + 600);
+    return {
+      max_tokens: 600,
+      system: 'You are a thesaurus that understands context, helping a writer find the right word. You return only valid JSON.',
+      prompt: (ctx.genreLine ? (ctx.genreLine + '\n\n') : '') +
+        'THE TEXT, with the word or phrase to replace marked [[like this]]:\n' + around + '\n\n' +
+        'Give 6 to 8 alternatives for ' + JSON.stringify(sel) + ' that fit exactly that spot in the sentence, in the same voice and tense, each with a note of a few words on what it adds. ' +
+        'Keep the same part of speech so the sentence still reads. Use US spelling. Write in the same language as the text.\n' +
+        'Return ONLY valid JSON, no markdown: { "words": [ { "word": "the alternative", "note": "a few words" } ] }',
+      before: sel
+    };
+  }
+  // v3.2.33 -- Rewrite, Describe, Expand, Tighten: three versions of the selected words, or of the whole box.
+  if (WRITING_TOOLS[tool] && WRITING_TOOLS[tool].fast) {
+    const sel = wtStr(body.selection, WRITING_TEXT_MAX);
+    const part = (sel && text.indexOf(sel) >= 0) ? sel : '';
+    let job;
+    if (tool === 'rewrite') {
+      const own = wtStr(body.instruction, WT_INSTRUCTION_MAX).trim();
+      job = own ? ('Rewrite it the way the writer asks: \u201c' + own.replace(/["\u201c\u201d]/g, '') + '\u201d. Follow that request only as far as it is about how the words read.')
+        : ('Rewrite it to make it ' + WT_REWRITE_HOWS[body.how] + '.');
+    } else if (tool === 'describe') {
+      job = 'Add sensory detail (what can be seen, heard, smelled, felt, tasted) so the reader can picture it, without slowing the story and without adding events.';
+    } else if (tool === 'expand') {
+      job = 'It feels rushed. Expand it: slow down and give it room, with more of what is seen, felt and happening, about half again to twice as long. Add no new events.';
+    } else {
+      job = 'Tighten it: cut wordiness and repetition so it reads faster, keeping its meaning. Make it noticeably shorter.';
+    }
+    return {
+      max_tokens: 1600,
+      system: 'You are a skilled editor helping a new writer improve their own illustrated story. You keep their story and their voice, and you return only valid JSON.',
+      prompt: bg + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- stay within its prompt and direction
+        'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
+        (part ? ('WORK ON ONLY THIS PART of the passage. Your text will replace exactly these words inside it, so it must read naturally in their place:\n' + part + '\n\n')
+              : 'WORK ON the whole passage.\n\n') +
+        job + ' Keep the names, facts, voice, tense and point of view as they are, and stay within this part\'s prompt and direction if they are given above. Write in the same language as the passage.\n' + WT_RULES +
+        'Give 3 different versions. Return ONLY valid JSON, no markdown: { "options": [ "first version", "second version", "third version" ] }',
+      before: part || text
+    };
+  }
+  // regen
+  const key = box;
+  const dir = ctx.gapDirections[key];
+  const outl = ctx.gapOutlines[key];
+  const isOutline = ctx.narrStyleId === 'outline', isDialogue = ctx.narrStyleId === 'dialogue';
+  const ends = (box === 'opening' || box === 'closing');
+  const v = ctx.verbosity;
+  // The same lengths Generate Narrative asks for (_vBlock / _vEnds there).
+  const len = isOutline ? ((v === 'low') ? '1-2 bullet points' : (v === 'med') ? '2-4 bullet points' : '3-6 bullet points')
+    : (v === 'low') ? '1 sentence' : (v === 'med') ? '1-2 sentences' : (ends ? '2-3 sentences' : '2-4 sentences');
+  // Regen reads the transcript around ITS panel, so a long session costs the same as a short one.
+  // v3.2.38 -- the window is cut by wtTranscriptWindow, which Feedback now uses too (one copy, same rule).
+  const window = wtTranscriptWindow(ctx, session, box, WRITING_TRANSCRIPT_WINDOW);
+  return {
+    max_tokens: isDialogue ? 1600 : 1100,
+    system: (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
+      buildNarrativeSystem(ctx.styleBundle.system, ctx.campaign, ctx.directorNotes) +
+      '\n\nFor THIS request you return plain text, not JSON: only the new text for one block of the story.',
+    prompt: 'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n\n' +
+      bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      'The session transcript (what actually happened):\n' + window + '\n\n' +
+      'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
+      (outlineEdited(outl) ? ('REQUIRED CONTENT for this block (you MUST cover these facts, in your own prose): ' + outlineText(outl) + '\n') : '') +
+      (dir ? ('DIRECTOR STEERING for this block (you MUST follow this): ' + dir + '\n') : '') +
+      'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
+      (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
+      (box.indexOf('between:') === 0 ? 'Cover only what happens between the picture before and the picture after. ' : '') +
+      (isOutline ? 'Write bullet points, one per line, each starting with • and a space. ' : '') +
+      (isDialogue ? 'Put each spoken line on its own line, led by the speaker\'s name and a colon. ' : '') +
+      'Use typographic quotes “ ” for speech.\n' +
+      'COPYRIGHT — keep the names from the transcript exactly as written, write entirely original prose, and never reproduce text from any published source.\n' +
+      'Return ONLY the new text for this block: no label, no quotation marks around it, no explanation.'
+  };
+}
+
+async function wtCallModel(key, model, system, prompt, maxTokens) {
+  const ac = new AbortController();
+  const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, WRITING_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: model, max_tokens: maxTokens, system: system, messages: [{ role: 'user', content: prompt }] }),
+      signal: ac.signal
+    });
+    const data = await r.json();
+    if (!data || data.error || !Array.isArray(data.content)) return { error: (data && data.error && data.error.message) || 'The writing service did not answer.' };
+    return {
+      text: data.content.map(function (b) { return b.text || ''; }).join('').trim(),
+      usage: data.usage || {},
+      truncated: data.stop_reason === 'max_tokens'
+    };
+  } catch (e) {
+    return { error: (e && e.name === 'AbortError') ? 'The writing service took too long to answer.' : 'The writing service could not be reached.' };
+  } finally { clearTimeout(t); }
+}
+
+function wtParseFeedback(raw) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  let p = null;
+  try { p = JSON.parse(clean); } catch (e) {
+    try { const f = repairUnescapedQuotes(clean); if (f.fixes > 0) p = JSON.parse(f.text); } catch (e2) { p = null; }
+  }
+  if (!p || typeof p !== 'object') return null;
+  const pts = (Array.isArray(p.points) ? p.points : []).filter(function (x) { return x && typeof x.issue === 'string' && x.issue.trim(); }).slice(0, 6).map(function (x) {
+    return { quote: wtStr(x.quote, 600).trim(), issue: wtStr(x.issue, 600).trim(), why: wtStr(x.why, 600).trim() };
+  });
+  // v3.2.38 -- the verdict. "great" carries no tips (any that came back are dropped: the model said it would not
+  // change a thing); "close" at most two; "work" as many as came. An answer with no verdict and no tips is unreadable.
+  let verdict = String(p.verdict || '').toLowerCase().trim();
+  if (verdict !== 'great' && verdict !== 'close' && verdict !== 'work') verdict = pts.length ? (pts.length <= 2 ? 'close' : 'work') : '';
+  if (!verdict) return null;
+  const keep = verdict === 'great' ? [] : verdict === 'close' ? pts.slice(0, 2) : pts;
+  if (verdict !== 'great' && !keep.length) return null;
+  const fallback = { great: 'I wouldn\u2019t change a thing!', close: 'You\u2019re close.', work: 'A good start, with a few things to fix.' }[verdict];
+  return { verdict: verdict, headline: wtStr(p.headline, 200).trim() || fallback, working: wtStr(p.working, 400).trim(), points: keep };
+}
+// v3.2.33 -- { "options": [ ... ] } from the polishing tools. Same quote repair as Feedback (TD-515).
+function wtParseJson(raw) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(clean); } catch (e) {
+    try { const f = repairUnescapedQuotes(clean); if (f.fixes > 0) return JSON.parse(f.text); } catch (e2) {}
+  }
+  return null;
+}
+function wtParseOptions(raw) {
+  const p = wtParseJson(raw);
+  if (!p || !Array.isArray(p.options)) return null;
+  const seen = {};
+  const out = p.options.filter(function (x) { return typeof x === 'string'; }).map(function (x) { return wtCleanText(wtStr(x, WRITING_TEXT_MAX)); })
+    .filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; }).slice(0, 3);
+  return out.length ? out : null;
+}
+function wtParseWords(raw, sel) {
+  const p = wtParseJson(raw);
+  if (!p || !Array.isArray(p.words)) return null;
+  const seen = {}; seen[String(sel || '').toLowerCase()] = 1;
+  const out = p.words.filter(function (x) { return x && typeof x.word === 'string' && x.word.trim(); })
+    .map(function (x) { return { word: wtStr(x.word, 80).trim(), note: wtStr(x.note, 120).trim() }; })
+    .filter(function (x) { const k = x.word.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 8);
+  return out.length ? out : null;
+}
+// v3.2.38 -- the part of the original story (transcript) around a box, centred on its panel; the whole story when
+// it is short. Regen reads WRITING_TRANSCRIPT_WINDOW characters; Feedback reads WRITING_FEEDBACK_WINDOW.
+function wtTranscriptWindow(ctx, session, box, size) {
+  const tr = String(session.transcript || '');
+  if (tr.length <= size) return tr;
+  const n = Math.max(1, ctx.moments.length);
+  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
+  let start = Math.round(pos * tr.length - size / 2);
+  start = Math.max(0, Math.min(tr.length - size, start));
+  return (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + size) +
+    (start + size < tr.length ? '\n[…later part of the transcript left out…]' : '');
+}
+const WRITING_FEEDBACK_WINDOW = 24000;   // v3.2.38 -- characters of the original story Feedback reads (Regen reads 40,000)
+function wtTranscriptBlock(ctx, session, box) {
+  const w = wtTranscriptWindow(ctx, session, box, WRITING_FEEDBACK_WINDOW);
+  return w.trim() ? ('THE ORIGINAL STORY / SESSION TRANSCRIPT around this part (what actually happened; the passage must be true to it):\n' + w + '\n\n') : '';
+}
+function wtCleanText(raw) {
+  let s = String(raw || '').replace(/^```[a-z]*\s*|\s*```$/g, '').trim();
+  // A model that wraps its whole answer in one pair of quotes: take them off.
+  if (s.length > 1 && /^["“]/.test(s) && /["”]$/.test(s) && s.slice(1, -1).indexOf('“') < 0 && s.slice(1, -1).indexOf('"') < 0) s = s.slice(1, -1).trim();
+  return s;
+}
+
+async function wtUsesLeft(db, userId) {
+  const r = await db.prepare('SELECT writing_uses_left FROM users WHERE id = ?').get(userId);
+  return (r && Number.isFinite(parseInt(r.writing_uses_left, 10))) ? parseInt(r.writing_uses_left, 10) : 0;
+}
+
+// Take one use. Returns { ok, refilled } -- refilled when this use bought a new set of four with a token.
+// THE ORDER IS THE PROMISE: the caller only reaches this after the model answered and the answer read.
+async function wtTakeUse(db, userId, campaignId) {
+  const took = await db.prepare('UPDATE users SET writing_uses_left = writing_uses_left - 1 WHERE id = ? AND writing_uses_left > 0').run(userId);
+  if (took && took.changes > 0) return { ok: true, refilled: false };
+  try {
+    await spendTokens(userId, 1, { source: 'writing_tools', event_type: 'generation_spend', related_campaign_id: campaignId });
+  } catch (e) {
+    // The balance was checked before the call; it emptied in between (another tab). The answer was
+    // already paid for on our side, so the person keeps it -- one use is not worth a lost result.
+    return { ok: false, refilled: false };
+  }
+  await db.prepare('UPDATE users SET writing_uses_left = COALESCE(writing_uses_left, 0) + ? WHERE id = ?').run(WRITING_USES_PER_TOKEN - 1, userId);
+  return { ok: true, refilled: true };
+}
+
+async function wtAccess(req, tool) {
+  if (!WRITING_TOOLS[tool].gold) return true;
+  try { return accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3; } catch (e) { return false; }
+}
+
+// The panel header: uses left, the balance, and whether the Gold tools are open to this person here.
+router.get('/writing/status/:campaignId', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const role = await getCampaignRole(req.session.userId, req.params.campaignId);
+    if (!role) return res.status(403).json({ error: 'Access denied' });
+    const bal = await getBalance(req.session.userId);
+    res.json({ uses_left: await wtUsesLeft(db, req.session.userId), balance: bal.total, uses_per_token: WRITING_USES_PER_TOKEN,
+      gold_tools: accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3 });
+  } catch (e) { res.status(500).json({ error: 'Could not read your writing uses.' }); }
+});
+
+router.post('/writing/:tool/:campaignId/:sessionId', requireAuth, async function (req, res) {
+  try { await writingToolHandler(req, res); }
+  catch (e) {
+    try { console.error('[writing] tool failed:', e && e.message); } catch (_e) {}
+    if (!res.headersSent) res.status(500).json({ error: 'The writing tool hit a problem. Nothing was charged. Please try again.' });
+  }
+});
+async function writingToolHandler(req, res) {
+  const tool = String(req.params.tool || '');
+  if (!Object.prototype.hasOwnProperty.call(WRITING_TOOLS, tool)) return res.status(404).json({ error: 'Unknown writing tool.' });
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.json({ error: 'AI service not configured. Please contact support.' });
+  const body = req.body || {};
+  const box = String(body.box || '');
+  if (!WRITING_BOX_RE.test(box)) return res.status(400).json({ error: 'Unknown box.' });
+  const text = wtStr(body.text, box === 'story' ? (tool === 'feedback' ? WRITING_STORY_FULL_MAX : WRITING_STORY_MAX) : WRITING_TEXT_MAX);   // v3.2.36; v3.2.40 Story Feedback reads the whole box
+  if (tool !== 'regen' && !text.trim()) return res.json({ error: 'Write something in this box first.' });
+  // v3.2.36 -- the Story box: no Regen; the polishing tools work on a selection of it. v3.2.40 -- no Show me either.
+  if (box === 'story' && tool === 'showme') return res.status(400).json({ error: 'Show me is for the Narrative boxes.' });
+  if (box === 'story' && tool === 'regen') return res.status(400).json({ error: 'Regen is for the Narrative boxes on the Storyboard.' });
+  if (box === 'story' && WRITING_TOOLS[tool] && WRITING_TOOLS[tool].fast && tool !== 'word') {
+    const ss = String(body.selection || '');
+    if (!ss.trim() || ss.length > WRITING_TEXT_MAX || text.indexOf(ss) < 0) return res.json({ error: 'Select the part of your story you want to rework (up to about 2,000 words).' });
+  }
+  // v3.2.33 -- what the stage-2 tools need before anything is looked up or paid for.
+  if (tool === 'word') {
+    const ws = String(body.selection || '');
+    if (!ws.trim() || ws.length > WT_WORD_MAX || ws.trim().split(/\s+/).length > 6 || text.indexOf(ws) < 0) {
+      return res.json({ error: 'Select a word or a short phrase in the box first (up to 6 words), then press Word.' });
+    }
+  }
+  if (tool === 'rewrite' && !Object.prototype.hasOwnProperty.call(WT_REWRITE_HOWS, String(body.how || '')) && !String(body.instruction || '').trim()) {
+    return res.json({ error: 'Choose how to rewrite it, or type your own way.' });
+  }
+
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND s.campaign_id = ?'
+  ).get(req.params.sessionId, req.session.userId, req.params.campaignId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  if (!(await wtAccess(req, tool))) {
+    return res.json({ error: 'WRITING_LOCKED', message: 'Feedback and the other writing tools come with Gold and Platinum (and the Free Trial). Regen works on every plan.' });
+  }
+
+  const ctx = await writingContext(db, req, session, targetForkId);
+  if (tool === 'regen') {
+    if (ctx.narrStyleId === 'written') return res.json({ error: 'This version uses Already Written, so the words are your own and Regen has nothing to write. Edit the text, or use Generate Narrative to split your story again.' });
+    if (!session.transcript) return res.json({ error: 'This session has nothing in its Story / Session Transcript box yet, so there is nothing to write from.' });
+    const bi = box.indexOf(':') > 0 ? parseInt(box.split(':')[1], 10) : 0;
+    if (box !== 'opening' && box !== 'closing' && !(bi >= 0 && bi < ctx.moments.length)) return res.status(400).json({ error: 'That panel is no longer on the storyboard. Reload the page.' });
+  }
+
+  // Before the call: a use in hand, or a token to buy four. Nothing is spent here.
+  const free = !!WRITING_TOOLS[tool].free;   // v3.2.33 -- Word: no use, no token
+  const usesBefore = await wtUsesLeft(db, req.session.userId);
+  // v3.2.40 -- Story Feedback costs one use per 10,000 words; everything else one (Word none).
+  const needUses = free ? 0 : (tool === 'feedback' && box === 'story') ? wtStoryFeedbackUses(text) : 1;
+  if (!free && usesBefore < needUses) {
+    const bal = await getBalance(req.session.userId);
+    if (usesBefore + bal.total * WRITING_USES_PER_TOKEN < needUses) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'The writing tools use 1 token for every ' + WRITING_USES_PER_TOKEN + ' uses' + (needUses > 1 ? (', and this needs ' + needUses + ' uses') : '') + '. You do not have enough tokens.' });
+  }
+
+  const P = wtPrompt(tool, ctx, session, box, text, body);
+  const model = WRITING_TOOLS[tool].fast ? WRITING_FAST_MODEL : WRITING_MODEL;   // v3.2.33
+  const out = await wtCallModel(key, model, P.system, P.prompt, P.max_tokens);
+  if (out.error) {
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Writing coach', fn: 'POST /narrative/writing/' + tool, message: 'Writing tool failed: ' + out.error }); } catch (e) {}
+    return res.json({ error: out.error + ' Nothing was charged.' });
+  }
+
+  let result = null;
+  if (tool === 'feedback') {
+    const fb = wtParseFeedback(out.text);
+    if (!fb) return res.json({ error: 'The feedback came back in a form we could not read. Nothing was charged. Please try again.' });
+    result = { points: fb.points, verdict: fb.verdict, headline: fb.headline, working: fb.working };   // v3.2.38
+    if (box === 'story') {   // v3.2.40 -- what the box reads as; big-picture points carry no quotes
+      const rj = wtParseJson(out.text) || {};
+      result.reads_as = wtStr(rj.reads_as, 160).trim();
+      result.points = result.points.map(function (pt) { return { quote: '', issue: pt.issue, why: pt.why }; });
+      if (result.verdict === 'great' && (!rj.headline || !String(rj.headline).trim())) result.headline = 'Ready to build your book from.';
+      result.uses_charged = needUses;
+    }
+  } else if (tool === 'showme') {
+    const after = wtCleanText(out.text);
+    if (!after || out.truncated) return res.json({ error: 'The example came back incomplete. Nothing was charged. Please try again.' });
+    result = { before: P.before, after: after };
+  } else if (tool === 'word') {
+    const ws = wtParseWords(out.text, P.before);
+    if (!ws) return res.json({ error: 'No words came back in a form we could read. Please try again.' });
+    result = { before: P.before, words: ws };
+  } else if (WRITING_TOOLS[tool].fast) {
+    const os = out.truncated ? null : wtParseOptions(out.text);
+    if (!os) return res.json({ error: 'The new versions came back incomplete. Nothing was charged. Please try again.' });
+    result = { before: P.before, options: os };
+  } else {
+    const t2 = wtCleanText(out.text);
+    if (!t2 || out.truncated) return res.json({ error: 'The new text came back incomplete. Nothing was charged. Please try again.' });
+    result = { options: [t2] };
+  }
+
+  const use = free ? { ok: true, refilled: false } : await wtTakeUse(db, req.session.userId, req.params.campaignId);   // v3.2.33 -- Word takes nothing
+  // v3.2.40 -- the extra uses of a long Story Feedback, taken the same way (after the answer).
+  let _refills = use.refilled ? 1 : 0;
+  for (let _k = 1; _k < needUses; _k++) { const _u = await wtTakeUse(db, req.session.userId, req.params.campaignId); if (_u.refilled) _refills++; if (!_u.ok) break; }
+  const u = out.usage || {};
+  try {
+    await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, _refills);
+  } catch (e) { try { console.warn('[writing] use log failed (non-fatal):', e && e.message); } catch (_e) {} }
+  try { await recordGeneration(req.session.userId, { event_type: 'writing_tool', tokens_redeemed: _refills, quantity: Math.max(1, needUses), unit: tool, model: model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
+
+  const bal2 = await getBalance(req.session.userId);
+  result.uses_left = await wtUsesLeft(db, req.session.userId);
+  result.balance = bal2.total;
+  result.uses_per_token = WRITING_USES_PER_TOKEN;
+  res.json(result);
+}
 
 module.exports = router;

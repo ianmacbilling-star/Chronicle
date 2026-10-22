@@ -102,6 +102,11 @@
     { label: 'Narrative Styles', cell: function (t) {
         return t.can_create ? val(esc(t.narrative_styles)) : na();
       } },
+    // v3.2.43 -- TD-999 (Ian, 2026-10-22). Below Gold the coach still writes a fresh version of a box (Regen,
+    // every plan), so the cell says that rather than a bare cross.
+    { label: 'Writing Coach', cell: function (t) {
+        return t.writing_coach ? mark(true) : val('Regen only');
+      } },
     { label: 'Archived Images per Campaign', cell: function (t) {
         return val(esc(cap(t.max_archives_per_campaign)));
       } },
@@ -181,6 +186,11 @@
           '<span><b>A Platinum Pass is Platinum.</b> Every feature in the Platinum column, for the ' +
           'months you buy, with the tokens granted up front. See the passes on the page behind this one.' +
           '</span></div>' +
+        // v3.2.43 -- Ian, 2026-10-22: say you can supply your own art or words. A footnote, not a row: it is
+        // true on every plan, and a row of ticks says nothing.
+        '<div class="tg-note tg-note-coin">' +
+          '<span aria-hidden="true" style="width:48px;flex-shrink:0;text-align:center;font-size:30px;color:var(--tg-gold-light);">\u270E</span>' +
+          '<span><b>On every plan:</b> put your own art in the book, or write it yourself.</span></div>' +
       '</div>' +
     '</div>';
   }

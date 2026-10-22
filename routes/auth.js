@@ -75,11 +75,13 @@ router.post('/register', async function(req, res) {
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
 
-    // Age + consent gate. DOB is required (age verification); under-13 is
-    // blocked (COPPA). Both attestations must be checked to create an account.
+    // Age + consent gate. DOB is required (age verification). v3.2.30 -- the minimum is 18, not 13:
+    // fal's terms (and Google's, for the models it runs) require every end user to be 18 or older
+    // (claude/IMAGE_PROVIDER_VERIFICATION_FINDINGS.md, TD-1001). Existing accounts are left as they are
+    // (Ian, 2026-10-21). Both attestations must be checked to create an account.
     const userAge = ageFromDob(dob);
     if (userAge === null) return res.json({ error: 'Please enter a valid date of birth.' });
-    if (userAge < 13) return res.json({ error: 'You must be at least 13 years old to create an account.' });
+    if (userAge < 18) return res.json({ error: 'You must be at least 18 years old to create an account.' });
     if (!accept_terms) return res.json({ error: 'You must read and accept the Terms of Service to create an account.' });
     if (!accept_upload) return res.json({ error: 'You must accept the content/copyright agreement to create an account.' });
 

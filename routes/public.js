@@ -214,7 +214,11 @@ router.get('/tier-grid', function (req, res) {
         // Both of these ask isTruePlatinum(userId), which is defined as
         // getEffectiveTier(uid, null) === 'platinum' -- your OWN plan, never inherited.
         custom_art_styles: name === 'platinum',
-        title_builder: name === 'platinum'
+        title_builder: name === 'platinum',
+        // v3.2.43 -- TD-999. The Writing Coach's Feedback, Show me, Rewrite and Word: the SAME test as wtAccess in
+        // routes/narrative.js (accessRank >= 3, Gold), so the grid says what the gate does. Regen is every plan.
+        // It is a creative capability, so a member inherits it from the Story Master's plan like the styles.
+        writing_coach: accessRank(name) >= 3
       };
     });
     res.set('Cache-Control', 'no-store');
