@@ -1634,7 +1634,11 @@ const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more 
 const WT_WORD_MAX = 60;           // characters a Word selection may have
 const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
 const WRITING_USES_PER_TOKEN = 4;
-const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4})$/;
+const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|story)$/;   // v3.2.36 -- 'story': the Story / Session Transcript box
+// v3.2.36 -- TD-999 stage 3. The coach on the Story box reads a WINDOW of a long story (the page sends about
+// 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
+// tools there need a selection, capped like a Narrative box. Regen is for the Narrative boxes only.
+const WRITING_STORY_MAX = 40000;
 const WRITING_TEXT_MAX = 12000;            // characters of box text the tools will read
 const WRITING_TRANSCRIPT_WINDOW = 40000;   // characters of transcript Regen reads, centred on its panel
 const WRITING_TIMEOUT_MS = 90 * 1000;
@@ -1662,6 +1666,7 @@ function wtBoxText(box, intro, sections, outro) {
   return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
 }
 function wtBoxName(box, moments) {
+  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
   if (box === 'opening') return 'the Opening (before the first picture)';
   if (box === 'closing') return 'the Closing (after the last picture)';
   const i = parseInt(box.split(':')[1], 10);
@@ -1752,6 +1757,7 @@ function wtBackground(ctx, session) {
 }
 
 function wtNeighbours(ctx, box) {
+  if (box === 'story') return '';   // v3.2.36 -- the story has no boxes either side
   const chain = wtChain(ctx.moments);
   const at = chain.indexOf(box);
   const prev = at > 0 ? chain[at - 1] : null;
@@ -1763,6 +1769,7 @@ function wtNeighbours(ctx, box) {
 }
 
 function wtPanels(ctx, box) {
+  if (box === 'story') return '';   // v3.2.36
   const n = ctx.moments.length;
   const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
   if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
@@ -2017,8 +2024,14 @@ async function writingToolHandler(req, res) {
   const body = req.body || {};
   const box = String(body.box || '');
   if (!WRITING_BOX_RE.test(box)) return res.status(400).json({ error: 'Unknown box.' });
-  const text = wtStr(body.text, WRITING_TEXT_MAX);
+  const text = wtStr(body.text, box === 'story' ? WRITING_STORY_MAX : WRITING_TEXT_MAX);   // v3.2.36
   if (tool !== 'regen' && !text.trim()) return res.json({ error: 'Write something in this box first.' });
+  // v3.2.36 -- the Story box: no Regen; the polishing tools work on a selection of it.
+  if (box === 'story' && tool === 'regen') return res.status(400).json({ error: 'Regen is for the Narrative boxes on the Storyboard.' });
+  if (box === 'story' && WRITING_TOOLS[tool] && WRITING_TOOLS[tool].fast && tool !== 'word') {
+    const ss = String(body.selection || '');
+    if (!ss.trim() || ss.length > WRITING_TEXT_MAX || text.indexOf(ss) < 0) return res.json({ error: 'Select the part of your story you want to rework (up to about 2,000 words).' });
+  }
   // v3.2.33 -- what the stage-2 tools need before anything is looked up or paid for.
   if (tool === 'word') {
     const ws = String(body.selection || '');

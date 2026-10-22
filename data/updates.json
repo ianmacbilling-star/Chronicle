@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.36",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3236-coach-on-story",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Writing Coach now works on your Story / Session Transcript too: Feedback, Rewrite and Word, right under the story box.",
+        "detail": "Press Writing Coach under the Story box (Story Masters). Feedback reads up to about 6,000 words: the words you select, or the part around your cursor. Rewrite (all its choices) and Word work on the words you select, up to about 2,000 words at a time. Typing in the coach edits your story and saves it, as typing in the box does. Regen and Previous / Next stay with the Narrative boxes. Test: a long story, cursor near the end, Get feedback (tips about the end); select a paragraph, Rewrite > Clearer, Use this; reload the page and see the change kept.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.35",
     "staged_on": "2026-10-22",
     "entries": [

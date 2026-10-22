@@ -18583,6 +18583,36 @@ var WT_WAIT = { regen: 'Writing a fresh version of this box…', showme: 'Rewrit
   rewrite: 'Rewriting…', describe: 'Adding detail…', expand: 'Making it longer…', tighten: 'Making it shorter…', word: 'Finding words…' };
 var WT_HOWS = [['clearer', 'Clearer'], ['vivid', 'More vivid'], ['dramatic', 'More dramatic'], ['simpler', 'Simpler'], ['describe', 'Add detail'], ['expand', 'Longer'], ['tighten', 'Shorter']];
 var WT_WORD_MAX = 60;
+// v3.2.36 -- TD-999 stage 3: the coach on the Story / Session Transcript box (box 'story'). No Regen and no
+// Previous / Next there. A story can be long, so the coach reads a WINDOW of it: about 6,000 words around the
+// words selected, or around the cursor (Feedback, Show me); the polishing tools need a selection.
+var WT_STORY_WINDOW = 36000;   // characters, about 6,000 words
+var WT_STORY_SEL_MAX = 12000;  // characters the polishing tools take (about 2,000 words)
+function wtIsStory() { return WT_STATE.box === 'story'; }
+function wtTabsHere() { return wtIsStory() ? WT_TABS.filter(function (t) { return t.id !== 'regen'; }) : WT_TABS; }
+// A piece of a long text around a point, cut at spaces, and where it starts.
+function wtWindow(full, center, max) {
+  full = String(full || '');
+  if (full.length <= max) return { text: full, start: 0 };
+  var start = Math.max(0, Math.min(full.length - max, Math.round(center - max / 2)));
+  if (start > 0) { var sp = full.slice(start, start + 200).search(/\s/); if (sp >= 0) start += sp + 1; }
+  var end = Math.min(full.length, start + max);
+  if (end < full.length) { var back = full.slice(start, end).search(/\s\S*$/); if (back > 0) end = start + back; }
+  return { text: full.slice(start, end), start: start };
+}
+// Save the box after the coach changed it: the Narrative boxes autosave; the Story box saves when it loses focus,
+// so the coach asks for that save itself, a moment after the last change.
+var _wtStoryTimer = null;
+function wtSaveBox(el) {
+  if (!el) return;
+  if (el.id === 'transcript-input') {
+    if (typeof updateWordCounts === 'function') { try { updateWordCounts(); } catch (x) {} }
+    if (_wtStoryTimer) clearTimeout(_wtStoryTimer);
+    _wtStoryTimer = setTimeout(function () { _wtStoryTimer = null; try { if (typeof el.onblur === 'function') el.onblur(); } catch (x) {} }, 800);
+    return;
+  }
+  if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+}
 
 function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank >= 3); }
 
@@ -18605,7 +18635,7 @@ function wtPanelEnsure() {
   p.setAttribute('aria-label', 'Writing coach');
   p.innerHTML =
     '<div class="wc-head"><div class="wc-title">Writing coach</div><div class="wc-sub" id="wc-sub"></div>' +
-      '<div class="wc-nav"><button type="button" class="wc-navbtn" id="wc-prev" onclick="wtNav(-1)" title="Previous box">&#8249; Previous</button>' +
+      '<div class="wc-nav" id="wc-nav"><button type="button" class="wc-navbtn" id="wc-prev" onclick="wtNav(-1)" title="Previous box">&#8249; Previous</button>' +
       '<button type="button" class="wc-navbtn" id="wc-next" onclick="wtNav(1)" title="Next box">Next &#8250;</button></div>' +
       '<button type="button" class="wc-close" onclick="wtClose()" aria-label="Close">&times;</button></div>' +
     '<div class="wc-warn" id="wc-warn" style="display:none;"></div>' +
@@ -18674,7 +18704,8 @@ function wtEditInput() {
   var e = wtEditEl(), b = wtBoxEl();
   if (!e || !b) return;
   b.value = e.value;
-  try { b.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) { if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave(); }
+  try { b.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) { if (typeof scheduleNarrativeSave === 'function' && b.id !== 'transcript-input') scheduleNarrativeSave(); }
+  if (b.id === 'transcript-input') wtSaveBox(b);   // v3.2.36 -- the Story box saves on blur; ask for it
   wtStalePaint();
 }
 function wtSyncEdit() {
@@ -18714,7 +18745,7 @@ function wtTabEl(id) { return document.getElementById('wc-tab-' + id); }
 function wtTabsReset() {
   WT_STATE.tabs = {}; WT_STATE.opts = [];
   var b = document.getElementById('wc-body');
-  if (b) b.innerHTML = WT_TABS.map(function (t) {
+  if (b) b.innerHTML = wtTabsHere().map(function (t) {
     return '<div class="wc-tab" id="wc-tab-' + t.id + '" style="display:none;"><div class="wc-stale" id="wc-stale-' + t.id + '" style="display:none;">Your text has changed since these suggestions.</div>' +
       '<div class="wc-tab-body" id="wc-tabbody-' + t.id + '"></div></div>';
   }).join('');
@@ -18722,7 +18753,7 @@ function wtTabsReset() {
 function wtTabHtml(id, html) { var b = document.getElementById('wc-tabbody-' + id); if (b) b.innerHTML = html; }
 function wtToolsHtml() {
   var lock = !wtGoldOk();
-  return WT_TABS.map(function (t) {
+  return wtTabsHere().map(function (t) {
     var locked = t.gold && lock;
     return '<button type="button" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.cur === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTab(\'' + t.id + '\')" title="' +
       (locked ? 'Comes with Gold and Platinum' : t.tip) + '">' + t.name + (locked ? '<span class="wt-gold">Gold</span>' : '') + '</button>';
@@ -18742,6 +18773,9 @@ function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
   if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
+  if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">3 to 5 tips that would make your story stronger, each with a <b>Show me</b>. ' +
+    'Feedback reads up to about 6,000 words: the words you select, or the part around your cursor.</p>' +
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'feedback') return '<p class="wc-text">3 to 5 tips that would make this box stronger, each with a <b>Show me</b>.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
@@ -18749,7 +18783,7 @@ function wtStartHtml(id) {
   return wtRewriteChoicesHtml();
 }
 function wtRewriteChoicesHtml() {
-  return '<p class="wc-text">How should the words you select (or the whole box) change?</p>' +
+  return '<p class="wc-text">' + (wtIsStory() ? 'Select the part of your story to rework (up to about 2,000 words). How should it change?' : 'How should the words you select (or the whole box) change?') + '</p>' +
     '<div class="wc-choices">' + WT_HOWS.map(function (h) { return '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtRewrite(\'' + h[0] + '\')">' + h[1] + '</button>'; }).join('') + '</div>' +
     '<div class="wc-own"><input type="text" id="wc-own-in" class="wc-input" maxlength="200" placeholder="Or say how, e.g. make him sound scared" ' +
       'onkeydown="if(event.key===\'Enter\'){event.preventDefault();wtRewrite(\'own\');}">' +
@@ -18773,7 +18807,7 @@ function wtBoxList() {
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     var ta = rows[i].getAttribute('data-ta');
-    if (ta && document.getElementById(ta)) out.push({ box: rows[i].getAttribute('data-box'), ta: ta });
+    if (ta && rows[i].getAttribute('data-box') !== 'story' && document.getElementById(ta)) out.push({ box: rows[i].getAttribute('data-box'), ta: ta });
   }
   return out;
 }
@@ -18819,7 +18853,8 @@ function wtCoach(box, ta, force) {
   var fresh = other || !document.getElementById('wc-tab-regen');
   WT_STATE.box = box; WT_STATE.ta = ta;
   WT_STATE.label = row ? (row.getAttribute('data-label') || '') : '';
-  if (fresh) { WT_STATE.gen++; wtTabsReset(); WT_STATE.cur = wtGoldOk() ? 'feedback' : 'regen'; }
+  if (fresh) { WT_STATE.gen++; wtTabsReset(); WT_STATE.cur = (wtGoldOk() || box === 'story') ? 'feedback' : 'regen'; }
+  var nv = document.getElementById('wc-nav'); if (nv) nv.style.display = (box === 'story') ? 'none' : '';
   p.style.display = 'flex';
   var sub = document.getElementById('wc-sub');
   if (sub) sub.textContent = WT_STATE.label || '';
@@ -18855,6 +18890,10 @@ function wtGo(tool, extra) {
     if (m) m.textContent = sel ? 'That is more than a word or short phrase. Select up to 6 words.' : 'Select a word or short phrase in the text above first.';
     return;
   }
+  if (wtIsStory() && tool !== 'word' && tool !== 'feedback' && (!sel || sel.text.length > WT_STORY_SEL_MAX)) {
+    wtTabHtml(tab, '<p class="wc-text">' + (sel ? 'That is a long piece. Select up to about 2,000 words of your story at a time.' : 'Select the part of your story you want to rework first.') + '</p>' + wtRewriteChoicesHtml());
+    return;
+  }
   var x = extra || {}; x.text = el.value;
   wtRun(tool, x, sel);
 }
@@ -18882,6 +18921,14 @@ function wtRun(tool, extra, sel) {
   var tab = WT_TAB_OF[tool], s = wtTabState(tab);
   if (s.busy) return;
   if (!state.currentCampaign || !state.currentSession) return;
+  if (wtIsStory()) {
+    // v3.2.36 -- the part of the story the coach reads, centred on the selection, the quoted words, or the cursor.
+    var full = extra.text || '', ed = wtEditEl();
+    var center = sel ? sel.start + sel.text.length / 2 : (typeof extra.focus === 'number' ? extra.focus : ((ed && typeof ed.selectionStart === 'number') ? ed.selectionStart : 0));
+    var w = wtWindow(full, center, tool === 'word' ? 4000 : (tool === 'feedback' || tool === 'showme') ? WT_STORY_WINDOW : WT_STORY_SEL_MAX + 8000);   // the polishing tools need only the selection and some text around it
+    var x2 = {}; for (var kx in extra) if (Object.prototype.hasOwnProperty.call(extra, kx)) x2[kx] = extra[kx];
+    x2.text = w.text; x2.winStart = w.start; x2.full = full; extra = x2;
+  }
   var myGen = WT_STATE.gen, mySeq = ++s.seq;
   s.busy = true;
   if (tool !== 'showme') { s.last = { tool: tool, extra: extra, sel: sel }; s.sel = sel; }
@@ -18889,7 +18936,7 @@ function wtRun(tool, extra, sel) {
   var wait = '<p class="wc-wait">' + (WT_WAIT[tool] || 'Working…') + '</p>';
   if (showSlot) showSlot.innerHTML = wait; else wtTabHtml(tab, wait);
   var body = { box: WT_STATE.box, text: extra.text || '' };
-  var textAt = extra.text || '';
+  var textAt = (extra.full != null) ? extra.full : (extra.text || '');
   if (tool === 'showme') { body.quote = extra.quote || ''; body.issue = extra.issue || ''; }
   if (sel && tool !== 'showme' && tool !== 'feedback' && tool !== 'regen') body.selection = sel.text;
   if (tool === 'rewrite') { if (extra.how) body.how = extra.how; if (extra.instruction) body.instruction = extra.instruction; }
@@ -18909,13 +18956,14 @@ function wtRun(tool, extra, sel) {
       put('<p class="wc-err">' + escapeHtml((d && d.error) || 'Something went wrong. Nothing was charged.') + '</p>' + (s.ran ? '' : back));
       return;
     }
-    if (tool !== 'showme') { s.ran = true; s.textAt = textAt; }
+    if (tool !== 'showme') { s.ran = true; s.textAt = textAt; s.winStart = extra.winStart || 0; }
     s.pending = true;
     if (tool === 'feedback') { wtRenderPoints(d.points || []); }
     else if (tool === 'showme') {
       var k0 = WT_STATE.opts.length;
-      WT_STATE.opts.push({ tab: tab, before: d.before || '', after: d.after || '' });
-      put('<div class="wc-ba"><div class="wc-ba-label">' + ((wtBoxEl() && d.before === wtBoxEl().value) ? 'The whole box, rewritten' : 'That part, rewritten') + '</div>' +
+      var at0 = (typeof extra.winStart === 'number' && d.before) ? extra.text.indexOf(d.before) : -1;   // v3.2.36 -- in the story: where in the whole text
+      WT_STATE.opts.push(at0 >= 0 ? { tab: tab, before: d.before || '', at: extra.winStart + at0, after: d.after || '' } : { tab: tab, before: d.before || '', after: d.after || '' });
+      put('<div class="wc-ba"><div class="wc-ba-label">' + ((wtBoxEl() && d.before === wtBoxEl().value) ? 'The whole box, rewritten' : (d.before === extra.text && extra.winStart != null ? 'That part of your story, rewritten' : 'That part, rewritten')) + '</div>' +
         '<div class="wc-ba-text wc-ba-after">' + escapeHtml(d.after || '') + '</div>' +
         '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k0 + ')">Use this</button>' +
         '<button type="button" class="wc-btn" onclick="wtCopy(' + k0 + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k0 + '"></div></div>');
@@ -18994,7 +19042,9 @@ function wtUseWord(i) {
 function wtShowMe(i) {
   var pt = wtTabState('feedback').points[i]; var el = wtBoxEl();
   if (!pt || !el) return;
-  wtRun('showme', { index: i, text: el.value, quote: pt.quote, issue: pt.issue }, null);
+  var fs = wtTabState('feedback'), at = -1;
+  if (wtIsStory() && pt.quote) { at = el.value.indexOf(pt.quote, fs.winStart || 0); if (at < 0) at = el.value.indexOf(pt.quote); }
+  wtRun('showme', { index: i, text: el.value, quote: pt.quote, issue: pt.issue, focus: at >= 0 ? at : (fs.winStart || 0) }, null);
 }
 function wtAgain(tab) {
   var el = wtBoxEl(); if (!el) return;
@@ -19023,7 +19073,7 @@ function wtUse(k, msgId) {
   }
   el.value = next;
   wtSetUndo(WT_STATE.ta, old);
-  if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+  wtSaveBox(el);
   var s = WT_STATE.tabs[o.tab];
   if (s) { s.pending = false; s.textAt = next; }   // using something counts as doing something in that tab
   wtSyncEdit();
@@ -19057,7 +19107,7 @@ function wtUndo(ta) {
   el.value = u.v;
   delete WT_STATE.undo[ta];
   var b = document.getElementById('wt-undo-' + ta); if (b) b.style.display = 'none';
-  if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+  wtSaveBox(el);
   if (WT_STATE.ta === ta) wtSyncEdit();
 }
 
@@ -21562,6 +21612,9 @@ function updateNotesBox(data) {
       if (role === 'dm') { saveSessionField('transcript', transcriptEl.value.trim()); }
     };
   }
+  // v3.2.36 -- TD-999 stage 3: the Writing Coach under the Story box, for whoever can edit it (the Story Master).
+  var storyCoachRow = document.getElementById('story-coach-row');
+  if (storyCoachRow) storyCoachRow.innerHTML = (role === 'dm' && typeof wtPillsHtml === 'function') ? wtPillsHtml('story', 'transcript-input', 'Story', null) : '';
   updateWordCounts();
 }
 
