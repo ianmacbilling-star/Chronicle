@@ -18588,6 +18588,13 @@ var WT_WORD_MAX = 60;
 // words selected, or around the cursor (Feedback, Show me); the polishing tools need a selection.
 var WT_STORY_WINDOW = 36000;   // characters, about 6,000 words
 var WT_STORY_SEL_MAX = 12000;  // characters the polishing tools take (about 2,000 words)
+// v3.2.40 -- Story Feedback reads the whole box: one use for every 10,000 words, said on its button.
+function wtStoryFbUses() {
+  var el = wtBoxEl(), t = el ? String(el.value || '').trim() : '';
+  var w = t ? t.split(/\s+/).length : 0;
+  return Math.max(1, Math.ceil(w / 10000));
+}
+function wtStoryFbLabel(verb) { var n = wtStoryFbUses(); return verb + ' (' + n + ' use' + (n === 1 ? '' : 's') + ')'; }
 function wtIsStory() { return WT_STATE.box === 'story'; }
 function wtTabsHere() { return wtIsStory() ? WT_TABS.filter(function (t) { return t.id !== 'regen'; }) : WT_TABS; }
 // A piece of a long text around a point, cut at spaces, and where it starts.
@@ -18773,9 +18780,10 @@ function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
   if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
-  if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">An honest verdict on this part of your story, and tips (each with a <b>Show me</b>) only where they would make it better. ' +
-    'Feedback reads up to about 6,000 words: the words you select, or the part around your cursor.</p>' +
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
+  if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">Big-picture feedback on your whole story: what it reads as (notes, a game transcript or a written story; one chapter or the whole thing), ' +
+    'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">' + wtStoryFbLabel('Get feedback') + '</button>' +
+    '<p class="wc-note">It reads the whole box: one use for every 10,000 words.</p>';
   if (id === 'feedback') return '<p class="wc-text">An honest verdict on this box \u2014 sometimes \u201cI wouldn\u2019t change a thing!\u201d \u2014 and tips (each with a <b>Show me</b>) only where they would make it better.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
@@ -18975,7 +18983,8 @@ function wtRun(tool, extra, sel) {
     // v3.2.36 -- the part of the story the coach reads, centred on the selection, the quoted words, or the cursor.
     var full = extra.text || '', ed = wtEditEl();
     var center = sel ? sel.start + sel.text.length / 2 : (typeof extra.focus === 'number' ? extra.focus : ((ed && typeof ed.selectionStart === 'number') ? ed.selectionStart : 0));
-    var w = wtWindow(full, center, tool === 'word' ? 4000 : (tool === 'feedback' || tool === 'showme') ? WT_STORY_WINDOW : WT_STORY_SEL_MAX + 8000);   // the polishing tools need only the selection and some text around it
+    var w = (tool === 'feedback') ? { text: full, start: 0 } :   // v3.2.40 -- Feedback reads the whole story
+      wtWindow(full, center, tool === 'word' ? 4000 : (tool === 'showme') ? WT_STORY_WINDOW : WT_STORY_SEL_MAX + 8000);   // the polishing tools need only the selection and some text around it
     var x2 = {}; for (var kx in extra) if (Object.prototype.hasOwnProperty.call(extra, kx)) x2[kx] = extra[kx];
     x2.text = w.text; x2.winStart = w.start; x2.full = full; extra = x2;
   }
@@ -19063,9 +19072,21 @@ function wtRenderPoints(points, d) {
   var s = wtTabState('feedback');
   s.points = points;
   var head = wtVerdictHtml(d);
+  // v3.2.40 -- the Story box: what it reads as, big-picture points, no Show me, and the cost on the button.
+  var story = wtIsStory();
+  var again = story ? wtStoryFbLabel('Get new feedback') : 'Get new feedback (1 use)';
+  if (story && d && d.reads_as) head = '<div class="wc-reads-as" style="font-size:11px;color:#7a5c12;letter-spacing:0.03em;margin:0 0 8px;">Reads as: ' + escapeHtml(d.reads_as) + '</div>' + head;
   if (!points.length && d && d.verdict === 'great') {
     s.pending = false;   // nothing to use, so nothing to warn about when moving on
-    wtTabHtml('feedback', head + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">Get new feedback (1 use)</button>');
+    wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
+    return;
+  }
+  if (story && points.length) {
+    s.pending = false;   // big-picture points have nothing to Use, so moving on never asks
+    wtTabHtml('feedback', head + '<ol class="wc-points">' + points.map(function (pt) {
+      return '<li class="wc-point"><div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' + (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') + '</li>';
+    }).join('') + '</ol><p class="wc-note">Big picture only: the final narrative gets polished box by box on the Storyboard. Rewrite and Word are here if you want to work on the words.</p>' +
+    '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
     return;
   }
   if (!points.length) { s.pending = false; wtTabHtml('feedback', '<p class="wc-text">No suggestions came back. Try again in a moment.</p>' + wtStartHtml('feedback')); return; }

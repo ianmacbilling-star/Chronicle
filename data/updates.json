@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.40",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3240-story-big-picture-feedback",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Feedback on the Story box now reads your whole story and looks at the big picture: what it is (notes, a game transcript or a written story; one chapter or the whole thing), its shape, pacing, clarity and gaps.",
+        "detail": "It reads the whole Story box and your Story Notes and Instructions, says what it reads as, then gives a verdict (Ready to build your book from, Close, or Needs work) with big-picture points, not line edits; transcripts are allowed to be messy. Show me is gone from the Story box; Rewrite and Word stay for working on the words. It costs one use for every 10,000 words, shown on the button. Test: a short story (1 use) and a long transcript (2+ uses on the button); the answer starts with Reads as.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.39",
     "staged_on": "2026-10-22",
     "entries": [

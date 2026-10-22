@@ -1639,6 +1639,15 @@ const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|story)$
 // 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
 // tools there need a selection, capped like a Narrative box. Regen is for the Narrative boxes only.
 const WRITING_STORY_MAX = 40000;
+// v3.2.40 -- STORY FEEDBACK READS THE WHOLE BOX (Ian: "Read the whole box"), so a long transcript costs more to read:
+// one use for every 10,000 words (Ian agreed), shown on the button before it is pressed. Capped at 60,000 words.
+const WRITING_STORY_FULL_MAX = 400000;   // characters
+const WRITING_STORY_WORDS_PER_USE = 10000;
+function wtStoryFeedbackUses(text) {
+  const t = String(text || '').trim();
+  const words = t ? t.split(/\s+/).length : 0;
+  return Math.max(1, Math.ceil(words / WRITING_STORY_WORDS_PER_USE));
+}
 const WRITING_TEXT_MAX = 12000;            // characters of box text the tools will read
 const WRITING_TRANSCRIPT_WINDOW = 40000;   // characters of transcript Regen reads, centred on its panel
 const WRITING_TIMEOUT_MS = 90 * 1000;
@@ -1797,6 +1806,33 @@ const WT_RULES =
 function wtPrompt(tool, ctx, session, box, text, body) {
   const bg = wtBackground(ctx, session);
   const name = wtBoxName(box, ctx.moments);
+  // v3.2.40 -- FEEDBACK ON THE STORY BOX IS BIG PICTURE (Ian, 2026-10-22). The Story box may hold notes, a game
+  // transcript or a story the writer wrote, and may be one chapter or a whole story: the coach says which, then judges
+  // the composition -- shape, pacing, clarity, gaps, consistency -- not sentences ("The individual paragraphs can be
+  // edited in the storyboard"). Transcripts are messy by nature, so it goes easy on the mess. It reads the whole box and
+  // the author's Story Notes and Instructions (in the background block, as STORY INSTRUCTIONS). No Show me here.
+  if (tool === 'feedback' && box === 'story') {
+    return {
+      max_tokens: 1600,
+      system: 'You are an experienced story editor reading the source material a writer will turn into an illustrated story. You look at the big picture, not the sentences, and you always return valid JSON.',
+      prompt: bg +
+        'THE WRITER\'S STORY BOX -- the source text for this session (the whole of it):\n' + text + '\n\n' +
+        'First decide what this is: a game TRANSCRIPT (players and a game master at a table, with table talk), NOTES or an outline, a written STORY, or a MIX; ' +
+        'and whether it reads as ONE CHAPTER of something longer or a WHOLE story. Say so plainly in "reads_as". If STORY INSTRUCTIONS are given above, they are the author\'s intent for this session: judge against them.\n' +
+        'Then judge the COMPOSITION, not the sentences: the shape (a clear start, build, turning point and ending, or a chapter that does its job), pacing (where it drags or rushes, scenes to merge or split), ' +
+        'clarity (who is who, where we are, what each character wants), gaps (moments skipped or impossible to follow, threads left hanging), and consistency with the world / lore and the story so far above. ' +
+        'Tune it to what it is: for a TRANSCRIPT, go easy on the mess -- table talk, rules chatter and half-sentences are normal and will be cleaned up when the narrative is written; look for whether the key moments and turns are in there and clear enough to build from. ' +
+        'For NOTES, check there is enough in each scene to build pictures and narrative from. For a written STORY, look at structure, point of view and arc.\n' +
+        'Do not give line edits or rewrite sentences: the final narrative is polished later, box by box, on the Storyboard. Choose ONE verdict:\n' +
+        '- "great": ready to build the book from. Headline \u201cReady to build your book from.\u201d and NO points.\n' +
+        '- "close": nearly there. 1 or 2 big-picture points.\n' +
+        '- "work": it has real gaps. 3 to 5 big-picture points, the one that matters most first.\n' +
+        'Do not invent problems or praise to be kind; name what already works. Write in the same language as the story.\n' + WT_RULES +
+        'Return ONLY valid JSON, no markdown:\n' +
+        '{ "reads_as": "e.g. A game transcript \u00b7 one chapter of a longer story", "verdict": "great" or "close" or "work", "headline": "one short line", ' +
+        '"working": "one specific sentence on what already works", "points": [ { "issue": "the big-picture change, in one plain sentence", "why": "why it matters to the finished story, in one short sentence" } ] }'
+    };
+  }
   if (tool === 'feedback') {
     return {
       max_tokens: 1200,
@@ -2072,9 +2108,10 @@ async function writingToolHandler(req, res) {
   const body = req.body || {};
   const box = String(body.box || '');
   if (!WRITING_BOX_RE.test(box)) return res.status(400).json({ error: 'Unknown box.' });
-  const text = wtStr(body.text, box === 'story' ? WRITING_STORY_MAX : WRITING_TEXT_MAX);   // v3.2.36
+  const text = wtStr(body.text, box === 'story' ? (tool === 'feedback' ? WRITING_STORY_FULL_MAX : WRITING_STORY_MAX) : WRITING_TEXT_MAX);   // v3.2.36; v3.2.40 Story Feedback reads the whole box
   if (tool !== 'regen' && !text.trim()) return res.json({ error: 'Write something in this box first.' });
-  // v3.2.36 -- the Story box: no Regen; the polishing tools work on a selection of it.
+  // v3.2.36 -- the Story box: no Regen; the polishing tools work on a selection of it. v3.2.40 -- no Show me either.
+  if (box === 'story' && tool === 'showme') return res.status(400).json({ error: 'Show me is for the Narrative boxes.' });
   if (box === 'story' && tool === 'regen') return res.status(400).json({ error: 'Regen is for the Narrative boxes on the Storyboard.' });
   if (box === 'story' && WRITING_TOOLS[tool] && WRITING_TOOLS[tool].fast && tool !== 'word') {
     const ss = String(body.selection || '');
@@ -2116,9 +2153,11 @@ async function writingToolHandler(req, res) {
   // Before the call: a use in hand, or a token to buy four. Nothing is spent here.
   const free = !!WRITING_TOOLS[tool].free;   // v3.2.33 -- Word: no use, no token
   const usesBefore = await wtUsesLeft(db, req.session.userId);
-  if (!free && usesBefore <= 0) {
+  // v3.2.40 -- Story Feedback costs one use per 10,000 words; everything else one (Word none).
+  const needUses = free ? 0 : (tool === 'feedback' && box === 'story') ? wtStoryFeedbackUses(text) : 1;
+  if (!free && usesBefore < needUses) {
     const bal = await getBalance(req.session.userId);
-    if (bal.total < 1) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'The writing tools use 1 token for every ' + WRITING_USES_PER_TOKEN + ' uses, and you are out of tokens.' });
+    if (usesBefore + bal.total * WRITING_USES_PER_TOKEN < needUses) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'The writing tools use 1 token for every ' + WRITING_USES_PER_TOKEN + ' uses' + (needUses > 1 ? (', and this needs ' + needUses + ' uses') : '') + '. You do not have enough tokens.' });
   }
 
   const P = wtPrompt(tool, ctx, session, box, text, body);
@@ -2134,6 +2173,13 @@ async function writingToolHandler(req, res) {
     const fb = wtParseFeedback(out.text);
     if (!fb) return res.json({ error: 'The feedback came back in a form we could not read. Nothing was charged. Please try again.' });
     result = { points: fb.points, verdict: fb.verdict, headline: fb.headline, working: fb.working };   // v3.2.38
+    if (box === 'story') {   // v3.2.40 -- what the box reads as; big-picture points carry no quotes
+      const rj = wtParseJson(out.text) || {};
+      result.reads_as = wtStr(rj.reads_as, 160).trim();
+      result.points = result.points.map(function (pt) { return { quote: '', issue: pt.issue, why: pt.why }; });
+      if (result.verdict === 'great' && (!rj.headline || !String(rj.headline).trim())) result.headline = 'Ready to build your book from.';
+      result.uses_charged = needUses;
+    }
   } else if (tool === 'showme') {
     const after = wtCleanText(out.text);
     if (!after || out.truncated) return res.json({ error: 'The example came back incomplete. Nothing was charged. Please try again.' });
@@ -2153,12 +2199,15 @@ async function writingToolHandler(req, res) {
   }
 
   const use = free ? { ok: true, refilled: false } : await wtTakeUse(db, req.session.userId, req.params.campaignId);   // v3.2.33 -- Word takes nothing
+  // v3.2.40 -- the extra uses of a long Story Feedback, taken the same way (after the answer).
+  let _refills = use.refilled ? 1 : 0;
+  for (let _k = 1; _k < needUses; _k++) { const _u = await wtTakeUse(db, req.session.userId, req.params.campaignId); if (_u.refilled) _refills++; if (!_u.ok) break; }
   const u = out.usage || {};
   try {
     await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, use.refilled ? 1 : 0);
+      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, _refills);
   } catch (e) { try { console.warn('[writing] use log failed (non-fatal):', e && e.message); } catch (_e) {} }
-  try { await recordGeneration(req.session.userId, { event_type: 'writing_tool', tokens_redeemed: use.refilled ? 1 : 0, quantity: 1, unit: tool, model: model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
+  try { await recordGeneration(req.session.userId, { event_type: 'writing_tool', tokens_redeemed: _refills, quantity: Math.max(1, needUses), unit: tool, model: model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
 
   const bal2 = await getBalance(req.session.userId);
   result.uses_left = await wtUsesLeft(db, req.session.userId);
