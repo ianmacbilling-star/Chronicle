@@ -318,6 +318,13 @@
           "placement": "auto"
         },
         {
+          "selector": "#story-coach-row .wt-coach",
+          "dmOnly": true,
+          "title": "Writing Coach",
+          "text": "The coach can read your whole story and tell you how it holds together: the order of events, pacing, clarity and gaps. It costs one use for every 10,000 words. Select a passage to Rewrite it, or a word to find a better one. The line-by-line polish happens later, on the Storyboard.",
+          "placement": "auto"
+        },
+        {
           "selector": "#session-notes-input",
           "title": "Notes & instructions",
           "text": "This is where you tell Campaignia how to create your story — anything it should know or do.",
@@ -458,9 +465,15 @@
           "placement": "auto"
         },
         {
-          "selector": ".wt-regen",
+          "selector": "#session-tab-storyboard .wt-regen",
           "title": "Narrative",
-          "text": "Regen writes a fresh version of just this box, and you see it before anything changes. Or simply retype it yourself. Feedback gives you tips to make it stronger.",
+          "text": "Click into the text to change it yourself, or Regen to write a fresh version of just this box. You see it before anything changes.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-tab-storyboard .wt-coach",
+          "title": "Writing Coach",
+          "text": "Opens a coach beside the storyboard with this box's text at the top. Feedback gives an honest verdict and tips, Rewrite reworks your words, and Word finds a better word. Select some words first to work on just those. Nothing changes until you click Use this, and Previous and Next take you through the boxes. One token buys four uses; Word is free.",
           "placement": "auto"
         }
       ]

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.42",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3242-coach-tours-and-help",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Storyboard and Story tours now show the Writing Coach, and the Help assistant knows all about it.",
+        "detail": "The Storyboard tour has a Writing Coach step after the Narrative step, and the Narrative step no longer mentions Feedback under the box. The Story tour has a Writing Coach step after the Story box, for the Story Master. Help can now answer questions about the coach: where it is, what each tool does, Story box Feedback, plans and cost. Test: run the Storyboard tour (Narrative, then Writing Coach); run the Story tour as the Story Master (Writing Coach after Your story) and as a member (no coach step); ask Help \"what does the writing coach cost?\" and \"what is the difference between Regen and Rewrite?\".",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.41",
     "staged_on": "2026-10-22",
     "entries": [
