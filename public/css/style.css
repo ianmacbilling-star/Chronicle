@@ -2972,11 +2972,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .wt-pill.is-locked{opacity:0.55;}
 .wt-pills{flex-wrap:wrap;row-gap:4px;}   /* v3.2.33 -- eight pills: wrap rather than run off a narrow box */
 .wt-gold{font-size:8px;letter-spacing:0.06em;text-transform:uppercase;margin-left:4px;opacity:0.85;}
-.wc-panel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:92vw;z-index:97;background:#ffffff;color:#1f2430;display:none;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);}
-.wc-head{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e6e1d6;background:#faf8f3;}
+.wc-panel{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:92vw;z-index:97;background:#ffffff;color:#1f2430;display:none;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);overflow-y:auto;overscroll-behavior:contain;}   /* v3.2.35 -- wider (Ian); the whole coach scrolls as one column, and never into the page */
+.wc-panel > *{flex-shrink:0;}
+.wc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid #e6e1d6;background:#faf8f3;position:sticky;top:0;z-index:2;}   /* v3.2.35 -- one line: title, box name, Previous / Next, close (Ian) */
 /* v3.2.34 -- the coach carries the box's text, the tools, and Previous / Next box (Ian) */
-.wc-head-main{min-width:0;flex:1;}
-.wc-nav{display:flex;gap:6px;margin-top:8px;}
+.wc-nav{display:flex;gap:6px;flex:0 0 auto;}
 .wc-navbtn{padding:2px 8px;font-size:11px;background:#fff;color:#7a5c12;border:1px solid #e2d6b5;border-radius:6px;cursor:pointer;}
 .wc-navbtn:hover:not(:disabled){border-color:#c9a84c;background:#f3ecd8;}
 .wc-navbtn:disabled{opacity:0.4;cursor:default;}
@@ -2992,12 +2992,18 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .wc-tool.is-locked{opacity:0.55;}
 .wc-tool .wt-gold{color:inherit;}
 .wc-revert{margin-left:auto;}
-.wc-title{font-family:var(--font-display);font-size:17px;color:#7a5c12;}
-.wc-sub{font-size:12px;color:#6b7280;margin-top:2px;}
+/* v3.2.35 -- tabs that keep their results; the changed-text note; the leave-with-suggestions question */
+.wc-tool.is-on{box-shadow:0 1px 0 #7a5c12;}
+.wc-stale{font-size:11px;color:#8a5a00;background:#fff6dd;border:1px solid #f0dca0;border-radius:6px;padding:4px 8px;margin:0 0 10px;}
+.wc-warn{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 16px;background:#fff6dd;border-bottom:1px solid #f0dca0;font-size:12px;color:#5b4300;}
+.wc-warn span{flex:1 1 200px;}
+.wc-title{font-family:var(--font-display);font-size:17px;color:#7a5c12;flex:0 0 auto;white-space:nowrap;}
+.wc-sub{font-size:12px;color:#6b7280;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wc-sub:not(:empty)::before{content:'\00b7  ';}
 .wc-close{background:none;border:none;font-size:24px;line-height:1;color:#6b7280;cursor:pointer;padding:0 4px;}
 .wc-close:hover{color:#1f2430;}
 .wc-uses{font-size:9px;line-height:1.3;color:#8a8f99;padding:4px 16px;border-bottom:1px solid #efebe2;min-height:11px;}
-.wc-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 24px;font-size:13px;line-height:1.55;}
+.wc-body{padding:14px 16px 24px;font-size:13px;line-height:1.55;}
 .wc-text{margin:0 0 12px;}
 .wc-note{font-size:11px;color:#6b7280;margin:8px 0;}
 .wc-wait{color:#7a5c12;font-style:italic;}

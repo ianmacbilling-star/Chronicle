@@ -18559,31 +18559,34 @@ function saveInlineNarrative(silent) {
 // Regen used to run the whole Generate Narrative job and save every box and the Summary (TD-998). It
 // now writes ONE box, on the server's /api/narrative/writing/regen, and shows the result here first.
 // =================================================================================================
-var WT_STATE = { box: null, ta: null, label: '', tool: '', busy: false, seq: 0, points: [], opts: [], undo: {}, sel: null, last: null, words: [] };
+var WT_STATE = { box: null, ta: null, label: '', cur: 'regen', gen: 0, opts: [], undo: {}, tabs: {}, pendingNav: null };
 
-// v3.2.34 -- ONE "Writing Coach" PILL (Ian, 2026-10-22). Nine pills were too many, and the coach panel opened on
-// top of a box on the right of the page so the writer could not see what they were working on. Now the row
-// under each Narrative box is: Edit prompt, Regen, Writing Coach, Revert. The coach panel carries the box's
-// own text at the top -- EDITABLE, and kept in step with the box (Ian) -- so the writer selects and types
-// there, whatever the panel covers. All the tools sit in the panel: Regen, Feedback, Rewrite (its choices
-// include Add detail, Longer and Shorter, which run Describe, Expand and Tighten) and Word, which now lives
-// only in the panel (Ian). Previous / Next walk through the session's boxes without closing (Ian).
-// Regen and Revert are in both places (Ian). Regen works on every plan; the rest is Gold and up.
+// v3.2.34 -- ONE "Writing Coach" PILL (Ian, 2026-10-22). The row under each Narrative box is: Edit prompt, Regen,
+// Writing Coach, Revert. The coach panel carries the box's own text at the top -- EDITABLE, kept in step with the
+// box -- so the writer selects and types there, whatever the panel covers. Regen and Revert are in both places.
+// v3.2.35 -- TABS (Ian, 2026-10-22): Regen, Feedback, Rewrite and Word are tabs that KEEP THEIR RESULTS, so the
+// writer can go back and forth. Clicking a tab never spends anything: an empty tab shows its own start button.
+// A tab whose results came before the text was edited says so, until something is run in it again. Moving to
+// another box clears the tabs, and asks first if any tab holds suggestions not yet used. The selection in the
+// coach's text stays selected through a run, and the new words are selected after Use this. The box name sits on
+// the title line with Previous / Next; the panel is wider; the mouse wheel over the coach scrolls only the coach.
+var WT_TABS = [
+  { id: 'regen', name: '&#8635; Regen', gold: false, tip: 'A fresh version of this whole box, written from the story' },
+  { id: 'feedback', name: 'Feedback', gold: true, tip: '3 to 5 tips to make this text stronger' },
+  { id: 'rewrite', name: 'Rewrite', gold: true, tip: 'Rework the selected words, or the whole box' },
+  { id: 'word', name: 'Word', gold: true, tip: 'Better choices for a selected word or short phrase (free)' }
+];
+// Which tab each tool's results land in (Add detail, Longer, Shorter and Show me live inside other tabs).
+var WT_TAB_OF = { regen: 'regen', feedback: 'feedback', showme: 'feedback', rewrite: 'rewrite', describe: 'rewrite', expand: 'rewrite', tighten: 'rewrite', word: 'word' };
 var WT_NAMES = { feedback: 'Feedback', showme: 'Show me', regen: 'Regen', rewrite: 'Rewrite', describe: 'Add detail', expand: 'Longer', tighten: 'Shorter', word: 'Word' };
 var WT_WAIT = { regen: 'Writing a fresh version of this box…', showme: 'Rewriting that part…', feedback: 'Reading your text…',
   rewrite: 'Rewriting…', describe: 'Adding detail…', expand: 'Making it longer…', tighten: 'Making it shorter…', word: 'Finding words…' };
 var WT_HOWS = [['clearer', 'Clearer'], ['vivid', 'More vivid'], ['dramatic', 'More dramatic'], ['simpler', 'Simpler'], ['describe', 'Add detail'], ['expand', 'Longer'], ['tighten', 'Shorter']];
-var WT_PANEL_TOOLS = [
-  { id: 'regen', name: '&#8635; Regen', gold: false, tip: 'A fresh version of this whole box, written from the story' },
-  { id: 'feedback', name: 'Feedback', gold: true, tip: '3 to 5 tips to make this text stronger' },
-  { id: 'rewrite', name: 'Rewrite', gold: true, tip: 'Rework the selected words, or the whole box' },
-  { id: 'word', name: 'Word', gold: true, tip: 'Select a word or short phrase above, then press Word for better choices (free)' }
-];
 var WT_WORD_MAX = 60;
 
 function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank >= 3); }
 
-// The row under each box. regenCall is the box's own Regen (which opens the coach and runs Regen).
+// The row under each box. regenCall is the box's own Regen (which opens the coach on the Regen tab and runs it).
 function wtPillsHtml(box, ta, label, regenCall) {
   return '<span class="wt-pills" id="wt-row-' + ta + '" data-box="' + box + '" data-ta="' + ta + '" data-label="' + escapeHtml(label || '') + '">' +
     (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">&#8635; Regen</button>' : '') +
@@ -18601,24 +18604,47 @@ function wtPanelEnsure() {
   p.setAttribute('role', 'dialog');
   p.setAttribute('aria-label', 'Writing coach');
   p.innerHTML =
-    '<div class="wc-head"><div class="wc-head-main"><div class="wc-title">Writing coach</div><div class="wc-sub" id="wc-sub"></div>' +
-      '<div class="wc-nav"><button type="button" class="wc-navbtn" id="wc-prev" onclick="wtNav(-1)">&#8249; Previous box</button>' +
-      '<button type="button" class="wc-navbtn" id="wc-next" onclick="wtNav(1)">Next box &#8250;</button></div></div>' +
-    '<button type="button" class="wc-close" onclick="wtClose()" aria-label="Close">&times;</button></div>' +
+    '<div class="wc-head"><div class="wc-title">Writing coach</div><div class="wc-sub" id="wc-sub"></div>' +
+      '<div class="wc-nav"><button type="button" class="wc-navbtn" id="wc-prev" onclick="wtNav(-1)" title="Previous box">&#8249; Previous</button>' +
+      '<button type="button" class="wc-navbtn" id="wc-next" onclick="wtNav(1)" title="Next box">Next &#8250;</button></div>' +
+      '<button type="button" class="wc-close" onclick="wtClose()" aria-label="Close">&times;</button></div>' +
+    '<div class="wc-warn" id="wc-warn" style="display:none;"></div>' +
     '<div class="wc-uses" id="wc-uses"></div>' +
     '<div class="wc-editwrap"><textarea class="wc-edit" id="wc-edit" oninput="wtEditInput()" placeholder="This box is empty. Write here, or use Regen."></textarea>' +
       '<div class="wc-edit-note">Typing here edits your story. Select words to work on just those.</div></div>' +
     '<div class="wc-tools" id="wc-tools"></div>' +
     '<div class="wc-body" id="wc-body"></div>';
   document.body.appendChild(p);
+  // The wheel over the coach scrolls the coach and never runs on into the storyboard behind it, even when the
+  // coach is at its end or has nothing to scroll. Over the storyboard, the wheel scrolls the storyboard.
+  if (p.addEventListener) p.addEventListener('wheel', function (e) {
+    var dy = e.deltaY || 0;
+    if (!dy) return;
+    for (var n = e.target; n && n !== p.parentNode; n = n.parentNode) {
+      if (n.scrollHeight > n.clientHeight + 1) {
+        var cs = window.getComputedStyle ? window.getComputedStyle(n) : null;
+        var oy = cs ? cs.overflowY : 'auto';
+        if (oy === 'auto' || oy === 'scroll') {
+          if ((dy < 0 && n.scrollTop > 0) || (dy > 0 && n.scrollTop + n.clientHeight < n.scrollHeight - 1)) return;   // it can scroll: let it
+        }
+      }
+      if (n === p) break;
+    }
+    e.preventDefault();
+  }, { passive: false });
   if (!window._wtEscWired) {
     window._wtEscWired = true;
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('wc-panel') && document.getElementById('wc-panel').style.display !== 'none') wtClose(); });
   }
   return p;
 }
-function wtClose() { var p = document.getElementById('wc-panel'); if (p) p.style.display = 'none'; WT_STATE.seq++; WT_STATE.busy = false; }
-function wtBody(html) { var b = document.getElementById('wc-body'); if (b) b.innerHTML = html; }
+function wtClose() {
+  var p = document.getElementById('wc-panel'); if (p) p.style.display = 'none';
+  WT_STATE.gen++; wtWarnHide();
+  // A tool still working when the coach closes would leave its tab saying "Working..." forever: start that box afresh next time.
+  var t = WT_STATE.tabs, busy = false; for (var k in t) if (t[k] && t[k].busy) { busy = true; t[k].busy = false; }
+  if (busy) WT_STATE.ta = null;
+}
 function wtUsesLine(d) {
   var el = document.getElementById('wc-uses');
   if (!el || !d || d.uses_left == null) return;
@@ -18638,13 +18664,8 @@ function wtLockedHtml() {
     '<button type="button" class="btn btn-primary btn-sm" onclick="wtClose(); goToPlans();">See plans</button>' +
     '<p class="wc-note">Regen works on every plan.</p>';
 }
-function wtIntroHtml() {
-  return '<p class="wc-note">Pick a tool above. ' + (wtGoldOk()
-    ? 'Select words in the text first to work on just those; otherwise the tool works on the whole box. Nothing a tool suggests goes into your story until you press Use this.'
-    : 'Regen writes a fresh version of the whole box. Feedback, Rewrite and Word come with Gold and Platinum.') + '</p>';
-}
 
-// The box being coached, and the panel's copy of its text.
+// ---- the box being coached, and the panel's copy of its text ----
 function wtBoxEl() { return WT_STATE.ta ? document.getElementById(WT_STATE.ta) : null; }
 function wtEditEl() { return document.getElementById('wc-edit'); }
 // Typing in the panel types into the box: the box's own input handler (autosave) runs, and Revert goes away,
@@ -18654,30 +18675,99 @@ function wtEditInput() {
   if (!e || !b) return;
   b.value = e.value;
   try { b.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) { if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave(); }
+  wtStalePaint();
 }
-// After the box changes from the coach (Use this, Revert): the panel shows the box's text again.
 function wtSyncEdit() {
   var e = wtEditEl(), b = wtBoxEl();
   if (e && b && e.value !== b.value) e.value = b.value;
   wtRevertSync();
+  wtStalePaint();
 }
 function wtRevertSync() {
   var r = document.getElementById('wc-revert'), u = WT_STATE.undo[WT_STATE.ta];
   if (r) r.style.display = (u && u.el === wtBoxEl()) ? '' : 'none';
 }
+// Keep (or put back) the highlight on words in the coach's text -- only if they are still there.
+function wtSelect(sel) {
+  var e = wtEditEl();
+  if (!e || !sel || typeof e.setSelectionRange !== 'function') return;
+  if (String(e.value).substr(sel.start, sel.text.length) !== sel.text) return;
+  try { e.setSelectionRange(sel.start, sel.start + sel.text.length); if (e.focus) e.focus({ preventScroll: true }); } catch (x) {}   // a browser only paints the highlight in a focused box
+}
+// The words selected in the coach's text (the tab and choice buttons cancel mousedown, so it keeps its selection).
+function wtSelection(el) {
+  if (!el) return null;
+  var a = el.selectionStart, b = el.selectionEnd;
+  if (typeof a !== 'number' || typeof b !== 'number' || b <= a) return null;
+  var raw = String(el.value || '').slice(a, b);
+  var lead = raw.length - raw.replace(/^\s+/, '').length, t = raw.trim();
+  if (!t) return null;
+  return { text: t, start: a + lead };
+}
 
+// ---- tabs ----
+function wtTabState(id) {
+  if (!WT_STATE.tabs[id]) WT_STATE.tabs[id] = { ran: false, busy: false, seq: 0, pending: false, textAt: null, sel: null, last: null, points: [], words: [] };
+  return WT_STATE.tabs[id];
+}
+function wtTabEl(id) { return document.getElementById('wc-tab-' + id); }
+function wtTabsReset() {
+  WT_STATE.tabs = {}; WT_STATE.opts = [];
+  var b = document.getElementById('wc-body');
+  if (b) b.innerHTML = WT_TABS.map(function (t) {
+    return '<div class="wc-tab" id="wc-tab-' + t.id + '" style="display:none;"><div class="wc-stale" id="wc-stale-' + t.id + '" style="display:none;">Your text has changed since these suggestions.</div>' +
+      '<div class="wc-tab-body" id="wc-tabbody-' + t.id + '"></div></div>';
+  }).join('');
+}
+function wtTabHtml(id, html) { var b = document.getElementById('wc-tabbody-' + id); if (b) b.innerHTML = html; }
 function wtToolsHtml() {
   var lock = !wtGoldOk();
-  return WT_PANEL_TOOLS.map(function (t) {
+  return WT_TABS.map(function (t) {
     var locked = t.gold && lock;
-    return '<button type="button" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.tool === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTool(\'' + t.id + '\')" title="' +
+    return '<button type="button" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.cur === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTab(\'' + t.id + '\')" title="' +
       (locked ? 'Comes with Gold and Platinum' : t.tip) + '">' + t.name + (locked ? '<span class="wt-gold">Gold</span>' : '') + '</button>';
   }).join('') +
-  '<button type="button" class="wc-tool wc-revert" id="wc-revert" style="display:none;" onclick="wtUndo(WT_STATE.ta)" title="Put back the text this box had before Use this">Revert</button>';
+  '<button type="button" class="wc-tool wc-revert" id="wc-revert" style="display:none;" onmousedown="event.preventDefault()" onclick="wtUndo(WT_STATE.ta)" title="Put back the text this box had before Use this">Revert</button>';
 }
 function wtPaintTools() { var t = document.getElementById('wc-tools'); if (t) t.innerHTML = wtToolsHtml(); wtRevertSync(); }
+// "Your text has changed since": on a tab with results made from different text. Goes away when the tab runs again.
+function wtStalePaint() {
+  var b = wtBoxEl();
+  WT_TABS.forEach(function (t) {
+    var s = WT_STATE.tabs[t.id], n = document.getElementById('wc-stale-' + t.id);
+    if (n) n.style.display = (s && s.ran && s.textAt != null && b && b.value !== s.textAt) ? '' : 'none';
+  });
+}
+function wtStartHtml(id) {
+  if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
+  if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
+  if (id === 'feedback') return '<p class="wc-text">3 to 5 tips that would make this box stronger, each with a <b>Show me</b>.</p>' +
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
+  if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';
+  return wtRewriteChoicesHtml();
+}
+function wtRewriteChoicesHtml() {
+  return '<p class="wc-text">How should the words you select (or the whole box) change?</p>' +
+    '<div class="wc-choices">' + WT_HOWS.map(function (h) { return '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtRewrite(\'' + h[0] + '\')">' + h[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="wc-own"><input type="text" id="wc-own-in" class="wc-input" maxlength="200" placeholder="Or say how, e.g. make him sound scared" ' +
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();wtRewrite(\'own\');}">' +
+    '<button type="button" class="wc-btn" onclick="wtRewrite(\'own\')">Rewrite</button></div>' +
+    '<p class="wc-note">Each choice gives you 3 versions to pick from and costs one use. Nothing changes until you press Use this.</p>';
+}
+// Show a tab. Never spends anything: an empty tab shows its start button.
+function wtTab(id) {
+  if (!WT_TAB_OF[id]) return;
+  WT_STATE.cur = id;
+  WT_TABS.forEach(function (t) { var el = wtTabEl(t.id); if (el) el.style.display = (t.id === id) ? '' : 'none'; });
+  var s = wtTabState(id);
+  if (!s.ran && !s.busy) wtTabHtml(id, wtStartHtml(id));
+  wtPaintTools();
+  wtStalePaint();
+}
 
-// The boxes on the page, in reading order, that have a coach (the same rows the pills are drawn in).
+// ---- the boxes on the page, and moving between them ----
 function wtBoxList() {
   var rows = (document.querySelectorAll ? document.querySelectorAll('.wt-pills') : []);
   var out = [];
@@ -18694,115 +18784,112 @@ function wtNavPaint() {
   if (p) p.disabled = !(at > 0);
   if (n) n.disabled = !(at >= 0 && at < list.length - 1);
 }
+function wtHasUnused() { var t = WT_STATE.tabs; for (var k in t) if (t[k] && t[k].pending) return true; return false; }
+function wtWarnHide() { var w = document.getElementById('wc-warn'); if (w) { w.style.display = 'none'; w.innerHTML = ''; } WT_STATE.pendingNav = null; }
 function wtNav(dir) {
   var list = wtBoxList(), at = -1;
   for (var i = 0; i < list.length; i++) if (list[i].ta === WT_STATE.ta) at = i;
   var t = list[at + dir];
   if (at < 0 || !t) return;
   wtCoach(t.box, t.ta);
-  var el = document.getElementById(t.ta);
-  try { if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {}
 }
+// Asked before the coach leaves a box that still has suggestions nobody used (Ian). In the panel, not a browser pop-up.
+function wtWarnShow(box, ta) {
+  var w = document.getElementById('wc-warn'); if (!w) return;
+  WT_STATE.pendingNav = { box: box, ta: ta };
+  w.innerHTML = '<span>You have suggestions you haven’t used. Move to the next box anyway?</span>' +
+    '<button type="button" class="wc-btn wc-btn-main" onclick="wtNavGo()">Move on</button>' +
+    '<button type="button" class="wc-btn" onclick="wtWarnHide()">Stay</button>';
+  w.style.display = 'flex';
+}
+function wtNavGo() { var n = WT_STATE.pendingNav; wtWarnHide(); if (n) wtCoach(n.box, n.ta, true); }
 
-// Open the coach on a box, with no tool running yet.
-function wtCoach(box, ta) {
+// Open the coach on a box. The same box again keeps its tabs; another box clears them (after asking, if any tab
+// holds suggestions not yet used).
+function wtCoach(box, ta, force) {
   var el = document.getElementById(ta);
   if (!el) return;
+  var p0 = document.getElementById('wc-panel');
+  var open = !!(p0 && p0.style.display === 'flex');
+  var other = WT_STATE.ta !== ta || WT_STATE.box !== box;
+  if (other && open && !force && wtHasUnused()) { wtWarnShow(box, ta); return; }
+  wtWarnHide();
   var row = document.getElementById('wt-row-' + ta);
-  WT_STATE.box = box; WT_STATE.ta = ta; WT_STATE.tool = '';
-  WT_STATE.label = row ? (row.getAttribute('data-label') || '') : '';
-  WT_STATE.points = []; WT_STATE.opts = []; WT_STATE.words = []; WT_STATE.last = null; WT_STATE.sel = null; WT_STATE.seq++; WT_STATE.busy = false;
   var p = wtPanelEnsure();
+  var fresh = other || !document.getElementById('wc-tab-regen');
+  WT_STATE.box = box; WT_STATE.ta = ta;
+  WT_STATE.label = row ? (row.getAttribute('data-label') || '') : '';
+  if (fresh) { WT_STATE.gen++; wtTabsReset(); WT_STATE.cur = wtGoldOk() ? 'feedback' : 'regen'; }
   p.style.display = 'flex';
   var sub = document.getElementById('wc-sub');
   if (sub) sub.textContent = WT_STATE.label || '';
   var e = wtEditEl(); if (e) e.value = el.value;
-  var u = document.getElementById('wc-uses'); if (u) u.textContent = '';
+  if (fresh && p.scrollTop) p.scrollTop = 0;
+  var u = document.getElementById('wc-uses'); if (u && fresh) u.textContent = '';
   if (state.currentCampaign) {
     fetch('/api/narrative/writing/status/' + state.currentCampaign.id).then(function (r) { return r.json(); }).then(wtUsesLine).catch(function () {});
   }
-  wtPaintTools();
+  wtTab(WT_STATE.cur);
   wtNavPaint();
-  wtBody(wtIntroHtml());
+  if (fresh && other) { try { if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }
 }
 
-// Kept under its old name: the box's own Regen pill (regenNarrativeSection) calls wtOpen('regen', ...).
+// Kept under its old name: the box's own Regen pill (regenNarrativeSection) calls wtOpen('regen', ...), which
+// opens the coach on the Regen tab and runs it -- pressing Regen on the box means "write it again".
 function wtOpen(tool, box, ta) {
   wtCoach(box, ta);
-  if (tool && WT_STATE.ta === ta) wtTool(tool);
+  if (WT_STATE.ta !== ta || document.getElementById('wc-warn').style.display !== 'none') return;
+  if (tool && WT_TAB_OF[tool]) { wtTab(WT_TAB_OF[tool]); wtGo(tool); }
 }
 
-// The words selected in the panel's text (the tool buttons cancel mousedown, so it keeps its selection).
-function wtSelection(el) {
-  if (!el) return null;
-  var a = el.selectionStart, b = el.selectionEnd;
-  if (typeof a !== 'number' || typeof b !== 'number' || b <= a) return null;
-  var raw = String(el.value || '').slice(a, b);
-  var lead = raw.length - raw.replace(/^\s+/, '').length, t = raw.trim();
-  if (!t) return null;
-  return { text: t, start: a + lead };
-}
-
-// A tool pressed in the panel.
-function wtTool(tool) {
-  var el = wtBoxEl();
-  if (!el) return;
+// Run a tool from its tab's start button or choices.
+function wtGo(tool, extra) {
+  var el = wtBoxEl(); if (!el) return;
+  var tab = WT_TAB_OF[tool];
   wtSyncEdit();
-  WT_STATE.tool = tool;
-  WT_STATE.points = []; WT_STATE.opts = []; WT_STATE.words = []; WT_STATE.last = null; WT_STATE.seq++; WT_STATE.busy = false;
-  WT_STATE.sel = (tool === 'feedback' || tool === 'regen') ? null : wtSelection(wtEditEl());
-  wtPaintTools();
-  if (tool !== 'regen' && !wtGoldOk()) { wtBody(wtLockedHtml()); return; }
-  if (tool !== 'regen' && !String(el.value || '').trim()) { wtBody('<p class="wc-text">Write something in this box first, then use ' + (WT_NAMES[tool] || tool) + ' on it.</p>'); return; }
-  if (tool === 'word') {
-    var s = WT_STATE.sel;
-    if (!s || s.text.length > WT_WORD_MAX || s.text.split(/\s+/).length > 6) {
-      wtBody('<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press <b>Word</b>. It is free.</p>');
-      return;
-    }
+  if (tool !== 'regen' && !wtGoldOk()) { wtTabHtml(tab, wtLockedHtml()); return; }
+  if (tool !== 'regen' && !String(el.value || '').trim()) { wtTabHtml(tab, '<p class="wc-text">Write something in this box first, then use ' + (WT_NAMES[tool] || tool) + ' on it.</p>' + (tab === 'rewrite' ? '' : wtStartHtml(tab))); return; }
+  var sel = (tool === 'feedback' || tool === 'regen') ? null : wtSelection(wtEditEl());
+  if (tool === 'word' && (!sel || sel.text.length > WT_WORD_MAX || sel.text.split(/\s+/).length > 6)) {
+    var m = document.getElementById('wc-word-msg');
+    if (m) m.textContent = sel ? 'That is more than a word or short phrase. Select up to 6 words.' : 'Select a word or short phrase in the text above first.';
+    return;
   }
-  if (tool === 'rewrite') { wtBody(wtRewriteChoicesHtml()); return; }
-  wtRun(tool, { text: el.value });
-}
-
-function wtRewriteChoicesHtml() {
-  return '<p class="wc-text">How should ' + (WT_STATE.sel ? 'the words you selected' : 'this box') + ' change?</p>' +
-    '<div class="wc-choices">' + WT_HOWS.map(function (h) { return '<button type="button" class="wc-btn" onclick="wtRewrite(\'' + h[0] + '\')">' + h[1] + '</button>'; }).join('') + '</div>' +
-    '<div class="wc-own"><input type="text" id="wc-own-in" class="wc-input" maxlength="200" placeholder="Or say how, e.g. make him sound scared" ' +
-      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();wtRewrite(\'own\');}">' +
-    '<button type="button" class="wc-btn" onclick="wtRewrite(\'own\')">Rewrite</button></div>' +
-    '<p class="wc-note">Each choice gives you 3 versions to pick from and costs one use. Nothing changes until you press Use this.</p>';
+  var x = extra || {}; x.text = el.value;
+  wtRun(tool, x, sel);
 }
 function wtRewrite(how) {
-  var el = wtBoxEl(); if (!el) return;
-  var extra = { text: el.value };
+  var extra = {};
   if (how === 'own') {
     var inp = document.getElementById('wc-own-in');
     var v = String(inp ? inp.value : '').trim();
     if (!v) { if (inp && inp.focus) inp.focus(); return; }
     extra.instruction = v.slice(0, 200);
-  } else if (how === 'describe' || how === 'expand' || how === 'tighten') { wtRun(how, extra); return; }   // Add detail, Longer, Shorter
-  else extra.how = how;
-  wtRun('rewrite', extra);
+    wtGo('rewrite', extra); return;
+  }
+  if (how === 'describe' || how === 'expand' || how === 'tighten') { wtGo(how, extra); return; }   // Add detail, Longer, Shorter
+  extra.how = how;
+  wtGo('rewrite', extra);
 }
 
 function wtOptionCard(k, text) {
   return '<div class="wc-opt"><div class="wc-opt-text">' + escapeHtml(text) + '</div>' +
-    '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k + ')">Use this</button>' +
-    '<button type="button" class="wc-btn" onclick="wtCopy(' + k + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k + '"></div></div>';
+    '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtUse(' + k + ')">Use this</button>' +
+    '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtCopy(' + k + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k + '"></div></div>';
 }
 
-function wtRun(tool, extra) {
-  if (WT_STATE.busy) return;
+function wtRun(tool, extra, sel) {
+  var tab = WT_TAB_OF[tool], s = wtTabState(tab);
+  if (s.busy) return;
   if (!state.currentCampaign || !state.currentSession) return;
-  var mySeq = ++WT_STATE.seq;
-  WT_STATE.busy = true;
-  if (tool !== 'showme') WT_STATE.last = { tool: tool, extra: extra };
+  var myGen = WT_STATE.gen, mySeq = ++s.seq;
+  s.busy = true;
+  if (tool !== 'showme') { s.last = { tool: tool, extra: extra, sel: sel }; s.sel = sel; }
   var showSlot = (tool === 'showme') ? document.getElementById('wc-show-' + extra.index) : null;
   var wait = '<p class="wc-wait">' + (WT_WAIT[tool] || 'Working…') + '</p>';
-  if (showSlot) showSlot.innerHTML = wait; else wtBody(wait);
-  var sel = WT_STATE.sel;
+  if (showSlot) showSlot.innerHTML = wait; else wtTabHtml(tab, wait);
   var body = { box: WT_STATE.box, text: extra.text || '' };
+  var textAt = extra.text || '';
   if (tool === 'showme') { body.quote = extra.quote || ''; body.issue = extra.issue || ''; }
   if (sel && tool !== 'showme' && tool !== 'feedback' && tool !== 'regen') body.selection = sel.text;
   if (tool === 'rewrite') { if (extra.how) body.how = extra.how; if (extra.instruction) body.instruction = extra.instruction; }
@@ -18811,61 +18898,66 @@ function wtRun(tool, extra) {
   })
   .then(function (r) { return r.json().catch(function () { return { error: 'The writing service did not answer (' + r.status + '). Nothing was charged.' }; }); })
   .then(function (d) {
-    if (mySeq !== WT_STATE.seq) return;   // closed, another box opened, or another tool pressed meanwhile
-    WT_STATE.busy = false;
+    if (myGen !== WT_STATE.gen || mySeq !== s.seq) return;   // closed, moved to another box, or the tab ran again
+    s.busy = false;
     wtUsesLine(d);
-    var put = function (h) { if (showSlot) showSlot.innerHTML = h; else wtBody(h); };
+    var put = function (h) { if (showSlot) showSlot.innerHTML = h; else wtTabHtml(tab, h); };
     if (!d || d.error) {
+      var back = (tool === 'showme') ? '' : wtStartHtml(tab);
       if (d && d.error === 'INSUFFICIENT_TOKENS') { put(insufficientTokensHtml(d.message)); return; }
       if (d && d.error === 'WRITING_LOCKED') { put(wtLockedHtml()); return; }
-      put('<p class="wc-err">' + escapeHtml((d && d.error) || 'Something went wrong. Nothing was charged.') + '</p>');
+      put('<p class="wc-err">' + escapeHtml((d && d.error) || 'Something went wrong. Nothing was charged.') + '</p>' + (s.ran ? '' : back));
       return;
     }
-    if (tool === 'feedback') { wtRenderPoints(d.points || []); return; }
-    var k = WT_STATE.opts.length;
-    if (tool === 'showme') {
-      WT_STATE.opts.push({ before: d.before || '', after: d.after || '' });
+    if (tool !== 'showme') { s.ran = true; s.textAt = textAt; }
+    s.pending = true;
+    if (tool === 'feedback') { wtRenderPoints(d.points || []); }
+    else if (tool === 'showme') {
+      var k0 = WT_STATE.opts.length;
+      WT_STATE.opts.push({ tab: tab, before: d.before || '', after: d.after || '' });
       put('<div class="wc-ba"><div class="wc-ba-label">' + ((wtBoxEl() && d.before === wtBoxEl().value) ? 'The whole box, rewritten' : 'That part, rewritten') + '</div>' +
         '<div class="wc-ba-text wc-ba-after">' + escapeHtml(d.after || '') + '</div>' +
-        '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k + ')">Use this</button>' +
-        '<button type="button" class="wc-btn" onclick="wtCopy(' + k + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k + '"></div></div>');
-      return;
+        '<div class="wc-acts"><button type="button" class="wc-btn wc-btn-main" onclick="wtUse(' + k0 + ')">Use this</button>' +
+        '<button type="button" class="wc-btn" onclick="wtCopy(' + k0 + ')">Copy</button></div><div class="wc-note" id="wc-msg-' + k0 + '"></div></div>');
     }
-    if (tool === 'word') { wtRenderWords(d.words || []); return; }
-    if (tool === 'regen') {
-      var t = (d.options && d.options[0]) || '';
-      WT_STATE.opts.push({ before: null, after: t });
+    else if (tool === 'word') { wtRenderWords(d.words || [], sel); }
+    else if (tool === 'regen') {
+      var k = WT_STATE.opts.length, t = (d.options && d.options[0]) || '';
+      WT_STATE.opts.push({ tab: tab, before: null, after: t });
       put(wtOptionCard(k, t) +
-        '<p class="wc-note">Nothing changes until you press Use this. Your box is untouched.</p>' +
-        '<button type="button" class="wc-btn" onclick="wtAgain()">Try again (1 use)</button>');
-      return;
+        '<p class="wc-note">Nothing changes until you press Use this.</p>' +
+        '<button type="button" class="wc-btn" onclick="wtAgain(\'regen\')">Try again (1 use)</button>');
+    } else {
+      // Rewrite and its choices: 3 versions of the selected words (or the whole box). The text is at the top of
+      // the coach, so the results do not repeat it (Ian).
+      var opts = (d.options || []).filter(function (x) { return typeof x === 'string' && x.trim(); });
+      if (!opts.length) { s.pending = false; put('<p class="wc-err">Nothing came back. Nothing was charged.</p>' + wtRewriteChoicesHtml()); return; }
+      var html = '<div class="wc-ba-label">' + escapeHtml(WT_NAMES[tool] || 'Rewrite') + (sel ? ' · the words you selected' : ' · the whole box') + '</div>';
+      opts.forEach(function (o) {
+        var kk = WT_STATE.opts.length;
+        WT_STATE.opts.push(sel ? { tab: tab, before: sel.text, at: sel.start, after: o } : { tab: tab, before: null, after: o });
+        html += wtOptionCard(kk, o);
+      });
+      put(html + '<p class="wc-note">Nothing changes until you press Use this. ' + (sel ? 'Use this replaces only the words you selected.' : 'Use this replaces the whole box.') + '</p>' +
+        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtAgain(\'rewrite\')">Try again (1 use)</button> ' +
+        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtTabHtml(\'rewrite\', wtRewriteChoicesHtml())">Other choices</button>');
     }
-    // Rewrite and its choices: 3 versions of the selected words (or the whole box).
-    var opts = (d.options || []).filter(function (x) { return typeof x === 'string' && x.trim(); });
-    if (!opts.length) { put('<p class="wc-err">Nothing came back. Nothing was charged.</p>'); return; }
-    // v3.2.34 -- the text is at the top of the panel, so the results do not repeat it (Ian).
-    var html = '<div class="wc-ba-label">' + escapeHtml(WT_NAMES[tool] || 'Rewrite') + (sel ? ' · the words you selected' : ' · the whole box') + '</div>';
-    opts.forEach(function (o) {
-      var kk = WT_STATE.opts.length;
-      WT_STATE.opts.push(sel ? { before: sel.text, at: sel.start, after: o } : { before: null, after: o });
-      html += wtOptionCard(kk, o);
-    });
-    put(html + '<p class="wc-note">Nothing changes until you press Use this. ' + (sel ? 'Use this replaces only the words you selected.' : 'Use this replaces the whole box.') + '</p>' +
-      '<button type="button" class="wc-btn" onclick="wtAgain()">Try again (1 use)</button> ' +
-      '<button type="button" class="wc-btn" onclick="wtTool(\'rewrite\')">Other choices</button>');
+    wtStalePaint();
+    if (sel && tool !== 'showme') wtSelect(sel);   // the words stay selected (Ian)
   })
   .catch(function (e) {
-    if (mySeq !== WT_STATE.seq) return;
-    WT_STATE.busy = false;
-    var h = '<p class="wc-err">Could not reach the writing service. Nothing was charged.</p>';
-    if (showSlot) showSlot.innerHTML = h; else wtBody(h);
+    if (myGen !== WT_STATE.gen || mySeq !== s.seq) return;
+    s.busy = false;
+    var h = '<p class="wc-err">Could not reach the writing service. Nothing was charged.</p>' + ((tool === 'showme' || s.ran) ? '' : wtStartHtml(tab));
+    if (showSlot) showSlot.innerHTML = h; else wtTabHtml(tab, h);
   });
 }
 
 function wtRenderPoints(points) {
-  WT_STATE.points = points;
-  if (!points.length) { wtBody('<p class="wc-text">No suggestions came back. Try again in a moment.</p>'); return; }
-  wtBody('<ol class="wc-points">' + points.map(function (pt, i) {
+  var s = wtTabState('feedback');
+  s.points = points;
+  if (!points.length) { s.pending = false; wtTabHtml('feedback', '<p class="wc-text">No suggestions came back. Try again in a moment.</p>' + wtStartHtml('feedback')); return; }
+  wtTabHtml('feedback', '<ol class="wc-points">' + points.map(function (pt, i) {
     return '<li class="wc-point">' +
       (pt.quote ? ('<div class="wc-quote">“' + escapeHtml(pt.quote) + '”</div>') : '') +
       '<div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' +
@@ -18873,41 +18965,46 @@ function wtRenderPoints(points) {
       '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part (1 use)">Show me</button>' +
       '<div class="wc-show" id="wc-show-' + i + '"></div>' +
     '</li>';
-  }).join('') + '</ol><p class="wc-note">Show me rewrites just that part, and costs one use.</p>');
+  }).join('') + '</ol><p class="wc-note">Show me rewrites just that part, and costs one use.</p>' +
+  '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">Get new feedback (1 use)</button>');
 }
 
-function wtRenderWords(words) {
-  WT_STATE.words = words;
-  var sel = WT_STATE.sel;
-  if (!words.length) { wtBody('<p class="wc-text">No words came back. Try again in a moment.</p>'); return; }
-  wtBody('<div class="wc-ba-label">Instead of \u201c' + escapeHtml(sel ? sel.text : '') + '\u201d</div>' +
+function wtRenderWords(words, sel) {
+  var s = wtTabState('word');
+  s.words = words;
+  if (!words.length) { s.pending = false; wtTabHtml('word', '<p class="wc-text">No words came back. Try again in a moment.</p>' + wtStartHtml('word')); return; }
+  wtTabHtml('word', '<div class="wc-ba-label">Instead of “' + escapeHtml(sel ? sel.text : '') + '”</div>' +
     '<ul class="wc-words">' + words.map(function (w, i) {
-      return '<li><button type="button" class="wc-word" onclick="wtUseWord(' + i + ')">' + escapeHtml(w.word) + '</button>' +
+      return '<li><button type="button" class="wc-word" onmousedown="event.preventDefault()" onclick="wtUseWord(' + i + ')">' + escapeHtml(w.word) + '</button>' +
         (w.note ? ('<span class="wc-word-note">' + escapeHtml(w.note) + '</span>') : '') + '</li>';
-    }).join('') + '</ul><div class="wc-note" id="wc-msg-word"></div><p class="wc-note">Click a word to put it in. Word is free.</p>');
+    }).join('') + '</ul><div class="wc-note" id="wc-msg-word"></div><p class="wc-note">Click a word to put it in. Word is free.</p>' +
+    '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for a new selection</button><div class="wc-note" id="wc-word-msg"></div>');
 }
 function wtUseWord(i) {
-  var w = WT_STATE.words[i], sel = WT_STATE.sel;
+  var s = wtTabState('word'), w = s.words[i], sel = s.sel;
   if (!w || !sel) return;
   var k = WT_STATE.opts.length;
-  WT_STATE.opts.push({ before: sel.text, at: sel.start, after: w.word });
+  WT_STATE.opts.push({ tab: 'word', before: sel.text, at: sel.start, after: w.word });
   wtUse(k, 'wc-msg-word');
   // The swapped-in word is the new selection, so a second click swaps it again rather than failing.
   var el = wtBoxEl();
-  if (el && el.value.substr(sel.start, w.word.length) === w.word) WT_STATE.sel = { text: w.word, start: sel.start };
+  if (el && el.value.substr(sel.start, w.word.length) === w.word) s.sel = { text: w.word, start: sel.start };
 }
 
 function wtShowMe(i) {
-  var pt = WT_STATE.points[i]; var el = wtBoxEl();
+  var pt = wtTabState('feedback').points[i]; var el = wtBoxEl();
   if (!pt || !el) return;
-  wtRun('showme', { index: i, text: el.value, quote: pt.quote, issue: pt.issue });
+  wtRun('showme', { index: i, text: el.value, quote: pt.quote, issue: pt.issue }, null);
 }
-function wtAgain() {
+function wtAgain(tab) {
   var el = wtBoxEl(); if (!el) return;
-  var l = WT_STATE.last || { tool: 'regen', extra: {} };
+  var s = wtTabState(tab || WT_STATE.cur), l = s.last;
+  if (!l) { wtGo(tab === 'rewrite' ? 'rewrite' : tab); return; }
   var extra = {}; for (var k in l.extra) if (Object.prototype.hasOwnProperty.call(l.extra, k)) extra[k] = l.extra[k];
   extra.text = el.value;
-  wtRun(l.tool, extra);
+  // The same words again, if they are still where they were; otherwise the whole box.
+  var sel = (l.sel && el.value.substr(l.sel.start, l.sel.text.length) === l.sel.text) ? l.sel : null;
+  wtRun(l.tool, extra, sel);
 }
 
 function wtUse(k, msgId) {
@@ -18915,19 +19012,23 @@ function wtUse(k, msgId) {
   var msg = document.getElementById(msgId || ('wc-msg-' + k));
   if (!o || !el) { if (msg) msg.textContent = 'That box is no longer on the page.'; return; }
   var old = el.value;
-  var next;
-  if (o.before == null || o.before === old) next = o.after;
+  var next, at = 0;
+  if (o.before == null || o.before === old) { next = o.after; at = -1; }
   else {
     // v3.2.33 -- the selected words are replaced WHERE THEY WERE SELECTED, so the same words earlier
     // in the box are not changed by mistake. If the box has moved under them, fall back to finding them.
-    var at = (typeof o.at === 'number' && old.substr(o.at, o.before.length) === o.before) ? o.at : old.indexOf(o.before);
+    at = (typeof o.at === 'number' && old.substr(o.at, o.before.length) === o.before) ? o.at : old.indexOf(o.before);
     if (at < 0) { if (msg) msg.textContent = 'That part of the box has changed since, so it was not replaced. Use Copy instead.'; return; }
     next = old.slice(0, at) + o.after + old.slice(at + o.before.length);
   }
   el.value = next;
   wtSetUndo(WT_STATE.ta, old);
   if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
+  var s = WT_STATE.tabs[o.tab];
+  if (s) { s.pending = false; s.textAt = next; }   // using something counts as doing something in that tab
   wtSyncEdit();
+  // The new words are selected in the coach's text, ready for another Rewrite or Word (Ian).
+  if (at >= 0) { wtSelect({ text: o.after, start: at }); if (s) s.sel = { text: o.after, start: at }; }
   if (msg) msg.textContent = 'Done. Revert is above and under the box until you type in it.';
 }
 function wtCopy(k) {

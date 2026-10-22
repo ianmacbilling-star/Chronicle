@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.35",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3235-coach-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach has tabs that keep their results, a wider panel, and the box name, Previous and Next on one line at the top.",
+        "detail": "Regen, Feedback, Rewrite and Word are tabs: each keeps its results while you look at the others, and clicking a tab never spends a use (each has its own start button). A tab whose results came before you edited the text says “Your text has changed since these suggestions” until you run it again. Words you select in the coach stay selected through Rewrite, and the new words are selected after Use this. Previous / Next clears the tabs, and asks first if any tab has suggestions you haven’t used. The mouse wheel over the coach scrolls only the coach. Test: Feedback, then Rewrite > Shorter on a selection, then back to Feedback (still there); edit the text (the note appears); Next with unused suggestions (asked); wheel over the coach at its end (the storyboard stays put).",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.34",
     "staged_on": "2026-10-22",
     "entries": [
