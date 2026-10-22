@@ -2313,10 +2313,25 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
         // image so the user can undo. Bulk 'batch' does not arm; it clears any stale
         // slot. Superseded slot images are released; the retained one is NOT.
+        // v3.2.37 -- TD-1006. A REGEN NEVER DELETED THE PICTURE LEAVING THE UNDO SLOT. Since v3.2.21 the slot's
+        // picture is also named in layout_meta.prev_shape, and releaseImage keeps any file layout_meta mentions.
+        // The release ran BEFORE prev_shape was rewritten, so it always found the picture still "in use" and kept
+        // it: every Regen past the first left a file in R2 that nothing points at. Now the slot and prev_shape are
+        // brought up to date FIRST, a prev_shape still naming the leaving picture is dropped, and only then is it
+        // released -- so releaseImage's checks see the row as it really is.
+        var _wtDropPrevShape = async function (urls) {
+          try {
+            var _dr = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(job.moment_id);
+            var _dm = null;
+            try { _dm = (_dr && _dr.layout_meta) ? (typeof _dr.layout_meta === 'object' ? _dr.layout_meta : JSON.parse(_dr.layout_meta)) : null; } catch (_dpe) { _dm = null; }
+            if (_dm && typeof _dm === 'object' && !Array.isArray(_dm) && _dm.prev_shape && urls.indexOf(_dm.prev_shape.image) >= 0) {
+              delete _dm.prev_shape;
+              await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_dm), job.moment_id);
+            }
+          } catch (_dre) { console.error('clearing the old undo-slot record failed (the file is kept):', _dre && _dre.message); }
+        };
         if (job.kind === 'retouch' || job.kind === 'moment') {
-          if (_priorM && _priorM.revert_image && _priorM.revert_image !== job.prev_image && _priorM.revert_image !== imageUrl) {
-            await releaseImage(db, _priorM.revert_image);
-          }
+          var _leaving = (_priorM && _priorM.revert_image && _priorM.revert_image !== job.prev_image && _priorM.revert_image !== imageUrl) ? _priorM.revert_image : null;
           if (job.prev_image && job.prev_image !== imageUrl) {
             var _rw = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_w : null;
             var _rh = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_h : null;
@@ -2341,12 +2356,20 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           } else {
             await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
           }
-        } else {
-          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
-          if (_priorM && _priorM.revert_image && _priorM.revert_image !== imageUrl) {
-            await releaseImage(db, _priorM.revert_image);
-            await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
+          if (_leaving) {   // v3.2.37 -- TD-1006: released AFTER the slot and its record moved on
+            await _wtDropPrevShape([_leaving]);
+            await releaseImage(db, _leaving);
           }
+        } else {
+          // v3.2.37 -- TD-1006. A batch run clears the undo slot: clear its record too, before the releases.
+          var _batchOut = [];
+          if (job.prev_image && job.prev_image !== imageUrl) _batchOut.push(job.prev_image);
+          if (_priorM && _priorM.revert_image && _priorM.revert_image !== imageUrl) {
+            await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
+            _batchOut.push(_priorM.revert_image);
+          }
+          if (_batchOut.length) await _wtDropPrevShape(_batchOut);
+          for (var _bi = 0; _bi < _batchOut.length; _bi++) await releaseImage(db, _batchOut[_bi]);
         }
         await logImageGeneration(db, job.user_id, job.kind === 'retouch' ? 'retouch' : 'moment', job.moment_id, job.fork_id);
       }

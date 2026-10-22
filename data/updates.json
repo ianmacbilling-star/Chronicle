@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.37",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3237-regen-cleans-up",
+        "kind": "fix",
+        "public": false,
+        "summary": "Regen deletes the picture it no longer needs again, instead of leaving it in storage.",
+        "detail": "Since v3.2.21 every Regen past the first left the picture leaving the Revert slot in storage, because the panel's own note about that slot still named it when the clean-up ran. Now the slot and its note move on first, then the old picture is released. Pictures still used anywhere (archived, on another version, published) are kept as before. Test: Regen one panel three times; the log shows “R2 deleted: 204” after the second and third; Revert still brings back the previous picture with its style.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.36",
     "staged_on": "2026-10-22",
     "entries": [
