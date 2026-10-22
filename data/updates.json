@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.41",
+    "staged_on": "2026-10-22",
+    "entries": [
+      {
+        "id": "3241-coach-closes-and-remembers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The writing coach closes itself when you leave the page its box is on, and remembers where you were: press Writing Coach on the same box and your tabs are back.",
+        "detail": "Switch to another session tab and the coach closes; come back and press Writing Coach on the same box and its Feedback, Rewrite versions and words are still there. An answer that was still on its way lands in its tab meanwhile. Closing with × keeps them too. Moving to another session, version or campaign starts fresh. Test: Feedback on a box, switch to the Story tab (the coach closes), back to the Storyboard, Writing Coach on the same box (Feedback still there); open another session (fresh).",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.40",
     "staged_on": "2026-10-22",
     "entries": [

@@ -18675,13 +18675,31 @@ function wtPanelEnsure() {
   }
   return p;
 }
+// v3.2.41 -- CLOSING KEEPS EVERYTHING (Ian, 2026-10-22). Closing the coach -- with x, Escape, or by leaving the page its
+// box is on -- only hides it. Its tabs stay, and an answer still on its way lands in its tab, so pressing Writing
+// Coach on the same box brings it all back. A different box, session or version starts afresh (wtCoach).
 function wtClose() {
   var p = document.getElementById('wc-panel'); if (p) p.style.display = 'none';
-  WT_STATE.gen++; wtWarnHide();
-  // A tool still working when the coach closes would leave its tab saying "Working..." forever: start that box afresh next time.
-  var t = WT_STATE.tabs, busy = false; for (var k in t) if (t[k] && t[k].busy) { busy = true; t[k].busy = false; }
-  if (busy) WT_STATE.ta = null;
+  wtWarnHide();
+  wtWatchStop();
 }
+// The session, campaign and version the coach's tabs belong to.
+function wtCtxKey() {
+  return (state.currentCampaign && state.currentCampaign.id) + ':' + (state.currentSession && state.currentSession.id) + ':' + (state.currentForkId == null ? 'dm' : state.currentForkId);
+}
+// v3.2.41 -- the coach closes itself when its box leaves the screen (another tab, session or page): it would be talking
+// about text you can't see, and Use this would have nowhere to go. Checked twice a second while the coach is open.
+function wtWatchStart() {
+  if (WT_STATE.watch) return;
+  WT_STATE.watch = setInterval(function () {
+    var p = document.getElementById('wc-panel');
+    if (!p || p.style.display === 'none') { wtWatchStop(); return; }
+    var el = WT_STATE.ta ? document.getElementById(WT_STATE.ta) : null;
+    var gone = !el || el.isConnected === false || (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) || WT_STATE.ctx !== wtCtxKey();
+    if (gone) wtClose();
+  }, 500);
+}
+function wtWatchStop() { if (WT_STATE.watch) { clearInterval(WT_STATE.watch); WT_STATE.watch = null; } }
 function wtUsesLine(d) {
   var el = document.getElementById('wc-uses-text');
   if (!el || !d || d.uses_left == null) return;
@@ -18854,7 +18872,7 @@ function wtCoach(box, ta, force) {
   if (!el) return;
   var p0 = document.getElementById('wc-panel');
   var open = !!(p0 && p0.style.display === 'flex');
-  var other = WT_STATE.ta !== ta || WT_STATE.box !== box;
+  var other = WT_STATE.ta !== ta || WT_STATE.box !== box || WT_STATE.ctx !== wtCtxKey();   // v3.2.41 -- another session or version is another box
   if (other && open && !force && wtHasUnused()) { wtWarnShow(box, ta); return; }
   wtWarnHide();
   var row = document.getElementById('wt-row-' + ta);
@@ -18862,7 +18880,7 @@ function wtCoach(box, ta, force) {
   var fresh = other || !document.getElementById('wc-tab-regen');
   WT_STATE.box = box; WT_STATE.ta = ta;
   WT_STATE.label = row ? (row.getAttribute('data-label') || '') : '';
-  if (fresh) { WT_STATE.gen++; wtTabsReset(); WT_STATE.cur = (wtGoldOk() || box === 'story') ? 'feedback' : 'regen'; }
+  if (fresh) { WT_STATE.ctx = wtCtxKey(); WT_STATE.gen++; wtTabsReset(); WT_STATE.cur = (wtGoldOk() || box === 'story') ? 'feedback' : 'regen'; }
   var nv = document.getElementById('wc-nav'); if (nv) nv.style.display = (box === 'story') ? 'none' : '';
   p.style.display = 'flex';
   var sub = document.getElementById('wc-sub');
@@ -18876,6 +18894,7 @@ function wtCoach(box, ta, force) {
   wtTab(WT_STATE.cur);
   wtNavPaint();
   wtIntentLoad();   // v3.2.39
+  wtWatchStart();   // v3.2.41
   if (fresh && other) { try { if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }
 }
 
