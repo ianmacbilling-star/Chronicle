@@ -953,19 +953,17 @@
     </div>
 
     <!-- ==================== MEMBERS (Phase 3 Deploy 2) ==================== -->
-    <div id="view-members" class="view" style="display:none;">
-      <div class="page-head">
-        <div>
-          <div class="page-title">Members</div>
-          <div class="page-subtitle">Who's in this campaign and what character they play</div>
-        </div>
-      </div>
-
+    <!-- v3.2.46 -- Ian, 2026-10-23: no dead space under the top banner. The "Members" title is gone (the breadcrumb
+         already says it), the view's top padding is cut, and the subtitle sits on the Current members line. -->
+    <div id="view-members" class="view" style="display:none;padding-top:0.5rem;">
       <!-- Members list section -->
-      <div style="margin-top:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;">Current members</div>
-          <button class="btn btn-primary btn-sm dm-only" onclick="openInviteModal()">&#9993; Invite member</button>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+          <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;min-width:0;">
+            <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;">Current members</div>
+            <div class="page-subtitle" style="margin-top:0;">Who's in this campaign and what character they play</div>
+          </div>
+          <button class="btn btn-primary btn-sm dm-only" style="flex-shrink:0;" onclick="openInviteModal()">&#9993; Invite member</button>
         </div>
         <!-- v3.2.45 -- TD-1007. The Story Master's members cap: filled by loadMemberCap(). -->
         <div id="members-cap-line" class="dm-only" style="display:none;margin:-4px 0 10px;font-size:12px;color:rgba(245,232,200,0.75);"></div>

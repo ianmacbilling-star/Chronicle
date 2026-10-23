@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.46",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3246-members-header",
+        "kind": "change",
+        "public": true,
+        "summary": "The Members page starts right under the top banner.",
+        "detail": "The big \"Members\" title is gone (the breadcrumb already says it), and \"Who's in this campaign and what character they play\" sits on the Current members line. Test: open a campaign's Members page, wide and on a phone.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.45",
     "staged_on": "2026-10-23",
     "entries": [
