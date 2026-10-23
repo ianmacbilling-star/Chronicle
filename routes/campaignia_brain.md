@@ -1826,8 +1826,18 @@ the questions missed. If the samples don't all share one style, a warning says w
 differs. A style built from mixed samples comes out mixed, so removing the odd one out
 and analyzing again usually helps.
 
-**2. The answers** are listed one line each under **How the style is drawn**. Hover over
-an answer to read all of it, or click **Edit** to change it. **"None" is a real answer:**
+**No reference images? Answer the questions yourself.** Reference images are optional. On
+a new style, each empty question shows a grey example of the kind of thing to write (for
+example Line work: "thick, even black outlines, or no outlines, with edges made by light
+against shadow"). Click **Edit** on a question to type your answer. Once at least 3 are
+answered, **Rewrite descriptions (free)** writes the three descriptions from them, and
+everything from step 3 on works the same. Analyze later replaces typed answers, so it asks
+first.
+
+**2. The answers** are listed one line each under **How the style is drawn**, a panel that
+opens and shuts when you click its title (open on a new style, shut when you reopen one
+that has answers; shut, it says how many are answered). Hover over an answer to read all
+of it, or click **Edit** to change it. **"None" is a real answer:**
 say so when the style has no outlines, no texture or no glows, because anything left
 unsaid lets the image model fall back on its own habits. After changing answers, click
 **Rewrite descriptions (free)**.

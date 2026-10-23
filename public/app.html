@@ -3301,7 +3301,11 @@
 .cs-qrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:5px 0;border-bottom:1px solid rgba(107,79,18,0.12);}
 .cs-qlabel{flex:0 0 175px;font-size:12px;font-weight:700;color:#6b4f12;cursor:help;}
 .cs-qval{flex:1 1 auto;min-width:0;font-size:13px;color:#2e2410;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
-.cs-qval.cs-qempty{color:#8a7a5a;}
+.cs-qval.cs-qempty{color:#9a8c6e;font-style:italic;white-space:normal;overflow:visible;line-height:1.35;}
+/* v3.2.51 -- the questions fold away: the title is the toggle. */
+.cs-toggle{background:none;border:0;padding:0;cursor:pointer;text-align:left;font-family:inherit;}
+.cs-toggle .cs-caret{display:inline-block;width:1em;}
+.cs-toggle .cs-count{font-weight:400;text-transform:none;letter-spacing:0;color:#8a7a5a;margin-left:6px;}
 .cs-qbtn{flex:0 0 auto;background:none;border:0;padding:0 2px;font-size:12px;color:#8a2b1e;text-decoration:underline;cursor:pointer;}
 .cs-qedit-on{align-items:flex-start;}
 .cs-qbox{flex:1 1 auto;min-width:0;min-height:44px;font-size:13px;padding:6px 8px;}
@@ -3349,7 +3353,7 @@
       <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
     </div>
       <div class="form-group">
-        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span> <button type="button" class="info-tip" id="cstyle-info-btn" aria-controls="cstyle-info" aria-expanded="false" aria-label="About reference images" title="The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others." onclick="_infoTipToggle(this, event)" style="vertical-align:middle;margin-left:2px;">i</button></label>
+        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; optional: 2 to 4 images sharing the look you want (style, not subject), or answer the questions below yourself</span> <button type="button" class="info-tip" id="cstyle-info-btn" aria-controls="cstyle-info" aria-expanded="false" aria-label="About reference images" title="The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others." onclick="_infoTipToggle(this, event)" style="vertical-align:middle;margin-left:2px;">i</button></label>
         <div id="cstyle-info" class="info-tip-pop" style="display:none;margin:0 0 8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others.</div>
         <div class="cs-refs">
         <div>
@@ -3434,13 +3438,16 @@
            is brought onto the questions with Analyze style, from its saved reference pictures. -->
       <div class="cs-note">This style was made before the questions. Click Analyze style above to get its answers and three descriptions from its reference pictures. Nothing changes in your stories until you choose a winner and save.</div>
     </div>
+    <!-- v3.2.51 -- the 18 questions fold away (open on a new style, shut on return), with grey examples (TD-1000). -->
     <div class="cs-section" id="cs-answers-wrap">
       <div class="cs-section-head">
-        <div class="cs-section-title">How the style is drawn</div>
+        <button type="button" class="cs-section-title cs-toggle" id="cs-answers-toggle" aria-controls="cs-answers-body" aria-expanded="true" onclick="csToggleAnswers()"><span class="cs-caret">&#9662;</span> How the style is drawn</button>
         <button class="btn btn-sm" id="cs-rewrite-all-btn" onclick="csRewriteAll()">Rewrite descriptions (free)</button>
       </div>
-      <div class="cs-note">Analyze fills these in from your reference images. Hover over an answer to read it all; Edit to change it, then Rewrite descriptions. &ldquo;None&rdquo; is a real answer: say so when the style has no outlines, no texture or no glows.</div>
-      <div class="cs-answers" id="cs-answers"></div>
+      <div id="cs-answers-body">
+        <div class="cs-note">Answer these yourself (the grey text shows the kind of thing to write), or let Analyze fill them in from reference images. Then click Rewrite descriptions to get three descriptions from your answers. Hover over an answer to read it all; Edit to change it. &ldquo;None&rdquo; is a real answer: say so when the style has no outlines, no texture or no glows.</div>
+        <div class="cs-answers" id="cs-answers"></div>
+      </div>
     </div>
     <div class="cs-section">
       <div class="cs-section-head"><div class="cs-section-title">Descriptions</div></div>

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.51",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3251-style-questions-examples",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Custom art styles: make one by answering the 18 questions yourself, with grey examples showing what to write. The questions now fold away.",
+        "detail": "Reference images are optional. Each empty question shows an example answer in grey, and the same example sits in the box when you edit it. Answer at least 3 and click Rewrite descriptions (free) for the three descriptions; previews and picking a winner work as before. The questions sit in a panel that opens and shuts from its title: open on a new style, shut when you reopen one with answers (it then says how many are answered). Analyze asks first if it would replace answers you typed. Test: New style, name it, no pictures; check the grey examples; answer 3 or more; Rewrite descriptions; generate a preview; Use this one; save; reopen (panel shut, \"N of 18 answered\"); open it; type an answer, then Analyze with pictures (it asks).",
+        "td": [
+          "TD-1000"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.50",
     "staged_on": "2026-10-23",
     "entries": [

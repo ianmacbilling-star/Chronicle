@@ -641,7 +641,7 @@ router.post('/custom/rewrite', requireAuth, requireTruePlatinum, async function 
     const answers = cleanAnswers(req.body && req.body.answers);
     if (!answers) return res.json({ error: 'There are no answers to write from.' });
     const filled = STYLE_QUESTIONS.filter(function (q) { return answers[q[0]]; }).length;
-    if (filled < 3) return res.json({ error: 'Fill in more of the answers first.' });
+    if (filled < 3) return res.json({ error: 'Fill in at least 3 of the answers first.' });   // v3.2.51 -- says how many (TD-1000)
     const count = (req.body && (req.body.count === 1 || req.body.count === '1')) ? 1 : 3;
     const variant = (req.body && /^[012]$/.test(String(req.body.variant))) ? parseInt(req.body.variant, 10) : 0;   // v3.1.68
     if (!freeCallAllowed(req.session.userId)) return res.json({ error: 'That is ' + FREE_DAILY + ' free rewrites today. Try again tomorrow.' });

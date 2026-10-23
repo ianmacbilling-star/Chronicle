@@ -5730,6 +5730,7 @@ function resetCustomStyleForm() {
   cstylePreviewUrl = '';
   CS.answers = {}; CS.options = [csBlankOption()]; CS.winner = null; CS.disagree = ''; CS.legacy = false;   // v3.1.67
   CS.open = {}; CS.busy = {}; CS.original = false; csNewSeeds();   // v3.1.68
+  CS.shut = false;   // v3.2.51 -- a new style opens with the questions showing
   var vals = { 'cstyle-edit-id':'', 'cstyle-name':'' };
   Object.keys(vals).forEach(function(k){ var el = document.getElementById(k); if (el) el.value = vals[k]; });
   var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = false;
@@ -5950,7 +5951,8 @@ function analyzeCustomStyle() {
       .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
       .then(function(){ csBusyEnd('analyze'); csFixedBars(); if (btn) { btn.disabled = false; btn.innerHTML = 'Analyze style <span class="btn-cost">(1 token)</span>'; } });
   }
-  var hasWork = CS.options.some(function (o) { return o && (o.edited || Object.keys(o.previews || {}).length); }) || (CS.winner !== null && CS.winner !== undefined);
+  csCurrentAnswers();   // v3.2.51 -- answers typed by hand are work too (TD-1000): Analyze replaces them, so it asks
+  var hasWork = csHasAnswers() || CS.options.some(function (o) { return o && (o.edited || Object.keys(o.previews || {}).length); }) || (CS.winner !== null && CS.winner !== undefined);
   if (hasWork) {
     appConfirm({ title: 'Analyze again?', body: 'This replaces the answers and all three descriptions, with their preview pictures.', note: 'Until you pick a new winner and save, your stories keep using this style as it was last saved.', okLabel: 'Analyze (1 token)', onOk: go });
   } else go();
@@ -6021,16 +6023,43 @@ function csFixedBars() {
 // then.. with an edit button... Don't put each question in its own panel... I don't think questions should be
 // grouped together either." One plain line per question, in order: the name, the answer cut off with an
 // ellipsis (hover shows it all), and Edit, which opens a box on that line only.
+// v3.2.51 -- TD-1000 (Ian, 2026-10-23): "I want to be able to answer the questions without using reference images...
+// that's why I want the example grey text in there so people know what to put in them." Each empty answer shows a
+// grey example (two contrasting answers, so the range is clear); the same example is the edit box's placeholder. The
+// question's full instructions stay on the label's hover.
+var CS_EXAMPLES = {
+  tradition: 'e.g. comic-book ink, or a soft watercolor storybook',
+  medium: 'e.g. brush ink on paper, or digital paint with visible strokes',
+  finish: 'e.g. crisp and polished, or loose and sketchy with unfinished edges',
+  line: 'e.g. thick, even black outlines, or no outlines, with edges made by light against shadow',
+  tones: 'e.g. two-tone black and white, or full range, mostly light',
+  black: 'e.g. large solid black masses, or no black, with deep navy for the darkest parts',
+  shading: 'e.g. flat, hard shadow shapes, or soft blended washes',
+  colour: 'e.g. saturated teal, magenta and orange laid flat, or muted earthy browns and greens',
+  light: 'e.g. warm light from one side with rim light drawn as flat shapes, or soft even daylight with no glows',
+  surfaces: 'e.g. matte everywhere, or wet, glossy and reflective',
+  texture: 'e.g. visible paper grain and brush marks, or perfectly clean',
+  detail: 'e.g. a detailed main figure with a minimal background, or evenly detailed everywhere',
+  background: 'e.g. one flat color, or full, detailed scenery',
+  edges: 'e.g. full bleed to every edge, or fading softly to white',
+  figures: 'e.g. large expressive eyes and slim stylised bodies, or realistic faces and proportions',
+  energy: 'e.g. still, calm and gentle, or sweeping angles, charged and theatrical',
+  atmosphere: 'e.g. drifting fog and haze, or clear air',
+  missed: 'e.g. a halftone dot pattern in the shadows, or leave it empty'
+};
 function csAnswersHtml() {
+  var any = csHasAnswers();
   return CS.questions.map(function (q) {
     var k = q.key, v = String(CS.answers[k] || '').trim(), editing = !!CS.open[k];
-    var shown = v || (k === 'missed' ? 'Nothing else' : '\u2014');
+    var ex = CS_EXAMPLES[k] || '';
+    // After an analysis an empty "What the questions missed" means nothing else; everywhere else an empty answer shows its example.
+    var shown = v || ((k === 'missed' && any) ? 'Nothing else' : (ex || '\u2014'));
     return '<div class="cs-qrow' + (editing ? ' cs-qedit-on' : '') + '" id="cs-q-' + k + '">' +
       '<span class="cs-qlabel" title="' + escapeHtml(q.help || '') + '">' + escapeHtml(q.label) + '</span>' +
       (editing
-        ? '<textarea class="form-textarea cs-qbox" id="cs-ans-' + k + '" data-key="' + k + '" rows="2" oninput="csEditAnswer(this)" placeholder="' + escapeHtml(q.help || '') + '">' + escapeHtml(v) + '</textarea>' +
+        ? '<textarea class="form-textarea cs-qbox" id="cs-ans-' + k + '" data-key="' + k + '" rows="2" oninput="csEditAnswer(this)" placeholder="' + escapeHtml(ex || q.help || '') + '">' + escapeHtml(v) + '</textarea>' +
           '<button type="button" class="cs-qbtn" onclick="csEditQ(\'' + k + '\')">Done</button>'
-        : '<span class="cs-qval' + (v ? '' : ' cs-qempty') + '" title="' + escapeHtml(v) + '">' + escapeHtml(shown) + '</span>' +
+        : '<span class="cs-qval' + (v ? '' : ' cs-qempty') + '" title="' + escapeHtml(v || ex) + '">' + escapeHtml(shown) + '</span>' +
           '<button type="button" class="cs-qbtn" onclick="csEditQ(\'' + k + '\')">Edit</button>') +
       '</div>';
   }).join('');
@@ -6049,6 +6078,24 @@ function csOptionTitle(i) {
   var hint = (i === 0 && CS.original) ? 'your original description' : v[1];
   return '<span class="cs-opt-title">' + v[0] + '</span><span class="cs-opt-hint">' + escapeHtml(hint) + '</span>';
 }
+// v3.2.51 -- Ian: the 18 questions in a collapsible panel, "open to begin with... shut on return". CS.shut is set
+// when the builder opens: open for a new style (or one with no answers yet), shut when reopening a style that has them.
+function csPaintShut() {
+  var body = document.getElementById('cs-answers-body'), t = document.getElementById('cs-answers-toggle');
+  if (body) body.classList.toggle('hidden', !!CS.shut);
+  if (t) {
+    var n = (CS.questions || []).filter(function (q) { return String(CS.answers[q.key] || '').trim(); }).length;
+    t.setAttribute('aria-expanded', CS.shut ? 'false' : 'true');
+    t.innerHTML = '<span class="cs-caret">' + (CS.shut ? '&#9656;' : '&#9662;') + '</span> How the style is drawn' +
+      (CS.shut && CS.questions.length ? ' <span class="cs-count">' + n + ' of ' + CS.questions.length + ' answered</span>' : '');
+  }
+}
+function csToggleAnswers() {
+  if (!CS.shut) csCurrentAnswers();
+  CS.shut = !CS.shut;
+  if (!CS.shut) { var box = document.getElementById('cs-answers'); if (box) box.innerHTML = csAnswersHtml(); }
+  csPaintShut();
+}
 function csRender() {
   var aw = document.getElementById('cs-answers-wrap');
   var cw = document.getElementById('cs-convert-wrap');
@@ -6057,13 +6104,14 @@ function csRender() {
   if (aw) aw.classList.toggle('hidden', showConvert);
   var box = document.getElementById('cs-answers');
   if (box) box.innerHTML = csAnswersHtml();
+  csPaintShut();   // v3.2.51
   var dis = document.getElementById('cs-disagree');
   if (dis) { dis.textContent = CS.disagree ? ('Your reference images don\u2019t all share one style: ' + CS.disagree + ' The answers follow the look most of them share.') : ''; dis.classList.toggle('hidden', !CS.disagree); }
   var note = document.getElementById('cs-win-note');
   if (note) {
     note.textContent = (CS.winner !== null && CS.winner !== undefined)
       ? 'The winner is what your stories use. The others are kept for comparison; Make this the winner swaps them.'
-      : (CS.options.length > 1 ? 'Preview them, then choose one with Use this one. Until you do, your stories use this style as it was last saved.' : 'Write a description, or Analyze your reference images to get three.');
+      : (CS.options.length > 1 ? 'Preview them, then choose one with Use this one. Until you do, your stories use this style as it was last saved.' : 'Answer the questions above and click Rewrite descriptions, or Analyze your reference images, to get three. Or write one yourself.');   // v3.2.51 -- TD-1000
   }
   csFixedBars();
   var ob = document.getElementById('cs-options');
@@ -6326,6 +6374,7 @@ function editCustomStyle(id) {
     CS.winner = 0;
   }
   CS.legacy = !csHasAnswers();   // no answers yet: offer Convert to questions
+  CS.shut = csHasAnswers();   // v3.2.51 -- Ian: shut on return (open when there is nothing in them yet)
   cstyleMarkSaved();   // v3.1.76: as opened is as saved
   csLoadQuestions(csRender);
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
