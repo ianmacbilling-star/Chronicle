@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.48",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3248-node-22-23-4",
+        "kind": "fix",
+        "public": false,
+        "summary": "Node.js pinned to 22.23.4, the patched release for the October Brotli security flaw (CVE-2026-111497).",
+        "detail": "Railway had been reusing Node 22.23.3. package.json now names 22.23.4 under engines, so every build installs it, and the start-up log prints the Node version under \"Campaignia is running!\". Test: staging Deploy Logs show \"Node: v22.23.4\"; the app works as before (sign in, open a storyboard, a Regen, a PDF preview). Production picks it up with the next promote.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.47",
     "staged_on": "2026-10-23",
     "entries": [

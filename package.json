@@ -3,6 +3,9 @@
   "version": "3.0.0",
   "description": "TTRPG session to graphic novel generator",
   "main": "server.js",
+  "engines": {
+    "node": "22.23.4"
+  },
   "scripts": {
     "start": "node server.js"
   },
