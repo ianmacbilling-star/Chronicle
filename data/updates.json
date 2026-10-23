@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.53",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3253-comic-page-black",
+        "kind": "fix",
+        "public": true,
+        "summary": "Comic-page styles: the page behind the panels is now always black, never white. \"What the questions missed\" is always the last question.",
+        "detail": "A comic-page preview left white paper showing below its hero panel. The comic page rule now says any space not covered by a panel is solid black and the panels tile the whole picture. Test: regenerate the Group preview of a style with Comic paneling answered; no white anywhere.",
+        "td": [
+          "TD-966"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.52",
     "staged_on": "2026-10-23",
     "entries": [
