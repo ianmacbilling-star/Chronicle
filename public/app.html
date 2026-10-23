@@ -960,7 +960,8 @@
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
           <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;min-width:0;">
-            <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;">Current members</div>
+            <!-- v3.2.50 -- Ian: the same size as the other page headers (the Sessions title: .page-title, gold, display font). -->
+            <div class="page-title" style="color:var(--gold);font-family:var(--font-display);letter-spacing:1px;">Current Members</div>
             <div class="page-subtitle" style="margin-top:0;">Who's in this campaign and what character they play</div>
           </div>
           <button class="btn btn-primary btn-sm dm-only" style="flex-shrink:0;" onclick="openInviteModal()">&#9993; Invite member</button>

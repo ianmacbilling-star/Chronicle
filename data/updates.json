@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.50",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3250-members-heading-size",
+        "kind": "change",
+        "public": true,
+        "summary": "The Members page heading is now the same size as the other page headings.",
+        "detail": "\"Current Members\" uses the same heading style as the Sessions page title (gold, display font, full size), with the description beside it. Test: open a campaign's Members page and compare with its Sessions page.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.49",
     "staged_on": "2026-10-23",
     "entries": [
