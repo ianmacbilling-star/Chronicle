@@ -18,7 +18,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
 const { sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 const { grantSignupBonus } = require('./tokens');
-const { isPaidTier, ownTier } = require('../middleware/tiers');
+const { isPaidTier, ownTier, memberCapState, memberCapMessage, rowIsPaid } = require('../middleware/tiers');   // v3.2.45 members cap (TD-1007)
 
 const INVITE_TTL_DAYS = 7;
 
@@ -56,6 +56,16 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   const campaignId = parseInt(req.params.campaignId, 10);
   const normalizedEmail = email.trim().toLowerCase();
   const db = await getDb();
+
+  // v3.2.45 -- TD-1007. THE MEMBERS CAP. Checked before anything is written (no stub character, no revoke).
+  // Someone already on a paid plan of their own never counts, so they can always be invited.
+  try {
+    const invitee = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE LOWER(email) = ?').get(normalizedEmail);
+    if (!rowIsPaid(invitee)) {
+      const st = await memberCapState(db, campaignId, { excludeEmail: normalizedEmail });
+      if (st.full) return res.status(403).json({ error: memberCapMessage(st), code: 'MEMBER_CAP', cap: st.cap, used: st.used });
+    }
+  } catch (e) { console.error('members cap check (invite):', e.message); return res.status(500).json({ error: 'Could not check the campaign size. Please try again.' }); }
 
   // Resolve the target character — either existing or new stub.
   let targetCharacterId = character_id ? parseInt(character_id, 10) : null;
@@ -230,6 +240,19 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
   if (existing) {
     return res.status(409).json({ error: 'ALREADY_MEMBER', message: 'You are already in this campaign' });
   }
+
+  // v3.2.45 -- TD-1007. THE MEMBERS CAP, AT THE DOOR. An invite held its place when it was sent, so this only bites
+  // when the campaign filled up some other way (the Story Master's plan changed, or invites from before the cap).
+  // Someone on a paid plan of their own always gets in. The invite stays unused, so it works once there is room.
+  try {
+    const me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(req.session.userId);
+    if (!rowIsPaid(me)) {
+      const st = await memberCapState(db, invite.campaign_id, { excludeInviteId: invite.id });
+      if (st.cap !== null && st.freeMembers >= st.cap) {
+        return res.status(403).json({ error: 'CAMPAIGN_FULL', message: 'This campaign is full right now. Ask the Story Master to make room, or join from an account with its own paid plan.' });
+      }
+    }
+  } catch (e) { console.error('members cap check (accept):', e.message); return res.status(500).json({ error: 'CAP_CHECK', message: 'Could not check the campaign size. Please try again.' }); }
 
   // Create the membership row.
   await db.prepare(
@@ -499,6 +522,19 @@ router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verif
   res.json({ success: true, new_dm_user_id: targetUserId });
 });
 
+// GET /api/campaigns/:campaignId/member-cap
+// v3.2.45 -- TD-1007. The Story Master's "Members not on a paid plan: 4 of 10" line on the Members screen.
+router.get('/campaigns/:campaignId/member-cap', requireAuth, verifyCampaignDM, async function(req, res) {
+  try {
+    const db = await getDb();
+    const st = await memberCapState(db, parseInt(req.params.campaignId, 10), {});
+    res.json({ cap: st.cap, used: st.used, free_members: st.freeMembers, pending: st.pendingFree, paid_members: st.paidMembers, full: st.full, plan: st.tierName });
+  } catch (e) {
+    console.error('member-cap error:', e.message);
+    res.status(500).json({ error: 'Could not read the campaign size' });
+  }
+});
+
 // GET /api/campaigns/:campaignId/invites
 // Any member can see pending invites (per design decision May 30 2026:
 // players see the list so they can anticipate who else is joining; the
@@ -565,6 +601,14 @@ router.post('/campaigns/:campaignId/invites/:inviteId/reactivate', requireAuth, 
   if (inv.used_at) {
     return res.status(409).json({ error: 'This invite has been used or revoked — create a new one' });
   }
+  // v3.2.45 -- TD-1007. An expired invite holds no place, so bringing it back must fit under the cap.
+  try {
+    const invitee = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE LOWER(email) = ?').get(String(inv.email_hint || '').trim().toLowerCase());
+    if (!rowIsPaid(invitee)) {
+      const st = await memberCapState(db, campaignId, { excludeInviteId: inv.id });
+      if (st.full) return res.status(403).json({ error: memberCapMessage(st), code: 'MEMBER_CAP', cap: st.cap, used: st.used });
+    }
+  } catch (e) { console.error('members cap check (reactivate):', e.message); return res.status(500).json({ error: 'Could not check the campaign size. Please try again.' }); }
   const newExpiry = inviteExpiresAt();
   await db.prepare(
     'UPDATE campaign_invites SET expires_at = ? WHERE id = ?'

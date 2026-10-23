@@ -20662,9 +20662,35 @@ function loadMembersTab() {
   loadPendingInvites();
 }
 
+// v3.2.45 -- TD-1007. "Members not on a paid plan: 4 of 10" for the Story Master. Refreshed whenever the members or
+// the pending invites are (re)loaded, so inviting, revoking and removing all move it.
+function memberCapLineText(d) {
+  if (!d || d.error) return '';
+  if (d.cap === null || d.cap === undefined) return 'Members not on a paid plan of their own: ' + d.used + ' (no limit on your plan).';
+  return 'Members not on a paid plan of their own: ' + d.used + ' of ' + d.cap +
+    (d.pending ? ' (including ' + d.pending + ' invite' + (d.pending === 1 ? '' : 's') + ' waiting)' : '') + '.' +
+    (d.full ? ' This campaign is full.' : '') + ' Members with their own paid plan don\'t count.';
+}
+function loadMemberCap() {
+  var cur = state.currentCampaign;
+  var el = document.getElementById('members-cap-line');
+  if (!el) return;
+  if (!cur || cur.my_role !== 'dm') { el.style.display = 'none'; return; }
+  fetch('/api/campaigns/' + cur.id + '/member-cap')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var t = memberCapLineText(d);
+      el.textContent = t;
+      el.style.color = (d && d.full) ? '#e8b25c' : 'rgba(245,232,200,0.75)';
+      el.style.display = t ? '' : 'none';
+    })
+    .catch(function () { el.style.display = 'none'; });
+}
+
 function loadMembers() {
   var cur = state.currentCampaign;
   if (!cur) return;
+  loadMemberCap();   // v3.2.45
   var list = document.getElementById('members-list');
   if (!list) return;
   list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading members…</div>';
@@ -20736,6 +20762,7 @@ function renderMembersList() {
 function loadPendingInvites() {
   var cur = state.currentCampaign;
   if (!cur) return;
+  loadMemberCap();   // v3.2.45 -- an invite sent, revoked or reactivated moves the count
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
   list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading invites…</div>';
@@ -22107,6 +22134,7 @@ var TIER_FIELD_LABELS = {
   max_campaigns: 'Max campaigns (blank/-1 = unlimited)',
   max_sessions: 'Max sessions / campaign (blank/-1 = unlimited)',
   max_characters: 'Max characters / campaign (blank/-1 = unlimited)',
+  max_free_members: 'Max non-paying members / campaign (blank/-1 = unlimited)',   // v3.2.45 -- TD-1007
   session_reserve: 'Session token reserve (0 = none)',
   max_archives_per_campaign: 'Archived images / campaign',
   max_assets: 'Max campaign assets (blank = unlimited)',

@@ -534,6 +534,9 @@ getDb().then(async function() {
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');
+    // v3.2.48 -- the Node version, so a deploy log shows at a glance whether a security patch is in (2026-10-23:
+    // Railway kept reusing 22.23.3, one short of the Brotli fix in 22.23.4; package.json "engines" now pins it).
+    console.log('  Node: ' + process.version);
   // A missing face silently falls back to a system typeface that MEASURES DIFFERENTLY from what the
   // PDF renders, which is how pages end up clipped. Say so at boot, not weeks later.
   try {

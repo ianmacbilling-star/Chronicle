@@ -1,5 +1,115 @@
 [
   {
+    "version": "3.2.50",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3250-members-heading-size",
+        "kind": "change",
+        "public": true,
+        "summary": "The Members page heading is now the same size as the other page headings.",
+        "detail": "\"Current Members\" uses the same heading style as the Sessions page title (gold, display font, full size), with the description beside it. Test: open a campaign's Members page and compare with its Sessions page.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.49",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3249-help-members-who-counts",
+        "kind": "fix",
+        "public": true,
+        "summary": "Help now gets right who counts toward a campaign's members limit: Free Trial members count, and nobody is ever removed.",
+        "detail": "Testers found Help calling the Free Trial \"a paid plan\", saying free players could join a plan whose limit is none, and saying a member would have to be removed. Help's live tier line and the Help notes now say: Copper and Free Trial members count; only a member's own Silver, Gold or Platinum subscription or a live pass doesn't; a plan set to none takes no free players; nobody is removed. Test: with Silver at 0, ask Help \"Can free players join my Silver campaign?\" (answer: no, they need their own paid plan or you need a higher plan) and \"Does a Free Trial member count?\" (yes).",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.48",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3248-node-22-23-4",
+        "kind": "fix",
+        "public": false,
+        "summary": "Node.js pinned to 22.23.4, the patched release for the October Brotli security flaw (CVE-2026-111497).",
+        "detail": "Railway had been reusing Node 22.23.3. package.json now names 22.23.4 under engines, so every build installs it, and the start-up log prints the Node version under \"Campaignia is running!\". Test: staging Deploy Logs show \"Node: v22.23.4\"; the app works as before (sign in, open a storyboard, a Regen, a PDF preview). Production picks it up with the next promote.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.47",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3247-members-cap-help-and-grid",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Help now knows each plan's live members number, and Compare the Tiers shows a cross for a plan set to none.",
+        "detail": "The Help assistant reads \"non-paying members per campaign\" for every plan from the dashboard settings, the same way it reads campaigns and archives, and answers \"how many members can I have\" with it. In Compare the Tiers the Non-Paying Members per Campaign row shows a cross for a plan set to 0, a number otherwise, and Unlimited when blank. Test: set Silver to 0 on the dashboard and open Compare the Tiers (Silver shows a cross); ask Help \"how many members can I have on Silver?\"; set it back.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.46",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3246-members-header",
+        "kind": "change",
+        "public": true,
+        "summary": "The Members page starts right under the top banner.",
+        "detail": "The big \"Members\" title is gone (the breadcrumb already says it), and \"Who's in this campaign and what character they play\" sits on the Current members line. Test: open a campaign's Members page, wide and on a phone.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.45",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3245-members-cap",
+        "kind": "change",
+        "public": true,
+        "summary": "Each plan now allows a set number of members per campaign who are not on a paid plan of their own. Members with their own paid plan never count.",
+        "detail": "Silver 6, Gold 10, Platinum 15 to start (dashboard: Tiers and Passes, \"Max non-paying members / campaign\", blank = unlimited). Invites waiting count; expired ones do not until reactivated. When full, inviting another non-paying member is refused with a clear message; someone with their own paid plan can always be invited. Nobody is removed from a campaign already over the number. The Story Master sees \"Members not on a paid plan of their own: 4 of 10\" on the Members screen, and Compare the Tiers has a row for it. Test: on staging set Silver to 1 on the dashboard, invite one Copper address (works), invite a second (refused), invite a paid account (works), revoke the first and invite again (works); open a full campaign's invite as a Copper account (\"full\").",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.44",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3244-landing-wording-and-grid",
+        "kind": "change",
+        "public": true,
+        "summary": "Landing page wording tidied, and Compare the Tiers now has a Your Own Art and Narrative row.",
+        "detail": "Both landing pages: \"AI Image Generation\" is now \"Image Generation\"; the Narrative Prose card says Campaignia turns your session (or story) into a graphic novel, instead of talking about panels; \"Artist, writer, or neither\" moved up into the Play / Tell It Your Way banner. Compare the Tiers: a Your Own Art and Narrative row near the top with a tick on every plan; the Writing Coach row moved down after Multiple Versions with a cross for Silver; the footnote about your own art is gone. Test: both landing pages wide and narrow; open Compare the Tiers on each.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.43",
     "staged_on": "2026-10-22",
     "entries": [

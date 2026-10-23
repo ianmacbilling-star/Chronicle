@@ -102,11 +102,9 @@
     { label: 'Narrative Styles', cell: function (t) {
         return t.can_create ? val(esc(t.narrative_styles)) : na();
       } },
-    // v3.2.43 -- TD-999 (Ian, 2026-10-22). Below Gold the coach still writes a fresh version of a box (Regen,
-    // every plan), so the cell says that rather than a bare cross.
-    { label: 'Writing Coach', cell: function (t) {
-        return t.writing_coach ? mark(true) : val('Regen only');
-      } },
+    // v3.2.44 -- Ian, 2026-10-23: a row of its own, near the top, ticked on every plan (Self Illustrated and
+    // Outline / Already Written are on every plan, and the route says so). Replaces v3.2.43's footnote.
+    { label: 'Your Own Art and Narrative', cell: function (t) { return mark(t.own_art_and_narrative); } },
     { label: 'Archived Images per Campaign', cell: function (t) {
         return val(esc(cap(t.max_archives_per_campaign)));
       } },
@@ -115,6 +113,13 @@
       } },
     { label: 'Assets per Campaign', cell: function (t) {
         return val(esc(cap(t.max_assets)));
+      } },
+    // v3.2.45 -- TD-1007 (Ian, 2026-10-23). Members on a paid plan of their own never count, so the sub-label says so.
+    // v3.2.47 -- Ian: a plan set to 0 on the dashboard shows a cross, not "0". Blank (null) is Unlimited.
+    { label: 'Non-Paying Members per Campaign', sub: 'members with their own plan don\'t count', cell: function (t) {
+        var m = t.max_free_members;
+        if (m !== null && m !== undefined && Number(m) <= 0) return mark(false);
+        return val(esc(cap(m)));
       } },
     // v3.0.893 -- N/A FOR A TIER THAT CREATES NOTHING OF ITS OWN, exactly like the two style
     // rows above. *(Ian, 2026-09-13: "it's not really true that copper can't download a pdf.
@@ -128,6 +133,8 @@
         return mark(t.can_export);
       } },
     { label: 'Multiple Versions', sub: NOT_INHERITED, cell: function (t) { return mark(t.multi_version); } },
+    // v3.2.43 -- TD-999. v3.2.44 (Ian, 2026-10-23): moved here, and a plain cross below Gold.
+    { label: 'Writing Coach', cell: function (t) { return mark(t.writing_coach); } },
     { label: 'Custom Art Styles', sub: NOT_INHERITED, cell: function (t) { return mark(t.custom_art_styles); } },
     { label: 'Title Builder', sub: NOT_INHERITED, cell: function (t) { return mark(t.title_builder); } }
   ];
@@ -186,11 +193,6 @@
           '<span><b>A Platinum Pass is Platinum.</b> Every feature in the Platinum column, for the ' +
           'months you buy, with the tokens granted up front. See the passes on the page behind this one.' +
           '</span></div>' +
-        // v3.2.43 -- Ian, 2026-10-22: say you can supply your own art or words. A footnote, not a row: it is
-        // true on every plan, and a row of ticks says nothing.
-        '<div class="tg-note tg-note-coin">' +
-          '<span aria-hidden="true" style="width:48px;flex-shrink:0;text-align:center;font-size:30px;color:var(--tg-gold-light);">\u270E</span>' +
-          '<span><b>On every plan:</b> put your own art in the book, or write it yourself.</span></div>' +
       '</div>' +
     '</div>';
   }
