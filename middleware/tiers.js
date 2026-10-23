@@ -18,6 +18,9 @@ const TIERS = {
     max_sessions: 1,         // per campaign -- get them to ONE rendered session (the aha)
     max_characters: 4,       // per campaign (new)
     session_reserve: 8,      // tokens fenced off for sessions (enforced in Part B)
+    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
+    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
+    max_free_members: 0,     // the Free Trial cannot invite at all (routes/invites.js)
     max_archives_per_campaign: 10,
     max_assets: null,
     moment_algorithm: 'extended',
@@ -73,6 +76,9 @@ const TIERS = {
     can_create: false,
     max_characters: null,
     session_reserve: 0,
+    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
+    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
+    max_free_members: 0,   // a Copper Story Master is a lapsed one: no new members until they subscribe
     description: 'Get your own version of the story · no monthly subscription · token purchases only'
   },
   silver: {
@@ -107,6 +113,9 @@ const TIERS = {
     can_create: true,
     max_characters: null,
     session_reserve: 0,
+    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
+    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
+    max_free_members: 6,
     description: '1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options'
   },
   gold: {
@@ -141,6 +150,9 @@ const TIERS = {
     can_create: true,
     max_characters: null,
     session_reserve: 0,
+    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
+    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
+    max_free_members: 10,
     description: '3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options'
   },
   platinum: {
@@ -175,6 +187,9 @@ const TIERS = {
     can_create: true,
     max_characters: null,
     session_reserve: 0,
+    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
+    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
+    max_free_members: 15,
     description: 'unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles'
   }
 };
@@ -207,13 +222,15 @@ const EDITABLE_TIER_FIELDS = [
   'signup_bonus',
   // v3.1.3 -- Ian: the Bookshelf size per tier from the Tiers and Passes tab. 0 = no Bookshelf. Not
   // nullable: an empty box falls back to the code default above, never to "unlimited".
-  'bookshelf_limit'
+  'bookshelf_limit',
+  // v3.2.45 -- TD-1007 (Ian, 2026-10-23): members per campaign who are not on a paid plan of their own.
+  'max_free_members'
 ];
 
 // Fields where an empty value means "unlimited" (stored as null). Every
 // other editable field is a required count: an empty value clears the
 // override so the code default applies (never stored as null/NaN).
-const NULLABLE_TIER_FIELDS = { max_assets: true, max_campaigns: true, max_sessions: true, max_characters: true };
+const NULLABLE_TIER_FIELDS = { max_assets: true, max_campaigns: true, max_sessions: true, max_characters: true, max_free_members: true };   // v3.2.45 max_free_members
 
 // Read the tier_config row into the in-memory cache. Call at boot and
 // after every save. Never throws -- on any error the cache is left as-is
@@ -751,4 +768,75 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+// ============================================================================
+// v3.2.45 -- TD-1007. HOW FULL IS THIS CAMPAIGN?
+//
+// Ian, 2026-10-23: "I'm worried that a company that makes stories may have one paying SM and then like 50 non
+// paying copper members." Storage is the cost that grows: every member's version keeps its own pictures.
+//
+// THE RULES (Ian): only members who are NOT on a paid plan of their own count -- ownTier, so a live pass is a paid
+// plan; the Free Trial and Copper are not. Pending invites count too (unused, not revoked, not expired), unless the
+// address belongs to an account that is already on a paid plan. The cap is the STORY MASTER's plan's
+// max_free_members (ownTier, so a pass-holding Story Master gets their pass's number); null = unlimited. Nobody is
+// ever removed: a campaign over its cap keeps everyone, it just cannot add more.
+//
+// opts.excludeEmail -- an address about to be re-invited (its old invite is about to be revoked, so it is not
+// counted twice). opts.excludeInviteId -- the invite being accepted or reactivated, counted by the caller.
+// ============================================================================
+async function memberCapState(db, campaignId, opts) {
+  opts = opts || {};
+  const now = Date.now();
+  const sm = await db.prepare(
+    "SELECT u.id, u.tier, u.pass_tier, u.pass_expires_at FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+    "WHERE cm.campaign_id = ? AND cm.role = 'dm'"
+  ).get(campaignId);
+  const smTier = sm ? ownTier(sm, now) : 'copper';
+  const t = getTier(smTier);
+  const raw = t.max_free_members;
+  const cap = (raw === null || raw === undefined || raw === '' || !isFinite(Number(raw)) || Number(raw) < 0) ? null : Number(raw);
+  const members = await db.prepare(
+    "SELECT u.id, u.tier, u.pass_tier, u.pass_expires_at FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+    "WHERE cm.campaign_id = ? AND cm.role <> 'dm'"
+  ).all(campaignId);
+  const freeMembers = members.filter(function (m) { return !isPaidTier(ownTier(m, now)); }).length;
+  const paidMembers = members.length - freeMembers;
+  const invites = await db.prepare(
+    "SELECT i.id, i.email_hint, i.expires_at, u.tier, u.pass_tier, u.pass_expires_at FROM campaign_invites i " +
+    "LEFT JOIN users u ON LOWER(u.email) = LOWER(i.email_hint) " +
+    "WHERE i.campaign_id = ? AND i.used_at IS NULL"
+  ).all(campaignId);
+  const exEmail = opts.excludeEmail ? String(opts.excludeEmail).trim().toLowerCase() : null;
+  const seen = {};
+  let pendingFree = 0;
+  invites.forEach(function (i) {
+    if (seen[i.id]) return; seen[i.id] = true;
+    if (opts.excludeInviteId != null && Number(i.id) === Number(opts.excludeInviteId)) return;
+    if (exEmail && String(i.email_hint || '').trim().toLowerCase() === exEmail) return;
+    const exp = (i.expires_at instanceof Date) ? i.expires_at.getTime() : Date.parse(String(i.expires_at));
+    if (!isFinite(exp) || exp < now) return;            // expired invites hold no place (Reactivate checks again)
+    if (i.tier && isPaidTier(ownTier(i, now))) return;  // an account already on a paid plan never counts
+    pendingFree++;
+  });
+  const used = freeMembers + pendingFree;
+  // Would a higher paid plan allow more? (for the message only)
+  let higher = false;
+  Object.keys(TIERS).forEach(function (k) {
+    if (!isPaidTier(k) || tierRank(k) <= tierRank(smTier)) return;
+    const c = getTier(k).max_free_members;
+    if (c === null || c === undefined || (cap !== null && Number(c) > cap)) higher = true;
+  });
+  return { cap: cap, used: used, freeMembers: freeMembers, paidMembers: paidMembers, pendingFree: pendingFree,
+           full: cap !== null && used >= cap, smTier: smTier, tierName: t.name || smTier, higherPlanAllowsMore: higher };
+}
+
+// Is this person on a paid plan of their own? (a members-cap question: paid people never count)
+function rowIsPaid(row) { return !!row && isPaidTier(ownTier(row)); }
+
+// The words a Story Master sees when the campaign is full.
+function memberCapMessage(st) {
+  return 'This campaign is full: your ' + st.tierName + ' plan allows ' + st.cap + ' member' + (st.cap === 1 ? '' : 's') +
+    ' who are not on a paid plan of their own, and invites waiting count too. Members with their own paid plan never count. ' +
+    'Revoke an invite you no longer need' + (st.higherPlanAllowsMore ? ', or move to a higher plan for more' : '') + '.';
+}
+
+module.exports = { memberCapState, memberCapMessage, rowIsPaid, TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

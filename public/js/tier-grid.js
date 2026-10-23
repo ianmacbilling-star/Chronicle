@@ -114,6 +114,10 @@
     { label: 'Assets per Campaign', cell: function (t) {
         return val(esc(cap(t.max_assets)));
       } },
+    // v3.2.45 -- TD-1007 (Ian, 2026-10-23). Members on a paid plan of their own never count, so the sub-label says so.
+    { label: 'Non-Paying Members per Campaign', sub: 'members with their own plan don\'t count', cell: function (t) {
+        return val(esc(cap(t.max_free_members)));
+      } },
     // v3.0.893 -- N/A FOR A TIER THAT CREATES NOTHING OF ITS OWN, exactly like the two style
     // rows above. *(Ian, 2026-09-13: "it's not really true that copper can't download a pdf.
     // They can if the DM allows them to publish.")* He is right, and the cross was describing

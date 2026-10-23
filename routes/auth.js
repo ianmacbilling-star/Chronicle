@@ -3,7 +3,7 @@ const { getPass } = require('../services/billing/passes');   // v3.0.924 -- TD-7
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive, isOnFreeTrial } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive, isOnFreeTrial, memberCapState } = require('../middleware/tiers');   // v3.2.45 memberCapState (TD-1007)
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
@@ -110,6 +110,13 @@ router.post('/register', async function(req, res) {
         const _ie = ((preInvite && preInvite.email_hint) || '').trim().toLowerCase();
         const _re = (email || '').trim().toLowerCase();
         willJoinViaInvite = !!(preInvite && !preInvite.used_at && new Date(preInvite.expires_at) >= new Date() && (!_ie || _ie === _re));
+        // v3.2.45 -- TD-1007. A brand-new account is never on a paid plan, so it must fit under the campaign's members
+        // cap. If the campaign is full the account is made as an ordinary sign-up (the Free Trial), and the invite stays
+        // unused so it still works from the invite page once there is room.
+        if (willJoinViaInvite) {
+          const _st = await memberCapState(db, preInvite.campaign_id, { excludeInviteId: preInvite.id });
+          if (_st.cap !== null && _st.freeMembers >= _st.cap) willJoinViaInvite = false;
+        }
       } catch (e) { preInvite = null; willJoinViaInvite = false; }
     }
     const regTier = willJoinViaInvite ? 'copper' : 'trial';

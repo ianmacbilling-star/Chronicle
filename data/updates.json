@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.45",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3245-members-cap",
+        "kind": "change",
+        "public": true,
+        "summary": "Each plan now allows a set number of members per campaign who are not on a paid plan of their own. Members with their own paid plan never count.",
+        "detail": "Silver 6, Gold 10, Platinum 15 to start (dashboard: Tiers and Passes, \"Max non-paying members / campaign\", blank = unlimited). Invites waiting count; expired ones do not until reactivated. When full, inviting another non-paying member is refused with a clear message; someone with their own paid plan can always be invited. Nobody is removed from a campaign already over the number. The Story Master sees \"Members not on a paid plan of their own: 4 of 10\" on the Members screen, and Compare the Tiers has a row for it. Test: on staging set Silver to 1 on the dashboard, invite one Copper address (works), invite a second (refused), invite a paid account (works), revoke the first and invite again (works); open a full campaign's invite as a Copper account (\"full\").",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.44",
     "staged_on": "2026-10-23",
     "entries": [

@@ -221,7 +221,9 @@ router.get('/tier-grid', function (req, res) {
         writing_coach: accessRank(name) >= 3,
         // v3.2.44 -- uploading your own pictures (I'll illustrate it myself) and the Outline / Already Written
         // narrative styles have no plan gate, so this is true for every column the grid draws.
-        own_art_and_narrative: true
+        own_art_and_narrative: true,
+        // v3.2.45 -- TD-1007. The same field memberCapState enforces; null = unlimited.
+        max_free_members: gridCap(t.max_free_members)
       };
     });
     res.set('Cache-Control', 'no-store');

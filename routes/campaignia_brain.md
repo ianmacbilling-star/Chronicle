@@ -479,7 +479,8 @@ since it also loses everything else the trial offered.)
 If you run a table, you subscribe to a paid tier and your players join **free as Copper
 members**. They inherit your tier's styling inside your campaign, can build their own
 version of the campaign, and only need to spend tokens to generate their *own* images —
-which they can buy as packs while they're in your (paid) campaign. So one paid Story
+which they can buy as packs while they're in your (paid) campaign (up to your plan's number of
+members who are not on a paid plan of their own; see §14). So one paid Story
 Master can outfit a whole group; players pay nothing unless they want their own art.
 
 ---
@@ -1602,6 +1603,24 @@ it. Every campaign has exactly one **Story Master**.
   preserves everyone's own versions, and the outgoing Story Master stays on as a regular
   member.
 
+**How many members a campaign can have.** Each plan allows a number of members per campaign
+**who are not on a paid plan of their own** (Copper and Free Trial members). Members with their
+own paid plan or a live pass **never count**, so there is no limit on them. **Invites waiting to
+be accepted count too**, unless the address belongs to an account that already has a paid plan;
+an expired invite does not count until it is reactivated. The numbers per plan are in **Compare
+the Tiers** (they are set on the dashboard, so use the live figure if you have it). The Story
+Master sees where they stand on the Members screen: **"Members not on a paid plan of their own:
+4 of 10"**.
+- **When it is full**, inviting another non-paying member is refused with a message saying so.
+  Revoke an invite you no longer need, or move to a higher plan if it allows more. Anyone with
+  their own paid plan can still be invited.
+- **Nobody is ever removed.** A campaign that is over the number (for example after the Story
+  Master changes plan) keeps everyone; it just cannot add more non-paying members until it is
+  under.
+- **If someone opens an invite to a full campaign**, they are told it is full and to ask the
+  Story Master to make room; the invite keeps working once there is room. A brand-new account
+  made from that invite becomes an ordinary account with the Free Trial instead of joining.
+
 ---
 
 ## 15. Publish
@@ -2044,6 +2063,15 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 ## 20. Why can't I… / troubleshooting
 
 Friction points and what's actually going on.
+
+- **"I can't invite another member" / "it says my campaign is full."** Each plan allows a number
+  of members per campaign who are not on a paid plan of their own, and invites still waiting
+  count too. Revoke an invite you no longer need (Members screen, the invite's Revoke), or move
+  to a higher plan if it allows more. Members with their own paid plan never count, so they can
+  always be invited. See §14.
+- **"My invite says the campaign is full."** The Story Master's campaign has reached its number of
+  non-paying members. Ask them to make room; the same invite works once there is. If you have
+  your own paid plan, you can join anyway.
 
 - **"The Writing Coach only offers Regen" / "Feedback says to see plans."** Feedback, Show me,
   Rewrite and Word come with **Gold**, **Platinum** and the **Free Trial**; Regen works on every plan.
