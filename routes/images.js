@@ -226,12 +226,52 @@ var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or cr
 // was not already there -- but it cannot remove one either.
 var NO_MARKS = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date, caption, title, or credit anywhere in the image, in any corner or along any edge. Text that genuinely belongs to the scene itself \u2014 a sign, a banner, runes carved in stone, writing on an open page \u2014 is fine; a mark laid on top of the picture is not.';
 
+// v3.2.52 -- TD-966. A CUSTOM STYLE'S COMIC PAGE AND SOUND EFFECTS (Ian, 2026-10-23: "In picture Panels.. comic style",
+// "in picture sound effects only... (no other text)", "Yes on the Black Gutters only"). Read from the style's SAVED
+// answers to questions 19 and 20, not from its description, so the rules hold whatever the description says. They
+// reach buildPanelInput as an OBJECT in the isFadeOverride slot ({ fade, panels, sfx }); a style without them still
+// passes true / false / null exactly as before, so every other picture's prompt is byte-for-byte unchanged.
+//
+// Ian's book "Marooned on Chult" (a panels instruction written into the style text) showed why: the edge-to-edge
+// NO_BORDER rule fought the black gutters (some came out white), and the scene description was lettered into a
+// caption box. COMIC_PAGE replaces NO_BORDER; NO_LETTERING / SFX_ONLY tighten NO_MARKS.
+var COMIC_PAGE = ' COMIC PAGE LAYOUT: compose this image as ONE comic-book page divided into several panels inside it, ' +
+  'arranged as the art style describes (if it gives no arrangement: 3 to 6 panels of varied sizes, one large hero panel ' +
+  'carrying the main moment, the others showing details, close-ups or the moments just before or after; inset panels may ' +
+  'overlap a larger one). Separate every panel with solid BLACK gutters and black panel borders, never white, cream or ' +
+  'coloured, with a thin black border around the whole page; the artwork inside each panel runs to that panel\'s border. ' +
+  'Every person who appears in more than one panel is the SAME person each time, with an identical face, hair, build, ' +
+  'clothing and gear, matching their reference. Do not add people, creatures or characters the scene does not call for ' +
+  'to fill extra panels.';
+var NO_LETTERING = ' NO LETTERING: no caption boxes, narration boxes, titles, speech or thought balloons, sound effects, ' +
+  'labels or any other written words laid over the picture, in any panel. Never write any part of the scene description ' +
+  'into the picture.';
+var SFX_ONLY = ' SOUND EFFECTS ONLY: you may draw bold, hand-lettered comic sound effects (short onomatopoeia such as BOOM, ' +
+  'CRACK or KRAK) worked into the art where the action makes a sound, spelled correctly. NO other text of any kind: no ' +
+  'caption boxes, narration, titles, speech or thought balloons or labels, and never any part of the scene description ' +
+  'written into the picture.';
+function styleFlagOn(answer) {
+  var a = String(answer == null ? '' : answer).trim();
+  if (!a) return false;
+  return !/^(none|no\b|n\/a|nothing|not\b|single\b|one\s+(single\s+)?(picture|image|panel)\b|1\s+(picture|image|panel)\b)/i.test(a);
+}
+function styleFlags(answers) {
+  var a = answers;
+  if (typeof a === 'string') { try { a = JSON.parse(a); } catch (e) { a = null; } }
+  if (!a || typeof a !== 'object') return { panels: false, sfx: false };
+  return { panels: styleFlagOn(a.panels), sfx: styleFlagOn(a.sfx) };
+}
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
-  var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
-  var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
-  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + NO_MARKS;
+  var _flags = (isFadeOverride && typeof isFadeOverride === 'object') ? isFadeOverride : null;   // v3.2.52 -- TD-966
+  var _fadeIn = _flags ? _flags.fade : isFadeOverride;
+  var _fade = (_fadeIn === true || _fadeIn === false) ? _fadeIn : isFadeStyle(style);
+  var _panels = !!(_flags && _flags.panels), _sfx = !!(_flags && _flags.sfx);
+  var edgeDirective = _panels ? COMIC_PAGE : (_fade ? FADE_WHITE : NO_BORDER);
+  var marksDirective = NO_MARKS + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));
+  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
   // It must land here and not only in extract.js, because extract writes each
   // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
@@ -303,7 +343,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     'averaged, or merged with another. If reference images are provided, treat ' +
     'them ONLY as identity and content sources (who or what each element is); do ' +
     'NOT copy their rendering style — re-render every referenced element in ' +
-    'this art style.' + edgeDirective + NO_MARKS + ' The required art style is: ' + stylePrefix;
+    'this art style.' + edgeDirective + marksDirective + ' The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
     ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks ' + _voice.unify + ' in this style rather than placed on top of it. ' + stylePrefix
     : '';
@@ -1102,7 +1142,7 @@ async function resolveGenStyle(db, style, userId, campaignId) {
     const rowId = parseInt(style.slice(7), 10);
     if (rowId) {
       try {
-        const row = await db.prepare('SELECT id, owner_id, name, style_prompt, is_fade FROM custom_art_styles WHERE id = ?').get(rowId);
+        const row = await db.prepare('SELECT id, owner_id, name, style_prompt, is_fade, style_answers FROM custom_art_styles WHERE id = ?').get(rowId);   // v3.2.52 style_answers
         if (row && row.style_prompt) {
           let allowed = (String(row.owner_id) === String(userId));
           if (!allowed && campaignId) {
@@ -1119,7 +1159,10 @@ async function resolveGenStyle(db, style, userId, campaignId) {
             const ownerTier = await getEffectiveTier(row.owner_id, null);
             if (ownerTier !== 'platinum') return { locked: true };
             var _sp = /^STYLE:/i.test(row.style_prompt) ? row.style_prompt : ('STYLE: ' + row.style_prompt);
-            return { styleForGen: _sp, isFade: !!row.is_fade, name: row.name || null };
+            // v3.2.52 -- TD-966. With a comic page or sound effects answered, isFade carries all three flags.
+            var _fl = styleFlags(row.style_answers);
+            var _isf = (_fl.panels || _fl.sfx) ? { fade: !!row.is_fade, panels: _fl.panels, sfx: _fl.sfx } : !!row.is_fade;
+            return { styleForGen: _sp, isFade: _isf, name: row.name || null };
           }
         }
       } catch (e) { console.error('custom style resolve error:', e.message); }
@@ -2514,7 +2557,10 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     // and differ in style, not in who is in it. Anything else gets a random seed, as before.
     const _askSeed = (_scene && req.body) ? Number(req.body.seed) : NaN;
     const seed = (Number.isInteger(_askSeed) && _askSeed >= 1 && _askSeed <= 2147483646) ? _askSeed : crypto.randomInt(1, 2147483647);
-    const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, _scene ? _scene.shape : 'wide', null, isFade);
+    // v3.2.52 -- TD-966. The builder sends its answers to 19 and 20, so a preview shows the comic page as panels will.
+    const _pfl = styleFlags(req.body && req.body.answers);
+    const _pOverride = (_pfl.panels || _pfl.sfx) ? { fade: isFade, panels: _pfl.panels, sfx: _pfl.sfx } : isFade;
+    const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, _scene ? _scene.shape : 'wide', null, _pOverride);
     try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'custom_style_preview', tokens_redeemed: cost, quantity: 1, unit: 'images', model: (IMAGE_MODELS[modelKey] || modelKey) }); } catch (e) {}
     // Persist the preview to the style so reopening shows the last render.
@@ -3079,5 +3125,7 @@ module.exports.submitRetouch = submitRetouch;
 //     instruction, scoped to the figure, instead of riding at the top of the
 //     prompt where it paints a background over the white reference staging.
 module.exports.resolveGenStyle = resolveGenStyle;
+module.exports.styleFlags = styleFlags;            // v3.2.52 -- TD-966
+module.exports.buildPanelInput = buildPanelInput;  // v3.2.52 -- for the guard
 module.exports.getStylePrefix = getStylePrefix;
 module.exports.ASSET_REF_SQL = ASSET_REF_SQL;   // v3.1.90 -- TD-979, shared with sessions.js
