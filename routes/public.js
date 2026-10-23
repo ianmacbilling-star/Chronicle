@@ -218,7 +218,10 @@ router.get('/tier-grid', function (req, res) {
         // v3.2.43 -- TD-999. The Writing Coach's Feedback, Show me, Rewrite and Word: the SAME test as wtAccess in
         // routes/narrative.js (accessRank >= 3, Gold), so the grid says what the gate does. Regen is every plan.
         // It is a creative capability, so a member inherits it from the Story Master's plan like the styles.
-        writing_coach: accessRank(name) >= 3
+        writing_coach: accessRank(name) >= 3,
+        // v3.2.44 -- uploading your own pictures (I'll illustrate it myself) and the Outline / Already Written
+        // narrative styles have no plan gate, so this is true for every column the grid draws.
+        own_art_and_narrative: true
       };
     });
     res.set('Cache-Control', 'no-store');

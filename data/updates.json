@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.44",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3244-landing-wording-and-grid",
+        "kind": "change",
+        "public": true,
+        "summary": "Landing page wording tidied, and Compare the Tiers now has a Your Own Art and Narrative row.",
+        "detail": "Both landing pages: \"AI Image Generation\" is now \"Image Generation\"; the Narrative Prose card says Campaignia turns your session (or story) into a graphic novel, instead of talking about panels; \"Artist, writer, or neither\" moved up into the Play / Tell It Your Way banner. Compare the Tiers: a Your Own Art and Narrative row near the top with a tick on every plan; the Writing Coach row moved down after Multiple Versions with a cross for Silver; the footnote about your own art is gone. Test: both landing pages wide and narrow; open Compare the Tiers on each.",
+        "td": [
+          "TD-999"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.43",
     "staged_on": "2026-10-22",
     "entries": [

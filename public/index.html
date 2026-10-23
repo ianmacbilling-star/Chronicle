@@ -24,7 +24,7 @@
        second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
        extension and index.html cannot stamp itself the way app.html does. -->
   <link rel="stylesheet" href="/css/tier-grid.css?v=3.0.896">
-  <script src="/js/tier-grid.js?v=3.2.43" defer></script>
+  <script src="/js/tier-grid.js?v=3.2.44" defer></script>
   <!-- v3.0.897 -- TD-770. THE LANDING PAGE STYLESHEET MOVED OUT, UNCHANGED.
        900 lines lived here. A second landing page needs the same rules, and two copies of one
        stylesheet is the fault this project keeps paying for -- so they are in one file that every
@@ -181,12 +181,12 @@
   </style>
     <div class="features-strip-body arsenal-5">
       <div class="feature-cell">
-        <div class="feature-title">AI IMAGE GENERATION</div>
+        <div class="feature-title">IMAGE GENERATION</div>
         <div class="feature-desc">Every panel gets a unique AI illustration. High fantasy, dark and gritty, watercolor, anime — choose the style that matches your campaign. You control the prompts, you control the scenes.</div>
       </div>
       <div class="feature-cell">
         <div class="feature-title">NARRATIVE PROSE</div>
-        <div class="feature-desc">Between every panel, Campaignia weaves narrative prose that reads like a real novel. Opening scenes, bridges, closing chapters. Select from multiple narrative styles and points of view.</div>
+        <div class="feature-desc">Campaignia turns your session into a graphic novel, told in prose that reads like a real novel — from the opening scene, through every twist, to the closing chapter. Choose from multiple narrative styles and points of view.</div>
       </div>
       <div class="feature-cell">
         <div class="feature-title">CHARACTER MEMORY</div>
@@ -209,12 +209,15 @@
        (TD-941). Three cells on the features-strip classes; this block only sets the three columns. -->
   <style>
     .features-strip-body.ways-3 { grid-template-columns: repeat(3, 1fr); }
-    .ways-foot { padding: 14px 20px 18px; text-align: center; font-style: italic; color: rgba(240,232,208,0.75); border-top: 2px solid rgba(201,168,76,0.1); }
+    /* v3.2.44 -- Ian, 2026-10-23: the tagline sits in the banner, not on a line of its own under the cards. */
+    #your-way .features-strip-header { flex-wrap: wrap; row-gap: 2px; }
+    .ways-tag { margin-left: auto; font-style: italic; font-size: 15px; color: var(--ink, #0a0806); opacity: 0.8; }
     @media (max-width: 900px) { .features-strip-body.ways-3 { grid-template-columns: 1fr; } .features-strip-body.ways-3 .feature-cell { border-right: none; } }
   </style>
   <div class="features-strip" id="your-way">
     <div class="features-strip-header">
       <div class="features-strip-title">PLAY IT YOUR WAY &mdash; CAMPAIGNIA CAN DO IT ALL. OR YOU CAN.</div>
+      <div class="ways-tag">Artist, writer, or neither &mdash; we&rsquo;ve got you covered.</div>
     </div>
     <div class="features-strip-body ways-3">
       <div class="feature-cell">
@@ -230,7 +233,6 @@
         <div class="feature-desc">The DM who keeps a campaign journal? Your words stay exactly as you wrote them, and Campaignia adds the pictures.</div>
       </div>
     </div>
-    <div class="ways-foot feature-desc">Artist, writer, or neither &mdash; we&rsquo;ve got you covered.</div>
   </div>
 
   <!-- ============================================================
