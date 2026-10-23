@@ -280,13 +280,14 @@ const STYLE_QUESTIONS = [
   ['figures', 'Characters: faces, eyes and bodies', 'How people are drawn: eyes (size, shape, highlights), faces, proportions and body type, realistic or stylised, expression.'],   // v3.1.68 -- label made obvious (Ian: "how people should look... Anime... big eyes")
   ['energy', 'Energy and drama', 'Movement (still and calm, or sweeping and dynamic) and intensity (quiet and gentle, or charged and theatrical), described as how things are drawn, never as what happens.'],
   ['atmosphere', 'Atmosphere', 'Fog, smoke, rain, haze, particles, sparkle, or clear air.'],
-  ['missed', 'What the questions missed', 'Anything else that makes these images look the way they do. Empty if nothing.'],
   // v3.2.52 -- TD-966 (Ian, 2026-10-23): "In picture Panels.. comic style" and "in picture sound effects only... (no
   // other text)". Empty or "none" means one single picture and no lettering, exactly as before. routes/images.js reads
   // these two saved answers itself (styleFlags) and adds fixed rules: black gutters, same people in every panel, and
   // no text except sound effects when asked.
   ['panels', 'Comic paneling', 'Whether each picture is ONE image (none) or a comic page divided into several panels inside it: how many, their sizes, inset panels. Answer "none" unless the images themselves are divided into comic panels.'],
-  ['sfx', 'Sound effects', 'Hand-drawn comic sound effects inside the art (BOOM, CRACK) and how they are lettered, or none. Never captions, titles or speech balloons. Answer "none" unless the images contain drawn sound effects.']
+  ['sfx', 'Sound effects', 'Hand-drawn comic sound effects inside the art (BOOM, CRACK) and how they are lettered, or none. Never captions, titles or speech balloons. Answer "none" unless the images contain drawn sound effects.'],
+  // v3.2.53 -- Ian: "What the questions missed" is always LAST.
+  ['missed', 'What the questions missed', 'Anything else that makes these images look the way they do. Empty if nothing.']
 ];
 const STYLE_ANSWER_MAX = 600;
 const STYLE_TEXT_MAX = 4000;

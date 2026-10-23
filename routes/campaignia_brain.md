@@ -1821,8 +1821,8 @@ there. Each picture shows whole in its box.
 what is in them, and answers **20 questions** about the style: Tradition; Medium and
 technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Color;
 Light and light effects; Surfaces; Texture; Detail, and where it goes; Background; Edges
-and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; What
-the questions missed; **Comic paneling**; and **Sound effects**.
+and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; **Comic
+paneling**; **Sound effects**; and, always last, What the questions missed.
 
 **Comic paneling and Sound effects** decide the layout of every picture in the style.
 - **Comic paneling** empty or "none": each picture is one single image, as always. Any

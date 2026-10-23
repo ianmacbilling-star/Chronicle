@@ -240,6 +240,10 @@ var COMIC_PAGE = ' COMIC PAGE LAYOUT: compose this image as ONE comic-book page 
   'carrying the main moment, the others showing details, close-ups or the moments just before or after; inset panels may ' +
   'overlap a larger one). Separate every panel with solid BLACK gutters and black panel borders, never white, cream or ' +
   'coloured, with a thin black border around the whole page; the artwork inside each panel runs to that panel\'s border. ' +
+  // v3.2.53 -- Ian's first previews: the Group page left white page showing below its hero panel. Gutters were black, but
+  // the page background was never said, so the model left it as blank paper.
+  'The page itself is black: any space not covered by a panel is solid black, never white or blank paper; the panels ' +
+  'tile the whole image with no empty area. ' +
   'Every person who appears in more than one panel is the SAME person each time, with an identical face, hair, build, ' +
   'clothing and gear, matching their reference. Do not add people, creatures or characters the scene does not call for ' +
   'to fill extra panels.';
