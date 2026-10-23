@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.47",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3247-members-cap-help-and-grid",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Help now knows each plan's live members number, and Compare the Tiers shows a cross for a plan set to none.",
+        "detail": "The Help assistant reads \"non-paying members per campaign\" for every plan from the dashboard settings, the same way it reads campaigns and archives, and answers \"how many members can I have\" with it. In Compare the Tiers the Non-Paying Members per Campaign row shows a cross for a plan set to 0, a number otherwise, and Unlimited when blank. Test: set Silver to 0 on the dashboard and open Compare the Tiers (Silver shows a cross); ask Help \"how many members can I have on Silver?\"; set it back.",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.46",
     "staged_on": "2026-10-23",
     "entries": [

@@ -1607,10 +1607,17 @@ it. Every campaign has exactly one **Story Master**.
 **who are not on a paid plan of their own** (Copper and Free Trial members). Members with their
 own paid plan or a live pass **never count**, so there is no limit on them. **Invites waiting to
 be accepted count too**, unless the address belongs to an account that already has a paid plan;
-an expired invite does not count until it is reactivated. The numbers per plan are in **Compare
-the Tiers** (they are set on the dashboard, so use the live figure if you have it). The Story
-Master sees where they stand on the Members screen: **"Members not on a paid plan of their own:
-4 of 10"**.
+an expired invite does not count until it is reactivated. **The Story Master's plan sets the
+number** (a Story Master on a pass gets the pass's number), and the numbers are dashboard settings:
+**always answer with the live figure, "non-paying members/campaign", from the LIVE TIER NUMBERS
+block**, never a number remembered from here. If a plan's figure is **none**, that plan cannot add
+members who are not on a paid plan of their own (it can still add members who have one); if it is
+**unlimited**, there is no cap. The same numbers are in **Compare the Tiers**, where a plan with
+none shows a cross. The Story Master sees where they stand on the Members screen: **"Members not
+on a paid plan of their own: 4 of 10"**.
+- **The Story Master is never counted**, so a plan's number is the people besides the Story Master.
+  If the campaign is handed to someone else, the old Story Master becomes an ordinary member and
+  counts only if they are not on a paid plan, and the new Story Master's plan sets the number.
 - **When it is full**, inviting another non-paying member is refused with a message saying so.
   Revoke an invite you no longer need, or move to a higher plan if it allows more. Anyone with
   their own paid plan can still be invited.
@@ -2065,8 +2072,8 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 Friction points and what's actually going on.
 
 - **"I can't invite another member" / "it says my campaign is full."** Each plan allows a number
-  of members per campaign who are not on a paid plan of their own, and invites still waiting
-  count too. Revoke an invite you no longer need (Members screen, the invite's Revoke), or move
+  of members per campaign who are not on a paid plan of their own (the live "non-paying
+  members/campaign" figure for the Story Master's plan), and invites still waiting count too. Revoke an invite you no longer need (Members screen, the invite's Revoke), or move
   to a higher plan if it allows more. Members with their own paid plan never count, so they can
   always be invited. See §14.
 - **"My invite says the campaign is full."** The Story Master's campaign has reached its number of
@@ -2245,6 +2252,11 @@ Friction points and what's actually going on.
 ---
 
 ## 21. Quick FAQ
+
+- **How many members can I have in a campaign?** As many as you like who have their own paid plan.
+  Members who are not on a paid plan of their own (Copper or Free Trial) are capped per campaign by
+  the Story Master's plan: give the live "non-paying members/campaign" figure for that plan. Invites
+  still waiting count; the Story Master does not. See §14.
 
 - **What is the Writing Coach?** A panel that helps with the words in any narrative box, and with the
   whole story on the Story tab: **Feedback**, **Rewrite**, **Word** and **Regen**. Gold, Platinum and
