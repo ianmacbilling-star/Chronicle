@@ -261,6 +261,7 @@ const COST_ANALYZE = 1;
 // FROM the answers. The user can edit the answers and ask for fresh descriptions. "None" is a real answer
 // and is stated outright, because silence is where the image model falls back on its own habits.
 // The keys are stored with the style (custom_art_styles.style_answers); never rename one.
+// v3.2.52 -- now 20: Comic paneling and Sound effects joined (TD-966).
 const STYLE_QUESTIONS = [
   ['tradition', 'Tradition', 'The broad genre or tradition it belongs to (for example comic ink, anime, watercolor illustration, oil painting, cinematic concept art, collage). Never an artist, studio, franchise or title.'],
   ['medium', 'Medium and technique', 'What it is made with: ink, watercolor, oil, digital paint, pencil, woodcut, mixed media, collage, photographic.'],
@@ -279,7 +280,13 @@ const STYLE_QUESTIONS = [
   ['figures', 'Characters: faces, eyes and bodies', 'How people are drawn: eyes (size, shape, highlights), faces, proportions and body type, realistic or stylised, expression.'],   // v3.1.68 -- label made obvious (Ian: "how people should look... Anime... big eyes")
   ['energy', 'Energy and drama', 'Movement (still and calm, or sweeping and dynamic) and intensity (quiet and gentle, or charged and theatrical), described as how things are drawn, never as what happens.'],
   ['atmosphere', 'Atmosphere', 'Fog, smoke, rain, haze, particles, sparkle, or clear air.'],
-  ['missed', 'What the questions missed', 'Anything else that makes these images look the way they do. Empty if nothing.']
+  ['missed', 'What the questions missed', 'Anything else that makes these images look the way they do. Empty if nothing.'],
+  // v3.2.52 -- TD-966 (Ian, 2026-10-23): "In picture Panels.. comic style" and "in picture sound effects only... (no
+  // other text)". Empty or "none" means one single picture and no lettering, exactly as before. routes/images.js reads
+  // these two saved answers itself (styleFlags) and adds fixed rules: black gutters, same people in every panel, and
+  // no text except sound effects when asked.
+  ['panels', 'Comic paneling', 'Whether each picture is ONE image (none) or a comic page divided into several panels inside it: how many, their sizes, inset panels. Answer "none" unless the images themselves are divided into comic panels.'],
+  ['sfx', 'Sound effects', 'Hand-drawn comic sound effects inside the art (BOOM, CRACK) and how they are lettered, or none. Never captions, titles or speech balloons. Answer "none" unless the images contain drawn sound effects.']
 ];
 const STYLE_ANSWER_MAX = 600;
 const STYLE_TEXT_MAX = 4000;
@@ -308,7 +315,14 @@ const DESCRIPTION_RULES =
   '(h) Describe light effects exactly as the images draw them. ' +
   '(i) Energy and drama describe HOW things are drawn (sweeping curves, hard contrast, tension in the pose), ' +
   'never events: a calm scene in a dramatic style gets dramatic treatment, not invented danger. ' +
-  '(j) Roughly 6 to 10 sentences. Every word is a directive; no art criticism, no preamble.';
+  '(j) Roughly 6 to 10 sentences. Every word is a directive; no art criticism, no preamble. ' +
+  // v3.2.52 -- TD-966. The two layout answers are handled by fixed rules at drawing time; the description only adds
+  // the arrangement or the lettering look, and stays silent when they are none.
+  '(k) Comic paneling: if the answer is empty or none, say NOTHING about panels (one picture is the default). ' +
+  'Otherwise add ONE sentence describing the panel arrangement (how many panels, their sizes, any insets); do not ' +
+  'mention gutter colour, which is set elsewhere. ' +
+  '(l) Sound effects: if the answer is empty or none, say NOTHING about lettering. Otherwise add ONE sentence on how ' +
+  'the sound effects are lettered (bold, hand-drawn, coloured, outlined). Never ask for captions, titles or speech balloons.';
 
 // v3.1.68 -- FAITHFUL, BOLDER, SOFTER (Ian, 2026-10-13: the three "seem pretty similar"; "those are good
 // options for choices. Label them as such"). Three wordings of the same answers looked alike, so the three

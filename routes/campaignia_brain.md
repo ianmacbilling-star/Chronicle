@@ -1818,11 +1818,25 @@ they fill the box you clicked and any empty boxes, and never replace a picture a
 there. Each picture shows whole in its box.
 
 **1. Analyze style (1 token).** Campaignia studies how the samples are *drawn*, never
-what is in them, and answers **18 questions** about the style: Tradition; Medium and
+what is in them, and answers **20 questions** about the style: Tradition; Medium and
 technique; Finish; Line work; Tonal range; Black and the darkest areas; Shading; Color;
 Light and light effects; Surfaces; Texture; Detail, and where it goes; Background; Edges
-and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; and What
-the questions missed. If the samples don't all share one style, a warning says what
+and framing; Characters: faces, eyes and bodies; Energy and drama; Atmosphere; What
+the questions missed; **Comic paneling**; and **Sound effects**.
+
+**Comic paneling and Sound effects** decide the layout of every picture in the style.
+- **Comic paneling** empty or "none": each picture is one single image, as always. Any
+  other answer makes each picture a **comic page with several panels inside it**, laid out
+  as the answer says (or 3 to 6 panels with one large hero panel if it doesn't say). The
+  gutters between panels are always **black**, never white; the same character looks the
+  same in every panel; and no captions, titles or speech balloons are drawn.
+- **Sound effects** empty or "none": no lettering at all. Any other answer allows bold
+  hand-drawn **sound effects** (BOOM, CRACK) inside the art, and **no other text**.
+- These are read from the saved answers whenever a picture is drawn, so they work whatever
+  the description says. The previews show them too.
+- **Soft edges follow the Edges and framing answer** (there is no separate box): a style
+  whose edges fade to white fades, otherwise pictures run to the edges. A comic page always
+  runs to the edges with black gutters. If the samples don't all share one style, a warning says what
 differs. A style built from mixed samples comes out mixed, so removing the odd one out
 and analyzing again usually helps.
 
@@ -1890,7 +1904,7 @@ drawn the wrong way: **Characters: faces, eyes and bodies**. **Soft / faded edge
 filling the frame; Analyze sets it from the Edges answer and you can change it.
 
 **Styles made before the questions** keep working exactly as they were. Opening one
-shows its description. To get the 18 answers and the three descriptions, click **Analyze
+shows its description. To get the 20 answers and the three descriptions, click **Analyze
 style** (1 token); it reads the style's saved reference pictures. Nothing in your books
 changes until you pick a winner and save.
 
@@ -1979,7 +1993,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   styles-by-tier block lists exactly which presets you have). For a specific look, the
   painterly presets are usually closest. **If you're on Platinum, the best route is the
   Custom Art Style Builder** (profile menu → Custom Art Styles): upload 2–4 reference
-  images in that look and click **Analyze style**. Campaignia answers 18 questions about
+  images in that look and click **Analyze style**. Campaignia answers 20 questions about
   how they are drawn and writes three descriptions (Faithful, Bolder, Softer); preview
   each, edit the answers if something is off, and pick a winner (section 17). Campaignia makes *original* art inspired by an aesthetic
   (post-impressionist, watercolor, cel-shaded), so asking for the feel of a famous painter's work is fine — it just

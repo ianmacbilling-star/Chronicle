@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.52",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3252-comic-panels-and-sfx",
+        "kind": "feature",
+        "public": true,
+        "summary": "Custom art styles can now draw every picture as a comic page with panels inside it, and allow hand-drawn sound effects.",
+        "detail": "Two new questions in the custom style builder. Comic paneling: none (one picture, as before) or a panel layout; any layout gives black gutters only, the same character looking the same in every panel, and no captions, titles or speech balloons. Sound effects: none, or bold hand-drawn sound effects (BOOM, CRACK) with no other text. They are read from the saved answers whenever a picture is drawn. The Soft / faded edges box is gone; soft edges follow the Edges and framing answer. Styles without these answers draw exactly as before. Test: on a custom style, answer Comic paneling (\"a comic page of 4 panels, one large\") and Sound effects (\"none\"), Rewrite, generate the three previews (black gutters, no lettering); then Sound effects \"bold red sound effects\" and generate again; check an existing style's previews are unchanged.",
+        "td": [
+          "TD-966"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.51",
     "staged_on": "2026-10-23",
     "entries": [

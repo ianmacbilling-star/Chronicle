@@ -3297,7 +3297,7 @@
 .cs-note{font-size:12px;color:var(--text-muted);margin:0 0 8px;line-height:1.45;}
 /* v3.1.68 -- grouped summaries you click to edit (Ian: the 18 boxes were "way too busy"); labels readable on white. */
 /* v3.1.69 -- one plain line per question (Ian), in order: down the first column, then the second. */
-.cs-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(9,auto);grid-auto-flow:column;column-gap:28px;}
+.cs-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(10,auto);grid-auto-flow:column;column-gap:28px;}   /* v3.2.52 -- 20 questions, ten a column */
 .cs-qrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:5px 0;border-bottom:1px solid rgba(107,79,18,0.12);}
 .cs-qlabel{flex:0 0 175px;font-size:12px;font-weight:700;color:#6b4f12;cursor:help;}
 .cs-qval{flex:1 1 auto;min-width:0;font-size:13px;color:#2e2410;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
@@ -3455,12 +3455,10 @@
       <div id="cs-bar-rewrite"></div>
       <div id="cs-options"></div>
     </div>
-    <div class="form-group" style="margin-top:16px;">
-      <label class="form-checkbox-row">
-        <input type="checkbox" id="cstyle-fade" />
-        <span>Soft / faded edges <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; art thins to white at the panel edges instead of filling the frame</span></span>
-      </label>
-    </div>
+    <!-- v3.2.52 -- Ian: the Soft / faded edges box only repeated question 14 (Edges and framing). The box is gone from the
+         screen; this hidden one still carries the setting, which Analyze and Rewrite set from the Edges answer as before,
+         and which a saved style keeps. -->
+    <input type="checkbox" id="cstyle-fade" hidden aria-hidden="true" tabindex="-1" style="display:none;" />
     <div id="cstyle-save-error" class="alert alert-error hidden" style="margin:14px 0 0;"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeCustomStyles()">Close</button>

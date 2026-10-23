@@ -5920,7 +5920,7 @@ function analyzeCustomStyle() {
   function go() {
     var btn = document.getElementById('cstyle-analyze-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Analyzing\u2026'; }
-    csBusyStart('analyze', 'Reading your reference images, answering the 18 questions and writing three descriptions\u2026', 12000);   // v3.1.68
+    csBusyStart('analyze', 'Reading your reference images, answering the 20 questions and writing three descriptions\u2026', 12000);   // v3.1.68; v3.2.52 20
     csFixedBars();
     var fd = new FormData();
     refs.files.forEach(function(f){ fd.append('images', f); });
@@ -6045,7 +6045,9 @@ var CS_EXAMPLES = {
   figures: 'e.g. large expressive eyes and slim stylised bodies, or realistic faces and proportions',
   energy: 'e.g. still, calm and gentle, or sweeping angles, charged and theatrical',
   atmosphere: 'e.g. drifting fog and haze, or clear air',
-  missed: 'e.g. a halftone dot pattern in the shadows, or leave it empty'
+  missed: 'e.g. a halftone dot pattern in the shadows, or leave it empty',
+  panels: 'e.g. none, one single picture; or a comic page of 3 to 6 panels, one large hero panel with small insets',   // v3.2.52 -- TD-966
+  sfx: 'e.g. none; or bold hand-drawn sound effects inside the art (BOOM, CRACK), with no other text'
 };
 function csAnswersHtml() {
   var any = csHasAnswers();
@@ -6232,7 +6234,7 @@ function csGenerate(i, scene) {
   csRender();
   fetch('/api/images/custom-style-preview', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked), scene: scene, seed: seed })
+    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked), scene: scene, seed: seed, answers: { panels: String((csCurrentAnswers() || {}).panels || ''), sfx: String((CS.answers || {}).sfx || '') } })   // v3.2.52 -- TD-966: questions 19 and 20
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
