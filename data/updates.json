@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.49",
+    "staged_on": "2026-10-23",
+    "entries": [
+      {
+        "id": "3249-help-members-who-counts",
+        "kind": "fix",
+        "public": true,
+        "summary": "Help now gets right who counts toward a campaign's members limit: Free Trial members count, and nobody is ever removed.",
+        "detail": "Testers found Help calling the Free Trial \"a paid plan\", saying free players could join a plan whose limit is none, and saying a member would have to be removed. Help's live tier line and the Help notes now say: Copper and Free Trial members count; only a member's own Silver, Gold or Platinum subscription or a live pass doesn't; a plan set to none takes no free players; nobody is removed. Test: with Silver at 0, ask Help \"Can free players join my Silver campaign?\" (answer: no, they need their own paid plan or you need a higher plan) and \"Does a Free Trial member count?\" (yes).",
+        "td": [
+          "TD-1007"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.48",
     "staged_on": "2026-10-23",
     "entries": [

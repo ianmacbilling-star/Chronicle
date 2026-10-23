@@ -326,7 +326,9 @@ router.post('/ask', requireAuth, async function(req, res) {
   function _shelf(t){ var n = Number(t && t.bookshelf_limit); return (Number.isFinite(n) && n > 0) ? ('Bookshelf ' + Math.floor(n) + ' books') : 'no Bookshelf'; }
   // v3.2.47 -- TD-1007. The members cap, from the same live tier config (Dashboard, Tiers and Passes, max_free_members).
   // 0 means that plan cannot add members who are not on a paid plan of their own; blank (null) means unlimited.
-  function _members(t){ var v = t && t.max_free_members; if (v === null || v === undefined) return 'non-paying members/campaign unlimited'; var n = Number(v); return (Number.isFinite(n) && n > 0) ? ('non-paying members/campaign ' + Math.floor(n)) : 'non-paying members/campaign none (cannot add members who are not on a paid plan of their own)'; }
+  // v3.2.49 -- the bots (2026-10-23) got Help calling the Free Trial "a paid plan" and promising free players could join a
+  // plan set to none. Say who counts on the line itself, where the model reads the number.
+  function _members(t){ var v = t && t.max_free_members; var who = ' (Copper and Free Trial members count; the Free Trial is NOT a paid plan; only members with their own Silver, Gold or Platinum subscription or a live pass do not count)'; if (v === null || v === undefined) return 'non-paying members/campaign unlimited'; var n = Number(v); return (Number.isFinite(n) && n > 0) ? ('non-paying members/campaign ' + Math.floor(n) + who) : ('non-paying members/campaign NONE: this plan cannot add any Copper or Free Trial member; only people with their own paid plan (Silver or higher, or a live pass) can join' + who); }
   const _tierMatrix = ['trial','copper','silver','gold','platinum'].map(function (nm) {
     const t = getTier(nm) || {};
     if (nm === 'copper') {

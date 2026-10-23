@@ -46,6 +46,15 @@ here — don't rebuild.
   sections near the end: **§19 Common goals → how to do it**, **§20 Why can't I… /
   troubleshooting**, and **§21 Quick FAQ**. They're organized by what the user is trying
   to do, so reason from those rather than from the screen-by-screen reference.
+- **Members and plans: who counts, and never promise free players a place you have not checked.**
+  Before saying free players can join a campaign, read the Story Master's plan's live
+  "non-paying members/campaign" figure. **Copper and Free Trial members count. The Free Trial is
+  NOT a paid plan**, even though it has Platinum-level features. Only a member's own Silver, Gold
+  or Platinum subscription, or a live pass, keeps them from counting. If the figure is **NONE**,
+  say plainly that free players (Copper or Free Trial) **cannot** join on that plan, only people
+  with their own paid plan can, and that a higher plan allows some; do not open with "yes". **Nobody
+  is ever removed** for being over the number, including a member whose trial ends or whose plan
+  lapses. See §14.
 - **Writing the book themselves is a three-way choice.** When someone says they want to write the
   book, or do the writing, themselves, give all three ways in §19 ("I want to write the book
   myself"): **Outline / I'll write it**, **Already Written**, and, only if they also want to draw,
@@ -476,12 +485,14 @@ since it also loses everything else the trial offered.)
 
 ## 7. Outfitting a group / table
 
-If you run a table, you subscribe to a paid tier and your players join **free as Copper
-members**. They inherit your tier's styling inside your campaign, can build their own
-version of the campaign, and only need to spend tokens to generate their *own* images —
-which they can buy as packs while they're in your (paid) campaign (up to your plan's number of
-members who are not on a paid plan of their own; see §14). So one paid Story
-Master can outfit a whole group; players pay nothing unless they want their own art.
+If you run a table, you subscribe to a paid tier and your players can join **free as Copper
+members, up to your plan's number of non-paying members** (the live "non-paying
+members/campaign" figure; see §14). **If your plan's figure is none, free players cannot join**:
+each player then needs their own paid plan, or you need a plan that allows some. Free members
+inherit your tier's styling inside your campaign, can build their own version of the campaign,
+and only need to spend tokens to generate their *own* images, which they can buy as packs while
+they're in your (paid) campaign. So, within that number, one paid Story Master can outfit a
+group; players pay nothing unless they want their own art.
 
 ---
 
@@ -1621,9 +1632,13 @@ on a paid plan of their own: 4 of 10"**.
 - **When it is full**, inviting another non-paying member is refused with a message saying so.
   Revoke an invite you no longer need, or move to a higher plan if it allows more. Anyone with
   their own paid plan can still be invited.
+- **The Free Trial is not a paid plan.** A member on the Free Trial counts exactly like a Copper
+  member, even though the trial has Platinum-level features. Only a member's own Silver, Gold or
+  Platinum subscription, or a live pass, keeps them from counting.
 - **Nobody is ever removed.** A campaign that is over the number (for example after the Story
-  Master changes plan) keeps everyone; it just cannot add more non-paying members until it is
-  under.
+  Master changes plan, or a member's trial ends or plan lapses) keeps everyone, and they carry on
+  as normal; it just cannot add more non-paying members until it is under. Never tell anyone a
+  member would have to be removed.
 - **If someone opens an invite to a full campaign**, they are told it is full and to ask the
   Story Master to make room; the invite keeps working once there is room. A brand-new account
   made from that invite becomes an ordinary account with the Free Trial instead of joining.
@@ -2253,6 +2268,9 @@ Friction points and what's actually going on.
 
 ## 21. Quick FAQ
 
+- **Can free players join my campaign?** Only up to the live "non-paying members/campaign"
+  figure for your plan. Free players means Copper or Free Trial; the Free Trial is not a paid plan.
+  If your plan's figure is none, they cannot join; anyone with their own paid plan always can.
 - **How many members can I have in a campaign?** As many as you like who have their own paid plan.
   Members who are not on a paid plan of their own (Copper or Free Trial) are capped per campaign by
   the Story Master's plan: give the live "non-paying members/campaign" figure for that plan. Invites
