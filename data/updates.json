@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.56",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3256-transcript-cache",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Generate Story, the character-change check and Generate Narrative share the transcript through Anthropic's cache.",
+        "detail": "The session transcript now goes first in all three requests, word for word the same, marked to be kept five minutes; each call's own instructions follow unchanged. The change check (seconds after Generate Story) reads it at a tenth of the price, and so does Generate Narrative within five minutes of Generate Story. Already Written unchanged. Railway logs a [story cache] line per call. Test: on a test campaign, Generate Story then Generate Narrative within five minutes; logs show write on generate-story and read on change-check and generate-narrative; compare panels and prose with a run from before.",
+        "td": [
+          "TD-1010"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.55",
     "staged_on": "2026-10-24",
     "entries": [

@@ -15,6 +15,7 @@ const { getDb, getOrCreateDmFork, getDmForkId, resolveActingFork, requestedForkI
 const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
+const transcriptCache = require('../services/transcriptCache');   // v3.2.56 -- TD-1010: the transcript goes first, kept
 
 // v3.0.507 -- TITLE LENGTH IS A FUNCTION OF THE PICTURE'S WIDTH.
 // Ian, 2026-08-07: "keep the titles short based on the size of the image. So Tower Titles need to
@@ -352,15 +353,16 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '## KNOWN CHARACTERS (appearance reference only)\n' + charList + '\n' +
     'IMPORTANT: the list above is an appearance reference, NOT a cast list for ' +
     'this session. Only include a character in a panel if they ACTUALLY APPEAR ' +
-    'in the transcript below. Do NOT add a character to a scene just because ' +
+    'in the session transcript above. Do NOT add a character to a scene just because ' +   // v3.2.56 -- it now comes first
     'they are on this list — many of them are not in this session. If a ' +
     'character is not present in the transcript, they must not appear in any panel.\n' +
     (_narrator ? narratorPanelsBlock(_narrator) : '') +   // v3.1.27 -- who "I" is, and more pictures of them
     (assetList ? ('## KNOWN ASSETS (the campaign\'s recurring places, supporting characters and items; slash-separated names are aliases of ONE asset)\n' + assetList + '\n' +
       'When one of these appears in a panel, refer to it in that panel\'s "description" and "prompt" by one of these exact names, so its reference picture attaches.\n\n') : '') +
     notesSection + '\n\n' +
-    ((session.campaign_lore && session.campaign_lore.trim()) ? ('## WORLD / LORE (background for consistency and continuity \u2014 NOT events of this session; the transcript below is the sole source of what actually happened)\n' + session.campaign_lore.trim() + '\n\n') : '') +
-    '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
+    ((session.campaign_lore && session.campaign_lore.trim()) ? ('## WORLD / LORE (background for consistency and continuity \u2014 NOT events of this session; the session transcript above is the sole source of what actually happened)\n' + session.campaign_lore.trim() + '\n\n') : '') +
+    // v3.2.56 -- TD-1010. The transcript moved to the very start of the request (transcriptCache), so the change check
+    // and Generate Narrative can reuse it. Everything else here is unchanged.
     '## YOUR TASK\n' +
     'This transcript is approximately ' + wordCount + ' words long. ' +
     'Extract the moments that genuinely deserve their own graphic novel panel, up to a MAXIMUM of ' + momentCount + ' panels. ' +
@@ -429,6 +431,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const extractJobId = _ejIns.lastInsertRowid;
   res.json({ job_id: extractJobId });
 
+  // v3.2.56 -- TD-1010. One copy, so the change check below sends exactly the same start.
+  const _storySystem = [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: systemPrompt }];
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -440,7 +444,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       body: JSON.stringify({
         model: TEXT_MODEL,
         max_tokens: 10000,   // v3.1.9 -- TD-908: was 8000; headroom for recurring_elements
-        system: systemPrompt,
+        system: _storySystem,   // v3.2.56 -- the transcript first (kept), then the same instructions
         messages: [{
           role: 'user',
           content: userPrompt
@@ -449,6 +453,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     });
 
     const data = await response.json();
+    transcriptCache.logCache('generate-story', data);   // v3.2.56
     if (data.error) { await db.prepare("UPDATE extract_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((data.error && data.error.message) || 'AI service error'), new Date().toISOString(), extractJobId); return; }
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
@@ -576,7 +581,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now, dmForkId);
 
       // Stage 3: scan for major permanent changes and flag them for review.
-      await detectCharacterChanges(db, session, req.params.campaignId, key, now, targetForkId);
+      await detectCharacterChanges(db, session, req.params.campaignId, key, now, targetForkId, _storySystem);   // v3.2.56 -- reuses the kept transcript
 
       // v3.1.9 -- TD-908. SUGGESTED ASSETS, FROM THE REPLY WE ALREADY PAID FOR. The model proposes;
       // services/assetSuggestions.js keeps only what the real matcher finds in two or more of the
@@ -805,7 +810,10 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
 // Dedicated AI call: scan the transcript for MAJOR PERMANENT physical
 // changes to known characters. Flags the session_characters row.
 // Conservative — temporary states (Long Rest, bloodied, etc) are ignored.
-async function detectCharacterChanges(db, session, campaignId, apiKey, now, forkId) {
+// v3.2.56 -- TD-1010. storySystem: Generate Story's own system blocks (the transcript, then its instructions). Sent
+// unchanged, so this call reads the transcript Generate Story has just had kept, at a tenth of the price; the message
+// then says plainly that this is a different task. Without it (no caller does that now) the old single message is sent.
+async function detectCharacterChanges(db, session, campaignId, apiKey, now, forkId, storySystem) {
   try {
     if (!apiKey) return;
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
@@ -870,7 +878,11 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
       }
     });
 
+    const _shared = Array.isArray(storySystem) && storySystem.length > 0;
     const instruction =
+      (_shared ? ('THIS REQUEST IS A DIFFERENT TASK. You are NOT storyboarding now: return no panels, no moments and no story, ' +
+        'and ignore the storyboard answer format. The session transcript is at the start of this request, above. ' +
+        'Your only task is the one below, and your answer is the JSON it asks for.\n\n') : '') +
       // v3.0.744 -- TD-543. Same reason; this one decides whether a scar or a lost hand is real.
       'You are reviewing a session transcript for PERMANENT physical changes to characters. ' +
       'You are given the session transcript AND the DM\'s session notes — check BOTH.\n\n' +
@@ -925,7 +937,7 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
         : '') +
       'MOMENTS IN THIS SESSION (in order):\n' + momentListText + '\n\n' +
       'If there are no permanent changes, return { "changes": [] }.\n\n' +
-      'SESSION TRANSCRIPT:\n' + transcript + '\n\n' +
+      (_shared ? 'SESSION TRANSCRIPT: at the start of this request, above.\n\n' : ('SESSION TRANSCRIPT:\n' + transcript + '\n\n')) +
       'DM SESSION NOTES:\n' + (notes || '(none)');
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -938,11 +950,13 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
       body: JSON.stringify({
         model: TEXT_MODEL,
         max_tokens: 800,
+        ...(_shared ? { system: storySystem } : {}),   // v3.2.56
         messages: [{ role: 'user', content: instruction }]
       })
     });
 
     const data = await response.json();
+    transcriptCache.logCache('change-check', data);   // v3.2.56
     if (data.error) { console.error('detectCharacterChanges API error:', data.error.message); return; }
 
     var raw = data.content.map(function(b) { return b.text || ''; }).join('').trim();

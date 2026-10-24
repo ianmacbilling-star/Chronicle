@@ -7,6 +7,7 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL, WRITING_MODEL, WRITING_FAST_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
+const transcriptCache = require('../services/transcriptCache');   // v3.2.56 -- TD-1010: the transcript first, kept
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -717,7 +718,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
          'This is what the table has already played. TREAT EVERY WORD OF IT AS TRUE and already ' +
          'established \u2014 do not hedge it, question it, or present it as rumour or memory. ' +
          'It is NOT part of this session: everything that happens now comes from the panel ' +
-         'sequence and the transcript below. Use it for CONTINUITY \u2014 who these people are to ' +
+         'sequence and the session transcript at the start. Use it for CONTINUITY \u2014 who these people are to ' +   // v3.2.56
          'each other, what they were already trying to do, what was left hanging \u2014 and do NOT ' +
          'retell it. The intro opens THIS session; it is not a recap of the last one.\n\n')
       : '') +
@@ -781,7 +782,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       'so honor the chronology of the panels regardless -- do not reorder events to follow them a ' +
       'second time.\n\n'
       : '') +
-    'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
+    // v3.2.56 -- TD-1010. The transcript itself moved to the very start of the request (transcriptCache), so it can be
+    // reused from Generate Story; this line keeps its old place in the reading order and its rule.
+    'Full session transcript: at the start of this request, above (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events).\n\n' +
     'Style:\n' +
     (isOutline ? outlineStyleLines(narrVerbosity) : isDialogue
       ? '- Keep the characters\' spoken lines intact; verbosity below controls only the NARRATION prose woven around them, never which lines are spoken\n' +
@@ -1016,12 +1019,14 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         // v3.0.704 -- TD-507. Was `styleBundle.system`, a fixed fantasy persona that outranked
         // both the genre steering and the director's instructions in the user message.
         system: isWritten ? styleBundle.system   // v3.1.49 -- no voice, no first person: the author's words stand
-          : (narrator ? narratorSystemLine(narrator) : (_fpAnon ? narratorAnonSystemLine() : '')) + buildNarrativeSystem(styleBundle.system, campaign, directorNotes),   // v3.1.27 -- first person heads it
+          : [transcriptCache.transcriptBlock(session.transcript),   // v3.2.56 -- TD-1010: the transcript first, kept (shared with Generate Story)
+            { type: 'text', text: (narrator ? narratorSystemLine(narrator) : (_fpAnon ? narratorAnonSystemLine() : '')) + buildNarrativeSystem(styleBundle.system, campaign, directorNotes) }],   // v3.1.27 -- first person heads it
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const data = await response.json();
+    transcriptCache.logCache(isWritten ? 'generate-narrative-written' : 'generate-narrative', data);   // v3.2.56
     if (data.error) {
       await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((data.error && data.error.message) || 'AI service error'), new Date().toISOString(), jobId);
       return;
