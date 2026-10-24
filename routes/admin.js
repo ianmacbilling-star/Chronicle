@@ -176,6 +176,24 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
+// v3.2.60 -- GET /api/admin/user-last-active. Ian's database view vuuserlastactive (each user's pass, last action and
+// sign-up), shown beside the Stats on the Dashboard. The view is Ian's and lives in the database, not in the code:
+// whatever columns it has are shown, in its own order. If the view is not there (a database it was never created on)
+// the tab says so instead of failing. Admin only; capped at 500 rows.
+router.get('/user-last-active', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare('SELECT * FROM vuuserlastactive LIMIT 500').all();
+    const list = Array.isArray(rows) ? rows : [];
+    res.json({ columns: list.length ? Object.keys(list[0]) : [], rows: list, capped: list.length >= 500 });
+  } catch (e) {
+    const msg = String((e && e.message) || '');
+    if ((e && e.code === '42P01') || /vuuserlastactive/.test(msg) && /does not exist/.test(msg)) return res.json({ missing: true, columns: [], rows: [] });
+    console.error('GET user-last-active error:', msg);
+    res.status(500).json({ error: 'Could not load the user list' });
+  }
+});
+
 // ---- Weekly metric snapshots (true history for current-state metrics) ----
 // Current-state metrics (active users, per-tier counts) have no history in the
 // live tables, so a weekly job snapshots them into metric_snapshots.
