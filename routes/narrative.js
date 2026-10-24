@@ -1743,26 +1743,34 @@ async function writingContext(db, req, session, targetForkId) {
   };
 }
 
-// The shared background block: who and what the story is, so suggestions stay in character, genre and voice.
+// The shared background: who and what the story is, so suggestions stay in character, genre and voice.
+// v3.2.55 -- PROMPT CACHING (TD-1010; Anthropic, 2026-10-24: "Your prompt cache hit rate is low"). The background is
+// now two parts, most general first, so a coach call can reuse what the call before it already sent (Anthropic keeps
+// it five minutes; reading it again costs a tenth of sending it). CAMPAIGN: name, lore, characters, genre, the general
+// campaign prompt, then this version's narrative voice and narrator. SESSION: its name, the story so far and the story
+// instructions. The same words as before, in that order. Changing anything here changes what is reused: keep the
+// wording of both parts free of anything about one box or one request (that goes after them, in wtPrompt).
 function wtBackground(ctx, session) {
   const genre = genresvc.genreSteering(ctx.campaign && ctx.campaign.genres, 'prose');
   ctx.genreLine = genre || '';   // v3.2.33 -- Word reads only this, not the whole background
   const campPrompt = genresvc.campaignPrompt(ctx.campaign && ctx.campaign.campaign_prompt);
-  return 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n' +
-    'Session: ' + (session.name || '') + '\n\n' +
-    // v3.2.32 -- lore and the story so far, worded as Generate Narrative words them: background for
-    // continuity, never events of this passage. Capped so a very long lore costs a use the same as a
-    // short one (Generate Narrative sends it whole; a use is a quarter of a token).
-    (ctx.lore ? ('WORLD / LORE (background for consistency across sessions; NOT events of this passage):\n' + wtStr(ctx.lore, WT_LORE_MAX) + '\n\n') : '') +
-    (ctx.storySoFar ? ('THE STORY SO FAR (carried forward from the previous session' + (ctx.storySoFarFrom ? (', \u201c' + ctx.storySoFarFrom + '\u201d') : '') + '):\n' +
-      wtStr(ctx.storySoFar, WT_SOFAR_MAX) + '\n' +
-      'This has already happened in the story. Treat it as true and stay consistent with it, but it is NOT part of this passage: do not retell it or suggest retelling it.\n\n') : '') +
-    (ctx.charList ? ('Characters:\n' + ctx.charList + '\n\n') : '') +
-    (genre ? (genre + '\n\n') : '') +
-    'NARRATIVE VOICE chosen for this version:\n' + ctx.styleBundle.voice + '\n\n' +
-    (ctx.narrator ? narratorProseBlock(ctx.narrator) : (ctx.fpAnon ? narratorAnonBlock() : '')) +
-    (campPrompt ? ('GENERAL CAMPAIGN PROMPT from the author:\n' + campPrompt + '\n\n') : '') +
-    (ctx.directorNotes ? ('STORY INSTRUCTIONS from the author (they apply to the prose):\n' + ctx.directorNotes + '\n\n') : '');
+  return {
+    campaign: 'Campaign: ' + ((ctx.campaign && ctx.campaign.name) || '') + '\n\n' +
+      // v3.2.32 -- lore and the story so far, worded as Generate Narrative words them: background for
+      // continuity, never events of this passage. Capped so a very long lore costs a use the same as a
+      // short one (Generate Narrative sends it whole; a use is a quarter of a token).
+      (ctx.lore ? ('WORLD / LORE (background for consistency across sessions; NOT events of this passage):\n' + wtStr(ctx.lore, WT_LORE_MAX) + '\n\n') : '') +
+      (ctx.charList ? ('Characters:\n' + ctx.charList + '\n\n') : '') +
+      (genre ? (genre + '\n\n') : '') +
+      (campPrompt ? ('GENERAL CAMPAIGN PROMPT from the author:\n' + campPrompt + '\n\n') : '') +
+      'NARRATIVE VOICE chosen for this version:\n' + ctx.styleBundle.voice + '\n\n' +
+      (ctx.narrator ? narratorProseBlock(ctx.narrator) : (ctx.fpAnon ? narratorAnonBlock() : '')),
+    session: 'Session: ' + (session.name || '') + '\n\n' +
+      (ctx.storySoFar ? ('THE STORY SO FAR (carried forward from the previous session' + (ctx.storySoFarFrom ? (', \u201c' + ctx.storySoFarFrom + '\u201d') : '') + '):\n' +
+        wtStr(ctx.storySoFar, WT_SOFAR_MAX) + '\n' +
+        'This has already happened in the story. Treat it as true and stay consistent with it, but it is NOT part of this passage: do not retell it or suggest retelling it.\n\n') : '') +
+      (ctx.directorNotes ? ('STORY INSTRUCTIONS from the author (they apply to the prose):\n' + ctx.directorNotes + '\n\n') : '')
+  };
 }
 
 // v3.2.39 -- THE INTENT OF THIS PART (Ian, 2026-10-22: "so it knows what exactly was the intent of that narrative
@@ -1803,6 +1811,23 @@ const WT_RULES =
   'RULES: write no names, products, places or facts the writer did not give you. Use US spelling. ' +
   'Inside any JSON string, never use the straight ASCII double quote; use typographic quotes “ ” for speech.\n';
 
+// v3.2.55 -- PROMPT CACHING (TD-1010). The message goes in blocks: first the parts that stay the same from one call
+// to the next -- the campaign, the session, and the whole original story when it is short enough to be read whole --
+// each marked for Anthropic to keep; then everything about this box and this request (its pictures, the text either
+// side, its prompt and direction, the passage, and last of all the tool's role and instructions), which is never kept.
+// Feedback, Show me and Story Feedback share one system line (WT_SYSTEM) so they share what is kept; each tool's own
+// role sentence moved to the end of its message. Regen keeps its own system (the Generate Narrative rules), and the
+// polishing tools run on the fast model, which keeps its own copy (and only for long backgrounds: 4,096 tokens there,
+// 1,024 on the main model). Below those sizes nothing is kept and nothing goes wrong. Word is unchanged.
+const WT_SYSTEM = 'You are the Writing Coach in Campaignia, helping a writer with their own illustrated story. ' +
+  'The task for this request, and the exact form your answer must take, are given at the end of the message: follow them exactly.';
+function wtMessage(kept, rest) {
+  const out = [];
+  kept.forEach(function (t) { if (t && String(t).trim()) out.push({ type: 'text', text: String(t), cache_control: { type: 'ephemeral' } }); });
+  out.push({ type: 'text', text: String(rest || '') });
+  return out;
+}
+
 function wtPrompt(tool, ctx, session, box, text, body) {
   const bg = wtBackground(ctx, session);
   const name = wtBoxName(box, ctx.moments);
@@ -1814,9 +1839,10 @@ function wtPrompt(tool, ctx, session, box, text, body) {
   if (tool === 'feedback' && box === 'story') {
     return {
       max_tokens: 1600,
-      system: 'You are an experienced story editor reading the source material a writer will turn into an illustrated story. You look at the big picture, not the sentences, and you always return valid JSON.',
-      prompt: bg +
+      system: WT_SYSTEM,   // v3.2.55
+      prompt: wtMessage([bg.campaign, bg.session],
         'THE WRITER\'S STORY BOX -- the source text for this session (the whole of it):\n' + text + '\n\n' +
+        'YOUR ROLE: You are an experienced story editor reading the source material a writer will turn into an illustrated story. You look at the big picture, not the sentences, and you always return valid JSON.\n' +
         'First decide what this is: a game TRANSCRIPT (players and a game master at a table, with table talk), NOTES or an outline, a written STORY, or a MIX; ' +
         'and whether it reads as ONE CHAPTER of something longer or a WHOLE story. Say so plainly in "reads_as". If STORY INSTRUCTIONS are given above, they are the author\'s intent for this session: judge against them.\n' +
         'Then judge the COMPOSITION, not the sentences: the shape (a clear start, build, turning point and ending, or a chapter that does its job), pacing (where it drags or rushes, scenes to merge or split), ' +
@@ -1830,14 +1856,20 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         'Do not invent problems or praise to be kind; name what already works. Write in the same language as the story.\n' + WT_RULES +
         'Return ONLY valid JSON, no markdown:\n' +
         '{ "reads_as": "e.g. A game transcript \u00b7 one chapter of a longer story", "verdict": "great" or "close" or "work", "headline": "one short line", ' +
-        '"working": "one specific sentence on what already works", "points": [ { "issue": "the big-picture change, in one plain sentence", "why": "why it matters to the finished story, in one short sentence" } ] }'
+        '"working": "one specific sentence on what already works", "points": [ { "issue": "the big-picture change, in one plain sentence", "why": "why it matters to the finished story, in one short sentence" } ] }')
     };
   }
   if (tool === 'feedback') {
+    // v3.2.55 -- the original story is kept with the background when it is read whole (the same for every box);
+    // a longer one is a window around this box, so it goes after, with the box.
+    const story = wtTranscriptBlock(ctx, session, box);
+    const whole = String(session.transcript || '').length <= WRITING_FEEDBACK_WINDOW;
     return {
       max_tokens: 1200,
-      system: 'You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.',
-      prompt: bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
+      system: WT_SYSTEM,   // v3.2.55
+      prompt: wtMessage([bg.campaign, bg.session, whole ? story : ''],
+        wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
+        (whole ? '' : story) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
         // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
         // Feedback used to give 3 to 5 tips every time, so a writer who took every suggestion and asked again got three
@@ -1846,7 +1878,8 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         // v3.2.38 -- A BLIND TASTE TEST (Ian): the coach is never told who wrote the passage -- often it is prose Generate
         // Narrative wrote -- and judges only the text in front of it. It reads the ORIGINAL STORY around this part (as Regen
         // does), so a passage that reads beautifully but gets the session wrong cannot be "great".
-        (box !== 'story' ? wtTranscriptBlock(ctx, session, box) : '') +
+        // v3.2.55 -- the original story now comes before the passage (above), kept with the background when whole.
+        'YOUR ROLE: You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.\n' +
         'First judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
         'A great passage is TRUE to the original story (names, who did what, the order of events, nothing invented that contradicts it), SPECIFIC (concrete details from this session, not vague mood), ' +
         'IN VOICE (the chosen narrative voice and this campaign, not generic filler), and free of stock phrasing: clichés and stock phrases (“a testament to”, “the air hung heavy”, “little did they know”), ' +
@@ -1866,7 +1899,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         '"headline": "one short line for the writer, e.g. \u201cI wouldn\u2019t change a thing!\u201d, \u201cYou\u2019re close.\u201d or \u201cA good start, with a few things to fix.\u201d", ' +
         '"working": "one specific sentence on what already works, naming the words or choices", ' +
         '"points": [ { "quote": "the exact words from the passage this is about, copied character for character, at most 25 words, or an empty string if it is about the whole passage", ' +
-        '"issue": "what to change, in one plain sentence", "why": "why that makes it stronger, in one short sentence" } ] }'
+        '"issue": "what to change, in one plain sentence", "why": "why that makes it stronger, in one short sentence" } ] }')
     };
   }
   if (tool === 'showme') {
@@ -1874,14 +1907,15 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     const whole = !quote || text.indexOf(quote) < 0;
     return {
       max_tokens: 900,
-      system: 'You are a writing coach showing a new writer how one suggestion looks in practice. You return only the rewritten words, with no commentary.',
-      prompt: bg + wtIntentBlock(ctx, box) + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +   // v3.2.39
+      system: WT_SYSTEM,   // v3.2.55
+      prompt: wtMessage([bg.campaign, bg.session], wtIntentBlock(ctx, box) + 'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +   // v3.2.39
         'THE SUGGESTION: ' + issue + '\n\n' +
+        'YOUR ROLE: You are a writing coach showing a new writer how one suggestion looks in practice. You return only the rewritten words, with no commentary.\n' +
         (whole
           ? 'Rewrite the whole passage applying ONLY this suggestion. Keep everything else -- facts, names, voice, point of view, length -- as it is.\n'
           : 'Rewrite ONLY this part of it, applying ONLY this suggestion:\n' + quote + '\n' +
             'Your rewrite will replace exactly those words inside the passage, so it must read naturally in their place. Keep the facts, names, voice and point of view.\n') +
-        'Use US spelling, and typographic quotes “ ” for speech. Return ONLY the rewritten words: no quotation marks around them, no label, no explanation.',
+        'Use US spelling, and typographic quotes “ ” for speech. Return ONLY the rewritten words: no quotation marks around them, no label, no explanation.'),
       before: whole ? text : quote
     };
   }
@@ -1919,13 +1953,14 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     }
     return {
       max_tokens: 1600,
-      system: 'You are a skilled editor helping a new writer improve their own illustrated story. You keep their story and their voice, and you return only valid JSON.',
-      prompt: bg + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- stay within its prompt and direction
+      system: WT_SYSTEM,   // v3.2.55
+      prompt: wtMessage([bg.campaign, bg.session], wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- stay within its prompt and direction
         'THE PASSAGE -- ' + name + ':\n' + text + '\n\n' +
         (part ? ('WORK ON ONLY THIS PART of the passage. Your text will replace exactly these words inside it, so it must read naturally in their place:\n' + part + '\n\n')
               : 'WORK ON the whole passage.\n\n') +
+        'YOUR ROLE: You are a skilled editor helping a new writer improve their own illustrated story. You keep their story and their voice, and you return only valid JSON.\n' +
         job + ' Keep the names, facts, voice, tense and point of view as they are, and stay within this part\'s prompt and direction if they are given above. Write in the same language as the passage.\n' + WT_RULES +
-        'Give 3 different versions. Return ONLY valid JSON, no markdown: { "options": [ "first version", "second version", "third version" ] }',
+        'Give 3 different versions. Return ONLY valid JSON, no markdown: { "options": [ "first version", "second version", "third version" ] }'),
       before: part || text
     };
   }
@@ -1942,17 +1977,22 @@ function wtPrompt(tool, ctx, session, box, text, body) {
   // Regen reads the transcript around ITS panel, so a long session costs the same as a short one.
   // v3.2.38 -- the window is cut by wtTranscriptWindow, which Feedback now uses too (one copy, same rule).
   const window = wtTranscriptWindow(ctx, session, box, WRITING_TRANSCRIPT_WINDOW);
+  // v3.2.55 -- kept with the background when the whole transcript is read (the same for every box); a window otherwise.
+  const rgWhole = String(session.transcript || '').length <= WRITING_TRANSCRIPT_WINDOW;
+  const rgStory = 'The session transcript (what actually happened):\n' + window + '\n\n';
   return {
     max_tokens: isDialogue ? 1600 : 1100,
     system: (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
       buildNarrativeSystem(ctx.styleBundle.system, ctx.campaign, ctx.directorNotes) +
       '\n\nFor THIS request you return plain text, not JSON: only the new text for one block of the story.',
-    prompt: 'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n\n' +
-      bg + wtPanels(ctx, box) + wtNeighbours(ctx, box) +
-      'The session transcript (what actually happened):\n' + window + '\n\n' +
+    // v3.2.55 -- the persona line moved from the top to just before the instructions, after the parts that are kept.
+    prompt: wtMessage([bg.campaign, bg.session, rgWhole ? rgStory : ''],
+      wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      (rgWhole ? '' : rgStory) +
       'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
       (outlineEdited(outl) ? ('REQUIRED CONTENT for this block (you MUST cover these facts, in your own prose): ' + outlineText(outl) + '\n') : '') +
       (dir ? ('DIRECTOR STEERING for this block (you MUST follow this): ' + dir + '\n') : '') +
+      'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n' +
       'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
       (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
       (box.indexOf('between:') === 0 ? 'Cover only what happens between the picture before and the picture after. ' : '') +
@@ -1960,10 +2000,11 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       (isDialogue ? 'Put each spoken line on its own line, led by the speaker\'s name and a colon. ' : '') +
       'Use typographic quotes “ ” for speech.\n' +
       'COPYRIGHT — keep the names from the transcript exactly as written, write entirely original prose, and never reproduce text from any published source.\n' +
-      'Return ONLY the new text for this block: no label, no quotation marks around it, no explanation.'
+      'Return ONLY the new text for this block: no label, no quotation marks around it, no explanation.')
   };
 }
 
+// v3.2.55 -- prompt is a string (Word) or the blocks wtMessage builds; the API takes either as the message content.
 async function wtCallModel(key, model, system, prompt, maxTokens) {
   const ac = new AbortController();
   const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, WRITING_TIMEOUT_MS);
@@ -2204,8 +2245,11 @@ async function writingToolHandler(req, res) {
   for (let _k = 1; _k < needUses; _k++) { const _u = await wtTakeUse(db, req.session.userId, req.params.campaignId); if (_u.refilled) _refills++; if (!_u.ok) break; }
   const u = out.usage || {};
   try {
-    await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, _refills);
+    // v3.2.55 -- with caching, input_tokens counts only what was read afresh: the kept part written this call
+    // (cache_write_tokens, billed at 1.25x) and the kept part reused (cache_read_tokens, billed at 0.1x) are logged beside it.
+    await db.prepare('INSERT INTO writing_uses (user_id, campaign_id, session_id, tool, model, input_tokens, output_tokens, token_spent, cache_write_tokens, cache_read_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, req.params.campaignId, session.id, tool, model, parseInt(u.input_tokens, 10) || 0, parseInt(u.output_tokens, 10) || 0, _refills,
+        parseInt(u.cache_creation_input_tokens, 10) || 0, parseInt(u.cache_read_input_tokens, 10) || 0);
   } catch (e) { try { console.warn('[writing] use log failed (non-fatal):', e && e.message); } catch (_e) {} }
   try { await recordGeneration(req.session.userId, { event_type: 'writing_tool', tokens_redeemed: _refills, quantity: Math.max(1, needUses), unit: tool, model: model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
 

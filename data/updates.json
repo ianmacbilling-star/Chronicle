@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.55",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3255-coach-caching",
+        "kind": "improvement",
+        "public": false,
+        "summary": "The Writing Coach reuses what it has already read, so a run of coach calls costs less.",
+        "detail": "Each coach call sends the campaign, the session and (when short enough) the whole original story first, marked for Anthropic to keep for five minutes; the box, the passage and the instructions follow. A second call within five minutes reads the kept part at a tenth of the price. Feedback, Show me and Story Feedback share one system line; Regen keeps its own. Prompts are the same words, reordered. writing_uses now logs cache_write_tokens and cache_read_tokens. Test on staging: Feedback on one box, then on the next box within five minutes; the second row in writing_uses should show cache_read_tokens above zero (if the background and story are over about 1,000 tokens).",
+        "td": [
+          "TD-1010"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.54",
     "staged_on": "2026-10-24",
     "entries": [

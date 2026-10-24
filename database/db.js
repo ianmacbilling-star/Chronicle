@@ -2247,6 +2247,9 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS writing_uses_left INTEGER NOT NULL DEFAULT 0');
     await pool.query('CREATE TABLE IF NOT EXISTS writing_uses (id SERIAL PRIMARY KEY, user_id INTEGER, campaign_id INTEGER, session_id INTEGER, tool TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, token_spent INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_writing_uses_user ON writing_uses(user_id, created_at)');
+    // v3.2.55 -- TD-1010 prompt caching: the kept part of a coach call, written and reused, beside input_tokens.
+    await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER NOT NULL DEFAULT 0');
+    await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0');
   } catch (e) { console.error('[writing] migration skipped this boot:', e && e.message); }
 }
 
