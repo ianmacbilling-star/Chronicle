@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.54",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3254-game-masters-page",
+        "kind": "feature",
+        "public": false,
+        "summary": "New landing page for Game Masters at campaignia.com/game-masters.",
+        "detail": "A copy of the home page with its own address, so it can be linked and advertised to Game Masters and later get its own wording. Search engines are told it is the Game Masters page, and it is in the site map. The home page is unchanged. Test: open /game-masters (same page as the home page, tab title starts \"Campaignia for Game Masters\"); Compare the Tiers and the sign-up buttons work from it; /sitemap-pages.xml lists it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.53",
     "staged_on": "2026-10-23",
     "entries": [
