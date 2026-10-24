@@ -1757,6 +1757,27 @@ function impersonateSyncAdminPanel() {
   var inSession = !!(_impState && _impState.active);
   sec.style.display = (isAdmin && !inSession) ? '' : 'none';
   if (isAdmin && !inSession) { try { _impRecentLoad(); } catch (e) {} }   // v3.1.22 -- TD-914
+  var dsec = document.getElementById('dbg-user-section');   // v3.2.63 -- same rule for Debug Mode for a user
+  if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
+}
+
+// v3.2.63 -- Dashboard > Support: Debug Mode on (true), off (false) or just checked (null) for one email; withLog
+// also shows their recorded entries, in the same words as their own Debug panel.
+function dbgUserSet(on, withLog) {
+  var em = document.getElementById('dbg-user-email');
+  var email = em ? em.value.trim() : '';
+  if (!email) { _impMsg('dbg-user-msg', 'Enter the customer email address.', false); return; }
+  _impMsg('dbg-user-msg', on === null ? 'Checking...' : 'Saving...', true);
+  var body = { email: email }; if (on !== null) body.on = !!on; if (withLog) body.log = true;
+  var logEl = document.getElementById('dbg-user-log'); if (logEl) { logEl.style.display = 'none'; logEl.textContent = ''; }
+  fetch('/api/admin/debug-mode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || res.j.error) { _impMsg('dbg-user-msg', (res.j && res.j.error) || 'Could not change Debug Mode.', false); return; }
+      _impMsg('dbg-user-msg', 'Debug Mode is ' + (res.j.debug_mode ? 'ON' : 'OFF') + ' for ' + res.j.email + ' (user ' + res.j.user_id + ')' + (res.j.changed ? '.' : ', unchanged.'), true);
+      if (withLog && logEl) { logEl.textContent = cmpFormatDebugLog(res.j.entries || []); logEl.style.display = 'block'; }
+    })
+    .catch(function (e) { _impMsg('dbg-user-msg', 'Could not change Debug Mode: ' + e.message, false); });
 }
 
 function devAddTokens() {

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.63",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3263-debug-for-user",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard > Support: turn Debug Mode on or off for a user by email.",
+        "detail": "An email field with Turn on, Turn off and Check. Their actions are recorded from their next one (the request recorder now also reads the setting from the database, at most once a minute per user); signing out still turns it off. Test: turn it on for a tester, have them do something, sign in as them and open the Debug panel on their Account page; the entries are there.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.62",
     "staged_on": "2026-10-24",
     "entries": [
