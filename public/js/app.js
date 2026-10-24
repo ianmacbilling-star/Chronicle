@@ -23198,7 +23198,48 @@ function renderStats(d) {
     html += row(t[1], (tiers[t[0]] === null || tiers[t[0]] === undefined) ? 0 : tiers[t[0]]);
   });
   html += '</div>';
-  box.innerHTML = html;
+  // v3.2.60 -- Ian: the view vuuserlastactive beside the stats. Stats on the left, the user list on the right (below
+  // on a narrow screen); the list scrolls inside its own box.
+  box.innerHTML = '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">' +
+    '<div style="flex:0 1 520px;min-width:280px;">' + html + '</div>' +
+    '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span></div>' +
+    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;">Loading\u2026</div></div>' +
+    '</div>';
+  loadUserLastActive();
+}
+
+// v3.2.60 -- the rows of vuuserlastactive, every column the view has, in its order.
+function _ulaCell(v) {
+  if (v === null || v === undefined || v === '') return '\u2014';
+  var s = String(v);
+  // timestamps come back as ISO strings: show them as local date and time
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  }
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function renderUserLastActive(d) {
+  var out = document.getElementById('stats-lastactive');
+  var cnt = document.getElementById('stats-lastactive-count');
+  if (!out) return;
+  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not load the user list.'; return; }
+  if (d.missing) { out.textContent = 'The view vuuserlastactive is not in this database yet.'; return; }
+  var rows = d.rows || [], cols = d.columns || [];
+  if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
+  if (!rows.length) { out.textContent = 'No rows.'; return; }
+  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(201,168,76,0.85);white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.25);';
+  var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.08);';
+  var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
+    cols.map(function (c) { return '<th style="' + th + '">' + _ulaCell(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.forEach(function (r) { h += '<tr>' + cols.map(function (c) { return '<td style="' + td + '">' + _ulaCell(r[c]) + '</td>'; }).join('') + '</tr>'; });
+  out.innerHTML = h + '</tbody></table>';
+}
+function loadUserLastActive() {
+  fetch('/api/admin/user-last-active')
+    .then(function (r) { return r.json(); })
+    .then(renderUserLastActive)
+    .catch(function (e) { renderUserLastActive({ error: 'Could not load the user list: ' + e.message }); });
 }
 
 // ----- Layout styles (shared style-picker; mirrors art/narrative) -----

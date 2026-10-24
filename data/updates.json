@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.60",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3260-stats-user-list",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard Stats shows the vuuserlastactive view beside the stats.",
+        "detail": "Every column of the view, in its order, up to 500 rows, in a scrolling box to the right of the stats (below them on a narrow screen). Dates show as local date and time. If the view does not exist in that database, the box says so. Test: open Dashboard > Stats on staging; the list shows; on a database without the view, it says the view is not there.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.59",
     "staged_on": "2026-10-24",
     "entries": [
