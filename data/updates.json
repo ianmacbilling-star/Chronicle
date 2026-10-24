@@ -1,5 +1,29 @@
 [
   {
+    "version": "3.2.57",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3257-coach-shares-transcript",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Regen and Feedback share the transcript cache with Generate Story and Generate Narrative.",
+        "detail": "When they read the whole story (up to 40,000 characters for Regen, 24,000 for Feedback), Regen and Feedback now send the same kept transcript block at the front of their instructions, so the first one after Generate Narrative reads it from the cache. Never dearer than before. Test: Generate Narrative, then Regen a box within five minutes; that writing_uses row shows cache_read_tokens about the size of the transcript.",
+        "td": [
+          "TD-1010"
+        ]
+      },
+      {
+        "id": "3257-story-count",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The story box shows its word and character count on the Writing Coach line.",
+        "detail": "Under the Story / Session Transcript box, the count now sits on the same line as the Writing Coach button and shows characters as well as words.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.56",
     "staged_on": "2026-10-24",
     "entries": [

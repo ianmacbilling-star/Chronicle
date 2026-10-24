@@ -1144,8 +1144,11 @@
             <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Type or paste your story here &mdash; a transcript, a written story, notes or an outline..."></textarea>
             </div>
             <!-- v3.2.36 -- TD-999 stage 3: the Writing Coach for the story box (filled in for the Story Master). -->
-            <div id="story-coach-row" class="narr-tools-row" style="margin-top:4px;"></div>
-            <div id="transcript-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
+            <!-- v3.2.57 -- the count on the same line as Writing Coach, with a character count (Ian). -->
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <div id="story-coach-row" class="narr-tools-row" style="flex:1 1 auto;min-width:0;"></div>
+              <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
+            </div>
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
           <div class="form-group">

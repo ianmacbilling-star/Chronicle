@@ -7,6 +7,8 @@
 // price, 1.25x). Anthropic matches from the very start of a request, which is why the block goes before the system
 // instructions and not in the message: the three calls' instructions differ. Change this text and all three change.
 // Already Written does not use it (it sends the text as numbered sentences instead).
+// v3.2.57 -- the Writing Coach's Regen and Feedback use it too, when they read the whole story, so their first call
+// after Generate Narrative reads it from the cache.
 'use strict';
 function transcriptBlock(transcript) {
   return { type: 'text', text: '## SESSION TRANSCRIPT (what actually happened in this session)\n' + String(transcript == null ? '' : transcript) + '\n', cache_control: { type: 'ephemeral' } };

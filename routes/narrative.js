@@ -1865,14 +1865,20 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     };
   }
   if (tool === 'feedback') {
-    // v3.2.55 -- the original story is kept with the background when it is read whole (the same for every box);
-    // a longer one is a window around this box, so it goes after, with the box.
+    // v3.2.55 -- the original story is kept when it is read whole (the same for every box); a longer one is a window
+    // around this box, so it goes after, with the box.
+    // v3.2.57 -- TD-1010. When whole, it is now the SAME kept block Generate Story and Generate Narrative send
+    // (transcriptCache), at the front of the system instructions, so the first Feedback after Generate Narrative reads
+    // it from their cache. A pointer stands where it used to be. Never dearer than before: a miss writes it at 1.25x,
+    // as it always did.
     const story = wtTranscriptBlock(ctx, session, box);
     const whole = String(session.transcript || '').length <= WRITING_FEEDBACK_WINDOW;
+    const shareTr = whole && !!String(session.transcript || '').trim();
     return {
       max_tokens: 1200,
-      system: WT_SYSTEM,   // v3.2.55
-      prompt: wtMessage([bg.campaign, bg.session, whole ? story : ''],
+      system: shareTr ? [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: WT_SYSTEM }] : WT_SYSTEM,   // v3.2.57
+      prompt: wtMessage([bg.campaign, bg.session],
+        (shareTr ? 'THE ORIGINAL STORY / SESSION TRANSCRIPT: at the start of this request, above (what actually happened; the passage must be true to it).\n\n' : '') +   // v3.2.57
         wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
         (whole ? '' : story) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
@@ -1985,13 +1991,18 @@ function wtPrompt(tool, ctx, session, box, text, body) {
   // v3.2.55 -- kept with the background when the whole transcript is read (the same for every box); a window otherwise.
   const rgWhole = String(session.transcript || '').length <= WRITING_TRANSCRIPT_WINDOW;
   const rgStory = 'The session transcript (what actually happened):\n' + window + '\n\n';
+  // v3.2.57 -- TD-1010. Read whole, the transcript is the SAME kept block Generate Story and Generate Narrative send,
+  // at the front of the system instructions: the first Regen after Generate Narrative reads it from their cache.
+  const rgShare = rgWhole && !!String(session.transcript || '').trim();
+  const rgSystem = (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
+      buildNarrativeSystem(ctx.styleBundle.system, ctx.campaign, ctx.directorNotes) +
+      '\n\nFor THIS request you return plain text, not JSON: only the new text for one block of the story.';
   return {
     max_tokens: isDialogue ? 1600 : 1100,
-    system: (ctx.narrator ? narratorSystemLine(ctx.narrator) : (ctx.fpAnon ? narratorAnonSystemLine() : '')) +
-      buildNarrativeSystem(ctx.styleBundle.system, ctx.campaign, ctx.directorNotes) +
-      '\n\nFor THIS request you return plain text, not JSON: only the new text for one block of the story.',
+    system: rgShare ? [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: rgSystem }] : rgSystem,   // v3.2.57
     // v3.2.55 -- the persona line moved from the top to just before the instructions, after the parts that are kept.
-    prompt: wtMessage([bg.campaign, bg.session, rgWhole ? rgStory : ''],
+    prompt: wtMessage([bg.campaign, bg.session],
+      (rgShare ? 'The session transcript (what actually happened): at the start of this request, above.\n\n' : '') +   // v3.2.57
       wtPanels(ctx, box) + wtNeighbours(ctx, box) +
       (rgWhole ? '' : rgStory) +
       'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
