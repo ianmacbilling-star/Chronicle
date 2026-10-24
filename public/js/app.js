@@ -25127,6 +25127,8 @@ function updateWordCounts() {
     var v = (el.value || '').trim();
     var n = v ? v.split(/\s+/).length : 0;
     out.textContent = n + (n === 1 ? ' word' : ' words');
+    // v3.2.57 -- the story box also counts characters (Ian), on the Writing Coach line.
+    if (pr[0] === 'transcript-input') out.textContent = n.toLocaleString() + (n === 1 ? ' word' : ' words') + ' \u00b7 ' + v.length.toLocaleString() + (v.length === 1 ? ' character' : ' characters');
     // v3.1.51 -- TD-941. On the story box, while Already Written is chosen: the recommended limit on the
     // same line, amber once over it. A recommendation, not a rule (Ian).
     if (pr[0] === 'transcript-input') {

@@ -1144,19 +1144,25 @@
             <textarea class="transcript-box" id="transcript-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Type or paste your story here &mdash; a transcript, a written story, notes or an outline..."></textarea>
             </div>
             <!-- v3.2.36 -- TD-999 stage 3: the Writing Coach for the story box (filled in for the Story Master). -->
-            <div id="story-coach-row" class="narr-tools-row" style="margin-top:4px;"></div>
-            <div id="transcript-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
-            <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
+            <!-- v3.2.57 -- the count on the same line as Writing Coach, with a character count (Ian). -->
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <div id="story-coach-row" class="narr-tools-row" style="flex:1 1 auto;min-width:0;"></div>
+              <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
+            </div>
+            <!-- v3.2.59 -- the rights line moved below both boxes, full width (Ian). -->
           </div>
           <div class="form-group">
             <label class="form-label">Story Notes and Instructions <span class="story-sub" style="font-weight:400;text-transform:none;letter-spacing:0;">— director's instructions for the AI</span></label>
             <textarea class="transcript-box" id="session-notes-input" oninput="updateWordCounts()" style="min-height:340px;" placeholder="Tell Campaignia what to do. Write instructions, not notes...&#10;&#10;MANDATORY SCENES:&#10;- Make sure you have a moment showing Zara betraying the party at the bridge&#10;&#10;EVERY MOMENT:&#10;- Make sure each moment has Theron&#8217;s wolf Shadow somewhere in it&#10;&#10;VISUAL STYLE:&#10;- Keep it dark gothic throughout, candlelit crypts"></textarea>
             <div id="session-notes-wordcount" class="story-count" style="text-align:right;margin-top:2px;">0 words</div>
-            <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
+            <!-- v3.2.58 -- the hint line under this box is gone (Ian: the grey example text in the box says the same). -->
           </div>
         </div>
 
-        <div class="story-savenote" style="margin-top:6px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
+        <!-- v3.2.59 -- Ian: the two lines under the boxes run the full width of the page, the save line tight under the
+             rights line. -->
+        <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
+        <div class="story-savenote" style="margin-top:1px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>

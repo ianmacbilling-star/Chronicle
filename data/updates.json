@@ -1,5 +1,89 @@
 [
   {
+    "version": "3.2.59",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3259-story-lines",
+        "kind": "improvement",
+        "public": false,
+        "summary": "The rights line and the save line on the Story tab run the full width, one under the other.",
+        "detail": "The \"Only paste content you own...\" line moved out of the story column to below both boxes, with \"Your story and notes save automatically...\" tight under it. Test: on the Story tab, both lines span the page under the two boxes.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.58",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3258-notes-hint",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Removed the hint line under Story Notes and Instructions.",
+        "detail": "The grey example text inside the box already says it. Test: the Story tab shows no line under the notes box's word count.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.57",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3257-coach-shares-transcript",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Regen and Feedback share the transcript cache with Generate Story and Generate Narrative.",
+        "detail": "When they read the whole story (up to 40,000 characters for Regen, 24,000 for Feedback), Regen and Feedback now send the same kept transcript block at the front of their instructions, so the first one after Generate Narrative reads it from the cache. Never dearer than before. Test: Generate Narrative, then Regen a box within five minutes; that writing_uses row shows cache_read_tokens about the size of the transcript.",
+        "td": [
+          "TD-1010"
+        ]
+      },
+      {
+        "id": "3257-story-count",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The story box shows its word and character count on the Writing Coach line.",
+        "detail": "Under the Story / Session Transcript box, the count now sits on the same line as the Writing Coach button and shows characters as well as words.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.2.56",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3256-transcript-cache",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Generate Story, the character-change check and Generate Narrative share the transcript through Anthropic's cache.",
+        "detail": "The session transcript now goes first in all three requests, word for word the same, marked to be kept five minutes; each call's own instructions follow unchanged. The change check (seconds after Generate Story) reads it at a tenth of the price, and so does Generate Narrative within five minutes of Generate Story. Already Written unchanged. Railway logs a [story cache] line per call. Test: on a test campaign, Generate Story then Generate Narrative within five minutes; logs show write on generate-story and read on change-check and generate-narrative; compare panels and prose with a run from before.",
+        "td": [
+          "TD-1010"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.55",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3255-coach-caching",
+        "kind": "improvement",
+        "public": false,
+        "summary": "The Writing Coach reuses what it has already read, so a run of coach calls costs less.",
+        "detail": "Each coach call sends the campaign, the session and (when short enough) the whole original story first, marked for Anthropic to keep for five minutes; the box, the passage and the instructions follow. A second call within five minutes reads the kept part at a tenth of the price. Feedback, Show me and Story Feedback share one system line; Regen keeps its own. Prompts are the same words, reordered. writing_uses now logs cache_write_tokens and cache_read_tokens. Test on staging: Feedback on one box, then on the next box within five minutes; the second row in writing_uses should show cache_read_tokens above zero (if the background and story are over about 1,000 tokens).",
+        "td": [
+          "TD-1010"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.54",
     "staged_on": "2026-10-24",
     "entries": [
