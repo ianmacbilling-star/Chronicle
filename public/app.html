@@ -1149,7 +1149,7 @@
               <div id="story-coach-row" class="narr-tools-row" style="flex:1 1 auto;min-width:0;"></div>
               <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
             </div>
-            <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
+            <!-- v3.2.59 -- the rights line moved below both boxes, full width (Ian). -->
           </div>
           <div class="form-group">
             <label class="form-label">Story Notes and Instructions <span class="story-sub" style="font-weight:400;text-transform:none;letter-spacing:0;">— director's instructions for the AI</span></label>
@@ -1159,7 +1159,10 @@
           </div>
         </div>
 
-        <div class="story-savenote" style="margin-top:6px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
+        <!-- v3.2.59 -- Ian: the two lines under the boxes run the full width of the page, the save line tight under the
+             rights line. -->
+        <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
+        <div class="story-savenote" style="margin-top:1px;">Your story and notes save automatically when you click away from the box, and again when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>

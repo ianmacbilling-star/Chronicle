@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.59",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3259-story-lines",
+        "kind": "improvement",
+        "public": false,
+        "summary": "The rights line and the save line on the Story tab run the full width, one under the other.",
+        "detail": "The \"Only paste content you own...\" line moved out of the story column to below both boxes, with \"Your story and notes save automatically...\" tight under it. Test: on the Story tab, both lines span the page under the two boxes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.58",
     "staged_on": "2026-10-24",
     "entries": [
