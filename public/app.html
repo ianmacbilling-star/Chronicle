@@ -122,6 +122,10 @@
         <style>@media (max-width: 640px) { #menu-build-stamp.has-v { display: block !important; } }</style>
       </div>
     </div>
+    <!-- v3.2.62 -- TD-996. An invisible spot to the right of the account button: seven clicks turn Debug Mode on or off
+         for an admin (Ian, 2026-10-24), without going to the Account page. Nothing shows and nothing happens for
+         anyone else. No cursor change, no title, hidden from screen readers. -->
+    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:24px;height:30px;margin-left:-6px;margin-right:-12px;flex:0 0 auto;"></span>
   </div>
 </div>
 

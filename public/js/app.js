@@ -29781,6 +29781,33 @@ function cmpVersionTap() {
   }
 }
 
+// v3.2.62 -- TD-996. Seven clicks on the invisible spot right of the account button (#dbg-egg) flip Debug Mode, for an
+// admin only (Ian: "NOBODY would know to do this"; admin-only so even a stray find does nothing). Same server
+// switch as the Account page box; a toast says which way it went, and the box and the red dot follow.
+var _cmpEggTaps = 0, _cmpEggTimer = null;
+function cmpEggTap() {
+  if (!(typeof state !== 'undefined' && state.user && state.user.is_admin)) return;
+  _cmpEggTaps++;
+  if (_cmpEggTimer) clearTimeout(_cmpEggTimer);
+  _cmpEggTimer = setTimeout(function () { _cmpEggTaps = 0; }, 2000);
+  if (_cmpEggTaps < 7) return;
+  _cmpEggTaps = 0;
+  fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var on = !(d && d.debug_mode);
+      return fetch('/api/debug/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on }) })
+        .then(function (r) { return r.json(); });
+    })
+    .then(function (d) {
+      var now = !!(d && d.debug_mode);
+      var t = document.getElementById('debug-mode-toggle'); if (t) t.checked = now;
+      cmpSetRecDot(now);
+      billingToast(now ? 'Debug Mode is ON.' : 'Debug Mode is OFF.', 'info');
+    })
+    .catch(function () { billingToast('Could not change Debug Mode.', 'error'); });
+}
+
 function cmpInitDebugPanel() {
   var isAdmin = !!(typeof state !== "undefined" && state.user && state.user.is_admin);
   cmpShowLogSection(isAdmin || _cmpLogUnlocked);
