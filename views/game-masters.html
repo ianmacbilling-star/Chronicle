@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="/css/fonts.css">
+  <meta charset="UTF-8">
+  <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaignia for Game Masters — You make it legendary. We make it forever.</title>
+  <meta name="description" content="Turn your TTRPG sessions into stunning graphic novels. AI-powered storyboards, image generation, and PDF export for Dungeon Masters." />
+  <!-- v3.2.54 -- THE GAME MASTERS LANDING PAGE (Ian, 2026-10-24: "I think I need to start having specific landing pages
+       for different groups"). A copy of the home page as it stood at v3.2.53, so it can grow its own wording; served only
+       by the /game-masters route in server.js, like /story. Search engines are told THIS is the Game Masters page. -->
+  <link rel="canonical" href="https://campaignia.com/game-masters" />
+  <meta property="og:site_name" content="Campaignia" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://campaignia.com/game-masters" />
+  <meta property="og:title" content="Campaignia for Game Masters — You make it legendary. We make it forever." />
+  <meta property="og:description" content="Turn your TTRPG sessions into stunning graphic novels. Paste your transcript, AI generates your storyboard and images, export a print-ready PDF." />
+  <meta property="og:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Campaignia for Game Masters — You make it legendary. We make it forever." />
+  <meta name="twitter:description" content="Turn your TTRPG sessions into stunning graphic novels with AI." />
+  <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
+  <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
+       second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
+       extension and index.html cannot stamp itself the way app.html does. -->
+  <link rel="stylesheet" href="/css/tier-grid.css?v=3.0.896">
+  <script src="/js/tier-grid.js?v=3.2.47" defer></script>
+  <!-- v3.0.897 -- TD-770. THE LANDING PAGE STYLESHEET MOVED OUT, UNCHANGED.
+       900 lines lived here. A second landing page needs the same rules, and two copies of one
+       stylesheet is the fault this project keeps paying for -- so they are in one file that every
+       landing page links, and a page that should look different is handed a different file.
+
+       POSITION MATTERS AND IS PRESERVED: this loads exactly where the inline block sat, AFTER
+       tier-grid.css, so the cascade is byte-for-byte the cascade it was. And it is a stylesheet in
+       the head, which blocks painting until it arrives -- so there is no flash of unstyled page,
+       only one extra request on a first visit that the edge then caches. -->
+  <link rel="stylesheet" href="/css/landing.css?v=3.0.928">
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0806" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Campaignia" />
+  <script src="/js/pwa.js" defer></script>
+    <script src="/analytics.js"></script>
+    <script src="/promo.js"></script>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <img src="/images/Campaignia_Logo.png" alt="Campaignia" />
+    <span class="nav-logo-text">Campaignia</span>
+  </a>
+  <div class="nav-actions">
+    <a href="/our-story" class="nav-link">OUR STORY</a>
+    <a href="/library?genre=fantasy,thriller,scifi,horror" class="nav-link">LIBRARY</a>
+    <a href="#pricing" class="nav-link">PRICING</a>
+    <a href="#faq" class="nav-link">FAQ</a>
+    <!-- v3.1.82 -- TD-955. The admin-only DRAFT link (TD-770) is no longer in this markup at all;
+         the script at the foot of the page adds it, for an admin only. -->
+    <a href="/login" class="btn-nav">SIGN IN</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="cmpToggleNav()">&#9776;</button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/our-story" onclick="cmpCloseNav()">OUR STORY</a>
+  <a href="/library?genre=fantasy,thriller,scifi,horror" onclick="cmpCloseNav()">LIBRARY</a>
+  <a href="#pricing" onclick="cmpCloseNav()">PRICING</a>
+  <a href="#faq" onclick="cmpCloseNav()">FAQ</a>
+</div>
+
+<div class="comic-book">
+<div class="comic-page">
+
+  <!-- ============================================================
+       PANEL 1 — HERO SPLIT (text left, image right)
+       ============================================================ -->
+  <div class="hero-split" style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:calc(100vh - 84px);">
+
+    <!-- LEFT: Text panel -->
+    <div class="panel hero-text-panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
+      <!-- subtle background texture -->
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
+      <div class="hero-content" style="position:relative;z-index:1;">
+        <div class="hero-eyebrow">⚔ FOR GAME MASTERS AND STORYTELLERS ⚔</div>
+        <h1 class="hero-title">
+          You make it<br>
+          <span class="white">legendary.</span><br>
+          Campaignia makes it<br>
+          <span class="red">forever.</span>
+        </h1>
+        <p class="hero-sub">
+          Your players still talk about that session. The betrayal. The sacrifice.
+          The moment everything changed at the table.<br>
+          Now imagine handing them a graphic novel of exactly that night.
+        </p>
+        <div class="hero-cta-wrap">
+          <a href="/login?signup" class="btn-hero">START FREE TRIAL</a>
+          <a href="#pricing" class="btn-ghost">See Plans</a>
+        </div>
+        <div class="hero-trial">⚔ 30-day free trial · No credit card required to explore<br>
+        AI storyboards · Your own art or words, if you like · Print-ready PDF export · Cancel anytime</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: DM image panel -->
+    <div class="panel hero-img-panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
+      <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,8,6,0.3) 0%,transparent 40%);"></div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       ROW 2 — Players celebrating + How It Works
+       ============================================================ -->
+  <div class="comic-row">
+
+    <!-- LEFT: Players image panel -->
+    <div class="panel panel-players">
+      <div class="players-caption">
+        <div class="caption-box gold-cap" data-label="NARRATOR">
+          These are the moments your players talked about. Campaignia makes sure they never forget.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: How It Works -->
+    <div class="panel-how">
+      <div class="how-title-panel">
+        <span class="section-tag">⚡ THE QUEST</span>
+        <div class="section-title">THREE STEPS TO IMMORTALITY</div>
+      </div>
+
+      <div class="how-steps">
+        <div class="how-step-panel panel">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-label">STEP ONE</div>
+            <div class="step-title">CREATE YOUR CHARACTERS</div>
+            <div class="step-desc">Add reference pictures of your party and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every session.</div>
+          </div>
+        </div>
+
+        <div class="how-step-panel panel">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-label">STEP TWO</div>
+            <div class="step-title">PASTE IN YOUR STORY</div>
+            <div class="step-desc">Drop in your session — notes, chat logs, whatever you've got. Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</div>
+          </div>
+        </div>
+
+        <div class="how-step-panel panel">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-label">STEP THREE</div>
+            <div class="step-title">ORDER YOUR GRAPHIC NOVEL</div>
+            <div class="step-desc">Choose your layout, preview it in the app, and order your story as a bound book — comic, hardback, or softback, your call. Hand it to your players. Frame it. It's a real record of your campaign.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       FEATURES STRIP
+       ============================================================ -->
+  <div class="features-strip">
+    <div class="features-strip-header">
+      <div class="features-strip-title">YOUR ARSENAL — CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
+    </div>
+  <!-- v3.2.43 -- TD-999. A fifth Arsenal card, the Writing Coach (Ian, 2026-10-22). landing.css lays the strip out in
+       four columns; this block makes it five on a wide screen, two with the coach across the bottom at 900px, and one
+       at 600px (the media rules are repeated here because this class outranks landing.css's own). -->
+  <style>
+    .features-strip-body.arsenal-5 { grid-template-columns: repeat(5, 1fr); }
+    @media (max-width: 900px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr 1fr; } .features-strip-body.arsenal-5 .feature-cell.arsenal-wide { grid-column: 1 / -1; } }
+    @media (max-width: 600px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr; } .features-strip-body.arsenal-5 .feature-cell { border-right: none; } }
+  </style>
+    <div class="features-strip-body arsenal-5">
+      <div class="feature-cell">
+        <div class="feature-title">IMAGE GENERATION</div>
+        <div class="feature-desc">Every panel gets a unique AI illustration. High fantasy, dark and gritty, watercolor, anime — choose the style that matches your campaign. You control the prompts, you control the scenes.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">NARRATIVE PROSE</div>
+        <div class="feature-desc">Campaignia turns your session into a graphic novel, told in prose that reads like a real novel — from the opening scene, through every twist, to the closing chapter. Choose from multiple narrative styles and points of view.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">CHARACTER MEMORY</div>
+        <div class="feature-desc">Upload reference images for each character. Campaignia keeps your party visually consistent across every session of your campaign.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">MULTIPLE LAYOUT STYLES</div>
+        <div class="feature-desc">Many layout styles and options available. Preview any style before you print — what you see is what you get.</div>
+      </div>
+      <div class="feature-cell arsenal-wide">
+        <div class="feature-title">WRITING COACH</div>
+        <div class="feature-desc">Want to polish your prose? The coach gives an honest verdict on any passage, offers rewrites, and finds the better word. It reads your whole story too, and tells you how it holds together.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- v3.1.50 -- TD-940. CAMPAIGNIA CAN DO IT ALL, OR YOU CAN (Ian, 2026-10-01): "if you're an artist, you
+       illustrate it; you're a writer, you write it. We've got you covered in all cases." "Illustrate", never
+       "draw", and kept vague about where (today it is the story panels). Write it yourself is Already Written
+       (TD-941). Three cells on the features-strip classes; this block only sets the three columns. -->
+  <style>
+    .features-strip-body.ways-3 { grid-template-columns: repeat(3, 1fr); }
+    /* v3.2.44 -- Ian, 2026-10-23: the tagline sits in the banner, not on a line of its own under the cards. */
+    #your-way .features-strip-header { flex-wrap: wrap; row-gap: 2px; }
+    .ways-tag { margin-left: auto; font-style: italic; font-size: 15px; color: var(--ink, #0a0806); opacity: 0.8; }
+    @media (max-width: 900px) { .features-strip-body.ways-3 { grid-template-columns: 1fr; } .features-strip-body.ways-3 .feature-cell { border-right: none; } }
+  </style>
+  <div class="features-strip" id="your-way">
+    <div class="features-strip-header">
+      <div class="features-strip-title">PLAY IT YOUR WAY &mdash; CAMPAIGNIA CAN DO IT ALL. OR YOU CAN.</div>
+      <div class="ways-tag">Artist, writer, or neither &mdash; we&rsquo;ve got you covered.</div>
+    </div>
+    <div class="features-strip-body ways-3">
+      <div class="feature-cell">
+        <div class="feature-title">WE DO IT ALL</div>
+        <div class="feature-desc">Paste in the session. Campaignia writes the prose and illustrates every panel, start to finish.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">ILLUSTRATE IT YOURSELF</div>
+        <div class="feature-desc">Got an artist at the table? Put their art in the book, and Campaignia builds the story around it.</div>
+      </div>
+      <div class="feature-cell">
+        <div class="feature-title">WRITE IT YOURSELF</div>
+        <div class="feature-desc">The DM who keeps a campaign journal? Your words stay exactly as you wrote them, and Campaignia adds the pictures.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ROW 4 — Pricing + Campaignia Book Payoff
+       ============================================================ -->
+  <!-- v3.0.925 -- TD-780 Push 7b. ROW 4 IS TWO COLUMNS AGAIN, and that is what puts the book
+       back in the picture: a full-width .panel-payoff crops a 0.667 portrait image down to its
+       top 29% and the book falls out of frame. WHAT YOU GET now fills the column the pricing
+       panel used to occupy, so the payoff keeps the proportions it was cropped for and the
+       space beside it says what the photograph is of. -->
+  <div class="comic-row">
+
+    <!-- LEFT: what you actually walk away with.
+         NOT A THIRD FEATURE LIST. "THREE STEPS TO IMMORTALITY" is how you use it and "YOUR
+         ARSENAL" is what the app does; both are already on this page. What was missing is what
+         you END UP HOLDING -- which is exactly what the photograph beside it shows. Every claim
+         here is already made somewhere on the page (step three, and the FAQ), so this states the
+         product rather than extending it. -->
+    <div class="panel-reward">
+      <div class="how-title-panel">
+        <span class="section-tag">🏆 THE REWARD</span>
+        <div class="section-title">WHAT YOU GET</div>
+      </div>
+      <div class="reward-items">
+        <div class="reward-item">
+          <div class="reward-item-title">A REAL BOOK</div>
+          <div class="reward-item-desc">Comic, hardback or softback, printed and shipped to your door.</div>
+        </div>
+        <div class="reward-item">
+          <div class="reward-item-title">A PRINT-READY PDF</div>
+          <div class="reward-item-desc">Cover page, illustrated panels, narrative prose and your character cast. Four layout styles, previewed before you print.</div>
+        </div>
+        <!-- IAN, 2026-09-16: "I want to start pushing a little narrative here... I don't want
+             people thinking that Campaignia makes up stories -- it rewrites the users stories."
+             So this item says whose story it is BEFORE it says how long we keep it, and it is
+             worded for the page it sits on: a table played a campaign, a person lived a story. -->
+        <div class="reward-item">
+          <div class="reward-item-title">IT’S YOUR STORY</div>
+          <div class="reward-item-desc">Campaignia doesn’t invent your campaign — it retells the one your table actually played. And it stays yours, long after a plan ends.</div>
+        </div>
+        <div class="reward-item">
+          <div class="reward-item-title">A PLACE TO SHOW IT</div>
+          <div class="reward-item-desc">Put it in the public Library for other tables to read, or keep it to your own.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Campaignia Book Payoff. BACK IN A 58% COLUMN, which is the proportion this
+         picture was cropped for -- see the note above. -->
+    <div style="flex:1;display:flex;flex-direction:column;">
+      <div class="panel panel-payoff" style="flex:1;">
+        <div class="payoff-content">
+          <div class="payoff-title">This could be<br>your campaign.</div>
+        </div>
+      </div>
+      <div class="cta-strip">
+        <div>
+          <div class="cta-strip-text">YOUR NEXT SESSION DESERVES TO BE REMEMBERED.</div>
+          <div class="cta-strip-sub">Every campaign has a moment the whole table will never forget.</div>
+        </div>
+        <div style="text-align:center;flex-shrink:0;">
+          <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
+          <div class="cta-note" style="color:rgba(240,232,208,0.5);">30-DAY FREE TRIAL</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       ROW 5 — the plans. FULL WIDTH, and that part of Push 7 stands: three pass cards in a
+       42% column were roughly 170px each.
+       ============================================================ -->
+  <div class="comic-row comic-row-pricing" id="pricing">
+
+    <div class="panel-pricing">
+      <div class="pricing-header">
+        <div class="pricing-header-title">CHOOSE YOUR PATH</div>
+        <div class="pricing-header-sub">Every adventurer starts somewhere. Your 30-day trial begins on your first campaign.</div>
+      </div>
+      <div class="pricing-tiers">
+
+        <div class="tier-row tier-trial">
+          <img src="/images/Free_Tier.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Free Trial" />
+          <div class="tier-info">
+            <div class="tier-name-row">FREE TRIAL</div>
+            <div class="tier-perks">Platinum-like access to explore every option · 30 days</div>
+          </div>
+          <div class="tier-price-tag" data-tier="trial"><small>30 days free</small></div>
+          <a href="/login?signup" class="btn-tier">START FREE</a>
+        </div>
+
+        <div class="plan-blurb plan-blurb-pass">
+          <b>GOT A PROJECT? GET A PASS.</b>
+          <span>Months of Platinum access and a pile of tokens, paid once. Nothing to cancel.</span>
+        </div>
+
+        <div class="pass-cards">
+          <div class="pass-card" data-pass="p3">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">3 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p3">200 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p3">$79</div>
+            <a href="/login?signup&amp;pass=p3" class="btn-tier btn-pass">GET THE 3-MONTH PASS</a>
+          </div>
+
+          <div class="pass-card" data-pass="p6">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">6 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p6">375 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p6">$149</div>
+            <a href="/login?signup&amp;pass=p6" class="btn-tier btn-pass">GET THE 6-MONTH PASS</a>
+          </div>
+
+          <div class="pass-card" data-pass="p12">
+            <div class="pass-card-kicker">PLATINUM PASS</div>
+            <div class="pass-card-term">12 MONTHS</div>
+            <div class="pass-card-tokens" data-pass-tokens="p12">700 tokens</div>
+            <div class="pass-card-tokens-sub">yours to spend whenever</div>
+            <div class="pass-card-price" data-pass-price="p12">$279</div>
+            <a href="/login?signup&amp;pass=p12" class="btn-tier btn-pass">GET THE 12-MONTH PASS</a>
+          </div>
+        </div>
+
+        <div class="plan-blurb plan-blurb-sub">
+          <b>IN IT FOR THE LONG HAUL? SUBSCRIBE.</b>
+          <span>Tokens every month, at the best per-token price we offer.</span>
+        </div>
+
+        <div class="tier-row tier-silver">
+          <img src="/images/Sliver_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Silver" />
+          <div class="tier-info">
+            <div class="tier-name-row">SILVER</div>
+            <div class="tier-perks">1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options</div>
+          </div>
+          <div class="tier-price-tag" data-tier="silver">$10<small>per month</small></div>
+          <a href="/login?signup&amp;plan=silver" class="btn-tier">GET SILVER</a>
+        </div>
+
+        <div class="tier-row tier-gold">
+          <img src="/images/Gold_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Gold" />
+          <div class="tier-info">
+            <div class="tier-name-row">GOLD</div>
+            <div class="tier-perks">3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options · multiple versions · writing coach</div>
+          </div>
+          <div class="tier-price-tag" data-tier="gold">$15<small>per month</small></div>
+          <a href="/login?signup&amp;plan=gold" class="btn-tier">GET GOLD</a>
+        </div>
+
+        <div class="tier-row tier-platinum">
+          <img src="/images/Platinum_Pieces.png" style="width:101px;height:101px;object-fit:contain;flex-shrink:0;" alt="Platinum" />
+          <div class="tier-info">
+            <div class="tier-name-row">PLATINUM</div>
+            <div class="tier-perks">unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles · multiple versions · writing coach</div>
+          </div>
+          <div class="tier-price-tag" data-tier="platinum">$22<small>per month</small></div>
+          <a href="/login?signup&amp;plan=platinum" class="btn-tier">GO PLATINUM</a>
+        </div>
+
+      </div>
+
+      <!-- v3.0.891 -- TD-767. The grid itself is built by /js/tier-grid.js; this is the only
+           markup it needs, so another landing page can carry the feature with one button. -->
+      <div class="tg-root tg-open-wrap">
+        <button type="button" id="tg-open-btn" class="tg-open">COMPARE THE TIERS</button>
+      </div>
+      <!-- v3.1.46 -- TD-934. Give Campaignia as a gift, below the tiers (Ian, 2026-10-01). Hidden until
+           the server says gifts are on, so a dormant feature never shows a button that leads nowhere. -->
+      <div class="tg-root" id="gift-open-wrap" style="display:none;padding:0 20px 18px;text-align:center;">
+        <a href="/gift?from=/" class="tg-open" style="display:inline-block;text-decoration:none;">GIVE CAMPAIGNIA AS A GIFT</a>
+      </div>
+      <script>
+        fetch('/api/gifts/status').then(function (r) { return r.json(); }).then(function (d) {
+          if (d && d.enabled) { var w = document.getElementById('gift-open-wrap'); if (w) w.style.display = 'block'; }
+        }).catch(function () {});
+      </script>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       FAQ STRIP
+       ============================================================ -->
+  <div class="faq-strip" id="faq">
+    <div class="faq-header">
+      <div class="faq-header-title">THE LORE — FREQUENTLY ASKED QUESTIONS</div>
+    </div>
+    <div class="faq-grid">
+      <div class="faq-cell">
+        <div class="faq-q">What transcript format does Campaignia need?</div>
+        <div class="faq-a">Anything goes — session notes, Discord logs, Roll20 exports, voice-to-text recordings, or your own summary. The more detail, the richer the output.</div>
+      </div>
+      <div class="faq-cell">
+        <div class="faq-q">How does the AI know which moments matter?</div>
+        <div class="faq-a">Campaignia identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--gold);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
+      </div>
+      <div class="faq-cell">
+        <div class="faq-q">Can I use Campaignia for any TTRPG system?</div>
+        <div class="faq-a">Absolutely. D&D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership — any system with a story worth telling. Campaignia works from the transcript, not the ruleset.</div>
+      </div>
+      <div class="faq-cell">
+        <div class="faq-q">Do I need my own AI API keys?</div>
+        <div class="faq-a">No. Campaignia handles all AI costs on our end. Your subscription covers everything — no setup required beyond creating your account.</div>
+      </div>
+      <div class="faq-cell">
+        <div class="faq-q">What does the exported PDF look like?</div>
+        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--gold);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
+      </div>
+      <div class="faq-cell">
+        <div class="faq-q">Can I cancel anytime?</div>
+        <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible — your stories don't disappear.</div>
+      </div>
+      <!-- v3.1.50 -- TD-940. The seventh question spans the row, so the grid of three stays whole. -->
+      <div class="faq-cell" style="grid-column:1 / -1;border-right:none;border-top:2px solid rgba(201,168,76,0.1);">
+        <div class="faq-q">Can I use my own art, or my own writing?</div>
+        <div class="faq-a">Yes. Campaignia can do it all, but it doesn&rsquo;t have to. Illustrate it yourself with your table&rsquo;s own art, or keep a story you&rsquo;ve already written word for word and let Campaignia add the pictures. Mix and match as you like.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /comic-page -->
+</div><!-- /comic-book -->
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-top">
+    <div class="footer-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>
+    <div class="footer-links">
+      <a href="/login" class="footer-link">Sign In</a>
+      <a href="/library?genre=fantasy,thriller,scifi,horror" class="footer-link">Public Library</a>
+      <a href="#pricing" class="footer-link">Pricing</a>
+      <a href="mailto:info@campaignia.com" class="footer-link">Contact</a>
+      <a href="/terms.html" class="footer-link">Terms</a>
+      <a href="/privacy.html" class="footer-link">Privacy</a>
+    </div>
+  </div>
+  <div class="footer-copy">&copy; <span id="footer-year"></span> So It Begins, LLC &middot; Campaignia. Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
+</footer>
+
+<script>
+  document.getElementById('footer-year').textContent = new Date().getFullYear();
+</script>
+
+<script>
+(function(){
+  // v3.0.924 -- TD-780 Push 7. Money is formatted from CENTS, and a price that is not a whole
+  // number of dollars must not be rounded into one: 7950 is $79.50, never $80.
+  function _cmpDollars(cents){
+    var d=Number(cents)/100;
+    if(!isFinite(d)) return null;
+    return '$'+(d%1===0?String(d):d.toFixed(2));
+  }
+  fetch('/api/public/pricing').then(function(r){return r.json();}).then(function(d){
+    if(!d) return;
+    // THE TWO HALVES ARE INDEPENDENT ON PURPOSE -- see the note in the batch.
+    if(d.pricing){
+      Object.keys(d.pricing).forEach(function(tier){
+        var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
+        if(!el) return;
+        var p=Number(d.pricing[tier]);
+        if(p>0) el.innerHTML='$'+p+'<small>per month</small>';
+      });
+    }
+    if(d.passes && d.passes.length){
+      d.passes.forEach(function(p){
+        if(!p||!p.id) return;
+        var pr=document.querySelector('.pass-card-price[data-pass-price="'+p.id+'"]');
+        var money=_cmpDollars(p.price_cents);
+        if(pr&&money) pr.textContent=money;
+        var tk=document.querySelector('.pass-card-tokens[data-pass-tokens="'+p.id+'"]');
+        if(tk&&Number(p.tokens)>0) tk.textContent=Number(p.tokens)+' tokens';
+      });
+    }
+  }).catch(function(){});
+})();
+</script>
+<script>
+// v3.1.82 -- TD-955 (link from v3.0.898, TD-770). THE DRAFT LINK IS BUILT HERE, FOR AN ADMIN ONLY.
+// It used to sit in the markup hidden with display:none, so every visitor, every crawler and
+// view-source received it. Now nothing is in the page unless the signed-in user is an admin.
+// Built in the browser rather than by the server on purpose: the home page is a static file that
+// an edge cache may hold, and a cached admin copy would show the link to everyone.
+// Fails closed: anonymous, a refused or failed request, or no JavaScript all add nothing.
+function cmpAddDraftLink(d){
+  if (!d || !d.is_admin) return;
+  if (document.getElementById('nav-story-draft')) return;
+  var signIn = document.querySelector('.nav-actions .btn-nav');
+  if (!signIn || !signIn.parentNode) return;
+  var a = document.createElement('a');
+  a.id = 'nav-story-draft';
+  a.className = 'nav-link';
+  a.href = '/story';
+  a.title = 'Admin only: draft storyteller landing page';
+  a.textContent = 'DRAFT';
+  a.style.cssText = 'font-size:9px;letter-spacing:1px;opacity:0.5;';
+  signIn.parentNode.insertBefore(a, signIn);
+}
+(function(){
+  try {
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(cmpAddDraftLink)
+      .catch(function(){});
+  } catch (e) {}
+})();
+function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
+function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
+</script>
+</body>
+</html>

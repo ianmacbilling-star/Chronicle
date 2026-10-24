@@ -351,6 +351,13 @@ app.get('/story', function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'views', 'story.html'));
 });
+
+// v3.2.54 -- THE GAME MASTERS LANDING PAGE, one page per audience (Ian, 2026-10-24). Same reasons as /story above:
+// served only from views/, no-store, one URL. Its canonical is /game-masters; the home page keeps its own.
+app.get('/game-masters', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'game-masters.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated
