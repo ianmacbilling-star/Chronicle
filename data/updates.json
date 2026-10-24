@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.61",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3261-stats-list-colors",
+        "kind": "fix",
+        "public": false,
+        "summary": "Dashboard Stats user list readable: light text on its own dark background.",
+        "detail": "The rows were black on dark brown. The list box now sets a dark background, light text and dark scrollbars. Test: Dashboard > Stats, the table reads clearly.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.60",
     "staged_on": "2026-10-24",
     "entries": [
