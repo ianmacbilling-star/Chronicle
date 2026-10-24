@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.2.58",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3258-notes-hint",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Removed the hint line under Story Notes and Instructions.",
+        "detail": "The grey example text inside the box already says it. Test: the Story tab shows no line under the notes box's word count.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.2.57",
     "staged_on": "2026-10-24",
     "entries": [
