@@ -23203,7 +23203,9 @@ function renderStats(d) {
   box.innerHTML = '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">' +
     '<div style="flex:0 1 520px;min-width:280px;">' + html + '</div>' +
     '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span></div>' +
-    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;">Loading\u2026</div></div>' +
+    // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
+    // and dark scrollbars instead of inheriting the pane's.
+    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
     '</div>';
   loadUserLastActive();
 }
@@ -23229,7 +23231,7 @@ function renderUserLastActive(d) {
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
   var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(201,168,76,0.85);white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.25);';
-  var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.08);';
+  var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
     cols.map(function (c) { return '<th style="' + th + '">' + _ulaCell(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
   rows.forEach(function (r) { h += '<tr>' + cols.map(function (c) { return '<td style="' + td + '">' + _ulaCell(r[c]) + '</td>'; }).join('') + '</tr>'; });
