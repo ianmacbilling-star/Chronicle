@@ -107,7 +107,8 @@ function bucketName() { return BUCKET_NAME; }
 // rather than a stored address. Only uploads/ keys; throws on failure so the clean-up can count it.
 async function deleteKey(key) {
   if (!useCloud) throw new Error('This server stores pictures on its own disk.');
-  if (!/^uploads\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || /^uploads\/\.\.?$/.test(String(key))) throw new Error('Only uploads/ keys are deleted: ' + key);   // v3.2.69 -- not uploads/. or uploads/..
+  // v3.2.74 -- the five folders the clean-up handles (was uploads/ only), never a . or .. name.
+  if (!/^(uploads|archives|optimized|story|print)\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || /\/\.\.?$/.test(String(key))) throw new Error('Only files in the five storage folders are deleted: ' + key);
   const body = Buffer.alloc(0);
   const signed = signRequest('DELETE', key, 'application/octet-stream', body);
   const axios = require('axios');
@@ -180,7 +181,7 @@ async function getObject(key) {
 // Permanently delete one HELD picture. Only the holding bucket, only <environment>/uploads/<name>.
 async function deleteHeld(key) {
   if (!useCloud) throw new Error('This server stores pictures on its own disk.');
-  if (!/^[a-z0-9-]+\/uploads\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || !safeKey(key)) throw new Error('Only held uploads are deleted: ' + key);
+  if (!/^[a-z0-9-]+\/(uploads|archives|optimized|story|print)\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || !safeKey(key)) throw new Error('Only held files are deleted: ' + key);   // v3.2.74 -- every folder
   const hold = holdingBucket();
   if (!hold || hold === BUCKET_NAME) throw new Error('The holding bucket must be another bucket.');
   const signed = signRequest('DELETE', key, 'application/octet-stream', Buffer.alloc(0), null, null, hold);

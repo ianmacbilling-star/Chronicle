@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.74",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3274-cleanup-every-folder",
+        "kind": "ops",
+        "public": false,
+        "summary": "The monthly clean-up and Move to holding cover PDFs and saved books too, not just pictures.",
+        "detail": "Monthly clean-up, Run report and Move to holding now handle every folder: pictures, archived pictures, saved books / Bookshelf copies / order covers and published story PDFs over 30 days old, and print PDFs over 90. Held files keep their folder (production/print/... etc.), so Put back returns each to the right place; a bare name is looked up in every folder. Brakes: nothing moves if over 60% of the whole bucket looks orphaned, and a folder where over 85% looks orphaned (at least 10 files) is left alone that run. Holding, the held list and the email show a line per folder. The Monthly job toggle stays as it was (Off). Test: on staging Run report and Check holding; on production Run report, then Move to holding once, then Check holding.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.73",
     "staged_on": "2026-10-25",
     "entries": [
