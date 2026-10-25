@@ -2370,66 +2370,56 @@
         </div>
       </div>
 
-      <!-- v3.2.67 -- TD-1006. Staging's one-time move to its own bucket. Does nothing unless set up in Railway. -->
-      <div class="settings-section" id="storage-move-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Move to its own storage (staging, one time)</div>
-        <div class="settings-section-desc">
-          For staging only. Step 1 copies every picture this database uses from the shared bucket into this environment&rsquo;s
-          own bucket (nothing is deleted). Step 2, only after a copy with no failures, rewrites the stored picture addresses to
-          the new public address. Both can be run again. It refuses to run unless R2_BUCKET, R2_SHARED_BUCKET, R2_PUBLIC_URL and
-          R2_LEGACY_PUBLIC_URLS are set in Railway.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <button class="btn btn-sm" onclick="storageMoveLoad()">Check setup</button>
-          <button class="btn btn-sm" onclick="storageMoveRun('copy')">1. Copy pictures</button>
-          <button class="btn btn-sm" onclick="storageMoveRun('rewrite')">2. Rewrite addresses</button>
-        </div>
-        <div id="storage-move-out" style="margin-top:10px;font-size:13px;line-height:1.6;"></div>
-      </div>
       <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
       <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Unused pictures (read only)</div>
+        <div class="settings-section-title">Orphaned pictures (read only)</div>
         <div class="settings-section-desc">
-          Lists pictures in this environment&rsquo;s storage that nothing in its database uses (history &mdash; finished image jobs,
-          debug logs, watermark checks &mdash; does not count as use). It deletes nothing. Pictures from the last 24 hours are left out.
+          Finds pictures that are orphaned: still in storage, but nothing uses them any more &mdash; no panel, character, asset,
+          book, saved book, order or story points to them. It only looks and makes a list; it never moves or deletes anything.
+          (Old records like finished image jobs and debug logs don&rsquo;t count as use. Pictures from the last 24 hours are left
+          out, because they may still be saving.)
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <button class="btn btn-sm" onclick="unusedPicsRun()">Run the check</button>
+          <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures</button>
           <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
       </div>
       <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. v3.2.71 -- its own panel on Tools. -->
+      <style>#cleanup-section .cu-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;} #cleanup-section .cu-row .settings-section-desc{margin:0;}</style>
       <div class="settings-section" id="cleanup-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Monthly clean-up</div>
+        <div class="settings-section-desc" style="margin:0 0 10px;">See what needs to be in the holding bucket.</div>
         <div>
-          <div class="settings-section-desc" style="margin:0 0 8px;">Once a month, pictures under uploads/ that nothing in this database uses and that are over 30 days old.
-            Report only emails a summary; Move to holding moves them to the holding bucket (after one last check) &mdash; nothing is deleted. Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="cleanup-mode" class="form-input" style="max-width:180px;" onchange="cleanupSetMode(this.value)">
-              <option value="off">Off</option><option value="report">Report only</option><option value="hold">Move to holding</option>
-            </select>
-            <button class="btn btn-sm" onclick="cleanupRun(false)">Run report now</button>
-            <button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding now</button>
-          </div>
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer;">
+            <input type="checkbox" id="cleanup-toggle" onchange="cleanupSetMode(this.checked ? 'hold' : 'report')" style="width:18px;height:18px;">
+            Monthly job: <span id="cleanup-toggle-word">Off</span>
+          </label>
+          <div class="settings-section-desc" style="margin:4px 0 12px;">When On, on the 1st of each month it moves orphaned pictures over 30 days old into the holding bucket,
+            deletes anything that has been in holding over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.</div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="cleanupRun(false)">Run report</button>
+            <span class="settings-section-desc">Counts the orphaned pictures over 30 days old that would go to holding. Moves nothing.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding</button>
+            <span class="settings-section-desc">Moves them now, without waiting for the 1st. Click twice to confirm.</span></div>
           <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
-          <!-- v3.2.69 -- TD-1006. The holding bucket: moved pictures wait here until put back or emptied. -->
-          <div style="font-weight:600;margin:14px 0 6px;">Holding</div>
-          <div class="settings-section-desc" style="margin:0 0 8px;">Pictures the clean-up moved wait here. A moved picture shows as broken on the site; Put back copies it home
-            (paste its name or its web address, one per line) and it is never moved again. Pictures leave holding for good only by Empty holding, or when
-            the monthly run (in Move to holding mode) finds them held over 90 days.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
-            <button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
-          </div>
-          <textarea id="hold-names" class="form-input" rows="3" placeholder="Picture names or addresses, one per line" style="width:100%;max-width:640px;margin-top:8px;"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
-            <button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
-            <button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything now in use</button>
-            <button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put everything back</button>
-            <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">Everything held</option><option value="7">Held 7+ days</option><option value="30">Held 30+ days</option></select>
-            <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Empty holding</button>
-          </div>
+          <!-- v3.2.69 -- TD-1006. The holding bucket. v3.2.72 -- reworded with Ian, a description beside every button. -->
+          <div style="font-weight:600;margin:16px 0 8px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">Manage holding bucket</div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
+            <span class="settings-section-desc">Shows how many pictures are in holding, how much space they take, and when they were moved. Changes nothing.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
+            <span class="settings-section-desc">Every picture in holding, with the date it was moved.</span></div>
+          <div class="settings-section-desc" style="margin:12px 0 4px;">Paste picture names or addresses, one per line or separated by commas:</div>
+          <textarea id="hold-names" class="form-input" rows="3" placeholder="gen-1787635888241-8e22b1fe27e52f56.png" style="width:100%;max-width:640px;"></textarea>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
+            <span class="settings-section-desc">Returns the pasted pictures to where they were. A picture put back is never moved to holding again.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything no longer orphaned</button>
+            <span class="settings-section-desc">Checks every held picture again and returns any that are in use after all. Use it after a fix to the check, or after restoring the database from a backup.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put back everything</button>
+            <span class="settings-section-desc">Returns every held picture. Click twice to confirm.</span></div>
+          <div class="cu-row" style="margin-top:12px;"><span style="font-weight:600;">Delete from holding:</span>
+            <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">any age</option><option value="7">held over 7 days</option><option value="30">held over 30 days</option><option value="90" selected>held over 90 days</option></select>
+            <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Delete for good</button></div>
+          <div class="settings-section-desc" style="margin:4px 0 0;">Permanently deletes held pictures older than the age you pick. The monthly job does the same with 90 days; this does it now, with any age. It can&rsquo;t be undone. Click twice to confirm.</div>
           <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
         </div>
       </div>

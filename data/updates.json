@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.72",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3272-storage-panels-reworded",
+        "kind": "ops",
+        "public": false,
+        "summary": "Dashboard Tools: the storage panels reworded so every button says what it does; the staging move tool removed.",
+        "detail": "Orphaned pictures (read only): Check for orphaned pictures. Monthly clean-up: a Monthly job On/Off toggle (On moves orphaned pictures over 30 days to holding on the 1st and deletes what has been held over 90 days; Off only emails the report), Run report, Move to holding. Manage holding bucket: Check holding, Download the held list, Put back (one per line or commas), Put back anything no longer orphaned, Put back everything, Delete from holding [age] Delete for good; a description beside every button. Move to its own storage (staging, one time) is removed with its routes and services/storageMove.js. Test: on staging, open Tools and read each panel; flip the toggle On and Off and watch the status line.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.71",
     "staged_on": "2026-10-25",
     "entries": [
