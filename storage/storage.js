@@ -29,7 +29,9 @@ function initStorage() {
 // v3.2.65 -- TD-1006. `query` (optional) signs a query string, for listing the bucket. Absent, the canonical request
 // and the URL are exactly what they always were; and an empty key signs the bucket itself (/chronicle-images),
 // which only the listing uses -- every other caller passes a key.
-function signRequest(method, key, contentType, body, extra, query) {
+// v3.2.69 -- TD-1006. `bucket` (optional) signs a request to ANOTHER bucket of the account (the holding bucket).
+// Absent, it is this environment's bucket, byte for byte as before.
+function signRequest(method, key, contentType, body, extra, query, bucket) {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -44,7 +46,7 @@ function signRequest(method, key, contentType, body, extra, query) {
   const names = Object.keys(hdrs).sort();
   const canonicalHeaders = names.map(function (n) { return n + ':' + hdrs[n] + '\n'; }).join('');
   const signedHeaders = names.join(';');
-  const canonicalUri = '/' + BUCKET_NAME + (key ? ('/' + key) : '');
+  const canonicalUri = '/' + (bucket || BUCKET_NAME) + (key ? ('/' + key) : '');
   const enc = function (s) { return encodeURIComponent(String(s)).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); }); };
   const canonicalQuery = query ? Object.keys(query).sort().map(function (k) { return enc(k) + '=' + enc(query[k]); }).join('&') : '';
   const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash].join('\n');
@@ -105,7 +107,7 @@ function bucketName() { return BUCKET_NAME; }
 // rather than a stored address. Only uploads/ keys; throws on failure so the clean-up can count it.
 async function deleteKey(key) {
   if (!useCloud) throw new Error('This server stores pictures on its own disk.');
-  if (!/^uploads\/[A-Za-z0-9._\-]+$/.test(String(key || ''))) throw new Error('Only uploads/ keys are deleted: ' + key);
+  if (!/^uploads\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || /^uploads\/\.\.?$/.test(String(key))) throw new Error('Only uploads/ keys are deleted: ' + key);   // v3.2.69 -- not uploads/. or uploads/..
   const body = Buffer.alloc(0);
   const signed = signRequest('DELETE', key, 'application/octet-stream', body);
   const axios = require('axios');
@@ -115,10 +117,68 @@ async function deleteKey(key) {
   return resp && resp.status;
 }
 
+// v3.2.69 -- TD-1006. THE HOLDING BUCKET. The clean-up never deletes from the main bucket: unused pictures move to
+// R2_HOLDING_BUCKET (default campaignia-holding), under <environment>/uploads/<name>, and wait there for Put back or
+// Empty holding. Not public; reached only through these calls. The R2 token must cover it.
+function holdingBucket() { return String(process.env.R2_HOLDING_BUCKET || 'campaignia-holding').trim(); }
+const SAFE_KEY = /^[A-Za-z0-9._\-]+(\/[A-Za-z0-9._\-]+)*$/;
+// A key may not have a . or .. part: a URL would read it as a folder step and the request would land somewhere else.
+function safeKey(k) { k = String(k || ''); return SAFE_KEY.test(k) && k.split('/').every(function (p) { return p !== '.' && p !== '..'; }); }
+function r2agent() { const https = require('https'); return new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false }); }
+
+// Copy one object between any two buckets of the account (or two keys), inside R2. 'copied' or 'missing'; throws
+// on anything else.
+async function copyBetween(srcBucket, srcKey, dstBucket, dstKey) {
+  if (!useCloud) throw new Error('This server stores pictures on its own disk.');
+  if (!srcBucket || !dstBucket) throw new Error('Both buckets are needed.');
+  if (!safeKey(srcKey) || !safeKey(dstKey)) throw new Error('Unusual key, not copied: ' + srcKey + ' -> ' + dstKey);
+  if (srcBucket === dstBucket && srcKey === dstKey) throw new Error('A picture cannot be copied onto itself.');
+  const body = Buffer.alloc(0);
+  const signed = signRequest('PUT', dstKey, 'application/octet-stream', body, { 'x-amz-copy-source': '/' + srcBucket + '/' + srcKey }, null, dstBucket);
+  const axios = require('axios');
+  try {
+    const resp = await axios.put(signed.url, body, { headers: signed.headers, httpsAgent: r2agent(), timeout: 60000 });
+    const txt = (resp && resp.data) ? String(resp.data) : '';
+    if (txt.indexOf('<Error') >= 0) { if (/NoSuchKey/.test(txt)) return 'missing'; throw new Error('copy reported an error: ' + txt.slice(0, 200)); }
+    return 'copied';
+  } catch (e) {
+    const st = e && e.response && e.response.status;
+    const data = e && e.response && e.response.data ? String(e.response.data) : '';
+    if (st === 404 || /NoSuchKey/.test(data)) return 'missing';
+    throw new Error((st ? (st + ' ') : '') + (data ? data.slice(0, 200) : (e && e.message)));
+  }
+}
+// Is it there? { size } or null. Throws on anything but found / not found.
+async function headObject(bkt, key) {
+  if (!useCloud) throw new Error('This server stores pictures on its own disk.');
+  if (!safeKey(key)) throw new Error('Unusual key: ' + key);
+  const signed = signRequest('HEAD', key, 'application/octet-stream', Buffer.alloc(0), null, null, bkt);
+  const axios = require('axios');
+  try {
+    const resp = await axios.head(signed.url, { headers: signed.headers, httpsAgent: r2agent(), timeout: 60000 });
+    return { size: parseInt((resp.headers && resp.headers['content-length']) || '0', 10) };
+  } catch (e) {
+    if (e && e.response && e.response.status === 404) return null;
+    throw new Error(((e && e.response && e.response.status) ? (e.response.status + ' ') : '') + (e && e.message));
+  }
+}
+// Permanently delete one HELD picture. Only the holding bucket, only <environment>/uploads/<name>.
+async function deleteHeld(key) {
+  if (!useCloud) throw new Error('This server stores pictures on its own disk.');
+  if (!/^[a-z0-9-]+\/uploads\/[A-Za-z0-9._\-]+$/.test(String(key || '')) || !safeKey(key)) throw new Error('Only held uploads are deleted: ' + key);
+  const hold = holdingBucket();
+  if (!hold || hold === BUCKET_NAME) throw new Error('The holding bucket must be another bucket.');
+  const signed = signRequest('DELETE', key, 'application/octet-stream', Buffer.alloc(0), null, null, hold);
+  const axios = require('axios');
+  const resp = await axios.delete(signed.url, { headers: signed.headers, httpsAgent: r2agent(), timeout: 60000 });
+  return resp && resp.status;
+}
+
 // v3.2.65 -- TD-1006. Every object under a prefix: [{ key, size, lastModified }]. Read only. Pages through the
 // bucket 1,000 at a time (capped at 200 pages). Returns null in local-disk mode. Throws on an R2 error, so a
 // report can say it could not read the bucket rather than report an empty one.
-async function listObjects(prefix) {
+// v3.2.69 -- `bkt` (optional) lists another bucket (the holding bucket).
+async function listObjects(prefix, bkt) {
   if (!useCloud) return null;
   const axios = require('axios');
   const https = require('https');
@@ -129,7 +189,7 @@ async function listObjects(prefix) {
   do {
     const q = { 'list-type': '2', 'max-keys': '1000', 'prefix': prefix };
     if (token) q['continuation-token'] = token;
-    const signed = signRequest('GET', '', 'application/octet-stream', Buffer.alloc(0), null, q);
+    const signed = signRequest('GET', '', 'application/octet-stream', Buffer.alloc(0), null, q, bkt);
     const resp = await axios.get(signed.url, { headers: signed.headers, httpsAgent: agent, timeout: 60000, responseType: 'text' });
     const xml = String(resp.data || '');
     const blocks = xml.match(/<Contents>[\s\S]*?<\/Contents>/g) || [];
@@ -504,4 +564,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey, holdingBucket, copyBetween, headObject, deleteHeld };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006

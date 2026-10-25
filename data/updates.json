@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.69",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3269-holding-bucket",
+        "kind": "ops",
+        "public": false,
+        "summary": "The storage clean-up moves unused pictures to a holding bucket instead of deleting them.",
+        "detail": "Dashboard > Support > Unused pictures: the mode Delete is now Move to holding (Delete now became Move to holding now, click twice). Pictures are copied to campaignia-holding under production/ or staging/, the copy is checked, then removed from the main bucket. Holding: Check holding, Download the held list, Put back (names or addresses, one per line; never moved again), Put everything back (click twice), Empty holding (everything, or held 7+ / 30+ days; click twice). In Move to holding mode the monthly run also deletes for good anything held over 90 days, and its email says how many; in Report mode it changes nothing. Needs the campaignia-holding bucket and both R2 tokens covering it. Test on staging: Check holding (0); on production, Move to holding now, then open a moved picture (broken), Put back its address, and check it shows again.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.68",
     "staged_on": "2026-10-24",
     "entries": [

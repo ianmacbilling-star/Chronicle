@@ -2393,15 +2393,32 @@
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">
           <div style="font-weight:600;margin-bottom:6px;">Monthly clean-up</div>
           <div class="settings-section-desc" style="margin:0 0 8px;">Once a month, pictures under uploads/ that nothing in this database uses and that are over 30 days old.
-            Report only emails a summary; Delete removes them (after one last check). Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
+            Report only emails a summary; Move to holding moves them to the holding bucket (after one last check) &mdash; nothing is deleted. Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <select id="cleanup-mode" class="form-input" style="max-width:180px;" onchange="cleanupSetMode(this.value)">
-              <option value="off">Off</option><option value="report">Report only</option><option value="delete">Delete</option>
+              <option value="off">Off</option><option value="report">Report only</option><option value="hold">Move to holding</option>
             </select>
             <button class="btn btn-sm" onclick="cleanupRun(false)">Run report now</button>
-            <button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Delete now</button>
+            <button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding now</button>
           </div>
           <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
+          <!-- v3.2.69 -- TD-1006. The holding bucket: moved pictures wait here until put back or emptied. -->
+          <div style="font-weight:600;margin:14px 0 6px;">Holding</div>
+          <div class="settings-section-desc" style="margin:0 0 8px;">Pictures the clean-up moved wait here. A moved picture shows as broken on the site; Put back copies it home
+            (paste its name or its web address, one per line) and it is never moved again. Pictures leave holding for good only by Empty holding, or when
+            the monthly run (in Move to holding mode) finds them held over 90 days.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
+            <button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
+          </div>
+          <textarea id="hold-names" class="form-input" rows="3" placeholder="Picture names or addresses, one per line" style="width:100%;max-width:640px;margin-top:8px;"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+            <button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
+            <button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put everything back</button>
+            <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">Everything held</option><option value="7">Held 7+ days</option><option value="30">Held 30+ days</option></select>
+            <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Empty holding</button>
+          </div>
+          <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
         </div>
       </div>
       <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
