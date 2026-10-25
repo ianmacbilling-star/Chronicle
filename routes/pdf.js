@@ -2524,6 +2524,16 @@ function coverSubtitle(pageOpts) {
   var raw = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : '';
   return raw;
 }
+// v3.2.82 -- TD-1017. THE AUTHOR NOTE. Ian, 2026-10-25: a box under the subtitle where the author writes a note
+// or message to the readers, printed on the details page (the one with the copyright and the Campaignia notice),
+// saved with the title, subtitle and cover. PDF and print only, never the Library page. No heading: the author
+// writes all of it. A preview passes the unsaved text as pageOpts.authorNote; otherwise the version holds it.
+var AUTHOR_NOTE_MAX = 600;
+function bookAuthorNote(pageOpts, campaign) {
+  var raw = (pageOpts && pageOpts.authorNote != null) ? pageOpts.authorNote
+    : ((campaign && campaign._memberAuthorNote != null) ? campaign._memberAuthorNote : '');
+  return String(raw).replace(/\r\n/g, '\n').trim().slice(0, AUTHOR_NOTE_MAX);
+}
 // v3.0.575 -- ONE PLACE THAT READS A FORK'S BOOK META ONTO THE CAMPAIGN. This block existed FIVE
 // times, byte-identical, in /novel, /print-interior, /print-cover, /publish-story and
 // assembleNovelHtml -- and the subtitle and the title colour had to be added to all five at once,
@@ -2567,6 +2577,7 @@ function applyForkBookMeta(campaign, fbm) {
   // subtitle indistinguishable from one that was never set.
   if (_f.subtitle != null) campaign._memberSubtitle = String(_f.subtitle);
   if (_f.title_color) campaign._memberTitleColor = String(_f.title_color);
+  if (_f.author_note != null) campaign._memberAuthorNote = String(_f.author_note);   // v3.2.82 -- TD-1017
 }
 // v3.2.10 -- TD-988. A SAVED BOOK IS SELF-CONTAINED. Ian, 2026-10-19: "Saved books... should publish
 // exactly what is in those books... not what the current cover, title etc etc say." The save records
@@ -2583,6 +2594,7 @@ function savedBookMetaFrom(built) {
     return { v: 1, cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '',
       title_image_url: c.title_image_url || '', built_title_url: c.built_title_url || '', book_title: t,
       subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '',
+      author_note: bookAuthorNote(po, c),   // v3.2.82 -- TD-1017: the note the saved PDF was rendered with
       // v3.2.18 -- a drawn title carries its own subtitle in the artwork; recorded when its words are known.
       built_title_sub: (c.built_title_url && c._builtTitleText) ? String(c._builtTitleSub || '') : undefined };
   } catch (e) { return null; }
@@ -2628,10 +2640,12 @@ function applySavedBookMeta(campaign, pageOpts, m) {
   if (m.book_title) campaign._memberBookTitle = String(m.book_title);
   if (m.subtitle != null) campaign._memberSubtitle = String(m.subtitle); else delete campaign._memberSubtitle;
   if (m.title_color) campaign._memberTitleColor = String(m.title_color); else delete campaign._memberTitleColor;
+  if (m.author_note != null) campaign._memberAuthorNote = String(m.author_note); else delete campaign._memberAuthorNote;   // v3.2.82
   if (pageOpts) {
     if (m.book_title) pageOpts.bookTitle = String(m.book_title);
     if (m.subtitle != null) pageOpts.subtitle = String(m.subtitle); else delete pageOpts.subtitle;
     if (m.title_color) pageOpts.titleColor = String(m.title_color); else delete pageOpts.titleColor;
+    if (m.author_note != null) pageOpts.authorNote = String(m.author_note); else delete pageOpts.authorNote;   // v3.2.82
   }
   return true;
 }
@@ -4501,7 +4515,7 @@ async function resolveBookMismatch(req, campaignId, coStr) {
 // (applyForkBookMeta over the prefs, as every render reads them). The Order & Publish tab asks for this when a
 // book is put there and keeps it; /book-since compares it with now, so the warning reports only what changed
 // AFTER the book was optimized or loaded. One computation for both sides.
-var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color'];
+var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color', 'author_note'];   // v3.2.82 -- author_note
 async function bookStateNow(req, campaignId) {
   var db = await getDb();
   var campaign = await db.prepare(
@@ -4518,7 +4532,8 @@ async function bookStateNow(req, campaignId) {
   return { v: 1, inc: includeFingerprint(incMap), co: storedLayoutCo(prefs) || '',
     cover: { cover_image_url: c2.cover_image_url || '', back_cover_image_url: c2.back_cover_image_url || '', title_image_url: c2.title_image_url || '',
       built_title_url: c2.built_title_url || '', book_title: String(c2._memberBookTitle || c2.name || ''),
-      subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '' } };
+      subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '',
+      author_note: (c2._memberAuthorNote != null ? String(c2._memberAuthorNote) : '') } };   // v3.2.82
 }
 function bookStateDiff(since, now) {
   var out = { since: true, sessions: false, layout: false, titlecover: false, any: false, categories: [] };
@@ -6243,9 +6258,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // layout, so a recoloured cover keeps exactly the relationship the default one has.
   var _coverSubStyleArt   = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.78"') : '';
   var _coverSubStylePlain = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.40"') : '';
+  // v3.2.82 -- TD-1017. Ian, 2026-10-25: the subtitle under the title on the title page and the details page, the
+  // same words the cover prints (coverSubtitle). The details page no longer prints the campaign name -- it may only
+  // be a working name; it shows only if the author put it in the title or subtitle.
+  var _fmSub = coverSubtitle(pageOpts);
+  var _fmNote = bookAuthorNote(pageOpts, campaign);
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
+      (_fmSub ? '<div class="tp-subtitle">' + _fmEsc(_fmSub) + '</div>' : '') +
       (titleImg
         ? '<div class="tp-image-wrap">' +
             ((co && co.border === 'frame' && co.arrange !== 'comicpage')
@@ -6257,7 +6278,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var detailsPageHTML =
     '<div class="detailspage">' +
       '<div class="dp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
-      ((_bookTitleFM && _bookTitleFM !== campaign.name) ? '<div class="dp-campaign">' + _fmEsc(campaign.name) + '</div>' : '') +
+      (_fmSub ? '<div class="dp-campaign">' + _fmEsc(_fmSub) + '</div>' : '') +   // v3.2.82 -- the subtitle, never the campaign name
       // v3.0.749 -- TD-547(2). The details page no longer prints the date range. dateRange is
       // still computed above and still exported through formatDateRange, because campaigns.js
       // seeds the book subtitle from it -- this stops PRINTING it, nothing more.
@@ -6266,8 +6287,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       (fPublic
         ? (copyHolder ? '<div class="dp-block"><div class="dp-label">Chronicled by</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' : '')
         : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
-      '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
+      (_fmNote ? '<div class="dp-author-note">' + _fmNote.split(/\n+/).map(function (_ln) { return _ln.trim(); }).filter(Boolean).map(function (_ln) { return '<p>' + _fmEsc(_ln) + '</p>'; }).join('') + '</div>' : '') +   // v3.2.82 -- TD-1017
       '<div class="dp-footer">' +
+        // v3.2.83 -- TD-1018. Ian: the copyright line sits just above the Campaignia logo, at the foot of the page.
+        '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
         '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />' +
         '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
           // v3.0.391 -- Ian, exact wording. The tabletop role-playing reference is gone: the term
@@ -6474,22 +6497,25 @@ ${previewScrollbarCss()}
   /* FRONT MATTER — interior title page + details / copyright page */
   .titlepage { width:8.5in;min-height:9.4in;padding:0.85in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
   .tp-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#2c1810;letter-spacing:0.04em;line-height:1.15;text-transform:uppercase;margin-bottom:0.4in; }
+  .tp-subtitle { font-family:'Crimson Text',serif;font-size:16pt;font-style:italic;color:#6b5f55;margin:-0.3in 0 0.4in; }
   .tp-image-wrap { margin:0 auto;max-width:100%; }
   .tp-image-border { display:inline-block;position:relative;line-height:0;border-radius:4px;overflow:hidden; }
   .tp-image { display:block;max-width:6.5in;max-height:6.5in;width:auto;height:auto;margin:0 auto; }
   .tp-logo { width:0.95in;height:auto;object-fit:contain;margin-top:0.5in;opacity:0.9; }
-  .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in 0.4in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
   .dp-title { font-family:'Cinzel',serif;font-size:20pt;font-weight:700;color:#2c1810;letter-spacing:0.03em;margin-bottom:0.08in; }
   .dp-campaign { font-family:'Crimson Text',serif;font-size:16pt;font-style:italic;color:#6b5f55;margin:-0.02in 0 0.12in; }
   .dp-dates { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;font-style:italic;margin-bottom:0.15in; }
   .dp-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.1in auto 0.3in; }
+  .dp-author-note { font-family:'Crimson Text',serif;font-size:11.5pt;font-style:italic;color:#3a2a1a;line-height:1.5;max-width:5.4in;margin:0.12in auto 0; }
+  .dp-author-note p { margin:0 0 0.08in; }
   .dp-block { margin-bottom:0.22in; }
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
-  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.9; }
+  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.14in auto 0.12in;opacity:0.9; }   /* v3.2.83 -- was 0.3in on top; the copyright line now sits just above */
   .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
-  .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }
+  .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }   /* v3.2.85 -- TD-1020: the page bottom padding is 0.4in (was 1in), so the footer sits lower */
 
   /* CONTENT */
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
@@ -6894,6 +6920,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   // without any of them having to carry a copy of the fields.
   if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
   else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
+  if (req.query.authorNote != null) pageOpts.authorNote = String(req.query.authorNote).slice(0, AUTHOR_NOTE_MAX);   // v3.2.82 -- an unsaved edit, previewed
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
   res.set('X-Total-Sessions', String(sessionsWithData.length));
@@ -8819,6 +8846,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
   // without any of them having to carry a copy of the fields.
   if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
   else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
+  if (req.query.authorNote != null) pageOpts.authorNote = String(req.query.authorNote).slice(0, AUTHOR_NOTE_MAX);   // v3.2.82 -- an unsaved edit, previewed
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
 

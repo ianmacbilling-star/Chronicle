@@ -1,5 +1,79 @@
 [
   {
+    "version": "3.2.85",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3285-details-footer-lower",
+        "kind": "change",
+        "public": true,
+        "summary": "On the page after the title page, the copyright line, the Campaignia logo and the notice sit lower, nearer the foot of the page.",
+        "detail": "The bottom padding of the details page went from 1 inch to 0.4 inch, so the footer block (copyright line, logo, notice) moves down about 0.6 inch. Still well inside the printed page margins. Test: preview a book and look at page 3.",
+        "td": [
+          "TD-1020"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.84",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3284-title-boxes-save-as-you-type",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Title, Subtitle and Author\u2019s Note boxes now save as you type, and an edit is kept even if you refresh or close the page straight away.",
+        "detail": "They used to save only when you clicked out of the box, so a refresh with the cursor still in it lost the edit. Now each saves about a second after you stop typing, and anything not yet saved is sent as the page closes, refreshes or goes to the background. An emptied Title is not saved while you retype it; leaving the box still puts the campaign name back. Test: type in each box and refresh at once; type and wait two seconds, then refresh.",
+        "td": [
+          "TD-1019"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.83",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3283-copyright-above-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The copyright line on the page after the title page now sits at the bottom, just above the Campaignia logo.",
+        "detail": "On the details page (page 3), the line \u00a9 year name. All rights reserved. moved from under Players and Story Master (and the Author\u2019s Note) down to the foot of the page, directly above the Campaignia logo and notice. Test: preview any book and look at page 3.",
+        "td": [
+          "TD-1018"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.82",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3282-subtitle-front-pages",
+        "kind": "change",
+        "public": true,
+        "summary": "Your subtitle now prints under the title on the title page and on the page after it, as well as on the cover. That page no longer prints the campaign name.",
+        "detail": "Pages 2 and 3 of the book (the title page with its picture, and the page with the copyright notice) show the subtitle in small italics under the title, the same words as the cover. The campaign name is no longer printed on page 3; it may only be a working name, and shows only if you put it in the title or subtitle. No subtitle, nothing extra. Test: preview a book with and without a subtitle.",
+        "td": [
+          "TD-1017"
+        ]
+      },
+      {
+        "id": "3282-author-note",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Author\u2019s Note box under the Subtitle: a note, message or dedication to your readers, printed on the page after the title page.",
+        "detail": "Order & Publish > Title & Cover: up to 600 characters with a counter, line breaks kept, no heading added. It prints on page 3 (the page with the copyright notice), below Players and Story Master and above the copyright line, in the PDF and the printed book only (not the Library page). Saved per version with the title, subtitle and cover, and kept with a saved book, so an ordered or reloaded book prints the note it was saved with; changing it after a save shows as a title and cover change. Test: type a note, preview, save the book, change the note, reload the saved book.",
+        "td": [
+          "TD-1017"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.81",
     "staged_on": "2026-10-25",
     "entries": [

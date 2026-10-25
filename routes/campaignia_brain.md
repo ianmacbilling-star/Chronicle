@@ -1501,7 +1501,16 @@ title and settings then follow the book everywhere — the Optimize tab renders 
 Order and Publish tab shows them, and they're still there when you come back tomorrow.
 
 **Subtitles are optional and empty by default.** Leave the field blank and nothing prints
-under the title; if you want the session dates there, type them.
+under the title; if you want the session dates there, type them. The subtitle prints under the
+title on the cover, the title page and the page after it (the one with the copyright notice). The
+campaign name is not printed there — it may only be a working name — unless you put it in the title
+or subtitle.
+
+**Author’s Note.** Under the Subtitle there is a box for a note to your readers — a message, a
+dedication, thanks, anything you like, up to 600 characters, line breaks kept. It prints, with no
+heading, on the page right after the title page, above the copyright line. It is saved with the
+version’s title, subtitle and cover (and kept with a saved book), and it appears in the PDF and the
+printed book only, not on the Library page — the Library uses the blurb you write when you publish.
 
 **Building, publishing and printing a version**
 
@@ -1693,7 +1702,8 @@ Everything here belongs to the version you picked on tab 1. **This is the quick 
 try things out** — stylings, fonts, decorations and layouts — because previewing here is
 **faster and cheaper than running Optimize**. Settle the look here first.
 
-- **Title and subtitle** — default to the campaign name; change them here.
+- **Title and subtitle** — default to the campaign name; change them here. The **Author’s Note** box under
+  them is a note to your readers, printed on the page after the title page (PDF and print only).
 - **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
   instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
   styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under

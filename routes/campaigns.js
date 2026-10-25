@@ -474,6 +474,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // v3.0.552 -- null is sent as null, NOT coerced to empty. The client needs to tell "never set"
     // from "cleared" so it knows whether to seed the field with the dates.
     subtitle: (cur.subtitle == null ? null : String(cur.subtitle)),
+    author_note: (cur.author_note == null ? '' : String(cur.author_note)),   // v3.2.82 -- TD-1017
     // The date range the cover would show, computed by the SAME function pdf.js renders with
     // (formatDateRange). The Prep panel seeds the subtitle field from this, so a book that has never
     // had a subtitle opens showing exactly what its cover already says -- and a second copy of a
@@ -576,6 +577,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // subtitle and shows its dates, empty means someone cleared it and it shows nothing. Collapsing
   // them would make the field settable but never removable, which is the thing Ian asked to fix.
   if (b.subtitle !== undefined) patch.subtitle = (b.subtitle === '' ? '' : (b.subtitle || null));
+  // v3.2.82 -- TD-1017. The author note: a note to the readers on the details page. 600 characters, line breaks kept.
+  if (b.author_note !== undefined) patch.author_note = String(b.author_note == null ? '' : b.author_note).replace(/\r\n/g, '\n').slice(0, 600);
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
   // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.
@@ -665,6 +668,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // materialise does) silently dropped a subtitle it had never touched. Two payloads describing
     // one record must carry the same fields or the caller has to remember which is which.
     subtitle: (merged.subtitle == null ? null : String(merged.subtitle)),
+    author_note: (merged.author_note == null ? '' : String(merged.author_note)),   // v3.2.82
     title_color: merged.title_color || '',
     layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''

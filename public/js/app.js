@@ -10861,6 +10861,7 @@ function loadNovelPreview(layout) {
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
+  url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -11096,6 +11097,7 @@ function prepTrueView() {
   var _t = document.getElementById('prep-title');
   if (_t && _t.value && _t.value.trim()) url += '&bookTitle=' + encodeURIComponent(_t.value.trim());
   var _s2 = document.getElementById('prep-subtitle'); if (_s2) url += '&subtitle=' + encodeURIComponent(_s2.value.trim());
+  url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
   var _c = document.getElementById('print-title-color');
   if (_c && _c.value) url += '&titleColor=' + encodeURIComponent(_c.value);
   window.open(url, '_blank');
@@ -11191,6 +11193,7 @@ function prepSyncTitle() {
       ? 'Sits under the title on the cover. Leave it empty for no subtitle at all.'
       : 'This is someone else s version. Switch to your own version to change the subtitle.';
   }
+  try { _prepAuthorNoteSync(_ownV); } catch (e) {}   // v3.2.82 -- TD-1017
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
@@ -12543,7 +12546,7 @@ function prepSaveTitleColor() {
 //
 // Cheap: it early-returns on every click in the app except the handful where a Prep field is
 // focused. Each saver already returns early when nothing changed, so the common case costs nothing.
-var PREP_COMMIT_IDS = ['prep-title', 'prep-subtitle', 'print-title-color'];
+var PREP_COMMIT_IDS = ['prep-title', 'prep-subtitle', 'prep-author-note', 'print-title-color'];   // v3.2.82 -- the author note
 function prepWireCommitOnExit() {
   if (prepWireCommitOnExit._done) return;
   prepWireCommitOnExit._done = true;
@@ -12820,6 +12823,7 @@ function prepCommitFields() {
   try {
     if (typeof prepSaveTitle === 'function') prepSaveTitle();
     if (typeof prepSaveSubtitle === 'function') prepSaveSubtitle();
+    if (typeof prepSaveAuthorNote === 'function') prepSaveAuthorNote();   // v3.2.82
     if (typeof prepSaveTitleColor === 'function') prepSaveTitleColor();
   } catch (e) {}
 }
@@ -19671,6 +19675,7 @@ function loadNovelPreview(layout) {
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
+  url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -30301,6 +30306,7 @@ function loadFinalize() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _ps = document.getElementById('prep-subtitle'); if (_ps) url += '&subtitle=' + encodeURIComponent(_ps.value.trim());
+  url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) { finalizeLoadLastOptimized(); return; }   // came back: reveal the 'Load Last Optimized File' button if one is saved
   loadFinalize._lastUrl = url;
@@ -34094,6 +34100,7 @@ function resetPublishForCampaignSwitch(force) {
   resetOptimizeLogForSwitch(force);   // v3.0.328: the optimize log describes a book we are leaving
   _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
+  var _an = document.getElementById('prep-author-note'); if (_an) { _an.value = ''; try { prepAuthorNoteCount(); } catch (e) {} }   // v3.2.82
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
   state.bookMeta = null;
@@ -37032,3 +37039,98 @@ function _narrGenLabels() {
     if (!b.disabled) b.textContent = p[1];
   });
 }
+// =====================================================================================
+// v3.2.82 -- TD-1017. THE AUTHOR NOTE. Ian, 2026-10-25: "a new box under the subtitle where an author can
+// write a note, message, whatever to the readers", printed on the details page (the one with the copyright and
+// the Campaignia notice), saved with the version's title, subtitle and cover. PDF and print only.
+// Saved like the subtitle: on change and on leaving the field (PREP_COMMIT_IDS), skipped when nothing changed.
+// Appended, not inserted (TD-853): nothing later in the file can shadow these.
+// =====================================================================================
+var PREP_AUTHOR_NOTE_MAX = 600;
+function prepAuthorNoteCount() {
+  var el = document.getElementById('prep-author-note');
+  var c = document.getElementById('prep-author-note-count');
+  if (!el || !c) return;
+  c.textContent = el.value.length + ' / ' + PREP_AUTHOR_NOTE_MAX;
+}
+function _prepAuthorNoteSync(own) {
+  var el = document.getElementById('prep-author-note');
+  if (!el) return;
+  var bm = state.bookMeta || {};
+  if (document.activeElement !== el) el.value = (bm.author_note == null) ? '' : String(bm.author_note);
+  el.readOnly = !own;
+  el.title = own
+    ? 'Printed on the page with the copyright notice, right after the title page. In the PDF and the printed book only.'
+    : 'This is someone else\u2019s version. Switch to your own version to change the note.';
+  prepAuthorNoteCount();
+}
+function prepSaveAuthorNote() {
+  var el = document.getElementById('prep-author-note');
+  if (!el || !state.currentCampaign) return;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var now = String(el.value || '').replace(/\r\n/g, '\n').slice(0, PREP_AUTHOR_NOTE_MAX);
+  var was = (state.bookMeta && state.bookMeta.author_note != null) ? String(state.bookMeta.author_note) : '';
+  if (now.trim() === was.trim()) return;
+  _prepMetaWrite({ author_note: now });
+}
+function _prepAuthorNoteQ() {
+  var el = document.getElementById('prep-author-note');
+  return el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '';
+}
+// =====================================================================================
+// v3.2.84 -- TD-1019. THE TITLE, SUBTITLE AND AUTHOR NOTE SAVE AS YOU TYPE, AND ON THE WAY OUT.
+// Ian, 2026-10-25: he typed an Author Note, refreshed, and it was gone -- and the subtitle the same. They
+// saved only when the box lost focus (onchange, and PREP_COMMIT_IDS on a click elsewhere), so a refresh or a
+// closed tab with the cursor still in the box lost the edit. Clicking away first saved it (Ian confirmed).
+//  1. About a second after typing stops, the box's own saver runs (prepSaveTitle / prepSaveSubtitle /
+//     prepSaveAuthorNote), so every existing rule holds: nothing sent when nothing changed, writes chained
+//     through _prepMetaWrite. An EMPTIED title is skipped here, because prepSaveTitle would put the
+//     campaign name back while the reader is still retyping; leaving the box still does that, as before.
+//  2. On pagehide, or the tab going hidden, anything typed and not yet saved goes in one PUT with
+//     keepalive, which the browser finishes even as the page closes.
+// Appended, not inserted (TD-853): nothing later in the file can shadow these.
+// =====================================================================================
+var PREP_TYPE_SAVE_MS = 1000;
+var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote' };
+var _prepTypeTimers = {};
+function _prepTypeSave(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (id === 'prep-title' && !String(el.value || '').trim()) return;
+  var fn = window[PREP_TYPE_SAVERS[id]];
+  if (typeof fn === 'function') { try { fn(); } catch (e) {} }
+}
+function _prepTypeSchedule(id) {
+  clearTimeout(_prepTypeTimers[id]);
+  _prepTypeTimers[id] = setTimeout(function () { delete _prepTypeTimers[id]; _prepTypeSave(id); }, PREP_TYPE_SAVE_MS);
+}
+function _prepUnsavedPatch() {
+  if (typeof state === 'undefined' || !state || !state.currentCampaign) return null;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return null;
+  var bm = state.bookMeta || {}, patch = {}, any = false;
+  var t = document.getElementById('prep-title');
+  if (t) { var tv = String(t.value || '').trim(); if (tv && tv !== String(bm.book_title || '')) { patch.book_title = tv; any = true; } }
+  var s = document.getElementById('prep-subtitle');
+  if (s) { var sv = String(s.value || '').trim(); if (sv !== (bm.subtitle != null ? String(bm.subtitle) : '')) { patch.subtitle = sv; any = true; } }
+  var n = document.getElementById('prep-author-note');
+  if (n) { var nv = String(n.value || '').replace(/\r\n/g, '\n').slice(0, 600); if (nv.trim() !== (bm.author_note != null ? String(bm.author_note) : '').trim()) { patch.author_note = nv; any = true; } }
+  return any ? patch : null;
+}
+function _prepFlushOnLeave() {
+  try {
+    Object.keys(_prepTypeTimers).forEach(function (k) { clearTimeout(_prepTypeTimers[k]); });
+    _prepTypeTimers = {};
+    var patch = _prepUnsavedPatch();
+    if (!patch) return;
+    var body = Object.assign({}, patch);
+    if (state.novelAsUser && body.fork_user == null) body.fork_user = state.novelAsUser;
+    var url = '/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?');
+    fetch(url, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    state.bookMeta = Object.assign(state.bookMeta || {}, patch);
+  } catch (e) {}
+}
+try {
+  document.addEventListener('input', function (e) { var id = e && e.target && e.target.id; if (id && PREP_TYPE_SAVERS[id]) _prepTypeSchedule(id); }, true);
+  window.addEventListener('pagehide', _prepFlushOnLeave);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') _prepFlushOnLeave(); });
+} catch (e) {}
