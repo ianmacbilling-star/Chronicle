@@ -16,6 +16,7 @@ const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 const transcriptCache = require('../services/transcriptCache');   // v3.2.56 -- TD-1010: the transcript goes first, kept
+const writtenOrder = require('../services/writtenOrder');   // v3.2.77 -- Already Written: pictures in the order of the text
 
 // v3.0.507 -- TITLE LENGTH IS A FUNCTION OF THE PICTURE'S WIDTH.
 // Ian, 2026-08-07: "keep the titles short based on the size of the image. So Tower Titles need to
@@ -217,6 +218,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   }
   // v3.1.27 -- IN FIRST PERSON. The version's narrator, or null (every book before this).
   const _narrator = await forkNarrator(db, targetForkId);
+  // v3.2.77 -- ALREADY WRITTEN TAKES ITS PICTURES IN THE ORDER OF THE TEXT (services/writtenOrder.js).
+  // Only this version's own stored choice counts: no genre default is Already Written. Any failure
+  // reads as "not Already Written", which is the old behaviour.
+  var _isWrittenOrder = false;
+  try {
+    const _nsRow = await db.prepare('SELECT narrative_style FROM session_forks WHERE id = ?').get(targetForkId);
+    _isWrittenOrder = !!(_nsRow && _nsRow.narrative_style === 'written');
+  } catch (_nse) { _isWrittenOrder = false; }
 
   // Image locking — Generate Story re-extracts by DELETEing and rebuilding
   // every moment on this version, which would destroy locked panels. Refuse
@@ -378,6 +387,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     // Spec: GENRE_AND_CAMPAIGN_PROMPT_SPEC.md section 5.2.
     (_genrePanels ? ('## ' + _genrePanels + '\n\n') : '') +
     (_campPrompt ? ('## GENERAL CAMPAIGN PROMPT (applies to every session in this campaign; follow it unless it conflicts with the COPYRIGHT rule, which always wins)\n' + _campPrompt + '\n\n') : '') +
+    (_isWrittenOrder ? writtenOrder.PROMPT_BLOCK : '') +   // v3.2.77 -- empty for every other style
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
     '{\n' +
     '  "title": "Session title (4-6 dramatic words)",\n' +
@@ -486,6 +496,18 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       }
     }
 
+    // v3.2.77 -- ALREADY WRITTEN: put the pictures in the order their passages appear in the text, even
+    // when the reply did not. A fault here leaves the reply's own order, which is what every build before did.
+    if (_isWrittenOrder && parsed && Array.isArray(parsed.moments) && parsed.moments.length) {
+      try {
+        var _wo = writtenOrder.sortByText(parsed.moments, parsed.narrative_outline && parsed.narrative_outline.panels, session.transcript);
+        parsed.moments = _wo.moments;
+        if (parsed.narrative_outline && Array.isArray(parsed.narrative_outline.panels)) parsed.narrative_outline.panels = _wo.panels;
+        console.log('[written-order] session ' + session.id + ' version ' + targetForkId + ': ' + _wo.found + ' of ' + _wo.total + ' panels found in the text; ' + (_wo.moved ? 'reordered to ' + _wo.order.map(function (k) { return k + 1; }).join(',') : 'already in text order'));
+      } catch (_woe) {
+        try { console.error('[written-order] left in the reply order: ' + (_woe && _woe.message)); } catch (_le) {}
+      }
+    }
     // Auto-save moments to database
     if (parsed.moments && parsed.moments.length) {
       // Phase 4 — regenerate replaces only the CALLER's version's moments.

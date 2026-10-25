@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.77",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3277-written-picture-order",
+        "kind": "fix",
+        "public": true,
+        "summary": "Already Written: Generate Story now puts the pictures in the order your text tells them and spreads them across the whole story, so every picture gets its own words and long passages are not left without a picture.",
+        "detail": "With Already Written chosen as the narrative style, Generate Story asks for the pictures in the order their passages appear in the text (not the order the events happened), spread from start to end, each with the first words of its passage; the server then sorts the pictures into text order by those words, so a reply that ignores the request is still put right. Every other narrative style is unchanged. Railway log line: [written-order] ... N of M panels found in the text; reordered to ... Test: on Salmon River Trip, choose Already Written, Generate Story, then Generate Narrative; no picture should be left with no text, and no long run of text should sit under one picture.",
+        "td": [
+          "TD-1012"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.76",
     "staged_on": "2026-10-25",
     "entries": [
