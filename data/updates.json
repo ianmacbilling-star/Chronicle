@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.81",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3281-date-stamp-not-watermark",
+        "kind": "fix",
+        "public": true,
+        "summary": "A camera date stamp on an uploaded picture (like 11/16/2006 in the corner) no longer counts as a watermark.",
+        "detail": "The picture check sometimes reported a camera date stamp as a watermark and refused the picture. If the only text it reads is a date and/or time, the picture is no longer refused; a watermark with any words, a name, a web address or a stock mark beside or instead of the date still is. Covers uploads, character reference builds and custom art style Analyze. Pictures already refused stay as they are (Ian). Test: upload a snapshot with an orange camera date stamp as an asset.",
+        "td": [
+          "TD-1016"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.80",
     "staged_on": "2026-10-25",
     "entries": [

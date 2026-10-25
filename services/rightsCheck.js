@@ -86,15 +86,32 @@ function parseReply(text) {
 
 function truthy(v) { return v === true || v === 'true' || v === 1; }
 
+// v3.2.81 -- TD-1016. A CAMERA DATE STAMP IS NOT A WATERMARK. Ian, 2026-10-25: "Dates don't count." The
+// definition above already says so and Haiku still flagged a 2006 snapshot's "11/16/2006" (and misread it as
+// 11/15/2006), so asking harder is not the fix -- the same lesson as the AI-tool credits in v3.2.17. A watermark
+// whose ONLY readable text is a date and/or time is not counted. One with no text, or any word, name, handle,
+// web address or symbol beside the date, still is.
+var MONTH_WORDS = /\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?|mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(rs(day)?)?|fri(day)?|sat(urday)?|sun(day)?)\.?\b/g;
+function isDateStampText(t) {
+  var s = String(t || '').toLowerCase().replace(/["\u201c\u201d]/g, '').trim();
+  if (!s) return false;
+  var hadMonth = MONTH_WORDS.test(s); MONTH_WORDS.lastIndex = 0;
+  s = s.replace(MONTH_WORDS, ' ').replace(/\b(a\.?m\.?|p\.?m\.?)(?=\s|$)/g, ' ').replace(/(\d)(st|nd|rd|th)\b/g, '$1');
+  if (!/^[\d\s\/.\-:,'\u2019]+$/.test(s)) return false;
+  var groups = s.match(/\d+/g) || [];
+  return groups.length >= 2 || (hadMonth && groups.length >= 1);
+}
+
 // A model answer -> a verdict. Exported so the analysis paths (v3.1.91) read answers the same way.
 function verdictFromAnswer(o) {
   if (!o) return { verdict: 'unchecked', reasons: [] };
   var reasons = [];
   var wt = String(o.watermark_text || '').trim().slice(0, 120);
   var st = String(o.signature_text || '').trim().slice(0, 120);
-  if (truthy(o.watermark)) reasons.push({ source: 'vision', kind: 'watermark', text: 'This picture has a watermark' + (wt ? (' (“' + wt + '”)') : '') + '.' });
+  var wm = truthy(o.watermark) && !isDateStampText(wt);   // v3.2.81 -- TD-1016: dates don't count
+  if (wm) reasons.push({ source: 'vision', kind: 'watermark', text: 'This picture has a watermark' + (wt ? (' (“' + wt + '”)') : '') + '.' });
   if (truthy(o.signature)) reasons.push({ source: 'vision', kind: 'signature', text: 'This picture looks signed' + (st ? (' (“' + st + '”)') : '') + '.' });
-  var verdict = truthy(o.watermark) ? 'reject' : (truthy(o.signature) ? 'warn' : 'ok');
+  var verdict = wm ? 'reject' : (truthy(o.signature) ? 'warn' : 'ok');
   return { verdict: verdict, reasons: reasons };
 }
 
@@ -436,6 +453,7 @@ function responseRights(map) {
 }
 
 module.exports = {
+  isDateStampText: isDateStampText,   // v3.2.81 -- TD-1016
   metadataCheck: metadataCheck, visionCheck: visionCheck, verdictFromAnswer: verdictFromAnswer, parseReply: parseReply,
   combine: combine, record: record, lookup: lookup, inherit: inherit, checkUpload: checkUpload,
   responseRights: responseRights, normUrl: normUrl, VISION_SYSTEM: VISION_SYSTEM,
