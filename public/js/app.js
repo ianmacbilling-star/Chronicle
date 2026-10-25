@@ -23331,8 +23331,12 @@ function renderStats(d) {
   html += '</div>';
   // v3.2.60 -- Ian: the view vuuserlastactive beside the stats. Stats on the left, the user list on the right (below
   // on a narrow screen); the list scrolls inside its own box.
-  box.innerHTML = '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">' +
-    '<div style="flex:0 1 520px;min-width:280px;">' + html + '</div>' +
+  // v3.2.88 -- TD-1022. Ian: a slider between the stats and the user grid, like Prep & Preview's. Wide screens only;
+  // on a narrow one the two still stack. The width is remembered in this browser (statsSplitPct).
+  var _stWide = window.innerWidth > 900;
+  box.innerHTML = '<div id="stats-split" style="display:flex;gap:' + (_stWide ? '0' : '28px') + ';flex-wrap:' + (_stWide ? 'nowrap' : 'wrap') + ';align-items:' + (_stWide ? 'stretch' : 'flex-start') + ';">' +
+    '<div id="stats-left" style="flex:0 ' + (_stWide ? '0 ' + _statsSplitBasis() : '1 520px') + ';min-width:240px;">' + html + '</div>' +
+    (_stWide ? '<div id="stats-splitter" onmousedown="statsSplitStart(event)" title="Drag to resize" style="flex:0 0 14px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 7px;"><div style="width:3px;height:60px;background:rgba(216,184,92,0.5);border-radius:2px;"></div></div>' : '') +
     '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span></div>' +
     // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
     // and dark scrollbars instead of inheriting the pane's.
@@ -37172,4 +37176,46 @@ function _splitDragShield(on, endFn) {
       _splitShieldEnd = null; window.removeEventListener('blur', _splitShieldBlur);
     }
   } catch (e) {}
+}
+// =====================================================================================
+// v3.2.88 -- TD-1022. THE STATS SLIDER. Ian, 2026-10-25: "a similar slider on the dashboard / Stats tab between the
+// stats and the query grid." Same behaviour as the Prep & Preview slider since v3.2.87: it lets go when you
+// release (the sheet over the page, _splitDragShield), a move with no button held ends it, and so does the window
+// losing focus. The stats side stays between 20% and 75% of the row; the choice is kept in this browser.
+// Appended, not inserted (TD-853).
+// =====================================================================================
+var _statsDrag = null;
+function _statsSplitBasis() {
+  var v = null;
+  try { v = parseFloat(window.localStorage.getItem('statsSplitPct')); } catch (e) { v = null; }
+  return (v && v >= 20 && v <= 75) ? (v + '%') : '520px';
+}
+function statsSplitStart(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  var split = document.getElementById('stats-split');
+  var left = document.getElementById('stats-left');
+  if (!split || !left) return;
+  _statsDrag = { x: e.clientX, w: left.getBoundingClientRect().width, total: split.getBoundingClientRect().width, pct: null };
+  document.addEventListener('mousemove', statsSplitMove);
+  document.addEventListener('mouseup', statsSplitEnd);
+  document.body.style.userSelect = 'none';
+  _splitDragShield(true, statsSplitEnd);
+}
+function statsSplitMove(e) {
+  if (!_statsDrag || !_statsDrag.total) return;
+  if (e && e.buttons === 0) { statsSplitEnd(); return; }
+  var left = document.getElementById('stats-left');
+  var pct = ((_statsDrag.w + (e.clientX - _statsDrag.x)) / _statsDrag.total) * 100;
+  if (pct < 20) pct = 20; if (pct > 75) pct = 75;
+  if (left) left.style.flexBasis = pct.toFixed(2) + '%';
+  _statsDrag.pct = pct;
+}
+function statsSplitEnd() {
+  var pct = _statsDrag ? _statsDrag.pct : null;
+  _statsDrag = null;
+  document.removeEventListener('mousemove', statsSplitMove);
+  document.removeEventListener('mouseup', statsSplitEnd);
+  document.body.style.userSelect = '';
+  _splitDragShield(false);
+  try { if (pct != null) window.localStorage.setItem('statsSplitPct', String(Math.round(pct * 100) / 100)); } catch (e) {}
 }

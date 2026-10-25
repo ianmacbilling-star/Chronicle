@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.88",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3288-stats-slider",
+        "kind": "ops",
+        "public": false,
+        "summary": "Dashboard > Stats: a slider between the stats and the users grid.",
+        "detail": "Drag the bar between the two to make either side wider; it lets go when you release, like the Prep & Preview slider, and the width is remembered in this browser. On a narrow screen the two still stack with no slider. Test: Dashboard > Stats, drag the bar, release, reload.",
+        "td": [
+          "TD-1022"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.87",
     "staged_on": "2026-10-25",
     "entries": [
