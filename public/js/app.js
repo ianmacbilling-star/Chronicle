@@ -23651,9 +23651,11 @@ function novelSplitStart(e){
   document.addEventListener('mousemove', novelSplitMove);
   document.addEventListener('mouseup', novelSplitEnd);
   document.body.style.userSelect='none';
+  _splitDragShield(true, novelSplitEnd);   // v3.2.86 -- TD-1021: the preview frame no longer swallows the release
 }
 function novelSplitMove(e){
   if(!_novelDrag || !_novelDrag.total) return;
+  if(e && e.buttons === 0){ novelSplitEnd(); return; }   // v3.2.86 -- the button was let go where we could not hear it
   var prep=document.getElementById('novel-prep-panel');
   var pct=((_novelDrag.w + (e.clientX - _novelDrag.x)) / _novelDrag.total) * 100;
   if(pct<20) pct=20; if(pct>70) pct=70;
@@ -23665,6 +23667,7 @@ function novelSplitEnd(){
   document.removeEventListener('mousemove', novelSplitMove);
   document.removeEventListener('mouseup', novelSplitEnd);
   document.body.style.userSelect='';
+  _splitDragShield(false);   // v3.2.86
   try{ if(_novelSplitPct!=null) localStorage.setItem('novelSplitPct', String(Math.round(_novelSplitPct*100)/100)); }catch(_e){}
 }
 function novelSplitInit(){
@@ -33683,9 +33686,11 @@ function finalizeSplitStart(e) {
   document.addEventListener('mousemove', finalizeSplitMove);
   document.addEventListener('mouseup', finalizeSplitEnd);
   document.body.style.userSelect = 'none';
+  _splitDragShield(true, finalizeSplitEnd);   // v3.2.86 -- TD-1021, the same fix on the Optimize splitter
 }
 function finalizeSplitMove(e) {
   if (!_finalizeDrag || !_finalizeDrag.total) return;
+  if (e && e.buttons === 0) { finalizeSplitEnd(); return; }   // v3.2.86
   var left = document.getElementById('finalize-left');
   var pct = ((_finalizeDrag.w + (e.clientX - _finalizeDrag.x)) / _finalizeDrag.total) * 100;
   if (pct < 20) pct = 20; if (pct > 75) pct = 75;
@@ -33696,6 +33701,7 @@ function finalizeSplitEnd() {
   document.removeEventListener('mousemove', finalizeSplitMove);
   document.removeEventListener('mouseup', finalizeSplitEnd);
   document.body.style.userSelect = '';
+  _splitDragShield(false);   // v3.2.86
 }
 function finalizeSetPdfTab(which) {
   // Tabs removed -- the panes are always side by side now. Kept as a safe hook so existing callers
@@ -37134,3 +37140,24 @@ try {
   window.addEventListener('pagehide', _prepFlushOnLeave);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') _prepFlushOnLeave(); });
 } catch (e) {}
+// =====================================================================================
+// v3.2.86 -- TD-1021. A SPLITTER LETS GO WHEN YOU LET GO. Ian, 2026-10-25: the slider between the Prep panel
+// and the preview had to be clicked again to release it. The release (mouseup) was listened for on this
+// document, but the pointer was usually over the PREVIEW, which is an iframe -- a separate document that
+// keeps the mouseup to itself -- so the drag carried on until the next click. While a splitter is dragged,
+// every iframe ignores the pointer, so the release always reaches this page; a move with no button held,
+// or the window losing focus, also ends it. Used by both splitters (Prep & Preview and Optimize).
+// Appended, not inserted (TD-853).
+// =====================================================================================
+var _splitShieldEnd = null;
+function _splitShieldBlur() { if (typeof _splitShieldEnd === 'function') _splitShieldEnd(); }
+function _splitDragShield(on, endFn) {
+  try {
+    Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (f) {
+      if (on) { if (f.getAttribute('data-split-pe') == null) f.setAttribute('data-split-pe', f.style.pointerEvents || ''); f.style.pointerEvents = 'none'; }
+      else if (f.getAttribute('data-split-pe') != null) { f.style.pointerEvents = f.getAttribute('data-split-pe'); f.removeAttribute('data-split-pe'); }
+    });
+    if (on) { _splitShieldEnd = endFn || null; window.addEventListener('blur', _splitShieldBlur); }
+    else { _splitShieldEnd = null; window.removeEventListener('blur', _splitShieldBlur); }
+  } catch (e) {}
+}

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.86",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3286-splitter-release",
+        "kind": "fix",
+        "public": true,
+        "summary": "The slider between the Prep panel and the preview now lets go when you release the mouse; no second click needed. Same for the Optimize tab slider.",
+        "detail": "Releasing the mouse over the preview was never heard by the page (the preview is a separate frame), so the slider stayed stuck to the pointer until the next click. While you drag, the preview now ignores the pointer, and a move with no button held or the window losing focus also ends the drag. Test: on Prep & Preview, drag the slider over the preview and let go.",
+        "td": [
+          "TD-1021"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.85",
     "staged_on": "2026-10-25",
     "entries": [
