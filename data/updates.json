@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.79",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3279-place-narrative-labels",
+        "kind": "change",
+        "public": true,
+        "summary": "With Already Written, the narrative buttons now say Place Narrative instead of Generate Narrative, because your own words are placed beside the pictures, not written for you.",
+        "detail": "Labels only; what the buttons do is unchanged. Review tab: Campaignia draws + Already Written reads Place Narrative, Generate Images; I'll illustrate it myself + Already Written reads Place Narrative; I'll illustrate it myself with any other style still reads Generate Narrative; otherwise Generate Narrative & Images. Storyboard: Place Narrative with Already Written, else Generate Narrative, and while it runs it says Placing narrative. The labels change as soon as the narrative style or who draws changes. Test: switch a version between Already Written and another style, and the illustrate switch, and read both tabs.",
+        "td": [
+          "TD-1014"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.78",
     "staged_on": "2026-10-25",
     "entries": [
