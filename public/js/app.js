@@ -1823,10 +1823,15 @@ function renderCleanup(d) {
   if (d.running) h += '<div>Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
   if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
   var o = d.last;
-  if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode === 'hold' ? 'move to holding' : o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): unused over 30 days ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
+  // v3.2.74 -- every folder: a line per folder under the totals.
+  var FL = { uploads: 'pictures', archives: 'archived pictures', optimized: 'saved books and covers', story: 'story PDFs', print: 'print PDFs' };
+  var folderLine = (o && o.byFolder) ? ('<div style="opacity:0.85;">' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return o.byFolder[k]; }).map(function (k) { var f = o.byFolder[k];
+    return _upEsc(FL[k]) + ' ' + f.unused + (o.mode === 'hold' ? (f.skipped ? ' (left alone: over 85% looked orphaned)' : (' \u2192 moved ' + f.moved)) : ''); }).join(' \u00b7 ') + '</div>') : '';
+  if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode === 'hold' ? 'move to holding' : o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): orphaned ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
     (o.mode === 'hold' ? (' \u00b7 moved to holding ' + o.moved + ' (' + _upBytes(o.movedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed)
       : (o.mode === 'delete' ? (' \u00b7 deleted ' + o.deleted + ' (' + _upBytes(o.deletedBytes) + ')') : ' \u00b7 nothing moved')) + '</div>' +
     (o.refused ? ('<div style="color:#ffb38a;"><strong>Not moved:</strong> ' + _upEsc(o.refused) + '</div>') : '') +
+    folderLine +
     (o.emptied ? ('<div>Held over ' + o.emptied.days + ' days, deleted for good: ' + o.emptied.deleted + ' (' + _upBytes(o.emptied.deletedBytes) + ')' + (o.emptied.failed ? (' \u00b7 failed ' + o.emptied.failed) : '') + '</div>') : '');
   var jb = d.job;
   if (jb && jb.kind === 'restore' && jb.inUse) h += '<div><strong>Last put back of what is in use</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): checked ' + jb.checked + ' held \u00b7 back ' + jb.restored + ' \u00b7 already in place ' + jb.already + ' \u00b7 failed ' + jb.failed + '</div>';
@@ -1863,7 +1868,10 @@ function holdLoad() {
   fetch('/api/admin/storage-holding', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
     if (!out) return;
     if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read holding.'; return; }
-    out.innerHTML = 'Holding ' + _upEsc(d.bucket) + '/' + _upEsc(d.prefix) + ': <strong>' + d.count + '</strong> pictures (' + _upBytes(d.bytes) + ')' +
+    var FL = { uploads: 'pictures', archives: 'archived pictures', optimized: 'saved books and covers', story: 'story PDFs', print: 'print PDFs' };   // v3.2.74
+    var bf = d.byFolder || {};
+    out.innerHTML = 'Holding ' + _upEsc(d.bucket) + '/' + _upEsc(d.prefix) + ': <strong>' + d.count + '</strong> files (' + _upBytes(d.bytes) + ')' +
+      (Object.keys(bf).length ? (' \u2014 ' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return bf[k]; }).map(function (k) { return _upEsc(FL[k]) + ' ' + bf[k].count + ' (' + _upBytes(bf[k].bytes) + ')'; }).join(', ')) : '') +
       (d.oldest ? (' \u00b7 held since ' + _upEsc(String(d.oldest).slice(0, 10)) + (d.newest && String(d.newest).slice(0, 10) !== String(d.oldest).slice(0, 10) ? (' to ' + _upEsc(String(d.newest).slice(0, 10))) : '')) : '');
   }).catch(function (e) { if (out) out.textContent = e.message; });
 }
@@ -1871,7 +1879,7 @@ function holdCsv() {
   fetch('/api/admin/storage-holding.csv', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (t) {
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv' }));
-    a.download = 'held-pictures-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.download = 'held-files-' + new Date().toISOString().slice(0, 10) + '.csv';
     document.body.appendChild(a); a.click();
     setTimeout(function () { try { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); } catch (e) {} }, 1000);
   });
@@ -1884,7 +1892,7 @@ function _holdPost(path, body) {
 function holdRestore(all) {
   var ta = document.getElementById('hold-names');
   var names = all ? [] : String((ta && ta.value) || '').split(/[\r\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-  if (!all && !names.length) { var o = document.getElementById('hold-out'); if (o) o.textContent = 'Paste a picture name or address first.'; return; }
+  if (!all && !names.length) { var o = document.getElementById('hold-out'); if (o) o.textContent = 'Paste a file name or address first.'; return; }
   _holdPost('restore', all ? { all: true } : { names: names });
 }
 function holdRestoreInUse() { _holdPost('restore', { inUse: true }); }   // v3.2.70

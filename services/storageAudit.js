@@ -124,13 +124,15 @@ async function unusedPictureReport(db, opts) {
 // a file can be stored a moment before its row is written; 90 days for print/, because a print PDF waits in the
 // reader's browser from Prepare Your Order until payment, and only then is written to print_orders. Moves nothing --
 // the monthly clean-up still touches uploads/ only.
+// v3.2.74 -- the monthly clean-up moves every folder (Ian, 2026-10-25), with its own, longer wait: 30 days, and 90
+// for print/. moveMinAgeMs is that wait; minAgeMs stays the report's.
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FOLDERS = [
-  { prefix: 'uploads/', label: 'Pictures', minAgeMs: RECENT_MS },
-  { prefix: 'archives/', label: 'Archived pictures', minAgeMs: RECENT_MS },
-  { prefix: 'optimized/', label: 'Saved books, Bookshelf copies and order covers', minAgeMs: RECENT_MS },
-  { prefix: 'story/', label: 'Published story PDFs', minAgeMs: RECENT_MS },
-  { prefix: 'print/', label: 'Print PDFs', minAgeMs: 90 * DAY_MS }
+  { prefix: 'uploads/', label: 'Pictures', minAgeMs: RECENT_MS, moveMinAgeMs: 30 * DAY_MS },
+  { prefix: 'archives/', label: 'Archived pictures', minAgeMs: RECENT_MS, moveMinAgeMs: 30 * DAY_MS },
+  { prefix: 'optimized/', label: 'Saved books, Bookshelf copies and order covers', minAgeMs: RECENT_MS, moveMinAgeMs: 30 * DAY_MS },
+  { prefix: 'story/', label: 'Published story PDFs', minAgeMs: RECENT_MS, moveMinAgeMs: 30 * DAY_MS },
+  { prefix: 'print/', label: 'Print PDFs', minAgeMs: 90 * DAY_MS, moveMinAgeMs: 90 * DAY_MS }
 ];
 function fileKind(key) {
   if (/^uploads\//.test(key)) return kindOf(key);
@@ -151,12 +153,13 @@ async function orphanReport(db, opts) {
     saved_books: scan.savedBooks || 0, keys_mentioned: scan.refs.size, folders: [],
     listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0, items: [] };
   FOLDERS.forEach(function (f, i) {
-    const r = { prefix: f.prefix, label: f.label, min_age_days: Math.round(f.minAgeMs / DAY_MS), listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0 };
+    const minAge = opts.forMove ? f.moveMinAgeMs : f.minAgeMs;   // v3.2.74
+    const r = { prefix: f.prefix, label: f.label, min_age_days: Math.round(minAge / DAY_MS), listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0 };
     lists[i].forEach(function (o) {
       r.listed++; r.listed_bytes += o.size || 0;
       if (scan.refs.has(o.key)) { r.in_use++; return; }
       const t = Date.parse(o.lastModified);
-      if (isNaN(t) || (now - t) < f.minAgeMs) { r.recent++; return; }
+      if (isNaN(t) || (now - t) < minAge) { r.recent++; return; }
       r.unused++; r.unused_bytes += o.size || 0;
       out.items.push({ key: o.key, folder: f.prefix.slice(0, -1), kind: fileKind(o.key), size: o.size || 0, last_modified: o.lastModified });
     });

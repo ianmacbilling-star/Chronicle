@@ -2396,32 +2396,32 @@
             <input type="checkbox" id="cleanup-toggle" onchange="cleanupSetMode(this.checked ? 'hold' : 'report')" style="width:18px;height:18px;">
             Monthly job: <span id="cleanup-toggle-word">Off</span>
           </label>
-          <div class="settings-section-desc" style="margin:4px 0 12px;">When On, on the 1st of each month it moves orphaned pictures over 30 days old into the holding bucket,
-            deletes anything that has been in holding over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.
-            It handles pictures only; PDFs are reported above but never moved.</div>
+          <div class="settings-section-desc" style="margin:4px 0 12px;">When On, on the 1st of each month it moves orphaned pictures, PDFs and saved books into the holding bucket
+            (pictures, archived pictures, saved books and story PDFs over 30 days old; print PDFs over 90), deletes anything that has been in holding
+            over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.</div>
           <div class="cu-row"><button class="btn btn-sm" onclick="cleanupRun(false)">Run report</button>
-            <span class="settings-section-desc">Counts the orphaned pictures over 30 days old that would go to holding. Moves nothing.</span></div>
+            <span class="settings-section-desc">Counts the orphaned pictures, PDFs and saved books that would go to holding (pictures, archives, saved books and stories over 30 days old; print PDFs over 90). Moves nothing.</span></div>
           <div class="cu-row"><button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding</button>
             <span class="settings-section-desc">Moves them now, without waiting for the 1st. Click twice to confirm.</span></div>
           <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
           <!-- v3.2.69 -- TD-1006. The holding bucket. v3.2.72 -- reworded with Ian, a description beside every button. -->
           <div style="font-weight:600;margin:16px 0 8px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">Manage holding bucket</div>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
-            <span class="settings-section-desc">Shows how many pictures are in holding, how much space they take, and when they were moved. Changes nothing.</span></div>
+            <span class="settings-section-desc">Shows how many files are in holding, folder by folder, how much space they take, and when they were moved. Changes nothing.</span></div>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
-            <span class="settings-section-desc">Every picture in holding, with the date it was moved.</span></div>
-          <div class="settings-section-desc" style="margin:12px 0 4px;">Paste picture names or addresses, one per line or separated by commas:</div>
+            <span class="settings-section-desc">Every file in holding, with its folder and the date it was moved.</span></div>
+          <div class="settings-section-desc" style="margin:12px 0 4px;">Paste file names or addresses, one per line or separated by commas:</div>
           <textarea id="hold-names" class="form-input" rows="3" placeholder="gen-1787635888241-8e22b1fe27e52f56.png" style="width:100%;max-width:640px;"></textarea>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
-            <span class="settings-section-desc">Returns the pasted pictures to where they were. A picture put back is never moved to holding again.</span></div>
+            <span class="settings-section-desc">Returns the pasted files to where they were. A file put back is never moved to holding again.</span></div>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything no longer orphaned</button>
-            <span class="settings-section-desc">Checks every held picture again and returns any that are in use after all. Use it after a fix to the check, or after restoring the database from a backup.</span></div>
+            <span class="settings-section-desc">Checks every held file again and returns any that are in use after all. Use it after a fix to the check, or after restoring the database from a backup.</span></div>
           <div class="cu-row"><button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put back everything</button>
-            <span class="settings-section-desc">Returns every held picture. Click twice to confirm.</span></div>
+            <span class="settings-section-desc">Returns every held file. Click twice to confirm.</span></div>
           <div class="cu-row" style="margin-top:12px;"><span style="font-weight:600;">Delete from holding:</span>
             <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">any age</option><option value="7">held over 7 days</option><option value="30">held over 30 days</option><option value="90" selected>held over 90 days</option></select>
             <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Delete for good</button></div>
-          <div class="settings-section-desc" style="margin:4px 0 0;">Permanently deletes held pictures older than the age you pick. The monthly job does the same with 90 days; this does it now, with any age. It can&rsquo;t be undone. Click twice to confirm.</div>
+          <div class="settings-section-desc" style="margin:4px 0 0;">Permanently deletes held files older than the age you pick. The monthly job does the same with 90 days; this does it now, with any age. It can&rsquo;t be undone. Click twice to confirm.</div>
           <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
         </div>
       </div>

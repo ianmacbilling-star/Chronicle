@@ -10,11 +10,17 @@
 // or when the monthly run in Move to holding mode finds them held over 90 days (Ian 2026-10-24).
 // Refused unless the environment is on its own bucket and the holding bucket is a third one, or when over 60% of the
 // bucket looks unused (that would mean the check is wrong). Only counts are kept for the last run.
+// v3.2.74 -- EVERY FOLDER (Ian, 2026-10-25): pictures, archived pictures, saved books / Bookshelf copies / order
+// covers, published story PDFs (all over 30 days) and print PDFs (over 90). Held as <environment>/<folder>/<name>, so
+// Put back returns each file to its folder. Besides the 60% brake on the whole bucket, a folder where more than 85%
+// looks orphaned (with at least 10 files) is left alone that run -- the check failing for one folder looks like that.
 const storage = require('../storage/storage');
 const audit = require('./storageAudit');
 
 const MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_UNUSED_SHARE = 0.6;
+const MAX_FOLDER_SHARE = 0.85, FOLDER_MIN_FILES = 10;   // v3.2.74
+const FOLDER_NAMES = ['uploads', 'archives', 'optimized', 'story', 'print'];
 const MODES = ['off', 'report', 'hold'];
 const KEEP_MAX = 20000;
 const HOLD_DAYS = 90;
@@ -84,26 +90,31 @@ async function moveOne(it, own, hold) {
 // One run. doMove false = report only.
 async function run(db, doMove, now) {
   now = now || Date.now();
-  const rep = await audit.unusedPictureReport(db, { now: now, minAgeMs: MIN_AGE_MS });
+  const rep = await audit.orphanReport(db, { now: now, forMove: true });   // v3.2.74 -- every folder
   if (rep.error) throw new Error(rep.error);
   const keep = new Set(await getKeep(db));
   const items = rep.items.filter(function (it) { return !keep.has(it.key); });
   const kept = rep.items.length - items.length;
   const unusedBytes = items.reduce(function (a, it) { return a + (it.size || 0); }, 0);
+  const byFolder = {};
+  (rep.folders || []).forEach(function (f) { byFolder[f.prefix.slice(0, -1)] = { listed: f.listed, waitDays: f.min_age_days, unused: 0, unusedBytes: 0, moved: 0, movedBytes: 0, skipped: false }; });
+  items.forEach(function (it) { const b = byFolder[it.folder]; if (b) { b.unused++; b.unusedBytes += it.size || 0; } });
   const out = { at: new Date(now).toISOString(), env: rep.env, bucket: storage.bucketName(), holdBucket: storage.holdingBucket(), mode: doMove ? 'hold' : 'report',
     listed: rep.listed, listedBytes: rep.listed_bytes, inUse: rep.in_use, tooNew: rep.recent, unused: items.length, unusedBytes: unusedBytes, putBackBefore: kept,
-    byKind: rep.by_kind, moved: 0, movedBytes: 0, nowInUse: 0, failed: 0, refused: '', savedBooks: rep.saved_books || 0 };
+    byFolder: byFolder, moved: 0, movedBytes: 0, nowInUse: 0, failed: 0, refused: '', skippedFolders: [], savedBooks: rep.saved_books || 0 };
   if (doMove && items.length) {
     const allowed = deletionAllowed();
     if (!allowed.ok) out.refused = allowed.why;
     else if (rep.listed && items.length / rep.listed > MAX_UNUSED_SHARE) out.refused = 'More than ' + Math.round(MAX_UNUSED_SHARE * 100) + '% of the bucket looks unused (' + items.length + ' of ' + rep.listed + '); nothing moved, as that suggests the check is wrong.';
     else {
+      // v3.2.74 -- a folder that looks almost entirely orphaned is left alone this run.
+      Object.keys(byFolder).forEach(function (k) { const b = byFolder[k]; if (b.listed >= FOLDER_MIN_FILES && b.unused / b.listed > MAX_FOLDER_SHARE) { b.skipped = true; out.skippedFolders.push(k); } });
       const fresh = await audit.referencedKeys(db);   // the last look, just before moving
-      const todo = items.filter(function (it) { if (fresh.refs.has(it.key)) { out.nowInUse++; return false; } return true; });
+      const todo = items.filter(function (it) { if (byFolder[it.folder] && byFolder[it.folder].skipped) return false; if (fresh.refs.has(it.key)) { out.nowInUse++; return false; } return true; });
       const own = storage.bucketName(), hold = storage.holdingBucket();
       S.phase = 'moving to holding';
       await pool(todo, async function (it) {
-        try { await moveOne(it, own, hold); out.moved++; out.movedBytes += it.size || 0; }
+        try { await moveOne(it, own, hold); out.moved++; out.movedBytes += it.size || 0; const b = byFolder[it.folder]; if (b) { b.moved++; b.movedBytes += it.size || 0; } }
         catch (e) { out.failed++; }
       });
     }
@@ -113,12 +124,19 @@ async function run(db, doMove, now) {
 }
 
 function mb(n) { return ((n || 0) / 1048576).toFixed(1) + ' MB'; }
+const FOLDER_LABELS = { uploads: 'pictures', archives: 'archived pictures', optimized: 'saved books and covers', story: 'story PDFs', print: 'print PDFs' };
+function folderLines(o) {
+  const b = o.byFolder || {};
+  return FOLDER_NAMES.filter(function (k) { return b[k]; }).map(function (k) { const f = b[k];
+    return '  ' + FOLDER_LABELS[k] + ' (' + k + '/): orphaned ' + f.unused + ' (' + mb(f.unusedBytes) + ')' + (o.mode === 'hold' ? (f.skipped ? '   LEFT ALONE: over 85% looked orphaned' : ('   moved ' + f.moved)) : ''); }).join(String.fromCharCode(10));
+}
 function summaryText(o) {
   const NL = String.fromCharCode(10);
   return ['Storage clean-up (' + (o.mode === 'hold' ? 'move to holding' : 'report') + ') on ' + o.env + ', bucket ' + o.bucket + ', ' + o.at, '',
-    'Files under uploads/: ' + o.listed + ' (' + mb(o.listedBytes) + ')',
-    'In use: ' + o.inUse + '   newer than 30 days: ' + o.tooNew + (o.putBackBefore ? ('   put back before, kept: ' + o.putBackBefore) : '') + '   saved books opened: ' + (o.savedBooks || 0),
-    'Unused and over 30 days: ' + o.unused + ' (' + mb(o.unusedBytes) + ')' + (o.byKind ? ('  ' + Object.keys(o.byKind).sort().map(function (k) { return k + ' ' + o.byKind[k].count; }).join(', ')) : ''),
+    'Files in storage: ' + o.listed + ' (' + mb(o.listedBytes) + ')',
+    'In use: ' + o.inUse + '   too new (30 days; print PDFs 90): ' + o.tooNew + (o.putBackBefore ? ('   put back before, kept: ' + o.putBackBefore) : '') + '   saved books opened: ' + (o.savedBooks || 0),
+    'Orphaned: ' + o.unused + ' (' + mb(o.unusedBytes) + ')',
+    folderLines(o),
     o.mode === 'hold' ? ('Moved to holding (' + o.holdBucket + '): ' + o.moved + ' (' + mb(o.movedBytes) + ')   started being used, kept: ' + o.nowInUse + '   failed: ' + o.failed + NL + 'Nothing is deleted. Dashboard > Tools > Manage holding bucket to put back or delete.')
       : 'Report only: nothing moved. Turn the Monthly job On (Dashboard > Tools > Monthly clean-up) to move them each month.',
     o.refused ? ('NOT MOVED: ' + o.refused) : '',
@@ -164,30 +182,36 @@ async function maybeMonthly(db, nowDate) {
 }
 
 // ---- Holding -------------------------------------------------------------------------------------------------
-async function held() {
-  const list = await storage.listObjects(holdPrefix() + 'uploads/', storage.holdingBucket());
-  return (list || []).map(function (o) { return { key: o.key.slice(holdPrefix().length), size: o.size, heldSince: o.lastModified }; });
+async function held() {   // v3.2.74 -- every folder of this environment
+  const list = await storage.listObjects(holdPrefix(), storage.holdingBucket());
+  return (list || []).map(function (o) { const key = o.key.slice(holdPrefix().length); return { key: key, folder: key.split('/')[0], size: o.size, heldSince: o.lastModified }; })
+    .filter(function (o) { return FOLDER_NAMES.indexOf(o.folder) >= 0; });
 }
 async function holdingSummary() {
   const ok = holdingOk(); if (!ok.ok) return { bucket: storage.holdingBucket(), prefix: holdPrefix(), error: ok.why };
   const h = await held();
   const dates = h.map(function (o) { return o.heldSince; }).filter(Boolean).sort();
+  const byFolder = {};
+  h.forEach(function (o) { const b = byFolder[o.folder] = byFolder[o.folder] || { count: 0, bytes: 0 }; b.count++; b.bytes += o.size || 0; });
   return { bucket: storage.holdingBucket(), prefix: holdPrefix(), count: h.length, bytes: h.reduce(function (a, o) { return a + (o.size || 0); }, 0),
-    oldest: dates[0] || null, newest: dates[dates.length - 1] || null };
+    oldest: dates[0] || null, newest: dates[dates.length - 1] || null, byFolder: byFolder };
 }
 async function heldCsv() {
   const h = await held();
-  return 'key,held_since,size_bytes\n' + h.map(function (o) { return o.key + ',' + (o.heldSince || '') + ',' + (o.size || 0); }).join('\n') + '\n';
+  return 'key,folder,held_since,size_bytes\n' + h.map(function (o) { return o.key + ',' + o.folder + ',' + (o.heldSince || '') + ',' + (o.size || 0); }).join('\n') + '\n';
 }
 
-// A picture's name or its web address -> its key (uploads/<name>), or null.
-function nameToKey(s) {
+// A file's name or its web address -> the keys it could be: one when the folder is in it (an address always has
+// it), one per folder for a bare name. [] when it cannot be read. v3.2.74 -- every folder (was uploads/ only).
+function nameToKeys(s) {
   s = String(s || '').trim().split(/[?#]/)[0].replace(/[.,;:)\]'"]+$/, '');   // v3.2.70 -- a trailing full stop or comma
-  if (!s) return null;
-  const m = s.match(/(?:^|\/)uploads\/([A-Za-z0-9._\-]+)$/);
-  const name = m ? m[1] : (/^[A-Za-z0-9._\-]+$/.test(s) ? s : null);
-  return (name && name !== '.' && name !== '..') ? ('uploads/' + name) : null;
+  if (!s) return [];
+  const m = s.match(/(?:^|\/)(uploads|archives|optimized|story|print)\/([A-Za-z0-9._\-]+)$/);
+  if (m) return (m[2] !== '.' && m[2] !== '..') ? [m[1] + '/' + m[2]] : [];
+  if (!/^[A-Za-z0-9._\-]+$/.test(s) || s === '.' || s === '..') return [];
+  return FOLDER_NAMES.map(function (f) { return f + '/' + s; });
 }
+function nameToKey(s) { const k = nameToKeys(s); return k.length ? k[0] : null; }   // kept for the old callers: a bare name reads as uploads/
 
 // One picture home: never over a file that is already there; copy, check, then remove the held copy.
 async function restoreOne(key, own, hold) {
@@ -204,8 +228,14 @@ async function restore(db, names, all) {
   startJob('putting back', async function () {
     const res = { kind: 'restore', at: new Date().toISOString(), restored: 0, already: 0, notHeld: 0, unreadable: 0, failed: 0 };
     let keys;
-    if (all) keys = (await held()).map(function (o) { return o.key; });
-    else { keys = []; (names || []).forEach(function (n) { const k = nameToKey(n); if (k) { if (keys.indexOf(k) < 0) keys.push(k); } else if (String(n || '').trim()) res.unreadable++; }); }
+    const heldList = await held();
+    if (all) keys = heldList.map(function (o) { return o.key; });
+    else {
+      // v3.2.74 -- a bare name is looked up in every folder; the one that is held is the one put back.
+      const heldSet = new Set(heldList.map(function (o) { return o.key; }));
+      keys = []; (names || []).forEach(function (n) { const c = nameToKeys(n); if (!c.length) { if (String(n || '').trim()) res.unreadable++; return; }
+        const k = c.filter(function (x) { return heldSet.has(x); })[0] || c[0]; if (keys.indexOf(k) < 0) keys.push(k); });
+    }
     const own = storage.bucketName(), hold = storage.holdingBucket(), back = [];
     await pool(keys, async function (k) {
       try { const r = await restoreOne(k, own, hold); if (r === 'restored') { res.restored++; back.push(k); } else if (r === 'already') { res.already++; back.push(k); } else res.notHeld++; }
@@ -223,7 +253,7 @@ async function restoreInUse(db) {
   startJob('checking what is in use', async function () {
     const res = { kind: 'restore', inUse: true, at: new Date().toISOString(), checked: 0, restored: 0, already: 0, notHeld: 0, unreadable: 0, failed: 0 };
     const fresh = await audit.referencedKeys(db);
-    const h = await held();
+    const h = await held();   // every folder since v3.2.74
     res.checked = h.length;
     const keys = h.map(function (o) { return o.key; }).filter(function (k) { return fresh.refs.has(k); });
     S.phase = 'putting back';
@@ -256,4 +286,4 @@ async function emptyOld(days, now) {
 }
 
 module.exports = { status, run, runNow, maybeMonthly, getMode, setMode, deletionAllowed, holdingOk, summaryText, holdingSummary, heldCsv,
-  nameToKey, restore, restoreInUse, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, HOLD_DAYS };
+  nameToKey, nameToKeys, restore, restoreInUse, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, MAX_FOLDER_SHARE, HOLD_DAYS };
