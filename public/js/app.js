@@ -1761,6 +1761,37 @@ function impersonateSyncAdminPanel() {
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
   if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  var msec = document.getElementById('storage-move-section');   // v3.2.67 -- TD-1006, same rule
+  if (msec) msec.style.display = (isAdmin && !inSession) ? '' : 'none';
+}
+
+// v3.2.67 -- TD-1006. Staging's one-time move to its own bucket: setup, progress and results.
+var _smTimer = null;
+function renderStorageMove(d) {
+  var out = document.getElementById('storage-move-out'); if (!out) return;
+  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read the move status.'; return; }
+  var c = d.config || {};
+  var h = '<div><strong>Environment:</strong> ' + _upEsc(c.env) + ' \u00b7 <strong>own bucket:</strong> ' + _upEsc(c.own) + ' \u00b7 <strong>copy from:</strong> ' + _upEsc(c.shared || '(not set)') + '</div>' +
+    '<div><strong>New address:</strong> ' + _upEsc(c.publicUrl || '(not set)') + ' \u00b7 <strong>old addresses:</strong> ' + _upEsc((c.legacy || []).join(', ') || '(none)') + '</div>';
+  if (!c.ready) h += '<div style="color:#ffb38a;"><strong>Not set up:</strong> ' + _upEsc((c.problems || []).join(' ')) + '</div>';
+  if (d.phase) h += '<div><strong>Copy:</strong> ' + _upEsc(d.phase) + (d.running ? ' (running)' : '') + ' \u00b7 ' + d.done + ' of ' + d.total + ' \u00b7 copied ' + d.copied + ' \u00b7 not in the shared bucket ' + d.missingCount + ' \u00b7 failed ' + d.failedCount + '</div>';
+  if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
+  if (d.failedCount) h += '<div style="color:#ffb38a;">Failed (first 50): ' + _upEsc(d.failed.join(' | ')) + '</div>';
+  if (d.missingCount) h += '<div style="opacity:0.8;">Not in the shared bucket (first 50): ' + _upEsc(d.missing.join(', ')) + '</div>';
+  if (d.phase === 'copied') h += '<div style="color:' + (d.copyClean ? '#bfe6c4' : '#ffb38a') + ';">' + (d.copyClean ? 'Copy finished with no failures. Step 2 can run.' : 'Copy finished with failures: run Copy again before step 2.') + '</div>';
+  if (d.rewrite) h += '<div style="color:#bfe6c4;"><strong>Addresses rewritten:</strong> ' + d.rewrite.rows + ' rows (' + _upEsc(Object.keys(d.rewrite.byColumn || {}).map(function (k) { return k + ' ' + d.rewrite.byColumn[k]; }).join(', ')) + ')</div>';
+  out.innerHTML = h;
+  if (_smTimer) { clearTimeout(_smTimer); _smTimer = null; }
+  if (d.running) _smTimer = setTimeout(storageMoveLoad, 2000);
+}
+function storageMoveLoad() {
+  fetch('/api/admin/storage-move', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(renderStorageMove)
+    .catch(function (e) { renderStorageMove({ error: e.message }); });
+}
+function storageMoveRun(step) {
+  var out = document.getElementById('storage-move-out'); if (out) out.textContent = step === 'copy' ? 'Starting the copy\u2026' : 'Rewriting addresses\u2026';
+  fetch('/api/admin/storage-move/' + step, { method: 'POST', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(renderStorageMove)
+    .catch(function (e) { renderStorageMove({ error: e.message }); });
 }
 
 // v3.2.65 -- TD-1006. The unused-picture report: summary, the oldest 200, and the whole list as CSV.

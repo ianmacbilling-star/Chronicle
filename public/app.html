@@ -2361,6 +2361,22 @@
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
       </div>
+      <!-- v3.2.67 -- TD-1006. Staging's one-time move to its own bucket. Does nothing unless set up in Railway. -->
+      <div class="settings-section" id="storage-move-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Move to its own storage (staging, one time)</div>
+        <div class="settings-section-desc">
+          For staging only. Step 1 copies every picture this database uses from the shared bucket into this environment&rsquo;s
+          own bucket (nothing is deleted). Step 2, only after a copy with no failures, rewrites the stored picture addresses to
+          the new public address. Both can be run again. It refuses to run unless R2_BUCKET, R2_SHARED_BUCKET, R2_PUBLIC_URL and
+          R2_LEGACY_PUBLIC_URLS are set in Railway.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <button class="btn btn-sm" onclick="storageMoveLoad()">Check setup</button>
+          <button class="btn btn-sm" onclick="storageMoveRun('copy')">1. Copy pictures</button>
+          <button class="btn btn-sm" onclick="storageMoveRun('rewrite')">2. Rewrite addresses</button>
+        </div>
+        <div id="storage-move-out" style="margin-top:10px;font-size:13px;line-height:1.6;"></div>
+      </div>
       <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
       <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Unused pictures (read only)</div>

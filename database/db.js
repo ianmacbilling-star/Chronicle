@@ -436,6 +436,8 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_activity BOOLEAN DEFAULT true',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS asset_id INTEGER',
+    // v3.2.66 -- TD-1006: a Retouch's working files (marker copy, tile), deleted when the job ends
+    'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS temp_inputs TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS description TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS revert_image_url TEXT',
     // v3.0.558 -- TD-345. NULL means "not set", and that is a real state that must survive: Ian

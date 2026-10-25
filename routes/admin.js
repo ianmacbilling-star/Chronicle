@@ -245,6 +245,21 @@ router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, r
   }
 });
 
+// v3.2.67 -- TD-1006. Staging's one-time move to its own bucket (services/storageMove.js). Admin only; refuses to do
+// anything unless R2_BUCKET and R2_SHARED_BUCKET are set and differ, so production cannot run it.
+router.get('/storage-move', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(require('../services/storageMove').status()); } catch (e) { res.status(500).json({ error: (e && e.message) || 'error' }); }
+});
+router.post('/storage-move/:step', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const mv = require('../services/storageMove');
+    const db = await getDb();
+    if (req.params.step === 'copy') return res.json(await mv.runCopy(db));
+    if (req.params.step === 'rewrite') return res.json(await mv.runRewrite(db));
+    return res.status(400).json({ error: 'Unknown step.' });
+  } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+
 // ---- Weekly metric snapshots (true history for current-state metrics) ----
 // Current-state metrics (active users, per-tier counts) have no history in the
 // live tables, so a weekly job snapshots them into metric_snapshots.

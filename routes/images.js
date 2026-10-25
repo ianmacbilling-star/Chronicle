@@ -5,7 +5,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, forkSelfIllustrated } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
-const { releaseImage, persistToR2, fetchFile, isOurPublicUrl } = require('../storage/storage');   // isOurPublicUrl: v3.1.85, TD-954
+const { releaseImage, persistToR2, fetchFile, isOurPublicUrl, deleteFile } = require('../storage/storage');   // deleteFile: v3.2.66, TD-1006   // isOurPublicUrl: v3.1.85, TD-954
 const imageCrop = require('../services/imageCrop');
 const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
@@ -1834,9 +1834,12 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const sub = await submitRetouch(_sendUrl, instructionR, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape, _markedUrl || null, _pickName || null, _isTile, _isTile ? moment.image : null);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, crop_meta, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, _cropMeta, nowTs, nowTs);
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, crop_meta, temp_inputs, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, _cropMeta,
+      // v3.2.66 -- TD-1006: the marker copy and the tile, deleted by releaseJobTemps when the job ends
+      ([_markedUrl || null, _isTile ? _sendUrl : null].filter(Boolean).length ? JSON.stringify([_markedUrl || null, _isTile ? _sendUrl : null].filter(Boolean)) : null),
+      nowTs, nowTs);
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, fork_id: moment.fork_id, instruction_raw: (req.body && req.body.instruction) || null, ref_name_picked: _pickName || null, ref_pin: _pinOutcome, ref_url_sent: (function(){ for (var q=0;q<refsR.length;q++){ var rq=refsR[q]; if (rq && rq.name && _pickName && String(rq.name).trim().toLowerCase()===_pickName.toLowerCase()) return rq.url; } return null; })(), picker_saw: (req.body && req.body.picker_saw) || null, picker_fork: (req.body && req.body.picker_fork) || null, refs: (refsR || []).map(function(r){ return r && r.name; }), marked_url: _markedUrl ? 'yes' : 'no', cropped: _isTile ? _cropMeta : 'no -- whole picture sent', instruction_sent: instructionR } }); } catch (_le) {}
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
@@ -2183,6 +2186,26 @@ async function verifyFalWebhook(req) {
 
 const webhookRouter = express.Router();
 
+// v3.2.66 -- TD-1006. A RETOUCH'S WORKING FILES GO WHEN IT ENDS. Each panel Retouch stores a copy of the picture
+// with the reader's markers drawn on (marked-...) and, for a confined change, the cropped tile (tile-...), only so
+// the image model can fetch them. Nothing ever showed or needed them again, and nothing deleted them: about 116
+// a month, two thirds of the bucket's steady leak (the unused-picture report, 2026-10-24). The job row now names
+// them (image_jobs.temp_inputs) and this deletes them once the job is over, done or failed -- by then the model has
+// read them. Only those two kinds of file are ever deleted here, whatever the column says; the column is then
+// cleared so the unused-picture report does not count them as in use. Never fatal.
+async function releaseJobTemps(db, job) {
+  try {
+    if (!job || !job.temp_inputs) return;
+    let list = [];
+    try { list = JSON.parse(job.temp_inputs) || []; } catch (e) { list = []; }
+    for (let i = 0; i < list.length; i++) {
+      const u = list[i];
+      if (typeof u === 'string' && /\/uploads\/(marked|tile)-[A-Za-z0-9._-]+$/.test(u) && isOurPublicUrl(u)) await deleteFile(u);
+    }
+    await db.prepare('UPDATE image_jobs SET temp_inputs = NULL WHERE id = ?').run(job.id);
+  } catch (e) { try { console.warn('[retouch temps] left in place:', e && e.message); } catch (_e) {} }
+}
+
 // fal calls this when a queued generation finishes. Public (no session) —
 // authenticity comes from the signature. Idempotent + always acks with 200.
 webhookRouter.post('/webhook/fal', async function(req, res) {
@@ -2209,6 +2232,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       const friendlyMsg = friendlyImageError({ message: errMsg, status: (body.error && (body.error.status || body.error.code)) || null });
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', friendlyMsg, new Date().toISOString(), job.id);
+      await releaseJobTemps(db, job);   // v3.2.66 -- TD-1006
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation failed: ' + String(errMsg).slice(0, 200), detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
@@ -2237,12 +2261,14 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', friendlyImageError({ message: 'no image in webhook payload' }), new Date().toISOString(), job.id);
+      await releaseJobTemps(db, job);   // v3.2.66 -- TD-1006
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation returned no image', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
     if (payload.has_nsfw_concepts && payload.has_nsfw_concepts[0] === true) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', friendlyImageError({ message: 'image was flagged by the safety filter (returned blank)' }), new Date().toISOString(), job.id);
+      await releaseJobTemps(db, job);   // v3.2.66 -- TD-1006
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image flagged by safety filter (returned blank)', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
@@ -2465,10 +2491,12 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       try { await recordGeneration(job.user_id, { event_type: genSource, tokens_redeemed: (job.cost || 0), quantity: 1, unit: 'images', model: job.model, related_campaign_id: job.campaign_id }); } catch (e) {}
       await db.prepare('UPDATE image_jobs SET status = ?, image_url = ?, updated_at = ? WHERE id = ?')
         .run('done', imageUrl, new Date().toISOString(), job.id);
+      await releaseJobTemps(db, job);   // v3.2.66 -- TD-1006
     } catch (e) {
       console.error('[fal webhook] processing error:', e.message);
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', friendlyImageError(e), new Date().toISOString(), job.id);
+      await releaseJobTemps(db, job);   // v3.2.66 -- TD-1006
     }
     return res.status(200).json({ ok: true });
   } catch (e) {
