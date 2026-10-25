@@ -37077,3 +37077,60 @@ function _prepAuthorNoteQ() {
   var el = document.getElementById('prep-author-note');
   return el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '';
 }
+// =====================================================================================
+// v3.2.84 -- TD-1019. THE TITLE, SUBTITLE AND AUTHOR NOTE SAVE AS YOU TYPE, AND ON THE WAY OUT.
+// Ian, 2026-10-25: he typed an Author Note, refreshed, and it was gone -- and the subtitle the same. They
+// saved only when the box lost focus (onchange, and PREP_COMMIT_IDS on a click elsewhere), so a refresh or a
+// closed tab with the cursor still in the box lost the edit. Clicking away first saved it (Ian confirmed).
+//  1. About a second after typing stops, the box's own saver runs (prepSaveTitle / prepSaveSubtitle /
+//     prepSaveAuthorNote), so every existing rule holds: nothing sent when nothing changed, writes chained
+//     through _prepMetaWrite. An EMPTIED title is skipped here, because prepSaveTitle would put the
+//     campaign name back while the reader is still retyping; leaving the box still does that, as before.
+//  2. On pagehide, or the tab going hidden, anything typed and not yet saved goes in one PUT with
+//     keepalive, which the browser finishes even as the page closes.
+// Appended, not inserted (TD-853): nothing later in the file can shadow these.
+// =====================================================================================
+var PREP_TYPE_SAVE_MS = 1000;
+var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote' };
+var _prepTypeTimers = {};
+function _prepTypeSave(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (id === 'prep-title' && !String(el.value || '').trim()) return;
+  var fn = window[PREP_TYPE_SAVERS[id]];
+  if (typeof fn === 'function') { try { fn(); } catch (e) {} }
+}
+function _prepTypeSchedule(id) {
+  clearTimeout(_prepTypeTimers[id]);
+  _prepTypeTimers[id] = setTimeout(function () { delete _prepTypeTimers[id]; _prepTypeSave(id); }, PREP_TYPE_SAVE_MS);
+}
+function _prepUnsavedPatch() {
+  if (typeof state === 'undefined' || !state || !state.currentCampaign) return null;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return null;
+  var bm = state.bookMeta || {}, patch = {}, any = false;
+  var t = document.getElementById('prep-title');
+  if (t) { var tv = String(t.value || '').trim(); if (tv && tv !== String(bm.book_title || '')) { patch.book_title = tv; any = true; } }
+  var s = document.getElementById('prep-subtitle');
+  if (s) { var sv = String(s.value || '').trim(); if (sv !== (bm.subtitle != null ? String(bm.subtitle) : '')) { patch.subtitle = sv; any = true; } }
+  var n = document.getElementById('prep-author-note');
+  if (n) { var nv = String(n.value || '').replace(/\r\n/g, '\n').slice(0, 600); if (nv.trim() !== (bm.author_note != null ? String(bm.author_note) : '').trim()) { patch.author_note = nv; any = true; } }
+  return any ? patch : null;
+}
+function _prepFlushOnLeave() {
+  try {
+    Object.keys(_prepTypeTimers).forEach(function (k) { clearTimeout(_prepTypeTimers[k]); });
+    _prepTypeTimers = {};
+    var patch = _prepUnsavedPatch();
+    if (!patch) return;
+    var body = Object.assign({}, patch);
+    if (state.novelAsUser && body.fork_user == null) body.fork_user = state.novelAsUser;
+    var url = '/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?');
+    fetch(url, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    state.bookMeta = Object.assign(state.bookMeta || {}, patch);
+  } catch (e) {}
+}
+try {
+  document.addEventListener('input', function (e) { var id = e && e.target && e.target.id; if (id && PREP_TYPE_SAVERS[id]) _prepTypeSchedule(id); }, true);
+  window.addEventListener('pagehide', _prepFlushOnLeave);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') _prepFlushOnLeave(); });
+} catch (e) {}

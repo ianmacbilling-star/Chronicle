@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.84",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3284-title-boxes-save-as-you-type",
+        "kind": "fix",
+        "public": true,
+        "summary": "The Title, Subtitle and Author\u2019s Note boxes now save as you type, and an edit is kept even if you refresh or close the page straight away.",
+        "detail": "They used to save only when you clicked out of the box, so a refresh with the cursor still in it lost the edit. Now each saves about a second after you stop typing, and anything not yet saved is sent as the page closes, refreshes or goes to the background. An emptied Title is not saved while you retype it; leaving the box still puts the campaign name back. Test: type in each box and refresh at once; type and wait two seconds, then refresh.",
+        "td": [
+          "TD-1019"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.83",
     "staged_on": "2026-10-25",
     "entries": [
