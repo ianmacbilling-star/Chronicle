@@ -1053,45 +1053,7 @@ router.get('/usage', async function(req, res) {
   }
 });
 
-// GET /api/auth/image-model - current global image model setting
-router.get('/image-model', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  try {
-    const db = await getDb();
-    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-    res.json({ model: row && row.value ? row.value : 'nano2' });
-  } catch(e) {
-    res.json({ model: 'nano2' });
-  }
-});
-
-// PUT /api/auth/image-model - change the global image model setting
-router.put('/image-model', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const validModels = ['schnell', 'nano2'];
-  const model = req.body.model;
-  if (!validModels.includes(model)) return res.json({ error: 'Invalid model' });
-  const _adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function(e){ return e.trim(); }).filter(Boolean);
-  const _adb = await getDb();
-  const _au = await _adb.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
-  if (!_au || !_adminEmails.includes(_au.email)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  try {
-    const db = await getDb();
-    // Upsert the single 'image_model' row.
-    const existing = await db.prepare("SELECT setting_key FROM app_settings WHERE setting_key = 'image_model'").get();
-    if (existing) {
-      await db.prepare("UPDATE app_settings SET value = ? WHERE setting_key = 'image_model'").run(model);
-    } else {
-      await db.prepare("INSERT INTO app_settings (setting_key, value) VALUES ('image_model', ?)").run(model);
-    }
-    res.json({ success: true, model: model });
-  } catch(e) {
-    console.error('image-model save error:', e.message);
-    res.json({ error: 'Could not save setting' });
-  }
-});
+// v3.2.71 -- the image-model routes are gone: every picture uses Nano (FAL_IMAGE_MODEL / FAL_IMAGE_EDIT_MODEL in Railway).
 
 // ---- Guided Tours: data + per-user progress -------------------------------
 // GET /api/auth/tours -> the data-driven tour step definitions (public/tours.json).

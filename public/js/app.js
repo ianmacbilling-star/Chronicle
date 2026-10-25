@@ -1761,7 +1761,9 @@ function impersonateSyncAdminPanel() {
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
   if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
-  if (usec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
+  var csec = document.getElementById('cleanup-section');   // v3.2.71 -- its own panel now
+  if (csec) csec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  if (csec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
   var msec = document.getElementById('storage-move-section');   // v3.2.67 -- TD-1006, same rule
   if (msec) msec.style.display = (isAdmin && !inSession) ? '' : 'none';
 }
@@ -14173,44 +14175,13 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  // Settings now hosts admin/testing controls only (the global image model).
   // Profile (name / email / password) moved to the Account screen.
-  fetch('/api/auth/image-model')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var el = document.getElementById('settings-image-model');
-      if (el && d.model) el.value = d.model;
-    });
+  // v3.2.71 -- the image model selector is gone: every picture uses Nano, set by the Railway variables.
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
   loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
-function saveImageModel() {
-  var el = document.getElementById('settings-image-model');
-  if (!el) return;
-  fetch('/api/auth/image-model', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: el.value })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.error) {
-        showSettingsError('model-error', d.error);
-      } else {
-        var ok = document.getElementById('model-success');
-        if (ok) {
-          ok.textContent = 'Image model saved.';
-          ok.classList.remove('hidden');
-          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
-        }
-      }
-    })
-    .catch(function() {
-      showSettingsError('model-error', 'Could not save. Please try again.');
-    });
-}
 
 function saveProfile() {
   // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
@@ -20053,44 +20024,13 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  // Settings now hosts admin/testing controls only (the global image model).
   // Profile (name / email / password) moved to the Account screen.
-  fetch('/api/auth/image-model')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var el = document.getElementById('settings-image-model');
-      if (el && d.model) el.value = d.model;
-    });
+  // v3.2.71 -- the image model selector is gone: every picture uses Nano, set by the Railway variables.
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
   loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
-function saveImageModel() {
-  var el = document.getElementById('settings-image-model');
-  if (!el) return;
-  fetch('/api/auth/image-model', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: el.value })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.error) {
-        showSettingsError('model-error', d.error);
-      } else {
-        var ok = document.getElementById('model-success');
-        if (ok) {
-          ok.textContent = 'Image model saved.';
-          ok.classList.remove('hidden');
-          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
-        }
-      }
-    })
-    .catch(function() {
-      showSettingsError('model-error', 'Could not save. Please try again.');
-    });
-}
 
 function saveProfile() {
   // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
@@ -22401,7 +22341,7 @@ var TIER_FIELD_LABELS = {
 // else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
 // div, a button with its own check -- would be a second rule to keep in step with this one.
 // The route is gated independently; neither is load-bearing alone.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'orders'];   // v3.1.43 -- 'gifts' (TD-934)
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'tools', 'orders'];   // v3.1.43 -- 'gifts' (TD-934); v3.2.71 -- 'tools'
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --

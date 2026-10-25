@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.71",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3271-tools-tab",
+        "kind": "ops",
+        "public": false,
+        "summary": "Dashboard: a Tools tab ; Image Generation Model removed (always Nano).",
+        "detail": "Dashboard has a new Tools tab (after Support). Moved there: Maintenance (weekly snapshot) and Pass expiry sweep and Email preview / test-send from Settings; Move to its own storage, Unused pictures and Monthly clean-up (now its own panel, with Holding) from Support. Nothing else changed. Image Generation Model is removed: every picture uses Nano (the FAL_IMAGE_MODEL / FAL_IMAGE_EDIT_MODEL Railway variables); the old setting is no longer read and Flux schnell is retired. Test: open each panel on Tools and press its safe button (Run the check, Check holding, Dry run, Send test to me).",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.70",
     "staged_on": "2026-10-25",
     "entries": [

@@ -1798,6 +1798,8 @@
         <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
              now reachable by testers and impersonation must never be. -->
         <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
+        <!-- v3.2.71 -- Tools: maintenance, pass sweep, email previews, storage. Admin only, like every tab here. -->
+        <button class="settings-tab" id="settings-tab-tools" onclick="switchSettingsTab('tools')">Tools</button>
         <!-- v3.0.789 -- TD-589. Orders becomes a real tab rather than a modal behind a button.
              Membership of SETTINGS_TABS_ALL is what gates it: admins get every tab, testers get
              only User Testing, everyone else gets none. The route is gated independently. -->
@@ -1805,22 +1807,6 @@
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
-
-      <!-- Image Generation Model -->
-      <div class="settings-section">
-        <div class="settings-section-title">Image Generation Model</div>
-        <div class="settings-section-desc">Which AI model generates storyboard images. Applies to all users.</div>
-        <div id="model-success" class="alert alert-success hidden"></div>
-        <div id="model-error" class="alert alert-error hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Model</label>
-          <select class="form-input" id="settings-image-model">
-            <option value="nano2">Nano Banana 2 (current — highest quality)</option>
-            <option value="schnell">Flux schnell (legacy — low quality, low cost)</option>
-          </select>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
-      </div>
 
       <!-- ADMIN: Public Library moderation -->
       <div id="admin-library-section" class="settings-section" style="display:none;">
@@ -1880,28 +1866,6 @@
       </div>
 
 
-      <!-- Maintenance (admin) -->
-      <div class="settings-section">
-        <div class="settings-section-title">Maintenance</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Take this week's metrics snapshot now. The scheduled weekly job does this automatically; use this to capture a point on demand.</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" id="snapshot-run-btn" onclick="runSnapshotNow()">Run weekly snapshot now</button>
-          <span class="settings-section-desc" id="snapshot-run-msg" style="margin:0;"></span>
-        </div>
-      </div>
-
-      <!-- Pass expiry sweep (admin) -- v3.0.956 -->
-      <div class="settings-section">
-        <div class="settings-section-title">Pass expiry sweep</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
-          <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
-          <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
-        </div>
-        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
-      </div>
-
       <!-- Print pricing (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Print pricing</div>
@@ -1940,45 +1904,6 @@
         <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
           <button class="btn btn-primary btn-sm" onclick="saveHelpEmailSettings()">Save</button>
           <span class="settings-section-desc" id="help-email-msg" style="margin:0;"></span>
-        </div>
-      </div>
-
-      <!-- Email preview / test-send (admin) -->
-      <div class="settings-section">
-        <div class="settings-section-title">Email preview / test-send</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
-          <select id="email-preview-select" class="form-input" style="width:260px;">
-            <option value="welcome">Welcome (new account)</option>
-            <option value="password_reset">Password reset</option>
-            <option value="invite">Campaign invite</option>
-            <option value="join_notification">Join notification (to SM)</option>
-            <option value="player_joined_welcome">Player joined welcome</option>
-            <option value="order_confirmation">Print order confirmed</option>
-            <option value="order_problem">Print order problem</option>
-            <option value="receipt_pack">Receipt &mdash; token pack</option>
-            <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
-            <option value="receipt_subscription">Receipt &mdash; subscription started</option>
-            <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
-            <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
-            <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
-            <option value="gift">Gift &mdash; to the recipient</option>
-            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
-            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
-            <option value="gift_redeemed">Gift &mdash; buyer told it was redeemed</option>
-            <option value="feedback">Feedback (to support)</option>
-            <option value="trial_ending_soon">Trial &mdash; ending soon</option>
-            <option value="trial_expired">Trial &mdash; expired</option>
-            <option value="trial_week_after">Trial &mdash; one week after</option>
-            <option value="trial_month_after">Trial &mdash; one month after</option>
-            <option value="idle_warning">Idle warning</option>
-            <option value="suspended">Account suspended</option>
-            <option value="purge_warning">Purge warning</option>
-            <option value="account_closed">Account closed</option>
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="sendEmailPreview()">Send test to me</button>
-          <span class="settings-section-desc" id="email-preview-msg" style="margin:0;"></span>
         </div>
       </div>
 
@@ -2361,6 +2286,90 @@
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
       </div>
+      <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
+      <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Debug Mode for a user</div>
+        <div class="settings-section-desc">
+          Turn Debug Mode on or off for one account. Their actions are recorded from their next one; it switches off
+          by itself when they sign out. View log shows what has been recorded for them; Send to support emails it to
+          support, as if they had pressed their own button.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <input class="form-input" id="dbg-user-email" type="email" placeholder="customer@example.com" style="max-width:280px;" />
+          <button class="btn btn-sm" onclick="dbgUserSet(true)">Turn on</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(false)">Turn off</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null)">Check</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null, true)">View log</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null, false, true)">Send to support</button>
+        </div>
+        <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
+        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
+      </div>
+      </div>
+
+      <!-- v3.2.71 -- the Tools tab (Ian, 2026-10-25): maintenance and one-off tools, off the Settings and Support tabs. -->
+      <div class="settings-pane" id="settings-pane-tools" style="display:none;">
+      <!-- Maintenance (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Maintenance</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Take this week's metrics snapshot now. The scheduled weekly job does this automatically; use this to capture a point on demand.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="snapshot-run-btn" onclick="runSnapshotNow()">Run weekly snapshot now</button>
+          <span class="settings-section-desc" id="snapshot-run-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
+      <!-- Pass expiry sweep (admin) -- v3.0.956 -->
+      <div class="settings-section">
+        <div class="settings-section-title">Pass expiry sweep</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
+          <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
+          <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
+        </div>
+        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+      </div>
+
+      <!-- Email preview / test-send (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Email preview / test-send</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
+          <select id="email-preview-select" class="form-input" style="width:260px;">
+            <option value="welcome">Welcome (new account)</option>
+            <option value="password_reset">Password reset</option>
+            <option value="invite">Campaign invite</option>
+            <option value="join_notification">Join notification (to SM)</option>
+            <option value="player_joined_welcome">Player joined welcome</option>
+            <option value="order_confirmation">Print order confirmed</option>
+            <option value="order_problem">Print order problem</option>
+            <option value="receipt_pack">Receipt &mdash; token pack</option>
+            <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
+            <option value="receipt_subscription">Receipt &mdash; subscription started</option>
+            <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
+            <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
+            <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
+            <option value="gift">Gift &mdash; to the recipient</option>
+            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
+            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
+            <option value="gift_redeemed">Gift &mdash; buyer told it was redeemed</option>
+            <option value="feedback">Feedback (to support)</option>
+            <option value="trial_ending_soon">Trial &mdash; ending soon</option>
+            <option value="trial_expired">Trial &mdash; expired</option>
+            <option value="trial_week_after">Trial &mdash; one week after</option>
+            <option value="trial_month_after">Trial &mdash; one month after</option>
+            <option value="idle_warning">Idle warning</option>
+            <option value="suspended">Account suspended</option>
+            <option value="purge_warning">Purge warning</option>
+            <option value="account_closed">Account closed</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="sendEmailPreview()">Send test to me</button>
+          <span class="settings-section-desc" id="email-preview-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       <!-- v3.2.67 -- TD-1006. Staging's one-time move to its own bucket. Does nothing unless set up in Railway. -->
       <div class="settings-section" id="storage-move-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Move to its own storage (staging, one time)</div>
@@ -2389,9 +2398,11 @@
           <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
-        <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. -->
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">
-          <div style="font-weight:600;margin-bottom:6px;">Monthly clean-up</div>
+      </div>
+      <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. v3.2.71 -- its own panel on Tools. -->
+      <div class="settings-section" id="cleanup-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Monthly clean-up</div>
+        <div>
           <div class="settings-section-desc" style="margin:0 0 8px;">Once a month, pictures under uploads/ that nothing in this database uses and that are over 30 days old.
             Report only emails a summary; Move to holding moves them to the holding bucket (after one last check) &mdash; nothing is deleted. Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -2421,25 +2432,6 @@
           </div>
           <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
         </div>
-      </div>
-      <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
-      <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Debug Mode for a user</div>
-        <div class="settings-section-desc">
-          Turn Debug Mode on or off for one account. Their actions are recorded from their next one; it switches off
-          by itself when they sign out. View log shows what has been recorded for them; Send to support emails it to
-          support, as if they had pressed their own button.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <input class="form-input" id="dbg-user-email" type="email" placeholder="customer@example.com" style="max-width:280px;" />
-          <button class="btn btn-sm" onclick="dbgUserSet(true)">Turn on</button>
-          <button class="btn btn-sm" onclick="dbgUserSet(false)">Turn off</button>
-          <button class="btn btn-sm" onclick="dbgUserSet(null)">Check</button>
-          <button class="btn btn-sm" onclick="dbgUserSet(null, true)">View log</button>
-          <button class="btn btn-sm" onclick="dbgUserSet(null, false, true)">Send to support</button>
-        </div>
-        <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
       </div>
       </div>
 
