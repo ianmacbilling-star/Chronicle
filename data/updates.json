@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.66",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3266-retouch-temps",
+        "kind": "fix",
+        "public": false,
+        "summary": "A panel Retouch now deletes its working files (the marker copy and the cropped tile) when it finishes.",
+        "detail": "They were only for the image model and were never deleted: about 116 a month. Deleted when the job ends, done or failed. Test: Retouch a panel with markers on staging; the Railway log shows \"R2 deleted: 204 uploads/marked-...\" when the new picture lands, and the panel looks right.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.65",
     "staged_on": "2026-10-24",
     "entries": [
