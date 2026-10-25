@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.65",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3265-unused-pictures",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard > Support: a read-only report of pictures in storage that nothing points to.",
+        "detail": "Lists every picture under uploads/ in the bucket, reads every text column of every table in this environment's database, and shows the ones mentioned nowhere (older than 24 hours), with sizes and a CSV. Deletes nothing. Staging and production share the bucket, so only a picture unused on both is safe to delete. Test: Run the check on staging and on production; download both CSVs.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.64",
     "staged_on": "2026-10-24",
     "entries": [
