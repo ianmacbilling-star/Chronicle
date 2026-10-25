@@ -2381,15 +2381,28 @@
       <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Unused pictures (read only)</div>
         <div class="settings-section-desc">
-          Lists pictures in storage that nothing in <strong>this</strong> environment&rsquo;s database points to. It deletes nothing.
-          Staging and production share the same storage but not the same database, so a picture is only safe to delete
-          if it shows here on <strong>both</strong>. Pictures from the last 24 hours are left out.
+          Lists pictures in this environment&rsquo;s storage that nothing in its database uses (history &mdash; finished image jobs,
+          debug logs, watermark checks &mdash; does not count as use). It deletes nothing. Pictures from the last 24 hours are left out.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
           <button class="btn btn-sm" onclick="unusedPicsRun()">Run the check</button>
           <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
+        <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. -->
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">
+          <div style="font-weight:600;margin-bottom:6px;">Monthly clean-up</div>
+          <div class="settings-section-desc" style="margin:0 0 8px;">Once a month, pictures under uploads/ that nothing in this database uses and that are over 30 days old.
+            Report only emails a summary; Delete removes them (after one last check). Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="cleanup-mode" class="form-input" style="max-width:180px;" onchange="cleanupSetMode(this.value)">
+              <option value="off">Off</option><option value="report">Report only</option><option value="delete">Delete</option>
+            </select>
+            <button class="btn btn-sm" onclick="cleanupRun(false)">Run report now</button>
+            <button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Delete now</button>
+          </div>
+          <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
+        </div>
       </div>
       <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
       <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">

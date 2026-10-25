@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.68",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3268-monthly-cleanup",
+        "kind": "ops",
+        "public": false,
+        "summary": "Monthly storage clean-up: pictures nothing uses, over 30 days old (report only until switched to Delete).",
+        "detail": "Dashboard > Support > Unused pictures > Monthly clean-up: mode Off / Report only / Delete, Run report now, Delete now (click twice). Once a month (the 1st, from 09:00 UTC) it checks this environment's own bucket; Report only emails a summary, Delete removes them after one last check. Refused unless the environment is on its own bucket, or when over 60% looks unused. History (finished image jobs, debug logs, watermark checks) no longer counts as use, in the report too. Test: on staging, Run report now; on production, Run report now and read the numbers before switching to Delete.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.67",
     "staged_on": "2026-10-24",
     "entries": [

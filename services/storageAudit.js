@@ -13,10 +13,17 @@
 // database it read; anything deleted later must be unused in BOTH.
 //
 // Pictures made in the last 24 hours are left out: a generation can be stored a moment before its row is written.
+//
+// v3.2.68 -- HISTORY IS NOT USE. Three tables only ever RECORD a picture: the debug logs, the watermark-check
+// verdicts (image_rights) and the image-job log (image_jobs keeps every Regen's new and replaced picture forever;
+// the app reads a job only while it finishes). Counting them kept nearly every replaced panel "in use". They are
+// skipped now -- image_jobs only for jobs that have ended (done or failed); a job still running still counts.
 'use strict';
 const storage = require('../storage/storage');
 const KEY_RE = /(?:uploads|archives|optimized|print|story)\/[A-Za-z0-9._\-]+/g;
 const RECENT_MS = 24 * 60 * 60 * 1000;
+const HISTORY_TABLES = { debug_logs: true, image_rights: true };   // v3.2.68 -- records, not uses
+const JOB_TABLE = 'image_jobs';                                     // v3.2.68 -- only unfinished jobs count
 
 function kindOf(key) {
   const name = String(key).replace(/^[^/]*\//, '');
@@ -39,8 +46,9 @@ async function referencedKeys(db) {
   const tables = Object.keys(byTable);
   for (let i = 0; i < tables.length; i++) {
     const t = tables[i];
+    if (HISTORY_TABLES[t]) continue;   // v3.2.68
     const sel = byTable[t].map(function (c, j) { return qid(c) + '::text AS c' + j; }).join(', ');
-    const rows = await db.prepare('SELECT ' + sel + ' FROM ' + qid(t)).all();
+    const rows = await db.prepare('SELECT ' + sel + ' FROM ' + qid(t) + (t === JOB_TABLE ? " WHERE status NOT IN ('done', 'failed')" : '')).all();
     (rows || []).forEach(function (row) {
       Object.keys(row).forEach(function (k) {
         const v = row[k];
@@ -58,6 +66,7 @@ async function referencedKeys(db) {
 async function unusedPictureReport(db, opts) {
   opts = opts || {};
   const now = opts.now || Date.now();
+  const minAge = (opts.minAgeMs != null) ? opts.minAgeMs : RECENT_MS;   // v3.2.68 -- the clean-up asks for 30 days
   const prefix = opts.prefix || 'uploads/';
   const objects = await storage.listObjects(prefix);
   if (objects === null) return { error: 'This server stores pictures on its own disk, not in the bucket.' };
@@ -69,7 +78,7 @@ async function unusedPictureReport(db, opts) {
     out.listed_bytes += o.size || 0;
     if (scan.refs.has(o.key)) { out.in_use++; return; }
     const t = Date.parse(o.lastModified);
-    if (!isNaN(t) && (now - t) < RECENT_MS) { out.recent++; return; }
+    if (isNaN(t) || (now - t) < minAge) { out.recent++; return; }   // v3.2.68 -- no date: treated as recent, never removed
     const k = kindOf(o.key);
     out.unused++; out.unused_bytes += o.size || 0;
     const b = out.by_kind[k] = out.by_kind[k] || { count: 0, bytes: 0 };
@@ -80,4 +89,4 @@ async function unusedPictureReport(db, opts) {
   return out;
 }
 
-module.exports = { unusedPictureReport, referencedKeys, kindOf, KEY_RE };
+module.exports = { unusedPictureReport, referencedKeys, kindOf, KEY_RE, HISTORY_TABLES };
