@@ -1,5 +1,37 @@
 [
   {
+    "version": "3.2.76",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3276-holding-results-line",
+        "kind": "ops",
+        "public": false,
+        "summary": "Manage holding bucket: the results line is bigger and bolder.",
+        "detail": "Dashboard > Tools > Monthly clean-up > Manage holding bucket: the line under the buttons (Check holding, Put back, Delete for good results and progress) is larger, bold and gold, like the Results line above. Test: press Check holding.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.75",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3275-cleanup-results-line",
+        "kind": "ops",
+        "public": false,
+        "summary": "Monthly clean-up: the per-folder result line and the running count are bigger and bolder.",
+        "detail": "Dashboard > Tools > Monthly clean-up: the per-folder line under Last run now starts with \"Results:\" and, like the \"Running: ... N of M\" line while it works, is larger, bold and gold. Test: press Run report and read the Results line.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.74",
     "staged_on": "2026-10-25",
     "entries": [
