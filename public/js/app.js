@@ -1827,19 +1827,32 @@ function renderUnusedPics(d) {
   out.innerHTML = h;
 }
 // v3.2.68 -- TD-1006. The monthly clean-up controls. Delete now needs a second click within 5 seconds (no browser pop-up).
-var _cuTimer = null, _cuArmed = false;
+// v3.2.69 -- Delete became Move to holding; Put everything back and Empty holding use the same second click.
+var _cuTimer = null, _cuArmed = false, _armed = {};
+function _armClick(id, label, armedLabel, fn) {
+  var b = document.getElementById(id);
+  if (!_armed[id]) { _armed[id] = true; if (b) b.textContent = armedLabel; setTimeout(function () { _armed[id] = false; if (b) b.textContent = label; }, 5000); return; }
+  _armed[id] = false; if (b) b.textContent = label;
+  fn();
+}
 function renderCleanup(d) {
   var out = document.getElementById('cleanup-out'); if (!out) return;
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read the clean-up status.'; return; }
   var sel = document.getElementById('cleanup-mode'); if (sel && d.mode) sel.value = d.mode;
   var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 mode <strong>' + _upEsc(d.mode) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
-  if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Deleting is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
+  if (d.holdBucket) h += '<div>Holding: ' + _upEsc(d.holdBucket) + '/' + _upEsc(d.holdPrefix || '') + (d.keep ? (' \u00b7 put back (never moved again) ' + d.keep) : '') + '</div>';
+  if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Moving is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
   if (d.running) h += '<div>Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
   if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
   var o = d.last;
-  if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): unused over 30 days ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
-    (o.mode === 'delete' ? (' \u00b7 deleted ' + o.deleted + ' (' + _upBytes(o.deletedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed) : ' \u00b7 nothing deleted') + '</div>' +
-    (o.refused ? ('<div style="color:#ffb38a;"><strong>Not deleted:</strong> ' + _upEsc(o.refused) + '</div>') : '');
+  if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode === 'hold' ? 'move to holding' : o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): unused over 30 days ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
+    (o.mode === 'hold' ? (' \u00b7 moved to holding ' + o.moved + ' (' + _upBytes(o.movedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed)
+      : (o.mode === 'delete' ? (' \u00b7 deleted ' + o.deleted + ' (' + _upBytes(o.deletedBytes) + ')') : ' \u00b7 nothing moved')) + '</div>' +
+    (o.refused ? ('<div style="color:#ffb38a;"><strong>Not moved:</strong> ' + _upEsc(o.refused) + '</div>') : '') +
+    (o.emptied ? ('<div>Held over ' + o.emptied.days + ' days, deleted for good: ' + o.emptied.deleted + ' (' + _upBytes(o.emptied.deletedBytes) + ')' + (o.emptied.failed ? (' \u00b7 failed ' + o.emptied.failed) : '') + '</div>') : '');
+  var jb = d.job;
+  if (jb && jb.kind === 'restore') h += '<div><strong>Last put back</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): back ' + jb.restored + ' \u00b7 already in place ' + jb.already + ' \u00b7 not in holding ' + jb.notHeld + ' \u00b7 unreadable ' + jb.unreadable + ' \u00b7 failed ' + jb.failed + '</div>';
+  if (jb && jb.kind === 'empty') h += '<div><strong>Last emptying</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): deleted ' + jb.deleted + ' (' + _upBytes(jb.deletedBytes) + ')' + (jb.days ? (' \u00b7 held under ' + jb.days + ' days, kept ' + jb.tooRecent) : '') + ' \u00b7 failed ' + jb.failed + '</div>';
   out.innerHTML = h;
   if (_cuTimer) { clearTimeout(_cuTimer); _cuTimer = null; }
   if (d.running) _cuTimer = setTimeout(cleanupLoad, 2000);
@@ -1851,16 +1864,45 @@ function cleanupSetMode(m) {
   fetch('/api/admin/storage-cleanup/mode', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: m }) })
     .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
 }
-function cleanupRun(del) {
-  var out = document.getElementById('cleanup-out'); if (out) out.textContent = del ? 'Deleting\u2026' : 'Checking\u2026';
-  fetch('/api/admin/storage-cleanup/run', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delete: !!del }) })
+function cleanupRun(move) {
+  var out = document.getElementById('cleanup-out'); if (out) out.textContent = move ? 'Moving\u2026' : 'Checking\u2026';
+  fetch('/api/admin/storage-cleanup/run', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ move: !!move }) })
     .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
 }
-function cleanupDeleteClick() {
-  var b = document.getElementById('cleanup-delete-btn');
-  if (!_cuArmed) { _cuArmed = true; if (b) b.textContent = 'Click again to delete'; setTimeout(function () { _cuArmed = false; if (b) b.textContent = 'Delete now'; }, 5000); return; }
-  _cuArmed = false; if (b) b.textContent = 'Delete now';
-  cleanupRun(true);
+function cleanupDeleteClick() { _armClick('cleanup-delete-btn', 'Move to holding now', 'Click again to move', function () { cleanupRun(true); }); }
+// v3.2.69 -- TD-1006. The holding bucket.
+function holdLoad() {
+  var out = document.getElementById('hold-out'); if (out) out.textContent = 'Checking holding\u2026';
+  fetch('/api/admin/storage-holding', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!out) return;
+    if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read holding.'; return; }
+    out.innerHTML = 'Holding ' + _upEsc(d.bucket) + '/' + _upEsc(d.prefix) + ': <strong>' + d.count + '</strong> pictures (' + _upBytes(d.bytes) + ')' +
+      (d.oldest ? (' \u00b7 held since ' + _upEsc(String(d.oldest).slice(0, 10)) + (d.newest && String(d.newest).slice(0, 10) !== String(d.oldest).slice(0, 10) ? (' to ' + _upEsc(String(d.newest).slice(0, 10))) : '')) : '');
+  }).catch(function (e) { if (out) out.textContent = e.message; });
+}
+function holdCsv() {
+  fetch('/api/admin/storage-holding.csv', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (t) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv' }));
+    a.download = 'held-pictures-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); } catch (e) {} }, 1000);
+  });
+}
+function _holdPost(path, body) {
+  fetch('/api/admin/storage-holding/' + path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
+}
+function holdRestore(all) {
+  var ta = document.getElementById('hold-names');
+  var names = all ? [] : String((ta && ta.value) || '').split(/[\r\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  if (!all && !names.length) { var o = document.getElementById('hold-out'); if (o) o.textContent = 'Paste a picture name or address first.'; return; }
+  _holdPost('restore', all ? { all: true } : { names: names });
+}
+function holdAllClick() { _armClick('hold-all-btn', 'Put everything back', 'Click again to put all back', function () { holdRestore(true); }); }
+function holdEmptyClick() {
+  var sel = document.getElementById('hold-days');
+  _armClick('hold-empty-btn', 'Empty holding', 'Click again: deletes for good', function () { _holdPost('empty', { olderThanDays: parseInt((sel && sel.value) || '0', 10) || 0 }); });
 }
 
 function unusedPicsRun() {

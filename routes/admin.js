@@ -260,7 +260,8 @@ router.post('/storage-move/:step', requireAuth, requireAdmin, async function (re
   } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
 });
 
-// v3.2.68 -- TD-1006. The monthly storage clean-up: status, its mode (off / report / delete) and Run now.
+// v3.2.68 -- TD-1006. The monthly storage clean-up: status, its mode (off / report / hold) and Run now.
+// v3.2.69 -- Run now with move:true moves unused pictures to the holding bucket (nothing is deleted).
 router.get('/storage-cleanup', requireAuth, requireAdmin, async function (req, res) {
   try { res.json(await require('../services/storageCleanup').status(await getDb())); } catch (e) { res.status(500).json({ error: (e && e.message) || 'error' }); }
 });
@@ -269,7 +270,25 @@ router.post('/storage-cleanup/mode', requireAuth, requireAdmin, async function (
   catch (e) { res.json({ error: (e && e.message) || 'error' }); }
 });
 router.post('/storage-cleanup/run', requireAuth, requireAdmin, async function (req, res) {
-  try { res.json(await require('../services/storageCleanup').runNow(await getDb(), !!(req.body && req.body.delete === true))); }
+  try { res.json(await require('../services/storageCleanup').runNow(await getDb(), !!(req.body && req.body.move === true))); }
+  catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+// v3.2.69 -- TD-1006. The holding bucket: what is held, its list, Put back (names or addresses, or all), Empty holding.
+router.get('/storage-holding', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await require('../services/storageCleanup').holdingSummary()); } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+router.get('/storage-holding.csv', requireAuth, requireAdmin, async function (req, res) {
+  try { res.type('text/csv').send(await require('../services/storageCleanup').heldCsv()); } catch (e) { res.status(500).type('text/plain').send((e && e.message) || 'error'); }
+});
+router.post('/storage-holding/restore', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const b = req.body || {};
+    const names = Array.isArray(b.names) ? b.names.slice(0, 5000).map(String) : [];
+    res.json(await require('../services/storageCleanup').restore(await getDb(), names, b.all === true));
+  } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+router.post('/storage-holding/empty', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await require('../services/storageCleanup').emptyHolding(await getDb(), (req.body && req.body.olderThanDays) || 0)); }
   catch (e) { res.json({ error: (e && e.message) || 'error' }); }
 });
 
