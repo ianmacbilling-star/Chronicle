@@ -23,7 +23,10 @@ function initStorage() {
 // function used to hardcode. Building it from a sorted map instead of a literal is what
 // lets a new signed header be added without a second copy of the signer, which is the
 // fault class this codebase keeps paying for (TD-284, TD-293, TD-295, TD-296).
-function signRequest(method, key, contentType, body, extra) {
+// v3.2.65 -- TD-1006. `query` (optional) signs a query string, for listing the bucket. Absent, the canonical request
+// and the URL are exactly what they always were; and an empty key signs the bucket itself (/chronicle-images),
+// which only the listing uses -- every other caller passes a key.
+function signRequest(method, key, contentType, body, extra, query) {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -38,7 +41,10 @@ function signRequest(method, key, contentType, body, extra) {
   const names = Object.keys(hdrs).sort();
   const canonicalHeaders = names.map(function (n) { return n + ':' + hdrs[n] + '\n'; }).join('');
   const signedHeaders = names.join(';');
-  const canonicalRequest = [method, '/' + BUCKET_NAME + '/' + key, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const canonicalUri = '/' + BUCKET_NAME + (key ? ('/' + key) : '');
+  const enc = function (s) { return encodeURIComponent(String(s)).replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); }); };
+  const canonicalQuery = query ? Object.keys(query).sort().map(function (k) { return enc(k) + '=' + enc(query[k]); }).join('&') : '';
+  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash].join('\n');
   const credentialScope = dateStamp + '/auto/s3/aws4_request';
   const stringToSign = 'AWS4-HMAC-SHA256\n' + amzDate + '\n' + credentialScope + '\n' + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
 
@@ -58,9 +64,40 @@ function signRequest(method, key, contentType, body, extra) {
   if (extra) Object.keys(extra).forEach(function (k) { outHeaders[String(k).toLowerCase()] = String(extra[k]); });
 
   return {
-    url: 'https://' + host + '/' + BUCKET_NAME + '/' + key,
+    url: 'https://' + host + canonicalUri + (canonicalQuery ? ('?' + canonicalQuery) : ''),
     headers: outHeaders
   };
+}
+
+// v3.2.65 -- TD-1006. Every object under a prefix: [{ key, size, lastModified }]. Read only. Pages through the
+// bucket 1,000 at a time (capped at 200 pages). Returns null in local-disk mode. Throws on an R2 error, so a
+// report can say it could not read the bucket rather than report an empty one.
+async function listObjects(prefix) {
+  if (!useCloud) return null;
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  const out = [];
+  let token = null, pages = 0;
+  const unxml = function (s) { return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&'); };
+  do {
+    const q = { 'list-type': '2', 'max-keys': '1000', 'prefix': prefix };
+    if (token) q['continuation-token'] = token;
+    const signed = signRequest('GET', '', 'application/octet-stream', Buffer.alloc(0), null, q);
+    const resp = await axios.get(signed.url, { headers: signed.headers, httpsAgent: agent, timeout: 60000, responseType: 'text' });
+    const xml = String(resp.data || '');
+    const blocks = xml.match(/<Contents>[\s\S]*?<\/Contents>/g) || [];
+    blocks.forEach(function (b) {
+      const k = (b.match(/<Key>([\s\S]*?)<\/Key>/) || [])[1];
+      if (!k) return;
+      out.push({ key: unxml(k), size: parseInt((b.match(/<Size>(\d+)<\/Size>/) || [])[1] || '0', 10), lastModified: (b.match(/<LastModified>([^<]+)<\/LastModified>/) || [])[1] || '' });
+    });
+    const trunc = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+    const next = (xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/) || [])[1];
+    token = (trunc && next) ? unxml(next) : null;
+    pages++;
+  } while (token && pages < 200);
+  return out;
 }
 
 async function uploadFile(fileBuffer, filename, mimetype, prefix) {
@@ -421,4 +458,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls };   // last four: v3.1.85, TD-954
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006

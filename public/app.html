@@ -2361,6 +2361,20 @@
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
       </div>
+      <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
+      <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Unused pictures (read only)</div>
+        <div class="settings-section-desc">
+          Lists pictures in storage that nothing in <strong>this</strong> environment&rsquo;s database points to. It deletes nothing.
+          Staging and production share the same storage but not the same database, so a picture is only safe to delete
+          if it shows here on <strong>both</strong>. Pictures from the last 24 hours are left out.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <button class="btn btn-sm" onclick="unusedPicsRun()">Run the check</button>
+          <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
+        </div>
+        <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
+      </div>
       <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
       <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Debug Mode for a user</div>

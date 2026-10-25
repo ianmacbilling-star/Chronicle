@@ -231,6 +231,20 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
   }
 });
 
+// v3.2.65 -- TD-1006. GET /api/admin/unused-pictures: the read-only report of pictures in the bucket that nothing in
+// THIS database points to (services/storageAudit.js says how, and why the shared bucket matters). Deletes nothing.
+router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await require('../services/storageAudit').unusedPictureReport(db);
+    if (r.error) return res.json(r);
+    res.json(r);
+  } catch (e) {
+    console.error('GET unused-pictures error:', e && e.message);
+    res.status(500).json({ error: 'Could not run the check: ' + ((e && e.message) || 'unknown error') });
+  }
+});
+
 // ---- Weekly metric snapshots (true history for current-state metrics) ----
 // Current-state metrics (active users, per-tier counts) have no history in the
 // live tables, so a weekly job snapshots them into metric_snapshots.

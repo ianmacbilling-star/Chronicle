@@ -1759,6 +1759,58 @@ function impersonateSyncAdminPanel() {
   if (isAdmin && !inSession) { try { _impRecentLoad(); } catch (e) {} }   // v3.1.22 -- TD-914
   var dsec = document.getElementById('dbg-user-section');   // v3.2.63 -- same rule for Debug Mode for a user
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
+  if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
+}
+
+// v3.2.65 -- TD-1006. The unused-picture report: summary, the oldest 200, and the whole list as CSV.
+var _unusedPics = null;
+function _upBytes(n) { n = n || 0; return n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'; }
+function _upEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function renderUnusedPics(d) {
+  var out = document.getElementById('unused-pics-out');
+  var csv = document.getElementById('unused-pics-csv');
+  if (!out) return;
+  _unusedPics = null; if (csv) csv.style.display = 'none';
+  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not run the check.'; return; }
+  _unusedPics = d;
+  var kinds = Object.keys(d.by_kind || {}).sort().map(function (k) { var b = d.by_kind[k]; return _upEsc(k) + ': ' + b.count + ' (' + _upBytes(b.bytes) + ')'; }).join(' \u00b7 ');
+  var h = '<div style="line-height:1.6;">' +
+    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.keys_mentioned + ' storage addresses mentioned)</div>' +
+    '<div><strong>In storage under ' + _upEsc(d.prefix) + ':</strong> ' + d.listed + ' files, ' + _upBytes(d.listed_bytes) + '</div>' +
+    '<div><strong>In use here:</strong> ' + d.in_use + ' \u00b7 <strong>Newer than 24 hours (left out):</strong> ' + d.recent + '</div>' +
+    '<div style="color:#e8c766;"><strong>Not used by this database:</strong> ' + d.unused + ' files, ' + _upBytes(d.unused_bytes) + (kinds ? (' \u2014 ' + kinds) : '') + '</div>' +
+    '</div>';
+  var items = d.items || [];
+  if (items.length) {
+    var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
+    var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
+    h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
+      '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
+      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
+      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+    if (csv) csv.style.display = '';
+  }
+  out.innerHTML = h;
+}
+function unusedPicsRun() {
+  var out = document.getElementById('unused-pics-out');
+  if (out) out.textContent = 'Reading storage and the database\u2026 this can take a minute.';
+  fetch('/api/admin/unused-pictures', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(renderUnusedPics)
+    .catch(function (e) { renderUnusedPics({ error: 'Could not run the check: ' + e.message }); });
+}
+function unusedPicsCsv() {
+  var d = _unusedPics; if (!d || !d.items) return;
+  var rows = ['key,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
+  var blob = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'unused-pictures-' + String(d.env || 'env').replace(/[^A-Za-z0-9_-]/g, '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { try { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); } catch (e) {} }, 1000);
 }
 
 // v3.2.63 -- Dashboard > Support: Debug Mode on (true), off (false) or just checked (null) for one email; withLog
