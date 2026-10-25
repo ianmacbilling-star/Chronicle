@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.83",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3283-copyright-above-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The copyright line on the page after the title page now sits at the bottom, just above the Campaignia logo.",
+        "detail": "On the details page (page 3), the line \u00a9 year name. All rights reserved. moved from under Players and Story Master (and the Author\u2019s Note) down to the foot of the page, directly above the Campaignia logo and notice. Test: preview any book and look at page 3.",
+        "td": [
+          "TD-1018"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.82",
     "staged_on": "2026-10-25",
     "entries": [

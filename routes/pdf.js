@@ -6288,8 +6288,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         ? (copyHolder ? '<div class="dp-block"><div class="dp-label">Chronicled by</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' : '')
         : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
       (_fmNote ? '<div class="dp-author-note">' + _fmNote.split(/\n+/).map(function (_ln) { return _ln.trim(); }).filter(Boolean).map(function (_ln) { return '<p>' + _fmEsc(_ln) + '</p>'; }).join('') + '</div>' : '') +   // v3.2.82 -- TD-1017
-      '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
       '<div class="dp-footer">' +
+        // v3.2.83 -- TD-1018. Ian: the copyright line sits just above the Campaignia logo, at the foot of the page.
+        '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
         '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />' +
         '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
           // v3.0.391 -- Ian, exact wording. The tabletop role-playing reference is gone: the term
@@ -6512,7 +6513,7 @@ ${previewScrollbarCss()}
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
-  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.9; }
+  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.14in auto 0.12in;opacity:0.9; }   /* v3.2.83 -- was 0.3in on top; the copyright line now sits just above */
   .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
   .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }
 
