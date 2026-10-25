@@ -6502,7 +6502,7 @@ ${previewScrollbarCss()}
   .tp-image-border { display:inline-block;position:relative;line-height:0;border-radius:4px;overflow:hidden; }
   .tp-image { display:block;max-width:6.5in;max-height:6.5in;width:auto;height:auto;margin:0 auto; }
   .tp-logo { width:0.95in;height:auto;object-fit:contain;margin-top:0.5in;opacity:0.9; }
-  .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in 0.4in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
   .dp-title { font-family:'Cinzel',serif;font-size:20pt;font-weight:700;color:#2c1810;letter-spacing:0.03em;margin-bottom:0.08in; }
   .dp-campaign { font-family:'Crimson Text',serif;font-size:16pt;font-style:italic;color:#6b5f55;margin:-0.02in 0 0.12in; }
   .dp-dates { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;font-style:italic;margin-bottom:0.15in; }
@@ -6515,7 +6515,7 @@ ${previewScrollbarCss()}
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
   .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.14in auto 0.12in;opacity:0.9; }   /* v3.2.83 -- was 0.3in on top; the copyright line now sits just above */
   .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
-  .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }
+  .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }   /* v3.2.85 -- TD-1020: the page bottom padding is 0.4in (was 1in), so the footer sits lower */
 
   /* CONTENT */
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }

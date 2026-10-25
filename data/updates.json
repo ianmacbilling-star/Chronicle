@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.85",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3285-details-footer-lower",
+        "kind": "change",
+        "public": true,
+        "summary": "On the page after the title page, the copyright line, the Campaignia logo and the notice sit lower, nearer the foot of the page.",
+        "detail": "The bottom padding of the details page went from 1 inch to 0.4 inch, so the footer block (copyright line, logo, notice) moves down about 0.6 inch. Still well inside the printed page margins. Test: preview a book and look at page 3.",
+        "td": [
+          "TD-1020"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.84",
     "staged_on": "2026-10-25",
     "entries": [
