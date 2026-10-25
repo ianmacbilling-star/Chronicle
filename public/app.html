@@ -122,6 +122,10 @@
         <style>@media (max-width: 640px) { #menu-build-stamp.has-v { display: block !important; } }</style>
       </div>
     </div>
+    <!-- v3.2.62 -- TD-996. An invisible spot to the right of the account button: seven clicks turn Debug Mode on or off
+         for an admin (Ian, 2026-10-24), without going to the Account page. Nothing shows and nothing happens for
+         anyone else. No cursor change, no title, hidden from screen readers. -->
+    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:24px;height:30px;margin-left:-6px;margin-right:-12px;flex:0 0 auto;"></span>
   </div>
 </div>
 
@@ -2356,6 +2360,25 @@
           <button class="btn btn-sm" onclick="impersonateLoadLog()">Recent support sessions</button>
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
+      </div>
+      <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
+      <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Debug Mode for a user</div>
+        <div class="settings-section-desc">
+          Turn Debug Mode on or off for one account. Their actions are recorded from their next one; it switches off
+          by itself when they sign out. View log shows what has been recorded for them; Send to support emails it to
+          support, as if they had pressed their own button.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <input class="form-input" id="dbg-user-email" type="email" placeholder="customer@example.com" style="max-width:280px;" />
+          <button class="btn btn-sm" onclick="dbgUserSet(true)">Turn on</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(false)">Turn off</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null)">Check</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null, true)">View log</button>
+          <button class="btn btn-sm" onclick="dbgUserSet(null, false, true)">Send to support</button>
+        </div>
+        <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
+        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
       </div>
       </div>
 

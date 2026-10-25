@@ -1,5 +1,53 @@
 [
   {
+    "version": "3.2.64",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3264-debug-send",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard > Support: Send to support emails a user's debug log without them doing anything.",
+        "detail": "Same email as the user's own Send to support button, marked \"(sent by support)\" with the admin's email in it. Test: enter a tester's email, Send to support; support@campaignia.com gets the log.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.63",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3263-debug-for-user",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard > Support: turn Debug Mode on or off for a user by email.",
+        "detail": "An email field with Turn on, Turn off and Check. Their actions are recorded from their next one (the request recorder now also reads the setting from the database, at most once a minute per user); signing out still turns it off. Test: turn it on for a tester, have them do something, sign in as them and open the Debug panel on their Account page; the entries are there.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.62",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3262-debug-egg",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin shortcut: seven clicks just right of the account button turn Debug Mode on or off.",
+        "detail": "An invisible spot in the top banner, right of the account button. Admin accounts only; it does nothing for anyone else. A toast says ON or OFF, and the Account page box follows. Test: as admin, click the spot seven times quickly: \"Debug Mode is ON.\"; seven more: OFF.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.61",
     "staged_on": "2026-10-24",
     "entries": [

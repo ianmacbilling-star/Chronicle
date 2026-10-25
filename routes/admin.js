@@ -194,6 +194,43 @@ router.get('/user-last-active', requireAuth, requireAdmin, async function (req, 
   }
 });
 
+// v3.2.63 -- POST /api/admin/debug-mode { email, on }: Debug Mode on or off for one user, from Dashboard > Support
+// (Ian, 2026-10-24). Without "on" it only reports the user's current setting; with "log": true it also returns their
+// 500 newest Debug Mode entries; with "send": true it emails their log to support (v3.2.64). The user's requests are recorded from
+// their next one (routes/debug.js reads the flag from the database); signing out still switches it off.
+router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Enter an email address.' });
+    const db = await getDb();
+    const u = await db.prepare('SELECT id, email, debug_mode FROM users WHERE LOWER(email) = ?').get(email);
+    if (!u) return res.status(404).json({ error: 'No account with that email address.' });
+    const has = req.body && typeof req.body.on === 'boolean';
+    let on = !!u.debug_mode;
+    if (has) {
+      on = req.body.on;
+      await db.prepare('UPDATE users SET debug_mode = ? WHERE id = ?').run(on, u.id);
+      const dbg = require('./debug');
+      try { dbg.setDebugFlagCache(u.id, on); } catch (e) {}
+      if (on) { try { await dbg.logDebug(u.id, { level: 'info', source: 'server', page: 'Dashboard', fn: 'POST /api/admin/debug-mode', message: 'Debug Mode turned on by support', detail: { by: req.session.userId, at: new Date().toISOString() } }); } catch (e) {} }
+    }
+    const out = { email: u.email, user_id: u.id, debug_mode: on, changed: has };
+    if (req.body && req.body.send === true) {   // v3.2.64 -- Send to support: their log, emailed as if they had pressed it
+      const me = await db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
+      const sent = await require('./debug').sendDebugLogEmail(u.id, me || { id: req.session.userId });
+      if (!sent.ok) return res.status(sent.status || 500).json({ error: sent.error || 'Could not send the log.' });
+      out.sent = true; out.sent_entries = sent.entries;
+    }
+    if (req.body && req.body.log === true) {   // View log: the same 500 newest entries their own Debug panel shows
+      out.entries = await db.prepare('SELECT id, created_at, level, source, page, fn, message, detail FROM debug_logs WHERE user_id = ? ORDER BY id DESC LIMIT 500').all(u.id) || [];
+    }
+    res.json(out);
+  } catch (e) {
+    console.error('POST debug-mode error:', e && e.message);
+    res.status(500).json({ error: 'Could not change Debug Mode.' });
+  }
+});
+
 // ---- Weekly metric snapshots (true history for current-state metrics) ----
 // Current-state metrics (active users, per-tier counts) have no history in the
 // live tables, so a weekly job snapshots them into metric_snapshots.

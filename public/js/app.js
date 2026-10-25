@@ -1757,6 +1757,28 @@ function impersonateSyncAdminPanel() {
   var inSession = !!(_impState && _impState.active);
   sec.style.display = (isAdmin && !inSession) ? '' : 'none';
   if (isAdmin && !inSession) { try { _impRecentLoad(); } catch (e) {} }   // v3.1.22 -- TD-914
+  var dsec = document.getElementById('dbg-user-section');   // v3.2.63 -- same rule for Debug Mode for a user
+  if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
+}
+
+// v3.2.63 -- Dashboard > Support: Debug Mode on (true), off (false) or just checked (null) for one email; withLog
+// also shows their recorded entries, in the same words as their own Debug panel.
+function dbgUserSet(on, withLog, send) {   // v3.2.64 -- send: email their log to support
+  var em = document.getElementById('dbg-user-email');
+  var email = em ? em.value.trim() : '';
+  if (!email) { _impMsg('dbg-user-msg', 'Enter the customer email address.', false); return; }
+  _impMsg('dbg-user-msg', send ? 'Sending...' : on === null ? 'Checking...' : 'Saving...', true);
+  var body = { email: email }; if (on !== null) body.on = !!on; if (withLog) body.log = true; if (send) body.send = true;
+  var logEl = document.getElementById('dbg-user-log'); if (logEl) { logEl.style.display = 'none'; logEl.textContent = ''; }
+  fetch('/api/admin/debug-mode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || res.j.error) { _impMsg('dbg-user-msg', (res.j && res.j.error) || 'Could not change Debug Mode.', false); return; }
+      _impMsg('dbg-user-msg', res.j.sent ? ('Log sent to support for ' + res.j.email + ' (' + res.j.sent_entries + ' entr' + (res.j.sent_entries === 1 ? 'y' : 'ies') + ').')
+        : ('Debug Mode is ' + (res.j.debug_mode ? 'ON' : 'OFF') + ' for ' + res.j.email + ' (user ' + res.j.user_id + ')' + (res.j.changed ? '.' : ', unchanged.')), true);
+      if (withLog && logEl) { logEl.textContent = cmpFormatDebugLog(res.j.entries || []); logEl.style.display = 'block'; }
+    })
+    .catch(function (e) { _impMsg('dbg-user-msg', 'Could not change Debug Mode: ' + e.message, false); });
 }
 
 function devAddTokens() {
@@ -29779,6 +29801,33 @@ function cmpVersionTap() {
     var p = document.getElementById('dev-debug-panel');
     if (p) { p.style.display = 'block'; cmpInitDebugPanel(); p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   }
+}
+
+// v3.2.62 -- TD-996. Seven clicks on the invisible spot right of the account button (#dbg-egg) flip Debug Mode, for an
+// admin only (Ian: "NOBODY would know to do this"; admin-only so even a stray find does nothing). Same server
+// switch as the Account page box; a toast says which way it went, and the box and the red dot follow.
+var _cmpEggTaps = 0, _cmpEggTimer = null;
+function cmpEggTap() {
+  if (!(typeof state !== 'undefined' && state.user && state.user.is_admin)) return;
+  _cmpEggTaps++;
+  if (_cmpEggTimer) clearTimeout(_cmpEggTimer);
+  _cmpEggTimer = setTimeout(function () { _cmpEggTaps = 0; }, 2000);
+  if (_cmpEggTaps < 7) return;
+  _cmpEggTaps = 0;
+  fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var on = !(d && d.debug_mode);
+      return fetch('/api/debug/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on }) })
+        .then(function (r) { return r.json(); });
+    })
+    .then(function (d) {
+      var now = !!(d && d.debug_mode);
+      var t = document.getElementById('debug-mode-toggle'); if (t) t.checked = now;
+      cmpSetRecDot(now);
+      billingToast(now ? 'Debug Mode is ON.' : 'Debug Mode is OFF.', 'info');
+    })
+    .catch(function () { billingToast('Could not change Debug Mode.', 'error'); });
 }
 
 function cmpInitDebugPanel() {

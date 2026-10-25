@@ -46,6 +46,24 @@ async function logDebug(userId, entry) {
   }
 }
 
+// v3.2.63 -- TURNED ON FROM THE DASHBOARD (Ian, 2026-10-24: set Debug Mode for a user by email, from Support). The
+// request capture below used to look only at req.session.debugMode, which is set when THAT user's own page reads or
+// flips the switch, so a flag set by support did nothing for their requests until they did. It now also asks the
+// database, through this cache (one read per user per minute at most, and only on the requests it would record).
+// logDebug still checks the database on every entry, so a flag turned OFF stops logging at once either way.
+const _flagCache = new Map();
+const FLAG_TTL_MS = 60 * 1000;
+async function debugFlagOn(userId) {
+  const c = _flagCache.get(userId);
+  if (c && (Date.now() - c.at) < FLAG_TTL_MS) return c.on;
+  const db = await getDb();
+  const u = await db.prepare('SELECT debug_mode FROM users WHERE id = ?').get(userId);
+  const on = !!(u && u.debug_mode);
+  _flagCache.set(userId, { on: on, at: Date.now() });
+  return on;
+}
+function setDebugFlagCache(userId, on) { if (userId) _flagCache.set(userId, { on: !!on, at: Date.now() }); }
+
 router.use(requireAuth);
 
 // GET /api/debug/status -- the current user's flag (panel reads this on open).
@@ -69,6 +87,7 @@ router.post('/toggle', async function(req, res) {
     const db = await getDb();
     await db.prepare('UPDATE users SET debug_mode = ? WHERE id = ?').run(on, req.session.userId);
     if (req.session) req.session.debugMode = on;
+    setDebugFlagCache(req.session.userId, on);   // v3.2.63
     if (on) {
       await logDebug(req.session.userId, {
         level: 'info', source: 'server', page: 'Account', fn: 'POST /api/debug/toggle',
@@ -106,16 +125,17 @@ router.post('/clear', async function(req, res) {
   }
 });
 
-// POST /api/debug/send -- email the current user's captured log to support.
-router.post('/send', async function(req, res) {
-  try {
+// v3.2.64 -- the email itself, shared by the user's own Send to support button (/send below) and the Dashboard's
+// (routes/admin.js, Ian, 2026-10-24: "send it without having them do anything"). sentBy is the admin's user row when
+// support sent it, or null; the email says which. Returns { ok } or { status, error }, in the words /send always used.
+async function sendDebugLogEmail(userId, sentBy) {
     const db = await getDb();
-    const u = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.session.userId);
+    const u = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(userId);
     const rows = await db.prepare(
       'SELECT id, created_at, level, source, page, fn, message, detail FROM debug_logs WHERE user_id = ? ORDER BY id DESC LIMIT ?'
-    ).all(req.session.userId, DISPLAY_LIMIT);
+    ).all(userId, DISPLAY_LIMIT);
     const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) return res.status(503).json({ error: 'Email is not configured.' });
+    if (!apiKey) return { status: 503, error: 'Email is not configured.' };
     const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
     const blocks = (rows || []).map(function(e) {
       return '[' + (e.created_at || '') + '] ' + String(e.level || 'info').toUpperCase() + ' / ' + (e.source || '') +
@@ -124,25 +144,36 @@ router.post('/send', async function(req, res) {
         '\n  msg:  ' + (e.message || '-') +
         (e.detail ? ('\n  detail:\n' + String(e.detail).replace(/^/gm, '    ')) : '');
     });
+    const bySupport = sentBy ? ('Sent from the Dashboard by ' + (sentBy.email || ('user ' + sentBy.id)) + '; the user did nothing.') : '';
     const bodyText =
-      'User: ' + (u ? (u.name + ' <' + u.email + '> (id ' + u.id + ')') : ('id ' + req.session.userId)) +
+      'User: ' + (u ? (u.name + ' <' + u.email + '> (id ' + u.id + ')') : ('id ' + userId)) +
+      (bySupport ? ('\n' + bySupport) : '') +
       '\nEntries: ' + (rows ? rows.length : 0) +
       '\n\n' + (blocks.length ? blocks.join('\n\n') : '(no entries)');
-    const who = u ? (u.name + ' <' + u.email + '>') : ('user ' + req.session.userId);
+    const who = u ? (u.name + ' <' + u.email + '>') : ('user ' + userId);
     const html = '<p style="font:14px/1.5 sans-serif;">Debug log attached from ' + escapeHtml(who) + '.</p>' +
+      (bySupport ? ('<p style="font:14px/1.5 sans-serif;">' + escapeHtml(bySupport) + '</p>') : '') +
       '<p style="font:14px/1.5 sans-serif;">Entries: ' + (rows ? rows.length : 0) + '</p>';
     const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-    const fileName = 'campaignia-debug-' + (u ? u.id : req.session.userId) + '-' + stamp + '.txt';
+    const fileName = 'campaignia-debug-' + (u ? u.id : userId) + '-' + stamp + '.txt';
     const { Resend } = require('resend');
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
       from: 'Campaignia Debug <' + fromEmail + '>',
       to: SUPPORT_EMAIL,
-      subject: 'Debug log from ' + (u ? u.email : ('user ' + req.session.userId)),
+      subject: 'Debug log from ' + (u ? u.email : ('user ' + userId)) + (sentBy ? ' (sent by support)' : ''),
       html: html,
       attachments: [{ filename: fileName, content: Buffer.from(bodyText, 'utf8').toString('base64') }]
     });
-    if (error) return res.status(502).json({ error: 'Could not send the log.' });
+    if (error) return { status: 502, error: 'Could not send the log.' };
+    return { ok: true, entries: rows ? rows.length : 0 };
+}
+
+// POST /api/debug/send -- email the current user's captured log to support.
+router.post('/send', async function(req, res) {
+  try {
+    const r = await sendDebugLogEmail(req.session.userId, null);
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Could not send the log.' });
@@ -228,6 +259,14 @@ function captureMiddleware(req, res, next) {
     var cleanPath = path.split('?')[0];
     var isMutation = (m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE');
     var isRender = (m === 'GET') && RENDER_PREFIXES.some(function(pfx){ return cleanPath.indexOf(pfx) === 0; });
+    // v3.2.63 -- the session flag, or (when it is off) the database flag through the cache, so Debug Mode turned on
+    // from the Dashboard records this user's requests at once.
+    if ((isMutation || isRender) && req.session && req.session.userId && path.indexOf('/api/debug') !== 0 && !req.session.debugMode) {
+      var _req = req, _res = res;
+      debugFlagOn(req.session.userId).then(function (on) { if (on) { _req.session.debugMode = true; captureMiddleware(_req, _res, next); } else next(); })
+        .catch(function () { next(); });
+      return;
+    }
     if ((isMutation || isRender) && req.session && req.session.debugMode && req.session.userId && path.indexOf('/api/debug') !== 0) {
       var uid = req.session.userId;
       var started = Date.now();
@@ -258,3 +297,5 @@ function captureMiddleware(req, res, next) {
 module.exports = router;
 module.exports.logDebug = logDebug;
 module.exports.captureMiddleware = captureMiddleware;
+module.exports.setDebugFlagCache = setDebugFlagCache;
+module.exports.sendDebugLogEmail = sendDebugLogEmail;   // v3.2.64 -- the Dashboard's Send to support   // v3.2.63 -- the Dashboard switch updates it at once
