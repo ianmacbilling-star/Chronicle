@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.64",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3264-debug-send",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard > Support: Send to support emails a user's debug log without them doing anything.",
+        "detail": "Same email as the user's own Send to support button, marked \"(sent by support)\" with the admin's email in it. Test: enter a tester's email, Send to support; support@campaignia.com gets the log.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.63",
     "staged_on": "2026-10-24",
     "entries": [

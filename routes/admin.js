@@ -196,7 +196,7 @@ router.get('/user-last-active', requireAuth, requireAdmin, async function (req, 
 
 // v3.2.63 -- POST /api/admin/debug-mode { email, on }: Debug Mode on or off for one user, from Dashboard > Support
 // (Ian, 2026-10-24). Without "on" it only reports the user's current setting; with "log": true it also returns their
-// 500 newest Debug Mode entries. The user's requests are recorded from
+// 500 newest Debug Mode entries; with "send": true it emails their log to support (v3.2.64). The user's requests are recorded from
 // their next one (routes/debug.js reads the flag from the database); signing out still switches it off.
 router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) {
   try {
@@ -215,6 +215,12 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
       if (on) { try { await dbg.logDebug(u.id, { level: 'info', source: 'server', page: 'Dashboard', fn: 'POST /api/admin/debug-mode', message: 'Debug Mode turned on by support', detail: { by: req.session.userId, at: new Date().toISOString() } }); } catch (e) {} }
     }
     const out = { email: u.email, user_id: u.id, debug_mode: on, changed: has };
+    if (req.body && req.body.send === true) {   // v3.2.64 -- Send to support: their log, emailed as if they had pressed it
+      const me = await db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
+      const sent = await require('./debug').sendDebugLogEmail(u.id, me || { id: req.session.userId });
+      if (!sent.ok) return res.status(sent.status || 500).json({ error: sent.error || 'Could not send the log.' });
+      out.sent = true; out.sent_entries = sent.entries;
+    }
     if (req.body && req.body.log === true) {   // View log: the same 500 newest entries their own Debug panel shows
       out.entries = await db.prepare('SELECT id, created_at, level, source, page, fn, message, detail FROM debug_logs WHERE user_id = ? ORDER BY id DESC LIMIT 500').all(u.id) || [];
     }
