@@ -1820,12 +1820,14 @@ function renderCleanup(d) {
   var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 monthly job <strong>' + (d.mode === 'hold' ? 'On' : (d.mode === 'off' ? 'Off (silent)' : 'Off (report only)')) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
   if (d.holdBucket) h += '<div>Holding: ' + _upEsc(d.holdBucket) + '/' + _upEsc(d.holdPrefix || '') + (d.keep ? (' \u00b7 put back (never moved again) ' + d.keep) : '') + '</div>';
   if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Moving is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
-  if (d.running) h += '<div>Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
+  // v3.2.75 -- Ian: the running count bigger and bolder.
+  if (d.running) h += '<div style="font-size:15px;font-weight:700;color:#f0d78a;margin:4px 0;">Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
   if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
   var o = d.last;
   // v3.2.74 -- every folder: a line per folder under the totals.
   var FL = { uploads: 'pictures', archives: 'archived pictures', optimized: 'saved books and covers', story: 'story PDFs', print: 'print PDFs' };
-  var folderLine = (o && o.byFolder) ? ('<div style="opacity:0.85;">' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return o.byFolder[k]; }).map(function (k) { var f = o.byFolder[k];
+  // v3.2.75 -- Ian: the per-folder line is the result, so it says so, bigger and bolder.
+  var folderLine = (o && o.byFolder) ? ('<div style="font-size:15px;font-weight:700;color:#f0d78a;margin:4px 0;">Results: ' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return o.byFolder[k]; }).map(function (k) { var f = o.byFolder[k];
     return _upEsc(FL[k]) + ' ' + f.unused + (o.mode === 'hold' ? (f.skipped ? ' (left alone: over 85% looked orphaned)' : (' \u2192 moved ' + f.moved)) : ''); }).join(' \u00b7 ') + '</div>') : '';
   if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode === 'hold' ? 'move to holding' : o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): orphaned ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
     (o.mode === 'hold' ? (' \u00b7 moved to holding ' + o.moved + ' (' + _upBytes(o.movedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed)
