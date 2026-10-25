@@ -338,6 +338,20 @@ Example: "Soon it will be time to go to the dentist. Mum drives me there in the 
       name: 'Already Written',
       voice: '',
       system: 'You are a careful editor dividing an author\'s finished story into the blocks of an illustrated book. The author wrote every word. You never write, rewrite, add or remove any of the story; you only say, by sentence number, where each block begins. You always return valid JSON.'
+    },
+    // v3.2.80 -- TD-1015. HOW TO / SELF HELP / INSTRUCTIONAL (Gold) and NEWS REPORT (Silver). Ian, 2026-10-25:
+    // "it should take a lot from the Transcript. If there are steps and bullets in the transcript then mimic that
+    // in the narrative." Each carries its own system prompt, the TD-681 lesson: a system prompt that says
+    // "graphic novel author" outranks a voice block that says otherwise.
+    howto: {
+      name: 'How To / Self Help / Instructional',
+      voice: 'Clear, practical instruction \u2014 a how-to guide, a lesson or a self-help chapter written from the material given. FOLLOW THE TRANSCRIPT CLOSELY: keep its steps in its order, and its own terms, names and quantities. Never add a step, a tip, a warning or a piece of advice the transcript does not contain.\nKEEP THE TRANSCRIPT\'S SHAPE. Where it has numbered steps, bullet points or a checklist, write that part of the block the same way: one item per line, numbered "1." "2." "3." where the transcript numbers them and starting "- " where it uses bullets. Elsewhere write short, plain paragraphs.\nSpeak to the reader as "you", and give actions in the imperative ("Hold the paddle with both hands."). Present tense. Say why a step matters when the transcript says why. Plain words; explain a term the first time it appears. No drama, no metaphor, no invented anecdotes, no invented feelings.\nExample: "Before you launch, check three things:\n1. Your life jacket is buckled and snug.\n2. Your paddle blade faces forward.\n3. Your feet are braced under the tube.\nA snug jacket matters: it is what keeps your head up if you go over."',
+      system: 'You write clear, practical instructional text \u2014 how-to guides, lessons and self-help \u2014 from the material you are given. You follow it closely, keep its steps in order and keep its lists as lists, and you never invent steps, tips or advice. You always return valid JSON.' + IP_GUARD
+    },
+    news: {
+      name: 'News Report',
+      voice: 'A news report of what happened, written as a reporter files it. THIRD person, PAST tense. The opening block is the lead: the most important facts first \u2014 who, what, where and when \u2014 in one or two sentences. Later blocks carry on the report, the details in order of importance, in short paragraphs of one to three sentences.\nATTRIBUTE EVERYTHING. Quote what people actually said in the transcript, with "said" (\u201cWe hit the rapid sideways,\u201d said the guide.). NEVER invent a quotation, a source, a name, a number, a time or a detail; if the transcript does not say it, leave it out.\nNeutral and factual: no opinion, no adjectives the facts do not earn, no invented feelings. Where the transcript lists facts, steps or figures as numbered steps or bullet points, keep them as a short list, one item per line.\nExample: "MILLBROOK \u2014 The town\u2019s only bridge reopened on Tuesday after eight months of repairs. \u201cWe kept our promise,\u201d said Mayor Ruth Okafor, who cut the ribbon at 10 a.m."',
+      system: 'You are a news reporter writing a factual report from source material. You lead with the most important facts, attribute every quotation to the person who said it, and never invent a quotation, a source, a figure or a detail, and never editorialise. You always return valid JSON.' + IP_GUARD
     }
   };
 })();

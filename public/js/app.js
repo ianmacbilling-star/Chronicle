@@ -5664,7 +5664,10 @@ var NARR_STYLE_META = [
   { id:'outline', name:'Outline / I\u2019ll write it', desc:'Bullet points instead of prose \u2014 what happens, who is there, the key moment and a line worth keeping \u2014 so you can write the story yourself.', example:'\u2022 The raft reaches the big rapid. \u2022 Tom goes over the side. \u2022 Worth keeping \u2014 GUIDE: \u201cPaddle hard left, now!\u201d' },   // v3.1.27 -- TD-920
   // v3.1.49 -- TD-941. Ian: "takes pretty much exactly what is written... and slices it into the appropriate
   // narrative and image panels". The server copies the author's sentences; nothing is rewritten.
-  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box: up to {words} words a session, about a chapter. Longer stories, one session per chapter.', example:'Your words, exactly as you wrote them.' }
+  { id:'written', name:'Already Written', desc:'Your own finished story, kept word for word. Campaignia only splits it around the pictures \u2014 it writes nothing new. Put your story in the Story / Session Transcript box: up to {words} words a session, about a chapter. Longer stories, one session per chapter.', example:'Your words, exactly as you wrote them.' },
+  // v3.2.80 -- TD-1015. Ian: How To on Gold, News Report on Silver; both follow the transcript and keep its lists.
+  { id:'howto', name:'How To / Self Help / Instructional', desc:'Clear, practical instruction that follows your material closely \u2014 your steps in your order, kept as numbered steps or bullet points where you wrote them that way. Speaks to the reader as \u201cyou\u201d.', example:'Before you launch, check three things: 1. Your life jacket is buckled and snug. 2. Your paddle blade faces forward. 3. Your feet are braced under the tube.' },
+  { id:'news', name:'News Report', desc:'A factual news report: the most important facts first, short paragraphs, and only the quotes people actually said. Neutral, third person, past tense.', example:'MILLBROOK \u2014 The town\u2019s only bridge reopened on Tuesday after eight months of repairs. \u201cWe kept our promise,\u201d said Mayor Ruth Okafor.' }
 ];
 var STYLE_PICKER_KIND = null;
 
@@ -25383,6 +25386,8 @@ var CS_GENRES = [
   ['nonfiction', 'Nonfiction'],
   ['family', 'Family Story'],
   ['skillstory', 'Skill Story'],
+  ['howto', 'How To / Self Help / Instructional'],   // v3.2.80 -- TD-1015
+  ['news', 'News Report'],   // v3.2.80 -- TD-1015
   ['other', 'Other (use Prompt)']
 ];
 // v3.0.835 -- TD-680. THE EXAMPLES IN THE SESSION BOXES WERE FANTASY ON EVERY GENRE.
@@ -25412,7 +25417,8 @@ var CS_CATEGORY = {
   fantasy: 'fiction', romance: 'fiction', thriller: 'fiction', scifi: 'fiction',
   horror: 'fiction', biography: 'nonfiction', mystery: 'fiction', childrens: 'fiction',
   ya: 'fiction', historical: 'fiction', literary: 'fiction', nonfiction: 'nonfiction',
-  family: 'nonfiction', skillstory: 'skillstory'
+  family: 'nonfiction', skillstory: 'skillstory',
+  howto: 'nonfiction', news: 'nonfiction'   // v3.2.80 -- TD-1015
 };
 var CS_CATEGORY_DEFAULT = 'fiction';
 
@@ -25468,6 +25474,15 @@ var CS_GENRE_HINTS = {
   family: {
     transcript: 'Tell the story in the order it happened. Paste letters, notes or a recorded conversation if you have them -- or just write it out.\n\nNana grew up on the farm outside Ennis.\nShe met Grandad at the dance hall in 1961.\nThey saved for two years to buy the blue car.',
     notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the day they bought the blue car\n\nEVERY MOMENT:\n- Make sure each moment has the farmhouse kitchen the way it really was\n\nTONE:\n- Keep it warm and gentle; this is for her 80th\n\nNAMES:\n- Always call her Nana, never Grandmother'
+  },
+  // v3.2.80 -- TD-1015. Their own examples, so a How To or a News Report does not show a ballplayer's biography.
+  howto: {
+    transcript: 'Paste your steps, notes or a class or video transcript -- or just write it out, in the order someone would do it. Keep your numbered steps and bullet points; the narrative keeps them too.\n\nHow to launch a kayak from the shore\n1. Set the kayak half in the water, bow pointing out.\n2. Sit on the edge of the seat, then swing your legs in.\n3. Push off with your paddle and center your weight.',
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the paddle grip close up\n\nEVERY MOMENT:\n- Make sure each moment shows the hands and the equipment clearly enough to copy\n\nTONE:\n- Keep it friendly and encouraging, like a good instructor\n\nSTAY ACCURATE:\n- Do not add steps or tips that are not in my notes'
+  },
+  news: {
+    transcript: 'Paste your notes, the interview, the press release or the report -- or just write down what happened. Who, what, where and when matter most.\n\nThe Millbrook bridge reopened on Tuesday after eight months of repairs.\nMayor Ruth Okafor cut the ribbon at 10 a.m.\n"We kept our promise," she said.',
+    notes: 'Tell Campaignia what to do. Write instructions, not notes...\n\nMANDATORY SCENES:\n- Make sure you have a moment showing the ribbon being cut\n\nEVERY MOMENT:\n- Make sure each moment shows the bridge and the town as they really look\n\nTONE:\n- Keep it neutral and factual, like a local paper\n\nSTAY ACCURATE:\n- Only quote what people actually said in my notes'
   }
 };
 
@@ -25487,7 +25502,9 @@ var CS_CLS_HINTS = {
   childrens: 'e.g. Big sister, or a talking badger',
   biography: 'e.g. Pitcher, or Union officer',
   family: 'e.g. Grandmother, or the neighbour with the blue car',
-  skillstory: 'e.g. The dentist, or Mom'
+  skillstory: 'e.g. The dentist, or Mom',
+  howto: 'e.g. The instructor, or you',   // v3.2.80 -- TD-1015
+  news: 'e.g. Reporter, or the mayor'
 };
 
 // THE WIRING POINT THAT IS EASY TO MISS. applyGenreHints runs on session load, and the
