@@ -284,7 +284,9 @@ router.post('/storage-holding/restore', requireAuth, requireAdmin, async functio
   try {
     const b = req.body || {};
     const names = Array.isArray(b.names) ? b.names.slice(0, 5000).map(String) : [];
-    res.json(await require('../services/storageCleanup').restore(await getDb(), names, b.all === true));
+    const sc = require('../services/storageCleanup');
+    if (b.inUse === true) return res.json(await sc.restoreInUse(await getDb()));   // v3.2.70
+    res.json(await sc.restore(await getDb(), names, b.all === true));
   } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
 });
 router.post('/storage-holding/empty', requireAuth, requireAdmin, async function (req, res) {

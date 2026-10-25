@@ -2414,6 +2414,7 @@
           <textarea id="hold-names" class="form-input" rows="3" placeholder="Picture names or addresses, one per line" style="width:100%;max-width:640px;margin-top:8px;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
             <button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
+            <button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything now in use</button>
             <button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put everything back</button>
             <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">Everything held</option><option value="7">Held 7+ days</option><option value="30">Held 30+ days</option></select>
             <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Empty holding</button>

@@ -18,7 +18,16 @@
 // verdicts (image_rights) and the image-job log (image_jobs keeps every Regen's new and replaced picture forever;
 // the app reads a job only while it finishes). Counting them kept nearly every replaced panel "in use". They are
 // skipped now -- image_jobs only for jobs that have ended (done or failed); a job still running still counts.
+//
+// v3.2.70 -- SAVED BOOKS ARE USE TOO. Every Save on Optimize writes the book's layout and reading snapshot to the
+// bucket (optimized/approved-<campaign>-<layout>-<time>.json.gz), and the Bookshelf keeps its own copies. They list
+// the panel pictures AS SAVED, which may since have been regenerated -- and publishing that book, its Edit buttons
+// and the print fallback all read them. The database only holds their addresses, so every saved book the database
+// mentions is opened and every key inside it counts as in use. If one cannot be read (other than not being there),
+// the whole check fails rather than guess -- a failed check moves nothing.
+// Addresses are also read with %2F as /, so an address inside an encoded link still counts.
 'use strict';
+const zlib = require('zlib');
 const storage = require('../storage/storage');
 const KEY_RE = /(?:uploads|archives|optimized|print|story)\/[A-Za-z0-9._\-]+/g;
 const RECENT_MS = 24 * 60 * 60 * 1000;
@@ -31,6 +40,13 @@ function kindOf(key) {
   return m ? m[1] : 'other';
 }
 function qid(name) { return '"' + String(name).replace(/"/g, '""') + '"'; }
+const SAVED_BOOK_RE = /^optimized\/[A-Za-z0-9._\-]+\.json\.gz$/;
+function addKeys(refs, s) {
+  if (s.indexOf('/') < 0 && s.indexOf('%2') < 0) return;
+  if (/%2F/i.test(s)) s = s.replace(/%2F/gi, '/');   // v3.2.70
+  const m = s.match(KEY_RE);
+  if (m) m.forEach(function (key) { refs.add(key); });
+}
 
 // Every bucket key mentioned anywhere in the database.
 async function referencedKeys(db) {
@@ -53,14 +69,27 @@ async function referencedKeys(db) {
       Object.keys(row).forEach(function (k) {
         const v = row[k];
         if (v == null) return;
-        const s = String(v);
-        if (s.indexOf('/') < 0) return;
-        const m = s.match(KEY_RE);
-        if (m) m.forEach(function (key) { refs.add(key); });
+        addKeys(refs, String(v));   // v3.2.70
       });
     });
   }
-  return { refs: refs, tables: tables.length };
+  // v3.2.70 -- open every saved book the database mentions, four at a time.
+  const books = Array.from(refs).filter(function (k) { return SAVED_BOOK_RE.test(k); });
+  const before = refs.size;
+  let opened = 0, gone = 0, i = 0;
+  const worker = async function () {
+    while (i < books.length) {
+      const k = books[i++];
+      let buf;
+      try { buf = await storage.getObject(k); } catch (e) { throw new Error('Could not open the saved book ' + k + ' (' + ((e && e.message) || e) + '), so nothing counts as unused.'); }
+      if (!buf) { gone++; continue; }
+      let text;
+      try { text = zlib.gunzipSync(buf).toString('utf8'); } catch (e) { throw new Error('The saved book ' + k + ' could not be unpacked, so nothing counts as unused.'); }
+      addKeys(refs, text); opened++;
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  return { refs: refs, tables: tables.length, savedBooks: opened, savedBooksGone: gone, savedBookKeys: refs.size - before };
 }
 
 async function unusedPictureReport(db, opts) {
@@ -73,6 +102,7 @@ async function unusedPictureReport(db, opts) {
   const scan = await referencedKeys(db);
   const out = { env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local', prefix: prefix,
     listed: objects.length, listed_bytes: 0, tables_read: scan.tables, keys_mentioned: scan.refs.size,
+    saved_books: scan.savedBooks || 0, saved_book_keys: scan.savedBookKeys || 0,   // v3.2.70
     in_use: 0, recent: 0, unused: 0, unused_bytes: 0, by_kind: {}, items: [] };
   objects.forEach(function (o) {
     out.listed_bytes += o.size || 0;
