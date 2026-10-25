@@ -101,6 +101,20 @@ async function copyFromBucket(srcBucket, key) {
 }
 function bucketName() { return BUCKET_NAME; }
 
+// v3.2.68 -- TD-1006. Delete one object BY KEY, for the monthly clean-up, which works from the bucket listing (a key)
+// rather than a stored address. Only uploads/ keys; throws on failure so the clean-up can count it.
+async function deleteKey(key) {
+  if (!useCloud) throw new Error('This server stores pictures on its own disk.');
+  if (!/^uploads\/[A-Za-z0-9._\-]+$/.test(String(key || ''))) throw new Error('Only uploads/ keys are deleted: ' + key);
+  const body = Buffer.alloc(0);
+  const signed = signRequest('DELETE', key, 'application/octet-stream', body);
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  const resp = await axios.delete(signed.url, { headers: signed.headers, httpsAgent: agent, timeout: 60000 });
+  return resp && resp.status;
+}
+
 // v3.2.65 -- TD-1006. Every object under a prefix: [{ key, size, lastModified }]. Read only. Pages through the
 // bucket 1,000 at a time (capped at 200 pages). Returns null in local-disk mode. Throws on an R2 error, so a
 // report can say it could not read the bucket rather than report an empty one.
@@ -490,4 +504,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006

@@ -1761,6 +1761,7 @@ function impersonateSyncAdminPanel() {
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
   if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  if (usec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
   var msec = document.getElementById('storage-move-section');   // v3.2.67 -- TD-1006, same rule
   if (msec) msec.style.display = (isAdmin && !inSession) ? '' : 'none';
 }
@@ -1825,6 +1826,43 @@ function renderUnusedPics(d) {
   }
   out.innerHTML = h;
 }
+// v3.2.68 -- TD-1006. The monthly clean-up controls. Delete now needs a second click within 5 seconds (no browser pop-up).
+var _cuTimer = null, _cuArmed = false;
+function renderCleanup(d) {
+  var out = document.getElementById('cleanup-out'); if (!out) return;
+  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read the clean-up status.'; return; }
+  var sel = document.getElementById('cleanup-mode'); if (sel && d.mode) sel.value = d.mode;
+  var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 mode <strong>' + _upEsc(d.mode) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
+  if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Deleting is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
+  if (d.running) h += '<div>Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
+  if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
+  var o = d.last;
+  if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): unused over 30 days ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
+    (o.mode === 'delete' ? (' \u00b7 deleted ' + o.deleted + ' (' + _upBytes(o.deletedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed) : ' \u00b7 nothing deleted') + '</div>' +
+    (o.refused ? ('<div style="color:#ffb38a;"><strong>Not deleted:</strong> ' + _upEsc(o.refused) + '</div>') : '');
+  out.innerHTML = h;
+  if (_cuTimer) { clearTimeout(_cuTimer); _cuTimer = null; }
+  if (d.running) _cuTimer = setTimeout(cleanupLoad, 2000);
+}
+function cleanupLoad() {
+  fetch('/api/admin/storage-cleanup', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
+}
+function cleanupSetMode(m) {
+  fetch('/api/admin/storage-cleanup/mode', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: m }) })
+    .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
+}
+function cleanupRun(del) {
+  var out = document.getElementById('cleanup-out'); if (out) out.textContent = del ? 'Deleting\u2026' : 'Checking\u2026';
+  fetch('/api/admin/storage-cleanup/run', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delete: !!del }) })
+    .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
+}
+function cleanupDeleteClick() {
+  var b = document.getElementById('cleanup-delete-btn');
+  if (!_cuArmed) { _cuArmed = true; if (b) b.textContent = 'Click again to delete'; setTimeout(function () { _cuArmed = false; if (b) b.textContent = 'Delete now'; }, 5000); return; }
+  _cuArmed = false; if (b) b.textContent = 'Delete now';
+  cleanupRun(true);
+}
+
 function unusedPicsRun() {
   var out = document.getElementById('unused-pics-out');
   if (out) out.textContent = 'Reading storage and the database\u2026 this can take a minute.';

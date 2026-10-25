@@ -260,6 +260,19 @@ router.post('/storage-move/:step', requireAuth, requireAdmin, async function (re
   } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
 });
 
+// v3.2.68 -- TD-1006. The monthly storage clean-up: status, its mode (off / report / delete) and Run now.
+router.get('/storage-cleanup', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await require('../services/storageCleanup').status(await getDb())); } catch (e) { res.status(500).json({ error: (e && e.message) || 'error' }); }
+});
+router.post('/storage-cleanup/mode', requireAuth, requireAdmin, async function (req, res) {
+  try { const sc = require('../services/storageCleanup'); const db = await getDb(); await sc.setMode(db, String((req.body && req.body.mode) || '')); res.json(await sc.status(db)); }
+  catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+router.post('/storage-cleanup/run', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await require('../services/storageCleanup').runNow(await getDb(), !!(req.body && req.body.delete === true))); }
+  catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+
 // ---- Weekly metric snapshots (true history for current-state metrics) ----
 // Current-state metrics (active users, per-tier counts) have no history in the
 // live tables, so a weekly job snapshots them into metric_snapshots.

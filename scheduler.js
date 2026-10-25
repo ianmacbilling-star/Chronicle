@@ -545,6 +545,13 @@ async function tick() {
   } catch (e) {
     console.error('[scheduler] lifecycle sweep failed:', e && e.message);
   }
+  // v3.2.68 -- TD-1006. The monthly storage clean-up (report only until Ian sets it to delete). Its own try.
+  try {
+    const sc = await require('./services/storageCleanup').maybeMonthly(db);
+    if (sc) console.log('[scheduler] storage clean-up (' + sc.mode + '): unused ' + sc.unused + ', deleted ' + sc.deleted + (sc.refused ? (', refused: ' + sc.refused) : ''));
+  } catch (e) {
+    console.error('[scheduler] storage clean-up failed:', e && e.message);
+  }
   // v3.1.43 -- TD-934. Every tick, its own try, like every job here.
   try {
     const g = await deliverDueGifts(db);
