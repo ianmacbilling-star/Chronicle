@@ -472,6 +472,10 @@
               <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown, or Summer at the Lake" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
               <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
+              <!-- v3.2.82 -- TD-1017. Ian: a note to the readers, printed on the details page; PDF and print only. -->
+              <div class="prep-field-label">Author&#8217;s Note</div>
+              <textarea id="prep-author-note" maxlength="600" rows="4" onchange="prepSaveAuthorNote()" oninput="prepAuthorNoteCount()" placeholder="Optional. A note, message or dedication to your readers." class="prep-input" style="resize:vertical;min-height:84px;line-height:1.45;margin-bottom:2px;" title="Printed on the page with the copyright notice, right after the title page. In the PDF and the printed book only."></textarea>
+              <div id="prep-author-note-count" style="font-size:11px;color:rgba(232,213,163,0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
               <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
               <div id="prep-drawn-title-note" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:4px 0 8px;"></div>
 
