@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.67",
+    "staged_on": "2026-10-24",
+    "entries": [
+      {
+        "id": "3267-own-bucket",
+        "kind": "ops",
+        "public": false,
+        "summary": "Staging can move to its own storage bucket; production is unchanged.",
+        "detail": "The bucket name is now the Railway setting R2_BUCKET (unset = chronicle-images, as before). Dashboard > Support has a one-time staging tool: 1. Copy pictures (every picture staging's database uses, copied into its own bucket, nothing deleted), 2. Rewrite addresses (only after a clean copy). It refuses to run unless R2_BUCKET, R2_SHARED_BUCKET, R2_PUBLIC_URL and R2_LEGACY_PUBLIC_URLS are set. Test: on staging with the settings in place, Check setup, Copy, then Rewrite; old campaigns' pictures still show.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.66",
     "staged_on": "2026-10-24",
     "entries": [

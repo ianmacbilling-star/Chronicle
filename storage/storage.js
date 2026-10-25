@@ -3,7 +3,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 let useCloud = false;
-const BUCKET_NAME = 'chronicle-images';
+// v3.2.67 -- TD-1006. THE BUCKET IS A SETTING. Staging and production shared this one bucket with separate databases,
+// so neither could ever safely clean up (each sees the other's pictures as unused). Staging moves to its own bucket
+// by setting R2_BUCKET; production leaves it unset and stays on chronicle-images, exactly as before.
+const BUCKET_NAME = String(process.env.R2_BUCKET || '').trim() || 'chronicle-images';
 
 function initStorage() {
   if (process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_ACCOUNT_ID) {
@@ -68,6 +71,35 @@ function signRequest(method, key, contentType, body, extra, query) {
     headers: outHeaders
   };
 }
+
+// v3.2.67 -- TD-1006. Copy one object from ANOTHER bucket of this account into this environment's bucket, under the
+// same key, inside R2 (nothing travels through this process). For staging's one-time move off the shared bucket.
+// Returns 'copied', or 'missing' when the source has no such object; throws on anything else.
+async function copyFromBucket(srcBucket, key) {
+  if (!useCloud) throw new Error('This server stores pictures on its own disk.');
+  if (!srcBucket || srcBucket === BUCKET_NAME) throw new Error('The source bucket must be another bucket.');
+  if (!/^[A-Za-z0-9._\-]+(\/[A-Za-z0-9._\-]+)*$/.test(String(key || ''))) throw new Error('Unusual key, not copied: ' + key);
+  const body = Buffer.alloc(0);
+  const signed = signRequest('PUT', key, 'application/octet-stream', body, { 'x-amz-copy-source': '/' + srcBucket + '/' + key });
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  try {
+    const resp = await axios.put(signed.url, body, { headers: signed.headers, httpsAgent: agent, timeout: 60000 });
+    const txt = (resp && resp.data) ? String(resp.data) : '';
+    if (txt.indexOf('<Error') >= 0) {
+      if (/NoSuchKey/.test(txt)) return 'missing';
+      throw new Error('copy reported an error: ' + txt.slice(0, 200));
+    }
+    return 'copied';
+  } catch (e) {
+    const st = e && e.response && e.response.status;
+    const data = e && e.response && e.response.data ? String(e.response.data) : '';
+    if (st === 404 || /NoSuchKey/.test(data)) return 'missing';
+    throw new Error((st ? (st + ' ') : '') + (data ? data.slice(0, 200) : (e && e.message)));
+  }
+}
+function bucketName() { return BUCKET_NAME; }
 
 // v3.2.65 -- TD-1006. Every object under a prefix: [{ key, size, lastModified }]. Read only. Pages through the
 // bucket 1,000 at a time (capped at 200 pages). Returns null in local-disk mode. Throws on an R2 error, so a
@@ -458,4 +490,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
