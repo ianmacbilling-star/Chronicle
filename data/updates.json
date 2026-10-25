@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.89",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3289-version-limit-gate",
+        "kind": "fix",
+        "public": true,
+        "summary": "Making a second version without Gold now shows a plain \u201cMore versions need Gold\u201d box with Upgrade My Plan, instead of \u201cSomething went wrong.\u201d",
+        "detail": "The message itself was right, but it sat under an error heading and read like a crash. It now uses the same box as the other plan limits (like the Title Builder): a heading that names the limit, the same sentence, a note that nothing you made is affected, and Upgrade My Plan / Not now. Both ways of making a version (New Version and Make My Version) show it. Test: as a Copper member with one version already, try to make another.",
+        "td": [
+          "TD-1023"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.88",
     "staged_on": "2026-10-25",
     "entries": [

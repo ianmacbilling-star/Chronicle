@@ -22103,6 +22103,7 @@ function newSessionVersion() {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
+        if (res.j && res.j.code === 'FORK_TIER') { versionTierGate(res.j.error); return; }   // v3.2.89 -- TD-1023: a plan limit, not an error
         if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not create that version.'); return; }
         state.currentForkId = res.j.fork_id;
         loadSessionForks(state.currentSession.id);
@@ -22184,6 +22185,7 @@ async function makeMyVersion() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
+      if (data && data.code === 'FORK_TIER') { versionTierGate(data.error); return; }   // v3.2.89 -- TD-1023
       if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
@@ -37218,4 +37220,22 @@ function statsSplitEnd() {
   document.body.style.userSelect = '';
   _splitDragShield(false);
   try { if (pct != null) window.localStorage.setItem('statsSplitPct', String(Math.round(pct * 100) / 100)); } catch (e) {}
+}
+// =====================================================================================
+// v3.2.89 -- TD-1023. A PLAN LIMIT IS NOT AN ERROR. The testers (2026-10-25): a Copper member making a second
+// version got the right sentence ("Your first version is free. Making another one needs Gold or higher...") under
+// "Something went wrong.", which reads like a crash. Ian: "treat it like the other upgrade areas" -- the same
+// box platinumGate gives the Title Builder: a heading that names the limit, the reason, Upgrade My Plan and Not now.
+// The server's own sentence (routes/sessions.js, code FORK_TIER) is the body, so the two cannot disagree.
+// Appended, not inserted (TD-853).
+// =====================================================================================
+function versionTierGate(msg) {
+  appConfirm({
+    title: 'More versions need Gold',
+    body: msg || 'Your first version is free. Making another one needs Gold or higher on your own plan.',
+    note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
+    okLabel: 'Upgrade My Plan',
+    cancelLabel: 'Not now',
+    onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+  });
 }
