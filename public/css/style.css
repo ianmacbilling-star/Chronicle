@@ -1626,7 +1626,9 @@ body.role-player.can-edit-fork #review-narr-style-btn,
 body.role-player.can-edit-fork #sb-narr-style-btn,
 body.role-player.can-edit-fork #sb-generate-narr-btn,
 body.role-player.can-edit-fork #review-art-style-btn,
-body.role-player.can-edit-fork #sb-art-style-btn { display: inline-block !important; }
+body.role-player.can-edit-fork #sb-art-style-btn,
+body.role-player.can-edit-fork #story-narr-style-btn,
+body.role-player.can-edit-fork #story-art-style-btn { display: inline-block !important; }   /* v3.2.78 -- the Story tab's pair (v3.1.51) was never added here */
 body.role-player.can-edit-fork #extract-btn { display: inline-block !important; }
 /* Viewing a fork you do not own (e.g. DM looking at a player version) is read-only. */
 body.viewing-foreign-fork #extract-btn,
@@ -1636,6 +1638,8 @@ body.viewing-foreign-fork #review-narr-style-btn,
 body.viewing-foreign-fork #sb-narr-style-btn,
 body.viewing-foreign-fork #review-art-style-btn,
 body.viewing-foreign-fork #sb-art-style-btn,
+body.viewing-foreign-fork #story-narr-style-btn,
+body.viewing-foreign-fork #story-art-style-btn,
 body.viewing-foreign-fork #sb-generate-narr-btn,
 body.viewing-foreign-fork .moment-regen-btn,
 body.viewing-foreign-fork .moment-prompt-edit-btn { display: none !important; }

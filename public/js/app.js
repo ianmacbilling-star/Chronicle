@@ -5687,6 +5687,7 @@ function refreshNarrStyleButtons() {
   });
   _storyStyleLabel('story-narr-style-btn', 'Narrative: ', label);   // v3.1.51 -- phones drop the prefix
   try { updateWordCounts(); } catch (e) {}   // v3.1.51 -- TD-941: the Already Written note follows the style
+  try { _narrGenLabels(); } catch (e) {}   // v3.2.79 -- Already Written: the Generate buttons say Place
 }
 
 // Fetch the caller's EFFECTIVE tier + style locks for the current campaign so
@@ -7183,7 +7184,7 @@ function generateNarrativeOnly() {
   // app.html and narrButtonsIdle() is the only thing that writes it back, so a button left
   // reading 'Writing narrative...' can no longer become its own idle label.
   var btn = document.getElementById('sb-generate-narr-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
+  if (btn) { btn.disabled = true; btn.textContent = (state.narrativeStyle === 'written') ? 'Placing narrative\u2026' : 'Writing narrative\u2026'; }   // v3.2.79
   // Narrative-only drives its OWN dedicated 'Narrative:' bar (narr-bar-cell),
   // not the shared 'Images:' bar -- so a solo narrative run is labeled correctly
   // and, as the only visible bar, spans the full width.
@@ -36060,12 +36061,7 @@ function _selfIllApplyUi() {
     var on = !!state.selfIllustrated;
     var g = document.getElementById('generate-all-btn');
     if (g) g.style.display = on ? 'none' : '';
-    var rb = document.getElementById('review-generate-btn');
-    if (rb) {
-      var lab = on ? 'Generate Narrative' : 'Generate Narrative & Images';
-      rb.setAttribute('data-idle', lab);
-      if (!rb.disabled) rb.textContent = lab;
-    }
+    _narrGenLabels();   // v3.2.79 -- the Review label now follows the narrative style too (was set here)
     if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons();
     var cb = document.getElementById('illus-on'); if (cb) cb.checked = on;
     if (!on) _artBriefs = { key: null, byMoment: {}, loading: false };
@@ -36991,4 +36987,31 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.f
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _cmpRightsBoot);
   else _cmpRightsBoot();
+}
+// =====================================================================================
+// v3.2.79 -- THE NARRATIVE BUTTONS SAY WHAT THEY DO (TD-1014).
+//
+// Ian, 2026-10-25: with Already Written the words are the author's own, so "Generate" the narrative
+// promises something that does not happen. The run is unchanged -- it still places the author's text
+// beside the pictures -- only the labels follow the narrative style and who draws the pictures:
+//   Campaignia draws, any other style   -> Generate Narrative & Images   (Storyboard: Generate Narrative)
+//   Campaignia draws, Already Written   -> Place Narrative, Generate Images   (Storyboard: Place Narrative)
+//   I'll illustrate it, any other style -> Generate Narrative
+//   I'll illustrate it, Already Written -> Place Narrative
+// Written into data-idle, so narrButtonsIdle() puts back the right one after a run or a cancel.
+// Appended, not inserted (TD-853): nothing later in the file can shadow it.
+// =====================================================================================
+function _narrGenLabelsFor(narrStyle, selfIll) {
+  var placed = (narrStyle === 'written');
+  var verb = placed ? 'Place Narrative' : 'Generate Narrative';
+  return { review: selfIll ? verb : (verb + (placed ? ', Generate Images' : ' & Images')), storyboard: verb };
+}
+function _narrGenLabels() {
+  var l = _narrGenLabelsFor(state.narrativeStyle || 'classic', !!state.selfIllustrated);
+  [['review-generate-btn', l.review], ['sb-generate-narr-btn', l.storyboard]].forEach(function (p) {
+    var b = document.getElementById(p[0]);
+    if (!b) return;
+    b.setAttribute('data-idle', p[1]);
+    if (!b.disabled) b.textContent = p[1];
+  });
 }
