@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.70",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3270-saved-books-count",
+        "kind": "ops",
+        "public": false,
+        "summary": "The unused-picture check opens saved books; Put back anything now in use.",
+        "detail": "Saved books (Optimize saves and Bookshelf copies, optimized/approved-*.json.gz) list their panel pictures as saved; publishing, Edit and the print fallback read them. The check now opens every saved book the database mentions and counts every picture inside as in use (if one cannot be read, the check fails and nothing moves). Dashboard > Support > Holding: Put back anything now in use runs the check and puts back every held picture it finds. The report's first line says how many saved books were opened. Test: on production, Run the check (saved books opened > 0), then Put back anything now in use, and read the Last put back line.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.69",
     "staged_on": "2026-10-24",
     "entries": [

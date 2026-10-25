@@ -91,7 +91,7 @@ async function run(db, doMove, now) {
   const unusedBytes = items.reduce(function (a, it) { return a + (it.size || 0); }, 0);
   const out = { at: new Date(now).toISOString(), env: rep.env, bucket: storage.bucketName(), holdBucket: storage.holdingBucket(), mode: doMove ? 'hold' : 'report',
     listed: rep.listed, listedBytes: rep.listed_bytes, inUse: rep.in_use, tooNew: rep.recent, unused: items.length, unusedBytes: unusedBytes, putBackBefore: kept,
-    byKind: rep.by_kind, moved: 0, movedBytes: 0, nowInUse: 0, failed: 0, refused: '' };
+    byKind: rep.by_kind, moved: 0, movedBytes: 0, nowInUse: 0, failed: 0, refused: '', savedBooks: rep.saved_books || 0 };
   if (doMove && items.length) {
     const allowed = deletionAllowed();
     if (!allowed.ok) out.refused = allowed.why;
@@ -116,7 +116,7 @@ function summaryText(o) {
   const NL = String.fromCharCode(10);
   return ['Storage clean-up (' + (o.mode === 'hold' ? 'move to holding' : 'report') + ') on ' + o.env + ', bucket ' + o.bucket + ', ' + o.at, '',
     'Files under uploads/: ' + o.listed + ' (' + mb(o.listedBytes) + ')',
-    'In use: ' + o.inUse + '   newer than 30 days: ' + o.tooNew + (o.putBackBefore ? ('   put back before, kept: ' + o.putBackBefore) : ''),
+    'In use: ' + o.inUse + '   newer than 30 days: ' + o.tooNew + (o.putBackBefore ? ('   put back before, kept: ' + o.putBackBefore) : '') + '   saved books opened: ' + (o.savedBooks || 0),
     'Unused and over 30 days: ' + o.unused + ' (' + mb(o.unusedBytes) + ')' + (o.byKind ? ('  ' + Object.keys(o.byKind).sort().map(function (k) { return k + ' ' + o.byKind[k].count; }).join(', ')) : ''),
     o.mode === 'hold' ? ('Moved to holding (' + o.holdBucket + '): ' + o.moved + ' (' + mb(o.movedBytes) + ')   started being used, kept: ' + o.nowInUse + '   failed: ' + o.failed + NL + 'Nothing is deleted. Put back or Empty holding on Dashboard > Support.')
       : 'Report only: nothing moved. Switch the mode to Move to holding on Dashboard > Support when you are happy.',
@@ -181,7 +181,7 @@ async function heldCsv() {
 
 // A picture's name or its web address -> its key (uploads/<name>), or null.
 function nameToKey(s) {
-  s = String(s || '').trim().split(/[?#]/)[0];
+  s = String(s || '').trim().split(/[?#]/)[0].replace(/[.,;:)\]'"]+$/, '');   // v3.2.70 -- a trailing full stop or comma
   if (!s) return null;
   const m = s.match(/(?:^|\/)uploads\/([A-Za-z0-9._\-]+)$/);
   const name = m ? m[1] : (/^[A-Za-z0-9._\-]+$/.test(s) ? s : null);
@@ -215,6 +215,26 @@ async function restore(db, names, all) {
   });
   return status(db);
 }
+// v3.2.70 -- TD-1006. Put back every held picture that the check now finds in use (it learned to open saved books
+// after 2,290 had been moved). Runs the full check first; never puts back what is still unused.
+async function restoreInUse(db) {
+  const ok = holdingOk(); if (!ok.ok) throw new Error(ok.why);
+  startJob('checking what is in use', async function () {
+    const res = { kind: 'restore', inUse: true, at: new Date().toISOString(), checked: 0, restored: 0, already: 0, notHeld: 0, unreadable: 0, failed: 0 };
+    const fresh = await audit.referencedKeys(db);
+    const h = await held();
+    res.checked = h.length;
+    const keys = h.map(function (o) { return o.key; }).filter(function (k) { return fresh.refs.has(k); });
+    S.phase = 'putting back';
+    const own = storage.bucketName(), hold = storage.holdingBucket();
+    await pool(keys, async function (k) {
+      try { const r = await restoreOne(k, own, hold); if (r === 'restored') res.restored++; else if (r === 'already') res.already++; else res.notHeld++; }
+      catch (e) { res.failed++; }
+    });
+    S.job = res;
+  });
+  return status(db);
+}
 async function emptyHolding(db, olderThanDays) {
   const ok = holdingOk(); if (!ok.ok) throw new Error(ok.why);
   const days = Math.max(0, parseInt(olderThanDays, 10) || 0);
@@ -235,4 +255,4 @@ async function emptyOld(days, now) {
 }
 
 module.exports = { status, run, runNow, maybeMonthly, getMode, setMode, deletionAllowed, holdingOk, summaryText, holdingSummary, heldCsv,
-  nameToKey, restore, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, HOLD_DAYS };
+  nameToKey, restore, restoreInUse, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, HOLD_DAYS };

@@ -162,6 +162,21 @@ async function headObject(bkt, key) {
     throw new Error(((e && e.response && e.response.status) ? (e.response.status + ' ') : '') + (e && e.message));
   }
 }
+// v3.2.70 -- TD-1006. Read one object of this environment's bucket BY KEY (the audit opens saved books with it).
+// The bytes, or null when there is no such object; throws on anything else.
+async function getObject(key) {
+  if (!useCloud) return null;
+  if (!safeKey(key)) throw new Error('Unusual key: ' + key);
+  const signed = signRequest('GET', key, 'application/octet-stream', Buffer.alloc(0));
+  const axios = require('axios');
+  try {
+    const resp = await axios.get(signed.url, { headers: signed.headers, httpsAgent: r2agent(), responseType: 'arraybuffer', timeout: 60000, maxContentLength: Infinity });
+    return Buffer.from(resp.data);
+  } catch (e) {
+    if (e && e.response && e.response.status === 404) return null;
+    throw new Error(((e && e.response && e.response.status) ? (e.response.status + ' ') : '') + (e && e.message));
+  }
+}
 // Permanently delete one HELD picture. Only the holding bucket, only <environment>/uploads/<name>.
 async function deleteHeld(key) {
   if (!useCloud) throw new Error('This server stores pictures on its own disk.');
@@ -564,4 +579,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey, holdingBucket, copyBetween, headObject, deleteHeld };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey, holdingBucket, copyBetween, headObject, deleteHeld, getObject };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006

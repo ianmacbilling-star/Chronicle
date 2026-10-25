@@ -1808,7 +1808,7 @@ function renderUnusedPics(d) {
   _unusedPics = d;
   var kinds = Object.keys(d.by_kind || {}).sort().map(function (k) { var b = d.by_kind[k]; return _upEsc(k) + ': ' + b.count + ' (' + _upBytes(b.bytes) + ')'; }).join(' \u00b7 ');
   var h = '<div style="line-height:1.6;">' +
-    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.keys_mentioned + ' storage addresses mentioned)</div>' +
+    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div>' +
     '<div><strong>In storage under ' + _upEsc(d.prefix) + ':</strong> ' + d.listed + ' files, ' + _upBytes(d.listed_bytes) + '</div>' +
     '<div><strong>In use here:</strong> ' + d.in_use + ' \u00b7 <strong>Newer than 24 hours (left out):</strong> ' + d.recent + '</div>' +
     '<div style="color:#e8c766;"><strong>Not used by this database:</strong> ' + d.unused + ' files, ' + _upBytes(d.unused_bytes) + (kinds ? (' \u2014 ' + kinds) : '') + '</div>' +
@@ -1828,7 +1828,7 @@ function renderUnusedPics(d) {
 }
 // v3.2.68 -- TD-1006. The monthly clean-up controls. Delete now needs a second click within 5 seconds (no browser pop-up).
 // v3.2.69 -- Delete became Move to holding; Put everything back and Empty holding use the same second click.
-var _cuTimer = null, _cuArmed = false, _armed = {};
+var _cuTimer = null, _cuArmed = false, _armed = {}, _holdShown = null;
 function _armClick(id, label, armedLabel, fn) {
   var b = document.getElementById(id);
   if (!_armed[id]) { _armed[id] = true; if (b) b.textContent = armedLabel; setTimeout(function () { _armed[id] = false; if (b) b.textContent = label; }, 5000); return; }
@@ -1851,9 +1851,18 @@ function renderCleanup(d) {
     (o.refused ? ('<div style="color:#ffb38a;"><strong>Not moved:</strong> ' + _upEsc(o.refused) + '</div>') : '') +
     (o.emptied ? ('<div>Held over ' + o.emptied.days + ' days, deleted for good: ' + o.emptied.deleted + ' (' + _upBytes(o.emptied.deletedBytes) + ')' + (o.emptied.failed ? (' \u00b7 failed ' + o.emptied.failed) : '') + '</div>') : '');
   var jb = d.job;
-  if (jb && jb.kind === 'restore') h += '<div><strong>Last put back</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): back ' + jb.restored + ' \u00b7 already in place ' + jb.already + ' \u00b7 not in holding ' + jb.notHeld + ' \u00b7 unreadable ' + jb.unreadable + ' \u00b7 failed ' + jb.failed + '</div>';
+  if (jb && jb.kind === 'restore' && jb.inUse) h += '<div><strong>Last put back of what is in use</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): checked ' + jb.checked + ' held \u00b7 back ' + jb.restored + ' \u00b7 already in place ' + jb.already + ' \u00b7 failed ' + jb.failed + '</div>';
+  else if (jb && jb.kind === 'restore') h += '<div><strong>Last put back</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): back ' + jb.restored + ' \u00b7 already in place ' + jb.already + ' \u00b7 not in holding ' + jb.notHeld + ' \u00b7 unreadable ' + jb.unreadable + ' \u00b7 failed ' + jb.failed + '</div>';
   if (jb && jb.kind === 'empty') h += '<div><strong>Last emptying</strong> (' + _upEsc(String(jb.at).slice(0, 16).replace('T', ' ')) + '): deleted ' + jb.deleted + ' (' + _upBytes(jb.deletedBytes) + ')' + (jb.days ? (' \u00b7 held under ' + jb.days + ' days, kept ' + jb.tooRecent) : '') + ' \u00b7 failed ' + jb.failed + '</div>';
   out.innerHTML = h;
+  // v3.2.70 -- the Holding buttons report under themselves too: progress while running, then the result.
+  var ho = document.getElementById('hold-out');
+  if (ho && d.running && /putting back|emptying|checking what/.test(String(d.phase || ''))) ho.textContent = 'Working: ' + d.phase + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '\u2026';
+  else if (ho && jb && jb.at && jb.at !== _holdShown) {
+    _holdShown = jb.at;
+    ho.textContent = jb.kind === 'empty' ? ('Emptied: deleted ' + jb.deleted + ' (' + _upBytes(jb.deletedBytes) + ')' + (jb.days ? (', kept ' + jb.tooRecent + ' held under ' + jb.days + ' days') : '') + (jb.failed ? (', failed ' + jb.failed) : '') + '.')
+      : ('Put back ' + jb.restored + (jb.already ? (', already in place ' + jb.already) : '') + (jb.notHeld ? (', not in holding ' + jb.notHeld + ' (check the name)') : '') + (jb.unreadable ? (', unreadable ' + jb.unreadable) : '') + (jb.failed ? (', failed ' + jb.failed) : '') + (jb.inUse ? (' (checked ' + jb.checked + ' held)') : '') + '.');
+  }
   if (_cuTimer) { clearTimeout(_cuTimer); _cuTimer = null; }
   if (d.running) _cuTimer = setTimeout(cleanupLoad, 2000);
 }
@@ -1890,6 +1899,7 @@ function holdCsv() {
   });
 }
 function _holdPost(path, body) {
+  var ho = document.getElementById('hold-out'); if (ho) ho.textContent = 'Working\u2026';   // v3.2.70
   fetch('/api/admin/storage-holding/' + path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
 }
@@ -1899,6 +1909,7 @@ function holdRestore(all) {
   if (!all && !names.length) { var o = document.getElementById('hold-out'); if (o) o.textContent = 'Paste a picture name or address first.'; return; }
   _holdPost('restore', all ? { all: true } : { names: names });
 }
+function holdRestoreInUse() { _holdPost('restore', { inUse: true }); }   // v3.2.70
 function holdAllClick() { _armClick('hold-all-btn', 'Put everything back', 'Click again to put all back', function () { holdRestore(true); }); }
 function holdEmptyClick() {
   var sel = document.getElementById('hold-days');
