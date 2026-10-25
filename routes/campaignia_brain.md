@@ -661,7 +661,17 @@ light voice.
 **Skill Story**
 - *Writing:* Calm, literal and first person, in the present tense, one step at a time. Say plainly what will happen, including the parts that are uncomfortable, and never promise that something will not hurt. Sparse guidance between steps. End on a calm, positive beat.
 - *Pictures:* One clear step per frame, uncluttered and evenly lit, with the same person shown consistently throughout. An ordinary real place with ordinary real objects, exactly as it would actually look; never fantasy, never costume, never invented ornament. Nothing frightening, nothing ambiguous, no dramatic angles.
-- The longest instruction of the fifteen, and the only one that specifies person and tense. See 8c.
+- The longest instruction of the seventeen, and the only one that specifies person and tense. See 8c.
+
+**How To / Self Help / Instructional**
+- *Writing:* Teach. Follow the source’s steps in its order, keep its numbered steps and bullet points as lists, and make every step clear enough to do. No drama; no invented steps, tips or advice.
+- *Pictures:* One step or technique per frame, shown clearly enough to copy: the hands, the tools and the result in view, evenly lit and uncluttered. Real places and objects exactly as they look; never fantasy, never costume.
+- For teaching a skill or a method to adults — a recipe, a craft, a workout, a class. It starts on the **How To / Self Help / Instructional** narrative style *(Gold)* and **Everyday life illustration**; you can change either. (For preparing a child for a dentist visit, use **Skill Story**.)
+
+**News Report**
+- *Writing:* Report it as news: the most important facts first, then the rest in order of importance. Attribute what people said and never invent a quotation, a source or a figure. Neutral and factual.
+- *Pictures:* Favour the plain, documentary depiction of the events and the people in them, framed as a news photographer would: real places, real clothes and real objects as they actually are; never fantasy, never costume, never staged drama.
+- Starts on the **News Report** narrative style *(Silver)* and **Everyday life illustration**; you can change either. Because a news report is about real people, it publishes **link only** by default, like a Family Story (see 8c).
 
 **Other (use Prompt)** — the exclusive one.
 - *Writing:* nothing. *Pictures:* nothing.
@@ -726,7 +736,7 @@ remembering to be careful.
   restricted to the Story Master**, and asks for the same confirmation. On any other
   campaign, anyone who archived an image can flip it public.
 
-**This applies if ANY of your three genres is Family Story or Skill Story** — pairing one
+**This applies if ANY of your three genres is Family Story, Skill Story, Biography or News Report** — pairing one
 with Fantasy does not switch the protections off.
 
 Two things it does **not** do, so you know where the edges are:
@@ -755,8 +765,8 @@ them at a dentist appointment or a grandparent's childhood and you will get a be
 rendered fantasy dentist, because that is what they are for. **If your story is not a
 fantasy, change the art style.** It is the highest-value setting on the page.
 
-**For real-world stories — Family Story, Skill Story, Biography, Nonfiction, Historical
-Fiction:**
+**For real-world stories — Family Story, Skill Story, Biography, Nonfiction, How To, News Report,
+Historical Fiction:**
 
 - **Everyday life illustration** *(Silver)* — richly painted and highly detailed, the same
   quality of rendering as the fantasy styles, but of the real world: ordinary places,
@@ -778,6 +788,14 @@ Fiction:**
   a Biography or a Nonfiction book.
 - **Children's Storybook** *(Platinum)* — warm and gentle, and lovely for a Family Story,
   though its own voice leans storybook-fantasy; pair it with a real-world art style.
+- **How To / Self Help / Instructional** *(Gold)* — clear, practical instruction that follows your
+  material closely: your steps in your order, spoken to the reader as *you*. Where your story box has
+  numbered steps or bullet points, the narrative keeps them as numbered steps or bullets. It will not
+  add steps, tips or advice you did not give it. On the screen each step sits on its own line; **in the
+  printed book a list currently runs on as one paragraph** (the numbers stay, so it still reads in order).
+- **News Report** *(Silver)* — a factual report: the most important facts first, then the details,
+  in short paragraphs, third person and past tense. It quotes only what people actually said in your
+  story box, and never invents a quote, a name, a number or a detail.
 
 **And the reverse pairing is fine too.** A fantasy campaign in **Everyday life
 illustration** is a legitimate look — grounded, unglamorous fantasy — not a mistake.
@@ -1042,6 +1060,11 @@ once, in order. A narrative panel can come out empty when two pictures follow ea
 text. **Narrative length** and **In first person** don't apply to it, so they are greyed out. It
 costs the usual Generate Narrative tokens. Every plan. You can still edit any narrative panel by
 hand afterwards; generating again re-splits the text and replaces those edits.
+While Already Written is chosen, the buttons say **Place Narrative** (on the Storyboard) and **Place
+Narrative, Generate Images** (on Review), or just **Place Narrative** on Review if you are illustrating
+it yourself, because your words are placed, not written. They do exactly what Generate Narrative does.
+Generate Story picks the pictures **in the order your text tells them**, spread across the whole story,
+so each picture lands next to its own passage.
 **Choose it before the first Generate Story:** the **Narrative** and **Art** style buttons are on the
 **Story** tab too, beside Generate Story. **How long:** it works best up to about **3,000 words a
 session** — roughly a chapter (the number on the style card is the current one). It keeps every word,
@@ -1766,7 +1789,7 @@ not publish it at all.
 
 **Changing your mind.** Both directions work, from **My Stuff → Published Stories**:
 
-- **Link only → Public** lists it. If it is a **Family Story** or **Skill Story**,
+- **Link only → Public** lists it. If it is a **Family Story**, **Skill Story**, **Biography** or **News Report**,
   Campaignia warns you that the book may show a real person and asks you to confirm first,
   and only the **Story Master** can do it.
 - **Public → Link only** removes it from the directory immediately and asks search engines
@@ -2183,7 +2206,7 @@ Friction points and what's actually going on.
 - **"My image failed to generate."** You weren't charged — just **Regenerate**. If it
   keeps failing, simplify the prompt or check your connection.
 - **"I published my Family Story but I can't find it in the Library."** That is working as
-  intended — Family Stories and Skill Stories publish as **link only**, so they are
+  intended — Family Stories, Skill Stories, Biographies and News Reports publish as **link only**, so they are
   deliberately not listed. It is on **My Stuff → Published Stories**, with a **Copy
   link** button. If you do want it listed publicly, switch it there and confirm the
   warning.
@@ -2353,7 +2376,7 @@ Friction points and what's actually going on.
 - **How do I see the real printed look?** Publish page → **Optimize** tab, then **Review in a
   New Tab**.
 - **Who can make an image public?** The person who archived it, or the campaign's Story
-  Master — **except on a Family Story or Skill Story campaign, where only the Story
+  Master — **except on a Family Story, Skill Story, Biography or News Report campaign, where only the Story
   Master can, and is asked to confirm first.**
 - **Can I build a series?** Yes — publish some sessions now and more later; each Publish
   creates a Library entry, and you can compile subsets into separate volumes.
@@ -2363,7 +2386,11 @@ Friction points and what's actually going on.
   primary one and the rest are elements of it.
 - **What does a genre actually do?** It sends two standing instructions with every
   {session}: one shaping the prose, one shaping which moments get drawn. Section 8b prints
-  both, for all fifteen.
+  both, for all seventeen.
+- **Can Campaignia make a how-to guide or a news report?** Yes. Pick the **How To / Self Help /
+  Instructional** or **News Report** genre on the campaign, and the matching narrative style is chosen
+  for you (How To is Gold, News Report is Silver; you can change it). Both follow your story box
+  closely and keep its numbered steps and bullet points as lists. See 8b and 8d.
 - **What is a Skill Story?** A calm, literal, step-by-step story for showing someone what
   is about to happen — a dentist visit, a first day at school. First person, present tense,
   one step a page. See 8c.

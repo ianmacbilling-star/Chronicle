@@ -1,5 +1,47 @@
 [
   {
+    "version": "3.2.81",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3281-date-stamp-not-watermark",
+        "kind": "fix",
+        "public": true,
+        "summary": "A camera date stamp on an uploaded picture (like 11/16/2006 in the corner) no longer counts as a watermark.",
+        "detail": "The picture check sometimes reported a camera date stamp as a watermark and refused the picture. If the only text it reads is a date and/or time, the picture is no longer refused; a watermark with any words, a name, a web address or a stock mark beside or instead of the date still is. Covers uploads, character reference builds and custom art style Analyze. Pictures already refused stay as they are (Ian). Test: upload a snapshot with an orange camera date stamp as an asset.",
+        "td": [
+          "TD-1016"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.80",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3280-howto-news-styles",
+        "kind": "feature",
+        "public": true,
+        "summary": "Two new narrative styles: How To / Self Help / Instructional (Gold) and News Report (Silver). Both follow your story closely and keep your numbered steps and bullet points as lists.",
+        "detail": "How To writes clear, practical instruction to the reader as you, in your steps and your order, and never adds steps or advice. News Report writes a factual report: most important facts first, short paragraphs, third person, past tense, quoting only what people actually said. Test: pick each in the Narrative style window (How To shows Gold only below Gold), Generate Narrative on a story with numbered steps, and check the lists come through.",
+        "td": [
+          "TD-1015"
+        ]
+      },
+      {
+        "id": "3280-howto-news-genres",
+        "kind": "feature",
+        "public": true,
+        "summary": "Two new genres: How To / Self Help / Instructional and News Report. Each starts on its own narrative style and on Everyday life art (change either any time), with its own examples in the story boxes. News Report stories publish link only by default, like Family Stories.",
+        "detail": "Both are nonfiction. How To defaults to the How To style (Gold; Classic below Gold) and News Report to the News Report style (Silver; Classic on Copper); both default to Everyday life illustration. News Report is sensitive: link-only publishing, the confirm before going public, Story Master only for public images. The Library genre filter lists both. Brain updated (8b, 8c, 8d, FAQ) and its sensitive-genre lines now name Biography too. Test: new campaign with each genre; check the example text in the Story and Story Instructions boxes and the character Role field, the default styles, and that a News Report publishes link only.",
+        "td": [
+          "TD-1015"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.79",
     "staged_on": "2026-10-25",
     "entries": [

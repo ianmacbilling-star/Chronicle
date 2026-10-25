@@ -140,6 +140,20 @@ var GENRES = [
     // v3.0.912 -- TD-777. defaultArt/defaultVoice became artChain/voiceChain at the top of
     // this record. BOTH ANSWERS ARE BYTE-IDENTICAL to what v3.0.836 shipped for TD-681.
     safety: 'sensitive' },
+  // v3.2.80 -- TD-1015. Ian, 2026-10-25: two nonfiction genres, each defaulting to its own narrative style
+  // ("yes they should but can be overwritten") and to Everyday life for the art; News is sensitive (it can
+  // show real people), How To is not. Chains are one entry each: below Gold (How To) or Silver (News) the
+  // voice falls through to classic, and below Silver the art falls to the floor, as for every other genre.
+  { slug: 'howto',      label: 'How To / Self Help / Instructional', category: 'nonfiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['howto'],
+    prose:  'Teach. Follow the source\u2019s steps in its order, keep its numbered steps and bullet points as lists, and make every step clear enough to do. No drama; no invented steps, tips or advice.',
+    panels: 'One step or technique per frame, shown clearly enough to copy: the hands, the tools and the result in view, evenly lit and uncluttered. Real places and objects exactly as they look; never fantasy, never costume.' },
+  { slug: 'news',       label: 'News Report', category: 'nonfiction',
+    artChain: ['Everyday life illustration'], voiceChain: ['news'],
+    prose:  'Report it as news: the most important facts first, then the rest in order of importance. Attribute what people said and never invent a quotation, a source or a figure. Neutral and factual.',
+    panels: 'Favour the plain, documentary depiction of the events and the people in them, framed as a news photographer would: real places, real clothes and real objects as they actually are; never fantasy, never costume, never staged drama.',
+    // The literal, not the constant -- see family above. News is about real people and real events.
+    safety: 'sensitive' },
   { slug: 'other',      label: 'Other (use Prompt)',
     artChain: ['High fantasy illustration'], voiceChain: ['classic'],
     prose:  '', panels: '' }
