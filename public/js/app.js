@@ -37152,12 +37152,24 @@ try {
 var _splitShieldEnd = null;
 function _splitShieldBlur() { if (typeof _splitShieldEnd === 'function') _splitShieldEnd(); }
 function _splitDragShield(on, endFn) {
+  // v3.2.87 -- TD-1021 follow-up. Ian: after using the slider, the mouse wheel no longer scrolled the Quick View
+  // preview until its scrollbar was dragged. Setting pointer-events on the preview FRAME and back left the
+  // browser's wheel handling for that frame broken (reproduced in Chromium). So the frame is never touched now:
+  // while a splitter is dragged, a transparent sheet covers the whole page, the release lands on this page,
+  // and the sheet is removed the moment the drag ends.
   try {
-    Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (f) {
-      if (on) { if (f.getAttribute('data-split-pe') == null) f.setAttribute('data-split-pe', f.style.pointerEvents || ''); f.style.pointerEvents = 'none'; }
-      else if (f.getAttribute('data-split-pe') != null) { f.style.pointerEvents = f.getAttribute('data-split-pe'); f.removeAttribute('data-split-pe'); }
-    });
-    if (on) { _splitShieldEnd = endFn || null; window.addEventListener('blur', _splitShieldBlur); }
-    else { _splitShieldEnd = null; window.removeEventListener('blur', _splitShieldBlur); }
+    var sh = document.getElementById('split-drag-shield');
+    if (on) {
+      if (!sh) {
+        sh = document.createElement('div');
+        sh.id = 'split-drag-shield';
+        sh.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483647;background:transparent;cursor:col-resize;';
+        document.body.appendChild(sh);
+      }
+      _splitShieldEnd = endFn || null; window.addEventListener('blur', _splitShieldBlur);
+    } else {
+      if (sh && sh.parentNode) sh.parentNode.removeChild(sh);
+      _splitShieldEnd = null; window.removeEventListener('blur', _splitShieldBlur);
+    }
   } catch (e) {}
 }

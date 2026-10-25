@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.87",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3287-splitter-wheel",
+        "kind": "fix",
+        "public": true,
+        "summary": "After using the slider on Prep & Preview, the mouse wheel scrolls the preview again straight away.",
+        "detail": "v3.2.86 fixed the slider letting go by switching the preview frame off during the drag; switching it back on left the mouse wheel dead over Quick View until its scrollbar was dragged. The preview is no longer touched: while you drag, an invisible sheet covers the page and is removed when you let go. The slider still lets go on release. Same on the Optimize slider. Test: drag the slider, let go over the preview, then scroll it with the wheel.",
+        "td": [
+          "TD-1021"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.86",
     "staged_on": "2026-10-25",
     "entries": [
