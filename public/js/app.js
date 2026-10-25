@@ -1761,39 +1761,12 @@ function impersonateSyncAdminPanel() {
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
   if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
-  if (usec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
-  var msec = document.getElementById('storage-move-section');   // v3.2.67 -- TD-1006, same rule
-  if (msec) msec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  var csec = document.getElementById('cleanup-section');   // v3.2.71 -- its own panel now
+  if (csec) csec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  if (csec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
 }
 
-// v3.2.67 -- TD-1006. Staging's one-time move to its own bucket: setup, progress and results.
-var _smTimer = null;
-function renderStorageMove(d) {
-  var out = document.getElementById('storage-move-out'); if (!out) return;
-  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read the move status.'; return; }
-  var c = d.config || {};
-  var h = '<div><strong>Environment:</strong> ' + _upEsc(c.env) + ' \u00b7 <strong>own bucket:</strong> ' + _upEsc(c.own) + ' \u00b7 <strong>copy from:</strong> ' + _upEsc(c.shared || '(not set)') + '</div>' +
-    '<div><strong>New address:</strong> ' + _upEsc(c.publicUrl || '(not set)') + ' \u00b7 <strong>old addresses:</strong> ' + _upEsc((c.legacy || []).join(', ') || '(none)') + '</div>';
-  if (!c.ready) h += '<div style="color:#ffb38a;"><strong>Not set up:</strong> ' + _upEsc((c.problems || []).join(' ')) + '</div>';
-  if (d.phase) h += '<div><strong>Copy:</strong> ' + _upEsc(d.phase) + (d.running ? ' (running)' : '') + ' \u00b7 ' + d.done + ' of ' + d.total + ' \u00b7 copied ' + d.copied + ' \u00b7 not in the shared bucket ' + d.missingCount + ' \u00b7 failed ' + d.failedCount + '</div>';
-  if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
-  if (d.failedCount) h += '<div style="color:#ffb38a;">Failed (first 50): ' + _upEsc(d.failed.join(' | ')) + '</div>';
-  if (d.missingCount) h += '<div style="opacity:0.8;">Not in the shared bucket (first 50): ' + _upEsc(d.missing.join(', ')) + '</div>';
-  if (d.phase === 'copied') h += '<div style="color:' + (d.copyClean ? '#bfe6c4' : '#ffb38a') + ';">' + (d.copyClean ? 'Copy finished with no failures. Step 2 can run.' : 'Copy finished with failures: run Copy again before step 2.') + '</div>';
-  if (d.rewrite) h += '<div style="color:#bfe6c4;"><strong>Addresses rewritten:</strong> ' + d.rewrite.rows + ' rows (' + _upEsc(Object.keys(d.rewrite.byColumn || {}).map(function (k) { return k + ' ' + d.rewrite.byColumn[k]; }).join(', ')) + ')</div>';
-  out.innerHTML = h;
-  if (_smTimer) { clearTimeout(_smTimer); _smTimer = null; }
-  if (d.running) _smTimer = setTimeout(storageMoveLoad, 2000);
-}
-function storageMoveLoad() {
-  fetch('/api/admin/storage-move', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(renderStorageMove)
-    .catch(function (e) { renderStorageMove({ error: e.message }); });
-}
-function storageMoveRun(step) {
-  var out = document.getElementById('storage-move-out'); if (out) out.textContent = step === 'copy' ? 'Starting the copy\u2026' : 'Rewriting addresses\u2026';
-  fetch('/api/admin/storage-move/' + step, { method: 'POST', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(renderStorageMove)
-    .catch(function (e) { renderStorageMove({ error: e.message }); });
-}
+// v3.2.72 -- the staging one-time move tool is retired (staging moved 2026-10-24).
 
 // v3.2.65 -- TD-1006. The unused-picture report: summary, the oldest 200, and the whole list as CSV.
 var _unusedPics = null;
@@ -1806,21 +1779,23 @@ function renderUnusedPics(d) {
   _unusedPics = null; if (csv) csv.style.display = 'none';
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not run the check.'; return; }
   _unusedPics = d;
-  var kinds = Object.keys(d.by_kind || {}).sort().map(function (k) { var b = d.by_kind[k]; return _upEsc(k) + ': ' + b.count + ' (' + _upBytes(b.bytes) + ')'; }).join(' \u00b7 ');
+  // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
+  var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
+  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
+  var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
-    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div>' +
-    '<div><strong>In storage under ' + _upEsc(d.prefix) + ':</strong> ' + d.listed + ' files, ' + _upBytes(d.listed_bytes) + '</div>' +
-    '<div><strong>In use here:</strong> ' + d.in_use + ' \u00b7 <strong>Newer than 24 hours (left out):</strong> ' + d.recent + '</div>' +
-    '<div style="color:#e8c766;"><strong>Not used by this database:</strong> ' + d.unused + ' files, ' + _upBytes(d.unused_bytes) + (kinds ? (' \u2014 ' + kinds) : '') + '</div>' +
-    '</div>';
+    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
+    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
+    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned size</th></tr></thead><tbody>' +
+    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:#e8c766;">' + f.unused + '</td><td style="' + tdr + 'color:#e8c766;">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
+    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + _upBytes(d.unused_bytes) + '</td></tr>' +
+    '</tbody></table></div>';
   var items = d.items || [];
   if (items.length) {
-    var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
-    var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
     h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
       '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
-      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
-      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
+      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
+      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
     if (csv) csv.style.display = '';
   }
@@ -1838,8 +1813,11 @@ function _armClick(id, label, armedLabel, fn) {
 function renderCleanup(d) {
   var out = document.getElementById('cleanup-out'); if (!out) return;
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not read the clean-up status.'; return; }
-  var sel = document.getElementById('cleanup-mode'); if (sel && d.mode) sel.value = d.mode;
-  var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 mode <strong>' + _upEsc(d.mode) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
+  // v3.2.72 -- a toggle: On = hold (move monthly), Off = report (email only). An old 'off' shows as Off.
+  var tg = document.getElementById('cleanup-toggle'), tw = document.getElementById('cleanup-toggle-word');
+  if (tg && d.mode) tg.checked = (d.mode === 'hold');
+  if (tw && d.mode) tw.textContent = (d.mode === 'hold') ? 'On' : 'Off';
+  var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 monthly job <strong>' + (d.mode === 'hold' ? 'On' : (d.mode === 'off' ? 'Off (silent)' : 'Off (report only)')) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
   if (d.holdBucket) h += '<div>Holding: ' + _upEsc(d.holdBucket) + '/' + _upEsc(d.holdPrefix || '') + (d.keep ? (' \u00b7 put back (never moved again) ' + d.keep) : '') + '</div>';
   if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Moving is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
   if (d.running) h += '<div>Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
@@ -1878,7 +1856,7 @@ function cleanupRun(move) {
   fetch('/api/admin/storage-cleanup/run', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ move: !!move }) })
     .then(function (r) { return r.json(); }).then(renderCleanup).catch(function (e) { renderCleanup({ error: e.message }); });
 }
-function cleanupDeleteClick() { _armClick('cleanup-delete-btn', 'Move to holding now', 'Click again to move', function () { cleanupRun(true); }); }
+function cleanupDeleteClick() { _armClick('cleanup-delete-btn', 'Move to holding', 'Click again to move', function () { cleanupRun(true); }); }
 // v3.2.69 -- TD-1006. The holding bucket.
 function holdLoad() {
   var out = document.getElementById('hold-out'); if (out) out.textContent = 'Checking holding\u2026';
@@ -1910,10 +1888,10 @@ function holdRestore(all) {
   _holdPost('restore', all ? { all: true } : { names: names });
 }
 function holdRestoreInUse() { _holdPost('restore', { inUse: true }); }   // v3.2.70
-function holdAllClick() { _armClick('hold-all-btn', 'Put everything back', 'Click again to put all back', function () { holdRestore(true); }); }
+function holdAllClick() { _armClick('hold-all-btn', 'Put back everything', 'Click again to put all back', function () { holdRestore(true); }); }
 function holdEmptyClick() {
   var sel = document.getElementById('hold-days');
-  _armClick('hold-empty-btn', 'Empty holding', 'Click again: deletes for good', function () { _holdPost('empty', { olderThanDays: parseInt((sel && sel.value) || '0', 10) || 0 }); });
+  _armClick('hold-empty-btn', 'Delete for good', 'Click again: deletes for good', function () { _holdPost('empty', { olderThanDays: parseInt((sel && sel.value) || '0', 10) || 0 }); });
 }
 
 function unusedPicsRun() {
@@ -1926,11 +1904,11 @@ function unusedPicsRun() {
 }
 function unusedPicsCsv() {
   var d = _unusedPics; if (!d || !d.items) return;
-  var rows = ['key,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
+  var rows = ['key,folder,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.folder || '', it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
   var blob = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'unused-pictures-' + String(d.env || 'env').replace(/[^A-Za-z0-9_-]/g, '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'orphaned-files-' + String(d.env || 'env').replace(/[^A-Za-z0-9_-]/g, '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a); a.click();
   setTimeout(function () { try { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); } catch (e) {} }, 1000);
 }
@@ -14173,44 +14151,13 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  // Settings now hosts admin/testing controls only (the global image model).
   // Profile (name / email / password) moved to the Account screen.
-  fetch('/api/auth/image-model')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var el = document.getElementById('settings-image-model');
-      if (el && d.model) el.value = d.model;
-    });
+  // v3.2.71 -- the image model selector is gone: every picture uses Nano, set by the Railway variables.
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
   loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
-function saveImageModel() {
-  var el = document.getElementById('settings-image-model');
-  if (!el) return;
-  fetch('/api/auth/image-model', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: el.value })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.error) {
-        showSettingsError('model-error', d.error);
-      } else {
-        var ok = document.getElementById('model-success');
-        if (ok) {
-          ok.textContent = 'Image model saved.';
-          ok.classList.remove('hidden');
-          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
-        }
-      }
-    })
-    .catch(function() {
-      showSettingsError('model-error', 'Could not save. Please try again.');
-    });
-}
 
 function saveProfile() {
   // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
@@ -20053,44 +20000,13 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  // Settings now hosts admin/testing controls only (the global image model).
   // Profile (name / email / password) moved to the Account screen.
-  fetch('/api/auth/image-model')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var el = document.getElementById('settings-image-model');
-      if (el && d.model) el.value = d.model;
-    });
+  // v3.2.71 -- the image model selector is gone: every picture uses Nano, set by the Railway variables.
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
   loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
-function saveImageModel() {
-  var el = document.getElementById('settings-image-model');
-  if (!el) return;
-  fetch('/api/auth/image-model', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: el.value })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.error) {
-        showSettingsError('model-error', d.error);
-      } else {
-        var ok = document.getElementById('model-success');
-        if (ok) {
-          ok.textContent = 'Image model saved.';
-          ok.classList.remove('hidden');
-          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
-        }
-      }
-    })
-    .catch(function() {
-      showSettingsError('model-error', 'Could not save. Please try again.');
-    });
-}
 
 function saveProfile() {
   // v3.2.04 -- TD-939. Name and pen name save at once. A new email is NOT saved here: it goes to
@@ -22401,7 +22317,7 @@ var TIER_FIELD_LABELS = {
 // else, and syncSettingsTabs hides the buttons accordingly. Adding it anywhere else -- a hidden
 // div, a button with its own check -- would be a second rule to keep in step with this one.
 // The route is gated independently; neither is load-bearing alone.
-var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'orders'];   // v3.1.43 -- 'gifts' (TD-934)
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'gifts', 'support', 'tools', 'orders'];   // v3.1.43 -- 'gifts' (TD-934); v3.2.71 -- 'tools'
 function settingsTabsAllowed() {
   var me = state.user || {};
   // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --

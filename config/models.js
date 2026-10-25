@@ -1,9 +1,8 @@
 // Single source of truth for the AI / image models Campaignia calls. Swap a
 // model via env var (AI_MODEL / HELP_MODEL / LAYOUT_MODEL) or by editing a default here in ONE
 // place -- important if a model is ever repriced, renamed, or decommissioned.
-// The active image model is chosen at runtime from app_settings 'image_model';
-// the actual fal.ai endpoint strings live here so a swap is a single edit rather
-// than a hunt across files.
+// v3.2.71 -- every picture uses Nano; which Nano is FAL_IMAGE_MODEL / FAL_IMAGE_EDIT_MODEL below. (The dashboard
+// setting app_settings 'image_model' and Flux schnell are retired.)
 
 const TEXT_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-6';
 const HELP_MODEL = process.env.HELP_MODEL || 'claude-haiku-4-5-20251001';
@@ -38,7 +37,6 @@ function falEndpoint(envName, fallback) {
   return v;
 }
 const IMAGE_MODELS = {
-  schnell: 'fal-ai/flux/schnell',
   nano2: falEndpoint('FAL_IMAGE_MODEL', 'fal-ai/nano-banana-2')
 };
 const IMAGE_EDIT_MODELS = {

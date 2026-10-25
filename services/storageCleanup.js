@@ -1,7 +1,8 @@
 'use strict';
 // v3.2.68 -- TD-1006. The monthly storage clean-up. Once a month each environment looks at pictures under uploads/ in
 // its OWN bucket that nothing in its own database uses (services/storageAudit.js decides, history tables aside) and
-// that are over 30 days old. Mode (Dashboard > Support): off, report (the default: email the numbers) or hold.
+// that are over 30 days old. Mode (Dashboard > Tools, the Monthly job toggle): report (Off, the default: email the
+// numbers) or hold (On). 'off' (silent) is still understood but no longer offered.
 // v3.2.69 -- TD-1006. Nothing is deleted from the main bucket by the clean-up any more (Ian 2026-10-24): an unused
 // picture MOVES to the holding bucket (R2_HOLDING_BUCKET, default campaignia-holding) under <environment>/uploads/...,
 // copied first, the copy checked, and only then removed from the main bucket. Put back copies pictures home; a picture
@@ -118,8 +119,8 @@ function summaryText(o) {
     'Files under uploads/: ' + o.listed + ' (' + mb(o.listedBytes) + ')',
     'In use: ' + o.inUse + '   newer than 30 days: ' + o.tooNew + (o.putBackBefore ? ('   put back before, kept: ' + o.putBackBefore) : '') + '   saved books opened: ' + (o.savedBooks || 0),
     'Unused and over 30 days: ' + o.unused + ' (' + mb(o.unusedBytes) + ')' + (o.byKind ? ('  ' + Object.keys(o.byKind).sort().map(function (k) { return k + ' ' + o.byKind[k].count; }).join(', ')) : ''),
-    o.mode === 'hold' ? ('Moved to holding (' + o.holdBucket + '): ' + o.moved + ' (' + mb(o.movedBytes) + ')   started being used, kept: ' + o.nowInUse + '   failed: ' + o.failed + NL + 'Nothing is deleted. Put back or Empty holding on Dashboard > Support.')
-      : 'Report only: nothing moved. Switch the mode to Move to holding on Dashboard > Support when you are happy.',
+    o.mode === 'hold' ? ('Moved to holding (' + o.holdBucket + '): ' + o.moved + ' (' + mb(o.movedBytes) + ')   started being used, kept: ' + o.nowInUse + '   failed: ' + o.failed + NL + 'Nothing is deleted. Dashboard > Tools > Manage holding bucket to put back or delete.')
+      : 'Report only: nothing moved. Turn the Monthly job On (Dashboard > Tools > Monthly clean-up) to move them each month.',
     o.refused ? ('NOT MOVED: ' + o.refused) : '',
     o.emptied ? ('Held over ' + o.emptied.days + ' days, deleted for good: ' + o.emptied.deleted + ' (' + mb(o.emptied.deletedBytes) + ')   failed: ' + o.emptied.failed) : ''].join(NL);
 }

@@ -1,5 +1,53 @@
 [
   {
+    "version": "3.2.73",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3273-orphaned-pdfs",
+        "kind": "ops",
+        "public": false,
+        "summary": "Orphaned pictures and PDFs: the read-only check now covers every storage folder.",
+        "detail": "Dashboard > Tools > Orphaned pictures and PDFs (read only): Check for orphaned pictures and PDFs lists every folder (Pictures uploads/, Archived pictures archives/, Saved books / Bookshelf copies / order covers optimized/, Published story PDFs story/, Print PDFs print/) with files, size, in use, too new and orphaned, then the oldest 200 orphans with their folder; the CSV has a folder column. Same check as before (database plus saved books). Print PDFs younger than 90 days are left out (an order waits in the browser until paid); everything else younger than a day. Moves nothing; the monthly clean-up still handles pictures only. Test: on production, press the button and read the folder table.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.72",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3272-storage-panels-reworded",
+        "kind": "ops",
+        "public": false,
+        "summary": "Dashboard Tools: the storage panels reworded so every button says what it does; the staging move tool removed.",
+        "detail": "Orphaned pictures (read only): Check for orphaned pictures. Monthly clean-up: a Monthly job On/Off toggle (On moves orphaned pictures over 30 days to holding on the 1st and deletes what has been held over 90 days; Off only emails the report), Run report, Move to holding. Manage holding bucket: Check holding, Download the held list, Put back (one per line or commas), Put back anything no longer orphaned, Put back everything, Delete from holding [age] Delete for good; a description beside every button. Move to its own storage (staging, one time) is removed with its routes and services/storageMove.js. Test: on staging, open Tools and read each panel; flip the toggle On and Off and watch the status line.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.71",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3271-tools-tab",
+        "kind": "ops",
+        "public": false,
+        "summary": "Dashboard: a Tools tab ; Image Generation Model removed (always Nano).",
+        "detail": "Dashboard has a new Tools tab (after Support). Moved there: Maintenance (weekly snapshot) and Pass expiry sweep and Email preview / test-send from Settings; Move to its own storage, Unused pictures and Monthly clean-up (now its own panel, with Holding) from Support. Nothing else changed. Image Generation Model is removed: every picture uses Nano (the FAL_IMAGE_MODEL / FAL_IMAGE_EDIT_MODEL Railway variables); the old setting is no longer read and Flux schnell is retired. Test: open each panel on Tools and press its safe button (Run the check, Check holding, Dry run, Send test to me).",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.70",
     "staged_on": "2026-10-25",
     "entries": [

@@ -119,4 +119,52 @@ async function unusedPictureReport(db, opts) {
   return out;
 }
 
-module.exports = { unusedPictureReport, referencedKeys, kindOf, KEY_RE, HISTORY_TABLES };
+// v3.2.73 -- TD-1006. THE WHOLE BUCKET, READ ONLY: pictures and PDFs. Every folder the app writes to, judged by the
+// same check (database plus saved books). Each folder has its own "too new to judge" age: a day for most, because
+// a file can be stored a moment before its row is written; 90 days for print/, because a print PDF waits in the
+// reader's browser from Prepare Your Order until payment, and only then is written to print_orders. Moves nothing --
+// the monthly clean-up still touches uploads/ only.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FOLDERS = [
+  { prefix: 'uploads/', label: 'Pictures', minAgeMs: RECENT_MS },
+  { prefix: 'archives/', label: 'Archived pictures', minAgeMs: RECENT_MS },
+  { prefix: 'optimized/', label: 'Saved books, Bookshelf copies and order covers', minAgeMs: RECENT_MS },
+  { prefix: 'story/', label: 'Published story PDFs', minAgeMs: RECENT_MS },
+  { prefix: 'print/', label: 'Print PDFs', minAgeMs: 90 * DAY_MS }
+];
+function fileKind(key) {
+  if (/^uploads\//.test(key)) return kindOf(key);
+  const m = String(key).replace(/^[^/]*\//, '').match(/^([A-Za-z]+)-/);
+  return m ? m[1].toLowerCase() : 'other';
+}
+async function orphanReport(db, opts) {
+  opts = opts || {};
+  const now = opts.now || Date.now();
+  const lists = [];
+  for (let i = 0; i < FOLDERS.length; i++) {   // listed BEFORE the database is read, as in unusedPictureReport
+    const o = await storage.listObjects(FOLDERS[i].prefix);
+    if (o === null) return { error: 'This server stores files on its own disk, not in the bucket.' };
+    lists.push(o);
+  }
+  const scan = await referencedKeys(db);
+  const out = { env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local', tables_read: scan.tables,
+    saved_books: scan.savedBooks || 0, keys_mentioned: scan.refs.size, folders: [],
+    listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0, items: [] };
+  FOLDERS.forEach(function (f, i) {
+    const r = { prefix: f.prefix, label: f.label, min_age_days: Math.round(f.minAgeMs / DAY_MS), listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0 };
+    lists[i].forEach(function (o) {
+      r.listed++; r.listed_bytes += o.size || 0;
+      if (scan.refs.has(o.key)) { r.in_use++; return; }
+      const t = Date.parse(o.lastModified);
+      if (isNaN(t) || (now - t) < f.minAgeMs) { r.recent++; return; }
+      r.unused++; r.unused_bytes += o.size || 0;
+      out.items.push({ key: o.key, folder: f.prefix.slice(0, -1), kind: fileKind(o.key), size: o.size || 0, last_modified: o.lastModified });
+    });
+    ['listed', 'listed_bytes', 'in_use', 'recent', 'unused', 'unused_bytes'].forEach(function (k) { out[k] += r[k]; });
+    out.folders.push(r);
+  });
+  out.items.sort(function (a, b) { return String(a.last_modified).localeCompare(String(b.last_modified)); });
+  return out;
+}
+
+module.exports = { unusedPictureReport, orphanReport, referencedKeys, kindOf, KEY_RE, HISTORY_TABLES, FOLDERS };

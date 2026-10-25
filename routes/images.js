@@ -81,16 +81,11 @@ async function measureImageDims(url) {
 // a panel has character/asset references (Lever 3) and the plain
 // text-to-image endpoint when it doesn't.
 
-// Read the currently-selected model key from app_settings.
-// Falls back to 'nano2' if unset or on any error (the production model).
+// v3.2.71 -- always Nano (Ian, 2026-10-25). The dashboard's Image Generation Model setting is gone; which Nano is
+// called is the Railway variable (config/models.js). The old app_settings 'image_model' row is no longer read.
+// Kept as a function (async, taking db) so its eighteen callers are unchanged.
 async function getSelectedModel(db) {
-  try {
-    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-    const key = row && row.value ? row.value : 'nano2';
-    return IMAGE_MODELS[key] ? key : 'nano2';
-  } catch (e) {
-    return 'nano2';
-  }
+  return 'nano2';
 }
 
 // Gemini "thinking" level for Nano Banana 2 ('minimal' | 'high'), read SOLELY

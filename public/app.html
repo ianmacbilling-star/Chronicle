@@ -1798,6 +1798,8 @@
         <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
              now reachable by testers and impersonation must never be. -->
         <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
+        <!-- v3.2.71 -- Tools: maintenance, pass sweep, email previews, storage. Admin only, like every tab here. -->
+        <button class="settings-tab" id="settings-tab-tools" onclick="switchSettingsTab('tools')">Tools</button>
         <!-- v3.0.789 -- TD-589. Orders becomes a real tab rather than a modal behind a button.
              Membership of SETTINGS_TABS_ALL is what gates it: admins get every tab, testers get
              only User Testing, everyone else gets none. The route is gated independently. -->
@@ -1805,22 +1807,6 @@
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
-
-      <!-- Image Generation Model -->
-      <div class="settings-section">
-        <div class="settings-section-title">Image Generation Model</div>
-        <div class="settings-section-desc">Which AI model generates storyboard images. Applies to all users.</div>
-        <div id="model-success" class="alert alert-success hidden"></div>
-        <div id="model-error" class="alert alert-error hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Model</label>
-          <select class="form-input" id="settings-image-model">
-            <option value="nano2">Nano Banana 2 (current — highest quality)</option>
-            <option value="schnell">Flux schnell (legacy — low quality, low cost)</option>
-          </select>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
-      </div>
 
       <!-- ADMIN: Public Library moderation -->
       <div id="admin-library-section" class="settings-section" style="display:none;">
@@ -1880,28 +1866,6 @@
       </div>
 
 
-      <!-- Maintenance (admin) -->
-      <div class="settings-section">
-        <div class="settings-section-title">Maintenance</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Take this week's metrics snapshot now. The scheduled weekly job does this automatically; use this to capture a point on demand.</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" id="snapshot-run-btn" onclick="runSnapshotNow()">Run weekly snapshot now</button>
-          <span class="settings-section-desc" id="snapshot-run-msg" style="margin:0;"></span>
-        </div>
-      </div>
-
-      <!-- Pass expiry sweep (admin) -- v3.0.956 -->
-      <div class="settings-section">
-        <div class="settings-section-title">Pass expiry sweep</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
-          <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
-          <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
-        </div>
-        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
-      </div>
-
       <!-- Print pricing (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Print pricing</div>
@@ -1940,45 +1904,6 @@
         <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
           <button class="btn btn-primary btn-sm" onclick="saveHelpEmailSettings()">Save</button>
           <span class="settings-section-desc" id="help-email-msg" style="margin:0;"></span>
-        </div>
-      </div>
-
-      <!-- Email preview / test-send (admin) -->
-      <div class="settings-section">
-        <div class="settings-section-title">Email preview / test-send</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
-          <select id="email-preview-select" class="form-input" style="width:260px;">
-            <option value="welcome">Welcome (new account)</option>
-            <option value="password_reset">Password reset</option>
-            <option value="invite">Campaign invite</option>
-            <option value="join_notification">Join notification (to SM)</option>
-            <option value="player_joined_welcome">Player joined welcome</option>
-            <option value="order_confirmation">Print order confirmed</option>
-            <option value="order_problem">Print order problem</option>
-            <option value="receipt_pack">Receipt &mdash; token pack</option>
-            <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
-            <option value="receipt_subscription">Receipt &mdash; subscription started</option>
-            <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
-            <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
-            <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
-            <option value="gift">Gift &mdash; to the recipient</option>
-            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
-            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
-            <option value="gift_redeemed">Gift &mdash; buyer told it was redeemed</option>
-            <option value="feedback">Feedback (to support)</option>
-            <option value="trial_ending_soon">Trial &mdash; ending soon</option>
-            <option value="trial_expired">Trial &mdash; expired</option>
-            <option value="trial_week_after">Trial &mdash; one week after</option>
-            <option value="trial_month_after">Trial &mdash; one month after</option>
-            <option value="idle_warning">Idle warning</option>
-            <option value="suspended">Account suspended</option>
-            <option value="purge_warning">Purge warning</option>
-            <option value="account_closed">Account closed</option>
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="sendEmailPreview()">Send test to me</button>
-          <span class="settings-section-desc" id="email-preview-msg" style="margin:0;"></span>
         </div>
       </div>
 
@@ -2361,67 +2286,6 @@
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
       </div>
-      <!-- v3.2.67 -- TD-1006. Staging's one-time move to its own bucket. Does nothing unless set up in Railway. -->
-      <div class="settings-section" id="storage-move-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Move to its own storage (staging, one time)</div>
-        <div class="settings-section-desc">
-          For staging only. Step 1 copies every picture this database uses from the shared bucket into this environment&rsquo;s
-          own bucket (nothing is deleted). Step 2, only after a copy with no failures, rewrites the stored picture addresses to
-          the new public address. Both can be run again. It refuses to run unless R2_BUCKET, R2_SHARED_BUCKET, R2_PUBLIC_URL and
-          R2_LEGACY_PUBLIC_URLS are set in Railway.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <button class="btn btn-sm" onclick="storageMoveLoad()">Check setup</button>
-          <button class="btn btn-sm" onclick="storageMoveRun('copy')">1. Copy pictures</button>
-          <button class="btn btn-sm" onclick="storageMoveRun('rewrite')">2. Rewrite addresses</button>
-        </div>
-        <div id="storage-move-out" style="margin-top:10px;font-size:13px;line-height:1.6;"></div>
-      </div>
-      <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
-      <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Unused pictures (read only)</div>
-        <div class="settings-section-desc">
-          Lists pictures in this environment&rsquo;s storage that nothing in its database uses (history &mdash; finished image jobs,
-          debug logs, watermark checks &mdash; does not count as use). It deletes nothing. Pictures from the last 24 hours are left out.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <button class="btn btn-sm" onclick="unusedPicsRun()">Run the check</button>
-          <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
-        </div>
-        <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
-        <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. -->
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">
-          <div style="font-weight:600;margin-bottom:6px;">Monthly clean-up</div>
-          <div class="settings-section-desc" style="margin:0 0 8px;">Once a month, pictures under uploads/ that nothing in this database uses and that are over 30 days old.
-            Report only emails a summary; Move to holding moves them to the holding bucket (after one last check) &mdash; nothing is deleted. Refused if this environment is not on its own bucket, or if more than 60% of the bucket looks unused.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="cleanup-mode" class="form-input" style="max-width:180px;" onchange="cleanupSetMode(this.value)">
-              <option value="off">Off</option><option value="report">Report only</option><option value="hold">Move to holding</option>
-            </select>
-            <button class="btn btn-sm" onclick="cleanupRun(false)">Run report now</button>
-            <button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding now</button>
-          </div>
-          <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
-          <!-- v3.2.69 -- TD-1006. The holding bucket: moved pictures wait here until put back or emptied. -->
-          <div style="font-weight:600;margin:14px 0 6px;">Holding</div>
-          <div class="settings-section-desc" style="margin:0 0 8px;">Pictures the clean-up moved wait here. A moved picture shows as broken on the site; Put back copies it home
-            (paste its name or its web address, one per line) and it is never moved again. Pictures leave holding for good only by Empty holding, or when
-            the monthly run (in Move to holding mode) finds them held over 90 days.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
-            <button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
-          </div>
-          <textarea id="hold-names" class="form-input" rows="3" placeholder="Picture names or addresses, one per line" style="width:100%;max-width:640px;margin-top:8px;"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
-            <button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
-            <button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything now in use</button>
-            <button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put everything back</button>
-            <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">Everything held</option><option value="7">Held 7+ days</option><option value="30">Held 30+ days</option></select>
-            <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Empty holding</button>
-          </div>
-          <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
-        </div>
-      </div>
       <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
       <div class="settings-section" id="dbg-user-section" style="display:none;margin-top:14px;">
         <div class="settings-section-title">Debug Mode for a user</div>
@@ -2440,6 +2304,126 @@
         </div>
         <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
         <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
+      </div>
+      </div>
+
+      <!-- v3.2.71 -- the Tools tab (Ian, 2026-10-25): maintenance and one-off tools, off the Settings and Support tabs. -->
+      <div class="settings-pane" id="settings-pane-tools" style="display:none;">
+      <!-- Maintenance (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Maintenance</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Take this week's metrics snapshot now. The scheduled weekly job does this automatically; use this to capture a point on demand.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="snapshot-run-btn" onclick="runSnapshotNow()">Run weekly snapshot now</button>
+          <span class="settings-section-desc" id="snapshot-run-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
+      <!-- Pass expiry sweep (admin) -- v3.0.956 -->
+      <div class="settings-section">
+        <div class="settings-section-title">Pass expiry sweep</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
+          <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
+          <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
+        </div>
+        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+      </div>
+
+      <!-- Email preview / test-send (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Email preview / test-send</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
+          <select id="email-preview-select" class="form-input" style="width:260px;">
+            <option value="welcome">Welcome (new account)</option>
+            <option value="password_reset">Password reset</option>
+            <option value="invite">Campaign invite</option>
+            <option value="join_notification">Join notification (to SM)</option>
+            <option value="player_joined_welcome">Player joined welcome</option>
+            <option value="order_confirmation">Print order confirmed</option>
+            <option value="order_problem">Print order problem</option>
+            <option value="receipt_pack">Receipt &mdash; token pack</option>
+            <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
+            <option value="receipt_subscription">Receipt &mdash; subscription started</option>
+            <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
+            <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
+            <option value="receipt_proration">Receipt &mdash; plan change (prorated)</option>
+            <option value="gift">Gift &mdash; to the recipient</option>
+            <option value="receipt_gift">Gift &mdash; buyer&#39;s receipt</option>
+            <option value="gift_buyer_copy">Gift &mdash; buyer&#39;s copy of the code</option>
+            <option value="gift_redeemed">Gift &mdash; buyer told it was redeemed</option>
+            <option value="feedback">Feedback (to support)</option>
+            <option value="trial_ending_soon">Trial &mdash; ending soon</option>
+            <option value="trial_expired">Trial &mdash; expired</option>
+            <option value="trial_week_after">Trial &mdash; one week after</option>
+            <option value="trial_month_after">Trial &mdash; one month after</option>
+            <option value="idle_warning">Idle warning</option>
+            <option value="suspended">Account suspended</option>
+            <option value="purge_warning">Purge warning</option>
+            <option value="account_closed">Account closed</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="sendEmailPreview()">Send test to me</button>
+          <span class="settings-section-desc" id="email-preview-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
+      <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
+      <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Orphaned pictures and PDFs (read only)</div>
+        <div class="settings-section-desc">
+          Finds pictures and PDFs that are orphaned: still in storage, but nothing uses them any more &mdash; no panel, character,
+          asset, book, saved book, Bookshelf copy, order or story points to them. It only looks and makes a list, folder by folder;
+          it never moves or deletes anything.
+          (Old records like finished image jobs and debug logs don&rsquo;t count as use. Files from the last 24 hours are left
+          out, because they may still be saving; print PDFs from the last 90 days, because an order can wait in the browser until it is paid.)
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures and PDFs</button>
+          <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
+        </div>
+        <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+      <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. v3.2.71 -- its own panel on Tools. -->
+      <style>#cleanup-section .cu-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;} #cleanup-section .cu-row .settings-section-desc{margin:0;}</style>
+      <div class="settings-section" id="cleanup-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Monthly clean-up</div>
+        <div class="settings-section-desc" style="margin:0 0 10px;">See what needs to be in the holding bucket.</div>
+        <div>
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer;">
+            <input type="checkbox" id="cleanup-toggle" onchange="cleanupSetMode(this.checked ? 'hold' : 'report')" style="width:18px;height:18px;">
+            Monthly job: <span id="cleanup-toggle-word">Off</span>
+          </label>
+          <div class="settings-section-desc" style="margin:4px 0 12px;">When On, on the 1st of each month it moves orphaned pictures over 30 days old into the holding bucket,
+            deletes anything that has been in holding over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.
+            It handles pictures only; PDFs are reported above but never moved.</div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="cleanupRun(false)">Run report</button>
+            <span class="settings-section-desc">Counts the orphaned pictures over 30 days old that would go to holding. Moves nothing.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding</button>
+            <span class="settings-section-desc">Moves them now, without waiting for the 1st. Click twice to confirm.</span></div>
+          <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
+          <!-- v3.2.69 -- TD-1006. The holding bucket. v3.2.72 -- reworded with Ian, a description beside every button. -->
+          <div style="font-weight:600;margin:16px 0 8px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">Manage holding bucket</div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
+            <span class="settings-section-desc">Shows how many pictures are in holding, how much space they take, and when they were moved. Changes nothing.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
+            <span class="settings-section-desc">Every picture in holding, with the date it was moved.</span></div>
+          <div class="settings-section-desc" style="margin:12px 0 4px;">Paste picture names or addresses, one per line or separated by commas:</div>
+          <textarea id="hold-names" class="form-input" rows="3" placeholder="gen-1787635888241-8e22b1fe27e52f56.png" style="width:100%;max-width:640px;"></textarea>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdRestore(false)">Put back</button>
+            <span class="settings-section-desc">Returns the pasted pictures to where they were. A picture put back is never moved to holding again.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" onclick="holdRestoreInUse()">Put back anything no longer orphaned</button>
+            <span class="settings-section-desc">Checks every held picture again and returns any that are in use after all. Use it after a fix to the check, or after restoring the database from a backup.</span></div>
+          <div class="cu-row"><button class="btn btn-sm" id="hold-all-btn" onclick="holdAllClick()">Put back everything</button>
+            <span class="settings-section-desc">Returns every held picture. Click twice to confirm.</span></div>
+          <div class="cu-row" style="margin-top:12px;"><span style="font-weight:600;">Delete from holding:</span>
+            <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">any age</option><option value="7">held over 7 days</option><option value="30">held over 30 days</option><option value="90" selected>held over 90 days</option></select>
+            <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Delete for good</button></div>
+          <div class="settings-section-desc" style="margin:4px 0 0;">Permanently deletes held pictures older than the age you pick. The monthly job does the same with 90 days; this does it now, with any age. It can&rsquo;t be undone. Click twice to confirm.</div>
+          <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
+        </div>
       </div>
       </div>
 

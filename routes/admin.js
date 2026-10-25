@@ -236,7 +236,7 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
 router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const r = await require('../services/storageAudit').unusedPictureReport(db);
+    const r = await require('../services/storageAudit').orphanReport(db);   // v3.2.73 -- every folder: pictures and PDFs
     if (r.error) return res.json(r);
     res.json(r);
   } catch (e) {
@@ -245,20 +245,7 @@ router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, r
   }
 });
 
-// v3.2.67 -- TD-1006. Staging's one-time move to its own bucket (services/storageMove.js). Admin only; refuses to do
-// anything unless R2_BUCKET and R2_SHARED_BUCKET are set and differ, so production cannot run it.
-router.get('/storage-move', requireAuth, requireAdmin, async function (req, res) {
-  try { res.json(require('../services/storageMove').status()); } catch (e) { res.status(500).json({ error: (e && e.message) || 'error' }); }
-});
-router.post('/storage-move/:step', requireAuth, requireAdmin, async function (req, res) {
-  try {
-    const mv = require('../services/storageMove');
-    const db = await getDb();
-    if (req.params.step === 'copy') return res.json(await mv.runCopy(db));
-    if (req.params.step === 'rewrite') return res.json(await mv.runRewrite(db));
-    return res.status(400).json({ error: 'Unknown step.' });
-  } catch (e) { res.json({ error: (e && e.message) || 'error' }); }
-});
+// v3.2.72 -- the staging one-time move (v3.2.67, services/storageMove.js) is retired: staging moved 2026-10-24.
 
 // v3.2.68 -- TD-1006. The monthly storage clean-up: status, its mode (off / report / hold) and Run now.
 // v3.2.69 -- Run now with move:true moves unused pictures to the holding bucket (nothing is deleted).
