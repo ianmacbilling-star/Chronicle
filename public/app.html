@@ -2372,15 +2372,16 @@
 
       <!-- v3.2.65 -- TD-1006. Read-only report of pictures in the bucket that nothing in this database points to. -->
       <div class="settings-section" id="unused-pics-section" style="display:none;margin-top:14px;">
-        <div class="settings-section-title">Orphaned pictures (read only)</div>
+        <div class="settings-section-title">Orphaned pictures and PDFs (read only)</div>
         <div class="settings-section-desc">
-          Finds pictures that are orphaned: still in storage, but nothing uses them any more &mdash; no panel, character, asset,
-          book, saved book, order or story points to them. It only looks and makes a list; it never moves or deletes anything.
-          (Old records like finished image jobs and debug logs don&rsquo;t count as use. Pictures from the last 24 hours are left
-          out, because they may still be saving.)
+          Finds pictures and PDFs that are orphaned: still in storage, but nothing uses them any more &mdash; no panel, character,
+          asset, book, saved book, Bookshelf copy, order or story points to them. It only looks and makes a list, folder by folder;
+          it never moves or deletes anything.
+          (Old records like finished image jobs and debug logs don&rsquo;t count as use. Files from the last 24 hours are left
+          out, because they may still be saving; print PDFs from the last 90 days, because an order can wait in the browser until it is paid.)
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures</button>
+          <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures and PDFs</button>
           <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
@@ -2396,7 +2397,8 @@
             Monthly job: <span id="cleanup-toggle-word">Off</span>
           </label>
           <div class="settings-section-desc" style="margin:4px 0 12px;">When On, on the 1st of each month it moves orphaned pictures over 30 days old into the holding bucket,
-            deletes anything that has been in holding over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.</div>
+            deletes anything that has been in holding over 90 days, and emails you a summary. When Off, it only emails you the report and moves nothing.
+            It handles pictures only; PDFs are reported above but never moved.</div>
           <div class="cu-row"><button class="btn btn-sm" onclick="cleanupRun(false)">Run report</button>
             <span class="settings-section-desc">Counts the orphaned pictures over 30 days old that would go to holding. Moves nothing.</span></div>
           <div class="cu-row"><button class="btn btn-sm" id="cleanup-delete-btn" onclick="cleanupDeleteClick()">Move to holding</button>

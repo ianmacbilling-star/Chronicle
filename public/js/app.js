@@ -1779,21 +1779,23 @@ function renderUnusedPics(d) {
   _unusedPics = null; if (csv) csv.style.display = 'none';
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not run the check.'; return; }
   _unusedPics = d;
-  var kinds = Object.keys(d.by_kind || {}).sort().map(function (k) { var b = d.by_kind[k]; return _upEsc(k) + ': ' + b.count + ' (' + _upBytes(b.bytes) + ')'; }).join(' \u00b7 ');
+  // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
+  var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
+  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
+  var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
-    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div>' +
-    '<div><strong>In storage under ' + _upEsc(d.prefix) + ':</strong> ' + d.listed + ' files, ' + _upBytes(d.listed_bytes) + '</div>' +
-    '<div><strong>In use here:</strong> ' + d.in_use + ' \u00b7 <strong>Newer than 24 hours (left out):</strong> ' + d.recent + '</div>' +
-    '<div style="color:#e8c766;"><strong>Orphaned:</strong> ' + d.unused + ' files, ' + _upBytes(d.unused_bytes) + (kinds ? (' \u2014 ' + kinds) : '') + '</div>' +
-    '</div>';
+    '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
+    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
+    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned size</th></tr></thead><tbody>' +
+    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:#e8c766;">' + f.unused + '</td><td style="' + tdr + 'color:#e8c766;">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
+    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + _upBytes(d.unused_bytes) + '</td></tr>' +
+    '</tbody></table></div>';
   var items = d.items || [];
   if (items.length) {
-    var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
-    var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
     h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
       '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
-      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
-      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
+      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
+      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
     if (csv) csv.style.display = '';
   }
@@ -1902,11 +1904,11 @@ function unusedPicsRun() {
 }
 function unusedPicsCsv() {
   var d = _unusedPics; if (!d || !d.items) return;
-  var rows = ['key,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
+  var rows = ['key,folder,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.folder || '', it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
   var blob = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'unused-pictures-' + String(d.env || 'env').replace(/[^A-Za-z0-9_-]/g, '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'orphaned-files-' + String(d.env || 'env').replace(/[^A-Za-z0-9_-]/g, '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a); a.click();
   setTimeout(function () { try { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); } catch (e) {} }, 1000);
 }

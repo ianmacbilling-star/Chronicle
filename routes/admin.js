@@ -236,7 +236,7 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
 router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const r = await require('../services/storageAudit').unusedPictureReport(db);
+    const r = await require('../services/storageAudit').orphanReport(db);   // v3.2.73 -- every folder: pictures and PDFs
     if (r.error) return res.json(r);
     res.json(r);
   } catch (e) {

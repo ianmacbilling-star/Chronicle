@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.73",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3273-orphaned-pdfs",
+        "kind": "ops",
+        "public": false,
+        "summary": "Orphaned pictures and PDFs: the read-only check now covers every storage folder.",
+        "detail": "Dashboard > Tools > Orphaned pictures and PDFs (read only): Check for orphaned pictures and PDFs lists every folder (Pictures uploads/, Archived pictures archives/, Saved books / Bookshelf copies / order covers optimized/, Published story PDFs story/, Print PDFs print/) with files, size, in use, too new and orphaned, then the oldest 200 orphans with their folder; the CSV has a folder column. Same check as before (database plus saved books). Print PDFs younger than 90 days are left out (an order waits in the browser until paid); everything else younger than a day. Moves nothing; the monthly clean-up still handles pictures only. Test: on production, press the button and read the folder table.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.72",
     "staged_on": "2026-10-25",
     "entries": [
