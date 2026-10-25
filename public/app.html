@@ -2422,7 +2422,8 @@
             <select id="hold-days" class="form-input" style="max-width:190px;"><option value="0">any age</option><option value="7">held over 7 days</option><option value="30">held over 30 days</option><option value="90" selected>held over 90 days</option></select>
             <button class="btn btn-sm" id="hold-empty-btn" onclick="holdEmptyClick()">Delete for good</button></div>
           <div class="settings-section-desc" style="margin:4px 0 0;">Permanently deletes held files older than the age you pick. The monthly job does the same with 90 days; this does it now, with any age. It can&rsquo;t be undone. Click twice to confirm.</div>
-          <div id="hold-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
+          <!-- v3.2.76 -- Ian: the holding results bigger and bolder, like the clean-up's Results line. -->
+          <div id="hold-out" style="margin-top:8px;font-size:15px;font-weight:700;color:#f0d78a;line-height:1.6;"></div>
         </div>
       </div>
       </div>
