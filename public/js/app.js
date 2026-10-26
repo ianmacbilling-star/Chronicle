@@ -37533,3 +37533,24 @@ function prepAttestChanged(box) {
   var st = document.getElementById('novel-publish-status');
   if (box && box.checked && st && st.textContent === PREP_ATTEST_NAG) { st.style.display = 'none'; st.textContent = ''; st.style.color = ''; }
 }
+
+// =====================================================================================
+// v3.2.94 -- TD-1027. The campaign and session titles are cut to one line (two on a phone) by style.css, so the full
+// name goes in the title attribute and shows on hover. Kept in step by watching the two name boxes, because four
+// places write them (the render functions and both saves); nothing is set while the name is being edited.
+// =====================================================================================
+function _hdrTitleTips() {
+  ['sessions-camp-name', 'session-detail-name'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || el._hdrTips) return;
+    el._hdrTips = true;
+    var sync = function () {
+      if (el.querySelector('input')) { el.removeAttribute('title'); return; }
+      var t = (el.textContent || '').trim();
+      if (t) { if (el.getAttribute('title') !== t) el.setAttribute('title', t); } else el.removeAttribute('title');
+    };
+    sync();
+    try { new MutationObserver(sync).observe(el, { childList: true, characterData: true, subtree: true }); } catch (e) {}
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _hdrTitleTips); else _hdrTitleTips();

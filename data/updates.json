@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.94",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3294-long-titles",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A long campaign or session name no longer pushes the buttons beside it onto another line.",
+        "detail": "On a wide screen the name stays on one line and ends with \u2026, with the buttons kept on the right; hover the name to read all of it. On a phone the name uses at most two lines. Editing the name still shows the whole of it.",
+        "td": [
+          "TD-1027"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.93",
     "staged_on": "2026-10-26",
     "entries": [
