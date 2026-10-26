@@ -944,7 +944,10 @@
                  Replacing keeps the story's link, its place in the Library and its Bookshelf entries. -->
             <div id="prep-replace-wrap" style="display:none;">
               <div class="prep-field-label">Publish as</div>
-              <select id="prep-replace" class="prep-textarea" style="min-height:0;resize:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
+              <!-- v3.2.90 -- TD-1024. Ian: pictures, not a dropdown. The button opens a picker of book cards; the select stays,
+                   hidden, because everything that reads the choice (prepReplaceChosen, publishStory) reads it. -->
+              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(20,12,4,0.85);border:1px solid rgba(201,168,76,0.35);border-radius:8px;padding:6px 10px;color:var(--gold);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
+              <select id="prep-replace" class="prep-textarea" style="display:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
               <div id="prep-replace-note" class="prep-hint" style="display:none;"></div>
             </div>
             <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is

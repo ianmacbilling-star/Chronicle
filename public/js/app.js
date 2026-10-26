@@ -13986,6 +13986,7 @@ function prepFillReplace(list) {
     sel.appendChild(o);
   });
   wrap.style.display = state._prepReplaceList.length ? '' : 'none';
+  try { _prepReplaceBtnSync(); } catch (e) {}   // v3.2.90 -- TD-1024: the button shows the choice
   var note = document.getElementById('prep-replace-note'); if (note) { note.style.display = 'none'; note.textContent = ''; }
 }
 function prepReplaceChosen() {
@@ -37238,4 +37239,80 @@ function versionTierGate(msg) {
     cancelLabel: 'Not now',
     onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
   });
+}
+// =====================================================================================
+// v3.2.90 -- TD-1024. PUBLISH AS: A PICTURE PICKER, NOT A DROPDOWN. Ian, 2026-10-26: "Instead of a drop down... a modal
+// with the covers, Title image and Sub Title. I'm having a hard time telling one book from another. Kinda like the
+// character selector." Front cover only (Ian); the book about to be published is shown at the top for comparison
+// (Ian: "Sure"); a story published before its subtitle and title picture were recorded shows its cover and title
+// only (Ian: "Sure"). Choosing a card sets the hidden #prep-replace and runs prepReplaceChanged, so what Publish does
+// is unchanged. Appended, not inserted (TD-853).
+// =====================================================================================
+function _pubAsEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function _pubAsImg(url, w, h, fallback) {
+  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(201,168,76,0.3);background:rgba(40,28,14,0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(201,168,76,0.55);font-size:' + Math.round(h / 3) + 'px;';
+  if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
+  return '<span style=\'' + st + '\'>' + (url ? '' : (fallback || '')) + '</span>';
+}
+function _pubAsCard(o) {
+  // o: { cover, title, subtitle, titleImg, meta, id, chosen, clickable }
+  var bd = o.chosen ? '2px solid var(--gold)' : '1px solid rgba(201,168,76,0.25)';
+  var inner = _pubAsImg(o.cover, 72, 96, '&#128214;') +
+    '<span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;">' +
+      '<span style="font-family:var(--font-display);color:var(--gold);font-size:14px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
+      (o.subtitle ? '<span style="font-style:italic;color:rgba(240,232,208,0.85);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
+      (o.titleImg ? '<span style="display:flex;margin-top:3px;">' + _pubAsImg(o.titleImg, 96, 54, '') + '</span>' : '') +
+      (o.meta ? '<span style="font-size:11px;color:rgba(201,168,76,0.75);margin-top:2px;">' + _pubAsEsc(o.meta) + '</span>' : '') +
+    '</span>';
+  var st = 'display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:8px;border-radius:8px;border:' + bd + ';background:rgba(20,12,4,0.7);font-family:inherit;';
+  if (!o.clickable) return '<div style=\'' + st + '\'>' + inner + '</div>';
+  return '<button type="button" class="pubas-card" data-id="' + _pubAsEsc(o.id) + '" style=\'' + st + 'cursor:pointer;\'>' + inner + '</button>';
+}
+function _pubAsMeta(s) {
+  var bits = [];
+  if (s.sessions) bits.push(s.sessions + (s.sessions === 1 ? ' session' : ' sessions'));
+  var when = (typeof prepFmtDate === 'function') ? prepFmtDate(s.created_at) : ''; if (when) bits.push('published ' + when);
+  if (s.visibility === 'unlisted') bits.push('link only');
+  return bits.join(' \u00b7 ');
+}
+function _prepReplaceBtnSync() {
+  var b = document.getElementById('prep-replace-btn'); if (!b) return;
+  var s = (typeof prepReplaceChosen === 'function') ? prepReplaceChosen() : null;
+  b.innerHTML = s
+    ? (_pubAsImg(s.cover_url, 30, 40, '&#128214;') + '<span style="flex:1 1 auto;min-width:0;">Replace \u201c' + _pubAsEsc(s.title || 'Untitled') + '\u201d' + (s.subtitle ? ' <i style="opacity:0.8;">' + _pubAsEsc(s.subtitle) + '</i>' : '') + '</span><span>&#9662;</span>')
+    : ('<span style="flex:0 0 30px;height:40px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(201,168,76,0.5);border-radius:5px;font-size:18px;">+</span><span style="flex:1 1 auto;">A new story in the Library</span><span>&#9662;</span>');
+}
+function closePublishAsPicker() { var m = document.getElementById('pubas-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function openPublishAsPicker() {
+  closePublishAsPicker();
+  var list = state._prepReplaceList || [];
+  var cur = (typeof prepReplaceChosen === 'function') ? prepReplaceChosen() : null;
+  var bm = state.bookMeta || {};
+  var tEl = document.getElementById('prep-title'), sEl = document.getElementById('prep-subtitle');
+  var mine = { cover: bm.cover_image_url || '', title: (tEl && tEl.value.trim()) || bm.book_title || (state.currentCampaign && state.currentCampaign.name) || '',
+    subtitle: (sEl ? sEl.value.trim() : (bm.subtitle || '')), titleImg: bm.title_image_url || '', meta: 'The book you are about to publish', clickable: false };
+  var html = '<div style="font-size:12px;color:rgba(240,232,208,0.7);margin:0 0 6px;">Your book</div>' + _pubAsCard(mine) +
+    '<div style="font-size:12px;color:rgba(240,232,208,0.7);margin:14px 0 6px;">Publish it as</div>' +
+    '<div class="pubas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">' +
+      '<button type="button" class="pubas-card" data-id="" style=\'display:flex;gap:10px;align-items:center;text-align:left;width:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(201,168,76,0.25)' : '2px solid var(--gold)') + ';background:rgba(20,12,4,0.7);cursor:pointer;font-family:inherit;\'>' +
+        '<span style="flex:0 0 72px;height:96px;border:1px dashed rgba(201,168,76,0.5);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--gold);">+</span>' +
+        '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:14px;">A new story</span><span style="font-size:12px;color:rgba(240,232,208,0.8);">A new entry in the Library, with its own link.</span></span>' +
+      '</button>' +
+      list.map(function (s) { return _pubAsCard({ id: s.id, cover: s.cover_url || '', title: s.title || 'Untitled', subtitle: s.subtitle || '', titleImg: s.title_image_url || '', meta: 'Replace \u00b7 ' + _pubAsMeta(s), chosen: !!(cur && String(cur.id) === String(s.id)), clickable: true }); }).join('') +
+    '</div>' +
+    '<div style="font-size:11px;color:rgba(240,232,208,0.55);margin-top:10px;">Replacing keeps the story\u2019s link, its place in the Library and its Bookshelf entries; its pages, cover, title and blurb become this book.</div>';
+  var overlay = document.createElement('div'); overlay.id = 'pubas-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closePublishAsPicker(); });
+  overlay.innerHTML = '<div class="prep-img-modal-box" style="max-width:720px;"><div class="prep-img-modal-head"><div class="prep-img-modal-title">Publish as</div>' +
+    '<button type="button" class="prep-img-modal-x" aria-label="Close">&times;</button></div><div style="overflow-y:auto;padding:2px;">' + html + '</div></div>';
+  overlay.querySelector('.prep-img-modal-x').addEventListener('click', closePublishAsPicker);
+  Array.prototype.forEach.call(overlay.querySelectorAll('.pubas-card'), function (b) {
+    b.addEventListener('click', function () {
+      var sel = document.getElementById('prep-replace');
+      if (sel) { sel.value = b.getAttribute('data-id') || ''; if (typeof prepReplaceChanged === 'function') prepReplaceChanged(sel); }
+      _prepReplaceBtnSync();
+      closePublishAsPicker();
+    });
+  });
+  document.body.appendChild(overlay);
 }
