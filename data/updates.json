@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.2.93",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3293-publish-rights-box",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Publish to Library: pressing Publish without ticking the rights box now lights up the box and scrolls to it, instead of a small line under the button.",
+        "detail": "The \u201cI own or have the rights to this content\u201d row is outlined in amber, shakes once and scrolls into view, and the line under the button says which box to tick. Ticking it clears both. The Publish as window and the replace messages no longer mention the Bookshelf; they say a replaced story keeps its link and its place in the Library.",
+        "td": [
+          "TD-1026",
+          "TD-1024"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.92",
     "staged_on": "2026-10-26",
     "entries": [

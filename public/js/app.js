@@ -13275,11 +13275,11 @@ async function publishStory() {
   var _wantPublicConsent = (!_wantUnlisted && !!_unlistedEl && prepCampaignSensitive());
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
-  if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
+  if (!_attested) { _prepAttestNag(st); return; }   // v3.2.93 -- TD-1026: say so where they will see it
   // v3.2.02 -- TD-984. Replacing asks first, in our own window, because the old version cannot be brought back.
   var _replace = prepReplaceChosen();
   if (_replace) {
-    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link, its place in the Library and its Bookshelf entries stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
+    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link and its place in the Library stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
       { title: 'Replace \u201c' + (_replace.title || 'Untitled') + '\u201d?', okText: 'Replace it', cancelText: 'Cancel', danger: true, preserveLines: true });
     if (!_okR) return;
   }
@@ -14014,7 +14014,7 @@ function prepReplaceChanged(sel) {
     if (bl && (!bl.value.trim() || bl.value === state._prepReplaceKeep.filled)) { bl.value = s.blurb || ''; state._prepReplaceKeep.filled = bl.value; }
     if (note) {
       note.style.display = 'block';
-      note.textContent = 'Its link, its place in the Library and its Bookshelf entries stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
+      note.textContent = 'Its link and its place in the Library stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
         ((s.visibility !== 'unlisted' && prepCampaignSensitive() && un && un.checked) ? ' It is listed in the Library now; untick link only to keep it listed.' : '');
     }
   } else {
@@ -37327,7 +37327,7 @@ function openPublishAsPicker() {
       '<div class="pubas-grid" style="' + cols + '">' +
         list.map(function (s) { return _pubAsCard({ id: s.id, cover: s.cover_url || '', title: s.title || 'Untitled', subtitle: s.subtitle || '', meta: _pubAsMeta(s), chosen: !!(cur && String(cur.id) === String(s.id)), clickable: true }); }).join('') +
       '</div>' +
-      '<div style="font-size:11px;color:rgba(240,232,208,0.55);margin-top:10px;">Replacing keeps the story\u2019s link, its place in the Library and its Bookshelf entries; its pages, cover, title and blurb become this book.</div>' : '');
+      '<div style="font-size:11px;color:rgba(240,232,208,0.55);margin-top:10px;">Replacing keeps the story\u2019s link and its place in the Library; its pages, cover, title and blurb become this book.</div>' : '');
   var overlay = document.createElement('div'); overlay.id = 'pubas-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function (e) { if (e.target === overlay) closePublishAsPicker(); });
   overlay.innerHTML = '<div class="prep-img-modal-box" style="max-width:860px;"><div class="prep-img-modal-head"><div class="prep-img-modal-title">Publish as</div>' +
@@ -37508,4 +37508,28 @@ function _panelJobsSync() {
       });
     })
     .catch(function() {});
+}
+
+// =====================================================================================
+// v3.2.93 -- TD-1026. PUBLISH WITH THE RIGHTS BOX UNTICKED. Ian, 2026-10-26: "I keep hitting the button and didn't
+// realize I didn't check the box and was wondering what was happening." The only answer was a small gold line under
+// the button, and the box sits well above it (blurb, link only and Publish as come between). Now the box's row is
+// lit and shaken and scrolled into view, and the line under the button says which box, in amber. Ticking the box
+// clears both. Nothing about what Publish does changes; the server still refuses an unattested publish.
+// =====================================================================================
+var PREP_ATTEST_NAG = 'Tick the box above first: \u201cI own or have the rights to this content\u2026\u201d';
+function _prepAttestNag(st) {
+  if (st) { st.style.display = 'block'; st.style.color = '#e8a85a'; st.textContent = PREP_ATTEST_NAG; }
+  var box = document.getElementById('prep-attest');
+  var row = box ? box.closest('label') : null;
+  if (!row) return;
+  row.classList.remove('prep-attest-nag'); void row.offsetWidth; row.classList.add('prep-attest-nag');   // restart the shake
+  try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  try { box.focus({ preventScroll: true }); } catch (e) {}
+}
+function prepAttestChanged(box) {
+  var row = box ? box.closest('label') : null;
+  if (row) row.classList.remove('prep-attest-nag');
+  var st = document.getElementById('novel-publish-status');
+  if (box && box.checked && st && st.textContent === PREP_ATTEST_NAG) { st.style.display = 'none'; st.textContent = ''; st.style.color = ''; }
 }

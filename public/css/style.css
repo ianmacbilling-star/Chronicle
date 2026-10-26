@@ -3060,3 +3060,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .storyboard-panel.panel-job-busy .pp-retouch,
 .storyboard-panel.panel-job-busy .pp-replace,
 .storyboard-panel.panel-job-busy button[onclick^="revertMoment"] { pointer-events:none; filter:grayscale(1) brightness(0.6); }
+
+/* v3.2.93 -- TD-1026. Publish pressed with the rights box unticked: light the row and shake it once. */
+.prep-attest.prep-attest-nag { outline:2px solid #e8a85a; outline-offset:4px; border-radius:6px; background:rgba(232,168,90,0.12); color:#f3d9b0; animation:prepAttestShake 0.45s ease-in-out; }
+@keyframes prepAttestShake { 0%,100% { transform:translateX(0); } 20% { transform:translateX(-6px); } 40% { transform:translateX(6px); } 60% { transform:translateX(-4px); } 80% { transform:translateX(4px); } }
