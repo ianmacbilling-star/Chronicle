@@ -321,7 +321,7 @@
           "selector": "#story-coach-row .wt-coach",
           "dmOnly": true,
           "title": "Writing Coach",
-          "text": "The coach can read your whole story and tell you how it holds together: the order of events, pacing, clarity and gaps. It costs one use for every 10,000 words. Select a passage to Rewrite it, or a word to find a better one. The line-by-line polish happens later, on the Storyboard.",
+          "text": "The coach can read your whole story and tell you how it holds together: the order of events, pacing, clarity and gaps. 4 uses per token. Select a passage to Rewrite it, or a word to find a better one. The line-by-line polish happens later, on the Storyboard.",
           "placement": "auto"
         },
         {

@@ -19024,7 +19024,7 @@ function wtStartHtml(id) {
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">' + wtStoryFbLabel('Get feedback') + '</button>' +
     '<p class="wc-note">It reads the whole box: one use for every 10,000 words.</p>';
-  if (id === 'feedback') return '<p class="wc-text">An honest verdict on this box \u2014 sometimes \u201cI wouldn\u2019t change a thing!\u201d \u2014 and tips (each with a <b>Show me</b>) only where they would make it better.</p>' +
+  if (id === 'feedback') return '<p class="wc-text">Get honest feedback \u2014 hit the button below.</p>' +   // v3.2.95 -- TD-1028, Ian's wording
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';

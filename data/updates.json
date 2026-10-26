@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.95",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3295-coach-wording",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Writing Coach: shorter wording on the Feedback tab and in the Story tour.",
+        "detail": "The Feedback tab on a narrative box now says \u201cGet honest feedback \u2014 hit the button below.\u201d The Story tour's Writing Coach step says 4 uses per token.",
+        "td": [
+          "TD-1028"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.94",
     "staged_on": "2026-10-26",
     "entries": [
