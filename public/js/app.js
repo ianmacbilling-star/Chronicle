@@ -7009,6 +7009,7 @@ function ensureGenFree() {
 }
 
 function generateNarrativeAndImages() {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025
   if (!ensureGenFree()) return;
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
@@ -10087,6 +10088,7 @@ function refreshStoryboardImages() {
 }
 
 async function generateAllImages(fromChain) {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025: a picture is still being worked on
   if (!fromChain) { if (!ensureGenFree()) return; }
   // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
   // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
@@ -10119,7 +10121,7 @@ async function generateAllImages(fromChain) {
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    if (!m.locked) showPanelBusy(m.id, 'Generating');
+    if (!m.locked) _panelBusyPaintOnly(m.id, 'Generating');   // v3.2.91 -- on the picture; a batch's spinners are not kept as state
   });
 
   var _gctl = new AbortController();
@@ -10190,6 +10192,7 @@ async function generateAllImages(fromChain) {
 }
 
 function regenImage(momentId, index) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025: one job per picture at a time
   if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
@@ -10216,6 +10219,7 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91 -- already running: keep the spinner, follow that job
       // Render the error AT the panel (not at the top of the page) so
       // users scrolled deep in a long storyboard actually see it. The
       // existing image stays visible underneath the error overlay.
@@ -16122,6 +16126,7 @@ function rgSetup(momentId) {
 }
 
 function openRetouch(momentId) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025
   state.retouchMomentId = momentId;
   state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
@@ -16349,6 +16354,7 @@ function submitRetouch() {
   var momentId = state.retouchMomentId;
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
   var _rgCrop = null;
@@ -16396,6 +16402,7 @@ function submitRetouch() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91
       if (data.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(data.message), true);
       else showPanelError(momentId, 'Could not retouch: ' + (data.message || data.error));
       return;
@@ -16408,6 +16415,7 @@ function submitRetouch() {
 }
 
 function openReplacePicker(mode, id) {
+  if (mode === 'moment' && panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
   state.pickerCtx = { mode: mode };
   try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
@@ -17565,6 +17573,7 @@ function renderStoryboard() {
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
+  try { _panelBusyRepaint(); _panelJobsSync(); } catch (e) {}   // v3.2.91 -- TD-1025: the redraw just wiped every spinner; put back the ones still running
 }
 
 // Fill the storyboard's narrative textareas in place from a finished narrative,
@@ -19445,6 +19454,7 @@ function regenNarrativeSection(type, panelIndex) {
 }
 
 async function generateAllImages(fromChain) {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025: a picture is still being worked on
   if (!fromChain) { if (!ensureGenFree()) return; }
   // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
   // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
@@ -19477,7 +19487,7 @@ async function generateAllImages(fromChain) {
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    if (!m.locked) showPanelBusy(m.id, 'Generating');
+    if (!m.locked) _panelBusyPaintOnly(m.id, 'Generating');   // v3.2.91 -- on the picture; a batch's spinners are not kept as state
   });
 
   var _gctl = new AbortController();
@@ -19551,6 +19561,7 @@ async function generateAllImages(fromChain) {
 }
 
 function regenImage(momentId, index) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025: one job per picture at a time
   if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
@@ -19577,6 +19588,7 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91 -- already running: keep the spinner, follow that job
       // Render the error AT the panel (not at the top of the page) so
       // users scrolled deep in a long storyboard actually see it. The
       // existing image stays visible underneath the error overlay.
@@ -21947,6 +21959,7 @@ function saveForkNotes(value) {
 }
 
 function revertMoment(id) {
+  if (panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
   if (!state.currentCampaign || !state.currentSession) return;
   fetch('/api/images/revert-moment', {
     method: 'POST',
@@ -37315,4 +37328,170 @@ function openPublishAsPicker() {
     });
   });
   document.body.appendChild(overlay);
+}
+
+// ============================================================================
+// v3.2.91 -- TD-1025. A PICTURE'S JOB IS STATE, NOT JUST A SPINNER.
+//
+// Ian, 2026-10-26: regenerate a picture on the Storyboard, then do something else while it runs
+// (another picture, a dialog, a tweak) and its spinner disappears. You can't tell whether it is
+// still working, so you press Regen again -- and pay twice. Sometimes the new picture flashes in and
+// then the second regen overwrites it.
+//
+// The same fault v3.0.818 fixed on the character cards: the spinner was painted straight onto the
+// DOM, and renderStoryboard rebuilds every card, so any redraw (another picture landing, a tweak,
+// a dialog closing) threw it away while the job went on running. And the overlay lets clicks
+// through to the pills above it, so Regen could be pressed again on the same picture.
+//
+// Now: state.panelJobs remembers which pictures have a job running, and every Storyboard redraw
+// paints them again; the Storyboard also asks the server which of this session's pictures still
+// have a job running (a refresh, a session switch, another device) and follows those jobs. While a
+// picture is busy, Regen / Retouch / Replace / Revert on it say so instead of starting another job,
+// and the server refuses a second job on the same picture (PANEL_BUSY, nothing charged). The spinner
+// sits on the picture itself, not the middle of the whole card (Ian: with a long narration it sat
+// below the picture). Generate Images' own spinners stay DOM-only as before: its run clears them.
+// ============================================================================
+function _pjState() { state.panelJobs = state.panelJobs || {}; return state.panelJobs; }
+function _panelBusyHost(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return null;
+  var box = card.querySelector(':scope > .storyboard-panel-img');
+  var pic = box ? box.firstElementChild : null;
+  if (pic && !pic.classList.contains('panel-img-actions')) return pic;
+  return box || card;
+}
+function _panelBusyClearDom(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return null;
+  card.classList.remove('panel-job-busy');
+  var ovs = card.querySelectorAll('.moment-img-busy-overlay');
+  for (var i = 0; i < ovs.length; i++) ovs[i].remove();
+  return card;
+}
+function _panelBusyPaintOnly(momentId, label) {
+  var card = _panelBusyClearDom(momentId);
+  if (!card) return null;
+  return showBusyOverlay(_panelBusyHost(momentId), label || 'Generating');
+}
+function _panelBusyPaint(momentId) {
+  var j = _pjState()[momentId];
+  if (!j) return null;
+  var ov = _panelBusyPaintOnly(momentId, j.label);
+  var card = document.getElementById('moment-card-' + momentId);
+  if (card) card.classList.add('panel-job-busy');
+  return ov;
+}
+function showPanelBusy(momentId, label) {
+  hidePanelError(momentId);
+  var j = _pjState()[momentId] || {};
+  j.label = label || j.label || 'Generating';
+  _pjState()[momentId] = j;
+  return _panelBusyPaint(momentId);
+}
+function hidePanelBusy(momentId) {
+  delete _pjState()[momentId];
+  _panelBusyClearDom(momentId);
+}
+function hideAllPanelBusy() {
+  state.panelJobs = {};
+  var overlays = document.querySelectorAll('.moment-img-busy-overlay');
+  for (var i = 0; i < overlays.length; i++) overlays[i].remove();
+  var cards = document.querySelectorAll('.storyboard-panel.panel-job-busy');
+  for (var k = 0; k < cards.length; k++) cards[k].classList.remove('panel-job-busy');
+}
+function _panelBusyRepaint() {
+  Object.keys(_pjState()).forEach(function (id) { _panelBusyPaint(id); });
+}
+var PANEL_BUSY_NOTE = 'This picture is still being worked on. It will appear here when it\u2019s ready.';
+function panelJobBlocked(momentId) {
+  if (!_pjState()[momentId]) return false;
+  _panelBusyPaint(momentId);
+  showAlert(PANEL_BUSY_NOTE);
+  return true;
+}
+function _anyPanelJobBlocked() {
+  if (!Object.keys(_pjState()).length) return false;
+  showAlert('A picture is still being worked on. Wait for it to appear, then try again.');
+  return true;
+}
+// Same as before, but the finished picture's job is over: the redraw must not paint its spinner back.
+function applyRegenResult(momentId, imageUrl, newStyle) {
+  delete _pjState()[momentId];
+  var moment = state.moments.find(function(m) { return m.id === momentId; });
+  if (moment) {
+    if (moment.image && moment.image !== imageUrl) {
+      moment.revert_image = moment.image;
+      moment.revert_img_w = moment.img_w || null;
+      moment.revert_img_h = moment.img_h || null;
+    }
+    moment.image = imageUrl; moment.archived = false;
+    if (newStyle !== undefined) moment.style = newStyle;   // v3.2.21 -- TD-995
+  }
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+  renderStoryboard();
+  renderNovelWithImages();
+}
+// Same polling as before; one poll per job however many times it is asked for, and the job id is
+// remembered on the picture.
+function pollImageJob(jobId, momentId) {
+  state._pjPolls = state._pjPolls || {};
+  if (state._pjPolls[jobId]) return;
+  state._pjPolls[jobId] = true;
+  if (_pjState()[momentId]) _pjState()[momentId].jobId = jobId;
+  function end() { delete state._pjPolls[jobId]; }
+  var started = Date.now();
+  var MAX_MS = 6 * 60 * 1000;
+  var INTERVAL = 4000;
+  function tick() {
+    fetch('/api/images/jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (!j || j.error) {
+          if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Could not regenerate: ' + ((j && j.error) || 'timed out')); return; }
+          setTimeout(tick, INTERVAL); return;
+        }
+        if (j.status === 'done' && j.image_url) { end(); applyRegenResult(momentId, j.image_url, j.moment_style); return; }
+        if (j.status === 'failed') {
+          end();
+          if (j.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(j.message || 'You are out of tokens.'), true);
+          else showPanelError(momentId, 'Could not regenerate: ' + (j.error || 'generation failed'));
+          return;
+        }
+        if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Still working \u2014 the image will appear here when it is ready.'); return; }
+        setTimeout(tick, INTERVAL);
+      })
+      .catch(function(e) {
+        if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Could not regenerate: ' + e.message); return; }
+        setTimeout(tick, INTERVAL);
+      });
+  }
+  setTimeout(tick, INTERVAL);
+}
+// Ask the server which of this session's pictures still have a job running, and follow them. At most
+// every 20 seconds per session, and never while a session-wide run (Generate Images etc.) is going:
+// that run tracks its own pictures.
+function _panelJobsSync() {
+  if (!state.currentSession || !state.currentCampaign) return;
+  if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return;
+  var sid = state.currentSession.id;
+  var key = String(sid) + ':' + String(state.currentForkId || '');
+  var now = Date.now();
+  if (state._pjSyncKey === key && now - (state._pjSyncAt || 0) < 20000) return;
+  state._pjSyncKey = key; state._pjSyncAt = now;
+  fetch('/api/images/moment-jobs?session_id=' + encodeURIComponent(sid))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !Array.isArray(d.jobs)) return;
+      if (!state.currentSession || String(state.currentSession.id) !== String(sid)) return;
+      if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return;
+      d.jobs.forEach(function(j) {
+        var m = (state.moments || []).find(function(x) { return String(x.id) === String(j.moment_id); });
+        if (!m) return;
+        if (!_pjState()[m.id]) _pjState()[m.id] = { label: j.kind === 'retouch' ? 'Retouching' : (j.kind === 'batch' ? 'Generating' : 'Regenerating') };
+        hidePanelError(m.id);
+        _panelBusyPaint(m.id);
+        pollImageJob(j.id, m.id);
+      });
+    })
+    .catch(function() {});
 }

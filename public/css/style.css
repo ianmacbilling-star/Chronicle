@@ -3053,3 +3053,10 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .wc-word:hover{background:#f3ecd8;border-color:#c9a84c;}
 .wc-word-note{font-size:11px;color:#6b7280;}
 @media (max-width:600px){.wc-panel{width:100vw;max-width:100vw;}}
+
+/* v3.2.91 -- TD-1025. While a picture has a job running, the pills that would start another job on it are
+   off (the page and the server refuse it too). The spinner itself now sits on the picture, see app.js. */
+.storyboard-panel.panel-job-busy .pp-regen,
+.storyboard-panel.panel-job-busy .pp-retouch,
+.storyboard-panel.panel-job-busy .pp-replace,
+.storyboard-panel.panel-job-busy button[onclick^="revertMoment"] { pointer-events:none; filter:grayscale(1) brightness(0.6); }
