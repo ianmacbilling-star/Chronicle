@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.92",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3292-publish-as-covers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Publish as: bigger book cards with just the cover, and A new story sits beside your book.",
+        "detail": "Each card in the Publish as window now shows only the front cover, large and upright, with the title, subtitle, sessions and date underneath. Your book and A new story share the top row; the stories you could replace are in a grid below. Two cards a row on a phone. Choosing works exactly as before.",
+        "td": [
+          "TD-1024"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.91",
     "staged_on": "2026-10-26",
     "entries": [
