@@ -1,5 +1,86 @@
 [
   {
+    "version": "3.2.93",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3293-publish-rights-box",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Publish to Library: pressing Publish without ticking the rights box now lights up the box and scrolls to it, instead of a small line under the button.",
+        "detail": "The \u201cI own or have the rights to this content\u201d row is outlined in amber, shakes once and scrolls into view, and the line under the button says which box to tick. Ticking it clears both. The Publish as window and the replace messages no longer mention the Bookshelf; they say a replaced story keeps its link and its place in the Library.",
+        "td": [
+          "TD-1026",
+          "TD-1024"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.92",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3292-publish-as-covers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Publish as: bigger book cards with just the cover, and A new story sits beside your book.",
+        "detail": "Each card in the Publish as window now shows only the front cover, large and upright, with the title, subtitle, sessions and date underneath. Your book and A new story share the top row; the stories you could replace are in a grid below. Two cards a row on a phone. Choosing works exactly as before.",
+        "td": [
+          "TD-1024"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.91",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3291-picture-busy",
+        "kind": "fix",
+        "public": true,
+        "summary": "Storyboard: a picture that is regenerating or being retouched keeps its spinner while you work on other pictures, and can't be started twice by mistake.",
+        "detail": "The spinner used to vanish whenever the Storyboard redrew (another picture landing, a tweak, a dialog closing), though the picture was still being drawn; pressing Regen again then paid for a second picture that replaced the first. Now the spinner stays until the picture lands, sits in the middle of the picture rather than the middle of the whole card, and comes back after a page refresh. While it runs, Regen, Retouch, Replace and Revert on that picture are greyed and say it is still being worked on, and the server refuses a second job on the same picture without charging. Test: Regen one picture, then Retouch or Regen another and open a dialog; the first keeps its spinner and its new picture appears once.",
+        "td": [
+          "TD-1025"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.90",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3290-publish-as-picker",
+        "kind": "feature",
+        "public": true,
+        "summary": "Publishing again from a campaign: \u201cPublish as\u201d is now a picture picker. Each published book shows its cover, title, subtitle and title-page picture, with your book at the top to compare.",
+        "detail": "Order & Publish > Publish as opens a window: your book (cover, title, subtitle, title picture) at the top, then A new story and one card per story already published from this campaign, with its cover, title, subtitle, title-page picture, sessions, date and link only. Choosing a card works exactly as the old list did (same note, link only and blurb behaviour). Stories published before their subtitle and title picture were recorded show the cover and title only. Test: on a campaign with two or more published stories, open Publish as, pick one, then pick A new story.",
+        "td": [
+          "TD-1024"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.89",
+    "staged_on": "2026-10-25",
+    "entries": [
+      {
+        "id": "3289-version-limit-gate",
+        "kind": "fix",
+        "public": true,
+        "summary": "Making a second version without Gold now shows a plain \u201cMore versions need Gold\u201d box with Upgrade My Plan, instead of \u201cSomething went wrong.\u201d",
+        "detail": "The message itself was right, but it sat under an error heading and read like a crash. It now uses the same box as the other plan limits (like the Title Builder): a heading that names the limit, the same sentence, a note that nothing you made is affected, and Upgrade My Plan / Not now. Both ways of making a version (New Version and Make My Version) show it. Test: as a Copper member with one version already, try to make another.",
+        "td": [
+          "TD-1023"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.88",
     "staged_on": "2026-10-25",
     "entries": [

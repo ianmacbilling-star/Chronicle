@@ -8626,8 +8626,11 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
     // here only hides the choice; the publish card still publishes a new story.
     var stories = [];
     try {
-      var rs = await db.prepare("SELECT id, title, visibility, blurb, created_at, CASE WHEN jsonb_typeof(snapshot->'sessions') = 'array' THEN jsonb_array_length(snapshot->'sessions') ELSE 0 END AS n_sessions FROM public_stories WHERE campaign_id = ? AND user_id = ? AND public = TRUE ORDER BY created_at DESC, id DESC").all(req.params.campaignId, req.session.userId);
-      stories = (rs || []).map(function (r) { return { id: r.id, title: r.title || 'Untitled', visibility: r.visibility || 'public', blurb: r.blurb || '', created_at: r.created_at, sessions: Number(r.n_sessions) || 0 }; });
+      // v3.2.90 -- TD-1024. AND WHAT EACH ONE LOOKS LIKE, for the Publish as picker: the cover the listing uses, and the
+      // subtitle and title-page picture the book was published with (from its snapshot; older ones may have neither).
+      var rs = await db.prepare("SELECT id, title, visibility, blurb, created_at, cover_url, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, snapshot->'campaign'->>'title_image_url' AS title_img, CASE WHEN jsonb_typeof(snapshot->'sessions') = 'array' THEN jsonb_array_length(snapshot->'sessions') ELSE 0 END AS n_sessions FROM public_stories WHERE campaign_id = ? AND user_id = ? AND public = TRUE ORDER BY created_at DESC, id DESC").all(req.params.campaignId, req.session.userId);
+      stories = (rs || []).map(function (r) { return { id: r.id, title: r.title || 'Untitled', visibility: r.visibility || 'public', blurb: r.blurb || '', created_at: r.created_at, sessions: Number(r.n_sessions) || 0,
+        cover_url: rightsCheck.maskUrl(r.cover_url || ''), title_image_url: rightsCheck.maskUrl(r.title_img || ''), subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() }; });   // v3.2.90
     } catch (e2) { console.error('[story-status] story list failed (non-fatal):', e2 && e2.message ? e2.message : e2); }
     return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null, stories: stories });
   } catch (e) {

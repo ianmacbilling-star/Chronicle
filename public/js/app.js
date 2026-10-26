@@ -7009,6 +7009,7 @@ function ensureGenFree() {
 }
 
 function generateNarrativeAndImages() {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025
   if (!ensureGenFree()) return;
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
@@ -10087,6 +10088,7 @@ function refreshStoryboardImages() {
 }
 
 async function generateAllImages(fromChain) {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025: a picture is still being worked on
   if (!fromChain) { if (!ensureGenFree()) return; }
   // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
   // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
@@ -10119,7 +10121,7 @@ async function generateAllImages(fromChain) {
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    if (!m.locked) showPanelBusy(m.id, 'Generating');
+    if (!m.locked) _panelBusyPaintOnly(m.id, 'Generating');   // v3.2.91 -- on the picture; a batch's spinners are not kept as state
   });
 
   var _gctl = new AbortController();
@@ -10190,6 +10192,7 @@ async function generateAllImages(fromChain) {
 }
 
 function regenImage(momentId, index) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025: one job per picture at a time
   if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
@@ -10216,6 +10219,7 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91 -- already running: keep the spinner, follow that job
       // Render the error AT the panel (not at the top of the page) so
       // users scrolled deep in a long storyboard actually see it. The
       // existing image stays visible underneath the error overlay.
@@ -13271,11 +13275,11 @@ async function publishStory() {
   var _wantPublicConsent = (!_wantUnlisted && !!_unlistedEl && prepCampaignSensitive());
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
-  if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
+  if (!_attested) { _prepAttestNag(st); return; }   // v3.2.93 -- TD-1026: say so where they will see it
   // v3.2.02 -- TD-984. Replacing asks first, in our own window, because the old version cannot be brought back.
   var _replace = prepReplaceChosen();
   if (_replace) {
-    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link, its place in the Library and its Bookshelf entries stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
+    var _okR = await uiConfirm('Its pages, cover, title and blurb become this version. Its link and its place in the Library stay, so links you have shared keep working.\n\nThe old version is gone and cannot be brought back.',
       { title: 'Replace \u201c' + (_replace.title || 'Untitled') + '\u201d?', okText: 'Replace it', cancelText: 'Cancel', danger: true, preserveLines: true });
     if (!_okR) return;
   }
@@ -13986,6 +13990,7 @@ function prepFillReplace(list) {
     sel.appendChild(o);
   });
   wrap.style.display = state._prepReplaceList.length ? '' : 'none';
+  try { _prepReplaceBtnSync(); } catch (e) {}   // v3.2.90 -- TD-1024: the button shows the choice
   var note = document.getElementById('prep-replace-note'); if (note) { note.style.display = 'none'; note.textContent = ''; }
 }
 function prepReplaceChosen() {
@@ -14009,7 +14014,7 @@ function prepReplaceChanged(sel) {
     if (bl && (!bl.value.trim() || bl.value === state._prepReplaceKeep.filled)) { bl.value = s.blurb || ''; state._prepReplaceKeep.filled = bl.value; }
     if (note) {
       note.style.display = 'block';
-      note.textContent = 'Its link, its place in the Library and its Bookshelf entries stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
+      note.textContent = 'Its link and its place in the Library stay. Its pages, cover, title and blurb become this version, and the old version is gone.' +
         ((s.visibility !== 'unlisted' && prepCampaignSensitive() && un && un.checked) ? ' It is listed in the Library now; untick link only to keep it listed.' : '');
     }
   } else {
@@ -16121,6 +16126,7 @@ function rgSetup(momentId) {
 }
 
 function openRetouch(momentId) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025
   state.retouchMomentId = momentId;
   state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
@@ -16348,6 +16354,7 @@ function submitRetouch() {
   var momentId = state.retouchMomentId;
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025
   var _rgSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
   var _rgRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
   var _rgCrop = null;
@@ -16395,6 +16402,7 @@ function submitRetouch() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91
       if (data.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(data.message), true);
       else showPanelError(momentId, 'Could not retouch: ' + (data.message || data.error));
       return;
@@ -16407,6 +16415,7 @@ function submitRetouch() {
 }
 
 function openReplacePicker(mode, id) {
+  if (mode === 'moment' && panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
   state.pickerCtx = { mode: mode };
   try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
@@ -17564,6 +17573,7 @@ function renderStoryboard() {
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
+  try { _panelBusyRepaint(); _panelJobsSync(); } catch (e) {}   // v3.2.91 -- TD-1025: the redraw just wiped every spinner; put back the ones still running
 }
 
 // Fill the storyboard's narrative textareas in place from a finished narrative,
@@ -19444,6 +19454,7 @@ function regenNarrativeSection(type, panelIndex) {
 }
 
 async function generateAllImages(fromChain) {
+  if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025: a picture is still being worked on
   if (!fromChain) { if (!ensureGenFree()) return; }
   // v3.1.30 -- TD-921. A self-illustrated version draws nothing. Returning here, before any lock or
   // progress bar, leaves a chained run (Generate Narrative & Images) to finish its narrative alone.
@@ -19476,7 +19487,7 @@ async function generateAllImages(fromChain) {
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    if (!m.locked) showPanelBusy(m.id, 'Generating');
+    if (!m.locked) _panelBusyPaintOnly(m.id, 'Generating');   // v3.2.91 -- on the picture; a batch's spinners are not kept as state
   });
 
   var _gctl = new AbortController();
@@ -19550,6 +19561,7 @@ async function generateAllImages(fromChain) {
 }
 
 function regenImage(momentId, index) {
+  if (panelJobBlocked(momentId)) return;   // v3.2.91 -- TD-1025: one job per picture at a time
   if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
@@ -19576,6 +19588,7 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      if (data.error === 'PANEL_BUSY' && data.job_id) { pollImageJob(data.job_id, momentId); return; }   // v3.2.91 -- already running: keep the spinner, follow that job
       // Render the error AT the panel (not at the top of the page) so
       // users scrolled deep in a long storyboard actually see it. The
       // existing image stays visible underneath the error overlay.
@@ -21946,6 +21959,7 @@ function saveForkNotes(value) {
 }
 
 function revertMoment(id) {
+  if (panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
   if (!state.currentCampaign || !state.currentSession) return;
   fetch('/api/images/revert-moment', {
     method: 'POST',
@@ -22103,6 +22117,7 @@ function newSessionVersion() {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
+        if (res.j && res.j.code === 'FORK_TIER') { versionTierGate(res.j.error); return; }   // v3.2.89 -- TD-1023: a plan limit, not an error
         if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || 'Could not create that version.'); return; }
         state.currentForkId = res.j.fork_id;
         loadSessionForks(state.currentSession.id);
@@ -22184,6 +22199,7 @@ async function makeMyVersion() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
+      if (data && data.code === 'FORK_TIER') { versionTierGate(data.error); return; }   // v3.2.89 -- TD-1023
       if (data && data.error) { if (typeof showAlert === 'function') { showError(data.error); } else { alert(data.error); } return; }
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
@@ -37218,4 +37234,302 @@ function statsSplitEnd() {
   document.body.style.userSelect = '';
   _splitDragShield(false);
   try { if (pct != null) window.localStorage.setItem('statsSplitPct', String(Math.round(pct * 100) / 100)); } catch (e) {}
+}
+// =====================================================================================
+// v3.2.89 -- TD-1023. A PLAN LIMIT IS NOT AN ERROR. The testers (2026-10-25): a Copper member making a second
+// version got the right sentence ("Your first version is free. Making another one needs Gold or higher...") under
+// "Something went wrong.", which reads like a crash. Ian: "treat it like the other upgrade areas" -- the same
+// box platinumGate gives the Title Builder: a heading that names the limit, the reason, Upgrade My Plan and Not now.
+// The server's own sentence (routes/sessions.js, code FORK_TIER) is the body, so the two cannot disagree.
+// Appended, not inserted (TD-853).
+// =====================================================================================
+function versionTierGate(msg) {
+  appConfirm({
+    title: 'More versions need Gold',
+    body: msg || 'Your first version is free. Making another one needs Gold or higher on your own plan.',
+    note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
+    okLabel: 'Upgrade My Plan',
+    cancelLabel: 'Not now',
+    onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+  });
+}
+// =====================================================================================
+// v3.2.90 -- TD-1024. PUBLISH AS: A PICTURE PICKER, NOT A DROPDOWN. Ian, 2026-10-26: "Instead of a drop down... a modal
+// with the covers, Title image and Sub Title. I'm having a hard time telling one book from another. Kinda like the
+// character selector." Front cover only (Ian); the book about to be published is shown at the top for comparison
+// (Ian: "Sure"); a story published before its subtitle and title picture were recorded shows its cover and title
+// only (Ian: "Sure"). Choosing a card sets the hidden #prep-replace and runs prepReplaceChanged, so what Publish does
+// is unchanged. Appended, not inserted (TD-853).
+// =====================================================================================
+function _pubAsEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function _pubAsImg(url, w, h, fallback) {
+  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(201,168,76,0.3);background:rgba(40,28,14,0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(201,168,76,0.55);font-size:' + Math.round(h / 3) + 'px;';
+  if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
+  return '<span style=\'' + st + '\'>' + (url ? '' : (fallback || '')) + '</span>';
+}
+function _pubAsCard(o) {
+  // o: { cover, title, subtitle, meta, id, chosen, clickable }
+  // v3.2.92 -- TD-1024. Ian: "We don't need two pictures for every story... just the cover image... make the panels
+  // a little bigger and more vertical". The cover on top at the cover's own shape (7.1 : 9.6), the words under it.
+  var bd = o.chosen ? '2px solid var(--gold)' : '1px solid rgba(201,168,76,0.25)';
+  var inner = _pubAsCover(o.cover) +
+    '<span style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
+      '<span style="font-family:var(--font-display);color:var(--gold);font-size:15px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
+      (o.subtitle ? '<span style="font-style:italic;color:rgba(240,232,208,0.9);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
+      (o.meta ? '<span style="font-size:11px;color:rgba(201,168,76,0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
+    '</span>';
+  var st = 'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + bd + ';background:rgba(20,12,4,0.7);font-family:inherit;box-sizing:border-box;';
+  if (!o.clickable) return '<div style=\'' + st + '\'>' + inner + '</div>';
+  return '<button type="button" class="pubas-card" data-id="' + _pubAsEsc(o.id) + '" style=\'' + st + 'cursor:pointer;\'>' + inner + '</button>';
+}
+function _pubAsCover(url, plus) {
+  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(40,28,14,0.9) center/cover no-repeat;color:rgba(201,168,76,0.55);font-size:40px;';
+  st += plus ? 'border:1px dashed rgba(201,168,76,0.5);color:var(--gold);' : 'border:1px solid rgba(201,168,76,0.3);';
+  if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
+  return '<span style=\'' + st + '\'>' + (plus ? '+' : (url ? '' : '&#128214;')) + '</span>';
+}
+function _pubAsMeta(s) {
+  var bits = [];
+  if (s.sessions) bits.push(s.sessions + (s.sessions === 1 ? ' session' : ' sessions'));
+  var when = (typeof prepFmtDate === 'function') ? prepFmtDate(s.created_at) : ''; if (when) bits.push('published ' + when);
+  if (s.visibility === 'unlisted') bits.push('link only');
+  return bits.join(' \u00b7 ');
+}
+function _prepReplaceBtnSync() {
+  var b = document.getElementById('prep-replace-btn'); if (!b) return;
+  var s = (typeof prepReplaceChosen === 'function') ? prepReplaceChosen() : null;
+  b.innerHTML = s
+    ? (_pubAsImg(s.cover_url, 30, 40, '&#128214;') + '<span style="flex:1 1 auto;min-width:0;">Replace \u201c' + _pubAsEsc(s.title || 'Untitled') + '\u201d' + (s.subtitle ? ' <i style="opacity:0.8;">' + _pubAsEsc(s.subtitle) + '</i>' : '') + '</span><span>&#9662;</span>')
+    : ('<span style="flex:0 0 30px;height:40px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(201,168,76,0.5);border-radius:5px;font-size:18px;">+</span><span style="flex:1 1 auto;">A new story in the Library</span><span>&#9662;</span>');
+}
+function closePublishAsPicker() { var m = document.getElementById('pubas-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function openPublishAsPicker() {
+  closePublishAsPicker();
+  var list = state._prepReplaceList || [];
+  var cur = (typeof prepReplaceChosen === 'function') ? prepReplaceChosen() : null;
+  var bm = state.bookMeta || {};
+  var tEl = document.getElementById('prep-title'), sEl = document.getElementById('prep-subtitle');
+  var mine = { cover: bm.cover_image_url || '', title: (tEl && tEl.value.trim()) || bm.book_title || (state.currentCampaign && state.currentCampaign.name) || '',
+    subtitle: (sEl ? sEl.value.trim() : (bm.subtitle || '')), clickable: false };
+  // v3.2.92 -- Ian: put the new-story card next to the book about to be published, the older books under it. Both
+  // rows use the same columns, so every card is the same size.
+  var cols = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(170px, calc(50% - 6px)),1fr));gap:12px;';
+  var lab = function (t) { return '<div style="font-size:12px;color:rgba(240,232,208,0.7);margin:0 0 6px;">' + t + '</div>'; };
+  var html = '<div style="' + cols + '">' +
+      '<div style="display:flex;flex-direction:column;">' + lab('Your book') + _pubAsCard(mine) + '</div>' +
+      '<div style="display:flex;flex-direction:column;">' + lab('Publish it as') +
+        '<button type="button" class="pubas-card" data-id="" style=\'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(201,168,76,0.25)' : '2px solid var(--gold)') + ';background:rgba(20,12,4,0.7);cursor:pointer;font-family:inherit;box-sizing:border-box;\'>' +
+          _pubAsCover('', true) +
+          '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;">A new story</span><span style="font-size:12px;color:rgba(240,232,208,0.85);line-height:1.35;">A new entry in the Library, with its own link.</span></span>' +
+        '</button></div>' +
+    '</div>' +
+    (list.length ? lab('<span style="display:block;margin-top:16px;">Or replace a story already published</span>') +
+      '<div class="pubas-grid" style="' + cols + '">' +
+        list.map(function (s) { return _pubAsCard({ id: s.id, cover: s.cover_url || '', title: s.title || 'Untitled', subtitle: s.subtitle || '', meta: _pubAsMeta(s), chosen: !!(cur && String(cur.id) === String(s.id)), clickable: true }); }).join('') +
+      '</div>' +
+      '<div style="font-size:11px;color:rgba(240,232,208,0.55);margin-top:10px;">Replacing keeps the story\u2019s link and its place in the Library; its pages, cover, title and blurb become this book.</div>' : '');
+  var overlay = document.createElement('div'); overlay.id = 'pubas-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closePublishAsPicker(); });
+  overlay.innerHTML = '<div class="prep-img-modal-box" style="max-width:860px;"><div class="prep-img-modal-head"><div class="prep-img-modal-title">Publish as</div>' +
+    '<button type="button" class="prep-img-modal-x" aria-label="Close">&times;</button></div><div style="overflow-y:auto;padding:2px;">' + html + '</div></div>';
+  overlay.querySelector('.prep-img-modal-x').addEventListener('click', closePublishAsPicker);
+  Array.prototype.forEach.call(overlay.querySelectorAll('.pubas-card'), function (b) {
+    b.addEventListener('click', function () {
+      var sel = document.getElementById('prep-replace');
+      if (sel) { sel.value = b.getAttribute('data-id') || ''; if (typeof prepReplaceChanged === 'function') prepReplaceChanged(sel); }
+      _prepReplaceBtnSync();
+      closePublishAsPicker();
+    });
+  });
+  document.body.appendChild(overlay);
+}
+
+// ============================================================================
+// v3.2.91 -- TD-1025. A PICTURE'S JOB IS STATE, NOT JUST A SPINNER.
+//
+// Ian, 2026-10-26: regenerate a picture on the Storyboard, then do something else while it runs
+// (another picture, a dialog, a tweak) and its spinner disappears. You can't tell whether it is
+// still working, so you press Regen again -- and pay twice. Sometimes the new picture flashes in and
+// then the second regen overwrites it.
+//
+// The same fault v3.0.818 fixed on the character cards: the spinner was painted straight onto the
+// DOM, and renderStoryboard rebuilds every card, so any redraw (another picture landing, a tweak,
+// a dialog closing) threw it away while the job went on running. And the overlay lets clicks
+// through to the pills above it, so Regen could be pressed again on the same picture.
+//
+// Now: state.panelJobs remembers which pictures have a job running, and every Storyboard redraw
+// paints them again; the Storyboard also asks the server which of this session's pictures still
+// have a job running (a refresh, a session switch, another device) and follows those jobs. While a
+// picture is busy, Regen / Retouch / Replace / Revert on it say so instead of starting another job,
+// and the server refuses a second job on the same picture (PANEL_BUSY, nothing charged). The spinner
+// sits on the picture itself, not the middle of the whole card (Ian: with a long narration it sat
+// below the picture). Generate Images' own spinners stay DOM-only as before: its run clears them.
+// ============================================================================
+function _pjState() { state.panelJobs = state.panelJobs || {}; return state.panelJobs; }
+function _panelBusyHost(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return null;
+  var box = card.querySelector(':scope > .storyboard-panel-img');
+  var pic = box ? box.firstElementChild : null;
+  if (pic && !pic.classList.contains('panel-img-actions')) return pic;
+  return box || card;
+}
+function _panelBusyClearDom(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return null;
+  card.classList.remove('panel-job-busy');
+  var ovs = card.querySelectorAll('.moment-img-busy-overlay');
+  for (var i = 0; i < ovs.length; i++) ovs[i].remove();
+  return card;
+}
+function _panelBusyPaintOnly(momentId, label) {
+  var card = _panelBusyClearDom(momentId);
+  if (!card) return null;
+  return showBusyOverlay(_panelBusyHost(momentId), label || 'Generating');
+}
+function _panelBusyPaint(momentId) {
+  var j = _pjState()[momentId];
+  if (!j) return null;
+  var ov = _panelBusyPaintOnly(momentId, j.label);
+  var card = document.getElementById('moment-card-' + momentId);
+  if (card) card.classList.add('panel-job-busy');
+  return ov;
+}
+function showPanelBusy(momentId, label) {
+  hidePanelError(momentId);
+  var j = _pjState()[momentId] || {};
+  j.label = label || j.label || 'Generating';
+  _pjState()[momentId] = j;
+  return _panelBusyPaint(momentId);
+}
+function hidePanelBusy(momentId) {
+  delete _pjState()[momentId];
+  _panelBusyClearDom(momentId);
+}
+function hideAllPanelBusy() {
+  state.panelJobs = {};
+  var overlays = document.querySelectorAll('.moment-img-busy-overlay');
+  for (var i = 0; i < overlays.length; i++) overlays[i].remove();
+  var cards = document.querySelectorAll('.storyboard-panel.panel-job-busy');
+  for (var k = 0; k < cards.length; k++) cards[k].classList.remove('panel-job-busy');
+}
+function _panelBusyRepaint() {
+  Object.keys(_pjState()).forEach(function (id) { _panelBusyPaint(id); });
+}
+var PANEL_BUSY_NOTE = 'This picture is still being worked on. It will appear here when it\u2019s ready.';
+function panelJobBlocked(momentId) {
+  if (!_pjState()[momentId]) return false;
+  _panelBusyPaint(momentId);
+  showAlert(PANEL_BUSY_NOTE);
+  return true;
+}
+function _anyPanelJobBlocked() {
+  if (!Object.keys(_pjState()).length) return false;
+  showAlert('A picture is still being worked on. Wait for it to appear, then try again.');
+  return true;
+}
+// Same as before, but the finished picture's job is over: the redraw must not paint its spinner back.
+function applyRegenResult(momentId, imageUrl, newStyle) {
+  delete _pjState()[momentId];
+  var moment = state.moments.find(function(m) { return m.id === momentId; });
+  if (moment) {
+    if (moment.image && moment.image !== imageUrl) {
+      moment.revert_image = moment.image;
+      moment.revert_img_w = moment.img_w || null;
+      moment.revert_img_h = moment.img_h || null;
+    }
+    moment.image = imageUrl; moment.archived = false;
+    if (newStyle !== undefined) moment.style = newStyle;   // v3.2.21 -- TD-995
+  }
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+  renderStoryboard();
+  renderNovelWithImages();
+}
+// Same polling as before; one poll per job however many times it is asked for, and the job id is
+// remembered on the picture.
+function pollImageJob(jobId, momentId) {
+  state._pjPolls = state._pjPolls || {};
+  if (state._pjPolls[jobId]) return;
+  state._pjPolls[jobId] = true;
+  if (_pjState()[momentId]) _pjState()[momentId].jobId = jobId;
+  function end() { delete state._pjPolls[jobId]; }
+  var started = Date.now();
+  var MAX_MS = 6 * 60 * 1000;
+  var INTERVAL = 4000;
+  function tick() {
+    fetch('/api/images/jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (!j || j.error) {
+          if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Could not regenerate: ' + ((j && j.error) || 'timed out')); return; }
+          setTimeout(tick, INTERVAL); return;
+        }
+        if (j.status === 'done' && j.image_url) { end(); applyRegenResult(momentId, j.image_url, j.moment_style); return; }
+        if (j.status === 'failed') {
+          end();
+          if (j.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(j.message || 'You are out of tokens.'), true);
+          else showPanelError(momentId, 'Could not regenerate: ' + (j.error || 'generation failed'));
+          return;
+        }
+        if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Still working \u2014 the image will appear here when it is ready.'); return; }
+        setTimeout(tick, INTERVAL);
+      })
+      .catch(function(e) {
+        if (Date.now() - started > MAX_MS) { end(); showPanelError(momentId, 'Could not regenerate: ' + e.message); return; }
+        setTimeout(tick, INTERVAL);
+      });
+  }
+  setTimeout(tick, INTERVAL);
+}
+// Ask the server which of this session's pictures still have a job running, and follow them. At most
+// every 20 seconds per session, and never while a session-wide run (Generate Images etc.) is going:
+// that run tracks its own pictures.
+function _panelJobsSync() {
+  if (!state.currentSession || !state.currentCampaign) return;
+  if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return;
+  var sid = state.currentSession.id;
+  var key = String(sid) + ':' + String(state.currentForkId || '');
+  var now = Date.now();
+  if (state._pjSyncKey === key && now - (state._pjSyncAt || 0) < 20000) return;
+  state._pjSyncKey = key; state._pjSyncAt = now;
+  fetch('/api/images/moment-jobs?session_id=' + encodeURIComponent(sid))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !Array.isArray(d.jobs)) return;
+      if (!state.currentSession || String(state.currentSession.id) !== String(sid)) return;
+      if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return;
+      d.jobs.forEach(function(j) {
+        var m = (state.moments || []).find(function(x) { return String(x.id) === String(j.moment_id); });
+        if (!m) return;
+        if (!_pjState()[m.id]) _pjState()[m.id] = { label: j.kind === 'retouch' ? 'Retouching' : (j.kind === 'batch' ? 'Generating' : 'Regenerating') };
+        hidePanelError(m.id);
+        _panelBusyPaint(m.id);
+        pollImageJob(j.id, m.id);
+      });
+    })
+    .catch(function() {});
+}
+
+// =====================================================================================
+// v3.2.93 -- TD-1026. PUBLISH WITH THE RIGHTS BOX UNTICKED. Ian, 2026-10-26: "I keep hitting the button and didn't
+// realize I didn't check the box and was wondering what was happening." The only answer was a small gold line under
+// the button, and the box sits well above it (blurb, link only and Publish as come between). Now the box's row is
+// lit and shaken and scrolled into view, and the line under the button says which box, in amber. Ticking the box
+// clears both. Nothing about what Publish does changes; the server still refuses an unattested publish.
+// =====================================================================================
+var PREP_ATTEST_NAG = 'Tick the box above first: \u201cI own or have the rights to this content\u2026\u201d';
+function _prepAttestNag(st) {
+  if (st) { st.style.display = 'block'; st.style.color = '#e8a85a'; st.textContent = PREP_ATTEST_NAG; }
+  var box = document.getElementById('prep-attest');
+  var row = box ? box.closest('label') : null;
+  if (!row) return;
+  row.classList.remove('prep-attest-nag'); void row.offsetWidth; row.classList.add('prep-attest-nag');   // restart the shake
+  try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  try { box.focus({ preventScroll: true }); } catch (e) {}
+}
+function prepAttestChanged(box) {
+  var row = box ? box.closest('label') : null;
+  if (row) row.classList.remove('prep-attest-nag');
+  var st = document.getElementById('novel-publish-status');
+  if (box && box.checked && st && st.textContent === PREP_ATTEST_NAG) { st.style.display = 'none'; st.textContent = ''; st.style.color = ''; }
 }

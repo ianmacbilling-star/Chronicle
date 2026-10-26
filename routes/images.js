@@ -1436,6 +1436,22 @@ async function submitEditReference(falKey, baseImageUrl, changeText, charName, m
 // ROUTES
 // ============================================================
 
+// v3.2.91 -- TD-1025. ONE JOB PER PICTURE AT A TIME. Ian, 2026-10-26: with the Storyboard spinner lost he
+// pressed Regen again, and paid for two pictures where the second overwrote the first. A picture that
+// already has a regenerate or retouch queued or drawing (in the last 10 minutes, so a job whose webhook never
+// came does not lock it for good) is refused here, before anything is submitted or charged; the page keeps
+// its spinner and follows the running job (job_id). Generate Images is unchanged.
+const PANEL_JOB_WINDOW_MS = 10 * 60 * 1000;
+async function pendingMomentJob(db, momentId) {
+  try {
+    const since = new Date(Date.now() - PANEL_JOB_WINDOW_MS).toISOString();
+    return (await db.prepare("SELECT id, kind, user_id FROM image_jobs WHERE moment_id = ? AND status IN ('queued', 'processing') AND created_at > ? ORDER BY id DESC LIMIT 1").get(momentId, since)) || null;
+  } catch (e) { return null; }   // the check must never stop a picture being drawn
+}
+function panelBusyReply(res, job, userId) {
+  return res.json({ error: 'PANEL_BUSY', message: 'This picture is still being worked on. It will appear here when it\u2019s ready. Nothing was charged.', job_id: (job && String(job.user_id) === String(userId)) ? job.id : null });
+}
+
 // POST /api/images/generate-moment
 // v3.1.30 -- TD-921. The refusal the two drawing routes give for a self-illustrated version. The page
 // never asks (it hides Regenerate and skips Generate Images), so this is the backstop, not the path.
@@ -1464,6 +1480,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to regenerate.' });
   // v3.1.30 -- TD-921. A version set to "I'll illustrate it myself" is never drawn, whatever the page sends.
   if (await forkSelfIllustrated(db, moment.fork_id)) return res.json({ error: 'SELF_ILLUSTRATED', message: SELF_ILLUSTRATED_MSG });
+  { const _busy = await pendingMomentJob(db, moment.id); if (_busy) return panelBusyReply(res, _busy, req.session.userId); }   // v3.2.91 -- TD-1025
 
   // Tier gate: block generating with an art style locked at the caller's
   // effective tier (e.g. after an SM downgrade once the style was chosen).
@@ -1706,6 +1723,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'You can only retouch your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
   if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  { const _busy = await pendingMomentJob(db, moment.id); if (_busy) return panelBusyReply(res, _busy, req.session.userId); }   // v3.2.91 -- TD-1025
   if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;   // v3.1.98 -- TD-979
   // v3.0.653 -- TD-444. A DRAWN TITLE IS NOT RETOUCHED FROM HERE.
   //
@@ -2511,6 +2529,23 @@ webhookRouter.get('/jobs-status', requireAuth, async function(req, res) {
     const rows = await db.prepare('SELECT id, status, image_url, error, moment_id FROM image_jobs WHERE id IN (' + ph + ') AND user_id = ?').all(ids.concat([req.session.userId]));
     res.json({ jobs: rows.map(function(j){ return { id: j.id, status: j.status, image_url: j.image_url || null, error: j.error || null, moment_id: j.moment_id }; }) });
   } catch (e) { res.json({ error: friendlyError(e, 'Could not check image status.') }); }
+});
+
+// v3.2.91 -- TD-1025. Which of this session's pictures still have one of YOUR jobs queued or drawing, so the
+// Storyboard can put their spinners back after a refresh or a redraw, and follow them.
+webhookRouter.get('/moment-jobs', requireAuth, async function(req, res) {
+  try {
+    const sid = parseInt(req.query.session_id, 10);
+    if (!(sid > 0)) return res.json({ jobs: [] });
+    const db = await getDb();
+    const since = new Date(Date.now() - PANEL_JOB_WINDOW_MS).toISOString();
+    const rows = await db.prepare(
+      "SELECT j.id, j.moment_id, j.kind FROM image_jobs j JOIN moments m ON m.id = j.moment_id " +
+      "WHERE j.user_id = ? AND m.session_id = ? AND j.status IN ('queued', 'processing') AND j.created_at > ? " +
+      "AND j.kind IN ('moment', 'retouch', 'batch') ORDER BY j.id"
+    ).all(req.session.userId, sid, since);
+    res.json({ jobs: (rows || []).map(function (r) { return { id: r.id, moment_id: r.moment_id, kind: r.kind }; }) });
+  } catch (e) { res.json({ jobs: [] }); }
 });
 
 webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {

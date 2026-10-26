@@ -924,7 +924,7 @@
                  from when Before and After were both publishable. Only the optimized book ever publishes,
                  so the choice is gone and this now links to the exact file that will be used. -->
             <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">run Optimize first</a></span></div>
-            <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
+            <label class="prep-attest"><input type="checkbox" id="prep-attest" onchange="prepAttestChanged(this)" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
             <!-- v3.0.831 -- TD-677. The choice belongs HERE, not on the account page after the
@@ -944,7 +944,10 @@
                  Replacing keeps the story's link, its place in the Library and its Bookshelf entries. -->
             <div id="prep-replace-wrap" style="display:none;">
               <div class="prep-field-label">Publish as</div>
-              <select id="prep-replace" class="prep-textarea" style="min-height:0;resize:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
+              <!-- v3.2.90 -- TD-1024. Ian: pictures, not a dropdown. The button opens a picker of book cards; the select stays,
+                   hidden, because everything that reads the choice (prepReplaceChosen, publishStory) reads it. -->
+              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(20,12,4,0.85);border:1px solid rgba(201,168,76,0.35);border-radius:8px;padding:6px 10px;color:var(--gold);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
+              <select id="prep-replace" class="prep-textarea" style="display:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
               <div id="prep-replace-note" class="prep-hint" style="display:none;"></div>
             </div>
             <!-- v3.0.798 -- TD-608. ABOVE the button, because it is meant to be read before it is
