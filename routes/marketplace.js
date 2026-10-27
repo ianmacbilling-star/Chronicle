@@ -146,6 +146,8 @@ function mineOf(row) {
   return {
     id: row.id, status: row.status, paused: !!row.paused, admin_note: row.admin_note || '',
     has_live: !!live, changed: !!live && !sameContent(d, live), draft: d,
+    // v3.3.06 -- an approved listing's edits go live at once (Ian); "altered" = live now differs from what was approved
+    has_reviewed: !!row.reviewed_json, altered: !!live && !!row.reviewed_json && !sameContent(live, jparse(row.reviewed_json, null)),
     submitted_at: row.submitted_at || null, reviewed_at: row.reviewed_at || null
   };
 }
@@ -172,7 +174,7 @@ function mailFrame(title, inner, staff) {
 // when there is something to review"). Sent each time a listing goes to 'pending' -- a new listing or changes to
 // a live one -- to SUPPORT_EMAIL (the address every other support email uses), with the owner as reply-to.
 // Never throws and is never awaited by the save.
-async function notifySupport(db, uid, row, isChange) {
+async function notifySupport(db, uid, row, isChange, isLive) {
   try {
     const to = String(process.env.SUPPORT_EMAIL || 'support@campaignia.com').trim();
     const u = await db.prepare('SELECT name, pen_name, email FROM users WHERE id = ?').get(uid);
@@ -181,15 +183,24 @@ async function notifySupport(db, uid, row, isChange) {
     const d = draftOf(row || {});
     const name = d.display_name || '(no name)';
     const who = u ? ((u.name || '') + (u.pen_name ? ' (' + u.pen_name + ')' : '') + ' <' + (u.email || '') + '>') : ('user ' + uid);
-    const html = mailFrame('A Marketplace listing to review',
-      '<p><strong>' + esc(name) + '</strong> ' + (isChange ? 'changed their live listing' : 'sent a new listing') + ' for review.</p>' +
+    const html = mailFrame(isLive ? 'A live Marketplace listing was changed' : 'A Marketplace listing to review',
+      '<p><strong>' + esc(name) + '</strong> ' + (isLive ? 'changed their listing. <strong>The changes are already live</strong>; it is marked Altered in the review window until you look at it.' : (isChange ? 'changed their live listing' : 'sent a new listing') + ' for review.') + '</p>' +
       '<p style="margin:4px 0;"><strong>Account:</strong> ' + esc(who) + '</p>' +
       '<p style="margin:4px 0;"><strong>Headline:</strong> ' + esc(d.headline) + '</p>' +
       '<p style="margin:4px 0;"><strong>Offers:</strong> ' + esc(d.roles.join(', ')) + ' &middot; ' + esc(String(d.samples.length)) + ' sample picture' + (d.samples.length === 1 ? '' : 's') + '</p>' +
       '<p>' + esc(String(waiting)) + ' listing' + (waiting === 1 ? '' : 's') + ' waiting in all. Review them on the Dashboard: Settings &rsaquo; Marketplace &rsaquo; Review listings, at ' +
       '<a href="' + esc(appUrl()) + '/app.html">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</a>.</p>', true);
-    await mailSafely(to, 'Marketplace: ' + oneLine(name, 60) + (isChange ? ' changed their listing' : ' wants to be listed') + ' \u2014 review needed', html, u && u.email ? u.email : undefined);
+    await mailSafely(to, 'Marketplace: ' + oneLine(name, 60) + (isLive ? ' changed their live listing \u2014 already live, please look' : ((isChange ? ' changed their listing' : ' wants to be listed') + ' \u2014 review needed')), html, u && u.email ? u.email : undefined);
   } catch (e) { console.error('[marketplace] support notice failed: ' + ((e && e.message) || e)); }
+}
+
+// v3.3.06 -- CONFIRMED EMAIL (Ian: "It should use the email on file with Campaignia"). Make contact sends to and
+// replies to the account email, so both people must have confirmed theirs. Sign-in already refuses an unconfirmed
+// account and an email change only takes effect from its link, so this is a second lock, not the only one.
+const CONFIRM_FIRST = 'Please confirm your email address first: use the link we emailed when you signed up.';
+async function emailConfirmed(db, uid) {
+  try { const r = await db.prepare('SELECT email_verified FROM users WHERE id = ?').get(uid); return !!r && r.email_verified !== false; }
+  catch (e) { return true; }   // a database without the column predates confirmation; sign-in is the gate there
 }
 
 // ---------- status ----------
@@ -205,11 +216,12 @@ router.get('/status', async function (req, res) {
       const row = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(v.id);
       if (row) mine = { status: row.status, paused: !!row.paused, has_live: !!row.live_json };
     }
-    let waiting = null;
+    let waiting = null, altered = null;
     if (v && v.admin) {
       try { const c = await db.prepare("SELECT COUNT(*) AS n FROM marketplace_listings WHERE status = 'pending'").get(); waiting = Number(c && c.n) || 0; } catch (e) { waiting = null; }
+      try { const a = await db.prepare("SELECT COUNT(*) AS n FROM marketplace_listings WHERE status <> 'removed' AND live_json IS NOT NULL AND reviewed_json IS NOT NULL AND live_json <> reviewed_json").get(); altered = Number(a && a.n) || 0; } catch (e) { altered = null; }   // v3.3.06
     }
-    res.json({ enabled: on, admin: !!(v && v.admin), signedIn: !!v, show: on || !!(v && v.admin), mine: mine, waiting: waiting });
+    res.json({ enabled: on, admin: !!(v && v.admin), signedIn: !!v, show: on || !!(v && v.admin), mine: mine, waiting: waiting, altered: altered });
   } catch (e) { res.json({ enabled: false, admin: false, signedIn: false, show: false, mine: null }); }
 });
 
@@ -276,6 +288,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       want.forEach(function (u) { if (ok[u] && d.samples.indexOf(u) < 0 && d.samples.length < MAX_SAMPLES) d.samples.push(u); });
     }
     const submit = !!b.submit;
+    if (submit && !(await emailConfirmed(db, uid))) return res.status(403).json({ error: CONFIRM_FIRST });   // v3.3.06
     if (submit) {
       const miss = [];
       if (!d.display_name) miss.push('a name');
@@ -289,7 +302,12 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
     const cols = [d.display_name, d.headline, d.roles.join(','), d.bio, JSON.stringify(d.links), d.rates, d.availability, JSON.stringify(d.samples)];
     let status = row ? row.status : 'draft';
     const live = row ? jparse(row.live_json, null) : null;
-    if (submit) status = (live && sameContent(d, live) && row.status === 'approved') ? 'approved' : 'pending';
+    // v3.3.06 -- EDITS TO AN APPROVED LISTING GO LIVE AT ONCE (Ian, 2026-10-27: "they can go live right away for now.
+    // Maybe they show up on the review list as altered"). Once Ian has approved a listing (reviewed_json), Send for
+    // review publishes the new copy straight away; the review window marks it Altered until Ian looks at it again.
+    // A listing never approved still waits for him.
+    const goLive = submit && !!(row && row.reviewed_json);
+    if (submit) status = goLive ? 'approved' : 'pending';
     if (!row) {
       await db.prepare(
         'INSERT INTO marketplace_listings (user_id, display_name, headline, roles, bio, links, rates, availability, samples, status, paused, submitted_at, created_at, updated_at) ' +
@@ -299,10 +317,12 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       await db.prepare(
         'UPDATE marketplace_listings SET display_name = ?, headline = ?, roles = ?, bio = ?, links = ?, rates = ?, availability = ?, samples = ?, status = ?, ' +
         'submitted_at = ?, updated_at = ? WHERE user_id = ?'
-      ).run(...cols.concat([status, (submit && status === 'pending') ? now : (row.submitted_at || null), now, uid]));
+      ).run(...cols.concat([status, submit ? now : (row.submitted_at || null), now, uid]));
+      if (goLive) await db.prepare('UPDATE marketplace_listings SET live_json = ?, admin_note = NULL WHERE user_id = ?').run(JSON.stringify(d), uid);
     }
     const fresh = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
     if (submit && status === 'pending') notifySupport(db, uid, fresh, !!live);   // v3.3.03 -- not awaited: the save never waits on email
+    else if (goLive && !sameContent(d, live)) notifySupport(db, uid, fresh, true, true);   // v3.3.06 -- already live: support is told it is Altered
     res.json({ ok: true, mine: mineOf(fresh) });
   } catch (e) { console.error('[marketplace] save: ' + (e && e.message)); res.status(500).json({ error: 'Could not save your listing right now.' }); }
 });
@@ -384,6 +404,7 @@ router.post('/listings/:id/contact', requireAuth, gate, async function (req, res
     const db = await getDb();
     const me = await db.prepare('SELECT id, name, pen_name, email FROM users WHERE id = ?').get(req.session.userId);
     if (!me || !me.email) return res.status(403).json({ error: 'Your account needs an email address first.' });
+    if (!(await emailConfirmed(db, me.id))) return res.status(403).json({ error: CONFIRM_FIRST });   // v3.3.06
     const row = await db.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(Number(req.params.id) || 0);
     const pub = row && row.status !== 'removed' && !row.paused ? publicOf(row) : null;
     if (!pub) return res.status(404).json({ error: 'That listing is not on the Marketplace any more.' });
@@ -442,7 +463,7 @@ router.get('/admin/listings', adminOnly, async function (req, res) {
     res.json({ listings: rows.map(function (r) {
       const m = mineOf(r);
       m.user_id = r.user_id; m.owner = { name: r.owner_name || '', email: r.owner_email || '', pen_name: r.owner_pen || '' };
-      m.live = jparse(r.live_json, null); m.contacts = Number(r.contacts) || 0;
+      m.live = jparse(r.live_json, null); m.reviewed = jparse(r.reviewed_json, null); m.contacts = Number(r.contacts) || 0;   // v3.3.06
       m.reviewed_by = r.reviewed_by || ''; m.updated_at = r.updated_at || null;
       m.sample_rights = {};
       m.draft.samples.forEach(function (u) { const v = verdicts[u] || verdicts[String(u).split('?')[0]]; if (v) m.sample_rights[u] = { verdict: v.verdict, reasons: (v.reasons || []).map(function (x) { return x.text; }) }; });
@@ -462,13 +483,16 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
     const by = req.mktAdmin.email;
     let subject = '', body = '';
     if (action === 'approve') {
-      await db.prepare("UPDATE marketplace_listings SET live_json = ?, status = 'approved', admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?")
-        .run(JSON.stringify(draftOf(row)), note, now, by, now, row.id);
+      const wasAltered = !!row.reviewed_json;   // approving an altered listing just accepts the changes: no "you're live" email
+      await db.prepare("UPDATE marketplace_listings SET live_json = ?, reviewed_json = ?, status = 'approved', admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?")
+        .run(JSON.stringify(draftOf(row)), JSON.stringify(draftOf(row)), note, now, by, now, row.id);
+      if (wasAltered && !note) { const f0 = await db.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(row.id); return res.json({ ok: true, emailed: false, listing: mineOf(f0) }); }
       subject = 'Your Campaignia Marketplace listing is live';
       body = '<p>Good news: your listing is now on the Campaignia Marketplace, and members can find you and make contact.</p>' + (note ? '<p>' + esc(note) + '</p>' : '');
     } else if (action === 'decline') {
       if (!note) return res.status(400).json({ error: 'Say what needs to change, so they can fix it.' });
-      await db.prepare("UPDATE marketplace_listings SET status = 'declined', admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?").run(note, now, by, now, row.id);
+      // v3.3.06 -- on a listing approved before, Send back also puts the live copy back to what was approved
+      await db.prepare("UPDATE marketplace_listings SET status = 'declined', live_json = COALESCE(reviewed_json, live_json), admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?").run(note, now, by, now, row.id);
       subject = 'Your Campaignia Marketplace listing needs a change';
       body = '<p>Thanks for listing yourself on the Campaignia Marketplace. Before ' + (row.live_json ? 'your changes go' : 'it goes') + ' up, one thing needs to change:</p>' +
         '<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #c9a84c;background:#faf6ea;white-space:pre-wrap;">' + esc(note) + '</blockquote>' +
@@ -484,7 +508,7 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
       // v3.3.04 -- BACK TO REVIEW (Ian, 2026-10-27: "a way for me to unapprove a listing so I can test the approval
       // process over and over"). The listing goes back to 'pending' as if just sent: the approved copy is dropped,
       // so it leaves the directory, and nobody is emailed (neither the person nor support).
-      await db.prepare("UPDATE marketplace_listings SET status = 'pending', live_json = NULL, admin_note = ?, submitted_at = ?, reviewed_at = NULL, reviewed_by = NULL, updated_at = ? WHERE id = ?")
+      await db.prepare("UPDATE marketplace_listings SET status = 'pending', live_json = NULL, reviewed_json = NULL, admin_note = ?, submitted_at = ?, reviewed_at = NULL, reviewed_by = NULL, updated_at = ? WHERE id = ?")
         .run(note, now, now, row.id);
     } else if (action === 'restore') {
       const st = row.live_json ? 'approved' : 'pending';

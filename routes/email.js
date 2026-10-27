@@ -33,7 +33,7 @@ async function sendEmail(to, subject, html, opts) {
     html: html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
-  if (opts && opts.replyTo) payload.reply_to = opts.replyTo;
+  if (opts && opts.replyTo) payload.replyTo = opts.replyTo;   // v3.3.06: the Resend SDK reads replyTo and drops reply_to, so every reply went to FROM_EMAIL
   const { data, error } = await resend.emails.send(payload);
 
   if (error) throw new Error(error.message);
@@ -492,7 +492,7 @@ async function sendReportEmail(opts) {
       subject: '[Campaignia] Content report: ' + (opts.storyTitle || ('story #' + opts.storyId)),
       html: html
     };
-    if (opts.reporterEmail) payload.reply_to = opts.reporterEmail;
+    if (opts.reporterEmail) payload.replyTo = opts.reporterEmail;   // v3.3.06: replyTo (see sendEmail)
     const { error } = await resend.emails.send(payload);
     if (error) { console.error('[report] send failed:', error.message); return false; }
     return true;

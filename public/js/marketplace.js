@@ -245,7 +245,7 @@
     var s = '';
     if (m.status === 'draft') s = 'Draft. Not sent for review yet.';
     else if (m.status === 'pending') s = m.has_live ? 'Your changes are waiting for review. Your listing stays up as it was until then.' : 'Waiting for review. It appears on the Marketplace once it is approved.';
-    else if (m.status === 'approved') s = m.changed ? 'Live on the Marketplace. You have changes that are not sent yet: press Send for review to update it.' : 'Live on the Marketplace.';
+    else if (m.status === 'approved') s = m.changed ? 'Live on the Marketplace. You have saved changes that are not on it yet: press Update my listing to publish them.' : 'Live on the Marketplace.';
     else if (m.status === 'declined') s = (m.has_live ? 'Your changes were sent back' : 'Sent back') + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.') + ' Edit and send it again.';
     else if (m.status === 'removed') s = 'Removed from the Marketplace' + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.');
     if (m.paused && m.status !== 'removed') s += ' Paused: hidden from the Marketplace until you unpause it.';
@@ -286,7 +286,7 @@
         }).join('') + '</select>' +
       '</div>' +
       '<div class="mkt-row mkt-actions">' +
-        (removed ? '' : '<button type="button" class="mkt-btn" data-act="save">Save draft</button><button type="button" class="mkt-btn mkt-btn-gold" data-act="submit">Send for review</button>') +
+        (removed ? '' : '<button type="button" class="mkt-btn" data-act="save">Save draft</button><button type="button" class="mkt-btn mkt-btn-gold" data-act="submit">' + (m && m.has_reviewed ? 'Update my listing' : 'Send for review') + '</button>') +
         '<span class="mkt-msg" id="mkt-save-msg"></span></div>' +
       (m && !removed ? '<div class="mkt-row mkt-quiet">' +
         '<button type="button" class="mkt-linkbtn" data-act="pause">' + (m.paused ? 'Unpause my listing' : 'Pause my listing') + '</button>' +
@@ -358,7 +358,7 @@
         if (!x.ok) { flash(msg, x.j.error || 'Could not save it right now.', true); return; }
         m = x.j.mine;
         $('mkt-state').textContent = statusSentence(m);
-        flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Nothing changed, so it stays as it is.' : 'Sent for review. We will email you when it is decided.') : 'Saved.');
+        flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing on the Marketplace shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.');
         loadStatus();
       });
     });
@@ -399,7 +399,7 @@
     sec.style.display = STATUS.admin ? '' : 'none';
     if (!STATUS.admin) return;
     var sw = $('mkt-admin-switch'); if (sw) sw.checked = !!STATUS.enabled;
-    var w = $('mkt-admin-waiting'); if (w) w.textContent = STATUS.waiting ? (STATUS.waiting + ' waiting for review') : 'Nothing waiting for review';
+    var w = $('mkt-admin-waiting'); if (w) w.textContent = (STATUS.waiting ? (STATUS.waiting + ' waiting for review') : 'Nothing waiting for review') + (STATUS.altered ? (' \u00b7 ' + STATUS.altered + ' altered (already live)') : '');   // v3.3.06
   }
   function setSwitch(on) {
     var msg = $('mkt-admin-msg');
@@ -412,12 +412,12 @@
   }
   function openReview() {
     var ov = modal('mkt-modal-wide mkt-review', '<div class="mkt-title">Marketplace listings</div>' +
-      '<div class="mkt-row"><select id="mkt-rv-filter"><option value="pending">Waiting for review</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
+      '<div class="mkt-row"><select id="mkt-rv-filter"><option value="pending">Waiting for review</option><option value="altered">Altered (already live)</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
       '<span class="mkt-msg" id="mkt-rv-msg"></span></div><div class="mkt-body" id="mkt-rv-list"><span class="mkt-spin"></span></div>');
     var all = [];
     function paint() {
       var f = $('mkt-rv-filter').value;
-      var list = all.filter(function (m) { return !f || m.status === f; });
+      var list = all.filter(function (m) { return !f || (f === 'altered' ? m.altered : m.status === f); });
       $('mkt-rv-list').innerHTML = list.length ? list.map(reviewCard).join('') : '<p class="mkt-sub">Nothing here.</p>';
     }
     function load() {
@@ -445,10 +445,11 @@
   }
   function reviewCard(m) {
     var d = m.draft, live = m.live;
-    var diff = [];
-    if (live && m.changed) ['display_name', 'headline', 'roles', 'bio', 'links', 'rates', 'availability', 'samples'].forEach(function (k) {
-      if (JSON.stringify(d[k]) !== JSON.stringify(live[k])) diff.push(k.replace('_', ' '));
-    });
+    // v3.3.06 -- edits to an approved listing go live at once; what changed since Ian approved it is shown first
+    var FIELDS = ['display_name', 'headline', 'roles', 'bio', 'links', 'rates', 'availability', 'samples'];
+    var diff = [], altered = [];
+    if (live && m.changed) FIELDS.forEach(function (k) { if (JSON.stringify(d[k]) !== JSON.stringify(live[k])) diff.push(k.replace('_', ' ')); });
+    if (m.altered && m.reviewed) FIELDS.forEach(function (k) { if (JSON.stringify(live[k]) !== JSON.stringify(m.reviewed[k])) altered.push(k.replace('_', ' ')); });
     // v3.3.02 -- each picture gets ONE plain label under it, and the card a summary line, so a signature
     // that is not the account's name stands out (Ian: "I don't really understand what's going on here").
     // Pictures are backgrounds, not <img>, so the app's own rights marker does not add its outline and
@@ -473,7 +474,8 @@
       '<div class="mkt-rv-top"><b>' + esc(d.display_name || '(no name)') + '</b> <span class="mkt-sub">' + esc(m.status) + (m.paused ? ', paused' : '') + (m.has_live ? ', has a live copy' : '') +
         ' &middot; ' + esc(m.contacts) + ' contact' + (m.contacts === 1 ? '' : 's') + '</span>' +
         '<div class="mkt-sub">Account: ' + esc(m.owner.name) + (m.owner.pen_name ? ' (' + esc(m.owner.pen_name) + ')' : '') + ' &lt;' + esc(m.owner.email) + '&gt;</div></div>' +
-      (diff.length ? '<div class="mkt-diff">Changed since it was approved: ' + esc(diff.join(', ')) + '</div>' : '') +
+      (altered.length ? '<div class="mkt-rv-altered">ALTERED since you approved it, and already live: ' + esc(altered.join(', ')) + '. Accept the changes, or Send back to put the approved version back up.</div>' : '') +
+      (diff.length ? '<div class="mkt-diff">Saved but not published by them yet: ' + esc(diff.join(', ')) + '</div>' : '') +
       '<div class="mkt-head">' + esc(d.headline) + '</div><div class="mkt-pills">' + rolePills(d.roles) + '</div>' +
       '<div class="mkt-bio">' + esc(d.bio) + '</div>' +
       (d.links.length ? '<div class="mkt-links">' + d.links.map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="nofollow noopener noreferrer">' + esc(u) + '</a>'; }).join('') + '</div>' : '') +
@@ -483,7 +485,7 @@
       (m.admin_note ? '<div class="mkt-sub">Last note: \u201c' + esc(m.admin_note) + '\u201d</div>' : '') +
       '<textarea rows="2" maxlength="1000" placeholder="Note (sent to them with Decline and Remove; optional with Approve)"></textarea>' +
       '<div class="mkt-row">' +
-        (m.status !== 'removed' ? '<button type="button" class="mkt-btn mkt-btn-gold" data-rv="approve">Approve</button><button type="button" class="mkt-btn" data-rv="decline">Send back</button><button type="button" class="mkt-btn mkt-danger" data-rv="remove">Remove</button>'
+        (m.status !== 'removed' ? '<button type="button" class="mkt-btn mkt-btn-gold" data-rv="approve">' + (m.altered ? 'Accept changes' : 'Approve') + '</button><button type="button" class="mkt-btn" data-rv="decline">Send back</button><button type="button" class="mkt-btn mkt-danger" data-rv="remove">Remove</button>'
           : '<button type="button" class="mkt-btn" data-rv="restore">Restore</button>') +
         // v3.3.04 -- back to Waiting for review, live copy dropped, nobody emailed (for testing the approval again)
         (m.status !== 'pending' ? '<button type="button" class="mkt-btn mkt-btn-quiet" data-rv="unapprove" title="Puts it back in Waiting for review and takes it off the Marketplace. Nobody is emailed.">Back to review</button>' : '') +

@@ -2268,6 +2268,13 @@ async function migrateGifts(pool) {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_from ON marketplace_contacts(from_user_id, created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_listing ON marketplace_contacts(listing_id)');
   } catch (e) { console.error('[marketplace] migration skipped this boot:', e && e.message); }
+  // v3.3.06 -- TD-1037. reviewed_json: the copy Ian approved. Edits to an approved listing go live at once (live_json),
+  // and the review window shows the listing as Altered while live_json differs from this. Listings approved before
+  // this release take their live copy as the approved one, once (only rows still without one).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS reviewed_json TEXT');
+    await pool.query("UPDATE marketplace_listings SET reviewed_json = live_json WHERE reviewed_json IS NULL AND live_json IS NOT NULL AND status = 'approved'");
+  } catch (e) { console.error('[marketplace] reviewed_json migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

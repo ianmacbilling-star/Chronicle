@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.3.06",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3306-reply-to",
+        "kind": "fix",
+        "public": true,
+        "summary": "Replying to a Campaignia email that names someone to reply to (feedback, email-change notices, content reports, order problem reports) now reaches them.",
+        "detail": "The reply address was set in a form the email service ignores, so replies went to Campaignia's sending address instead. Every email that names someone to reply to now uses it.",
+        "td": [
+          "TD-1037"
+        ]
+      },
+      {
+        "id": "3306-marketplace-live-edits",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): once a listing has been approved, its edits go live at once and show in the review window as Altered; listing and making contact need a confirmed email.",
+        "detail": "Update my listing publishes straight away for an approved listing; support is emailed that a live listing changed. The review window has an Altered (already live) filter, lists what changed since approval, and offers Accept changes or Send back, which puts the approved version back up. A listing never approved still waits for review.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.05",
     "staged_on": "2026-10-27",
     "entries": [
