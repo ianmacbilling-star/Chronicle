@@ -1610,3 +1610,10 @@ async function sendEmailChangeNoticeEmail(name, oldEmail, maskedNewEmail) {
 }
 
 module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+
+// v3.3.01 -- TD-1037 ARTIST MARKETPLACE. Make contact and the review notes (routes/marketplace.js) send through
+// the one sendEmail above, with the sender's address as reply-to so the two members talk directly.
+// Added to the exports here rather than by editing the long list above.
+module.exports.sendMarketplaceEmail = function (to, subject, html, replyTo) {
+  return sendEmail(to, subject, html, replyTo ? { replyTo: replyTo } : undefined);
+};

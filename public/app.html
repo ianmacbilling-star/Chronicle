@@ -19,6 +19,7 @@
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/marketplace.css?v=3.3.01">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -110,6 +111,7 @@
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
+        <a class="user-menu-item mkt-link" href="/library?from=app#marketplace" style="text-decoration:none;color:inherit;">Marketplace</a>   <!-- v3.3.01 -- TD-1037 -->
         <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
         <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">Dashboard</div>
         <div class="user-menu-divider"></div>
@@ -1160,6 +1162,8 @@
               <div id="story-coach-row" class="narr-tools-row" style="flex:1 1 auto;min-width:0;"></div>
               <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
             </div>
+            <!-- v3.3.01 -- TD-1037. Hidden until the Marketplace is switched on. A new tab, so nothing typed here is lost. -->
+            <div class="mkt-link" style="font-size:12px;margin-top:4px;"><a href="/library?from=app#marketplace-writer" target="_blank" rel="noopener" style="color:var(--gold-light,#e8d5a3);">Want a writer or editor? Find one in the Marketplace</a></div>
             <!-- v3.2.59 -- the rights line moved below both boxes, full width (Ian). -->
           </div>
           <div class="form-group">
@@ -1653,6 +1657,16 @@
       </div>
 
 
+      <!-- v3.3.01 -- TD-1037. YOUR MARKETPLACE LISTING. The editor is a window from public/js/marketplace.js. Hidden until the switch is on. -->
+      <div class="settings-section mkt-link" id="mkt-account-section">
+        <div class="settings-section-title">Marketplace listing</div>
+        <div class="settings-section-desc" id="mkt-account-line">Artists, writers and editors can list themselves so Story Masters can find them and get in touch.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" class="btn btn-primary btn-sm" id="mkt-account-btn" onclick="if (window.Mkt) Mkt.openEditor()">Create your listing</button>
+          <a class="btn btn-sm" href="/library?from=app#marketplace" style="text-decoration:none;">Browse the Marketplace</a>
+        </div>
+      </div>
+
       <!-- Account actions (Sign out relocated here from the Settings screen) -->
       <!-- Usage -->
       <div class="settings-section">
@@ -1821,6 +1835,14 @@
         <div class="settings-section-desc">Browse everything users have shared to the public Library and remove anything inappropriate. Removing only un-publishes it; the owner&#39;s archived copy is left intact.</div>
         <button class="btn btn-primary btn-sm" onclick="openAdminLibrary()">&#128218; Open Public Library</button>
         <button class="btn btn-primary btn-sm" onclick="openAdminStories()" style="margin-left:8px;">&#128214; Open Stories</button>
+      </div>
+
+      <!-- v3.3.01 -- TD-1037. ADMIN: the Artist Marketplace switch and the review window (public/js/marketplace.js shows this to admins). -->
+      <div id="admin-mkt-section" class="settings-section" style="display:none;">
+        <div class="settings-section-title">Marketplace</div>
+        <div class="settings-section-desc">The Artist Marketplace. While it is off only admins see it: the Library tab, the links in the app and the listing section in My Account are hidden from everyone else. Listings appear only after you approve them.</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;"><input type="checkbox" id="mkt-admin-switch" onchange="if (window.Mkt) Mkt.setSwitch(this.checked)"> The Marketplace is on for everyone</label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button type="button" class="btn btn-primary btn-sm" onclick="if (window.Mkt) Mkt.openReview()">Review listings</button><span id="mkt-admin-waiting" style="font-size:12px;opacity:0.8;"></span><span id="mkt-admin-msg" class="mkt-msg"></span></div>
       </div>
 
       <!-- ==================== ADMIN TESTING WIDGET ====================
@@ -3894,6 +3916,7 @@
   </div>
 </div>
 <script src="/js/pw-eye.js" defer></script>
+<script src="/js/marketplace.js?v=3.3.01" defer></script>   <!-- v3.3.01 -- TD-1037 -->
 <script>
 (function(){
   try {

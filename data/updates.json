@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.3.01",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3301-marketplace-stage1",
+        "kind": "feature",
+        "public": false,
+        "summary": "Artist Marketplace, stage one (switched off): a Library tab where artists, writers and Campaignia editors list themselves, Make contact by email, and a review window on the Dashboard.",
+        "detail": "Off until launch (Dashboard > Settings > Marketplace); while it is off only admins see the Library tab, the links in the app and the listing section in My Account. A listing appears only after it is approved; editing an approved listing sends the changes for review while the approved copy stays up. Make contact emails the person listed with the sender's address to reply to; nobody's email is shown on a page. Sample pictures get the same watermark check as every upload. Spec: claude/ARTIST_MARKETPLACE_SPEC.md.",
+        "td": [
+          "TD-1037"
+        ]
+      },
+      {
+        "id": "3301-landing-css",
+        "kind": "fix",
+        "public": false,
+        "summary": "Landing pages load the current stylesheet, so a browser that had the old one cached shows the book photo window properly.",
+        "detail": "3.3.00 added the photo window's styles to landing.css without changing the version number the pages ask for, so a cached copy left the photos unstyled until a refresh.",
+        "td": [
+          "TD-1035"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.00",
     "staged_on": "2026-10-27",
     "entries": [

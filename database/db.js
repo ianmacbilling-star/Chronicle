@@ -2253,6 +2253,21 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER NOT NULL DEFAULT 0');
     await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0');
   } catch (e) { console.error('[writing] migration skipped this boot:', e && e.message); }
+  // v3.3.01 -- TD-1037 ARTIST MARKETPLACE (spec claude/ARTIST_MARKETPLACE_SPEC.md). Off until launch: the
+  // switch is seeded '0' once and the Dashboard owns it after that. One listing per user; live_json is the
+  // copy Ian approved and the only thing the directory shows. No foreign keys, like the gift tables, so a
+  // deleted account can never block or cascade (the directory joins users and lists active accounts only).
+  // In its own try, like the writing tables: a boot must never fail over this, and the routes answer cleanly without it.
+  try {
+    await pool.query("INSERT INTO app_settings (setting_key, value) SELECT 'marketplace_enabled', '0' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE setting_key = 'marketplace_enabled')");
+    await pool.query("CREATE TABLE IF NOT EXISTS marketplace_listings (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, display_name TEXT, headline TEXT, roles TEXT, bio TEXT, links TEXT, rates TEXT, availability TEXT, samples TEXT, live_json TEXT, status TEXT NOT NULL DEFAULT 'draft', paused BOOLEAN NOT NULL DEFAULT false, admin_note TEXT, submitted_at TIMESTAMP, reviewed_at TIMESTAMP, reviewed_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_listings_status ON marketplace_listings(status, updated_at)');
+    await pool.query('CREATE TABLE IF NOT EXISTS marketplace_samples (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, url TEXT NOT NULL, verdict TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_samples_user ON marketplace_samples(user_id)');
+    await pool.query('CREATE TABLE IF NOT EXISTS marketplace_contacts (id SERIAL PRIMARY KEY, from_user_id INTEGER, listing_id INTEGER, kind TEXT, message TEXT, emailed BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_from ON marketplace_contacts(from_user_id, created_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_listing ON marketplace_contacts(listing_id)');
+  } catch (e) { console.error('[marketplace] migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
