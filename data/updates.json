@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.98",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3298-creators-apostrophe",
+        "kind": "fix",
+        "public": true,
+        "summary": "Printed books: the note on the details page now reads \u201cthe creators\u2019 stories\u201d (the apostrophe was missing).",
+        "detail": "Books saved or ordered from now on carry the corrected note. Books already saved keep the old wording until they are optimized and saved again.",
+        "td": [
+          "TD-1034"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.97",
     "staged_on": "2026-10-27",
     "entries": [
