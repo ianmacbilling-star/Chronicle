@@ -1106,3 +1106,32 @@
          had become TALLER than the desktop rule it overrides. */
       .hero-text-panel { padding: 22px 16px !important; }
     }
+
+/* v3.3.00 -- TD-1035. "See what they look like" under A REAL BOOK, and the photo window it opens
+   (public/js/book-gallery.js). Photos of real printed books, Ian 2026-10-27. */
+.book-gallery-link { display: inline-block; margin-top: 6px; font-family: 'Crimson Text', serif; font-size: 13px; color: var(--gold-light); text-decoration: underline; text-underline-offset: 3px; opacity: 0.85; }
+.book-gallery-link:hover, .book-gallery-link:focus { color: var(--gold); opacity: 1; }
+html.bkg-open, html.bkg-open body { overflow: hidden; }
+.bkg-overlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; background: rgba(6,4,2,0.88); padding: 16px; }
+.bkg-box { position: relative; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; background: #120c06; border: 1px solid rgba(201,168,76,0.35); border-radius: 10px; padding: 14px 16px 12px; box-sizing: border-box; }
+.bkg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bkg-title { font-family: 'Bangers', cursive; font-size: 22px; letter-spacing: 1px; color: var(--gold); }
+.bkg-x { background: none; border: none; color: var(--gold); font-size: 30px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.bkg-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; flex: 1 1 auto; }
+.bkg-img { display: block; max-width: 100%; max-height: calc(100vh - 230px); object-fit: contain; border-radius: 4px; background: #0a0703; }
+.bkg-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(201,168,76,0.5); background: rgba(12,8,4,0.75); color: var(--gold); font-size: 28px; line-height: 38px; text-align: center; cursor: pointer; padding: 0; }
+.bkg-prev { left: 6px; } .bkg-next { right: 6px; }
+.bkg-cap { text-align: center; font-family: 'Crimson Text', serif; font-style: italic; font-size: 15px; color: rgba(240,232,208,0.85); }
+.bkg-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; justify-content: safe center; }
+.bkg-thumb { flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 4px; background: none; cursor: pointer; opacity: 0.7; }
+.bkg-thumb img { display: block; height: 64px; width: auto; border-radius: 2px; }
+.bkg-thumb.is-on, .bkg-thumb:hover { border-color: var(--gold); opacity: 1; }
+.bkg-note { text-align: center; font-size: 12px; color: rgba(240,232,208,0.5); }
+@media (max-width: 640px) {
+  .bkg-overlay { padding: 8px; }
+  .bkg-box { padding: 10px 10px 8px; }
+  .bkg-title { font-size: 18px; }
+  .bkg-img { max-height: calc(100vh - 200px); }
+  .bkg-nav { width: 36px; height: 36px; font-size: 24px; line-height: 32px; }
+  .bkg-thumb img { height: 52px; }
+}

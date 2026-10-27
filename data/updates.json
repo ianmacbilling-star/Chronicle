@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.00",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3300-real-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "Home, Game Masters and Storyteller pages: \u201cSee what they look like\u201d under A REAL BOOK opens photos of real printed Campaignia books.",
+        "detail": "Ten photographs of books made with Campaignia and printed for their owners (covers and inside pages), one large at a time with arrows and thumbnails. The Storyteller page opens on a family story, the Game Masters page on the fantasy books.",
+        "td": [
+          "TD-1035"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.99",
     "staged_on": "2026-10-27",
     "entries": [
