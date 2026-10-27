@@ -301,7 +301,7 @@ AT LEAST TWO describing sentences for every one that suggests what the person ca
 Use "usually", "sometimes" and "often". NEVER "always", "everyone" or any promise the day might not keep.
 Name feelings gently and in general \u2014 "Some children feel a little nervous, and that is okay" \u2014 and never state as fact how this person feels or looks.
 Be honest about the parts that are uncomfortable and NEVER promise that something will not hurt. No "should", no "bad", no judgement anywhere. End on a calm, positive, true note.
-Example: "Soon it will be time to go to the dentist. Mum drives me there in the car. Usually we park outside the front door. In the waiting room there are chairs and some books. Sometimes I wait for a few minutes. That is okay."`,
+Example: "Soon it will be time to go to the dentist. Mom drives me there in the car. Usually we park outside the front door. In the waiting room there are chairs and some books. Sometimes I wait for a few minutes. That is okay."`,
       system: 'You write calm, literal, first-person stories that prepare a real person for something that is going to happen. You are not a novelist. You never write dramatically, never use metaphor or simile, and never invent how someone feels. You always return valid JSON.' + IP_GUARD
     },
     storybook: {

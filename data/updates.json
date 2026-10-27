@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.99",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3299-mom",
+        "kind": "fix",
+        "public": true,
+        "summary": "Calm & Literal narrative style: its example says \u201cMom\u201d, not \u201cMum\u201d.",
+        "detail": "The style card, the example the writer follows, and the help assistant's sample all say Mom now.",
+        "td": [
+          "TD-1036"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.98",
     "staged_on": "2026-10-27",
     "entries": [
