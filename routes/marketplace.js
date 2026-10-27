@@ -157,12 +157,38 @@ async function mailSafely(to, subject, html, replyTo) {
     return true;
   } catch (e) { console.error('[marketplace] email failed: ' + ((e && e.message) || e)); return false; }
 }
-function mailFrame(title, inner) {
+function mailFrame(title, inner, staff) {
+  if (staff) return '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222;line-height:1.5;">' +
+    '<h2 style="color:#6b4a12;margin:0 0 12px;">' + esc(title) + '</h2>' + inner + '</div>';   // v3.3.03: no member footer on a note to support
   return '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222;line-height:1.5;">' +
     '<h2 style="color:#6b4a12;margin:0 0 12px;">' + esc(title) + '</h2>' + inner +
     '<hr style="border:none;border-top:1px solid #ddd;margin:18px 0 10px;"/>' +
     '<p style="font-size:12px;color:#777;margin:0;">Campaignia Marketplace. Campaignia is not a party to any arrangement you make with another member. ' +
     'You can pause or edit your listing from My Account at <a href="' + esc(appUrl()) + '/app.html">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</a>.</p></div>';
+}
+
+// v3.3.03 -- TD-1037. SOMETHING TO REVIEW: email support (Ian, 2026-10-27: "it should email support email
+// when there is something to review"). Sent each time a listing goes to 'pending' -- a new listing or changes to
+// a live one -- to SUPPORT_EMAIL (the address every other support email uses), with the owner as reply-to.
+// Never throws and is never awaited by the save.
+async function notifySupport(db, uid, row, isChange) {
+  try {
+    const to = String(process.env.SUPPORT_EMAIL || 'support@campaignia.com').trim();
+    const u = await db.prepare('SELECT name, pen_name, email FROM users WHERE id = ?').get(uid);
+    let waiting = 0;
+    try { const c = await db.prepare("SELECT COUNT(*) AS n FROM marketplace_listings WHERE status = 'pending'").get(); waiting = Number(c && c.n) || 0; } catch (e) {}
+    const d = draftOf(row || {});
+    const name = d.display_name || '(no name)';
+    const who = u ? ((u.name || '') + (u.pen_name ? ' (' + u.pen_name + ')' : '') + ' <' + (u.email || '') + '>') : ('user ' + uid);
+    const html = mailFrame('A Marketplace listing to review',
+      '<p><strong>' + esc(name) + '</strong> ' + (isChange ? 'changed their live listing' : 'sent a new listing') + ' for review.</p>' +
+      '<p style="margin:4px 0;"><strong>Account:</strong> ' + esc(who) + '</p>' +
+      '<p style="margin:4px 0;"><strong>Headline:</strong> ' + esc(d.headline) + '</p>' +
+      '<p style="margin:4px 0;"><strong>Offers:</strong> ' + esc(d.roles.join(', ')) + ' &middot; ' + esc(String(d.samples.length)) + ' sample picture' + (d.samples.length === 1 ? '' : 's') + '</p>' +
+      '<p>' + esc(String(waiting)) + ' listing' + (waiting === 1 ? '' : 's') + ' waiting in all. Review them on the Dashboard: Settings &rsaquo; Marketplace &rsaquo; Review listings, at ' +
+      '<a href="' + esc(appUrl()) + '/app.html">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</a>.</p>', true);
+    await mailSafely(to, 'Marketplace: ' + oneLine(name, 60) + (isChange ? ' changed their listing' : ' wants to be listed') + ' \u2014 review needed', html, u && u.email ? u.email : undefined);
+  } catch (e) { console.error('[marketplace] support notice failed: ' + ((e && e.message) || e)); }
 }
 
 // ---------- status ----------
@@ -275,6 +301,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       ).run(...cols.concat([status, (submit && status === 'pending') ? now : (row.submitted_at || null), now, uid]));
     }
     const fresh = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
+    if (submit && status === 'pending') notifySupport(db, uid, fresh, !!live);   // v3.3.03 -- not awaited: the save never waits on email
     res.json({ ok: true, mine: mineOf(fresh) });
   } catch (e) { console.error('[marketplace] save: ' + (e && e.message)); res.status(500).json({ error: 'Could not save your listing right now.' }); }
 });

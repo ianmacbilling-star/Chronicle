@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.03",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3303-marketplace-support-email",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): support gets an email whenever a listing is sent for review, new or changed.",
+        "detail": "Sent to SUPPORT_EMAIL (support@campaignia.com unless set), with the person's name, email, headline, what they offer, how many sample pictures, and how many listings are waiting in all. Reply goes to the person. A plain Save draft sends nothing.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.02",
     "staged_on": "2026-10-27",
     "entries": [
