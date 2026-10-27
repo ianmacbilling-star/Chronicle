@@ -93,17 +93,36 @@ html.mkt-modal-open { overflow: hidden; }
 .mkt-sfirst { display: block; width: 100%; margin-top: 3px; background: none; border: none; color: #e8c766; font: inherit; font-size: 12px; cursor: pointer; text-align: center; padding: 0; }
 .mkt-sfirst-on { color: rgba(240,232,208,0.55); cursor: default; }
 
-/* review window */
-.mkt-rv { margin: 12px 0; padding: 12px 14px; border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; background: rgba(255,255,255,0.02); }
-.mkt-rv-top { margin-bottom: 4px; }
-.mkt-diff { margin: 4px 0; color: #f2c27a; font-size: 13px; }
-.mkt-rv-pics { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-.mkt-rv-pic { position: relative; display: block; }
-.mkt-rv-pic img { width: 110px; height: 82px; object-fit: cover; border-radius: 3px; display: block; }
-.mkt-badge { position: absolute; left: 3px; bottom: 3px; font-size: 10px; padding: 0 5px; border-radius: 6px; background: #444; color: #fff; }
-.mkt-badge-warn { background: #b07a12; }
-.mkt-badge-reject { background: #a2321c; }
-.mkt-badge-ok { background: #2f6b2a; }
+/* review window -- v3.3.02: bigger text throughout (Ian), one label per picture, a summary line */
+.mkt-review { font-size: 17px; }
+.mkt-review .mkt-sub { font-size: 15px; }
+.mkt-review .mkt-head { font-size: 18px; }
+.mkt-review .mkt-pill { font-size: 13px; padding: 2px 10px; }
+.mkt-review .mkt-msg { font-size: 15px; }
+.mkt-review .mkt-btn { font-size: 13px; padding: 9px 18px; }
+.mkt-review textarea, .mkt-review select { font-size: 16px; }
+.mkt-review .mkt-links a { font-size: 16px; }
+.mkt-rv { margin: 14px 0; padding: 14px 16px; border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; background: rgba(255,255,255,0.02); }
+.mkt-rv-top { margin-bottom: 6px; font-size: 18px; }
+.mkt-diff { margin: 6px 0; color: #f2c27a; font-size: 15px; }
+.mkt-rv-summary { margin: 12px 0 8px; padding: 9px 12px; border-left: 4px solid #d97706; background: rgba(217,119,6,0.12); color: #fde68a; font-size: 16px; line-height: 1.45; }
+.mkt-rv-summary.mkt-rv-clean { border-left-color: #4d7c3a; background: rgba(77,124,58,0.12); color: #cfe8c0; }
+.mkt-rv-pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin: 10px 0 12px; }
+.mkt-rv-cell { min-width: 0; }
+.mkt-rv-pic { display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: 3px solid transparent; border-radius: 4px; cursor: zoom-in; background-color: #0a0705; background-size: contain; background-position: center; background-repeat: no-repeat; }
+.mkt-rv-pic:hover { border-color: rgba(201,168,76,0.6); }
+.mkt-rv-pic.mkt-rv-warn { border-color: #d97706; }
+.mkt-rv-pic.mkt-rv-bad { border-color: #dc2626; }
+.mkt-rv-label { margin-top: 4px; font-size: 14px; line-height: 1.3; color: rgba(240,232,208,0.6); }
+.mkt-rv-label.mkt-rv-warn { color: #fbbf24; font-weight: 600; }
+.mkt-rv-label.mkt-rv-bad { color: #fca5a5; font-weight: 600; }
+
+/* the picture viewer -- v3.3.02: a picture fills the screen, however small the file */
+.mkt-zoom { position: fixed; inset: 0; z-index: 10070; background: rgba(4,3,2,0.94); cursor: zoom-out; }
+.mkt-zoom-pic { position: absolute; inset: 24px 24px 56px; background-size: contain; background-position: center; background-repeat: no-repeat; }
+.mkt-zoom-x { position: absolute; top: 8px; right: 14px; background: none; border: none; color: #c9a84c; font-size: 34px; line-height: 1; cursor: pointer; }
+.mkt-zoom-file { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); color: rgba(232,213,163,0.75); font-size: 13px; font-family: 'Crimson Text', Georgia, serif; }
+.mkt-main-a { display: block; width: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
 
 @media (max-width: 720px) {
   .mkt-detail { grid-template-columns: 1fr; }

@@ -62,6 +62,30 @@
     ov.close = close;
     return ov;
   }
+  // v3.3.02 -- A PICTURE VIEWER. Ian: "if you click on an image it opens but it's really small". Clicking used
+  // to open the file itself in a new tab, at its own pixel size. Now it opens over the page, scaled up or down
+  // to fill the screen. Drawn as a background, not an <img>, so the app's rights marker leaves it alone.
+  function zoom(url) {
+    if (!url) return;
+    var lb = document.createElement('div');
+    lb.className = 'mkt-zoom';
+    lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-label', 'Picture');
+    lb.innerHTML = '<div class="mkt-zoom-pic"></div><button type="button" class="mkt-zoom-x" aria-label="Close">&times;</button>' +
+      '<a class="mkt-zoom-file" href="' + esc(url) + '" target="_blank" rel="noopener">Open the file</a>';
+    lb.querySelector('.mkt-zoom-pic').style.backgroundImage = 'url("' + String(url).replace(/["\\\n\r]/g, '') + '")';
+    function close() { if (lb.parentNode) lb.parentNode.removeChild(lb); window.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }   // closes the picture, not the window under it
+    lb.addEventListener('click', function (e) { if (!(e.target.classList && e.target.classList.contains('mkt-zoom-file'))) close(); });
+    window.addEventListener('keydown', onKey, true);
+    document.body.appendChild(lb);
+  }
+  // "This picture looks signed (\u201cFrazetta\u201d)." -> "Frazetta"; the words read on the picture.
+  function signedWords(r) {
+    var out = [];
+    ((r && r.reasons) || []).forEach(function (t) { var m = /\u201c([^\u201d]+)\u201d/.exec(String(t || '')); if (m) out.push(m[1]); });
+    return out;
+  }
+
   function flash(el, text, bad) {
     if (!el) return;
     el.textContent = text || '';
@@ -165,7 +189,7 @@
         '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make.</div></div>';
       body.innerHTML =
         '<div class="mkt-detail">' +
-          '<div class="mkt-detail-pics">' + (main ? '<a class="mkt-main-a" href="' + esc(main) + '" target="_blank" rel="noopener"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></a>' : '') + thumbs + '</div>' +
+          '<div class="mkt-detail-pics">' + (main ? '<button type="button" class="mkt-main-a" data-zoom="' + esc(main) + '" title="Click to see it bigger"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></button>' : '') + thumbs + '</div>' +
           '<div class="mkt-detail-text">' +
             '<div class="mkt-title">' + esc(p.name) + '</div>' +
             '<div class="mkt-head">' + esc(p.headline) + '</div>' +
@@ -177,11 +201,12 @@
             contact +
           '</div></div>';
       body.addEventListener('click', function (e) {
-        var t = e.target.closest ? e.target.closest('[data-src],[data-act]') : null;
+        var t = e.target.closest ? e.target.closest('[data-src],[data-act],[data-zoom]') : null;
         if (!t) return;
-        if (t.getAttribute('data-src')) {
+        if (t.getAttribute('data-zoom')) zoom(t.getAttribute('data-zoom'));
+        else if (t.getAttribute('data-src')) {
           var src = t.getAttribute('data-src');
-          body.querySelector('.mkt-main').src = src; body.querySelector('.mkt-main-a').href = src;
+          body.querySelector('.mkt-main').src = src; body.querySelector('.mkt-main-a').setAttribute('data-zoom', src);
           Array.prototype.forEach.call(body.querySelectorAll('.mkt-thumb'), function (b) { b.classList.toggle('on', b === t); });
         } else if (t.getAttribute('data-act') === 'edit') { ov.close(); openEditor(); }
         else if (t.getAttribute('data-act') === 'send') sendContact(p, t);
@@ -255,7 +280,7 @@
 
     function paintSamples() {
       $('mkt-samples').innerHTML = samples.length ? samples.map(function (u, i) {
-        return '<div class="mkt-sample"><img src="' + esc(u) + '" alt="">' +
+        return '<div class="mkt-sample"><img src="' + esc(u) + '" alt="" data-zoom="' + esc(u) + '" title="Click to see it bigger" style="cursor:zoom-in;">' +
           '<button type="button" class="mkt-sx" data-del="' + i + '" title="Take this one off">&times;</button>' +
           (i ? '<button type="button" class="mkt-sfirst" data-first="' + i + '" title="Make this the card picture">Make first</button>' : '<span class="mkt-sfirst mkt-sfirst-on">Card picture</span>') + '</div>';
       }).join('') : '<div class="mkt-sub">No pictures yet.</div>';
@@ -265,7 +290,8 @@
     $('mkt-f-bio').addEventListener('input', countBio);
     $('mkt-samples').addEventListener('click', function (e) {
       var t = e.target;
-      if (t.getAttribute('data-del') != null) { samples.splice(Number(t.getAttribute('data-del')), 1); paintSamples(); }
+      if (t.getAttribute('data-zoom')) zoom(t.getAttribute('data-zoom'));
+      else if (t.getAttribute('data-del') != null) { samples.splice(Number(t.getAttribute('data-del')), 1); paintSamples(); }
       else if (t.getAttribute('data-first') != null) { var i = Number(t.getAttribute('data-first')); samples.unshift(samples.splice(i, 1)[0]); paintSamples(); }
     });
     $('mkt-file').addEventListener('change', function () {
@@ -351,7 +377,7 @@
     });
   }
   function openReview() {
-    var ov = modal('mkt-modal-wide', '<div class="mkt-title">Marketplace listings</div>' +
+    var ov = modal('mkt-modal-wide mkt-review', '<div class="mkt-title">Marketplace listings</div>' +
       '<div class="mkt-row"><select id="mkt-rv-filter"><option value="pending">Waiting for review</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
       '<span class="mkt-msg" id="mkt-rv-msg"></span></div><div class="mkt-body" id="mkt-rv-list"><span class="mkt-spin"></span></div>');
     var all = [];
@@ -368,6 +394,7 @@
     }
     $('mkt-rv-filter').addEventListener('change', paint);
     $('mkt-rv-list').addEventListener('click', function (e) {
+      if (e.target.getAttribute && e.target.getAttribute('data-zoom')) { zoom(e.target.getAttribute('data-zoom')); return; }
       var act = e.target.getAttribute && e.target.getAttribute('data-rv');
       if (!act) return;
       var card = e.target.closest('.mkt-rv'); var id = card.getAttribute('data-id');
@@ -388,11 +415,26 @@
     if (live && m.changed) ['display_name', 'headline', 'roles', 'bio', 'links', 'rates', 'availability', 'samples'].forEach(function (k) {
       if (JSON.stringify(d[k]) !== JSON.stringify(live[k])) diff.push(k.replace('_', ' '));
     });
+    // v3.3.02 -- each picture gets ONE plain label under it, and the card a summary line, so a signature
+    // that is not the account's name stands out (Ian: "I don't really understand what's going on here").
+    // Pictures are backgrounds, not <img>, so the app's own rights marker does not add its outline and
+    // sentence on top (that is what squeezed the row).
+    var signedAll = [], nSigned = 0, nWm = 0;
     var pics = (d.samples || []).map(function (u) {
-      var r = m.sample_rights[u];
-      var badge = r ? '<span class="mkt-badge mkt-badge-' + esc(r.verdict) + '" title="' + esc((r.reasons || []).join(' ')) + '">' + esc({ warn: 'signed?', reject: 'watermark', ok: 'checked' }[r.verdict] || r.verdict) + '</span>' : '';
-      return '<a class="mkt-rv-pic" href="' + esc(u) + '" target="_blank" rel="noopener"><img src="' + esc(u) + '" alt="">' + badge + '</a>';
+      var r = m.sample_rights[u], words = signedWords(r), label = '', cls = '';
+      if (r && r.verdict === 'reject') { nWm++; cls = ' mkt-rv-bad'; label = 'Watermark' + (words.length ? ': \u201c' + words.join('\u201d, \u201c') + '\u201d' : ''); }
+      else if (r && r.verdict === 'warn') { nSigned++; cls = ' mkt-rv-warn'; signedAll = signedAll.concat(words); label = words.length ? 'Signed \u201c' + words.join('\u201d, \u201c') + '\u201d' : 'Looks signed'; }
+      return '<div class="mkt-rv-cell"><button type="button" class="mkt-rv-pic' + cls + '" data-zoom="' + esc(u) + '" title="Click to see it bigger" style="background-image:url(&quot;' + esc(String(u).replace(/["\\\n\r]/g, '')) + '&quot;)"></button>' +
+        '<div class="mkt-rv-label' + cls + '">' + esc(label || 'No signature or watermark seen') + '</div></div>';
     }).join('');
+    var total = (d.samples || []).length;
+    var summary = '';
+    if (nSigned || nWm) {
+      summary = '<div class="mkt-rv-summary">' +
+        (nSigned ? esc(nSigned + ' of ' + total + ' picture' + (total === 1 ? '' : 's') + ' look' + (nSigned === 1 ? 's' : '') + ' signed') + (signedAll.length ? ': <b>\u201c' + signedAll.map(esc).join('\u201d, \u201c') + '\u201d</b>' : '') + '. ' : '') +
+        (nWm ? esc(nWm + ' with a watermark. ') : '') +
+        'Account: <b>' + esc(m.owner.name || '') + (m.owner.pen_name ? ' (' + esc(m.owner.pen_name) + ')' : '') + '</b>. If the names don\u2019t match, it may not be their work.</div>';
+    } else if (total) summary = '<div class="mkt-rv-summary mkt-rv-clean">No signatures or watermarks seen on the ' + total + ' picture' + (total === 1 ? '' : 's') + '. The check can\u2019t recognise well-known art, so look at them yourself.</div>';
     return '<div class="mkt-rv" data-id="' + esc(m.id) + '">' +
       '<div class="mkt-rv-top"><b>' + esc(d.display_name || '(no name)') + '</b> <span class="mkt-sub">' + esc(m.status) + (m.paused ? ', paused' : '') + (m.has_live ? ', has a live copy' : '') +
         ' &middot; ' + esc(m.contacts) + ' contact' + (m.contacts === 1 ? '' : 's') + '</span>' +
@@ -403,7 +445,7 @@
       (d.links.length ? '<div class="mkt-links">' + d.links.map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="nofollow noopener noreferrer">' + esc(u) + '</a>'; }).join('') + '</div>' : '') +
       (d.rates ? '<div class="mkt-sub">Rates: ' + esc(d.rates) + '</div>' : '') +
       '<div class="mkt-sub">Availability: ' + esc(AVAIL_NAMES[d.availability] || d.availability) + '</div>' +
-      '<div class="mkt-rv-pics">' + pics + '</div>' +
+      summary + '<div class="mkt-rv-pics">' + pics + '</div>' +
       (m.admin_note ? '<div class="mkt-sub">Last note: \u201c' + esc(m.admin_note) + '\u201d</div>' : '') +
       '<textarea rows="2" maxlength="1000" placeholder="Note (sent to them with Decline and Remove; optional with Approve)"></textarea>' +
       '<div class="mkt-row">' +

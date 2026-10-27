@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.02",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3302-marketplace-review",
+        "kind": "fix",
+        "public": false,
+        "summary": "Marketplace (still switched off): bigger text in the review window, one plain label under each sample picture, and a line saying whose name is signed on the pictures beside the account's name.",
+        "detail": "The app's own picture marker no longer adds its outline and sentence on top of the review window's pictures (that squeezed the row). A listing with no signatures says so, and that the check can't recognise well-known art. Clicking a sample (in the review window, the editor, or a listing on the Library tab) now opens it filling the screen instead of the file at its own small size.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.01",
     "staged_on": "2026-10-27",
     "entries": [
