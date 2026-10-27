@@ -19,7 +19,7 @@
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/style.css">
-<link rel="stylesheet" href="/css/marketplace.css?v=3.3.04">
+<link rel="stylesheet" href="/css/marketplace.css?v=3.3.05">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -111,7 +111,7 @@
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
-        <a class="user-menu-item mkt-link" href="/library?from=app#marketplace" style="text-decoration:none;color:inherit;">Marketplace</a>   <!-- v3.3.01 -- TD-1037 -->
+        <div class="user-menu-item mkt-live-link" onclick="closeUserMenu();location.href='/library?from=app#marketplace'">Marketplace</div>   <!-- v3.3.05 -- TD-1037: same look as the items around it; shown only when the Marketplace is ON -->
         <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
         <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">Dashboard</div>
         <div class="user-menu-divider"></div>
@@ -3916,7 +3916,7 @@
   </div>
 </div>
 <script src="/js/pw-eye.js" defer></script>
-<script src="/js/marketplace.js?v=3.3.04" defer></script>   <!-- v3.3.01 -- TD-1037 -->
+<script src="/js/marketplace.js?v=3.3.05" defer></script>   <!-- v3.3.01 -- TD-1037 -->
 <script>
 (function(){
   try {

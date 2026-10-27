@@ -36,6 +36,7 @@
       var root = document.documentElement;
       root.classList.toggle('mkt-on', !!STATUS.show);
       root.classList.toggle('mkt-preview', !!(STATUS.show && !STATUS.enabled));
+      root.classList.toggle('mkt-live', !!STATUS.enabled);   // v3.3.05 -- the user menu item shows only when it is really on, admins too (Ian)
       paintAccount();
       paintAdmin();
       var w = statusWaiters; statusWaiters = [];
@@ -72,7 +73,21 @@
     lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-label', 'Picture');
     lb.innerHTML = '<div class="mkt-zoom-pic"></div><button type="button" class="mkt-zoom-x" aria-label="Close">&times;</button>' +
       '<a class="mkt-zoom-file" href="' + esc(url) + '" target="_blank" rel="noopener">Open the file</a>';
-    lb.querySelector('.mkt-zoom-pic').style.backgroundImage = 'url("' + String(url).replace(/["\\\n\r]/g, '') + '")';
+    var pic = lb.querySelector('.mkt-zoom-pic');
+    pic.style.backgroundImage = 'url("' + String(url).replace(/["\\\n\r]/g, '') + '")';
+    // v3.3.05 -- AT MOST TWICE ITS REAL SIZE. Stretched further, a small picture goes soft and blocky (Ian: "when
+    // you look at the pictures big they look bad"). Big pictures still shrink to fit the screen.
+    try {
+      var probe = new Image();
+      probe.onload = function () {
+        var w = probe.naturalWidth, h = probe.naturalHeight;
+        if (!w || !h || !lb.parentNode) return;
+        var fw = Math.max(100, (window.innerWidth || 1200) - 48), fh = Math.max(100, (window.innerHeight || 800) - 80);
+        var k = Math.min(fw / w, fh / h, 2);
+        pic.style.cssText += ';inset:auto;left:50%;top:calc(50% - 16px);transform:translate(-50%,-50%);width:' + Math.round(w * k) + 'px;height:' + Math.round(h * k) + 'px;';
+      };
+      probe.src = url;
+    } catch (e) {}
     function close() { if (lb.parentNode) lb.parentNode.removeChild(lb); window.removeEventListener('keydown', onKey, true); }
     function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }   // closes the picture, not the window under it
     lb.addEventListener('click', function (e) { if (!(e.target.classList && e.target.classList.contains('mkt-zoom-file'))) close(); });

@@ -30,6 +30,7 @@ const ROLES = ['artist', 'writer', 'editor'];
 const AVAIL = ['open', 'limited', 'closed'];
 const KINDS = ['commission', 'campaign', 'question'];
 const MAX_SAMPLES = 10;                // v3.3.04: was 6 (Ian, 2026-10-27)
+const MIN_SAMPLE_SIDE = 800;           // v3.3.05: a sample's longer side, in pixels (Ian: small ones look bad shown big)
 const MAX_SAMPLE_UPLOADS = 60;          // stored pictures per user, ever (each costs one small rights look); v3.3.04: was 40
 const CONTACT_PER_LISTING_MS = 24 * 60 * 60 * 1000;
 const CONTACT_PER_DAY = 8;
@@ -335,6 +336,13 @@ router.delete('/mine', requireAuth, gate, async function (req, res) {
 router.post('/mine/samples', requireAuth, gate, guardUpload(uploadSingle, 'marketplace'), async function (req, res) {
   try {
     if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'Choose a picture to upload.' });
+    // v3.3.05 -- TOO SMALL TO SHOW YOUR WORK. Checked before anything is stored or looked at, so a refused picture
+    // costs nothing. HEIC has already been converted by guardUpload, so this reads the real picture. If its size
+    // cannot be read, the upload goes on as before (the watermark check still runs).
+    const dims = await sampleSize(req.file.buffer);
+    if (dims && Math.max(dims.w, dims.h) < MIN_SAMPLE_SIDE) {
+      return res.status(400).json({ error: 'This picture is too small to show your work well (' + dims.w + ' \u00d7 ' + dims.h + '). Upload one at least ' + MIN_SAMPLE_SIDE + ' pixels wide or tall.', too_small: true });
+    }
     const db = await getDb();
     const uid = req.session.userId;
     const n = await db.prepare('SELECT COUNT(*) AS n FROM marketplace_samples WHERE user_id = ?').get(uid);
@@ -357,6 +365,17 @@ router.post('/mine/samples', requireAuth, gate, guardUpload(uploadSingle, 'marke
     res.json({ ok: true, url: url, verdict: verdict });
   } catch (e) { console.error('[marketplace] sample: ' + (e && e.message)); res.status(500).json({ error: 'Could not upload that picture right now.' }); }
 });
+
+// v3.3.05 -- a picture's width and height, or null. sharp is already a dependency; required here so a missing
+// or broken sharp never stops the route loading.
+async function sampleSize(buf) {
+  try {
+    const m = await require('sharp')(buf, { failOn: 'none' }).metadata();
+    if (!m || !m.width || !m.height) return null;
+    const turned = m.orientation && m.orientation >= 5;   // a phone photo stored on its side
+    return turned ? { w: m.height, h: m.width } : { w: m.width, h: m.height };
+  } catch (e) { return null; }
+}
 
 // ---------- Make contact ----------
 router.post('/listings/:id/contact', requireAuth, gate, async function (req, res) {
@@ -483,4 +502,4 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
 });
 
 module.exports = router;
-module.exports._test = { cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
+module.exports._test = { sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };

@@ -6,6 +6,8 @@
    hidden unless marketplace.js has put mkt-on on <html> (the switch is on, or an admin is looking).
    A link drawn later by app.js is covered by the same rule, so nothing can show early by accident. */
 html:not(.mkt-on) .mkt-link { display: none !important; }
+/* v3.3.05 -- the user menu's Marketplace item: only when the switch is ON, even for admins (Ian, 2026-10-27). */
+html:not(.mkt-live) .mkt-live-link { display: none !important; }
 
 .mkt-wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 50px; color: #f0e8d0; font-family: 'Crimson Text', Georgia, serif; }
 .mkt-preview-line { margin: 0 0 12px; padding: 8px 12px; border: 1px solid rgba(232,160,48,0.6); border-radius: 4px; background: rgba(232,160,48,0.12); color: #f2c27a; font-size: 13px; text-align: center; }

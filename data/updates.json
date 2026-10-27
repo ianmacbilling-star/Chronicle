@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.05",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3305-marketplace-picture-size",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): sample pictures must be at least 800 pixels on the longer side; the picture viewer enlarges a picture to at most twice its real size; the user menu's Marketplace item matches the others and shows only once the Marketplace is on.",
+        "detail": "A smaller sample is refused before anything is stored or checked, with its size in the message. Shown full screen, small pictures had been stretched until they looked soft and blocky; big pictures still shrink to fit the screen.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.04",
     "staged_on": "2026-10-27",
     "entries": [
