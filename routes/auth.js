@@ -11,7 +11,7 @@ const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendWelcomeEmai
 
 // Current Terms of Service / EULA version. Bump when the terms change so we
 // can require re-acceptance later. Stored per user at sign-up.
-const TOS_VERSION = '1.0';
+const TOS_VERSION = '1.3';   // v3.2.96 -- TD-1030: matches the pages (1.2 had not been carried here)
 
 // Whole years between a YYYY-MM-DD date string and today. Returns null if
 // the input is not a valid date.
