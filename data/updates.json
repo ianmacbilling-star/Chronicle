@@ -1,5 +1,53 @@
 [
   {
+    "version": "3.3.00",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3300-real-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "Home, Game Masters and Storyteller pages: \u201cSee what they look like\u201d under A REAL BOOK opens photos of real printed Campaignia books.",
+        "detail": "Ten photographs of books made with Campaignia and printed for their owners (covers and inside pages), one large at a time with arrows and thumbnails. The Storyteller page opens on a family story, the Game Masters page on the fantasy books.",
+        "td": [
+          "TD-1035"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.99",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3299-mom",
+        "kind": "fix",
+        "public": true,
+        "summary": "Calm & Literal narrative style: its example says \u201cMom\u201d, not \u201cMum\u201d.",
+        "detail": "The style card, the example the writer follows, and the help assistant's sample all say Mom now.",
+        "td": [
+          "TD-1036"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.98",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3298-creators-apostrophe",
+        "kind": "fix",
+        "public": true,
+        "summary": "Printed books: the note on the details page now reads \u201cthe creators\u2019 stories\u201d (the apostrophe was missing).",
+        "detail": "Books saved or ordered from now on carry the corrected note. Books already saved keep the old wording until they are optimized and saved again.",
+        "td": [
+          "TD-1034"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.97",
     "staged_on": "2026-10-27",
     "entries": [

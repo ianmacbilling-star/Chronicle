@@ -711,7 +711,7 @@ dramatic angles.
 **You write one into the {session} the same way you write anything else** — describe the
 situation as a list of steps, in order, and let the genre do the rest:
 
-> *Johnny waits in the waiting room with Mum. There are chairs and a box of books. The
+> *Johnny waits in the waiting room with Mom. There are chairs and a box of books. The
 > assistant calls Johnny's name and walks him back. Johnny sits in the big chair and it
 > tips backwards. The dentist counts Johnny's teeth with a small mirror. Sometimes the
 > cleaner is buzzy and tickly. Afterwards Johnny chooses a sticker.*

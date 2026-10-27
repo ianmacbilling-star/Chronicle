@@ -6305,7 +6305,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
           // state what is certainly true and nothing more. Saying the work IS based on the creator's
           // stories and descriptions is a much smaller assertion than the v3.0.390 sentence that was
           // reverted for claiming HOW the book was made -- it describes the input, not the process.
-          'This story was created on Campaignia.com. Narrative text and illustrations are based on the creators stories and descriptions and were produced in part or entirely with the assistance of AI tools. All characters and original content remain the property of their respective creators.</div>' +
+          'This story was created on Campaignia.com. Narrative text and illustrations are based on the creators&rsquo; stories and descriptions and were produced in part or entirely with the assistance of AI tools. All characters and original content remain the property of their respective creators.</div>' +
       '</div>' +
     '</div>';
 
