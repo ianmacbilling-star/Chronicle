@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.2.97",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3297-faq-ai-safe",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Home, Game Masters and Storyteller pages: the FAQ now answers \u201cIs my work safe with AI?\u201d",
+        "detail": "It replaces \u201cDo I need my own AI API keys?\u201d: the AI is built in with nothing to set up, and neither Campaignia nor our AI providers ever train AI models on your stories or art. The help assistant gives the same answer, and names the providers if asked.",
+        "td": [
+          "TD-1033"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.96",
     "staged_on": "2026-10-27",
     "entries": [
