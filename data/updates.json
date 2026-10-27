@@ -1,5 +1,69 @@
 [
   {
+    "version": "3.2.97",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3297-faq-ai-safe",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Home, Game Masters and Storyteller pages: the FAQ now answers \u201cIs my work safe with AI?\u201d",
+        "detail": "It replaces \u201cDo I need my own AI API keys?\u201d: the AI is built in with nothing to set up, and neither Campaignia nor our AI providers ever train AI models on your stories or art. The help assistant gives the same answer, and names the providers if asked.",
+        "td": [
+          "TD-1033"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.96",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3296-no-ai-training",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Terms of Service and Privacy Policy 1.3: we never use your stories or pictures to train AI, and our AI providers' terms with us forbid it too.",
+        "detail": "Terms section 4 gains a No AI training paragraph, and Privacy Policy section 3 says the same in plain words. If a provider ever changed its terms, we would move to one that keeps this promise. Both pages are now version 1.3, dated October 27, 2026.",
+        "td": [
+          "TD-1030"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.95",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3295-coach-wording",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Writing Coach: shorter wording on the Feedback tab and in the Story tour.",
+        "detail": "The Feedback tab on a narrative box now says \u201cGet honest feedback \u2014 hit the button below.\u201d The Story tour's Writing Coach step says 4 uses per token.",
+        "td": [
+          "TD-1028"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.2.94",
+    "staged_on": "2026-10-26",
+    "entries": [
+      {
+        "id": "3294-long-titles",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A long campaign or session name no longer pushes the buttons beside it onto another line.",
+        "detail": "On a wide screen the name stays on one line and ends with \u2026, with the buttons kept on the right; hover the name to read all of it. On a phone the name uses at most two lines. Editing the name still shows the whole of it.",
+        "td": [
+          "TD-1027"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.2.93",
     "staged_on": "2026-10-26",
     "entries": [

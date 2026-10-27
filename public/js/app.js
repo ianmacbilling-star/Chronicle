@@ -19024,7 +19024,7 @@ function wtStartHtml(id) {
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">' + wtStoryFbLabel('Get feedback') + '</button>' +
     '<p class="wc-note">It reads the whole box: one use for every 10,000 words.</p>';
-  if (id === 'feedback') return '<p class="wc-text">An honest verdict on this box \u2014 sometimes \u201cI wouldn\u2019t change a thing!\u201d \u2014 and tips (each with a <b>Show me</b>) only where they would make it better.</p>' +
+  if (id === 'feedback') return '<p class="wc-text">Get honest feedback \u2014 hit the button below.</p>' +   // v3.2.95 -- TD-1028, Ian's wording
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';
@@ -37533,3 +37533,24 @@ function prepAttestChanged(box) {
   var st = document.getElementById('novel-publish-status');
   if (box && box.checked && st && st.textContent === PREP_ATTEST_NAG) { st.style.display = 'none'; st.textContent = ''; st.style.color = ''; }
 }
+
+// =====================================================================================
+// v3.2.94 -- TD-1027. The campaign and session titles are cut to one line (two on a phone) by style.css, so the full
+// name goes in the title attribute and shows on hover. Kept in step by watching the two name boxes, because four
+// places write them (the render functions and both saves); nothing is set while the name is being edited.
+// =====================================================================================
+function _hdrTitleTips() {
+  ['sessions-camp-name', 'session-detail-name'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || el._hdrTips) return;
+    el._hdrTips = true;
+    var sync = function () {
+      if (el.querySelector('input')) { el.removeAttribute('title'); return; }
+      var t = (el.textContent || '').trim();
+      if (t) { if (el.getAttribute('title') !== t) el.setAttribute('title', t); } else el.removeAttribute('title');
+    };
+    sync();
+    try { new MutationObserver(sync).observe(el, { childList: true, characterData: true, subtree: true }); } catch (e) {}
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _hdrTitleTips); else _hdrTitleTips();

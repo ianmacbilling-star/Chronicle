@@ -2341,6 +2341,15 @@ Friction points and what's actually going on.
 - **Does the coach know Campaignia wrote the narrative?** No. It judges the text blind, so
   Campaignia's own writing gets no free pass.
 
+- **Is my work safe with AI? / Do you train AI on my stories?** Neither Campaignia nor our AI
+  providers ever train AI models on your stories or art. The AI is built into Campaignia: no API keys
+  and nothing to set up. The Terms of Service (section 4) and Privacy Policy (section 3) say so too.
+- **Which AI does Campaignia use?** Only say this when asked: Anthropic's Claude for the words (Generate
+  Story, the narrative, the Writing Coach and this help) and fal.ai for the pictures. Their terms with
+  us forbid using your content to train or improve their models. If a provider ever changed that, we
+  would move to one that keeps the promise. The Privacy Policy (section 4) lists them.
+- **Do I need my own AI API keys?** No. Everything is built in.
+
 - **What is the Canonical?** The campaign's official book: what members read, what every other
   version shows on sessions it hasn't made its own, and where new sessions begin. It belongs to
   the Story Master. See **§11 Versions** for the full picture, and for making another version the
