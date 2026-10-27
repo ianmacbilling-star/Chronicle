@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.04",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3304-marketplace-ten-bulk-unapprove",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): up to 10 sample pictures, several chosen at once; and a Back to review button in the review window.",
+        "detail": "Choose several pictures in one go: they upload one after another through the usual watermark check, stop at 10, and a line says how many were added, which look signed and which were refused. Back to review (admin) puts any listing that is not waiting back into Waiting for review and takes it off the Marketplace, emailing nobody, so the approval can be tried again.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.03",
     "staged_on": "2026-10-27",
     "entries": [

@@ -29,8 +29,8 @@ const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const ROLES = ['artist', 'writer', 'editor'];
 const AVAIL = ['open', 'limited', 'closed'];
 const KINDS = ['commission', 'campaign', 'question'];
-const MAX_SAMPLES = 6;
-const MAX_SAMPLE_UPLOADS = 40;          // stored pictures per user, ever (each costs one small rights look)
+const MAX_SAMPLES = 10;                // v3.3.04: was 6 (Ian, 2026-10-27)
+const MAX_SAMPLE_UPLOADS = 60;          // stored pictures per user, ever (each costs one small rights look); v3.3.04: was 40
 const CONTACT_PER_LISTING_MS = 24 * 60 * 60 * 1000;
 const CONTACT_PER_DAY = 8;
 const LIMITS = { display_name: 60, headline: 120, bio: 2000, rates: 200, link: 300, note: 1000, message: 2000 };
@@ -461,6 +461,12 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
       body = '<p>Your listing has been removed from the Campaignia Marketplace.</p>' +
         '<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #c9a84c;background:#faf6ea;white-space:pre-wrap;">' + esc(note) + '</blockquote>' +
         '<p>If you think this was a mistake, reply to this email.</p>';
+    } else if (action === 'unapprove') {
+      // v3.3.04 -- BACK TO REVIEW (Ian, 2026-10-27: "a way for me to unapprove a listing so I can test the approval
+      // process over and over"). The listing goes back to 'pending' as if just sent: the approved copy is dropped,
+      // so it leaves the directory, and nobody is emailed (neither the person nor support).
+      await db.prepare("UPDATE marketplace_listings SET status = 'pending', live_json = NULL, admin_note = ?, submitted_at = ?, reviewed_at = NULL, reviewed_by = NULL, updated_at = ? WHERE id = ?")
+        .run(note, now, now, row.id);
     } else if (action === 'restore') {
       const st = row.live_json ? 'approved' : 'pending';
       await db.prepare('UPDATE marketplace_listings SET status = ?, admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?').run(st, note, now, by, now, row.id);

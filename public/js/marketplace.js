@@ -260,9 +260,9 @@
           return '<label><input type="checkbox" value="' + r + '"' + (d.roles.indexOf(r) >= 0 ? ' checked' : '') + '> ' + esc(ROLE_NAMES[r]) + '</label>';
         }).join('') + '</div>' +
         '<label class="mkt-label" for="mkt-f-bio">About you and your work <span class="mkt-count" id="mkt-bio-count"></span></label><textarea id="mkt-f-bio" maxlength="2000" rows="6" placeholder="Who you are, what you like to make, what a project with you looks like.">' + esc(d.bio) + '</textarea>' +
-        '<div class="mkt-label">Sample pictures <span class="mkt-sub">(up to 6, your own work; the first is your card picture)</span></div>' +
+        '<div class="mkt-label">Sample pictures <span class="mkt-sub">(up to 10, your own work; the first is your card picture; you can choose several at once)</span></div>' +
         '<div class="mkt-samples" id="mkt-samples"></div>' +
-        '<div class="mkt-row"><label class="mkt-btn"><input type="file" id="mkt-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" hidden>Upload a picture</label><span class="mkt-msg" id="mkt-up-msg"></span></div>' +
+        '<div class="mkt-row"><label class="mkt-btn"><input type="file" id="mkt-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple hidden>Upload pictures</label><span class="mkt-msg" id="mkt-up-msg"></span></div>' +
         '<div class="mkt-label">Links <span class="mkt-sub">(portfolio, ArtStation, website; up to 3)</span></div>' +
         links.map(function (u, i) { return '<input class="mkt-f-link" maxlength="300" placeholder="https://" value="' + esc(u) + '">'; }).join('') +
         '<label class="mkt-label" for="mkt-f-rates">Rates <span class="mkt-sub">(optional)</span></label><input id="mkt-f-rates" maxlength="200" placeholder="e.g. From $40 a panel; ask me for a quote" value="' + esc(d.rates) + '">' +
@@ -294,17 +294,36 @@
       else if (t.getAttribute('data-del') != null) { samples.splice(Number(t.getAttribute('data-del')), 1); paintSamples(); }
       else if (t.getAttribute('data-first') != null) { var i = Number(t.getAttribute('data-first')); samples.unshift(samples.splice(i, 1)[0]); paintSamples(); }
     });
+    // v3.3.04 -- SEVERAL AT ONCE (Ian: "let them upload them in bulk"). The files go up one after another, each
+    // through the same upload and watermark check as before, in the order chosen; it stops when the listing is full.
+    var upBusy = false;
     $('mkt-file').addEventListener('change', function () {
-      var f = this.files && this.files[0]; this.value = '';
-      if (!f) return;
-      if (samples.length >= (data.max_samples || 6)) { flash($('mkt-up-msg'), 'Six is the most. Take one off first.', true); return; }
-      var fd = new FormData(); fd.append('image', f);
-      flash($('mkt-up-msg'), 'Uploading and checking\u2026');
-      api('POST', '/api/marketplace/mine/samples', fd).then(function (x) {
-        if (!x.ok) { flash($('mkt-up-msg'), x.j.error || 'Could not upload that picture.', true); return; }
-        samples.push(x.j.url); paintSamples();
-        flash($('mkt-up-msg'), x.j.verdict === 'warn' ? 'Added. It looks signed, which is fine if it is your signature.' : 'Added. Save to keep it.');
-      });
+      var files = Array.prototype.slice.call(this.files || []); this.value = '';
+      if (!files.length || upBusy) return;
+      var max = data.max_samples || 10, room = max - samples.length;
+      if (room <= 0) { flash($('mkt-up-msg'), max + ' is the most. Take one off first.', true); return; }
+      var skipped = files.length > room ? files.length - room : 0;
+      files = files.slice(0, room);
+      var added = 0, signed = 0, refused = [], i = 0;
+      upBusy = true;
+      (function next() {
+        if (i >= files.length) {
+          upBusy = false;
+          var msg = added ? (added + ' added' + (signed ? ' (' + signed + ' look' + (signed === 1 ? 's' : '') + ' signed, which is fine if it is your signature)' : '') + '. Save to keep ' + (added === 1 ? 'it' : 'them') + '.') : 'Nothing added.';
+          if (refused.length) msg += ' Not added: ' + refused.join(' ');
+          if (skipped) msg += ' ' + skipped + ' more left out: ' + max + ' is the most.';
+          flash($('mkt-up-msg'), msg, !added);
+          return;
+        }
+        var f = files[i++];
+        flash($('mkt-up-msg'), 'Uploading and checking ' + (files.length > 1 ? i + ' of ' + files.length : '') + '\u2026');
+        var fd = new FormData(); fd.append('image', f);
+        api('POST', '/api/marketplace/mine/samples', fd).then(function (x) {
+          if (!x.ok) refused.push((f.name || 'A picture') + ': ' + (x.j.error || 'could not be uploaded.'));
+          else { samples.push(x.j.url); added++; if (x.j.verdict === 'warn') signed++; paintSamples(); }
+          next();
+        });
+      })();
     });
     function collect(submit) {
       return {
@@ -403,7 +422,7 @@
       api('POST', '/api/marketplace/admin/listings/' + id + '/review', { action: act, note: note }).then(function (x) {
         e.target.disabled = false;
         if (!x.ok) { flash($('mkt-rv-msg'), x.j.error || 'Could not do that.', true); return; }
-        flash($('mkt-rv-msg'), 'Done: ' + act + (x.j.emailed ? ' (emailed them)' : ''));
+        flash($('mkt-rv-msg'), act === 'unapprove' ? 'Back in Waiting for review. Nobody was emailed.' : ('Done: ' + act + (x.j.emailed ? ' (emailed them)' : '')));
         load(); loadStatus();
       });
     });
@@ -451,6 +470,8 @@
       '<div class="mkt-row">' +
         (m.status !== 'removed' ? '<button type="button" class="mkt-btn mkt-btn-gold" data-rv="approve">Approve</button><button type="button" class="mkt-btn" data-rv="decline">Send back</button><button type="button" class="mkt-btn mkt-danger" data-rv="remove">Remove</button>'
           : '<button type="button" class="mkt-btn" data-rv="restore">Restore</button>') +
+        // v3.3.04 -- back to Waiting for review, live copy dropped, nobody emailed (for testing the approval again)
+        (m.status !== 'pending' ? '<button type="button" class="mkt-btn mkt-btn-quiet" data-rv="unapprove" title="Puts it back in Waiting for review and takes it off the Marketplace. Nobody is emailed.">Back to review</button>' : '') +
       '</div></div>';
   }
 
