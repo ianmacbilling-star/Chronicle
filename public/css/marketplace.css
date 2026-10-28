@@ -179,3 +179,10 @@ a.mkt-card { text-decoration: none; }
 .mkt-page-contact { margin-top: 18px; }
 .mkt-page-contact .mkt-contact { margin-top: 0; }
 .mkt-page textarea, .mkt-page select { width: 100%; box-sizing: border-box; background: #0d0804; color: #f0e8d0; border: 1px solid rgba(201,168,76,0.4); border-radius: 4px; padding: 8px 10px; font-family: 'Crimson Text', Georgia, serif; font-size: 15px; margin-bottom: 6px; }
+
+/* v3.3.10 -- how the art is made: tags on cards and pages; AI is marked plainly in its own colour */
+.mkt-media { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+.mkt-medium-tag { font-size: 11px; color: #e8dcc0; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); border-radius: 9px; padding: 1px 8px; }
+.mkt-medium-tag.mkt-medium-ai { color: #dbeafe; background: rgba(59,90,160,0.35); border-color: #5b7bc0; }
+.mkt-medium-text { font-style: italic; color: rgba(240,232,208,0.85); margin-top: 3px; }
+#mkt-media-box[hidden] { display: none; }

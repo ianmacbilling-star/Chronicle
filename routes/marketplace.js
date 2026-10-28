@@ -29,6 +29,17 @@ const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const ROLES = ['artist', 'writer', 'editor'];
 const AVAIL = ['open', 'limited', 'closed'];
 const KINDS = ['commission', 'campaign', 'question'];
+// v3.3.10 -- HOW THE ART IS MADE (Ian, 2026-10-27: "a Medium field... including AI art"). Tick boxes, any that apply,
+// so the labels stay the same everywhere and AI work is always called AI; plus "medium", a line in their own words.
+// Asked only of listings that offer art.
+const MEDIA = ['traditional', 'digital', '3d', 'ai-generated', 'ai-assisted'];
+const MEDIA_NAMES = { traditional: 'Traditional', digital: 'Digital', '3d': '3D', 'ai-generated': 'AI-generated', 'ai-assisted': 'AI-assisted' };
+function cleanMedia(v) {
+  const list = Array.isArray(v) ? v : String(v || '').split(',');
+  const out = [];
+  list.forEach(function (x) { x = String(x || '').trim().toLowerCase(); if (MEDIA.indexOf(x) >= 0 && out.indexOf(x) < 0) out.push(x); });
+  return MEDIA.filter(function (x) { return out.indexOf(x) >= 0; });   // always in the same order
+}
 const MAX_SAMPLES = 10;                // v3.3.04: was 6 (Ian, 2026-10-27)
 // v3.3.07 -- the Marketplace Terms (public/marketplace-terms.html) and the version a listing must have accepted to be
 // sent for review or updated. Change it together with the version line on that page; everyone then ticks again.
@@ -37,7 +48,7 @@ const MIN_SAMPLE_SIDE = 800;           // v3.3.05: a sample's longer side, in pi
 const MAX_SAMPLE_UPLOADS = 60;          // stored pictures per user, ever (each costs one small rights look); v3.3.04: was 40
 const CONTACT_PER_LISTING_MS = 24 * 60 * 60 * 1000;
 const CONTACT_PER_DAY = 8;
-const LIMITS = { display_name: 60, headline: 120, bio: 2000, rates: 200, link: 300, note: 1000, message: 2000 };
+const LIMITS = { medium: 80, display_name: 60, headline: 120, bio: 2000, rates: 200, link: 300, note: 1000, message: 2000 };
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter });
 const uploadSingle = upload.single('image');
@@ -124,7 +135,8 @@ function draftOf(row) {
     display_name: row.display_name || '', headline: row.headline || '', roles: cleanRoles(row.roles),
     bio: row.bio || '', links: jparse(row.links, []), rates: row.rates || '',
     availability: AVAIL.indexOf(row.availability) >= 0 ? row.availability : 'open',
-    samples: jparse(row.samples, [])
+    samples: jparse(row.samples, []),
+    media: cleanMedia(row.media), medium: row.medium || ''   // v3.3.10
   };
 }
 // The public card, built from the approved copy only.
@@ -136,6 +148,7 @@ function publicOf(row) {
     bio: live.bio || '', links: Array.isArray(live.links) ? live.links : [], rates: live.rates || '',
     availability: AVAIL.indexOf(live.availability) >= 0 ? live.availability : 'open',
     samples: (Array.isArray(live.samples) ? live.samples : []).filter(function (u) { return u && maskUrl(u) === u; }),   // a picture rejected later simply drops out
+    media: cleanMedia(live.media), medium: live.medium || '',   // v3.3.10
     approved_at: row.reviewed_at || null,
     path: listingPath(row.id, live.display_name)   // v3.3.08 -- its own page, /marketplace/<name>-<id>
   };
@@ -148,7 +161,9 @@ function slugify(t) {
 function listingPath(id, name) { return '/marketplace/' + slugify(name) + '-' + id; }
 function sameContent(a, b) {
   if (!a || !b) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
+  // v3.3.10 -- a copy saved before media/medium existed compares as "none ticked, nothing written"
+  const n = function (o) { return Object.assign({}, o, { media: o.media || [], medium: o.medium || '' }); };
+  return JSON.stringify(n(a)) === JSON.stringify(n(b));
 }
 function mineOf(row) {
   if (!row) return null;
@@ -290,12 +305,14 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       links: cleanLinks(b.links),
       rates: oneLine(b.rates, LIMITS.rates),
       availability: AVAIL.indexOf(b.availability) >= 0 ? b.availability : 'open',
-      samples: []
+      samples: [],
+      media: cleanMedia(b.media), medium: oneLine(b.medium, LIMITS.medium)   // v3.3.10
     };
+    if (d.roles.indexOf('artist') < 0) { d.media = []; d.medium = ''; }   // only asked of people offering art
     // Samples: only pictures this user uploaded here, in the order given, at most six.
     const want = Array.isArray(b.samples) ? b.samples.map(String) : [];
     if (want.length) {
-      const own = await db.prepare("SELECT url FROM marketplace_samples WHERE user_id = ? AND verdict <> 'reject'").all(uid);
+      const own = await db.prepare('SELECT url FROM marketplace_samples WHERE user_id = ?').all(uid);   // v3.3.10: marked pictures are no longer refused
       const ok = {}; own.forEach(function (r) { ok[r.url] = true; });
       want.forEach(function (u) { if (ok[u] && d.samples.indexOf(u) < 0 && d.samples.length < MAX_SAMPLES) d.samples.push(u); });
     }
@@ -308,6 +325,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       if (!d.roles.length) miss.push('at least one kind of help you offer');
       if (d.bio.length < 40) miss.push('a few sentences about you and your work');
       if (d.roles.indexOf('artist') >= 0 && !d.samples.length) miss.push('at least one sample picture (you offer art)');
+      if (d.roles.indexOf('artist') >= 0 && !d.media.length) miss.push('how you make your art (tick at least one)');   // v3.3.10
       if (miss.length) return res.status(400).json({ error: 'Before it can be reviewed, add ' + miss.join(', ') + '.', missing: miss });
       // v3.3.07 -- the tick box (Ian: "A terms check box that says they read it"). Once ticked for this version it stays ticked.
       if (b.accept_terms !== true && !(row && row.terms_version === MKT_TERMS_VERSION)) return res.status(400).json({ error: 'Tick the box to say you have read the Marketplace Terms.', terms: true });
@@ -332,8 +350,9 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
         'UPDATE marketplace_listings SET display_name = ?, headline = ?, roles = ?, bio = ?, links = ?, rates = ?, availability = ?, samples = ?, status = ?, ' +
         'submitted_at = ?, updated_at = ? WHERE user_id = ?'
       ).run(...cols.concat([status, submit ? now : (row.submitted_at || null), now, uid]));
-      if (goLive) await db.prepare('UPDATE marketplace_listings SET live_json = ?, admin_note = NULL WHERE user_id = ?').run(JSON.stringify(d), uid);
     }
+    await db.prepare('UPDATE marketplace_listings SET media = ?, medium = ? WHERE user_id = ?').run(d.media.join(','), d.medium, uid);   // v3.3.10
+    if (goLive) await db.prepare('UPDATE marketplace_listings SET live_json = ?, admin_note = NULL WHERE user_id = ?').run(JSON.stringify(d), uid);
     if (submit && b.accept_terms === true) await db.prepare('UPDATE marketplace_listings SET terms_version = ?, terms_accepted_at = ? WHERE user_id = ?').run(MKT_TERMS_VERSION, now, uid);   // v3.3.07
     const fresh = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
     if (submit && status === 'pending') notifySupport(db, uid, fresh, !!live);   // v3.3.03 -- not awaited: the save never waits on email
@@ -386,18 +405,18 @@ router.post('/mine/samples', requireAuth, gate, guardUpload(uploadSingle, 'marke
     const name = 'mkt-' + uid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext;
     const storage = require('../storage/storage');
     const url = await storage.uploadFile(req.file.buffer, name, req.file.mimetype, 'marketplace');
+    // v3.3.10 -- MARKS ARE SHOWN TO IAN, NEVER REFUSED HERE (Ian, 2026-10-27). Artists often watermark or sign their own
+    // portfolio, so a watermark, a signature or a stock library named in the file is information for the review window,
+    // not a reason to turn the picture away. The same free check runs, but its answer is kept on marketplace_samples
+    // only: passing no url to checkUpload means it is not recorded as a rejected picture for the rest of Campaignia,
+    // which would hide it from the listing.
     let verdict = 'ok', reasons = [];
     try {
-      const r = await require('../services/rightsCheck').checkUpload(url, req.file, req.file.buffer, { kind: 'marketplace', userId: uid });
-      verdict = (r && r.verdict) || 'ok'; reasons = (r && r.reasons) || [];
+      const r = await require('../services/rightsCheck').checkUpload(null, req.file, req.file.buffer, { kind: 'marketplace', userId: uid });
+      verdict = (r && r.verdict) || 'ok'; reasons = ((r && r.reasons) || []).map(function (x) { return x && x.text; }).filter(Boolean);
     } catch (e) { verdict = 'unchecked'; }
-    await db.prepare('INSERT INTO marketplace_samples (user_id, url, verdict, created_at) VALUES (?, ?, ?, ?)').run(uid, url, verdict, new Date().toISOString());
-    if (verdict === 'reject') {
-      try { await storage.deleteFile(url); } catch (e) { /* the row keeps the record */ }
-      const why = reasons.map(function (x) { return x && x.text; }).filter(Boolean).join(' ');
-      return res.status(400).json({ error: (why ? why + ' ' : '') + 'A sample has to be your own work without anyone else\u2019s mark on it. Choose another picture.' });
-    }
-    res.json({ ok: true, url: url, verdict: verdict });
+    await db.prepare('INSERT INTO marketplace_samples (user_id, url, verdict, reasons, created_at) VALUES (?, ?, ?, ?, ?)').run(uid, url, verdict, JSON.stringify(reasons), new Date().toISOString());
+    res.json({ ok: true, url: url, verdict: verdict, reasons: reasons });
   } catch (e) { console.error('[marketplace] sample: ' + (e && e.message)); res.status(500).json({ error: 'Could not upload that picture right now.' }); }
 });
 
@@ -475,6 +494,11 @@ router.get('/admin/listings', adminOnly, async function (req, res) {
     rows.forEach(function (r) { draftOf(r).samples.forEach(function (u) { urls.push(u); }); });
     let verdicts = {};
     try { verdicts = await require('../services/rightsCheck').lookup(urls); } catch (e) { verdicts = {}; }
+    // v3.3.10 -- what the check said at upload, kept with the sample (pictures uploaded before this release use the lookup above)
+    try {
+      const srows = await db.prepare('SELECT url, verdict, reasons FROM marketplace_samples').all();
+      srows.forEach(function (x) { if (x.reasons != null) verdicts[x.url] = { verdict: x.verdict, reasons: jparse(x.reasons, []).map(function (t) { return { text: t }; }) }; });
+    } catch (e) { /* the lookup above stands */ }
     res.json({ listings: rows.map(function (r) {
       const m = mineOf(r);
       m.user_id = r.user_id; m.owner = { name: r.owner_name || '', email: r.owner_email || '', pen_name: r.owner_pen || '' };
@@ -586,7 +610,16 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.09';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.10';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+// v3.3.10 -- how the art is made, on the cards and the page
+function mediaTagsSrv(p) {
+  if (!p.media || !p.media.length) return '';
+  return '<div class="mkt-media">' + p.media.map(function (m) { return '<span class="mkt-medium-tag' + (/^ai-/.test(m) ? ' mkt-medium-ai' : '') + '">' + esc(MEDIA_NAMES[m] || m) + '</span>'; }).join('') + '</div>';
+}
+function mediaHtmlSrv(p) {
+  if ((!p.media || !p.media.length) && !p.medium) return '';
+  return '<div class="mkt-label">Medium</div>' + mediaTagsSrv(p) + (p.medium ? '<div class="mkt-medium-text">' + esc(p.medium) + '</div>' : '');
+}
 function notFound(res, on) {
   res.status(404).set('Cache-Control', 'no-store').type('html').send(pageShell({
     title: 'Not on the Marketplace | Campaignia', description: 'This listing is not on the Campaignia Marketplace.', robots: 'noindex',
@@ -607,7 +640,7 @@ pages.get('/marketplace', async function (req, res) {
       const pic = p.samples[0] ? '<img class="mkt-card-img" src="' + esc(p.samples[0]) + '" alt="Sample of ' + esc(p.name) + '\u2019s work" loading="lazy">' : '<div class="mkt-card-img mkt-card-ph">' + esc((p.name || '?').charAt(0).toUpperCase()) + '</div>';
       return '<a class="mkt-card" href="' + esc(p.path) + '">' + pic + '<div class="mkt-card-body"><h2 class="mkt-card-name">' + esc(p.name) + '</h2><div class="mkt-card-head">' + esc(p.headline) + '</div>' +
         '<div class="mkt-pills">' + p.roles.map(function (r) { return '<span class="mkt-pill mkt-pill-' + esc(r) + '">' + esc(ROLE_ONE_SRV[r] || r) + '</span>'; }).join('') + '</div>' +
-        '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div></div></a>';
+        mediaTagsSrv(p) + '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div></div></a>';
     }).join('');
     const canonical = siteBase() + '/marketplace';
     res.set('Cache-Control', a.preview ? 'no-store' : 'public, max-age=300').type('html').send(pageShell({
@@ -656,6 +689,7 @@ pages.get('/marketplace/:slug', async function (req, res) {
             '<div class="mkt-head">' + esc(p.headline) + '</div>' +
             '<div class="mkt-pills">' + p.roles.map(function (r) { return '<span class="mkt-pill mkt-pill-' + esc(r) + '">' + esc(ROLE_ONE_SRV[r] || r) + '</span>'; }).join('') + '</div>' +
             '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div>' +
+            mediaHtmlSrv(p) +
             '<div class="mkt-bio">' + esc(p.bio) + '</div>' +
             (p.rates ? '<div class="mkt-label">Rates</div><div>' + esc(p.rates) + '</div>' : '') +
             (links ? '<div class="mkt-label">Links</div><div class="mkt-links">' + links + '</div>' : '') +
@@ -690,4 +724,4 @@ pages.get('/sitemap-marketplace.xml', async function (req, res) {
 
 module.exports = router;
 module.exports.pages = pages;
-module.exports._test = { slugify: slugify, listingPath: listingPath, pageShell: pageShell, jsonLd: jsonLd, MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
+module.exports._test = { cleanMedia: cleanMedia, MEDIA: MEDIA, slugify: slugify, listingPath: listingPath, pageShell: pageShell, jsonLd: jsonLd, MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };

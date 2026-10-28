@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.10",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3310-marketplace-medium",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): artists say how they make their art (Traditional, Digital, 3D, AI-generated, AI-assisted, plus a line in their own words), and watermarked or signed samples are shown to Campaignia for review instead of being refused.",
+        "detail": "The medium shows as tags on the cards and pages, with AI work labelled plainly; it is asked only of listings that offer art, and at least one box must be ticked to send for review. Sample pictures still get the free watermark and signature check, but its answer only goes to the review window, because artists often mark their own portfolios. The 800-pixel minimum stays.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.09",
     "staged_on": "2026-10-27",
     "entries": [

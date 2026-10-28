@@ -11,6 +11,17 @@
   'use strict';
   var ROLE_NAMES = { artist: 'Artists & Illustrators', writer: 'Writers & Narrative Editors', editor: 'Campaignia Editors' };
   var ROLE_ONE = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Editor' };
+  // v3.3.10 -- how the art is made (same list as MEDIA in routes/marketplace.js)
+  var MEDIA_NAMES = { traditional: 'Traditional (paint, ink, pencil)', digital: 'Digital (drawn or painted on screen)', '3d': '3D', 'ai-generated': 'AI-generated', 'ai-assisted': 'AI-assisted (AI with my own drawing or painting)' };
+  var MEDIA_SHORT = { traditional: 'Traditional', digital: 'Digital', '3d': '3D', 'ai-generated': 'AI-generated', 'ai-assisted': 'AI-assisted' };
+  function mediaTags(media) {
+    if (!media || !media.length) return '';
+    return '<div class="mkt-media">' + media.map(function (m) { return '<span class="mkt-medium-tag' + (/^ai-/.test(m) ? ' mkt-medium-ai' : '') + '">' + esc(MEDIA_SHORT[m] || m) + '</span>'; }).join('') + '</div>';
+  }
+  function mediaBlock(p) {
+    if ((!p.media || !p.media.length) && !p.medium) return '';
+    return '<div class="mkt-label">Medium</div>' + mediaTags(p.media) + (p.medium ? '<div class="mkt-medium-text">' + esc(p.medium) + '</div>' : '');
+  }
   var AVAIL_NAMES = { open: 'Taking work', limited: 'Limited availability', closed: 'Not taking work right now' };
   var KIND_NAMES = { commission: 'I\u2019d like to commission you', campaign: 'I\u2019d like you to join my campaign', question: 'I have a question' };
   var STATUS = null, statusWaiters = [];
@@ -159,7 +170,7 @@
       '<div class="mkt-card-body"><div class="mkt-card-name">' + esc(p.name) + '</div>' +
       '<div class="mkt-card-head">' + esc(p.headline) + '</div>' +
       '<div class="mkt-pills">' + rolePills(p.roles) + '</div>' +
-      '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div></div></a>';
+      mediaTags(p.media) + '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div></div></a>';
   }
   function dirShell() {
     var host = $('market');
@@ -241,7 +252,7 @@
             '<div class="mkt-title">' + esc(p.name) + '</div>' +
             '<div class="mkt-head">' + esc(p.headline) + '</div>' +
             '<div class="mkt-pills">' + rolePills(p.roles) + '</div>' +
-            '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div>' +
+            '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div>' + mediaBlock(p) +
             '<div class="mkt-bio">' + esc(p.bio) + '</div>' +
             (p.rates ? '<div class="mkt-label">Rates</div><div>' + esc(p.rates) + '</div>' : '') +
             (links ? '<div class="mkt-label">Links</div><div class="mkt-links">' + links + '</div>' : '') +
@@ -338,6 +349,15 @@
         '<div class="mkt-label">What you offer</div><div class="mkt-checks">' + Object.keys(ROLE_NAMES).map(function (r) {
           return '<label><input type="checkbox" value="' + r + '"' + (d.roles.indexOf(r) >= 0 ? ' checked' : '') + '> ' + esc(ROLE_NAMES[r]) + '</label>';
         }).join('') + '</div>' +
+        // v3.3.10 -- shown only while "Artists & Illustrators" is ticked
+        '<div id="mkt-media-box"' + (d.roles.indexOf('artist') >= 0 ? '' : ' hidden') + '>' +
+          '<div class="mkt-label">How you make your art <span class="mkt-sub">(tick any that apply; AI work is welcome and is labelled as AI)</span></div>' +
+          '<div class="mkt-checks mkt-media-checks">' + Object.keys(MEDIA_NAMES).map(function (k) {
+            return '<label><input type="checkbox" value="' + k + '"' + ((d.media || []).indexOf(k) >= 0 ? ' checked' : '') + '> ' + esc(MEDIA_NAMES[k]) + '</label>';
+          }).join('') + '</div>' +
+          '<label class="mkt-label" for="mkt-f-medium">Medium, in your own words <span class="mkt-sub">(optional)</span></label>' +
+          '<input id="mkt-f-medium" maxlength="80" placeholder="e.g. Ink and watercolour, coloured in Procreate" value="' + esc(d.medium || '') + '">' +
+        '</div>' +
         '<label class="mkt-label" for="mkt-f-bio">About you and your work <span class="mkt-count" id="mkt-bio-count"></span></label><textarea id="mkt-f-bio" maxlength="2000" rows="6" placeholder="Who you are, what you like to make, what a project with you looks like.">' + esc(d.bio) + '</textarea>' +
         '<div class="mkt-label">Sample pictures <span class="mkt-sub">(up to 10, your own work; the first is your card picture; you can choose several at once)</span></div>' +
         '<div class="mkt-samples" id="mkt-samples"></div>' +
@@ -370,6 +390,9 @@
     function countBio() { var n = ($('mkt-f-bio').value || '').length; $('mkt-bio-count').textContent = n + ' / 2000'; }
     paintSamples(); countBio();
     $('mkt-f-bio').addEventListener('input', countBio);
+    Array.prototype.forEach.call(body.querySelectorAll('.mkt-checks:not(.mkt-media-checks) input'), function (c) {
+      c.addEventListener('change', function () { var art = body.querySelector('.mkt-checks:not(.mkt-media-checks) input[value="artist"]'); $('mkt-media-box').hidden = !(art && art.checked); });
+    });
     $('mkt-samples').addEventListener('click', function (e) {
       var t = e.target;
       if (t.getAttribute('data-zoom')) zoom(t.getAttribute('data-zoom'));
@@ -386,12 +409,13 @@
       if (room <= 0) { flash($('mkt-up-msg'), max + ' is the most. Take one off first.', true); return; }
       var skipped = files.length > room ? files.length - room : 0;
       files = files.slice(0, room);
-      var added = 0, signed = 0, refused = [], i = 0;
+      var added = 0, signed = 0, marked = 0, refused = [], i = 0;
       upBusy = true;
       (function next() {
         if (i >= files.length) {
           upBusy = false;
           var msg = added ? (added + ' added' + (signed ? ' (' + signed + ' look' + (signed === 1 ? 's' : '') + ' signed, which is fine if it is your signature)' : '') + '. Save to keep ' + (added === 1 ? 'it' : 'them') + '.') : 'Nothing added.';
+          if (marked) msg += ' ' + marked + ' show' + (marked === 1 ? 's' : '') + ' a watermark or stock-library mark: fine if it is your own, and Campaignia will see it when reviewing.';   // v3.3.10: shown, not refused
           if (refused.length) msg += ' Not added: ' + refused.join(' ');
           if (skipped) msg += ' ' + skipped + ' more left out: ' + max + ' is the most.';
           flash($('mkt-up-msg'), msg, !added);
@@ -402,7 +426,7 @@
         var fd = new FormData(); fd.append('image', f);
         api('POST', '/api/marketplace/mine/samples', fd).then(function (x) {
           if (!x.ok) refused.push((f.name || 'A picture') + ': ' + (x.j.error || 'could not be uploaded.'));
-          else { samples.push(x.j.url); added++; if (x.j.verdict === 'warn') signed++; paintSamples(); }
+          else { samples.push(x.j.url); added++; if (x.j.verdict === 'warn') signed++; if (x.j.verdict === 'reject') marked++; paintSamples(); }
           next();
         });
       })();
@@ -410,7 +434,9 @@
     function collect(submit) {
       return {
         display_name: $('mkt-f-name').value, headline: $('mkt-f-head').value,
-        roles: Array.prototype.filter.call(body.querySelectorAll('.mkt-checks input'), function (c) { return c.checked; }).map(function (c) { return c.value; }),
+        roles: Array.prototype.filter.call(body.querySelectorAll('.mkt-checks:not(.mkt-media-checks) input'), function (c) { return c.checked; }).map(function (c) { return c.value; }),
+        media: Array.prototype.filter.call(body.querySelectorAll('.mkt-media-checks input'), function (c) { return c.checked; }).map(function (c) { return c.value; }),
+        medium: $('mkt-f-medium') ? $('mkt-f-medium').value : '',
         bio: $('mkt-f-bio').value,
         links: Array.prototype.map.call(body.querySelectorAll('.mkt-f-link'), function (i) { return i.value; }).filter(function (v) { return v.trim(); }),
         rates: $('mkt-f-rates').value, availability: $('mkt-f-avail').value, samples: samples.slice(), submit: !!submit,
@@ -518,10 +544,12 @@
   function reviewCard(m) {
     var d = m.draft, live = m.live;
     // v3.3.06 -- edits to an approved listing go live at once; what changed since Ian approved it is shown first
-    var FIELDS = ['display_name', 'headline', 'roles', 'bio', 'links', 'rates', 'availability', 'samples'];
+    var FIELDS = ['display_name', 'headline', 'roles', 'bio', 'links', 'rates', 'availability', 'samples', 'media', 'medium'];
+    var DEF = { media: [], medium: '' };   // a copy saved before v3.3.10 has neither
+    var val = function (o, k) { return JSON.stringify(o[k] === undefined ? DEF[k] : o[k]); };
     var diff = [], altered = [];
-    if (live && m.changed) FIELDS.forEach(function (k) { if (JSON.stringify(d[k]) !== JSON.stringify(live[k])) diff.push(k.replace('_', ' ')); });
-    if (m.altered && m.reviewed) FIELDS.forEach(function (k) { if (JSON.stringify(live[k]) !== JSON.stringify(m.reviewed[k])) altered.push(k.replace('_', ' ')); });
+    if (live && m.changed) FIELDS.forEach(function (k) { if (val(d, k) !== val(live, k)) diff.push(k.replace('_', ' ')); });
+    if (m.altered && m.reviewed) FIELDS.forEach(function (k) { if (val(live, k) !== val(m.reviewed, k)) altered.push(k.replace('_', ' ')); });
     // v3.3.02 -- each picture gets ONE plain label under it, and the card a summary line, so a signature
     // that is not the account's name stands out (Ian: "I don't really understand what's going on here").
     // Pictures are backgrounds, not <img>, so the app's own rights marker does not add its outline and
@@ -539,7 +567,7 @@
     if (nSigned || nWm) {
       summary = '<div class="mkt-rv-summary">' +
         (nSigned ? esc(nSigned + ' of ' + total + ' picture' + (total === 1 ? '' : 's') + ' look' + (nSigned === 1 ? 's' : '') + ' signed') + (signedAll.length ? ': <b>\u201c' + signedAll.map(esc).join('\u201d, \u201c') + '\u201d</b>' : '') + '. ' : '') +
-        (nWm ? esc(nWm + ' with a watermark. ') : '') +
+        (nWm ? esc(nWm + ' with a watermark or stock-library mark: check it is their own. ') : '') +
         'Account: <b>' + esc(m.owner.name || '') + (m.owner.pen_name ? ' (' + esc(m.owner.pen_name) + ')' : '') + '</b>. If the names don\u2019t match, it may not be their work.</div>';
     } else if (total) summary = '<div class="mkt-rv-summary mkt-rv-clean">No signatures or watermarks seen on the ' + total + ' picture' + (total === 1 ? '' : 's') + '. The check can\u2019t recognise well-known art, so look at them yourself.</div>';
     return '<div class="mkt-rv" data-id="' + esc(m.id) + '">' +
@@ -548,7 +576,7 @@
         '<div class="mkt-sub">Account: ' + esc(m.owner.name) + (m.owner.pen_name ? ' (' + esc(m.owner.pen_name) + ')' : '') + ' &lt;' + esc(m.owner.email) + '&gt;</div></div>' +
       (altered.length ? '<div class="mkt-rv-altered">ALTERED since you approved it, and already live: ' + esc(altered.join(', ')) + '. Accept the changes, or Send back to put the approved version back up.</div>' : '') +
       (diff.length ? '<div class="mkt-diff">Saved but not published by them yet: ' + esc(diff.join(', ')) + '</div>' : '') +
-      '<div class="mkt-head">' + esc(d.headline) + '</div><div class="mkt-pills">' + rolePills(d.roles) + '</div>' +
+      '<div class="mkt-head">' + esc(d.headline) + '</div><div class="mkt-pills">' + rolePills(d.roles) + '</div>' + mediaBlock(d) +
       '<div class="mkt-bio">' + esc(d.bio) + '</div>' +
       (d.links.length ? '<div class="mkt-links">' + d.links.map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="nofollow noopener noreferrer">' + esc(u) + '</a>'; }).join('') + '</div>' : '') +
       (d.rates ? '<div class="mkt-sub">Rates: ' + esc(d.rates) + '</div>' : '') +

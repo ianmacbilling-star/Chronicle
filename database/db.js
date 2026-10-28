@@ -2280,6 +2280,13 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_version TEXT');
     await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP');
   } catch (e) { console.error('[marketplace] terms migration skipped this boot:', e && e.message); }
+  // v3.3.10 -- TD-1037. How the art is made (media: ticked list; medium: their own words), and what the picture check
+  // said about each sample, kept with the sample (marks are shown to Ian, no longer refused).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS media TEXT');
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS medium TEXT');
+    await pool.query('ALTER TABLE marketplace_samples ADD COLUMN IF NOT EXISTS reasons TEXT');
+  } catch (e) { console.error('[marketplace] media migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
