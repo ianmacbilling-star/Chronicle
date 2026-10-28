@@ -1,5 +1,28 @@
 [
   {
+    "version": "3.3.17",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3317-guild-tester-fixes",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Guild (still switched off): fixes from the test run before it is parked.",
+        "detail": "A paused listing now says only that it is paused (it also said Live). Saving names any link left out because it is not a web address. A listing with no pictures shows no empty picture slot. The contact email prints a name once when name and pen name match. The approval email links to the listing. The one-message refusal says \"in the last 24 hours\". The Guild Terms say Campaignia does not vet anyone listed (still version 1.0).",
+        "td": [
+          "TD-1037"
+        ]
+      },
+      {
+        "id": "3317-story-landing-characters",
+        "kind": "copy",
+        "public": false,
+        "summary": "Story landing page: \"your family\" is now \"your characters\" in the steps and the features.",
+        "detail": "views/story.html: the reference-pictures step and the visual-consistency feature line."
+      }
+    ]
+  },
+  {
     "version": "3.3.16",
     "staged_on": "2026-10-27",
     "entries": [

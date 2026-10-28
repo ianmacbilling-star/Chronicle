@@ -67,6 +67,10 @@ function cleanRoles(v) {
   list.forEach(function (r) { r = String(r || '').trim().toLowerCase(); if (ROLES.indexOf(r) >= 0 && out.indexOf(r) < 0) out.push(r); });
   return out;
 }
+// v3.3.17 -- the links a person typed that were not web addresses, so the editor can say so (tester, 2026-10-28)
+function droppedLinks(v) {
+  return (Array.isArray(v) ? v : []).map(function (u) { return String(u || '').trim(); }).filter(function (u) { return u && !cleanLinks([u]).length; }).slice(0, 3);
+}
 function cleanLinks(v) {
   const list = Array.isArray(v) ? v : [];
   const out = [];
@@ -357,7 +361,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
     const fresh = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
     if (submit && status === 'pending') notifySupport(db, uid, fresh, !!live);   // v3.3.03 -- not awaited: the save never waits on email
     else if (goLive && !sameContent(d, live)) notifySupport(db, uid, fresh, true, true);   // v3.3.06 -- already live: support is told it is Altered
-    res.json({ ok: true, mine: mineOf(fresh) });
+    res.json({ ok: true, mine: mineOf(fresh), dropped_links: droppedLinks(b.links) });
   } catch (e) { console.error('[marketplace] save: ' + (e && e.message)); res.status(500).json({ error: 'Could not save your listing right now.' }); }
 });
 
@@ -448,12 +452,13 @@ router.post('/listings/:id/contact', requireAuth, gate, async function (req, res
     const kind = KINDS.indexOf(req.body && req.body.kind) >= 0 ? req.body.kind : 'question';
     const now = Date.now();
     const same = await db.prepare('SELECT COUNT(*) AS n FROM marketplace_contacts WHERE from_user_id = ? AND listing_id = ? AND created_at > ?').get(me.id, row.id, iso(now - CONTACT_PER_LISTING_MS));
-    if (Number(same && same.n) > 0) return res.status(429).json({ error: 'You have already written to ' + pub.name + ' today. Give them a day to reply.' });
+    if (Number(same && same.n) > 0) return res.status(429).json({ error: 'You have already written to ' + pub.name + ' in the last 24 hours. Give them a day to reply.' });
     const day = await db.prepare('SELECT COUNT(*) AS n FROM marketplace_contacts WHERE from_user_id = ? AND created_at > ?').get(me.id, iso(now - 24 * 60 * 60 * 1000));
     if (Number(day && day.n) >= CONTACT_PER_DAY) return res.status(429).json({ error: 'That is as many Guild messages as you can send in a day. Try again tomorrow.' });
     const owner = await db.prepare('SELECT name, email, status FROM users WHERE id = ?').get(row.user_id);
     if (!owner || !owner.email || (owner.status || 'active') !== 'active') return res.status(404).json({ error: 'That listing is not in the Guild any more.' });
-    const who = me.pen_name ? (me.name ? me.name + ' (' + me.pen_name + ')' : me.pen_name) : (me.name || 'A Campaignia member');
+    const samePen = me.pen_name && me.name && me.pen_name.trim().toLowerCase() === me.name.trim().toLowerCase();   // v3.3.17: "Erin Bot (Erin Bot)" printed once
+    const who = (me.pen_name && !samePen) ? (me.name ? me.name + ' (' + me.pen_name + ')' : me.pen_name) : (me.name || me.pen_name || 'A Campaignia member');
     const what = kind === 'commission' ? 'would like to commission you' : (kind === 'campaign' ? 'would like you to join a campaign' : 'has a question for you');
     const html = mailFrame('A message from the Campaignia Guild',
       '<p>Hi ' + esc(pub.name || owner.name || 'there') + ',</p>' +
@@ -527,7 +532,9 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
         .run(JSON.stringify(draftOf(row)), JSON.stringify(draftOf(row)), note, now, by, now, row.id);
       if (wasAltered && !note) { const f0 = await db.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(row.id); return res.json({ ok: true, emailed: false, listing: mineOf(f0) }); }
       subject = 'Your Campaignia Guild listing is live';
-      body = '<p>Good news: your listing is now in the Campaignia Guild, and members can find you and make contact.</p>' + (note ? '<p>' + esc(note) + '</p>' : '');
+      const lp = siteBase() + listingPath(row.id, row.display_name);   // v3.3.17 -- a link to the listing (tester, 2026-10-28)
+      body = '<p>Good news: your listing is now in the Campaignia Guild, and members can find you and make contact.</p>' +
+        '<p><a href="' + esc(lp) + '" style="color:#8a6d1f;font-weight:bold;">See your listing</a></p>' + (note ? '<p>' + esc(note) + '</p>' : '');
     } else if (action === 'decline') {
       if (!note) return res.status(400).json({ error: 'Say what needs to change, so they can fix it.' });
       // v3.3.06 -- on a listing approved before, Send back also puts the live copy back to what was approved
@@ -618,7 +625,7 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/guild-terms.html">Guild Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.16';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.17';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';
@@ -693,8 +700,8 @@ pages.get('/guild/:slug', async function (req, res) {
       // and to the Marketplace page when they arrived from outside (a search result, a shared link). marketplace.js decides.
       body: '<div class="mkt-page-crumb"><a class="mkt-back" href="/guild" data-back="1">&larr; Back to the Guild</a>' +
         '<span class="mkt-crumb-trail"><a href="/guild">The Guild</a> &rsaquo; ' + esc(p.name) + '</span></div>' +
-        '<div class="mkt-detail mkt-page-detail">' +
-          '<div class="mkt-detail-pics"><div class="mkt-page-pics">' + (pics || '<div class="mkt-empty">No sample pictures.</div>') + '</div></div>' +
+        '<div class="mkt-detail mkt-page-detail' + (pics ? '' : ' mkt-detail-solo') + '">' +   // v3.3.17: no pictures, no picture column
+          (pics ? '<div class="mkt-detail-pics"><div class="mkt-page-pics">' + pics + '</div></div>' : '') +
           '<div class="mkt-detail-text">' +
             '<h1 class="mkt-page-h1 mkt-title">' + esc(p.name) + '</h1>' +
             '<div class="mkt-head">' + esc(p.headline) + '</div>' +

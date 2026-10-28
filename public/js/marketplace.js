@@ -259,8 +259,8 @@
       }).join('');
       var contact = contactHtml(p);
       body.innerHTML =
-        '<div class="mkt-detail">' +
-          '<div class="mkt-detail-pics">' + (main ? '<button type="button" class="mkt-main-a" data-zoom="' + esc(main) + '" title="Click to see it bigger"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></button>' : '') + thumbs + '</div>' +
+        '<div class="mkt-detail' + (main ? '' : ' mkt-detail-solo') + '">' +
+          (!main ? '' : '<div class="mkt-detail-pics">' + (main ? '<button type="button" class="mkt-main-a" data-zoom="' + esc(main) + '" title="Click to see it bigger"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></button>' : '') + thumbs + '</div>') +
           '<div class="mkt-detail-text">' +
             '<div class="mkt-title">' + esc(p.name) + '</div>' +
             '<div class="mkt-head">' + esc(p.headline) + '</div>' +
@@ -335,7 +335,8 @@
     else if (m.status === 'approved') s = m.changed ? 'Live in the Guild. You have saved changes that are not on it yet: press Update my listing to publish them.' : 'Live in the Guild.';
     else if (m.status === 'declined') s = (m.has_live ? 'Your changes were sent back' : 'Sent back') + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.') + ' Edit and send it again.';
     else if (m.status === 'removed') s = 'Removed from the Guild' + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.');
-    if (m.paused && m.status !== 'removed') s += ' Paused: hidden from the Guild until you unpause it.';
+    if (m.paused && m.status === 'approved') s = 'Paused: hidden from the Guild until you unpause it.' + (m.changed ? ' You have saved changes that are not on it yet: press Update my listing to publish them.' : '');   // v3.3.17 -- not "Live" as well (tester, 2026-10-28)
+    else if (m.paused && m.status !== 'removed') s += ' Paused: hidden from the Guild until you unpause it.';
     return s;
   }
   function openEditor() {
@@ -467,7 +468,11 @@
         m = x.j.mine;
         $('mkt-state').textContent = statusSentence(m);
         if ($('mkt-page-link')) $('mkt-page-link').innerHTML = m.path ? pageLinkHtml(m.path, 'your listing', true) : '';
-        flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing in the Guild shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.');
+        var said = act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing in the Guild shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.';
+        // v3.3.17 -- say which links were left out (tester, 2026-10-28: dropped without a word)
+        var dl = x.j.dropped_links || [];
+        if (dl.length) said += ' ' + (dl.length === 1 ? '1 link was' : dl.length + ' links were') + ' left out because ' + (dl.length === 1 ? 'it isn\u2019t a web address' : 'they aren\u2019t web addresses') + ': ' + dl.join(', ') + '.';
+        flash(msg, said, !!dl.length);
         loadStatus();
       });
     });

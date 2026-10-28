@@ -15,6 +15,9 @@ html:not(.mkt-live) .mkt-live-link { display: none !important; }
 .mkt-guild-h { font-family: 'Bangers', cursive; font-weight: normal; font-size: clamp(28px, 4.5vw, 40px); letter-spacing: 1.5px; color: #c9a84c; text-shadow: 3px 3px 0 #0a0806; text-align: center; margin: 4px 0 2px; line-height: 1.05; }
 .mkt-subtitle { text-align: center; color: #e8c766; font-size: 17px; letter-spacing: 0.3px; margin: 0 auto 12px; max-width: 760px; }
 .mkt-page-h1 + .mkt-subtitle { margin-top: -6px; }
+/* v3.3.17 -- a listing with no pictures: one column, no empty picture slot */
+.mkt-detail.mkt-detail-solo { grid-template-columns: minmax(0, 1fr); }
+.mkt-page-detail.mkt-detail-solo { max-width: 820px; margin-left: auto; margin-right: auto; }
 .mkt-intro { max-width: 760px; margin: 0 auto 16px; text-align: center; font-style: italic; color: #e8d5a3; font-size: 16px; line-height: 1.45; }
 .mkt-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; margin: 0 0 18px; }
 .mkt-list-me { margin-left: 8px; border-style: dashed; }
