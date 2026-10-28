@@ -58,7 +58,7 @@
     });
   }
   function previewLine() {
-    return (STATUS && STATUS.show && !STATUS.enabled) ? '<div class="mkt-preview-line">The Marketplace is switched off. Only admins can see this.</div>' : '';
+    return (STATUS && STATUS.show && !STATUS.enabled) ? '<div class="mkt-preview-line">The Guild is switched off. Only admins can see this.</div>' : '';
   }
 
   // ---------------------------------------------------------------- windows
@@ -135,7 +135,7 @@
     if (!path) return '';
     var full = location.origin + path;
     return '<div class="mkt-fine mkt-pagelink">' + (mine ? 'Your page: ' : '') + '<a href="' + esc(path) + '" target="_blank" rel="noopener">' + esc(mine ? full.replace(/^https?:\/\//, '') : 'Open ' + name + '\u2019s own page') + '</a>' +
-      ' &middot; <button type="button" class="mkt-linkbtn" data-share="' + esc(full) + '" data-title="' + esc(mine ? 'My page on the Campaignia Marketplace' : name + ' on the Campaignia Marketplace') + '">Share</button><span class="mkt-share-msg" role="status" aria-live="polite"></span>' + (mine ? ' <span class="mkt-sub">Share it on your website and social media.</span>' : '') + '</div>';
+      ' &middot; <button type="button" class="mkt-linkbtn" data-share="' + esc(full) + '" data-title="' + esc(mine ? 'My page in the Campaignia Guild' : name + ' in the Campaignia Guild') + '">Share</button><span class="mkt-share-msg" role="status" aria-live="polite"></span>' + (mine ? ' <span class="mkt-sub">Share it on your website and social media.</span>' : '') + '</div>';
   }
   // v3.3.13 -- SHARE, the same behaviour as a published story's Share button (routes/story-pages.js): the device's own
   // share sheet where there is one (phones), otherwise the link is copied and "Link copied" shows beside the button.
@@ -191,6 +191,7 @@
       host.setAttribute('data-built', '1');
       host.innerHTML =
         '<div id="mkt-preview-slot"></div>' +
+        '<h2 class="mkt-guild-h">The Guild</h2><p class="mkt-subtitle">Artists, writers and Campaignia Specialists you can hire.</p>' +   // v3.3.16
         '<div class="mkt-intro">Find people to help make your book: artists to draw it, writers and editors to polish the words, and Campaignia Specialists to build the whole book in Campaignia for you. ' +
           'Press <b>Make contact</b> and they will reply to your email. Campaignia takes no fee and is not part of any arrangement you make.</div>' +
         '<div class="mkt-bar"><div class="mkt-roles" id="mkt-roles"></div>' +
@@ -208,7 +209,7 @@
       });
       $('mkt-list-me').addEventListener('click', function () {
         if (STATUS && STATUS.signedIn) openEditor();
-        else location.href = '/login?next=' + encodeURIComponent('/library#marketplace');
+        else location.href = '/login?next=' + encodeURIComponent('/library#guild');
       });
     }
     $('mkt-preview-slot').innerHTML = previewLine();
@@ -228,7 +229,7 @@
     api('GET', '/api/marketplace/listings' + (role ? '?role=' + role : '')).then(function (x) {
       if (role !== dir.role) return;   // a newer filter is already loading
       dir.loading = false;
-      if (!x.ok) { empty.textContent = x.j.error || 'Could not load the Marketplace right now.'; return; }
+      if (!x.ok) { empty.textContent = x.j.error || 'Could not load the Guild right now.'; return; }
       dir.list = x.j.listings || [];
       grid.innerHTML = dir.list.map(cardHtml).join('');
       empty.textContent = dir.list.length ? '' : (role ? 'Nobody is listed for this yet.' : 'Nobody is listed yet. Be the first.');
@@ -246,7 +247,7 @@
     var ov = modal('mkt-modal-wide', '<div class="mkt-body"><span class="mkt-spin"></span></div>');
     api('GET', '/api/marketplace/listings/' + id).then(function (x) {
       var body = ov.querySelector('.mkt-body');
-      if (!x.ok) { body.innerHTML = '<p>' + esc(x.j.error || 'That listing is not on the Marketplace.') + '</p>'; return; }
+      if (!x.ok) { body.innerHTML = '<p>' + esc(x.j.error || 'That listing is not in the Guild.') + '</p>'; return; }
       var p = x.j.listing;
       var main = p.samples && p.samples[0];
       var thumbs = (p.samples || []).length > 1 ? '<div class="mkt-thumbs">' + p.samples.map(function (u, i) {
@@ -286,14 +287,14 @@
   // The Make contact section: in the listing window and, since v3.3.09, on the listing's own page.
   function contactHtml(p) {
     if (p.own) return '<div class="mkt-note">This is your listing. <button type="button" class="mkt-linkbtn" data-act="edit">Edit it</button></div>';
-    if (!STATUS || !STATUS.signedIn) return '<div class="mkt-contact"><div class="mkt-label">Make contact</div><a class="mkt-btn mkt-btn-gold" href="/login?next=' + encodeURIComponent(/^\/marketplace\//.test(location.pathname) ? location.pathname : '/library#marketplace') + '">Sign in to make contact</a>' +
+    if (!STATUS || !STATUS.signedIn) return '<div class="mkt-contact"><div class="mkt-label">Make contact</div><a class="mkt-btn mkt-btn-gold" href="/login?next=' + encodeURIComponent(/^\/guild\//.test(location.pathname) ? location.pathname : '/library#guild') + '">Sign in to make contact</a>' +
       '<div class="mkt-fine">Sign in, or create a free account, to send ' + esc(p.name) + ' a message.</div></div>';
     return '<div class="mkt-contact"><div class="mkt-label">Make contact</div>' +
       '<select id="mkt-kind">' + Object.keys(KIND_NAMES).map(function (k) { return '<option value="' + k + '">' + esc(KIND_NAMES[k]) + '</option>'; }).join('') + '</select>' +
       '<textarea id="mkt-message" maxlength="2000" rows="5" placeholder="Say hello, describe your book and what you need, and when you need it."></textarea>' +
       '<div class="mkt-row"><button type="button" class="mkt-btn mkt-btn-gold" data-act="send">Send</button><span id="mkt-send-msg" class="mkt-msg"></span></div>' +
       '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make. ' +
-        'By sending you agree to the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a>.</div></div>';   // v3.3.07
+        'By sending you agree to the <a href="/guild-terms.html" target="_blank" rel="noopener">Guild Terms</a>.</div></div>';   // v3.3.07
   }
   // v3.3.09 -- the listing page's own contact section (#mkt-page-contact, left empty by the server)
   function pageContact() {
@@ -327,14 +328,14 @@
 
   // ---------------------------------------------------------------- your listing: the editor
   function statusSentence(m) {
-    if (!m) return 'You are not on the Marketplace yet.';
+    if (!m) return 'You are not in the Guild yet.';
     var s = '';
     if (m.status === 'draft') s = 'Draft. Not sent for review yet.';
-    else if (m.status === 'pending') s = m.has_live ? 'Your changes are waiting for review. Your listing stays up as it was until then.' : 'Waiting for review. It appears on the Marketplace once it is approved.';
-    else if (m.status === 'approved') s = m.changed ? 'Live on the Marketplace. You have saved changes that are not on it yet: press Update my listing to publish them.' : 'Live on the Marketplace.';
+    else if (m.status === 'pending') s = m.has_live ? 'Your changes are waiting for review. Your listing stays up as it was until then.' : 'Waiting for review. It appears in the Guild once it is approved.';
+    else if (m.status === 'approved') s = m.changed ? 'Live in the Guild. You have saved changes that are not on it yet: press Update my listing to publish them.' : 'Live in the Guild.';
     else if (m.status === 'declined') s = (m.has_live ? 'Your changes were sent back' : 'Sent back') + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.') + ' Edit and send it again.';
-    else if (m.status === 'removed') s = 'Removed from the Marketplace' + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.');
-    if (m.paused && m.status !== 'removed') s += ' Paused: hidden from the Marketplace until you unpause it.';
+    else if (m.status === 'removed') s = 'Removed from the Guild' + (m.admin_note ? ': \u201c' + m.admin_note + '\u201d' : '.');
+    if (m.paused && m.status !== 'removed') s += ' Paused: hidden from the Guild until you unpause it.';
     return s;
   }
   function openEditor() {
@@ -352,7 +353,7 @@
     var links = (d.links || []).concat(['', '', '']).slice(0, 3);
     body.innerHTML =
       previewLine() +
-      '<div class="mkt-title">Your Marketplace listing</div>' +
+      '<div class="mkt-title">Your Guild listing</div>' +
       '<div class="mkt-state" id="mkt-state">' + esc(statusSentence(m)) + '</div>' +
       '<div id="mkt-page-link">' + (m && m.path ? pageLinkHtml(m.path, 'your listing', true) : '') + '</div>' +
       '<div class="mkt-form"' + (removed ? ' style="opacity:0.5;pointer-events:none;"' : '') + '>' +
@@ -383,7 +384,7 @@
       '</div>' +
       // v3.3.07 -- the Marketplace Terms tick box. Needed for Send for review / Update my listing, not for Save draft.
       (removed ? '' : '<label class="mkt-terms-row" id="mkt-terms-row"><input type="checkbox" id="mkt-f-terms"' + (m && m.terms_ok ? ' checked' : '') + '> ' +
-        '<span>I have read the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a></span></label>') +
+        '<span>I have read the <a href="/guild-terms.html" target="_blank" rel="noopener">Guild Terms</a></span></label>') +
       '<div class="mkt-row mkt-actions">' +
         (removed ? '' : '<button type="button" class="mkt-btn" data-act="save">Save draft</button><button type="button" class="mkt-btn mkt-btn-gold" data-act="submit">' + (m && m.has_reviewed ? 'Update my listing' : 'Send for review') + '</button>') +
         '<span class="mkt-msg" id="mkt-save-msg"></span></div>' +
@@ -459,14 +460,14 @@
       var act = e.target.getAttribute && e.target.getAttribute('data-act');
       if (act !== 'save' && act !== 'submit') return;
       var msg = $('mkt-save-msg');
-      if (act === 'submit' && $('mkt-f-terms') && !$('mkt-f-terms').checked) { nag($('mkt-terms-row'), msg, 'Tick the box above first: \u201cI have read the Marketplace Terms\u201d.', $('mkt-f-terms')); return; }
+      if (act === 'submit' && $('mkt-f-terms') && !$('mkt-f-terms').checked) { nag($('mkt-terms-row'), msg, 'Tick the box above first: \u201cI have read the Guild Terms\u201d.', $('mkt-f-terms')); return; }
       flash(msg, 'Saving\u2026');
       api('PUT', '/api/marketplace/mine', collect(act === 'submit')).then(function (x) {
         if (!x.ok) { if (x.j.terms) nag($('mkt-terms-row'), msg, x.j.error, $('mkt-f-terms')); else flash(msg, x.j.error || 'Could not save it right now.', true); return; }
         m = x.j.mine;
         $('mkt-state').textContent = statusSentence(m);
         if ($('mkt-page-link')) $('mkt-page-link').innerHTML = m.path ? pageLinkHtml(m.path, 'your listing', true) : '';
-        flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing on the Marketplace shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.');
+        flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing in the Guild shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.');
         loadStatus();
       });
     });
@@ -516,12 +517,12 @@
     flash(msg, 'Saving\u2026');
     api('PUT', '/api/marketplace/admin/settings', { enabled: !!on }).then(function (x) {
       if (!x.ok) { flash(msg, x.j.error || 'Could not change it.', true); var sw = $('mkt-admin-switch'); if (sw) sw.checked = !on; return; }
-      flash(msg, x.j.enabled ? 'The Marketplace is ON for everyone.' : 'The Marketplace is off. Only admins can see it.');
+      flash(msg, x.j.enabled ? 'The Guild is ON for everyone.' : 'The Guild is off. Only admins can see it.');
       loadStatus();
     });
   }
   function openReview() {
-    var ov = modal('mkt-modal-wide mkt-review', '<div class="mkt-title">Marketplace listings</div>' +
+    var ov = modal('mkt-modal-wide mkt-review', '<div class="mkt-title">Guild listings</div>' +
       '<div class="mkt-row"><select id="mkt-rv-filter"><option value="attention">Needing attention</option><option value="pending">Waiting for review</option><option value="altered">Altered (already live)</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
       '<span class="mkt-msg" id="mkt-rv-msg"></span></div><div class="mkt-body" id="mkt-rv-list"><span class="mkt-spin"></span></div>');
     var all = [];
@@ -601,7 +602,7 @@
         (m.status !== 'removed' ? '<button type="button" class="mkt-btn mkt-btn-gold" data-rv="approve">' + (m.altered ? 'Accept changes' : 'Approve') + '</button><button type="button" class="mkt-btn" data-rv="decline">Send back</button><button type="button" class="mkt-btn mkt-danger" data-rv="remove">Remove</button>'
           : '<button type="button" class="mkt-btn" data-rv="restore">Restore</button>') +
         // v3.3.04 -- back to Waiting for review, live copy dropped, nobody emailed (for testing the approval again)
-        (m.status !== 'pending' ? '<button type="button" class="mkt-btn mkt-btn-quiet" data-rv="unapprove" title="Puts it back in Waiting for review and takes it off the Marketplace. Nobody is emailed.">Back to review</button>' : '') +
+        (m.status !== 'pending' ? '<button type="button" class="mkt-btn mkt-btn-quiet" data-rv="unapprove" title="Puts it back in Waiting for review and takes it out of the Guild. Nobody is emailed.">Back to review</button>' : '') +
       '</div></div>';
   }
 
@@ -622,14 +623,14 @@
     if (!b) return;
     var here = cameFromHere(), app = fromApp();
     var ref = ''; try { ref = here ? new URL(document.referrer).pathname : ''; } catch (e) {}
-    var label = 'Back to the Marketplace';
-    if (here) label = /^\/app(\.html)?$/.test(ref) ? 'Back to Campaignia' : (ref === '/library' ? 'Back to the Library' : (ref === '/marketplace' ? 'Back to the Marketplace' : 'Back'));
+    var label = 'Back to the Guild';
+    if (here) label = /^\/app(\.html)?$/.test(ref) ? 'Back to Campaignia' : (ref === '/library' ? 'Back to the Library' : ((ref === '/guild' || ref === '/marketplace') ? 'Back to the Guild' : 'Back'));
     else if (app) label = 'Back to Campaignia';
     b.innerHTML = '&larr; ' + label;
     b.addEventListener('click', function (e) {
       if (here) { e.preventDefault(); history.back(); }
       else if (app) { e.preventDefault(); location.href = '/app.html'; }
-      // else: the link itself goes to /marketplace
+      // else: the link itself goes to /guild
     });
   }
 
@@ -663,7 +664,7 @@
     };
     function fromHash() {
       var h = String(location.hash || '');
-      var m = /^#marketplace(?:-(artist|writer|editor))?$/.exec(h);
+      var m = /^#(?:guild|marketplace)(?:-(artist|writer|editor))?$/.exec(h);   // v3.3.16: #guild; #marketplace still works
       if (!m) return;
       whenStatus(function (s) { if (!s.show) return; dir.role = m[1] || ''; window.switchTab('market'); });
     }

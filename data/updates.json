@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.16",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3316-the-guild",
+        "kind": "feature",
+        "public": false,
+        "summary": "The Marketplace (still switched off) is now The Guild: \"Artists, writers and Campaignia Specialists you can hire.\"",
+        "detail": "Renamed everywhere it shows: the Library tab (now with a heading and that subtitle), the user menu, My Account, the links under the story box and on the art brief, the listing editor, the emails, the Dashboard switch and review window. Its pages moved to /guild and /guild/<name>-<number>; the old /marketplace addresses forward. The Marketplace Terms are now the Guild Terms at /guild-terms.html, same wording and still version 1.0, so nobody has to accept them again.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.15",
     "staged_on": "2026-10-27",
     "entries": [

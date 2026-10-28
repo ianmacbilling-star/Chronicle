@@ -11,6 +11,10 @@ html:not(.mkt-live) .mkt-live-link { display: none !important; }
 
 .mkt-wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 50px; color: #f0e8d0; font-family: 'Crimson Text', Georgia, serif; }
 .mkt-preview-line { margin: 0 0 12px; padding: 8px 12px; border: 1px solid rgba(232,160,48,0.6); border-radius: 4px; background: rgba(232,160,48,0.12); color: #f2c27a; font-size: 13px; text-align: center; }
+/* v3.3.16 -- The Guild: a heading and subtitle above the introduction (Library tab and the /guild page). */
+.mkt-guild-h { font-family: 'Bangers', cursive; font-weight: normal; font-size: clamp(28px, 4.5vw, 40px); letter-spacing: 1.5px; color: #c9a84c; text-shadow: 3px 3px 0 #0a0806; text-align: center; margin: 4px 0 2px; line-height: 1.05; }
+.mkt-subtitle { text-align: center; color: #e8c766; font-size: 17px; letter-spacing: 0.3px; margin: 0 auto 12px; max-width: 760px; }
+.mkt-page-h1 + .mkt-subtitle { margin-top: -6px; }
 .mkt-intro { max-width: 760px; margin: 0 auto 16px; text-align: center; font-style: italic; color: #e8d5a3; font-size: 16px; line-height: 1.45; }
 .mkt-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; margin: 0 0 18px; }
 .mkt-list-me { margin-left: 8px; border-style: dashed; }

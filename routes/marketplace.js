@@ -158,7 +158,7 @@ function publicOf(row) {
 function slugify(t) {
   return String(t || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'listing';
 }
-function listingPath(id, name) { return '/marketplace/' + slugify(name) + '-' + id; }
+function listingPath(id, name) { return '/guild/' + slugify(name) + '-' + id; }   // v3.3.16: /guild (was /marketplace)
 function sameContent(a, b) {
   if (!a || !b) return false;
   // v3.3.10 -- a copy saved before media/medium existed compares as "none ticked, nothing written"
@@ -193,7 +193,7 @@ function mailFrame(title, inner, staff) {
   return '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222;line-height:1.5;">' +
     '<h2 style="color:#6b4a12;margin:0 0 12px;">' + esc(title) + '</h2>' + inner +
     '<hr style="border:none;border-top:1px solid #ddd;margin:18px 0 10px;"/>' +
-    '<p style="font-size:12px;color:#777;margin:0;">Campaignia Marketplace. Campaignia is not a party to any arrangement you make with another member. ' +
+    '<p style="font-size:12px;color:#777;margin:0;">The Campaignia Guild. Campaignia is not a party to any arrangement you make with another member. ' +
     'You can pause or edit your listing from My Account at <a href="' + esc(appUrl()) + '/app.html">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</a>.</p></div>';
 }
 
@@ -210,14 +210,14 @@ async function notifySupport(db, uid, row, isChange, isLive) {
     const d = draftOf(row || {});
     const name = d.display_name || '(no name)';
     const who = u ? ((u.name || '') + (u.pen_name ? ' (' + u.pen_name + ')' : '') + ' <' + (u.email || '') + '>') : ('user ' + uid);
-    const html = mailFrame(isLive ? 'A live Marketplace listing was changed' : 'A Marketplace listing to review',
+    const html = mailFrame(isLive ? 'A live Guild listing was changed' : 'A Guild listing to review',
       '<p><strong>' + esc(name) + '</strong> ' + (isLive ? 'changed their listing. <strong>The changes are already live</strong>; it is marked Altered in the review window until you look at it.' : (isChange ? 'changed their live listing' : 'sent a new listing') + ' for review.') + '</p>' +
       '<p style="margin:4px 0;"><strong>Account:</strong> ' + esc(who) + '</p>' +
       '<p style="margin:4px 0;"><strong>Headline:</strong> ' + esc(d.headline) + '</p>' +
       '<p style="margin:4px 0;"><strong>Offers:</strong> ' + esc(d.roles.join(', ')) + ' &middot; ' + esc(String(d.samples.length)) + ' sample picture' + (d.samples.length === 1 ? '' : 's') + '</p>' +
-      '<p>' + esc(String(waiting)) + ' listing' + (waiting === 1 ? '' : 's') + ' waiting in all. Review them on the Dashboard: Settings &rsaquo; Marketplace &rsaquo; Review listings, at ' +
+      '<p>' + esc(String(waiting)) + ' listing' + (waiting === 1 ? '' : 's') + ' waiting in all. Review them on the Dashboard: Settings &rsaquo; The Guild &rsaquo; Review listings, at ' +
       '<a href="' + esc(appUrl()) + '/app.html">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</a>.</p>', true);
-    await mailSafely(to, 'Marketplace: ' + oneLine(name, 60) + (isLive ? ' changed their live listing \u2014 already live, please look' : ((isChange ? ' changed their listing' : ' wants to be listed') + ' \u2014 review needed')), html, u && u.email ? u.email : undefined);
+    await mailSafely(to, 'The Guild: ' + oneLine(name, 60) + (isLive ? ' changed their live listing \u2014 already live, please look' : ((isChange ? ' changed their listing' : ' wants to be listed') + ' \u2014 review needed')), html, u && u.email ? u.email : undefined);
   } catch (e) { console.error('[marketplace] support notice failed: ' + ((e && e.message) || e)); }
 }
 
@@ -265,7 +265,7 @@ router.get('/listings', gate, async function (req, res) {
     const out = [];
     rows.forEach(function (r) { const p = publicOf(r); if (p && (!role || p.roles.indexOf(role) >= 0)) out.push(p); });
     res.json({ listings: out });
-  } catch (e) { console.error('[marketplace] listings: ' + (e && e.message)); res.status(500).json({ error: 'Could not load the Marketplace right now.' }); }
+  } catch (e) { console.error('[marketplace] listings: ' + (e && e.message)); res.status(500).json({ error: 'Could not load the Guild right now.' }); }
 });
 
 router.get('/listings/:id', gate, async function (req, res) {
@@ -273,7 +273,7 @@ router.get('/listings/:id', gate, async function (req, res) {
     const db = await getDb();
     const row = await db.prepare("SELECT l.id, l.user_id, l.live_json, l.reviewed_at, l.status, l.paused, u.status AS user_status FROM marketplace_listings l JOIN users u ON u.id = l.user_id WHERE l.id = ?").get(Number(req.params.id) || 0);
     const p = row && row.status !== 'removed' && !row.paused && (row.user_status || 'active') === 'active' ? publicOf(row) : null;
-    if (!p) return res.status(404).json({ error: 'That listing is not on the Marketplace.' });
+    if (!p) return res.status(404).json({ error: 'That listing is not in the Guild.' });
     const v = await viewer(db, req);
     p.own = !!(v && v.id === row.user_id);
     res.json({ listing: p });
@@ -296,7 +296,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
     const uid = req.session.userId;
     const b = req.body || {};
     const row = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
-    if (row && row.status === 'removed') return res.status(403).json({ error: 'This listing was removed from the Marketplace. Write to support@campaignia.com if you think that was a mistake.' });
+    if (row && row.status === 'removed') return res.status(403).json({ error: 'This listing was removed from the Guild. Write to support@campaignia.com if you think that was a mistake.' });
     const d = {
       display_name: oneLine(b.display_name, LIMITS.display_name),
       headline: oneLine(b.headline, LIMITS.headline),
@@ -328,7 +328,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       if (d.roles.indexOf('artist') >= 0 && !d.media.length) miss.push('how you make your art (tick at least one)');   // v3.3.10
       if (miss.length) return res.status(400).json({ error: 'Before it can be reviewed, add ' + miss.join(', ') + '.', missing: miss });
       // v3.3.07 -- the tick box (Ian: "A terms check box that says they read it"). Once ticked for this version it stays ticked.
-      if (b.accept_terms !== true && !(row && row.terms_version === MKT_TERMS_VERSION)) return res.status(400).json({ error: 'Tick the box to say you have read the Marketplace Terms.', terms: true });
+      if (b.accept_terms !== true && !(row && row.terms_version === MKT_TERMS_VERSION)) return res.status(400).json({ error: 'Tick the box to say you have read the Guild Terms.', terms: true });
     }
     const now = new Date().toISOString();
     const cols = [d.display_name, d.headline, d.roles.join(','), d.bio, JSON.stringify(d.links), d.rates, d.availability, JSON.stringify(d.samples)];
@@ -378,7 +378,7 @@ router.delete('/mine', requireAuth, gate, async function (req, res) {
     const row = await db.prepare('SELECT id, status FROM marketplace_listings WHERE user_id = ?').get(req.session.userId);
     if (!row) return res.json({ ok: true });
     // A removed listing is kept so it cannot be deleted and re-made to get round Ian's decision.
-    if (row.status === 'removed') return res.status(403).json({ error: 'This listing was removed from the Marketplace and stays that way. Write to support@campaignia.com if you think that was a mistake.' });
+    if (row.status === 'removed') return res.status(403).json({ error: 'This listing was removed from the Guild and stays that way. Write to support@campaignia.com if you think that was a mistake.' });
     await db.prepare('DELETE FROM marketplace_listings WHERE id = ?').run(row.id);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
@@ -441,7 +441,7 @@ router.post('/listings/:id/contact', requireAuth, gate, async function (req, res
     if (!(await emailConfirmed(db, me.id))) return res.status(403).json({ error: CONFIRM_FIRST });   // v3.3.06
     const row = await db.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(Number(req.params.id) || 0);
     const pub = row && row.status !== 'removed' && !row.paused ? publicOf(row) : null;
-    if (!pub) return res.status(404).json({ error: 'That listing is not on the Marketplace any more.' });
+    if (!pub) return res.status(404).json({ error: 'That listing is not in the Guild any more.' });
     if (row.user_id === me.id) return res.status(400).json({ error: 'This is your own listing.' });
     const message = clip(req.body && req.body.message, LIMITS.message);
     if (message.length < 20) return res.status(400).json({ error: 'Say a little more about what you have in mind (at least 20 characters).' });
@@ -450,18 +450,18 @@ router.post('/listings/:id/contact', requireAuth, gate, async function (req, res
     const same = await db.prepare('SELECT COUNT(*) AS n FROM marketplace_contacts WHERE from_user_id = ? AND listing_id = ? AND created_at > ?').get(me.id, row.id, iso(now - CONTACT_PER_LISTING_MS));
     if (Number(same && same.n) > 0) return res.status(429).json({ error: 'You have already written to ' + pub.name + ' today. Give them a day to reply.' });
     const day = await db.prepare('SELECT COUNT(*) AS n FROM marketplace_contacts WHERE from_user_id = ? AND created_at > ?').get(me.id, iso(now - 24 * 60 * 60 * 1000));
-    if (Number(day && day.n) >= CONTACT_PER_DAY) return res.status(429).json({ error: 'That is as many Marketplace messages as you can send in a day. Try again tomorrow.' });
+    if (Number(day && day.n) >= CONTACT_PER_DAY) return res.status(429).json({ error: 'That is as many Guild messages as you can send in a day. Try again tomorrow.' });
     const owner = await db.prepare('SELECT name, email, status FROM users WHERE id = ?').get(row.user_id);
-    if (!owner || !owner.email || (owner.status || 'active') !== 'active') return res.status(404).json({ error: 'That listing is not on the Marketplace any more.' });
+    if (!owner || !owner.email || (owner.status || 'active') !== 'active') return res.status(404).json({ error: 'That listing is not in the Guild any more.' });
     const who = me.pen_name ? (me.name ? me.name + ' (' + me.pen_name + ')' : me.pen_name) : (me.name || 'A Campaignia member');
     const what = kind === 'commission' ? 'would like to commission you' : (kind === 'campaign' ? 'would like you to join a campaign' : 'has a question for you');
-    const html = mailFrame('A message from the Campaignia Marketplace',
+    const html = mailFrame('A message from the Campaignia Guild',
       '<p>Hi ' + esc(pub.name || owner.name || 'there') + ',</p>' +
-      '<p><strong>' + esc(who) + '</strong> ' + esc(what) + '. They found your listing on the Campaignia Marketplace.</p>' +
+      '<p><strong>' + esc(who) + '</strong> ' + esc(what) + '. They found your listing in the Campaignia Guild.</p>' +
       '<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #c9a84c;background:#faf6ea;white-space:pre-wrap;">' + esc(message) + '</blockquote>' +
       '<p><strong>Reply to this email</strong> to answer them directly. Your reply goes to their address, not to Campaignia.</p>');
     const ins = await db.prepare('INSERT INTO marketplace_contacts (from_user_id, listing_id, kind, message, emailed, created_at) VALUES (?, ?, ?, ?, false, ?)').run(me.id, row.id, kind, message, iso(now));
-    const sent = await mailSafely(owner.email, oneLine(who, 80) + ' would like to work with you \u2014 Campaignia Marketplace', html, me.email);
+    const sent = await mailSafely(owner.email, oneLine(who, 80) + ' would like to work with you \u2014 the Campaignia Guild', html, me.email);
     if (ins && ins.lastInsertRowid) { try { await db.prepare('UPDATE marketplace_contacts SET emailed = ? WHERE id = ?').run(sent, ins.lastInsertRowid); } catch (e) {} }
     if (!sent) return res.status(502).json({ error: 'Your message could not be sent right now. Please try again in a few minutes.' });
     res.json({ ok: true, message: 'Sent. ' + pub.name + ' will reply to your email address.' });
@@ -526,21 +526,21 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
       await db.prepare("UPDATE marketplace_listings SET live_json = ?, reviewed_json = ?, status = 'approved', admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?")
         .run(JSON.stringify(draftOf(row)), JSON.stringify(draftOf(row)), note, now, by, now, row.id);
       if (wasAltered && !note) { const f0 = await db.prepare('SELECT * FROM marketplace_listings WHERE id = ?').get(row.id); return res.json({ ok: true, emailed: false, listing: mineOf(f0) }); }
-      subject = 'Your Campaignia Marketplace listing is live';
-      body = '<p>Good news: your listing is now on the Campaignia Marketplace, and members can find you and make contact.</p>' + (note ? '<p>' + esc(note) + '</p>' : '');
+      subject = 'Your Campaignia Guild listing is live';
+      body = '<p>Good news: your listing is now in the Campaignia Guild, and members can find you and make contact.</p>' + (note ? '<p>' + esc(note) + '</p>' : '');
     } else if (action === 'decline') {
       if (!note) return res.status(400).json({ error: 'Say what needs to change, so they can fix it.' });
       // v3.3.06 -- on a listing approved before, Send back also puts the live copy back to what was approved
       await db.prepare("UPDATE marketplace_listings SET status = 'declined', live_json = COALESCE(reviewed_json, live_json), admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?").run(note, now, by, now, row.id);
-      subject = 'Your Campaignia Marketplace listing needs a change';
-      body = '<p>Thanks for listing yourself on the Campaignia Marketplace. Before ' + (row.live_json ? 'your changes go' : 'it goes') + ' up, one thing needs to change:</p>' +
+      subject = 'Your Campaignia Guild listing needs a change';
+      body = '<p>Thanks for listing yourself in the Campaignia Guild. Before ' + (row.live_json ? 'your changes go' : 'it goes') + ' up, one thing needs to change:</p>' +
         '<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #c9a84c;background:#faf6ea;white-space:pre-wrap;">' + esc(note) + '</blockquote>' +
         '<p>Edit your listing in My Account and send it for review again.</p>';
     } else if (action === 'remove') {
       if (!note) return res.status(400).json({ error: 'Give a reason; it is emailed to them.' });
       await db.prepare("UPDATE marketplace_listings SET status = 'removed', admin_note = ?, reviewed_at = ?, reviewed_by = ?, updated_at = ? WHERE id = ?").run(note, now, by, now, row.id);
-      subject = 'Your Campaignia Marketplace listing was removed';
-      body = '<p>Your listing has been removed from the Campaignia Marketplace.</p>' +
+      subject = 'Your Campaignia Guild listing was removed';
+      body = '<p>Your listing has been removed from the Campaignia Guild.</p>' +
         '<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #c9a84c;background:#faf6ea;white-space:pre-wrap;">' + esc(note) + '</blockquote>' +
         '<p>If you think this was a mistake, reply to this email.</p>';
     } else if (action === 'unapprove') {
@@ -574,6 +574,13 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
 // Make contact and the picture viewer on these pages are the same window as the Library's (public/js/marketplace.js).
 // =====================================================================================================
 const pages = express.Router();
+// v3.3.16 -- THE GUILD (Ian, 2026-10-27: "'The Guild' with the Subtitle"). The feature is still "marketplace" inside
+// the code, tables and settings; everything a person sees says the Guild, and the pages live at /guild. The
+// /marketplace addresses from v3.3.08-3.3.15 were never public; they forward, so any test link still works.
+const GUILD_SUBTITLE = 'Artists, writers and Campaignia Specialists you can hire.';
+pages.get('/marketplace', function (req, res) { res.redirect(301, '/guild'); });
+pages.get('/marketplace/:slug', function (req, res) { res.redirect(301, '/guild/' + encodeURIComponent(String(req.params.slug || ''))); });
+pages.get('/marketplace-terms.html', function (req, res) { res.redirect(301, '/guild-terms.html'); });   // the file itself is gone
 function siteBase() { return String(process.env.PUBLIC_BASE_URL || process.env.APP_URL || 'https://campaignia.com').replace(/\/+$/, ''); }
 function absUrl(u) { u = String(u || ''); return /^https?:\/\//i.test(u) ? u : siteBase() + (u.charAt(0) === '/' ? '' : '/') + u; }
 function jsonLd(o) { return JSON.stringify(o).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026'); }
@@ -606,12 +613,12 @@ function pageShell(o) {
     (o.jsonld ? '<script type="application/ld+json">' + jsonLd(o.jsonld) + '</script>\n' : '') +
     '</head>\n<body class="mkt-page">\n' +
     '<nav class="mkt-page-nav"><a href="/" class="mkt-page-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span>Campaignia</span></a>' +
-      '<span class="mkt-page-navlinks"><a href="/marketplace">Marketplace</a><a href="/library">Library</a><a class="mkt-page-cta" href="/login">Create your own</a></span></nav>\n' +
-    '<main class="mkt-wrap mkt-page-main">' + (o.preview ? '<div class="mkt-preview-line">The Marketplace is switched off. Only admins can see this page, and search engines are told not to list it.</div>' : '') + o.body + '</main>\n' +
-    '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
+      '<span class="mkt-page-navlinks"><a href="/guild">The Guild</a><a href="/library">Library</a><a class="mkt-page-cta" href="/login">Create your own</a></span></nav>\n' +
+    '<main class="mkt-wrap mkt-page-main">' + (o.preview ? '<div class="mkt-preview-line">The Guild is switched off. Only admins can see this page, and search engines are told not to list it.</div>' : '') + o.body + '</main>\n' +
+    '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/guild-terms.html">Guild Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.15';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.16';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';
@@ -623,12 +630,12 @@ function mediaHtmlSrv(p) {
 }
 function notFound(res, on) {
   res.status(404).set('Cache-Control', 'no-store').type('html').send(pageShell({
-    title: 'Not on the Marketplace | Campaignia', description: 'This listing is not on the Campaignia Marketplace.', robots: 'noindex',
-    body: '<h1 class="mkt-page-h1">This listing isn\u2019t on the Marketplace</h1><p class="mkt-intro">It may have been paused or taken down.' +
-      (on ? ' <a href="/marketplace">See everyone on the Marketplace</a>.' : '') + '</p>' }));
+    title: 'Not in the Guild | Campaignia', description: 'This listing is not in the Campaignia Guild.', robots: 'noindex',
+    body: '<h1 class="mkt-page-h1">This listing isn\u2019t in the Guild</h1><p class="mkt-intro">It may have been paused or taken down.' +
+      (on ? ' <a href="/guild">See everyone in the Guild</a>.' : '') + '</p>' }));
 }
 
-pages.get('/marketplace', async function (req, res) {
+pages.get('/guild', async function (req, res) {
   try {
     const a = await pageAccess(req);
     if (!a.on && !a.ok) return notFound(res, false);
@@ -643,22 +650,22 @@ pages.get('/marketplace', async function (req, res) {
         '<div class="mkt-pills">' + p.roles.map(function (r) { return '<span class="mkt-pill mkt-pill-' + esc(r) + '">' + esc(ROLE_ONE_SRV[r] || r) + '</span>'; }).join('') + '</div>' +
         mediaTagsSrv(p) + '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div></div></a>';
     }).join('');
-    const canonical = siteBase() + '/marketplace';
+    const canonical = siteBase() + '/guild';
     res.set('Cache-Control', a.preview ? 'no-store' : 'public, max-age=300').type('html').send(pageShell({
-      title: 'Hire artists, illustrators, writers and editors for your book | Campaignia Marketplace',
+      title: 'The Guild: artists, writers and Campaignia Specialists you can hire | Campaignia',
       description: 'Find an illustrator to draw your story, a writer or editor to polish it, or a Campaignia Specialist to build the whole book for you. Contact them directly; Campaignia takes no fee.',
       canonical: canonical, robots: a.preview ? 'noindex' : null, preview: a.preview,
-      jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Campaignia Marketplace', url: canonical,
+      jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'The Campaignia Guild', url: canonical,
         mainEntity: { '@type': 'ItemList', itemListElement: list.slice(0, 100).map(function (p, i) { return { '@type': 'ListItem', position: i + 1, url: siteBase() + p.path, name: p.name }; }) } },
-      body: '<h1 class="mkt-page-h1">The Campaignia Marketplace</h1>' +
+      body: '<h1 class="mkt-page-h1">The Guild</h1><p class="mkt-subtitle">' + esc(GUILD_SUBTITLE) + '</p>' +
         '<p class="mkt-intro">Find people to help make your book: artists and illustrators to draw it, writers and narrative editors to polish the words, and Campaignia Specialists to build the whole book in Campaignia for you. ' +
         'Press <b>Make contact</b> on a listing and they reply to your email. Campaignia takes no fee and is not part of any arrangement you make.</p>' +
-        '<div class="mkt-bar"><a class="mkt-btn" href="/library#marketplace">Filter by kind of help</a><a class="mkt-btn mkt-list-me" href="/library#marketplace">List yourself</a></div>' +
+        '<div class="mkt-bar"><a class="mkt-btn" href="/library#guild">Filter by kind of help</a><a class="mkt-btn mkt-list-me" href="/library#guild">List yourself</a></div>' +
         (list.length ? '<div class="mkt-grid">' + cards + '</div>' : '<div class="mkt-empty">Nobody is listed yet.</div>') }));
   } catch (e) { console.error('[marketplace] index page: ' + (e && e.message)); res.status(500).set('Cache-Control', 'no-store').send('Server error'); }
 });
 
-pages.get('/marketplace/:slug', async function (req, res) {
+pages.get('/guild/:slug', async function (req, res) {
   try {
     const a = await pageAccess(req);
     if (!a.on && !a.ok) return notFound(res, false);
@@ -667,10 +674,10 @@ pages.get('/marketplace/:slug', async function (req, res) {
     const row = await a.db.prepare("SELECT l.id, l.live_json, l.reviewed_at, l.updated_at, l.status, l.paused, u.status AS user_status FROM marketplace_listings l JOIN users u ON u.id = l.user_id WHERE l.id = ?").get(Number(m[1]));
     const p = row && row.status !== 'removed' && !row.paused && (row.user_status || 'active') === 'active' ? publicOf(row) : null;
     if (!p) return notFound(res, a.on);
-    if ('/marketplace/' + req.params.slug !== p.path) return res.redirect(301, p.path);   // renamed: the old address keeps working
+    if ('/guild/' + req.params.slug !== p.path) return res.redirect(301, p.path);   // renamed: the old address keeps working
     const canonical = siteBase() + p.path;
     const roleWords = p.roles.map(function (r) { return ROLE_SEO[r]; }).filter(Boolean);
-    const title = clipWords(p.name + ' \u2014 ' + (p.headline || roleWords[0] || 'on the Campaignia Marketplace'), 70) + ' | Campaignia Marketplace';
+    const title = clipWords(p.name + ' \u2014 ' + (p.headline || roleWords[0] || 'in the Campaignia Guild'), 70) + ' | The Campaignia Guild';
     const description = clipWords((p.headline ? p.headline + '. ' : '') + p.bio, 158);
     const pics = p.samples.map(function (u, i) {
       return '<button type="button" class="mkt-page-pic" data-zoom="' + esc(u) + '" title="Click to see it bigger"><img src="' + esc(u) + '" alt="Sample of ' + esc(p.name) + '\u2019s work (' + (i + 1) + ' of ' + p.samples.length + ')"' + (i > 1 ? ' loading="lazy"' : '') + '></button>';
@@ -684,8 +691,8 @@ pages.get('/marketplace/:slug', async function (req, res) {
           image: p.samples[0] ? absUrl(p.samples[0]) : undefined, sameAs: p.links.length ? p.links : undefined } },
       // v3.3.12 -- Back (Ian): to wherever they came from on this site -- the app, the Library tab, the Marketplace page --
       // and to the Marketplace page when they arrived from outside (a search result, a shared link). marketplace.js decides.
-      body: '<div class="mkt-page-crumb"><a class="mkt-back" href="/marketplace" data-back="1">&larr; Back to the Marketplace</a>' +
-        '<span class="mkt-crumb-trail"><a href="/marketplace">Marketplace</a> &rsaquo; ' + esc(p.name) + '</span></div>' +
+      body: '<div class="mkt-page-crumb"><a class="mkt-back" href="/guild" data-back="1">&larr; Back to the Guild</a>' +
+        '<span class="mkt-crumb-trail"><a href="/guild">The Guild</a> &rsaquo; ' + esc(p.name) + '</span></div>' +
         '<div class="mkt-detail mkt-page-detail">' +
           '<div class="mkt-detail-pics"><div class="mkt-page-pics">' + (pics || '<div class="mkt-empty">No sample pictures.</div>') + '</div></div>' +
           '<div class="mkt-detail-text">' +
@@ -713,7 +720,7 @@ pages.get('/sitemap-marketplace.xml', async function (req, res) {
     const db = await getDb();
     if (await isEnabled(db)) {   // nothing is listed while the switch is off
       const x = function (t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-      parts.push('<url><loc>' + x(siteBase() + '/marketplace') + '</loc></url>');
+      parts.push('<url><loc>' + x(siteBase() + '/guild') + '</loc></url>');
       const rows = await db.prepare(
         "SELECT l.id, l.live_json, l.updated_at FROM marketplace_listings l JOIN users u ON u.id = l.user_id " +
         "WHERE l.live_json IS NOT NULL AND l.status <> 'removed' AND l.paused = false AND COALESCE(u.status, 'active') = 'active' ORDER BY l.id LIMIT 10000").all();
@@ -730,4 +737,4 @@ pages.get('/sitemap-marketplace.xml', async function (req, res) {
 
 module.exports = router;
 module.exports.pages = pages;
-module.exports._test = { cleanMedia: cleanMedia, MEDIA: MEDIA, slugify: slugify, listingPath: listingPath, pageShell: pageShell, jsonLd: jsonLd, MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
+module.exports._test = { GUILD_SUBTITLE: GUILD_SUBTITLE, cleanMedia: cleanMedia, MEDIA: MEDIA, slugify: slugify, listingPath: listingPath, pageShell: pageShell, jsonLd: jsonLd, MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
