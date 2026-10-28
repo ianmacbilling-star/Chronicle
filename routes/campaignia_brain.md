@@ -108,7 +108,8 @@ step. "Session/chapter": a game night or a chapter of a story — the same thing
    description. The campaign holds the whole story.
 2. **Add your characters.** Press the **Characters** button to open the **Characters screen** and add the main
    cast, with a description and reference pictures. These are the canonical characters, the starting point. Once
-   the first session is made, a character is changed as the story goes along on that session's **Characters** tab.
+   the first session exists and is **Ready**, you change a character as the story goes along on that session's
+   **Characters** tab.
    Do it **before** generating, so Campaignia knows who's who and keeps them looking the same.
 3. **Invite your members (optional).** **Members** — invite by email or with a link. They join free, and
    can follow along or make their own versions.
@@ -850,8 +851,8 @@ Nothing here is a rule; it is a map of which combinations do what.
 ## 9. Characters
 
 Press the **Characters** button (on the campaign's Sessions screen) to open the **Characters screen** and build
-your cast. These are the **canonical characters**, the starting point. **After the first session is made**, a
-character is changed as the story goes along on that session's **Characters tab** (10.2), and the change carries
+your cast. These are the **canonical characters**, the starting point. **Once the first session exists and is Ready**, you
+change a character as the story goes along on that session's **Characters tab** (10.2), and the change carries
 into later sessions. The Story Master can
 create/edit any character; a member assigned a character can create/edit *that* one,
 including its reference images.
@@ -1035,8 +1036,8 @@ that, **any member can click Generate Story on their own version** to re-extract
 own outline from their own notes. (Transcript and notes save automatically on click.)
 
 ### 10.2 Characters tab
-Characters are first created on the **Characters screen** (section 9). Once the first session is made, this tab
-is where a character changes as the story goes along. It lists the characters detected in this session. It also:
+Characters are first created on the **Characters screen** (section 9). Once the first session exists and is **Ready**,
+this tab is where you change a character as the story goes along. It lists the characters detected in this session. It also:
 - **Detects visual changes** — if the story describes a change (a horn breaks off, a
   sunburn, a hole in a hat), Campaignia flags the character with a **review badge**.
   Open it with the character's **Edit** button.

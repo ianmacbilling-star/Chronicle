@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.25",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3325-characters-ready",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help: once the first session exists and is Ready, a character is changed as the story goes along on that session's Characters tab (Ian).",
+        "detail": "Brain sections 1a, 9 and 10.2, and step 2 of the Getting started guide.",
+        "td": [
+          "TD-1038"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.24",
     "staged_on": "2026-10-28",
     "entries": [

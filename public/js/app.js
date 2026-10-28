@@ -5371,7 +5371,7 @@ function renderHelpThread() {
 // same path. Keep the two in step.
 var GS_STEPS = [
   { t: 'Create a campaign', d: 'Your campaign holds the whole story. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
-  { t: 'Add your characters', d: 'Press the Characters button to open the Characters screen, and add your main cast with a description and reference pictures. Do it before you generate, so Campaignia knows who\u2019s who and keeps them looking the same. Later, as the story changes them, you update them on each session\u2019s Characters tab.', go: 'camp:characters' },
+  { t: 'Add your characters', d: 'Press the Characters button to open the Characters screen, and add your main cast with a description and reference pictures. Do it before you generate, so Campaignia knows who\u2019s who and keeps them looking the same. Once the first session exists and is Ready, you change a character as the story goes along on that session\u2019s Characters tab.', go: 'camp:characters' },
   { t: 'Invite your members (optional)', d: 'Open Members and invite people by email or with a link. They join free, and can follow along or make their own versions.', go: 'camp:members' },
   { t: 'Create a session/chapter', d: 'Add one for each game night, or for each chapter of your story.', go: 'camp:sessions' },
   { t: 'Paste in your story', d: 'On the Story tab, paste your transcript or notes. Add director\u2019s notes for scenes that must appear, or for how a character should come across.', go: 'sess:notes' },
