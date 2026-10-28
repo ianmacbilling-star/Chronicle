@@ -520,13 +520,14 @@
   }
   function openReview() {
     var ov = modal('mkt-modal-wide mkt-review', '<div class="mkt-title">Marketplace listings</div>' +
-      '<div class="mkt-row"><select id="mkt-rv-filter"><option value="pending">Waiting for review</option><option value="altered">Altered (already live)</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
+      '<div class="mkt-row"><select id="mkt-rv-filter"><option value="attention">Needing attention</option><option value="pending">Waiting for review</option><option value="altered">Altered (already live)</option><option value="approved">Live</option><option value="declined">Sent back</option><option value="draft">Drafts</option><option value="removed">Removed</option><option value="">All</option></select>' +
       '<span class="mkt-msg" id="mkt-rv-msg"></span></div><div class="mkt-body" id="mkt-rv-list"><span class="mkt-spin"></span></div>');
     var all = [];
     function paint() {
       var f = $('mkt-rv-filter').value;
-      var list = all.filter(function (m) { return !f || (f === 'altered' ? m.altered : m.status === f); });
-      $('mkt-rv-list').innerHTML = list.length ? list.map(reviewCard).join('') : '<p class="mkt-sub">Nothing here.</p>';
+      // v3.3.14 -- "Needing attention" (Ian), the default: everything waiting for review plus every live listing altered since approval
+      var list = all.filter(function (m) { return !f || (f === 'attention' ? (m.status === 'pending' || !!m.altered) : (f === 'altered' ? m.altered : m.status === f)); });
+      $('mkt-rv-list').innerHTML = list.length ? list.map(reviewCard).join('') : '<p class="mkt-sub">' + (f === 'attention' ? 'Nothing needs your attention.' : 'Nothing here.') + '</p>';
     }
     function load() {
       api('GET', '/api/marketplace/admin/listings').then(function (x) {

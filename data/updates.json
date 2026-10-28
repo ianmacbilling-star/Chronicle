@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.14",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3314-marketplace-needing-attention",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace review window (still switched off): opens on a new filter, Needing attention, showing every listing waiting for review and every live listing altered since it was approved.",
+        "detail": "The other filters are unchanged. With nothing to look at it says Nothing needs your attention.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.13",
     "staged_on": "2026-10-27",
     "entries": [
