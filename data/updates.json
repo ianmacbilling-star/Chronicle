@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.24",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3324-characters-screen",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help: characters are first made on the Characters screen (the Characters button); once the first session exists, they change as the story goes along on that session's Characters tab.",
+        "detail": "The assistant's knowledge (sections 1a, 9, 10.2, 12, 19 and the FAQ) and step 2 of the Getting started guide. Also carries the getting-started answer fix that missed v3.3.23: all 17 steps, numbered, the five publishing steps included.",
+        "td": [
+          "TD-1038"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.23",
     "staged_on": "2026-10-28",
     "entries": [
