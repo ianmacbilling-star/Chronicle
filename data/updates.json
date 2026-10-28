@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.08",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3308-marketplace-pages",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): every live listing has its own page that search engines can read, plus a Marketplace page listing everyone, and both are in the sitemap.",
+        "detail": "/marketplace/<name>-<number> carries the listing's title, description, share preview picture and structured data, built on the server; a renamed listing's old address forwards to the new one. /marketplace lists every live listing as links. While the switch is off both answer 404 except to admins (marked noindex), and the Marketplace sitemap is empty. The listing window and the editor show the page's address with Copy link, so artists can share it.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.07",
     "staged_on": "2026-10-27",
     "entries": [

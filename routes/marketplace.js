@@ -136,9 +136,16 @@ function publicOf(row) {
     bio: live.bio || '', links: Array.isArray(live.links) ? live.links : [], rates: live.rates || '',
     availability: AVAIL.indexOf(live.availability) >= 0 ? live.availability : 'open',
     samples: (Array.isArray(live.samples) ? live.samples : []).filter(function (u) { return u && maskUrl(u) === u; }),   // a picture rejected later simply drops out
-    approved_at: row.reviewed_at || null
+    approved_at: row.reviewed_at || null,
+    path: listingPath(row.id, live.display_name)   // v3.3.08 -- its own page, /marketplace/<name>-<id>
   };
 }
+// v3.3.08 -- A LISTING'S OWN ADDRESS. The name is only for people and search engines; the number at the end is what
+// finds the listing, so a rename never breaks a link (the old address 301s to the new one).
+function slugify(t) {
+  return String(t || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'listing';
+}
+function listingPath(id, name) { return '/marketplace/' + slugify(name) + '-' + id; }
 function sameContent(a, b) {
   if (!a || !b) return false;
   return JSON.stringify(a) === JSON.stringify(b);
@@ -152,6 +159,7 @@ function mineOf(row) {
     // v3.3.06 -- an approved listing's edits go live at once (Ian); "altered" = live now differs from what was approved
     terms_ok: row.terms_version === MKT_TERMS_VERSION,   // v3.3.07
     has_reviewed: !!row.reviewed_json, altered: !!live && !!row.reviewed_json && !sameContent(live, jparse(row.reviewed_json, null)),
+    path: row.live_json ? listingPath(row.id, (jparse(row.live_json, {}) || {}).display_name) : null,   // v3.3.08
     submitted_at: row.submitted_at || null, reviewed_at: row.reviewed_at || null
   };
 }
@@ -532,5 +540,153 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
   } catch (e) { console.error('[marketplace] review: ' + (e && e.message)); res.status(500).json({ error: 'Server error' }); }
 });
 
+// =====================================================================================================
+// v3.3.08 -- TD-1037. THE MARKETPLACE'S OWN PAGES, BUILT ON THE SERVER (Ian, 2026-10-27: "can you build this now?").
+// The Library tab draws listings with JavaScript, so a search engine saw an empty page. These pages arrive complete:
+//   /marketplace                 every live listing, as links (the page search engines start from)
+//   /marketplace/<name>-<id>     one listing: title, description, share preview, structured data, pictures
+//   /sitemap-marketplace.xml     both of the above, listed in the sitemap index (routes/story-pages.js)
+// While the switch is off they answer 404 to everyone but an admin, who sees them marked noindex with the preview line.
+// Make contact and the picture viewer on these pages are the same window as the Library's (public/js/marketplace.js).
+// =====================================================================================================
+const pages = express.Router();
+function siteBase() { return String(process.env.PUBLIC_BASE_URL || process.env.APP_URL || 'https://campaignia.com').replace(/\/+$/, ''); }
+function absUrl(u) { u = String(u || ''); return /^https?:\/\//i.test(u) ? u : siteBase() + (u.charAt(0) === '/' ? '' : '/') + u; }
+function jsonLd(o) { return JSON.stringify(o).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026'); }
+function clipWords(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); if (t.length <= n) return t; t = t.slice(0, n - 1); const sp = t.lastIndexOf(' '); return (sp > n * 0.6 ? t.slice(0, sp) : t) + '\u2026'; }
+const ROLE_ONE_SRV = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Editor' };
+const ROLE_SEO = { artist: 'illustrator for hire', writer: 'writer and narrative editor for hire', editor: 'Campaignia book editor for hire' };
+const AVAIL_SRV = { open: 'Taking work', limited: 'Limited availability', closed: 'Not taking work right now' };
+
+async function pageAccess(req) {
+  const db = await getDb();
+  const on = await isEnabled(db);
+  if (on) return { db: db, on: true, preview: false };
+  const v = await viewer(db, req);
+  return { db: db, on: false, preview: !!(v && v.admin), ok: !!(v && v.admin) };
+}
+function pageShell(o) {
+  // o: title, description, canonical, robots, ogImage, jsonld, body, preview
+  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
+    '<link rel="stylesheet" href="/css/fonts.css">\n<link rel="stylesheet" href="/css/marketplace.css?v=' + PAGE_ASSET_V + '">\n' +
+    '<title>' + esc(o.title) + '</title>\n<meta name="description" content="' + esc(o.description) + '" />\n' +
+    (o.robots ? '<meta name="robots" content="' + esc(o.robots) + '" />\n' : '') +
+    (o.canonical ? '<link rel="canonical" href="' + esc(o.canonical) + '" />\n' : '') +
+    '<meta property="og:site_name" content="Campaignia" />\n<meta property="og:type" content="' + esc(o.ogType || 'website') + '" />\n' +
+    '<meta property="og:title" content="' + esc(o.title) + '" />\n<meta property="og:description" content="' + esc(o.description) + '" />\n' +
+    (o.canonical ? '<meta property="og:url" content="' + esc(o.canonical) + '" />\n' : '') +
+    (o.ogImage ? '<meta property="og:image" content="' + esc(o.ogImage) + '" />\n<meta name="twitter:card" content="summary_large_image" />\n<meta name="twitter:image" content="' + esc(o.ogImage) + '" />\n' : '<meta name="twitter:card" content="summary" />\n') +
+    '<meta name="twitter:title" content="' + esc(o.title) + '" />\n<meta name="twitter:description" content="' + esc(o.description) + '" />\n' +
+    '<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />\n' +
+    (o.jsonld ? '<script type="application/ld+json">' + jsonLd(o.jsonld) + '</script>\n' : '') +
+    '</head>\n<body class="mkt-page">\n' +
+    '<nav class="mkt-page-nav"><a href="/" class="mkt-page-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span>Campaignia</span></a>' +
+      '<span class="mkt-page-navlinks"><a href="/marketplace">Marketplace</a><a href="/library">Library</a><a class="mkt-page-cta" href="/login">Create your own</a></span></nav>\n' +
+    '<main class="mkt-wrap mkt-page-main">' + (o.preview ? '<div class="mkt-preview-line">The Marketplace is switched off. Only admins can see this page, and search engines are told not to list it.</div>' : '') + o.body + '</main>\n' +
+    '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
+    '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
+}
+const PAGE_ASSET_V = '3.3.08';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+function notFound(res, on) {
+  res.status(404).set('Cache-Control', 'no-store').type('html').send(pageShell({
+    title: 'Not on the Marketplace | Campaignia', description: 'This listing is not on the Campaignia Marketplace.', robots: 'noindex',
+    body: '<h1 class="mkt-page-h1">This listing isn\u2019t on the Marketplace</h1><p class="mkt-intro">It may have been paused or taken down.' +
+      (on ? ' <a href="/marketplace">See everyone on the Marketplace</a>.' : '') + '</p>' }));
+}
+
+pages.get('/marketplace', async function (req, res) {
+  try {
+    const a = await pageAccess(req);
+    if (!a.on && !a.ok) return notFound(res, false);
+    const rows = await a.db.prepare(
+      "SELECT l.id, l.live_json, l.reviewed_at FROM marketplace_listings l JOIN users u ON u.id = l.user_id " +
+      "WHERE l.live_json IS NOT NULL AND l.status <> 'removed' AND l.paused = false AND COALESCE(u.status, 'active') = 'active' " +
+      "ORDER BY l.reviewed_at DESC NULLS LAST, l.id DESC LIMIT 1000").all();
+    const list = rows.map(publicOf).filter(Boolean);
+    const cards = list.map(function (p) {
+      const pic = p.samples[0] ? '<img class="mkt-card-img" src="' + esc(p.samples[0]) + '" alt="Sample of ' + esc(p.name) + '\u2019s work" loading="lazy">' : '<div class="mkt-card-img mkt-card-ph">' + esc((p.name || '?').charAt(0).toUpperCase()) + '</div>';
+      return '<a class="mkt-card" href="' + esc(p.path) + '">' + pic + '<div class="mkt-card-body"><h2 class="mkt-card-name">' + esc(p.name) + '</h2><div class="mkt-card-head">' + esc(p.headline) + '</div>' +
+        '<div class="mkt-pills">' + p.roles.map(function (r) { return '<span class="mkt-pill mkt-pill-' + esc(r) + '">' + esc(ROLE_ONE_SRV[r] || r) + '</span>'; }).join('') + '</div>' +
+        '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div></div></a>';
+    }).join('');
+    const canonical = siteBase() + '/marketplace';
+    res.set('Cache-Control', a.preview ? 'no-store' : 'public, max-age=300').type('html').send(pageShell({
+      title: 'Hire artists, illustrators, writers and editors for your book | Campaignia Marketplace',
+      description: 'Find an illustrator to draw your story, a writer or editor to polish it, or a Campaignia editor to put your book together. Contact them directly; Campaignia takes no fee.',
+      canonical: canonical, robots: a.preview ? 'noindex' : null, preview: a.preview,
+      jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Campaignia Marketplace', url: canonical,
+        mainEntity: { '@type': 'ItemList', itemListElement: list.slice(0, 100).map(function (p, i) { return { '@type': 'ListItem', position: i + 1, url: siteBase() + p.path, name: p.name }; }) } },
+      body: '<h1 class="mkt-page-h1">The Campaignia Marketplace</h1>' +
+        '<p class="mkt-intro">Find people to help make your book: artists and illustrators to draw it, writers and narrative editors to polish the words, and Campaignia editors to put it together. ' +
+        'Press <b>Make contact</b> on a listing and they reply to your email. Campaignia takes no fee and is not part of any arrangement you make.</p>' +
+        '<div class="mkt-bar"><a class="mkt-btn" href="/library#marketplace">Filter by kind of help</a><a class="mkt-btn mkt-list-me" href="/library#marketplace">List yourself</a></div>' +
+        (list.length ? '<div class="mkt-grid">' + cards + '</div>' : '<div class="mkt-empty">Nobody is listed yet.</div>') }));
+  } catch (e) { console.error('[marketplace] index page: ' + (e && e.message)); res.status(500).set('Cache-Control', 'no-store').send('Server error'); }
+});
+
+pages.get('/marketplace/:slug', async function (req, res) {
+  try {
+    const a = await pageAccess(req);
+    if (!a.on && !a.ok) return notFound(res, false);
+    const m = /-(\d+)$/.exec(String(req.params.slug || ''));
+    if (!m) return notFound(res, a.on);
+    const row = await a.db.prepare("SELECT l.id, l.live_json, l.reviewed_at, l.updated_at, l.status, l.paused, u.status AS user_status FROM marketplace_listings l JOIN users u ON u.id = l.user_id WHERE l.id = ?").get(Number(m[1]));
+    const p = row && row.status !== 'removed' && !row.paused && (row.user_status || 'active') === 'active' ? publicOf(row) : null;
+    if (!p) return notFound(res, a.on);
+    if ('/marketplace/' + req.params.slug !== p.path) return res.redirect(301, p.path);   // renamed: the old address keeps working
+    const canonical = siteBase() + p.path;
+    const roleWords = p.roles.map(function (r) { return ROLE_SEO[r]; }).filter(Boolean);
+    const title = clipWords(p.name + ' \u2014 ' + (p.headline || roleWords[0] || 'on the Campaignia Marketplace'), 70) + ' | Campaignia Marketplace';
+    const description = clipWords((p.headline ? p.headline + '. ' : '') + p.bio, 158);
+    const pics = p.samples.map(function (u, i) {
+      return '<button type="button" class="mkt-page-pic" data-zoom="' + esc(u) + '" title="Click to see it bigger"><img src="' + esc(u) + '" alt="Sample of ' + esc(p.name) + '\u2019s work (' + (i + 1) + ' of ' + p.samples.length + ')"' + (i > 1 ? ' loading="lazy"' : '') + '></button>';
+    }).join('');
+    const links = p.links.map(function (u) { const label = u.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''); return '<a href="' + esc(u) + '" target="_blank" rel="nofollow noopener noreferrer ugc">' + esc(label) + '</a>'; }).join('');
+    res.set('Cache-Control', a.preview ? 'no-store' : 'public, max-age=300').type('html').send(pageShell({
+      title: title, description: description, canonical: canonical, robots: a.preview ? 'noindex' : null, preview: a.preview,
+      ogType: 'profile', ogImage: p.samples[0] ? absUrl(p.samples[0]) : null,
+      jsonld: { '@context': 'https://schema.org', '@type': 'ProfilePage', url: canonical, dateModified: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+        mainEntity: { '@type': 'Person', name: p.name, description: p.headline || undefined, jobTitle: p.roles.map(function (r) { return ROLE_ONE_SRV[r]; }).join(', ') || undefined,
+          image: p.samples[0] ? absUrl(p.samples[0]) : undefined, sameAs: p.links.length ? p.links : undefined } },
+      body: '<div class="mkt-page-crumb"><a href="/marketplace">Marketplace</a> &rsaquo; ' + esc(p.name) + '</div>' +
+        '<div class="mkt-detail mkt-page-detail">' +
+          '<div class="mkt-detail-pics"><div class="mkt-page-pics">' + (pics || '<div class="mkt-empty">No sample pictures.</div>') + '</div></div>' +
+          '<div class="mkt-detail-text">' +
+            '<h1 class="mkt-page-h1 mkt-title">' + esc(p.name) + '</h1>' +
+            '<div class="mkt-head">' + esc(p.headline) + '</div>' +
+            '<div class="mkt-pills">' + p.roles.map(function (r) { return '<span class="mkt-pill mkt-pill-' + esc(r) + '">' + esc(ROLE_ONE_SRV[r] || r) + '</span>'; }).join('') + '</div>' +
+            '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_SRV[p.availability] || '') + '</div>' +
+            '<div class="mkt-bio">' + esc(p.bio) + '</div>' +
+            (p.rates ? '<div class="mkt-label">Rates</div><div>' + esc(p.rates) + '</div>' : '') +
+            (links ? '<div class="mkt-label">Links</div><div class="mkt-links">' + links + '</div>' : '') +
+            '<div class="mkt-row" style="margin-top:18px;"><button type="button" class="mkt-btn mkt-btn-gold" data-contact="' + esc(p.id) + '">Make contact</button>' +
+              '<button type="button" class="mkt-btn" data-copy="' + esc(canonical) + '">Copy link to this page</button></div>' +
+            '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make.</div>' +
+          '</div></div>' }));
+  } catch (e) { console.error('[marketplace] listing page: ' + (e && e.message)); res.status(500).set('Cache-Control', 'no-store').send('Server error'); }
+});
+
+pages.get('/sitemap-marketplace.xml', async function (req, res) {
+  const parts = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+  try {
+    const db = await getDb();
+    if (await isEnabled(db)) {   // nothing is listed while the switch is off
+      const x = function (t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+      parts.push('<url><loc>' + x(siteBase() + '/marketplace') + '</loc></url>');
+      const rows = await db.prepare(
+        "SELECT l.id, l.live_json, l.updated_at FROM marketplace_listings l JOIN users u ON u.id = l.user_id " +
+        "WHERE l.live_json IS NOT NULL AND l.status <> 'removed' AND l.paused = false AND COALESCE(u.status, 'active') = 'active' ORDER BY l.id LIMIT 10000").all();
+      rows.forEach(function (r) {
+        const live = jparse(r.live_json, null); if (!live) return;
+        let lm = ''; try { lm = r.updated_at ? new Date(r.updated_at).toISOString() : ''; } catch (e) { lm = ''; }
+        parts.push('<url><loc>' + x(siteBase() + listingPath(r.id, live.display_name)) + '</loc>' + (lm ? '<lastmod>' + lm + '</lastmod>' : '') + '</url>');
+      });
+    }
+  } catch (e) { console.error('[marketplace] sitemap: ' + (e && e.message)); }
+  parts.push('</urlset>');
+  res.set('Content-Type', 'application/xml; charset=utf-8').send(parts.join('\n'));
+});
+
 module.exports = router;
-module.exports._test = { MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
+module.exports.pages = pages;
+module.exports._test = { slugify: slugify, listingPath: listingPath, pageShell: pageShell, jsonLd: jsonLd, MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
