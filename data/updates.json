@@ -1,5 +1,18 @@
 [
   {
+    "version": "3.3.20",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3320-landing-gm",
+        "kind": "copy",
+        "public": false,
+        "summary": "Landing pages: Write It Yourself now says \"The GM who keeps a campaign journal?\" (was DM).",
+        "detail": "The home page and /game-masters."
+      }
+    ]
+  },
+  {
     "version": "3.3.19",
     "staged_on": "2026-10-28",
     "entries": [
