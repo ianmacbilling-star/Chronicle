@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.15",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3315-marketplace-specialists",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): \"Campaignia Editors\" is now \"Campaignia Specialists\": people who build a whole book in Campaignia for you.",
+        "detail": "Renamed everywhere it shows: the Library filter, the introductions, the listing editor (each kind of help now has a one-line explanation beside it), card and page tags, the Marketplace page's search description and the Marketplace Terms. Listings that had ticked it keep it.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.14",
     "staged_on": "2026-10-27",
     "entries": [

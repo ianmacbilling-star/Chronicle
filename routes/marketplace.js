@@ -3,7 +3,7 @@
 // v3.3.01 -- TD-1037 stage one. Spec: claude/ARTIST_MARKETPLACE_SPEC.md
 //
 // A directory of people who make things for books -- Artists & Illustrators, Writers & Narrative
-// Editors, General Campaignia Editors -- and a Make contact button that emails them. Campaignia
+// Editors, Campaignia Specialists (v3.3.15: renamed from "General Campaignia Editors", Ian) -- and a Make contact button that emails them. Campaignia
 // takes no money and is not a party to anything they agree (Ian, 2026-10-26: "Money: none for now").
 //
 // THE SWITCH. app_settings.marketplace_enabled ('0' until launch). While it is off every route here
@@ -578,8 +578,9 @@ function siteBase() { return String(process.env.PUBLIC_BASE_URL || process.env.A
 function absUrl(u) { u = String(u || ''); return /^https?:\/\//i.test(u) ? u : siteBase() + (u.charAt(0) === '/' ? '' : '/') + u; }
 function jsonLd(o) { return JSON.stringify(o).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026'); }
 function clipWords(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); if (t.length <= n) return t; t = t.slice(0, n - 1); const sp = t.lastIndexOf(' '); return (sp > n * 0.6 ? t.slice(0, sp) : t) + '\u2026'; }
-const ROLE_ONE_SRV = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Editor' };
-const ROLE_SEO = { artist: 'illustrator for hire', writer: 'writer and narrative editor for hire', editor: 'Campaignia book editor for hire' };
+// v3.3.15 -- the stored key stays 'editor'; only the name changed (Ian: "Campaignia Specialists"): people who build a whole book in Campaignia for you
+const ROLE_ONE_SRV = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Specialist' };
+const ROLE_SEO = { artist: 'illustrator for hire', writer: 'writer and narrative editor for hire', editor: 'Campaignia Specialist: your book built for you' };
 const AVAIL_SRV = { open: 'Taking work', limited: 'Limited availability', closed: 'Not taking work right now' };
 
 async function pageAccess(req) {
@@ -610,7 +611,7 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.13';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.15';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';
@@ -645,12 +646,12 @@ pages.get('/marketplace', async function (req, res) {
     const canonical = siteBase() + '/marketplace';
     res.set('Cache-Control', a.preview ? 'no-store' : 'public, max-age=300').type('html').send(pageShell({
       title: 'Hire artists, illustrators, writers and editors for your book | Campaignia Marketplace',
-      description: 'Find an illustrator to draw your story, a writer or editor to polish it, or a Campaignia editor to put your book together. Contact them directly; Campaignia takes no fee.',
+      description: 'Find an illustrator to draw your story, a writer or editor to polish it, or a Campaignia Specialist to build the whole book for you. Contact them directly; Campaignia takes no fee.',
       canonical: canonical, robots: a.preview ? 'noindex' : null, preview: a.preview,
       jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Campaignia Marketplace', url: canonical,
         mainEntity: { '@type': 'ItemList', itemListElement: list.slice(0, 100).map(function (p, i) { return { '@type': 'ListItem', position: i + 1, url: siteBase() + p.path, name: p.name }; }) } },
       body: '<h1 class="mkt-page-h1">The Campaignia Marketplace</h1>' +
-        '<p class="mkt-intro">Find people to help make your book: artists and illustrators to draw it, writers and narrative editors to polish the words, and Campaignia editors to put it together. ' +
+        '<p class="mkt-intro">Find people to help make your book: artists and illustrators to draw it, writers and narrative editors to polish the words, and Campaignia Specialists to build the whole book in Campaignia for you. ' +
         'Press <b>Make contact</b> on a listing and they reply to your email. Campaignia takes no fee and is not part of any arrangement you make.</p>' +
         '<div class="mkt-bar"><a class="mkt-btn" href="/library#marketplace">Filter by kind of help</a><a class="mkt-btn mkt-list-me" href="/library#marketplace">List yourself</a></div>' +
         (list.length ? '<div class="mkt-grid">' + cards + '</div>' : '<div class="mkt-empty">Nobody is listed yet.</div>') }));

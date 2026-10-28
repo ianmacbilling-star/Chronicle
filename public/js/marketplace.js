@@ -9,8 +9,10 @@
 // code at the place it is drawn. An admin sees it all while it is off, with an amber preview line.
 (function () {
   'use strict';
-  var ROLE_NAMES = { artist: 'Artists & Illustrators', writer: 'Writers & Narrative Editors', editor: 'Campaignia Editors' };
-  var ROLE_ONE = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Editor' };
+  // v3.3.15 -- 'editor' is shown as Campaignia Specialists (Ian); the stored key is unchanged
+  var ROLE_NAMES = { artist: 'Artists & Illustrators', writer: 'Writers & Narrative Editors', editor: 'Campaignia Specialists' };
+  var ROLE_HINT = { artist: 'you draw or paint the pictures', writer: 'you write or polish the words', editor: 'you build whole books in Campaignia for people' };
+  var ROLE_ONE = { artist: 'Artist / Illustrator', writer: 'Writer / Narrative Editor', editor: 'Campaignia Specialist' };
   // v3.3.10 -- how the art is made (same list as MEDIA in routes/marketplace.js)
   var MEDIA_NAMES = { traditional: 'Traditional (paint, ink, pencil)', digital: 'Digital (drawn or painted on screen)', '3d': '3D', 'ai-generated': 'AI-generated', 'ai-assisted': 'AI-assisted (AI with my own drawing or painting)' };
   var MEDIA_SHORT = { traditional: 'Traditional', digital: 'Digital', '3d': '3D', 'ai-generated': 'AI-generated', 'ai-assisted': 'AI-assisted' };
@@ -189,7 +191,7 @@
       host.setAttribute('data-built', '1');
       host.innerHTML =
         '<div id="mkt-preview-slot"></div>' +
-        '<div class="mkt-intro">Find people to help make your book: artists to draw it, writers and editors to polish the words, and Campaignia editors to put it together. ' +
+        '<div class="mkt-intro">Find people to help make your book: artists to draw it, writers and editors to polish the words, and Campaignia Specialists to build the whole book in Campaignia for you. ' +
           'Press <b>Make contact</b> and they will reply to your email. Campaignia takes no fee and is not part of any arrangement you make.</div>' +
         '<div class="mkt-bar"><div class="mkt-roles" id="mkt-roles"></div>' +
           '<button type="button" class="mkt-btn mkt-list-me" id="mkt-list-me">List yourself</button></div>' +
@@ -357,7 +359,7 @@
         '<label class="mkt-label" for="mkt-f-name">Name shown on your listing</label><input id="mkt-f-name" maxlength="60" value="' + esc(d.display_name) + '">' +
         '<label class="mkt-label" for="mkt-f-head">Headline</label><input id="mkt-f-head" maxlength="120" placeholder="e.g. Ink-and-watercolour fantasy illustrator" value="' + esc(d.headline) + '">' +
         '<div class="mkt-label">What you offer</div><div class="mkt-checks">' + Object.keys(ROLE_NAMES).map(function (r) {
-          return '<label><input type="checkbox" value="' + r + '"' + (d.roles.indexOf(r) >= 0 ? ' checked' : '') + '> ' + esc(ROLE_NAMES[r]) + '</label>';
+          return '<label><input type="checkbox" value="' + r + '"' + (d.roles.indexOf(r) >= 0 ? ' checked' : '') + '> ' + esc(ROLE_NAMES[r]) + ' <span class="mkt-sub">(' + esc(ROLE_HINT[r]) + ')</span></label>';
         }).join('') + '</div>' +
         // v3.3.10 -- shown only while "Artists & Illustrators" is ticked
         '<div id="mkt-media-box"' + (d.roles.indexOf('artist') >= 0 ? '' : ' hidden') + '>' +
@@ -494,7 +496,7 @@
     var line = $('mkt-account-line');
     if (!line || !STATUS) return;
     var m = STATUS.mine;
-    var txt = !m ? 'Artists, writers and editors can list themselves so Story Masters can find them and get in touch.'
+    var txt = !m ? 'Artists, writers and Campaignia Specialists can list themselves so Story Masters can find them and get in touch.'
       : statusSentence({ status: m.status, paused: m.paused, has_live: m.has_live, changed: false, admin_note: '' });
     line.textContent = txt;
     var b = $('mkt-account-btn'); if (b) b.textContent = m ? 'Edit your listing' : 'Create your listing';
