@@ -1,5 +1,18 @@
 [
   {
+    "version": "3.3.19",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3319-landing-creative-control",
+        "kind": "copy",
+        "public": false,
+        "summary": "Landing pages: the Multiple Layout Styles box is now Total Creative Control: all the tools in one place to edit every part of your book (rewrite the narrative, retouch images, rework the layout).",
+        "detail": "The home page, /game-masters and /story."
+      }
+    ]
+  },
+  {
     "version": "3.3.18",
     "staged_on": "2026-10-28",
     "entries": [
