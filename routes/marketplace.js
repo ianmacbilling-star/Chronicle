@@ -610,7 +610,7 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.11';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.12';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';
@@ -681,7 +681,10 @@ pages.get('/marketplace/:slug', async function (req, res) {
       jsonld: { '@context': 'https://schema.org', '@type': 'ProfilePage', url: canonical, dateModified: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
         mainEntity: { '@type': 'Person', name: p.name, description: p.headline || undefined, jobTitle: p.roles.map(function (r) { return ROLE_ONE_SRV[r]; }).join(', ') || undefined,
           image: p.samples[0] ? absUrl(p.samples[0]) : undefined, sameAs: p.links.length ? p.links : undefined } },
-      body: '<div class="mkt-page-crumb"><a href="/marketplace">Marketplace</a> &rsaquo; ' + esc(p.name) + '</div>' +
+      // v3.3.12 -- Back (Ian): to wherever they came from on this site -- the app, the Library tab, the Marketplace page --
+      // and to the Marketplace page when they arrived from outside (a search result, a shared link). marketplace.js decides.
+      body: '<div class="mkt-page-crumb"><a class="mkt-back" href="/marketplace" data-back="1">&larr; Back to the Marketplace</a>' +
+        '<span class="mkt-crumb-trail"><a href="/marketplace">Marketplace</a> &rsaquo; ' + esc(p.name) + '</span></div>' +
         '<div class="mkt-detail mkt-page-detail">' +
           '<div class="mkt-detail-pics"><div class="mkt-page-pics">' + (pics || '<div class="mkt-empty">No sample pictures.</div>') + '</div></div>' +
           '<div class="mkt-detail-text">' +

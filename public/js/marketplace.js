@@ -593,6 +593,33 @@
   }
 
   // ---------------------------------------------------------------- the Library tab
+  // v3.3.12 -- WHERE BACK GOES on a listing's own page (Ian: "if they get there from inside the app it goes back there...
+  // if they are just on the marketplace it goes back to that"). Came from a page of this site in this tab: step back to
+  // it, wherever it was. Otherwise -- a new tab opened from the app, a search result, a shared link -- the app if this
+  // tab was opened from the app (remembered for the tab), else the Marketplace page.
+  function rememberFromApp() {
+    try { if (/[?&]from=app\b/.test(location.search)) sessionStorage.setItem('mktFromApp', '1'); } catch (e) {}
+  }
+  function cameFromHere() {
+    try { return !!document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1; } catch (e) { return false; }
+  }
+  function fromApp() { try { return sessionStorage.getItem('mktFromApp') === '1'; } catch (e) { return false; } }
+  function wireBack() {
+    var b = document.querySelector('a.mkt-back[data-back]');
+    if (!b) return;
+    var here = cameFromHere(), app = fromApp();
+    var ref = ''; try { ref = here ? new URL(document.referrer).pathname : ''; } catch (e) {}
+    var label = 'Back to the Marketplace';
+    if (here) label = /^\/app(\.html)?$/.test(ref) ? 'Back to Campaignia' : (ref === '/library' ? 'Back to the Library' : (ref === '/marketplace' ? 'Back to the Marketplace' : 'Back'));
+    else if (app) label = 'Back to Campaignia';
+    b.innerHTML = '&larr; ' + label;
+    b.addEventListener('click', function (e) {
+      if (here) { e.preventDefault(); history.back(); }
+      else if (app) { e.preventDefault(); location.href = '/app.html'; }
+      // else: the link itself goes to /marketplace
+    });
+  }
+
   function libraryWire() {
     var tab = $('tab-market');
     if (!tab || typeof window.switchTab !== 'function') return;
@@ -634,6 +661,8 @@
   window.Mkt = { zoom: zoom, openEditor: openEditor, openReview: openReview, openListing: openListing, setSwitch: setSwitch, refresh: loadStatus, showDirectory: showDirectory };
 
   function start() {
+    rememberFromApp();
+    wireBack();
     libraryWire();
     pageContact();
     loadStatus();

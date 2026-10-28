@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.12",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3312-marketplace-back",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): a Back button on each artist's page, back to wherever they came from.",
+        "detail": "From the app, the Library's Marketplace tab or the Marketplace page it steps back there (and says where: Back to Campaignia, Back to the Library, Back to the Marketplace). Arriving from outside, such as a search result or a shared link, it goes to the Marketplace page; in a tab opened from the app it goes to the app.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.11",
     "staged_on": "2026-10-27",
     "entries": [
