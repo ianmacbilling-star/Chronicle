@@ -22,7 +22,7 @@ html:not(.mkt-live) .mkt-live-link { display: none !important; }
 .mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
 .mkt-card { display: flex; flex-direction: column; text-align: left; padding: 0; cursor: pointer; background: #0d0804; color: inherit; font: inherit; border: 3px solid #0a0806; border-radius: 3px; overflow: hidden; box-shadow: 3px 3px 0 rgba(0,0,0,0.35); transition: transform .12s; }
 .mkt-card:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 rgba(0,0,0,0.45); }
-.mkt-card-img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #160e06; display: block; }
+.mkt-card-img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #0a0705; display: block; }   /* v3.3.11: whole picture, never cropped; same card size, dark bands where the shape differs */
 .mkt-card-ph { display: flex; align-items: center; justify-content: center; font-family: 'Bangers', cursive; font-size: 54px; color: rgba(201,168,76,0.45); }
 .mkt-card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
 .mkt-card-name { font-family: 'Cinzel', serif; font-weight: 700; font-size: 15px; color: #c9a84c; }
@@ -163,11 +163,13 @@ body.mkt-page { margin: 0; min-height: 100vh; background: #0a0806 url('/images/C
 a.mkt-card { text-decoration: none; }
 .mkt-card h2.mkt-card-name { margin: 0; font-size: 15px; font-weight: 700; }
 .mkt-page-detail { background: rgba(20,13,6,0.92); border: 1px solid rgba(201,168,76,0.35); border-radius: 8px; padding: 20px 22px; }
-.mkt-page-pics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.mkt-page-pic { padding: 0; border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; background: #0a0705; cursor: zoom-in; overflow: hidden; }
+/* v3.3.11 -- NEVER CROPPED (Ian: "make sure the pictures on the artist page aren't cropped"). Every picture shows whole,
+   at its own shape: the first across the full width, the rest two to a row, each as tall as its own picture needs
+   (a very tall one is held to the screen's height and shrunk to fit, never cut). */
+.mkt-page-pics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+.mkt-page-pic { display: block; width: 100%; padding: 0; border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; background: #0a0705; cursor: zoom-in; overflow: hidden; }
 .mkt-page-pic:first-child { grid-column: 1 / -1; }
-.mkt-page-pic img { display: block; width: 100%; height: 100%; max-height: 70vh; object-fit: contain; }
-.mkt-page-pic:not(:first-child) img { aspect-ratio: 4 / 3; object-fit: cover; }
+.mkt-page-pic img { display: block; width: 100%; height: auto; max-height: 75vh; object-fit: contain; margin: 0 auto; }
 .mkt-page-detail .mkt-links a, .mkt-page .mkt-fine a, .mkt-page .mkt-intro a { color: #e8c766; }
 .mkt-page-foot { margin-top: 40px; border-top: 3px solid #0a0806; background: #0a0806; padding: 22px; text-align: center; color: rgba(201,168,76,0.45); font-size: 12px; font-family: 'Cinzel', serif; letter-spacing: 1px; }
 .mkt-page-foot a { color: rgba(201,168,76,0.7); text-decoration: none; }

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.11",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3311-marketplace-uncropped",
+        "kind": "fix",
+        "public": false,
+        "summary": "Marketplace (still switched off): the sample pictures on an artist's page, and the picture on each Marketplace card, are shown whole, never cropped.",
+        "detail": "On the page, the first picture runs the full width and the rest sit two to a row, each at its own shape; a very tall one is shrunk to fit the screen rather than cut. Cards keep one size and show the whole picture with dark bands where its shape differs.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.10",
     "staged_on": "2026-10-27",
     "entries": [
