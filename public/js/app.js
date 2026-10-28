@@ -5354,6 +5354,7 @@ function renderHelpThread() {
       // v3.1.42 -- TD-811. Answers came through with their **bold** markers showing. The assistant's replies
       // get light formatting; what the reader typed is shown exactly as typed.
       html += '<div class="help-msg ' + cls + '">' + (m.role === 'user' ? escapeHtml(m.content) : _helpFormat(m.content)) + '</div>';
+      if (m.guide) html += '<button type="button" class="help-gs-pill help-gs-inline" onclick="gsOpen()">Open the step-by-step guide</button>';   // v3.3.23
     });
   }
   if (_helpPending) html += '<div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>';
@@ -5404,7 +5405,7 @@ function gsPaint() {
   var bar = document.getElementById('help-gs-bar'), box = document.getElementById('help-gs'), th = document.getElementById('help-thread');
   if (!bar || !box) return;
   var d = _gs.data;
-  bar.innerHTML = (d && d.show_pill && !_gs.open) ? '<button type="button" class="help-gs-pill" onclick="gsOpen()">New here? Get started step by step</button>' : '';
+  bar.innerHTML = (((d && d.show_pill) || _gs.asked) && !_gs.open) ? '<button type="button" class="help-gs-pill" onclick="gsOpen()">New here? Get started step by step</button>' : '';
   if (!_gs.open) { box.style.display = 'none'; if (th) th.style.display = ''; return; }
   if (th) th.style.display = 'none';
   box.style.display = '';
@@ -5427,6 +5428,8 @@ function gsPaint() {
 }
 function gsOpen() {
   _gs.open = true;
+  // v3.3.23 -- a pill brought back by clearing the tours goes once the guide has been opened
+  if (_gs.data && _gs.data.offer) { _gs.data.offer = false; fetch('/api/help/start/seen', { method: 'POST' }).catch(function () {}); }
   var h = _gs.data && _gs.data.here;
   _gs.step = (h && h >= 1 && h <= GS_STEPS.length) ? h : (_gs.data && _gs.data.kind === 'member' ? 5 : 1);
   gsPaint();
@@ -5612,7 +5615,8 @@ function submitHelp() {
       _helpPending = false;
       if (btn) btn.disabled = false;
       if (data && data.ok && data.answer) {
-        _helpThread.push({ role: 'assistant', content: data.answer });
+        _helpThread.push(data.guide ? { role: 'assistant', content: data.answer, guide: true } : { role: 'assistant', content: data.answer });
+        if (data.guide) _gs.asked = true;   // v3.3.23 -- the pill comes back for the rest of the visit
         if (data.ai_done_emailed) _helpAiDoneSent = true;
       } else {
         _helpThread.pop();

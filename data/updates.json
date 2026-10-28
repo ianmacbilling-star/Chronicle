@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.23",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3323-getting-started-more",
+        "kind": "feature",
+        "public": false,
+        "summary": "Getting started: Show guided tours again (and the Dashboard's Clear tour history) brings the pill back until the guide is opened; asking the assistant how to get going adds an Open the step-by-step guide button under its answer.",
+        "detail": "Tour reset writes gs_offer into tour_progress; GET /api/help/start reports it; POST /api/help/start/seen drops it when the guide opens. /api/help/ask strips a <<GET_STARTED>> marker and returns guide:true; the pill also shows for the rest of that visit.",
+        "td": [
+          "TD-1038"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.22",
     "staged_on": "2026-10-28",
     "entries": [

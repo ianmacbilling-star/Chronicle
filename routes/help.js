@@ -33,6 +33,7 @@ function giftChoicesLine(u, inFreeTrial, passUntil, nowMs) {
   return 'a pass gift offers BOTH choices: the pass (' + start + ') OR Take tokens instead; a token-pack gift adds its tokens.';
 }
 const MAX_TURNS = 12;   // cap conversation history sent to the model
+const GS_MARKER = '<<GET_STARTED>>';   // v3.3.23 -- see the guide button below
 
 // The Campaignia Brain is the knowledge base for this assistant. It is loaded
 // once at startup from routes/campaignia_brain.md -- to change what the help
@@ -347,6 +348,10 @@ router.post('/ask', requireAuth, async function(req, res) {
   let _aiDoneOn = false;
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
+  // v3.3.23 -- THE GUIDE BUTTON (Ian, 2026-10-28: "if I just ask it ... how do I get going... can it put the pill at
+  // the top?"). The model marks a getting-started answer; the marker is taken out here and the panel shows an
+  // "Open the step-by-step guide" button under the answer and brings the pill back for the visit.
+  system += '\n\nGETTING-STARTED GUIDE BUTTON: when the user asks how to get started, how to get going, how to make or turn their story/campaign into a book, or what the steps are, answer briefly (Brain section 1a) and end your reply with the exact marker ' + GS_MARKER + ' on its own line. Do not add it for narrow questions about one feature.';
   if (_aiDoneOn && !_aiDoneAlready) {
     system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply -- always AFTER at least one short friendly sentence, never as the whole reply -- ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
   }
@@ -389,7 +394,8 @@ router.post('/ask', requireAuth, async function(req, res) {
     const rawAnswer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
     const _marker = '<<HELP_DONE>>';
     const _isDone = rawAnswer.indexOf(_marker) !== -1;
-    let answer = rawAnswer.split(_marker).join('').trim();
+    const _guide = rawAnswer.indexOf(GS_MARKER) !== -1;   // v3.3.23
+    let answer = rawAnswer.split(_marker).join('').split(GS_MARKER).join('').trim();
     // v3.1.53 -- A THANK-YOU IS NOT A FAILURE. Ian, twice: "perfect" after a good answer came back as
     // "Could not answer that right now", with his word put back in the box. With the session-end email on,
     // the model answered a plain thank-you with the end marker and nothing else, so stripping the marker
@@ -413,7 +419,7 @@ router.post('/ask', requireAuth, async function(req, res) {
         _aiDoneEmailed = true;
       } catch (e) { try { console.warn('[help ai-done email] ' + (e && e.message)); } catch (_e) {} }
     }
-    return res.json({ ok: true, answer: answer, ai_done_emailed: _aiDoneEmailed });
+    return res.json({ ok: true, answer: answer, ai_done_emailed: _aiDoneEmailed, guide: _guide });
   } catch (e) {
     console.error('help/ask error:', e.message);
     return res.json({ ok: false, error: friendlyAnthropicError(e) });
@@ -468,7 +474,11 @@ router.get('/start', requireAuth, async function (req, res) {
     const u = await db.prepare('SELECT * FROM users WHERE id = ?').get(uid);
     const pub = await db.prepare('SELECT 1 AS x FROM public_stories WHERE user_id = ? LIMIT 1').get(uid);
     const ord = await db.prepare("SELECT 1 AS x FROM print_orders WHERE user_id = ? AND payment_status = 'paid' LIMIT 1").get(uid);
-    out.show_pill = !(pub || ord);
+    // v3.3.23 -- Clear tour history / Show guided tours again puts the pill back until the guide is opened.
+    let tp = u && u.tour_progress;
+    if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch (e) { tp = null; } }
+    out.offer = !!(tp && typeof tp === 'object' && tp.gs_offer === true);
+    out.show_pill = !(pub || ord) || out.offer;
     let tier = 'copper';
     try { tier = ownTier(u) || 'copper'; } catch (e) {}
     const creator = tier !== 'copper' || isOnFreeTrial(u);
@@ -516,6 +526,17 @@ router.get('/start', requireAuth, async function (req, res) {
     console.error('[help start] ' + (e && e.message));
     return res.json(out);
   }
+});
+
+// v3.3.23 -- the guide was opened: a pill brought back by clearing the tours goes again. A support session does
+// not count as the customer opening it.
+router.post('/start/seen', requireAuth, async function (req, res) {
+  if (req.session.impersonatorId) return res.json({ ok: true, skipped: 'support session' });
+  try {
+    const db = await getDb();
+    await db.prepare("UPDATE users SET tour_progress = COALESCE(tour_progress, '{}'::jsonb) - 'gs_offer' WHERE id = ?").run(req.session.userId);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false }); }
 });
 
 module.exports = router;
