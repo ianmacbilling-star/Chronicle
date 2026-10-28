@@ -154,11 +154,12 @@
     var pic = p.samples && p.samples[0]
       ? '<img class="mkt-card-img" src="' + esc(p.samples[0]) + '" alt="" loading="lazy">'
       : '<div class="mkt-card-img mkt-card-ph">' + esc((p.name || '?').charAt(0).toUpperCase()) + '</div>';
-    return '<button type="button" class="mkt-card" data-id="' + esc(p.id) + '">' + pic +
+    // v3.3.09 -- a card is a link to the listing's own page (Ian: "if they click on the Artist tile... it opens the Artist's page")
+    return '<a class="mkt-card" href="' + esc(p.path) + '" data-id="' + esc(p.id) + '">' + pic +
       '<div class="mkt-card-body"><div class="mkt-card-name">' + esc(p.name) + '</div>' +
       '<div class="mkt-card-head">' + esc(p.headline) + '</div>' +
       '<div class="mkt-pills">' + rolePills(p.roles) + '</div>' +
-      '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div></div></button>';
+      '<div class="mkt-avail mkt-avail-' + esc(p.availability) + '">' + esc(AVAIL_NAMES[p.availability] || '') + '</div></div></a>';
   }
   function dirShell() {
     var host = $('market');
@@ -180,7 +181,7 @@
       });
       $('mkt-grid').addEventListener('click', function (e) {
         var c = e.target.closest ? e.target.closest('.mkt-card') : null;
-        if (c) openListing(Number(c.getAttribute('data-id')));
+        if (c && !c.getAttribute('href')) openListing(Number(c.getAttribute('data-id')));   // a card with a page simply follows its link
       });
       $('mkt-list-me').addEventListener('click', function () {
         if (STATUS && STATUS.signedIn) openEditor();
@@ -232,16 +233,7 @@
         var label = u.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
         return '<a href="' + esc(u) + '" target="_blank" rel="nofollow noopener noreferrer ugc">' + esc(label.length > 48 ? label.slice(0, 47) + '\u2026' : label) + '</a>';
       }).join('');
-      var contact;
-      if (p.own) contact = '<div class="mkt-note">This is your listing. <button type="button" class="mkt-linkbtn" data-act="edit">Edit it</button></div>';
-      else if (!STATUS || !STATUS.signedIn) contact = '<a class="mkt-btn mkt-btn-gold" href="/login?next=' + encodeURIComponent(/^\/marketplace\//.test(location.pathname) ? location.pathname : '/library#marketplace') + '">Sign in to make contact</a>';
-      else contact =
-        '<div class="mkt-contact"><div class="mkt-label">Make contact</div>' +
-        '<select id="mkt-kind">' + Object.keys(KIND_NAMES).map(function (k) { return '<option value="' + k + '">' + esc(KIND_NAMES[k]) + '</option>'; }).join('') + '</select>' +
-        '<textarea id="mkt-message" maxlength="2000" rows="5" placeholder="Say hello, describe your book and what you need, and when you need it."></textarea>' +
-        '<div class="mkt-row"><button type="button" class="mkt-btn mkt-btn-gold" data-act="send">Send</button><span id="mkt-send-msg" class="mkt-msg"></span></div>' +
-        '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make. ' +
-          'By sending you agree to the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a>.</div></div>';   // v3.3.07
+      var contact = contactHtml(p);
       body.innerHTML =
         '<div class="mkt-detail">' +
           '<div class="mkt-detail-pics">' + (main ? '<button type="button" class="mkt-main-a" data-zoom="' + esc(main) + '" title="Click to see it bigger"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></button>' : '') + thumbs + '</div>' +
@@ -265,6 +257,37 @@
           Array.prototype.forEach.call(body.querySelectorAll('.mkt-thumb'), function (b) { b.classList.toggle('on', b === t); });
         } else if (t.getAttribute('data-act') === 'edit') { ov.close(); openEditor(); }
         else if (t.getAttribute('data-act') === 'send') sendContact(p, t);
+      });
+    });
+  }
+  // The Make contact section: in the listing window and, since v3.3.09, on the listing's own page.
+  function contactHtml(p) {
+    if (p.own) return '<div class="mkt-note">This is your listing. <button type="button" class="mkt-linkbtn" data-act="edit">Edit it</button></div>';
+    if (!STATUS || !STATUS.signedIn) return '<div class="mkt-contact"><div class="mkt-label">Make contact</div><a class="mkt-btn mkt-btn-gold" href="/login?next=' + encodeURIComponent(/^\/marketplace\//.test(location.pathname) ? location.pathname : '/library#marketplace') + '">Sign in to make contact</a>' +
+      '<div class="mkt-fine">Sign in, or create a free account, to send ' + esc(p.name) + ' a message.</div></div>';
+    return '<div class="mkt-contact"><div class="mkt-label">Make contact</div>' +
+      '<select id="mkt-kind">' + Object.keys(KIND_NAMES).map(function (k) { return '<option value="' + k + '">' + esc(KIND_NAMES[k]) + '</option>'; }).join('') + '</select>' +
+      '<textarea id="mkt-message" maxlength="2000" rows="5" placeholder="Say hello, describe your book and what you need, and when you need it."></textarea>' +
+      '<div class="mkt-row"><button type="button" class="mkt-btn mkt-btn-gold" data-act="send">Send</button><span id="mkt-send-msg" class="mkt-msg"></span></div>' +
+      '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make. ' +
+        'By sending you agree to the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a>.</div></div>';   // v3.3.07
+  }
+  // v3.3.09 -- the listing page's own contact section (#mkt-page-contact, left empty by the server)
+  function pageContact() {
+    var host = $('mkt-page-contact');
+    if (!host) return;
+    var id = Number(host.getAttribute('data-listing'));
+    whenStatus(function () {
+      api('GET', '/api/marketplace/listings/' + id).then(function (x) {
+        if (!x.ok || !x.j.listing) { host.innerHTML = ''; return; }
+        var p = x.j.listing;
+        host.innerHTML = contactHtml(p);
+        host.addEventListener('click', function (e) {
+          var t = e.target.closest ? e.target.closest('[data-act]') : null;
+          if (!t) return;
+          if (t.getAttribute('data-act') === 'send') sendContact(p, t);
+          else if (t.getAttribute('data-act') === 'edit') openEditor();
+        });
       });
     });
   }
@@ -584,6 +607,7 @@
 
   function start() {
     libraryWire();
+    pageContact();
     loadStatus();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);

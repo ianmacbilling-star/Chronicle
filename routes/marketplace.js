@@ -586,7 +586,7 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.08';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.09';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 function notFound(res, on) {
   res.status(404).set('Cache-Control', 'no-store').type('html').send(pageShell({
     title: 'Not on the Marketplace | Campaignia', description: 'This listing is not on the Campaignia Marketplace.', robots: 'noindex',
@@ -659,9 +659,10 @@ pages.get('/marketplace/:slug', async function (req, res) {
             '<div class="mkt-bio">' + esc(p.bio) + '</div>' +
             (p.rates ? '<div class="mkt-label">Rates</div><div>' + esc(p.rates) + '</div>' : '') +
             (links ? '<div class="mkt-label">Links</div><div class="mkt-links">' + links + '</div>' : '') +
-            '<div class="mkt-row" style="margin-top:18px;"><button type="button" class="mkt-btn mkt-btn-gold" data-contact="' + esc(p.id) + '">Make contact</button>' +
-              '<button type="button" class="mkt-btn" data-copy="' + esc(canonical) + '">Copy link to this page</button></div>' +
-            '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make.</div>' +
+            // v3.3.09 -- the Make contact form sits on the page itself (Ian). Filled in by marketplace.js, because whether
+            // you are signed in, or this is your own listing, is per visitor and this page is cached for everyone.
+            '<div class="mkt-page-contact" id="mkt-page-contact" data-listing="' + esc(p.id) + '"><span class="mkt-spin"></span></div>' +
+            '<div class="mkt-row" style="margin-top:10px;"><button type="button" class="mkt-linkbtn" data-copy="' + esc(canonical) + '">Copy link to this page</button></div>' +
           '</div></div>' }));
   } catch (e) { console.error('[marketplace] listing page: ' + (e && e.message)); res.status(500).set('Cache-Control', 'no-store').send('Server error'); }
 });

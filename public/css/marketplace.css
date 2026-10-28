@@ -174,3 +174,8 @@ a.mkt-card { text-decoration: none; }
 .mkt-pagelink { margin-top: 10px; }
 .mkt-pagelink a { color: #e8c766; word-break: break-all; }
 @media (max-width: 720px) { .mkt-page-detail { padding: 14px; } .mkt-page-navlinks { gap: 10px; } }
+
+/* v3.3.09 -- the contact section on a listing's own page */
+.mkt-page-contact { margin-top: 18px; }
+.mkt-page-contact .mkt-contact { margin-top: 0; }
+.mkt-page textarea, .mkt-page select { width: 100%; box-sizing: border-box; background: #0d0804; color: #f0e8d0; border: 1px solid rgba(201,168,76,0.4); border-radius: 4px; padding: 8px 10px; font-family: 'Crimson Text', Georgia, serif; font-size: 15px; margin-bottom: 6px; }

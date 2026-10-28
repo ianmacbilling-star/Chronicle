@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.09",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3309-marketplace-card-opens-page",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): clicking a card on the Library's Marketplace tab opens that person's own page, and the Make contact form is on the page itself.",
+        "detail": "The page shows the form to a signed-in visitor, a Sign in to make contact button to others, and an Edit it link to the listing's owner. It is filled in after the page loads, so the page can still be cached for everyone.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.08",
     "staged_on": "2026-10-27",
     "entries": [
