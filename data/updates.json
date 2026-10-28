@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.13",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3313-marketplace-share",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): a Share button on each artist's page, like the one on published stories, in place of Copy link.",
+        "detail": "On a phone it opens the phone's own share sheet; on a computer it copies the link and says Link copied. The listing editor's page link has the same Share.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.12",
     "staged_on": "2026-10-27",
     "entries": [

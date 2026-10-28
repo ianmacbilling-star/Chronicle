@@ -610,7 +610,7 @@ function pageShell(o) {
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/marketplace-terms.html">Marketplace Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.12';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.3.13';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';
@@ -699,7 +699,9 @@ pages.get('/marketplace/:slug', async function (req, res) {
             // v3.3.09 -- the Make contact form sits on the page itself (Ian). Filled in by marketplace.js, because whether
             // you are signed in, or this is your own listing, is per visitor and this page is cached for everyone.
             '<div class="mkt-page-contact" id="mkt-page-contact" data-listing="' + esc(p.id) + '"><span class="mkt-spin"></span></div>' +
-            '<div class="mkt-row" style="margin-top:10px;"><button type="button" class="mkt-linkbtn" data-copy="' + esc(canonical) + '">Copy link to this page</button></div>' +
+            // v3.3.13 -- SHARE, like a story page's (Ian): the phone's own share sheet where there is one, else the link is copied.
+            '<div class="mkt-row" style="margin-top:12px;"><button type="button" class="mkt-share" data-share="' + esc(canonical) + '" data-title="' + esc(clipWords(p.name + (p.headline ? ' \u2014 ' + p.headline : ''), 90)) + '" aria-label="Share this page">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line></svg>Share</button><span class="mkt-share-msg" role="status" aria-live="polite"></span></div>' +
           '</div></div>' }));
   } catch (e) { console.error('[marketplace] listing page: ' + (e && e.message)); res.status(500).set('Cache-Control', 'no-store').send('Server error'); }
 });

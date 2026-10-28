@@ -133,19 +133,29 @@
     if (!path) return '';
     var full = location.origin + path;
     return '<div class="mkt-fine mkt-pagelink">' + (mine ? 'Your page: ' : '') + '<a href="' + esc(path) + '" target="_blank" rel="noopener">' + esc(mine ? full.replace(/^https?:\/\//, '') : 'Open ' + name + '\u2019s own page') + '</a>' +
-      ' &middot; <button type="button" class="mkt-linkbtn" data-copy="' + esc(full) + '">Copy link</button>' + (mine ? ' <span class="mkt-sub">Share it on your website and social media.</span>' : '') + '</div>';
+      ' &middot; <button type="button" class="mkt-linkbtn" data-share="' + esc(full) + '" data-title="' + esc(mine ? 'My page on the Campaignia Marketplace' : name + ' on the Campaignia Marketplace') + '">Share</button><span class="mkt-share-msg" role="status" aria-live="polite"></span>' + (mine ? ' <span class="mkt-sub">Share it on your website and social media.</span>' : '') + '</div>';
   }
-  function copyLink(btn) {
-    var url = btn.getAttribute('data-copy'), old = btn.getAttribute('data-label') || btn.textContent;
-    btn.setAttribute('data-label', old);
-    function done(ok) { btn.textContent = ok ? 'Copied' : url; setTimeout(function () { btn.textContent = old; }, ok ? 1800 : 6000); }
-    try { navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+  // v3.3.13 -- SHARE, the same behaviour as a published story's Share button (routes/story-pages.js): the device's own
+  // share sheet where there is one (phones), otherwise the link is copied and "Link copied" shows beside the button.
+  function shareLink(btn) {
+    var url = btn.getAttribute('data-share'), title = btn.getAttribute('data-title') || document.title;
+    var msg = btn.nextElementSibling && /mkt-share-msg/.test(btn.nextElementSibling.className) ? btn.nextElementSibling : null;
+    function say(t) { if (msg) { msg.textContent = t; setTimeout(function () { msg.textContent = ''; }, 2500); } }
+    function legacy() {
+      var a = document.createElement('textarea'); a.value = url; a.setAttribute('readonly', '');
+      a.style.position = 'absolute'; a.style.left = '-9999px'; document.body.appendChild(a); a.select();
+      try { document.execCommand('copy'); say('Link copied'); } catch (e) { say('Copy this page address to share it'); }
+      document.body.removeChild(a);
+    }
+    if (navigator.share) { navigator.share({ title: title, url: url }).catch(function () {}); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(url).then(function () { say('Link copied'); }, legacy); return; }
+    legacy();
   }
   // Buttons on the server-built pages, and Copy link anywhere: one listener for the whole document.
   document.addEventListener('click', function (e) {
-    var t = e.target && e.target.closest ? e.target.closest('[data-copy],[data-contact],.mkt-page-pic[data-zoom]') : null;
+    var t = e.target && e.target.closest ? e.target.closest('[data-share],[data-contact],.mkt-page-pic[data-zoom]') : null;
     if (!t) return;
-    if (t.getAttribute('data-copy')) { e.preventDefault(); copyLink(t); }
+    if (t.getAttribute('data-share')) { e.preventDefault(); shareLink(t); }
     else if (t.getAttribute('data-contact')) { e.preventDefault(); whenStatus(function () { openListing(Number(t.getAttribute('data-contact'))); }); }
     else if (t.getAttribute('data-zoom')) { e.preventDefault(); zoom(t.getAttribute('data-zoom')); }
   });
