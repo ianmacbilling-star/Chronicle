@@ -5386,13 +5386,15 @@ var GS_STEPS = [
   { t: 'Go to Publish and pick your sessions/chapters', d: 'Tick the ones to include: all of them for the whole story, or a few for a smaller volume.', go: 'novel:sessions' },
   { t: 'Prep & Preview', d: 'Set the title, the covers and the layout style.', go: 'novel:preview' },
   { t: 'Optimize', d: 'It lets the AI handle the layout and page breaks. Look through the PDF when it\u2019s done.', go: 'novel:finalize' },
-  { t: 'Publish and order', d: 'Publish to the Library as a web page, order a printed book, or both.', go: 'novel:order' }
+  { t: 'Publish and order', d: 'Publish to the Library as a web page, order a printed book, or both.', go: 'novel:order' },
+  { t: 'Enjoy your book!', d: 'Share it with the people who were there, and start the next session/chapter whenever you\u2019re ready.', go: null }   // v3.3.26 -- Ian: an 18th step
 ];
 var _gs = { data: null, open: false, step: 1 };
 function gsNote() {
   var d = _gs.data || {};
   if (d.kind === 'member') return 'You\u2019re a member, so your Story Master does steps 1\u20134. Once they mark a session Ready, press Make My Version, then follow steps 5\u201311 in your own version. Publishing is up to your Story Master.';
   if (d.kind === 'lone') return 'To start your own campaign you\u2019ll need a plan. Or join one when someone invites you.';
+  if (d.made_book) return 'You\u2019ve already made a book, so this opens at the end. Use Back or the dots to look at any step.';   // v3.3.26
   return (d.here && d.here > 1) ? 'You\u2019re part of the way in, so this opens at step ' + d.here + ', where you are.' : 'Start at step 1.';
 }
 function gsRefresh() {
@@ -5406,10 +5408,11 @@ function gsPaint() {
   if (!bar || !box) return;
   var d = _gs.data;
   bar.innerHTML = (((d && d.show_pill) || _gs.asked) && !_gs.open) ? '<button type="button" class="help-gs-pill" onclick="gsOpen()">New here? Get started step by step</button>' : '';
+  gsNoAutofill(bar);
   if (!_gs.open) { box.style.display = 'none'; if (th) th.style.display = ''; return; }
   if (th) th.style.display = 'none';
   box.style.display = '';
-  var n = _gs.step, st = GS_STEPS[n - 1], here = d && d.here;
+  var n = _gs.step, st = GS_STEPS[n - 1], here = d && (d.made_book ? GS_STEPS.length : d.here);   // v3.3.26 -- a book made: the end
   var dots = GS_STEPS.map(function (x, i) {
     var k = i + 1;
     return '<button type="button" class="gs-dot' + (k === n ? ' on' : '') + (here && k < here ? ' done' : '') + (here === k ? ' here' : '') + '" title="' + escapeHtml(k + '. ' + x.t) + '" onclick="gsShow(' + k + ')"></button>';
@@ -5420,17 +5423,29 @@ function gsPaint() {
     '<div class="gs-count">Step ' + n + ' of ' + GS_STEPS.length + (here === n ? ' <span class="gs-here">\u2190 You are here</span>' : '') + '</div>' +
     '<div class="gs-title">' + n + '. ' + escapeHtml(st.t) + '</div>' +
     '<div class="gs-text">' + escapeHtml(st.d) + '</div>' +
-    '<div class="gs-actions"><button type="button" class="btn btn-primary btn-sm" onclick="gsGo(' + n + ')">Take me there</button>' +
+    '<div class="gs-actions">' + (st.go ? '<button type="button" class="btn btn-primary btn-sm" onclick="gsGo(' + n + ')">Take me there</button>' : '') +
       '<button type="button" class="btn btn-sm" onclick="gsAsk(' + n + ')">Ask about this step</button></div>' +
     '<div class="gs-nav"><button type="button" class="btn btn-sm" onclick="gsShow(' + (n - 1) + ')"' + (n <= 1 ? ' disabled' : '') + '>&larr; Back</button>' +
       '<button type="button" class="btn btn-sm" onclick="gsShow(' + (n + 1) + ')"' + (n >= GS_STEPS.length ? ' disabled' : '') + '>Next &rarr;</button></div>' +
     '<div class="gs-dots">' + dots + '</div>';
+  gsNoAutofill(box);
+}
+// v3.3.26 -- Ian's password manager put its fill-in button on the guide's Back and Next (a multi-step wizard looks like
+// a sign-in flow to it). These attributes are how LastPass, 1Password, Bitwarden, Dashlane and Proton Pass are told
+// to leave an element alone.
+function gsNoAutofill(root) {
+  if (!root) return;
+  var els = [root].concat(Array.prototype.slice.call(root.querySelectorAll('button')));
+  els.forEach(function (el) {
+    el.setAttribute('autocomplete', 'off'); el.setAttribute('data-lpignore', 'true'); el.setAttribute('data-1p-ignore', 'true');
+    el.setAttribute('data-bwignore', 'true'); el.setAttribute('data-form-type', 'other'); el.setAttribute('data-protonpass-ignore', 'true');
+  });
 }
 function gsOpen() {
   _gs.open = true;
   // v3.3.23 -- a pill brought back by clearing the tours goes once the guide has been opened
   if (_gs.data && _gs.data.offer) { _gs.data.offer = false; fetch('/api/help/start/seen', { method: 'POST' }).catch(function () {}); }
-  var h = _gs.data && _gs.data.here;
+  var h = _gs.data && (_gs.data.made_book ? GS_STEPS.length : _gs.data.here);
   _gs.step = (h && h >= 1 && h <= GS_STEPS.length) ? h : (_gs.data && _gs.data.kind === 'member' ? 5 : 1);
   gsPaint();
 }
