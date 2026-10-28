@@ -36168,6 +36168,7 @@ function _selfBriefHtml(m) {
     L('Who\u2019s in it') + who +
     L('Look to aim for') + '<div>' + escapeHtml(aim) + '</div>' +
     (m.locked ? '' : '<button type="button" class="btn btn-sm dm-only" style="margin-top:10px;" onclick="openReplacePicker(\'moment\', ' + m.id + '); _rpShowTab(\'upload\');">Upload your own</button>') +
+    (m.locked ? '' : '<div class="mkt-link dm-only" style="margin-top:8px;"><a href="/library?from=app#guild-artist" target="_blank" rel="noopener" style="color:#e8c766;font-size:12px;">Need an artist? Find one in the Guild</a></div>') +   // v3.3.01 -- TD-1037 (hidden until the Marketplace is on)
   '</div>';
 }
 

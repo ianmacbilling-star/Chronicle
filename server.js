@@ -418,6 +418,8 @@ app.use('/api/order-covers', require('./routes/orderCovers'));   // v3.0.989 -- 
 app.use('/api', require('./routes/invites'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/gifts', require('./routes/gifts'));   // v3.1.43 -- TD-934 gift certificates
+app.use('/api/marketplace', require('./routes/marketplace'));   // v3.3.01 -- TD-1037 Artist Marketplace (switched off until launch: app_settings.marketplace_enabled)
+app.use('/', require('./routes/marketplace').pages);   // v3.3.08 -- TD-1037 /marketplace, /marketplace/<name>-<id>, /sitemap-marketplace.xml (404 while switched off)
 app.use('/api/debug', require('./routes/debug'));
 
 // Public, unauthenticated: landing-page pricing (reads live tier config).

@@ -2253,6 +2253,40 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER NOT NULL DEFAULT 0');
     await pool.query('ALTER TABLE writing_uses ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0');
   } catch (e) { console.error('[writing] migration skipped this boot:', e && e.message); }
+  // v3.3.01 -- TD-1037 ARTIST MARKETPLACE (spec claude/ARTIST_MARKETPLACE_SPEC.md). Off until launch: the
+  // switch is seeded '0' once and the Dashboard owns it after that. One listing per user; live_json is the
+  // copy Ian approved and the only thing the directory shows. No foreign keys, like the gift tables, so a
+  // deleted account can never block or cascade (the directory joins users and lists active accounts only).
+  // In its own try, like the writing tables: a boot must never fail over this, and the routes answer cleanly without it.
+  try {
+    await pool.query("INSERT INTO app_settings (setting_key, value) SELECT 'marketplace_enabled', '0' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE setting_key = 'marketplace_enabled')");
+    await pool.query("CREATE TABLE IF NOT EXISTS marketplace_listings (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, display_name TEXT, headline TEXT, roles TEXT, bio TEXT, links TEXT, rates TEXT, availability TEXT, samples TEXT, live_json TEXT, status TEXT NOT NULL DEFAULT 'draft', paused BOOLEAN NOT NULL DEFAULT false, admin_note TEXT, submitted_at TIMESTAMP, reviewed_at TIMESTAMP, reviewed_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_listings_status ON marketplace_listings(status, updated_at)');
+    await pool.query('CREATE TABLE IF NOT EXISTS marketplace_samples (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, url TEXT NOT NULL, verdict TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_samples_user ON marketplace_samples(user_id)');
+    await pool.query('CREATE TABLE IF NOT EXISTS marketplace_contacts (id SERIAL PRIMARY KEY, from_user_id INTEGER, listing_id INTEGER, kind TEXT, message TEXT, emailed BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_from ON marketplace_contacts(from_user_id, created_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mkt_contacts_listing ON marketplace_contacts(listing_id)');
+  } catch (e) { console.error('[marketplace] migration skipped this boot:', e && e.message); }
+  // v3.3.06 -- TD-1037. reviewed_json: the copy Ian approved. Edits to an approved listing go live at once (live_json),
+  // and the review window shows the listing as Altered while live_json differs from this. Listings approved before
+  // this release take their live copy as the approved one, once (only rows still without one).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS reviewed_json TEXT');
+    await pool.query("UPDATE marketplace_listings SET reviewed_json = live_json WHERE reviewed_json IS NULL AND live_json IS NOT NULL AND status = 'approved'");
+  } catch (e) { console.error('[marketplace] reviewed_json migration skipped this boot:', e && e.message); }
+  // v3.3.07 -- TD-1037. Which Marketplace Terms version the listing's owner ticked, and when (MKT_TERMS_VERSION in routes/marketplace.js).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_version TEXT');
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP');
+  } catch (e) { console.error('[marketplace] terms migration skipped this boot:', e && e.message); }
+  // v3.3.10 -- TD-1037. How the art is made (media: ticked list; medium: their own words), and what the picture check
+  // said about each sample, kept with the sample (marks are shown to Ian, no longer refused).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS media TEXT');
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS medium TEXT');
+    await pool.query('ALTER TABLE marketplace_samples ADD COLUMN IF NOT EXISTS reasons TEXT');
+  } catch (e) { console.error('[marketplace] media migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

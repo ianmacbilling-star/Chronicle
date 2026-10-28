@@ -33,7 +33,7 @@ async function sendEmail(to, subject, html, opts) {
     html: html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
-  if (opts && opts.replyTo) payload.reply_to = opts.replyTo;
+  if (opts && opts.replyTo) payload.replyTo = opts.replyTo;   // v3.3.06: the Resend SDK reads replyTo and drops reply_to, so every reply went to FROM_EMAIL
   const { data, error } = await resend.emails.send(payload);
 
   if (error) throw new Error(error.message);
@@ -492,7 +492,7 @@ async function sendReportEmail(opts) {
       subject: '[Campaignia] Content report: ' + (opts.storyTitle || ('story #' + opts.storyId)),
       html: html
     };
-    if (opts.reporterEmail) payload.reply_to = opts.reporterEmail;
+    if (opts.reporterEmail) payload.replyTo = opts.reporterEmail;   // v3.3.06: replyTo (see sendEmail)
     const { error } = await resend.emails.send(payload);
     if (error) { console.error('[report] send failed:', error.message); return false; }
     return true;
@@ -1610,3 +1610,10 @@ async function sendEmailChangeNoticeEmail(name, oldEmail, maskedNewEmail) {
 }
 
 module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disputeAlertText, sendDisputeAlertEmail, router, sendGiftEmail, giftEmail, sendGiftReceiptEmail, giftReceipt, giftBuyerCopy, sendGiftRedeemedEmail, giftRedeemedEmail, sendPurchaseReceiptEmail, sendPassEndingSoonEmail, sendPassExpiredEmail, sendOrderFailureReport, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+
+// v3.3.01 -- TD-1037 ARTIST MARKETPLACE. Make contact and the review notes (routes/marketplace.js) send through
+// the one sendEmail above, with the sender's address as reply-to so the two members talk directly.
+// Added to the exports here rather than by editing the long list above.
+module.exports.sendMarketplaceEmail = function (to, subject, html, replyTo) {
+  return sendEmail(to, subject, html, replyTo ? { replyTo: replyTo } : undefined);
+};

@@ -364,7 +364,8 @@ router.get('/sitemap.xml', async function (req, res) {
     var chunks = Math.max(1, Math.ceil(n / SITEMAP_CHUNK));
     var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-      '<sitemap><loc>' + xmlEsc(base + '/sitemap-pages.xml') + '</loc></sitemap>'];
+      '<sitemap><loc>' + xmlEsc(base + '/sitemap-pages.xml') + '</loc></sitemap>',
+    '<sitemap><loc>' + xmlEsc(base + '/sitemap-marketplace.xml') + '</loc></sitemap>'];   // v3.3.08 -- TD-1037: an empty list while the Marketplace is switched off
     for (var i = 1; i <= chunks; i++) {
       parts.push('<sitemap><loc>' + xmlEsc(base + '/sitemap-stories.xml?page=' + i) + '</loc></sitemap>');
     }
