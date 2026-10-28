@@ -5354,12 +5354,127 @@ function renderHelpThread() {
       // v3.1.42 -- TD-811. Answers came through with their **bold** markers showing. The assistant's replies
       // get light formatting; what the reader typed is shown exactly as typed.
       html += '<div class="help-msg ' + cls + '">' + (m.role === 'user' ? escapeHtml(m.content) : _helpFormat(m.content)) + '</div>';
+      if (m.guide) html += '<button type="button" class="help-gs-pill help-gs-inline" onclick="gsOpen()">Open the step-by-step guide</button>';   // v3.3.23
     });
   }
   if (_helpPending) html += '<div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>';
   if (_helpError) html += '<div class="help-msg help-msg-error">' + escapeHtml(_helpError) + '</div>';
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
+}
+// v3.3.22 -- GETTING STARTED (Ian, 2026-10-28). A pill at the top of Ask Us opens a step-by-step guide to the big
+// picture: one step at a time, Back / Next, "Ask about this step", and Take me there. The steps are written text
+// approved by Ian, not model answers, so they cost nothing and always say the same thing. GET /api/help/start
+// (routes/help.js) says where this person is -- the guide opens at the first step not yet done -- and which
+// campaign and session Take me there should open. The pill goes once they have published or ordered a book.
+// The same steps are in the Brain (routes/campaignia_brain.md, "Getting started"), so a typed question gets the
+// same path. Keep the two in step.
+var GS_STEPS = [
+  { t: 'Create a campaign', d: 'Your campaign holds the whole story. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
+  { t: 'Add your characters', d: 'Press the Characters button to open the Characters screen, and add your main cast with a description and reference pictures. Do it before you generate, so Campaignia knows who\u2019s who and keeps them looking the same. Once the first session exists and is Ready, you change a character as the story goes along on that session\u2019s Characters tab.', go: 'camp:characters' },
+  { t: 'Invite your members (optional)', d: 'Open Members and invite people by email or with a link. They join free, and can follow along or make their own versions.', go: 'camp:members' },
+  { t: 'Create a session/chapter', d: 'Add one for each game night, or for each chapter of your story.', go: 'camp:sessions' },
+  { t: 'Paste in your story', d: 'On the Story tab, paste your transcript or notes. Add director\u2019s notes for scenes that must appear, or for how a character should come across.', go: 'sess:notes' },
+  { t: 'Pick your narrative and art styles', d: 'Use the buttons on the Story tab to choose how the prose reads and how the pictures look.', go: 'sess:notes' },
+  { t: 'Generate Story', d: 'Campaignia reads what you pasted and pulls out the key moments.', go: 'sess:notes' },
+  { t: 'Add the assets it suggests', d: 'If it spots places, items or recurring minor characters, it offers to add them as assets. Give each a picture, and it looks the same every time it appears.', go: 'camp:assets' },
+  { t: 'Review the outline', d: 'The Review tab lists the moments. You can\u2019t move or remove them, but you can edit the prompts, add characters to a scene, and add or remove assets. Make sure it\u2019s right before you spend tokens.', go: 'sess:review' },
+  { t: 'Generate Narrative & Images', d: 'This writes the prose, draws every picture and builds the storyboard. It uses tokens.', go: 'sess:review' },
+  { t: 'Fine-tune on the Storyboard', d: 'Edit any text, retouch or regenerate a picture, and lock the ones you love so they\u2019re never replaced.', go: 'sess:storyboard' },
+  { t: 'Mark it Ready (optional)', d: 'Switch the session/chapter from Draft to Ready. Your members can then see it and make their own versions.', go: 'sess:storyboard' },
+  { t: 'Preview', d: 'The Preview tab shows how it lays out on the page. It\u2019s quick and free.', go: 'sess:export' },
+  { t: 'Go to Publish and pick your sessions/chapters', d: 'Tick the ones to include: all of them for the whole story, or a few for a smaller volume.', go: 'novel:sessions' },
+  { t: 'Prep & Preview', d: 'Set the title, the covers and the layout style.', go: 'novel:preview' },
+  { t: 'Optimize', d: 'It lets the AI handle the layout and page breaks. Look through the PDF when it\u2019s done.', go: 'novel:finalize' },
+  { t: 'Publish and order', d: 'Publish to the Library as a web page, order a printed book, or both.', go: 'novel:order' }
+];
+var _gs = { data: null, open: false, step: 1 };
+function gsNote() {
+  var d = _gs.data || {};
+  if (d.kind === 'member') return 'You\u2019re a member, so your Story Master does steps 1\u20134. Once they mark a session Ready, press Make My Version, then follow steps 5\u201311 in your own version. Publishing is up to your Story Master.';
+  if (d.kind === 'lone') return 'To start your own campaign you\u2019ll need a plan. Or join one when someone invites you.';
+  return (d.here && d.here > 1) ? 'You\u2019re part of the way in, so this opens at step ' + d.here + ', where you are.' : 'Start at step 1.';
+}
+function gsRefresh() {
+  fetch('/api/help/start').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j || !j.ok) return;
+    _gs.data = j; gsPaint();
+  }).catch(function () {});
+}
+function gsPaint() {
+  var bar = document.getElementById('help-gs-bar'), box = document.getElementById('help-gs'), th = document.getElementById('help-thread');
+  if (!bar || !box) return;
+  var d = _gs.data;
+  bar.innerHTML = (((d && d.show_pill) || _gs.asked) && !_gs.open) ? '<button type="button" class="help-gs-pill" onclick="gsOpen()">New here? Get started step by step</button>' : '';
+  if (!_gs.open) { box.style.display = 'none'; if (th) th.style.display = ''; return; }
+  if (th) th.style.display = 'none';
+  box.style.display = '';
+  var n = _gs.step, st = GS_STEPS[n - 1], here = d && d.here;
+  var dots = GS_STEPS.map(function (x, i) {
+    var k = i + 1;
+    return '<button type="button" class="gs-dot' + (k === n ? ' on' : '') + (here && k < here ? ' done' : '') + (here === k ? ' here' : '') + '" title="' + escapeHtml(k + '. ' + x.t) + '" onclick="gsShow(' + k + ')"></button>';
+  }).join('');
+  box.innerHTML =
+    '<div class="gs-head"><span class="gs-h">Getting started</span><button type="button" class="gs-link" onclick="gsClose()">Back to chat</button></div>' +
+    '<div class="gs-note">' + escapeHtml(gsNote()) + '</div>' +
+    '<div class="gs-count">Step ' + n + ' of ' + GS_STEPS.length + (here === n ? ' <span class="gs-here">\u2190 You are here</span>' : '') + '</div>' +
+    '<div class="gs-title">' + n + '. ' + escapeHtml(st.t) + '</div>' +
+    '<div class="gs-text">' + escapeHtml(st.d) + '</div>' +
+    '<div class="gs-actions"><button type="button" class="btn btn-primary btn-sm" onclick="gsGo(' + n + ')">Take me there</button>' +
+      '<button type="button" class="btn btn-sm" onclick="gsAsk(' + n + ')">Ask about this step</button></div>' +
+    '<div class="gs-nav"><button type="button" class="btn btn-sm" onclick="gsShow(' + (n - 1) + ')"' + (n <= 1 ? ' disabled' : '') + '>&larr; Back</button>' +
+      '<button type="button" class="btn btn-sm" onclick="gsShow(' + (n + 1) + ')"' + (n >= GS_STEPS.length ? ' disabled' : '') + '>Next &rarr;</button></div>' +
+    '<div class="gs-dots">' + dots + '</div>';
+}
+function gsOpen() {
+  _gs.open = true;
+  // v3.3.23 -- a pill brought back by clearing the tours goes once the guide has been opened
+  if (_gs.data && _gs.data.offer) { _gs.data.offer = false; fetch('/api/help/start/seen', { method: 'POST' }).catch(function () {}); }
+  var h = _gs.data && _gs.data.here;
+  _gs.step = (h && h >= 1 && h <= GS_STEPS.length) ? h : (_gs.data && _gs.data.kind === 'member' ? 5 : 1);
+  gsPaint();
+}
+function gsClose() { _gs.open = false; gsPaint(); renderHelpThread(); }
+function gsShow(n) { if (n < 1 || n > GS_STEPS.length) return; _gs.step = n; gsPaint(); }
+function gsAsk(n) {
+  var q = document.getElementById('help-question'); if (!q) return;
+  q.value = 'Tell me more about step ' + n + ' of getting started: ' + GS_STEPS[n - 1].t + '.';
+  gsClose();
+  if (typeof submitHelp === 'function') submitHelp();
+}
+function gsEnterCampaign(id, cb) {
+  var find = function () { return (state.campaigns || []).find(function (c) { return String(c.id) === String(id); }); };
+  var go = function () {
+    var c = find();
+    if (!c) { showView('campaigns'); return; }
+    if (!(state.currentCampaign && String(state.currentCampaign.id) === String(id))) selectCampaign(c.id);
+    cb();
+  };
+  if (find()) { go(); return; }
+  fetch('/api/campaigns').then(function (r) { return r.json(); })
+    .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
+    .catch(function () { showView('campaigns'); });
+}
+function gsWaitSession(id, tab, n) {
+  var s = state.currentSession;
+  if (s && String(s.id) === String(id)) { setTimeout(function () { switchSessionTab(tab); }, 60); return; }
+  if (n < 40) setTimeout(function () { gsWaitSession(id, tab, n + 1); }, 150);
+}
+function gsGo(n) {
+  var st = GS_STEPS[n - 1], d = _gs.data || {}, tgt = st.go;
+  if (window.innerWidth < 900) closeHelp();   // the panel covers the page on a small screen
+  if (tgt === 'campaigns' || !d.campaign) { showView('campaigns'); return; }
+  gsEnterCampaign(d.campaign.id, function () {
+    if (tgt.indexOf('camp:') === 0) { showCampaignSection(tgt.slice(5)); return; }
+    if (tgt.indexOf('novel:') === 0) {
+      showCampaignSection('novel');
+      if (state.currentView === 'novel' && typeof switchNovelTab === 'function') switchNovelTab(tgt.slice(6));
+      return;
+    }
+    if (!d.session) { showCampaignSection('sessions'); return; }
+    goToSessionPage(d.session.id);
+    gsWaitSession(d.session.id, tgt.slice(5), 0);
+  });
 }
 var RG_HELP_HINTS = [
   'A few things that make retouching go well:',
@@ -5472,6 +5587,7 @@ function openHelp() {
   m.classList.remove('hidden');
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = 'none';
   renderHelpThread();
+  gsPaint(); gsRefresh();   // v3.3.22 -- the Getting started pill
   var q = document.getElementById('help-question');
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
@@ -5499,7 +5615,8 @@ function submitHelp() {
       _helpPending = false;
       if (btn) btn.disabled = false;
       if (data && data.ok && data.answer) {
-        _helpThread.push({ role: 'assistant', content: data.answer });
+        _helpThread.push(data.guide ? { role: 'assistant', content: data.answer, guide: true } : { role: 'assistant', content: data.answer });
+        if (data.guide) _gs.asked = true;   // v3.3.23 -- the pill comes back for the rest of the visit
         if (data.ai_done_emailed) _helpAiDoneSent = true;
       } else {
         _helpThread.pop();

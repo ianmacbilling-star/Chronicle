@@ -1161,7 +1161,10 @@ router.post('/tour-reset', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();
-    await db.prepare("UPDATE users SET tour_progress = '{}'::jsonb WHERE id = ?").run(req.session.userId);
+    // v3.3.23 -- and the Getting started pill comes back with the tours (Ian, 2026-10-28: "if I clear the Tours...
+    // then it puts that pill there"). gs_offer is not a screen name, so no tour reads it; GET /api/help/start does,
+    // and POST /api/help/start/seen drops it once the guide has been opened.
+    await db.prepare("UPDATE users SET tour_progress = '{\"gs_offer\": true}'::jsonb WHERE id = ?").run(req.session.userId);
     res.json({ success: true });
   } catch (e) {
     console.error('tour-reset error:', e.message);
