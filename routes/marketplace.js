@@ -30,6 +30,9 @@ const ROLES = ['artist', 'writer', 'editor'];
 const AVAIL = ['open', 'limited', 'closed'];
 const KINDS = ['commission', 'campaign', 'question'];
 const MAX_SAMPLES = 10;                // v3.3.04: was 6 (Ian, 2026-10-27)
+// v3.3.07 -- the Marketplace Terms (public/marketplace-terms.html) and the version a listing must have accepted to be
+// sent for review or updated. Change it together with the version line on that page; everyone then ticks again.
+const MKT_TERMS_VERSION = '1.0';
 const MIN_SAMPLE_SIDE = 800;           // v3.3.05: a sample's longer side, in pixels (Ian: small ones look bad shown big)
 const MAX_SAMPLE_UPLOADS = 60;          // stored pictures per user, ever (each costs one small rights look); v3.3.04: was 40
 const CONTACT_PER_LISTING_MS = 24 * 60 * 60 * 1000;
@@ -147,6 +150,7 @@ function mineOf(row) {
     id: row.id, status: row.status, paused: !!row.paused, admin_note: row.admin_note || '',
     has_live: !!live, changed: !!live && !sameContent(d, live), draft: d,
     // v3.3.06 -- an approved listing's edits go live at once (Ian); "altered" = live now differs from what was approved
+    terms_ok: row.terms_version === MKT_TERMS_VERSION,   // v3.3.07
     has_reviewed: !!row.reviewed_json, altered: !!live && !!row.reviewed_json && !sameContent(live, jparse(row.reviewed_json, null)),
     submitted_at: row.submitted_at || null, reviewed_at: row.reviewed_at || null
   };
@@ -259,7 +263,7 @@ router.get('/mine', requireAuth, gate, async function (req, res) {
     const db = await getDb();
     const row = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(req.session.userId);
     const u = await db.prepare('SELECT name, pen_name FROM users WHERE id = ?').get(req.session.userId);
-    res.json({ mine: mineOf(row), suggest_name: (u && (u.pen_name || u.name)) || '', limits: LIMITS, max_samples: MAX_SAMPLES });
+    res.json({ mine: mineOf(row), suggest_name: (u && (u.pen_name || u.name)) || '', limits: LIMITS, max_samples: MAX_SAMPLES, terms_version: MKT_TERMS_VERSION });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -297,6 +301,8 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       if (d.bio.length < 40) miss.push('a few sentences about you and your work');
       if (d.roles.indexOf('artist') >= 0 && !d.samples.length) miss.push('at least one sample picture (you offer art)');
       if (miss.length) return res.status(400).json({ error: 'Before it can be reviewed, add ' + miss.join(', ') + '.', missing: miss });
+      // v3.3.07 -- the tick box (Ian: "A terms check box that says they read it"). Once ticked for this version it stays ticked.
+      if (b.accept_terms !== true && !(row && row.terms_version === MKT_TERMS_VERSION)) return res.status(400).json({ error: 'Tick the box to say you have read the Marketplace Terms.', terms: true });
     }
     const now = new Date().toISOString();
     const cols = [d.display_name, d.headline, d.roles.join(','), d.bio, JSON.stringify(d.links), d.rates, d.availability, JSON.stringify(d.samples)];
@@ -320,6 +326,7 @@ router.put('/mine', requireAuth, gate, async function (req, res) {
       ).run(...cols.concat([status, submit ? now : (row.submitted_at || null), now, uid]));
       if (goLive) await db.prepare('UPDATE marketplace_listings SET live_json = ?, admin_note = NULL WHERE user_id = ?').run(JSON.stringify(d), uid);
     }
+    if (submit && b.accept_terms === true) await db.prepare('UPDATE marketplace_listings SET terms_version = ?, terms_accepted_at = ? WHERE user_id = ?').run(MKT_TERMS_VERSION, now, uid);   // v3.3.07
     const fresh = await db.prepare('SELECT * FROM marketplace_listings WHERE user_id = ?').get(uid);
     if (submit && status === 'pending') notifySupport(db, uid, fresh, !!live);   // v3.3.03 -- not awaited: the save never waits on email
     else if (goLive && !sameContent(d, live)) notifySupport(db, uid, fresh, true, true);   // v3.3.06 -- already live: support is told it is Altered
@@ -526,4 +533,4 @@ router.post('/admin/listings/:id/review', adminOnly, async function (req, res) {
 });
 
 module.exports = router;
-module.exports._test = { sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };
+module.exports._test = { MKT_TERMS_VERSION: MKT_TERMS_VERSION, sampleSize: sampleSize, MIN_SAMPLE_SIDE: MIN_SAMPLE_SIDE, cleanRoles: cleanRoles, cleanLinks: cleanLinks, publicOf: publicOf, draftOf: draftOf, mineOf: mineOf, sameContent: sameContent, LIMITS: LIMITS };

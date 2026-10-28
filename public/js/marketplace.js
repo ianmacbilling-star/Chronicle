@@ -101,8 +101,24 @@
     return out;
   }
 
+  // v3.3.07 -- THE SHAKE (claude/UI_CONVENTIONS.md section 1), for the Marketplace's own windows. The Library page does not
+  // load app.js, so this is a copy of _prepAttestNag's behaviour rather than a call to it: amber outline, one shake, scroll
+  // to the middle, focus, and an amber line by the button naming what to do. unNag clears only that line.
+  function nag(row, statusEl, text, focusEl) {
+    if (!row) { flash(statusEl, text, true); return; }
+    row.classList.remove('mkt-nag'); void row.offsetWidth; row.classList.add('mkt-nag');
+    try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    try { if (focusEl) focusEl.focus({ preventScroll: true }); } catch (e) {}
+    if (statusEl) { statusEl.textContent = text; statusEl.className = 'mkt-msg mkt-nagmsg'; statusEl.setAttribute('data-nag', '1'); }
+  }
+  function unNag(row, statusEl) {
+    if (row) row.classList.remove('mkt-nag');
+    if (statusEl && statusEl.getAttribute('data-nag') === '1') { statusEl.textContent = ''; statusEl.className = 'mkt-msg'; statusEl.removeAttribute('data-nag'); }
+  }
+
   function flash(el, text, bad) {
     if (!el) return;
+    el.removeAttribute && el.removeAttribute('data-nag');
     el.textContent = text || '';
     el.className = 'mkt-msg' + (bad ? ' mkt-bad' : (text ? ' mkt-good' : ''));
   }
@@ -201,7 +217,8 @@
         '<select id="mkt-kind">' + Object.keys(KIND_NAMES).map(function (k) { return '<option value="' + k + '">' + esc(KIND_NAMES[k]) + '</option>'; }).join('') + '</select>' +
         '<textarea id="mkt-message" maxlength="2000" rows="5" placeholder="Say hello, describe your book and what you need, and when you need it."></textarea>' +
         '<div class="mkt-row"><button type="button" class="mkt-btn mkt-btn-gold" data-act="send">Send</button><span id="mkt-send-msg" class="mkt-msg"></span></div>' +
-        '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make.</div></div>';
+        '<div class="mkt-fine">' + esc(p.name) + ' gets your message by email and replies to your email address. Campaignia is not part of any arrangement you make. ' +
+          'By sending you agree to the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a>.</div></div>';   // v3.3.07
       body.innerHTML =
         '<div class="mkt-detail">' +
           '<div class="mkt-detail-pics">' + (main ? '<button type="button" class="mkt-main-a" data-zoom="' + esc(main) + '" title="Click to see it bigger"><img class="mkt-main" src="' + esc(main) + '" alt="Sample of ' + esc(p.name) + '\u2019s work"></button>' : '') + thumbs + '</div>' +
@@ -285,6 +302,9 @@
           return '<option value="' + k + '"' + (d.availability === k ? ' selected' : '') + '>' + esc(AVAIL_NAMES[k]) + '</option>';
         }).join('') + '</select>' +
       '</div>' +
+      // v3.3.07 -- the Marketplace Terms tick box. Needed for Send for review / Update my listing, not for Save draft.
+      (removed ? '' : '<label class="mkt-terms-row" id="mkt-terms-row"><input type="checkbox" id="mkt-f-terms"' + (m && m.terms_ok ? ' checked' : '') + '> ' +
+        '<span>I have read the <a href="/marketplace-terms.html" target="_blank" rel="noopener">Marketplace Terms</a></span></label>') +
       '<div class="mkt-row mkt-actions">' +
         (removed ? '' : '<button type="button" class="mkt-btn" data-act="save">Save draft</button><button type="button" class="mkt-btn mkt-btn-gold" data-act="submit">' + (m && m.has_reviewed ? 'Update my listing' : 'Send for review') + '</button>') +
         '<span class="mkt-msg" id="mkt-save-msg"></span></div>' +
@@ -346,22 +366,26 @@
         roles: Array.prototype.filter.call(body.querySelectorAll('.mkt-checks input'), function (c) { return c.checked; }).map(function (c) { return c.value; }),
         bio: $('mkt-f-bio').value,
         links: Array.prototype.map.call(body.querySelectorAll('.mkt-f-link'), function (i) { return i.value; }).filter(function (v) { return v.trim(); }),
-        rates: $('mkt-f-rates').value, availability: $('mkt-f-avail').value, samples: samples.slice(), submit: !!submit
+        rates: $('mkt-f-rates').value, availability: $('mkt-f-avail').value, samples: samples.slice(), submit: !!submit,
+        accept_terms: !!(submit && $('mkt-f-terms') && $('mkt-f-terms').checked)
       };
     }
     body.querySelector('.mkt-actions') && body.querySelector('.mkt-actions').addEventListener('click', function (e) {
       var act = e.target.getAttribute && e.target.getAttribute('data-act');
       if (act !== 'save' && act !== 'submit') return;
       var msg = $('mkt-save-msg');
+      if (act === 'submit' && $('mkt-f-terms') && !$('mkt-f-terms').checked) { nag($('mkt-terms-row'), msg, 'Tick the box above first: \u201cI have read the Marketplace Terms\u201d.', $('mkt-f-terms')); return; }
       flash(msg, 'Saving\u2026');
       api('PUT', '/api/marketplace/mine', collect(act === 'submit')).then(function (x) {
-        if (!x.ok) { flash(msg, x.j.error || 'Could not save it right now.', true); return; }
+        if (!x.ok) { if (x.j.terms) nag($('mkt-terms-row'), msg, x.j.error, $('mkt-f-terms')); else flash(msg, x.j.error || 'Could not save it right now.', true); return; }
         m = x.j.mine;
         $('mkt-state').textContent = statusSentence(m);
         flash(msg, act === 'submit' ? (m.status === 'approved' ? 'Updated. Your listing on the Marketplace shows these changes now.' : 'Sent for review. We will email you when it is decided.') : 'Saved. Press ' + (m.has_reviewed ? 'Update my listing' : 'Send for review') + ' when you are ready.');
         loadStatus();
       });
     });
+    var tb = $('mkt-f-terms');
+    if (tb) tb.addEventListener('change', function () { if (tb.checked) unNag($('mkt-terms-row'), $('mkt-save-msg')); });
     var quiet = body.querySelector('.mkt-quiet');
     if (quiet) quiet.addEventListener('click', function (e) {
       var act = e.target.getAttribute && e.target.getAttribute('data-act');

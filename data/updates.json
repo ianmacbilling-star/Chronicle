@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.07",
+    "staged_on": "2026-10-27",
+    "entries": [
+      {
+        "id": "3307-marketplace-terms",
+        "kind": "feature",
+        "public": false,
+        "summary": "Marketplace (still switched off): its own Marketplace Terms page, a tick box in the listing editor, and a line on Make contact.",
+        "detail": "The page is /marketplace-terms.html (version 1.0), linked only from the editor and the contact form; the Terms of Service and Privacy Policy are unchanged until launch. Send for review and Update my listing need the box ticked once per Terms version (date and version kept on the listing); pressing them unticked shakes the box. Save draft does not need it.",
+        "td": [
+          "TD-1037"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.06",
     "staged_on": "2026-10-27",
     "entries": [

@@ -135,3 +135,12 @@ html.mkt-modal-open { overflow: hidden; }
   .mkt-list-me { margin-left: 0; }
   .mkt-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 }
+
+/* v3.3.07 -- the Marketplace Terms tick box, and the shake (claude/UI_CONVENTIONS.md section 1; same amber and motion
+   as .prep-attest-nag in style.css) */
+.mkt-modal a, .mkt-terms-row a { color: #e8c766; }   /* links inside our windows read gold on every page, not the browser's blue */
+.mkt-terms-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 2px; padding: 6px 8px; cursor: pointer; font-size: 15px; border-radius: 6px; }
+.mkt-modal .mkt-terms-row input { width: auto; margin: 0; }
+.mkt-terms-row.mkt-nag { outline: 2px solid #e8a85a; outline-offset: 4px; background: rgba(232,168,90,0.12); color: #f3d9b0; animation: mktShake 0.45s ease-in-out; }
+.mkt-msg.mkt-nagmsg { color: #e8a85a; }
+@keyframes mktShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }

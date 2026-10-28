@@ -2275,6 +2275,11 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS reviewed_json TEXT');
     await pool.query("UPDATE marketplace_listings SET reviewed_json = live_json WHERE reviewed_json IS NULL AND live_json IS NOT NULL AND status = 'approved'");
   } catch (e) { console.error('[marketplace] reviewed_json migration skipped this boot:', e && e.message); }
+  // v3.3.07 -- TD-1037. Which Marketplace Terms version the listing's owner ticked, and when (MKT_TERMS_VERSION in routes/marketplace.js).
+  try {
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_version TEXT');
+    await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP');
+  } catch (e) { console.error('[marketplace] terms migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
