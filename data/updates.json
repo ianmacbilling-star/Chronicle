@@ -1,5 +1,26 @@
 [
   {
+    "version": "3.3.22",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3322-getting-started",
+        "kind": "feature",
+        "public": true,
+        "summary": "New to Campaignia? The Ask Us panel now has a Get started step by step guide.",
+        "detail": "Press New here? Get started step by step at the top of Ask Us for the whole path from your first campaign to a printed book, one step at a time. It opens at the step you have reached, and Take me there opens the right page. The pill goes away once you have published or ordered a book.",
+        "td": []
+      },
+      {
+        "id": "3322-brain-getting-started",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help assistant: a Getting started section with the same 17 steps; styles are picked on the Story tab before Generate Story; moments cannot be moved or removed on Review.",
+        "detail": "routes/campaignia_brain.md: new section 1a; 10.1 and 10.3 corrected; the Where do I start answer points at 1a. GET /api/help/start (routes/help.js) tells the guide where the person is."
+      }
+    ]
+  },
+  {
     "version": "3.3.21",
     "staged_on": "2026-10-28",
     "entries": [

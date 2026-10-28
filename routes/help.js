@@ -455,4 +455,67 @@ router.post('/transcript', requireAuth, async function(req, res) {
   return res.json({ ok: true });
 });
 
+// v3.3.22 -- GETTING STARTED (Ian, 2026-10-28: a pill at the top of Ask Us that "take[s] them step by step on
+// the big picture stuff", and "see what they have and take them to it"). The steps themselves are written text in
+// app.js (GS_STEPS) -- no model, no tokens. This only reports where this person is, so the guide can open at the
+// first step not yet done and Take me there can open the right campaign, session and tab. Read-only.
+// The pill stays until they have published to the Library or paid for a printed book (Ian: "Yes printed order counts").
+router.get('/start', requireAuth, async function (req, res) {
+  const uid = req.session.userId;
+  const out = { ok: true, show_pill: true, kind: 'creator', here: 1, campaign: null, session: null };
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT * FROM users WHERE id = ?').get(uid);
+    const pub = await db.prepare('SELECT 1 AS x FROM public_stories WHERE user_id = ? LIMIT 1').get(uid);
+    const ord = await db.prepare("SELECT 1 AS x FROM print_orders WHERE user_id = ? AND payment_status = 'paid' LIMIT 1").get(uid);
+    out.show_pill = !(pub || ord);
+    let tier = 'copper';
+    try { tier = ownTier(u) || 'copper'; } catch (e) {}
+    const creator = tier !== 'copper' || isOnFreeTrial(u);
+    // The campaign they are most likely working on: their own first (if they can create), then the one with the
+    // latest session activity, then the newest.
+    const camps = await db.prepare(
+      'SELECT c.id, c.name, cm.role, ' +
+      '(SELECT MAX(COALESCE(s.edited_at, s.created_at)) FROM sessions s WHERE s.campaign_id = c.id) AS last_s, ' +
+      'COALESCE(c.edited_at, c.created_at) AS last_c ' +
+      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id ' +
+      'WHERE cm.user_id = ? AND c.is_active = true'
+    ).all(uid);
+    const t = function (v) { const n = v ? new Date(v).getTime() : 0; return isFinite(n) ? n : 0; };
+    camps.sort(function (a, b) {
+      if (creator && (a.role === 'dm') !== (b.role === 'dm')) return a.role === 'dm' ? -1 : 1;
+      return Math.max(t(b.last_s), t(b.last_c)) - Math.max(t(a.last_s), t(a.last_c));
+    });
+    const c = camps[0] || null;
+    if (!c) { out.kind = creator ? 'creator' : 'lone'; out.here = creator ? 1 : null; return res.json(out); }
+    const sm = c.role === 'dm';
+    out.kind = sm ? 'creator' : 'member';
+    out.campaign = { id: c.id, name: c.name, role: c.role };
+    const chars = await db.prepare('SELECT COUNT(*) AS n FROM characters WHERE campaign_id = ?').get(c.id);
+    // A member only sees sessions the Story Master has marked Ready.
+    const sessSql = sm
+      ? 'SELECT s.id, s.name, s.transcript, s.session_notes FROM sessions s WHERE s.campaign_id = ? ORDER BY COALESCE(s.edited_at, s.created_at) DESC, s.id DESC LIMIT 1'
+      : "SELECT s.id, s.name, s.transcript, s.session_notes FROM sessions s WHERE s.campaign_id = ? AND EXISTS (SELECT 1 FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' AND f.player_access_status = 'ready') ORDER BY COALESCE(s.edited_at, s.created_at) DESC, s.id DESC LIMIT 1";
+    const s = await db.prepare(sessSql).get(c.id);
+    if (sm && !(Number(chars && chars.n) > 0) && !s) { out.here = 2; return res.json(out); }
+    if (!s) { out.here = sm ? 4 : null; return res.json(out); }
+    out.session = { id: s.id, name: s.name };
+    const mine = await db.prepare(
+      "SELECT COUNT(m.id) AS n, COUNT(NULLIF(COALESCE(m.image, ''), '')) AS imgs, COUNT(DISTINCT f.id) AS forks " +
+      'FROM session_forks f LEFT JOIN moments m ON m.fork_id = f.id WHERE f.session_id = ? AND f.user_id = ?'
+    ).get(s.id, uid);
+    const forks = Number(mine && mine.forks) || 0, n = Number(mine && mine.n) || 0, imgs = Number(mine && mine.imgs) || 0;
+    const pasted = !!(String(s.transcript || '').trim() || String(s.session_notes || '').trim());
+    if (!sm && !forks) out.here = 5;            // a member: open the session and press Make my own version
+    else if (sm && !pasted) out.here = 5;
+    else if (!n) out.here = 6;                  // styles, then Generate Story
+    else if (!imgs) out.here = 9;               // the outline is there; check it, then Generate Narrative & Images
+    else out.here = 11;                         // pictures made: fine-tune, then on to Preview and Publish
+    return res.json(out);
+  } catch (e) {
+    console.error('[help start] ' + (e && e.message));
+    return res.json(out);
+  }
+});
+
 module.exports = router;

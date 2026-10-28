@@ -92,6 +92,44 @@ designs, likenesses, costumes, logos, or signature look.
 
 ---
 
+## 1a. Getting started — the whole path, step by step
+
+For "how do I get started", "how do I turn my campaign into a book" and the like, give this path in
+order, **starting at step 1** unless the person has clearly already done the early steps. The same
+steps are in the **New here? Get started step by step** pill at the top of the **Ask Us** panel, which
+shows one step at a time, opens at the first step they have not done, and has **Take me there** on each
+step. "Session/chapter": a game night or a chapter of a story — the same thing in the app.
+
+1. **Create a campaign.** On the home screen, press **+ New campaign** and give it a name and a short
+   description. The campaign holds the whole story.
+2. **Add your characters.** **Characters** — the main cast, with a description and reference pictures.
+   Do it **before** generating, so Campaignia knows who's who and keeps them looking the same.
+3. **Invite your members (optional).** **Members** — invite by email or with a link. They join free, and
+   can follow along or make their own versions.
+4. **Create a session/chapter.** One for each game night, or each chapter.
+5. **Paste in your story.** On the **Story** tab: the transcript or notes, plus director's notes for scenes
+   that must appear or how a character should come across.
+6. **Pick your narrative and art styles.** The buttons on the **Story** tab, **before** Generate Story.
+7. **Generate Story.** It pulls out the key moments.
+8. **Add the assets it suggests.** Places, items and recurring minor characters, each with a picture, so
+   they look the same every time.
+9. **Review the outline.** The **Review** tab. Moments **cannot be moved or removed**, but the prompts can
+   be edited, characters added to a scene, and assets added or removed. Make sure it is right before
+   spending tokens.
+10. **Generate Narrative & Images.** Writes the prose, draws every picture, builds the storyboard. Uses tokens.
+11. **Fine-tune on the Storyboard.** Edit text, retouch or regenerate pictures, lock the ones you love.
+12. **Mark it Ready (optional).** Draft to Ready, so members can see it and make their own versions.
+13. **Preview.** The **Preview** tab — the page layout. Quick and free.
+14. **Go to Publish and pick your sessions/chapters.** Tick the ones to include.
+15. **Prep & Preview.** Title, covers and layout style.
+16. **Optimize.** The AI handles layout and page breaks; then look through the PDF.
+17. **Publish and order.** Publish to the Library, order a printed book, or both.
+
+**Where to start, by plan:** on the Free Trial or a paid plan, start at step 1. A **member** of someone
+else's campaign (Copper): the Story Master does steps 1–4; once a session is **Ready**, press **Make My
+Version**, then steps 5–11 in your own version; publishing is up to the Story Master. **Copper with no
+campaign:** starting your own needs a plan, or join one when invited.
+
 ## 2. Tiers
 
 Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Platinum.
@@ -968,6 +1006,11 @@ in longhand. How well it goes depends on the handwriting, and **names are the th
 settles on its best reading of a name rather than leaving a gap, so read the imported text over
 before you generate.
 
+**Pick your styles before you generate.** The **Narrative style** and **Art style** buttons sit on
+the Story tab, beside Generate Story (they show the current pick; which styles you can choose depends
+on your tier). Choose both before **Generate Story**. The same buttons are on Review and Storyboard if
+you want to change them later.
+
 **Generate Story** reads the transcript *and* the notes, picks the key moments worth
 illustrating, and produces a **story outline** (reviewed on the Review tab before any
 images are made). It also:
@@ -1018,10 +1061,11 @@ anything missing or wrong first. Per panel you can:
 
 Outline = the facts; Direction = the flavor — they work together and don't conflict.
 
-**You cannot reorder the panels.** The panel order follows your story's chronology. If your story came out in the wrong order, the best fix is to correct the **Story / Transcript** field directly. If that isn't possible, add explicit notes in the **Story Notes / Instructions** field spelling out the correct order of events, then **Generate Story** again from scratch.
+**You cannot reorder or remove the panels (moments) here.** What you *can* do is edit each panel's outline and image prompt, add or remove the characters in a scene, and add or remove assets — so make sure the outline is right before you spend tokens. The panel order follows your story's chronology. If your story came out in the wrong order, the best fix is to correct the **Story / Transcript** field directly. If that isn't possible, add explicit notes in the **Story Notes / Instructions** field spelling out the correct order of events, then **Generate Story** again from scratch.
 
-Pick your styles up top **first**: the **Narrative style** and **Art style** buttons
-(they show the current pick; which styles you can choose depends on your tier). Then
+Your styles are picked on the **Story** tab, before Generate Story (see 10.1). The same
+**Narrative style** and **Art style** buttons sit up top here too, so you can still change them
+before you spend tokens. Then
 **Generate Narrative & Images** turns the outline into the finished story — it writes the
 prose, renders the panels, and spends tokens.
 
@@ -2071,10 +2115,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   minor **Supporting Character / NPC**
   assets get pulled in by name (use slash-separated keywords to match variants). Major
   recurring characters go on the **Characters** tab instead.
-- **"Where do I start / what's the right order?"** Create a campaign → add **Characters**
-  first (recommended) → create a **Session** → paste the transcript and notes →
-  **Generate Story** → review on the **Review** tab → **Generate Narrative & Images** →
-  fine-tune the **Storyboard** → check **Preview** → **Publish** or **Order**.
+- **"Where do I start / what's the right order?"** Give the whole path in **1a. Getting started**,
+  starting from step 1 (Create a campaign) unless they clearly have already done the early steps.
+  The **Ask Us** panel also has a **New here? Get started step by step** pill that walks through it.
 - **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Picture
   Book or Magazine. Run **Optimize** on the Publish page to see the real
   printed result.
