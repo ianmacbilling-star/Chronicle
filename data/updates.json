@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.29",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3329-pinned-filters",
+        "kind": "feature",
+        "public": true,
+        "summary": "Pin your picture filters. The Archive screen and every window that picks a picture from the Archive now has a Pin button that keeps your filters for next time.",
+        "detail": "Each place keeps its own pin, per campaign, on this computer: the Archive screen, the Replace windows for panels, characters, assets and title images, the four Prep and Preview pictures together, and the Title Builder. A pinned filter that no longer matches anything is dropped, so a pinned window never opens empty. A character's Replace window always opens on that character.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.28",
     "staged_on": "2026-10-29",
     "entries": [

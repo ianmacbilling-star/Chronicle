@@ -12627,15 +12627,16 @@ function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title fr
 function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
 function _tbOpenPicker(mode, heading) {
   if (!state.currentCampaign) return;
-  state.pickerCtx = { mode: mode };
-  state.pickerFilters = Object.assign(emptyArchiveFilters(), { type: 'title' });
+  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title' };   // v3.3.29
+  state.pickerFilters = fpApply('titlebuilder', state.currentCampaign.id, Object.assign(emptyArchiveFilters(), { type: 'title' }));
+  state.pickerFilters.type = 'title';   // pinned or not, this picker offers titles only
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(renderPicker);
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); });   // v3.3.29
 }
 
 function prepSaveTitleColor() {
@@ -13202,7 +13203,7 @@ function openPrepImagePicker(kind, campaignId) {
     showError('Switch to your own version to change the cover, back, or title image.');
     return;
   }
-  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId, pinArea: 'prep' };   // v3.3.29 -- one pin for all four
   // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
   // shape filtering... and give the faint line showing how the pictures would be cropped."
   //
@@ -13211,14 +13212,14 @@ function openPrepImagePicker(kind, campaignId) {
   // worked. It also hid every legacy archive, since `shape` is null on all of them. The soft
   // fallback that undid an empty prefilter went with it: nothing sets that flag now, and dead
   // machinery is a liability rather than an option held open.
-  var f = emptyArchiveFilters();
+  var f = fpApply('prep', _campId, emptyArchiveFilters());   // v3.3.29 -- pinned filters, if any
   state.pickerFilters = f;
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = cfg.label;
   var modal = document.getElementById('replace-picker-modal');
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   // v3.0.680 -- TD-481. The archives of the campaign being EDITED, not of whatever is on screen.
-  ensureArchivesLoaded(renderPicker, _campId);
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); }, _campId);   // v3.3.29
 }
 
 // v3.0.679 -- TD-480. A PICKER OPENED FROM A MODAL HAS TO OUTRANK IT.
@@ -15005,7 +15006,11 @@ function loadArchives() {
   if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){ state.archives = Array.isArray(data) ? data : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; updateArchivesCount(); renderArchives(); })
+    .then(function(data){ state.archives = Array.isArray(data) ? data : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; updateArchivesCount();
+      // v3.3.29 -- a pinned Archive screen opens with its filters
+      var _pc = state.currentCampaign && state.currentCampaign.id;
+      if (fpGet('archive', _pc)) { state.archiveFilters = fpApply('archive', _pc, emptyArchiveFilters()); _pickerSettle(state.archiveFilters); }
+      renderArchives(); })
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
 }
 
@@ -15048,7 +15053,47 @@ function archiveTypeCaption(a) {
 function setArchiveFilter(key, val) {
   if (!state.archiveFilters) state.archiveFilters = {};
   state.archiveFilters[key] = val;
+  fpRemember('archive', state.currentCampaign && state.currentCampaign.id, state.archiveFilters);   // v3.3.29
   if (key === 'moment') { renderArchiveGrid(); } else { renderArchives(); }
+}
+
+// v3.3.29 -- PINNED FILTERS (Ian, 2026-10-29: "a small filter lock button that when checked keeps your filtering as
+// you last left it for the next time you pull it up... Or a Pin like the versions have" -- "on all areas where you
+// filter"). One pin per place, per campaign, kept in this browser: the Archive screen, each kind of Replace window,
+// the four Prep & Preview pictures together, and the Title Builder's pickers. Pinned, the filters are saved as they
+// change and come back when that place opens; unpinned, it opens as it always has. A pinned value that no longer
+// matches anything is dropped on opening (_pickerSettle), so a pin can never open on an empty grid.
+function _fpKey(area, cid) { return 'campaignia.filterPin.' + area + '.' + cid; }
+function fpGet(area, cid) {
+  if (!area || !cid) return null;
+  try { var v = JSON.parse(window.localStorage.getItem(_fpKey(area, cid)) || 'null'); return (v && v.f && typeof v.f === 'object') ? v : null; } catch (e) { return null; }
+}
+function fpSet(area, cid, f) { if (!area || !cid) return; try { window.localStorage.setItem(_fpKey(area, cid), JSON.stringify({ f: f })); } catch (e) {} }
+function fpClear(area, cid) { try { window.localStorage.removeItem(_fpKey(area, cid)); } catch (e) {} }
+function fpRemember(area, cid, f) { if (fpGet(area, cid)) fpSet(area, cid, f); }   // only while pinned
+function fpApply(area, cid, f) {   // the pinned filters over f, when pinned; returns f
+  var p = fpGet(area, cid); if (!p) return f;
+  var e = emptyArchiveFilters();
+  Object.keys(e).forEach(function (k) { f[k] = (p.f[k] !== undefined && p.f[k] !== null) ? String(p.f[k]) : e[k]; });
+  return f;
+}
+function fpButtonHTML(on, handler) {
+  return '<button type="button" class="archive-filter archive-pin" onclick="' + handler + '()" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+    ' title="' + (on ? 'Pinned: these filters come back the next time you open this. Click to unpin.' : 'Pin: keep these filters for the next time you open this.') + '"' +
+    ' style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;' + (on ? 'border-color:var(--gold);color:var(--gold);' : '') + '">' +
+    _vpickPinSvg(on) + '<span>' + (on ? 'Pinned' : 'Pin') + '</span></button>';
+}
+function _fpPickerArea() { return (state.pickerCtx && state.pickerCtx.pinArea) || ''; }
+function _fpPickerCid() { return (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id) || null; }
+function togglePickerPin() {
+  var a = _fpPickerArea(), c = _fpPickerCid(); if (!a || !c) return;
+  if (fpGet(a, c)) fpClear(a, c); else fpSet(a, c, state.pickerFilters || emptyArchiveFilters());
+  renderPicker();
+}
+function toggleArchivePin() {
+  var c = state.currentCampaign && state.currentCampaign.id; if (!c) return;
+  if (fpGet('archive', c)) fpClear('archive', c); else fpSet('archive', c, state.archiveFilters || emptyArchiveFilters());
+  renderArchiveFilters();
 }
 
 // v3.0.670 -- TD-474. The empty filter set, written once. It was a literal in three places, and a
@@ -15108,11 +15153,13 @@ function renderArchiveFilters() {
   if (!host) return;
   if (!state.archiveFilters) state.archiveFilters = emptyArchiveFilters();
   host.innerHTML = archiveFilterBarHTML(state.archiveFilters, 'setArchiveFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
+    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>' +
+    fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin');   // v3.3.29
 }
 
 function clearArchiveFilters() {
   state.archiveFilters = emptyArchiveFilters();
+  fpRemember('archive', state.currentCampaign && state.currentCampaign.id, state.archiveFilters);   // v3.3.29
   renderArchives();
 }
 
@@ -16548,7 +16595,7 @@ function submitRetouch() {
 
 function openReplacePicker(mode, id) {
   if (mode === 'moment' && panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
-  state.pickerCtx = { mode: mode };
+  state.pickerCtx = { mode: mode, pinArea: 'replace-' + (mode === 'canonical' ? 'character' : mode) };   // v3.3.29 -- one pin per kind of window
   try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
   var tEl = document.getElementById('replace-picker-title');
@@ -16584,7 +16631,8 @@ function openReplacePicker(mode, id) {
     f.character = String(id);
     if (tEl) tEl.textContent = 'Replace character image from Archive';
   }
-  state.pickerFilters = f;
+  state.pickerFilters = fpApply(state.pickerCtx.pinArea, _fpPickerCid(), f);   // v3.3.29 -- pinned filters win over the defaults above
+  if ((mode === 'canonical' || mode === 'character') && fpGet(state.pickerCtx.pinArea, _fpPickerCid())) { state.pickerFilters.character = String(id); }   // v3.3.29 -- but a character's window always opens on that character
   var modal = document.getElementById('replace-picker-modal');
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
@@ -16620,11 +16668,14 @@ function closeReplacePicker() {
 function setPickerFilter(key, val) {
   if (!state.pickerFilters) state.pickerFilters = {};
   state.pickerFilters[key] = val;
+  fpRemember(_fpPickerArea(), _fpPickerCid(), state.pickerFilters);   // v3.3.29
   if (key === 'moment') { renderPickerGrid(); } else { renderPicker(); }
 }
 
 function clearPickerFilters() {
   state.pickerFilters = emptyArchiveFilters();
+  if (state.pickerCtx && state.pickerCtx.forceType) state.pickerFilters.type = state.pickerCtx.forceType;   // v3.3.29 -- the Title Builder offers titles only
+  fpRemember(_fpPickerArea(), _fpPickerCid(), state.pickerFilters);   // v3.3.29
   renderPicker();
 }
 
@@ -16633,7 +16684,8 @@ function renderPicker() {
   try { _rpSync(); } catch (e) {}   // v3.1.15
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
+    '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>' +
+    (_fpPickerArea() ? fpButtonHTML(!!fpGet(_fpPickerArea(), _fpPickerCid()), 'togglePickerPin') : '');   // v3.3.29
   renderPickerGrid();
 }
 
