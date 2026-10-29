@@ -16556,8 +16556,10 @@ function openReplacePicker(mode, id) {
     state.pickerCtx.momentId = id;
     state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
     state.pickerCtx.forkId = state.currentForkId || null;
+    // v3.3.27 -- the session only, and only if it has pictures (_pickerSettle). The version was never pre-set
+    // correctly: the filter compares version NAMES and this put a fork NUMBER in it, so nothing ever matched
+    // and the dropdown still read All versions (Ian, 2026-10-29: "There are never any pictures by default").
     if (state.pickerCtx.sessionId) f.session = String(state.pickerCtx.sessionId);
-    if (state.currentForkId) f.version = String(state.currentForkId);
     if (tEl) tEl.textContent = 'Replace panel image';   // v3.1.15 -- the Archive is now one of two tabs
   } else if (mode === 'canonical') {
     state.pickerCtx.characterId = id;
@@ -16587,7 +16589,27 @@ function openReplacePicker(mode, id) {
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(renderPicker);
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); });
+}
+
+// v3.3.27 -- A PRE-SET FILTER MUST BE ONE YOU CAN SEE, AND MUST NOT EMPTY THE GRID BY ITSELF.
+// (1) A value the dropdown has no option for is dropped: it would read "All ..." while hiding everything.
+// (2) If the pre-set filters together match nothing, the session and character are let go, so a brand-new
+// session (or a character never archived) opens on the rest of the Archive rather than an empty grid.
+// Runs once, when the picker opens; anything the reader picks afterwards comes from the dropdowns.
+function _pickerSettle(f) {
+  if (!f) return;
+  var rows = state.archives || [];
+  var have = { session: {}, version: {}, character: {}, creator: {}, style: {} };
+  rows.forEach(function (a) {
+    if (a.session_id && a.session_title) have.session[String(a.session_id)] = 1;
+    var vl = archiveVersionLabel(a); if (vl) have.version[vl] = 1;
+    if (a.character_id && a.character_name) have.character[String(a.character_id)] = 1;
+    if (a.archived_by) have.creator[String(a.archived_by)] = 1;
+    if (a.art_style) have.style[String(a.art_style)] = 1;
+  });
+  Object.keys(have).forEach(function (k) { if (f[k] && !have[k][String(f[k])]) f[k] = ''; });
+  if (!getFilteredArchives(f).length) { f.session = ''; f.character = ''; f.version = ''; }
 }
 
 function closeReplacePicker() {

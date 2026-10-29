@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.27",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3327-replace-picker-filters",
+        "kind": "fix",
+        "public": true,
+        "summary": "Replace from Archive now opens showing your pictures, instead of an empty window that needed Clear filters.",
+        "detail": "For a panel it opens on this session's pictures from every version, newest first, or on the whole Archive when the session has none yet. A filter the dropdowns cannot show is never left on.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.26",
     "staged_on": "2026-10-28",
     "entries": [
