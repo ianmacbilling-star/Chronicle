@@ -3509,6 +3509,7 @@ function showCampaignSection(section) {
   paintPublishLock();
   if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
+  if (section === 'characters') charsNoteFrom();   // v3.3.34 -- for the Characters page's Back button
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -15240,12 +15241,14 @@ function renderArchiveFilters() {
   var host = document.getElementById('archives-filters');
   if (!host) return;
   if (!state.archiveFilters) state.archiveFilters = emptyArchiveFilters();
+  // v3.3.34 -- the Archive SCREEN's pin is back beside Clear filters (Ian: "we have plenty of room. It's weird near the
+  // back button"). The screen is wide enough that the two stay on the filters' row; the picture WINDOWS keep theirs
+  // on the title row (v3.3.32), where room is short.
+  // The two are held together, so if the filters ever wrap, Clear filters and the pin move as a pair.
   host.innerHTML = archiveFilterBarHTML(state.archiveFilters, 'setArchiveFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
-  // v3.3.32 -- the pin sits on the title row beside Back (Ian: "Do what you can to avoid another row pushing everything
-  // down"). At the end of the filters it wrapped onto a row of its own whenever the filters filled the line.
-  var pin = document.getElementById('archives-pin');
-  if (pin) pin.innerHTML = fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin');   // v3.3.29
+    '<span class="archive-clear-pin" style="display:inline-flex;gap:8px;">' +
+    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>' +
+    fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin') + '</span>';   // v3.3.29
 }
 
 function clearArchiveFilters() {
@@ -18154,6 +18157,7 @@ function showCampaignSection(section) {
   paintPublishLock();
   if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
+  if (section === 'characters') charsNoteFrom();   // v3.3.34 -- for the Characters page's Back button
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -29518,6 +29522,28 @@ function cstyleBack() {
   if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
   _sectionBackFrom = t;
   sectionBack();
+}
+
+// v3.3.34 -- THE CHARACTERS PAGE'S BACK BUTTON (Ian), the same idea as My Account's: back to the page Characters was
+// opened from, else the campaign's Sessions. Its OWN note, so it never disturbs the Archive and Asset Library Back
+// (_sectionBackFrom); and arriving back from a page Characters itself opened (their Back) keeps the note, so two
+// pages never send you to each other.
+var _charsBackFrom = null;
+function charsNoteFrom() {
+  var cur = _visibleViewId();
+  if (cur === 'characters') return;
+  if ((cur === 'archives' || cur === 'assets') && _sectionBackFrom === 'characters') return;
+  if (cur === 'account' && _accountBackFrom === 'characters') return;
+  _charsBackFrom = cur || null;
+}
+function charactersBack() {
+  var t = _charsBackFrom;
+  if (t === 'account' || t === 'orders' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1)) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { if (state.currentCampaign && state.currentCampaign.id) showCampaignSection('sessions'); else showView('campaigns'); return; }
+  var keep = _sectionBackFrom;
+  _sectionBackFrom = t;
+  sectionBack();
+  _sectionBackFrom = keep;
 }
 
 // v3.3.31 -- MY ACCOUNT'S BACK BUTTON (Ian), the same rule as My Stuff's and Custom Art Styles': back to the page
