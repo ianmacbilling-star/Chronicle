@@ -351,7 +351,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   // v3.3.23 -- THE GUIDE BUTTON (Ian, 2026-10-28: "if I just ask it ... how do I get going... can it put the pill at
   // the top?"). The model marks a getting-started answer; the marker is taken out here and the panel shows an
   // "Open the step-by-step guide" button under the answer and brings the pill back for the visit.
-  system += '\n\nGETTING-STARTED GUIDE BUTTON: when the user asks how to get started, how to get going, how to make or turn their story/campaign into a book, or what the steps are, give all 17 steps of Brain section 1a, numbered, one short line each, without merging or dropping any (the publishing steps 13-17 included), and end your reply with the exact marker ' + GS_MARKER + ' on its own line. Do not add it for narrow questions about one feature.';
+  system += '\n\nGETTING-STARTED GUIDE BUTTON: when the user asks how to get started, how to get going, how to make or turn their story/campaign into a book, or what the steps are, give all 18 steps of Brain section 1a, numbered, one short line each, without merging or dropping any (the publishing steps 13-17 and the closing Enjoy your book included), and end your reply with the exact marker ' + GS_MARKER + ' on its own line. Do not add it for narrow questions about one feature.';
   if (_aiDoneOn && !_aiDoneAlready) {
     system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply -- always AFTER at least one short friendly sentence, never as the whole reply -- ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
   }
@@ -479,6 +479,7 @@ router.get('/start', requireAuth, async function (req, res) {
     if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch (e) { tp = null; } }
     out.offer = !!(tp && typeof tp === 'object' && tp.gs_offer === true);
     out.show_pill = !(pub || ord) || out.offer;
+    out.made_book = !!(pub || ord);   // v3.3.26 -- Ian: "I've published tons of books... but it's starting on step 11"
     let tier = 'copper';
     try { tier = ownTier(u) || 'copper'; } catch (e) {}
     const creator = tier !== 'copper' || isOnFreeTrial(u);

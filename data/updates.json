@@ -1,5 +1,35 @@
 [
   {
+    "version": "3.3.27",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3327-replace-picker-filters",
+        "kind": "fix",
+        "public": true,
+        "summary": "Replace from Archive now opens showing your pictures, instead of an empty window that needed Clear filters.",
+        "detail": "For a panel it opens on this session's pictures from every version, newest first, or on the whole Archive when the session has none yet. A filter the dropdowns cannot show is never left on.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.26",
+    "staged_on": "2026-10-28",
+    "entries": [
+      {
+        "id": "3326-getting-started-end",
+        "kind": "fix",
+        "public": false,
+        "summary": "Getting started: an 18th step, Enjoy your book! Someone who has already published or ordered a book opens at the end, and password managers no longer offer to fill in the guide.",
+        "detail": "GS_STEPS gains step 18 (no Take me there). /api/help/start returns made_book. The guide's buttons carry the ignore attributes LastPass, 1Password, Bitwarden, Dashlane and Proton Pass read. Brain 1a and the getting-started instruction say 18 steps.",
+        "td": [
+          "TD-1038"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.25",
     "staged_on": "2026-10-28",
     "entries": [
