@@ -13645,6 +13645,11 @@ function bshelfTime(v) { var t = Date.parse(v || ''); return isNaN(t) ? 0 : t; }
 // The picture for a book's face: a shelf book's own first page, a Library book's story cover.
 function bshelfFaceUrl(b) {
   if (b && b.kind === 'book' && b.id != null) return '/api/bookshelf/' + encodeURIComponent(b.id) + '/cover';
+  // v3.3.30 -- a Library book shows its story's own cover page too (routes/public.js, story-cover), found from the
+  // story's address: the share token when it has one, else the id. The cover picture is the fallback.
+  var su = String((b && b.storyUrl) || ''), m;
+  if ((m = /^\/library\/story\/s\/([A-Za-z0-9_-]+)(\/|$)/.exec(su))) return '/api/public/story-cover/s/' + m[1];
+  if ((m = /^\/library\/story\/(\d+)(\/|$)/.exec(su))) return '/api/public/story-cover/' + m[1];
   return bshelfSafeUrl(b && b.coverUrl);
 }
 function paintBookshelf(body, data) {
@@ -13770,8 +13775,8 @@ function bookshelfFace(b, leather, isLib) {
   if (src) {
     var im = document.createElement('img');
     im.alt = '';
-    // The real first page first; if the server cannot draw it, the campaign picture; then leather.
-    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    // The real first page first; if the server cannot draw it, the campaign picture (a Library book: its cover picture); then leather.
+    var fallback = bshelfSafeUrl(b.coverUrl);   // v3.3.30 -- Library books fall back to their cover picture too
     im.onerror = function () {
       if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
       im.style.display = 'none';
@@ -13859,7 +13864,7 @@ function bookshelfShowCard(b, isLib) {
   if (src) {
     var im = document.createElement('img');
     im.className = 'bshelf-card-cover bopen-cover'; im.alt = '';
-    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    var fallback = bshelfSafeUrl(b.coverUrl);   // v3.3.30
     im.onerror = function () {
       if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
       im.style.display = 'none';

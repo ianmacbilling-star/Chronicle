@@ -68,7 +68,7 @@ async function serveStoryPage(req, res) {
     let row = null;
     if (token) {
       row = await db.prepare(
-        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'
+        'SELECT id, title, author_name, cover_url, pdf_url, slug, blurb, teaser, snapshot, created_at, updated_at, visibility, share_token FROM public_stories WHERE share_token = ? AND public = TRUE'   // (v3.3.30: the cover page picture is built from these)
       ).get(token);
     } else {
       const id = parseInt(req.params.id, 10);
@@ -138,6 +138,11 @@ async function serveStoryPage(req, res) {
     // engine or the page: og/twitter/JSON-LD carry no picture, and the page draws the Picture removed box.
     const _coverRej = !!row.cover_url && rightsCheck.isRejectedSync(row.cover_url);
     const cover = _coverRej ? '' : (row.cover_url || '');
+    // v3.3.30 -- the book's own cover page (routes/public.js, story-cover): on the page, in link previews and for
+    // search engines, with the cover picture as the fallback on the page. Never for a rejected cover.
+    let _cpV = ''; try { const _t = new Date(row.updated_at || row.created_at || 0).getTime(); if (_t > 0) _cpV = '?v=' + _t; } catch (e) {}
+    const coverPagePath = _coverRej ? '' : ((row.share_token ? '/api/public/story-cover/s/' + encodeURIComponent(row.share_token) : '/api/public/story-cover/' + row.id) + _cpV);
+    const shareCover = (coverPagePath && base) ? (base + coverPagePath) : cover;
     const blurb = (row.blurb && String(row.blurb).trim()) ? String(row.blurb).trim() : '';
     const teaser = (row.teaser && String(row.teaser).trim()) ? String(row.teaser).trim() : '';
     let metaDesc = (blurb || teaser || ('A Campaignia chronicle' + (author ? ' by ' + author : ''))).replace(/\s+/g, ' ').trim();
@@ -151,7 +156,7 @@ async function serveStoryPage(req, res) {
       description: metaDesc
     };
     if (author) ld.author = { '@type': 'Person', name: author };
-    if (cover) ld.image = cover;
+    if (shareCover) ld.image = shareCover;   // v3.3.30
     if (row.created_at) { try { ld.datePublished = new Date(row.created_at).toISOString(); } catch (e) {} }
     if (row.updated_at) { try { ld.dateModified = new Date(row.updated_at).toISOString(); } catch (e) {} }   // v3.2.02 -- TD-984, a replaced story
 
@@ -168,11 +173,11 @@ async function serveStoryPage(req, res) {
       '<meta property="og:title" content="' + esc(title) + '" />' +
       '<meta property="og:description" content="' + esc(metaDesc) + '" />' +
       '<meta property="og:url" content="' + esc(pageUrl) + '" />' +
-      (cover ? '<meta property="og:image" content="' + esc(cover) + '" />' : '') +
+      (shareCover ? '<meta property="og:image" content="' + esc(shareCover) + '" />' : '') +   // v3.3.30
       '<meta name="twitter:card" content="summary_large_image" />' +
       '<meta name="twitter:title" content="' + esc(title) + '" />' +
       '<meta name="twitter:description" content="' + esc(metaDesc) + '" />' +
-      (cover ? '<meta name="twitter:image" content="' + esc(cover) + '" />' : '') +
+      (shareCover ? '<meta name="twitter:image" content="' + esc(shareCover) + '" />' : '') +   // v3.3.30
       '<script type="application/ld+json">' + ldSafe(JSON.stringify(ld)) + '</script>';
 
     const header =
@@ -183,7 +188,7 @@ async function serveStoryPage(req, res) {
           '<a href="/?ref=story" style="color:rgba(201,168,76,0.85);text-decoration:none;font-size:12px;letter-spacing:0.04em;">Made with <strong style="color:#e8d5a3;">Campaignia</strong></a>' +
         '</div>' +
         '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin-top:14px;">' +
-          ((cover || _coverRej) ? '<img src="' + esc(cover || rightsCheck.REMOVED_PICTURE) + '" alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
+          ((coverPagePath || cover || _coverRej) ? '<img src="' + esc(coverPagePath || cover || rightsCheck.REMOVED_PICTURE) + '"' + ((coverPagePath && cover) ? ' onerror="this.onerror=null;this.src=\'' + esc(cover) + '\'"' : '') + ' alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
           '<div style="flex:1;min-width:220px;">' +
             '<h1 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:26px;margin:0 0 6px;">' + esc(title) + '</h1>' +
             (author ? '<div style="color:#c9a84c;font-size:14px;margin-bottom:12px;">Chronicled by ' + esc(author) + '</div>' : '') +

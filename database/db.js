@@ -546,6 +546,11 @@ async function initPostgres() {
     // SAME SHAPE AS genres BESIDE IT, deliberately: text[] + GIN + overlap, frozen at the
     // flip (TD-219). One pattern across both facets and both tabs instead of two.
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS art_styles text[]',
+    // v3.3.30 -- THE STORY'S REAL COVER (Ian, 2026-10-29: "show the Cover with the title on it as it is in the book").
+    // Page 1 of the published PDF as a picture, drawn the first time it is asked for (routes/public.js, story-cover).
+    // thumb_pdf is the pdf_url it was drawn from, so a Replace (a new PDF) draws a fresh one.
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_url TEXT',
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_pdf TEXT',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // v3.1.66 -- TD-964. The questions: the 18 answers (JSON), up to three options, each
     // { text, edited, previews: { closeup, outdoors, group } } (JSON), and which one won (0-2, or null).

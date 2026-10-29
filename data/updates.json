@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.30",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3330-library-cover-page",
+        "kind": "feature",
+        "public": true,
+        "summary": "Stories in the Library now show the book's own cover, title and all, as it is in the book.",
+        "detail": "On the Library, on each story's page, on Library books on your Bookshelf, and in the picture shown when a story link is shared. The title and subtitle are still written out below. If a cover cannot be drawn, the cover picture shows instead.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.29",
     "staged_on": "2026-10-29",
     "entries": [

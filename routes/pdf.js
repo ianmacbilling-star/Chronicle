@@ -8727,9 +8727,10 @@ router.post('/story-blurb/:campaignId', requireAuth, async function(req, res) {
 router.post('/story/:id/unpublish', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var row = await db.prepare('SELECT pdf_url FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    var row = await db.prepare('SELECT pdf_url, thumb_url FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);   // v3.3.30 -- thumb_url
     if (!row) return res.status(404).json({ error: 'Story not found.' });
     await db.prepare('DELETE FROM public_stories WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+    if (row.thumb_url) { try { await deleteFile(row.thumb_url); } catch (e3) {} }   // v3.3.30 -- the cover page picture goes with it
     if (row.pdf_url) { try { await deleteFile(row.pdf_url); } catch (e2) { console.error('[story unpublish] R2 cleanup failed (non-fatal):', e2 && e2.message ? e2.message : e2); } }
     return res.json({ success: true });
   } catch (e) {

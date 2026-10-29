@@ -482,9 +482,18 @@
         ? ('/library/story/s/' + item.share_token + '/' + (item.slug || 'story'))
         : ('/library/story/' + item.id + '/' + (item.slug || 'story'));
       a.target = '_blank'; a.rel = 'noopener';
-      if (item.cover_url) {
+      if (item.cover_page_url || item.cover_url) {
         var img = document.createElement('img'); img.className = 'sc-cover';
-        img.setAttribute('loading', 'lazy'); img.src = item.cover_url; img.alt = item.title || 'story cover';
+        img.setAttribute('loading', 'lazy'); img.alt = item.title || 'story cover';
+        // v3.3.30 -- the book's own cover page, title and all; if it cannot be drawn, the cover picture as before.
+        var _fb = item.cover_url || '';
+        img.onerror = function () {
+          if (_fb && img.getAttribute('data-fell') !== '1') { img.setAttribute('data-fell', '1'); img.src = _fb; return; }
+          img.onerror = null;
+          var ph0 = document.createElement('div'); ph0.className = 'sc-ph'; ph0.textContent = item.title || 'Untitled';
+          if (img.parentNode) img.parentNode.replaceChild(ph0, img);
+        };
+        img.src = item.cover_page_url || item.cover_url;
         a.appendChild(img);
       } else {
         var ph = document.createElement('div'); ph.className = 'sc-ph'; ph.textContent = item.title || 'Untitled';
