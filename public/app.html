@@ -377,6 +377,7 @@
             <span style="font-size:12px;color:rgba(201,168,76,0.7);">Version:</span>
             <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;font-size:11px;padding:0 10px;" onchange="onNovelVersionChange(this.value)"></select>
           </div>
+          <button class="btn btn-sm" id="novel-nav-characters" onclick="showCampaignSection('characters')" title="The campaign's characters (the Canonical ones)">Characters</button><!-- v3.3.33 -->
           <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
         </div>
       </div>
@@ -402,7 +403,10 @@
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower)." style="display:none">Quick View</button>
-            <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:4px;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
+            <!-- v3.3.33 -- Refresh preview lives here now, beside the preview it refreshes (Ian), and glows when a change
+                 on the Prep panel is not in the preview yet (prepMarkPreviewStale in app.js). True View moved to the
+                 far right of this row. -->
+            <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" title="Redraw the preview with your latest changes.">&#8635; Refresh preview</button>
             <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
               <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
               <span id="novel-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">100%</span>
@@ -416,6 +420,7 @@
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()" style="flex:0 0 auto;">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
+          <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:auto;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
         </div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
@@ -448,7 +453,6 @@
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
             <div class="prep-h" style="margin-bottom:0;">Prepare to Publish</div>
             <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
-              <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()">&#8635; Refresh preview</button>
               <!-- v3.0.506 -- CALL TO ACTION FOR THE NEXT STEP, modelled on Go to Publish on the
                    Optimize tab.
                    v3.0.604 -- NAVIGATION ONLY. It used to switch tabs AND start the run. Ian:

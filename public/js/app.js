@@ -11035,6 +11035,7 @@ function clearFinalizePanes() {
   try { if (typeof loadFinalize !== 'undefined') loadFinalize._lastUrl = null; } catch (e) {}
 }
 function loadNovelPreview(layout) {
+  try { prepMarkPreviewStale(false); } catch (e) {}   // v3.3.33 -- the preview is being drawn: nothing left to refresh
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
   if (!iframe) return;
@@ -13392,7 +13393,7 @@ function selectPrepImage(kind, archiveId) {
     _prepMemberSetImage(kind, (cur === a.image_url) ? '' : a.image_url);
     return;
   }
-  var cb = function(){ renderPrepThumbs(); };
+  var cb = function(){ renderPrepThumbs(); try { prepMarkPreviewStale(true); } catch (e) {} };   // v3.3.33 -- a new picture is not in the preview yet
   if (kind === 'cover') setCampaignCover(archiveId, cb);
   else if (kind === 'back') setCampaignBackCover(archiveId, cb);
   else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
@@ -13418,6 +13419,34 @@ function refreshNovelPreview() {
   if (pt && title) pt.value = title;
   if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
 }
+
+// v3.3.33 -- REFRESH PREVIEW ASKS TO BE PRESSED. Ian: "any time they make a change to something on the prep and
+// preview panel that button to shimmer or light up or wiggle... So they know to refresh." Any edit made on the Prep
+// panel (typing, a dropdown, a tick box, a colour, a cover picture) marks the preview out of date: the button wiggles
+// once and keeps a soft gold glow until the preview is drawn again (loadNovelPreview clears it, whatever drew it).
+// Edits that already redraw the preview themselves (Apply & preview, Done & Use) clear it straight away.
+// Programmatic fills fire no events, so loading a book never lights it.
+function prepMarkPreviewStale(on) {
+  var b = document.getElementById('prep-refresh-btn');
+  if (!b) return;
+  var was = b.classList.contains('prep-refresh-stale');
+  if (!on) {
+    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle');
+    b.title = 'Redraw the preview with your latest changes.';
+    return;
+  }
+  b.classList.add('prep-refresh-stale');
+  b.title = 'Your changes are not in the preview yet. Press to redraw it.';
+  if (!was) { b.classList.remove('prep-refresh-wiggle'); void b.offsetWidth; b.classList.add('prep-refresh-wiggle'); }
+}
+function _prepPanelEdited(e) {
+  var t = e && e.target;
+  if (!t || typeof t.closest !== 'function' || !t.closest('#novel-prep-panel')) return;
+  if (t.readOnly || t.disabled) return;
+  prepMarkPreviewStale(true);
+}
+document.addEventListener('input', _prepPanelEdited, true);
+document.addEventListener('change', _prepPanelEdited, true);
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
@@ -19950,6 +19979,7 @@ function selNovelLayout(el, layout) {
 }
 
 function loadNovelPreview(layout) {
+  try { prepMarkPreviewStale(false); } catch (e) {}   // v3.3.33 -- the preview is being drawn: nothing left to refresh
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
   if (!iframe) return;
