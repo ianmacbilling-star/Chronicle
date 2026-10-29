@@ -366,7 +366,7 @@ router.get('/stories', async function (req, res) {
     // absent from this directory and from the sitemap, and present everywhere a reader
     // who already holds the link needs it -- including the report form below, which is
     // deliberately still `public = TRUE` alone.
-    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // share_token v3.0.830 -- TD-675, so the grid can link canonically
+    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
@@ -380,7 +380,11 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+      return { cover_page_url: storyCoverPath(r),   // v3.3.30 -- the book's own cover, title and all
+        id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at,
+        // v3.3.32 -- the subtitle on the book's cover, as recorded when it was published (the same rule as the Publish as
+        // picker, pdf.js my-stories-for-campaign). A story published before books kept it has none, and none is guessed.
+        subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
@@ -388,6 +392,74 @@ router.get('/stories', async function (req, res) {
     console.error('GET public stories error:', e.message);
     res.status(500).json({ error: 'stories unavailable' });
   }
+});
+
+// =====================================================================================================
+// v3.3.30 -- THE STORY'S REAL COVER. Ian, 2026-10-29: "On the library... Can you show the Cover with the title on it
+// as it is in the book" -- "Check the bookshelf and mimic how we do it there." So this is the Bookshelf's v3.0.986
+// cover (routes/bookshelf.js, cover()) for a published story: page 1 of the published PDF, drawn by Ghostscript the
+// first time anyone asks, saved beside the story (thumb_url, and thumb_pdf = the PDF it came from, so a Replace draws
+// a fresh one), and served from our own origin. Two requests for the same story while it is drawn share one job.
+// WHO MAY SEE IT follows the story: by share token, any published story (the token is the link-only secret); by id,
+// only a browsable one -- the same two doors as routes/story-pages.js. A cover the rights check rejected is never
+// drawn, and anything that goes wrong answers 404 so the page falls back to the cover picture, as before.
+// =====================================================================================================
+function storyCoverPath(r) {
+  var v = ''; try { var t = new Date(r.updated_at || r.created_at || 0).getTime(); if (t > 0) v = '?v=' + t; } catch (e) {}
+  return (r.share_token ? '/api/public/story-cover/s/' + encodeURIComponent(r.share_token) : '/api/public/story-cover/' + r.id) + v;
+}
+var _storyCoverJobs = {};
+async function sendStoryCover(req, res, row, linkOnly) {
+  try {
+    if (!row || !row.pdf_url) return res.status(404).json({ error: 'No such story.' });
+    if (row.cover_url && rightsCheck.isRejectedSync(row.cover_url)) return res.status(404).json({ error: 'No cover.' });
+    var storage = require('../storage/storage');
+    var img = null;
+    if (row.thumb_url && row.thumb_pdf === row.pdf_url) { try { img = await storage.fetchFile(row.thumb_url); } catch (e) { img = null; } }
+    if (!img || !img.length) {
+      var key = String(row.id) + '|' + row.pdf_url;
+      if (!_storyCoverJobs[key]) {
+        _storyCoverJobs[key] = (async function () {
+          var pdfBuf = await storage.fetchFile(row.pdf_url);
+          if (!pdfBuf || !pdfBuf.length) throw new Error('the story could not be read back');
+          var jpg = await require('./bookshelf').renderFirstPageJpeg(pdfBuf);
+          if (!jpg || !jpg.length) throw new Error('nothing was drawn');
+          var url = await storage.uploadFile(jpg, 'story-' + row.id + '-cover-' + Date.now() + '.jpg', 'image/jpeg', 'optimized');
+          var db = await getDb();
+          // Only onto the same story with the same PDF: a story replaced or unpublished meanwhile keeps nothing.
+          var upd = await db.prepare('UPDATE public_stories SET thumb_url = ?, thumb_pdf = ? WHERE id = ? AND pdf_url = ? AND public = TRUE').run(url, row.pdf_url, row.id, row.pdf_url);
+          if (!upd || !upd.changes) { try { await storage.deleteFile(url); } catch (e) {} }
+          else if (row.thumb_url && row.thumb_url !== url) { try { await storage.deleteFile(row.thumb_url); } catch (e) {} }
+          return jpg;
+        })().then(function (v) { delete _storyCoverJobs[key]; return v; }, function (e) { delete _storyCoverJobs[key]; throw e; });
+      }
+      img = await _storyCoverJobs[key];
+    }
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Content-Length', String(img.length));
+    res.set('Cache-Control', (linkOnly ? 'private' : 'public') + ', max-age=86400');
+    if (linkOnly) res.set('X-Robots-Tag', 'noindex');
+    return res.send(img);
+  } catch (e) {
+    try { console.error('[story-cover] ' + (row && row.id) + ': ' + ((e && e.message) || e)); } catch (x) {}
+    return res.status(404).json({ error: 'The cover could not be drawn.' });
+  }
+}
+var STORY_COVER_COLS = 'id, pdf_url, cover_url, thumb_url, thumb_pdf, visibility';
+router.get('/story-cover/s/:token', async function (req, res) {
+  try {
+    var db = await getDb();
+    var row = await db.prepare('SELECT ' + STORY_COVER_COLS + ' FROM public_stories WHERE share_token = ? AND public = TRUE').get(String(req.params.token || ''));
+    return sendStoryCover(req, res, row, !!row && String(row.visibility || 'public') !== 'public');
+  } catch (e) { return res.status(404).json({ error: 'No such story.' }); }
+});
+router.get('/story-cover/:id', async function (req, res) {
+  try {
+    var id = parseInt(req.params.id, 10); if (!(id > 0)) return res.status(404).json({ error: 'No such story.' });
+    var db = await getDb();
+    var row = await db.prepare("SELECT " + STORY_COVER_COLS + " FROM public_stories WHERE id = ? AND public = TRUE AND visibility = 'public'").get(id);
+    return sendStoryCover(req, res, row, false);
+  } catch (e) { return res.status(404).json({ error: 'No such story.' }); }
 });
 
 // POST /api/public/report -- a reader flags a published story (or an image in

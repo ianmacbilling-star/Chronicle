@@ -16,6 +16,8 @@
 //   POST   /api/bookshelf/:id/restore         -> Bring back: make this the version's saved book again.
 //                                                body { shelveFirst } or { replace } -- see restore()
 //   POST   /api/bookshelf/library             -> body { storyId, token }: a pointer to a Library story
+//   POST   /api/bookshelf/story               -> body { storyId }: one of your own published stories, as your own book (v3.3.31)
+//   GET    /api/bookshelf/story-status?ids=   -> which of your published stories are on your shelf (v3.3.31)
 //   GET    /api/bookshelf/library-status/:id  -> may I add this Library story, and is it already there
 //   GET    /api/bookshelf/library-status?ids= -> the same for a page of Library cards (v3.0.983)
 //   DELETE /api/bookshelf/:id                 -> remove one of your own books, and its files
@@ -133,6 +135,7 @@ function makeHandlers(d) {
       versionId: r.version_id, versionLabel: r.version_label || '', arrange: r.arrange || '', layout: r.layout || '',
       bookTitle: r.book_title || '', coverUrl: shelfCover(r.cover_url || ''), pages: Number(r.pages) || 0,   // v3.1.96 -- TD-979
       savedAt: r.saved_at || null, createdAt: r.created_at || null, editable: !!r.body_url,
+      fromStory: !!(r.kind === 'book' && r.public_story_id),   // v3.3.31 -- added from your own published story: no Bring back
       storyUrl: r.story_url || '', gone: !!r._gone,
       // v3.1.8 -- what is in the book (Ian). Library books carry their story's genres and styles.
       subtitle: r.subtitle || '', sessionCount: (r.session_count == null ? null : Number(r.session_count)),
@@ -416,6 +419,9 @@ function makeHandlers(d) {
       var row = await db.prepare("SELECT * FROM bookshelf_books WHERE id = ? AND user_id = ? AND kind = 'book'").get(Number(req.params.id) || 0, uid);
       if (!row) return res.status(404).json({ code: 'not_found', error: 'That book is not on your Bookshelf.' });
       if (!row.pdf_url) return res.status(409).json({ code: 'no_file', error: 'This book has no saved file to bring back.' });
+      // v3.3.31 -- a book added from a published story keeps only the finished PDF, not the layout or the version
+      // it came from, so there is nothing to bring it back to. The page does not offer it; this is the net.
+      if (row.public_story_id) return res.status(409).json({ code: 'from_story', error: 'This book was added from your published story, so it cannot be brought back to Publish. You can still view and download it.' });
       var campaignId = Number(row.campaign_id) || 0;
       var scopeReq = { session: req.session, query: { as_version: row.version_id ? String(row.version_id) : '' }, body: {} };
       var acc = await bookAccess(db, uid, campaignId, scopeReq);
@@ -581,6 +587,90 @@ function makeHandlers(d) {
     }
   }
 
+  // v3.3.31 -- YOUR OWN PUBLISHED STORY, AS YOUR OWN BOOK. Ian, 2026-10-29: on My Stuff > Published Stories, "add it to
+  // my bookshelf... Since you own the story put it there like you own it. Not a reference to the library." So it is a
+  // kind 'book' with its own COPY of the published PDF: it counts toward the limit, looks like every other book, and
+  // stays when the story is unpublished or replaced (the copy is the shelf's own; unpublish deletes only the story's).
+  // What a published story does not keep is the layout file and the version it came from, so these books are not
+  // offered Bring back (restore() refuses them too). Only the story's publisher (public_stories.user_id -- a Story
+  // Master who published a member's version is that publisher) may add it. Once per story until it is replaced:
+  // src_pdf is the story's PDF address when it was added, and Replace gives the story a new one.
+  async function storyRow(db, uid, storyId) {
+    return await db.prepare('SELECT id, user_id, campaign_id, title, author_name, cover_url, pdf_url, genres, art_styles, created_at, updated_at FROM public_stories WHERE id = ? AND user_id = ? AND public = TRUE').get(Number(storyId) || 0, uid);
+  }
+  function pdfPageCount(buf) {
+    // The page tree's /Count: the largest is the root's. 0 when it cannot be read (the line is then left off).
+    var s = buf.toString('latin1'), re = /\/Count\s+(\d+)/g, m, n = 0;
+    while ((m = re.exec(s))) { var v = Number(m[1]); if (v > n && v < 5000) n = v; }
+    return n;
+  }
+  async function addStory(req, res) {
+    var made = null;
+    try {
+      var uid = req.session.userId;
+      var db = await d.getDb();
+      var t = tierOf(req);
+      if (!t.limit) return res.status(403).json({ code: 'bookshelf_tier', error: shelfPlansText() });
+      var st = await storyRow(db, uid, (req.body || {}).storyId);
+      if (!st || !st.pdf_url) return res.status(404).json({ code: 'not_found', error: 'That story is not one of your published stories.' });
+      var dup = await db.prepare("SELECT id FROM bookshelf_books WHERE user_id = ? AND kind = 'book' AND public_story_id = ? AND src_pdf = ?").get(uid, st.id, st.pdf_url);
+      if (dup) return res.status(409).json({ code: 'already_shelved', id: dup.id, error: 'This story is already on your Bookshelf.' });
+      var used = await countBooks(db, uid);
+      if (used >= t.limit) {
+        return res.status(403).json({ code: 'bookshelf_full', limit: t.limit, used: used,
+          error: 'Your Bookshelf is full (' + used + ' of ' + t.limit + '). Remove a book to make room.' });
+      }
+      var buf = await d.fetchFile(st.pdf_url);
+      if (!buf || !buf.length) return res.status(502).json({ code: 'no_file', error: 'The story could not be read back from storage. Nothing was added; please try again.' });
+      made = await d.uploadFile(buf, 'shelf-u' + uid + '-s' + st.id + '-' + d.now() + '.pdf', 'application/pdf', 'optimized');
+      var sm = null;
+      try {
+        sm = await db.prepare("SELECT snapshot->>'subtitle' AS sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, snapshot->'campaign'->>'name' AS camp_name, snapshot->'co'->>'arrange' AS arr, CASE WHEN jsonb_typeof(snapshot->'sessions') = 'array' THEN jsonb_array_length(snapshot->'sessions') ELSE 0 END AS n_sessions FROM public_stories WHERE id = ?").get(st.id);
+      } catch (e) { sm = null; }
+      var camp = null;
+      try { camp = await db.prepare('SELECT name FROM campaigns WHERE id = ?').get(st.campaign_id); } catch (e) { camp = null; }
+      var arr = (sm && sm.arr && /^[a-z]+$/.test(sm.arr)) ? sm.arr : '';
+      var at = st.updated_at || st.created_at || null;
+      var ins = await db.prepare(
+        'INSERT INTO bookshelf_books (user_id, kind, campaign_id, campaign_name, version_id, prefs_version_id, version_label, arrange, book_title, cover_url, pdf_url, body_url, pages, saved_at, public_story_id, src_pdf) ' +
+        "VALUES (?, 'book', ?, ?, NULL, 0, '', ?, ?, ?, ?, NULL, ?, ?, ?, ?)"
+      ).run(uid, st.campaign_id, (camp && camp.name) || (sm && sm.camp_name) || '', arr, st.title || '', st.cover_url || '', made,
+        pdfPageCount(buf), at ? new Date(at).toISOString() : '', st.id, st.pdf_url);
+      made = null;
+      // What is in the book, from what the story recorded when it was published. Best effort: the book is shelved.
+      try {
+        var art = (st.art_styles || []).map(function (sl) { return (sl === 'custom') ? 'Custom style' : (d.artNameForSlug(sl) || ''); }).filter(Boolean);
+        var sub = (sm && sm.sub != null) ? sm.sub : ((sm && sm.camp_sub) || '');
+        await storeMeta(db, ins && ins.lastInsertRowid, { subtitle: String(sub || '').trim(), sessionCount: (sm && Number(sm.n_sessions)) || null,
+          art: art, narr: [], genres: (d.genreLabels(st.genres || []) || []).map(String) });
+      } catch (e) { d.log('story-meta', e); }
+      return res.json({ ok: true, id: ins && ins.lastInsertRowid, used: used + 1, limit: t.limit });
+    } catch (e) {
+      if (made) { try { await d.deleteFile(made); } catch (e2) {} }
+      d.log('story', e);
+      return res.status(500).json({ code: 'save_failed', error: 'The story could not be put on your Bookshelf. Nothing was saved; please try again.' });
+    }
+  }
+  // ?ids=1,2,3 (at most 60) of your own published stories: which are on your shelf as they are now.
+  async function storyStatus(req, res) {
+    try {
+      var uid = req.session.userId;
+      var db = await d.getDb();
+      var t = tierOf(req);
+      var ids = String(req.query.ids || '').split(',').map(function (x) { return Number(x); })
+        .filter(function (n, i, a) { return Number.isInteger(n) && n > 0 && a.indexOf(n) === i; }).slice(0, 60);
+      var items = {};
+      if (!ids.length) return res.json({ canAdd: t.limit > 0, items: items });
+      var marks = ids.map(function () { return '?'; }).join(', ');
+      var on = await db.prepare("SELECT ps.id FROM public_stories ps JOIN bookshelf_books b ON b.public_story_id = ps.id AND b.kind = 'book' AND b.user_id = ? AND b.src_pdf = ps.pdf_url WHERE ps.user_id = ? AND ps.id IN (" + marks + ')').all([uid, uid].concat(ids));
+      (on || []).forEach(function (r) { items[String(r.id)] = { onShelf: true }; });
+      return res.json({ canAdd: t.limit > 0, items: items });
+    } catch (e) {
+      d.log('story-status', e);
+      return res.json({ canAdd: false, items: {}, failed: true });
+    }
+  }
+
   async function remove(req, res) {
     try {
       var uid = req.session.userId;
@@ -662,7 +752,7 @@ function makeHandlers(d) {
     }
   }
 
-  return { list: list, save: save, restore: restore, addLibrary: addLibrary, libraryStatus: libraryStatus, libraryStatusMany: libraryStatusMany, remove: remove, pdf: pdf, cover: cover, tierOf: tierOf };
+  return { list: list, save: save, restore: restore, addStory: addStory, storyStatus: storyStatus, addLibrary: addLibrary, libraryStatus: libraryStatus, libraryStatusMany: libraryStatusMany, remove: remove, pdf: pdf, cover: cover, tierOf: tierOf };
 }
 
 // v3.0.986 -- page 1 of a PDF as a JPEG, by Ghostscript -- the same binary the flatten uses
@@ -713,6 +803,8 @@ const { requireAuth } = require('../middleware/auth');
 // The two named paths come before '/:id/...' so an id can never be read as 'library'.
 router.get('/', requireAuth, function (req, res) { return H().list(req, res); });
 router.post('/save', requireAuth, function (req, res) { return H().save(req, res); });
+router.post('/story', requireAuth, function (req, res) { return H().addStory(req, res); });            // v3.3.31
+router.get('/story-status', requireAuth, function (req, res) { return H().storyStatus(req, res); });   // v3.3.31
 router.post('/library', requireAuth, function (req, res) { return H().addLibrary(req, res); });
 router.get('/library-status', requireAuth, function (req, res) { return H().libraryStatusMany(req, res); });   // v3.0.983
 router.get('/library-status/:storyId', requireAuth, function (req, res) { return H().libraryStatus(req, res); });

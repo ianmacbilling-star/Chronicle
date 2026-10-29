@@ -1,5 +1,135 @@
 [
   {
+    "version": "3.3.34",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3334-archive-pin",
+        "kind": "fix",
+        "public": true,
+        "summary": "On the Archive screen the filter Pin sits right after Clear filters again.",
+        "detail": "The picture windows keep it beside their close button.",
+        "td": []
+      },
+      {
+        "id": "3334-characters-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Characters page has a Back button, and its Publish button is gone.",
+        "detail": "Back takes you to the page you opened Characters from, or to the campaign's Sessions.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.33",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3333-refresh-preview",
+        "kind": "feature",
+        "public": true,
+        "summary": "Prep & Preview: the Refresh preview button sits above the preview and glows when you have a change it does not show yet.",
+        "detail": "Change a title, picture, colour or layout setting on the Prep panel and the button wiggles once and keeps a soft glow until the preview is redrawn.",
+        "td": []
+      },
+      {
+        "id": "3333-publish-characters",
+        "kind": "feature",
+        "public": true,
+        "summary": "A Characters button at the top of Publish, beside Archives.",
+        "detail": "It opens the campaign's Characters page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.32",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3332-library-subtitles",
+        "kind": "feature",
+        "public": true,
+        "summary": "Library story cards show the book's subtitle under its title.",
+        "detail": "It is the subtitle the book was published with. Stories published before books kept their subtitle show none.",
+        "td": []
+      },
+      {
+        "id": "3332-pin-title-row",
+        "kind": "fix",
+        "public": true,
+        "summary": "The filter pin now sits on the title row, so it never pushes the pictures down.",
+        "detail": "In the Archive and every picture window, the Pin button is beside the close button (or Back on the Archive screen) instead of after the filters.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.31",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3331-story-to-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Put your own published stories on your Bookshelf.",
+        "detail": "On My Stuff, Published Stories, each story has an Add to my Bookshelf button. It puts a copy of the book on your shelf as one of your own books, so it stays there even if you later unpublish or replace the story. It counts toward your Bookshelf limit.",
+        "td": []
+      },
+      {
+        "id": "3331-account-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Account has a Back button.",
+        "detail": "It takes you back to the page you opened My Account from, or to My Campaigns if that is not known.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.30",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3330-library-cover-page",
+        "kind": "feature",
+        "public": true,
+        "summary": "Stories in the Library now show the book's own cover, title and all, as it is in the book.",
+        "detail": "On the Library, on each story's page, on Library books on your Bookshelf, and in the picture shown when a story link is shared. The title and subtitle are still written out below. If a cover cannot be drawn, the cover picture shows instead.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.29",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3329-pinned-filters",
+        "kind": "feature",
+        "public": true,
+        "summary": "Pin your picture filters. The Archive screen and every window that picks a picture from the Archive now has a Pin button that keeps your filters for next time.",
+        "detail": "Each place keeps its own pin, per campaign, on this computer: the Archive screen, the Replace windows for panels, characters, assets and title images, the four Prep and Preview pictures together, and the Title Builder. A pinned filter that no longer matches anything is dropped, so a pinned window never opens empty. A character's Replace window always opens on that character.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.28",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3328-company-page-cast",
+        "kind": "feature",
+        "public": true,
+        "summary": "The character page (The Company) now shows only the characters in the sessions you put in the book, and a new Character pictures choice decides which picture of each one is used.",
+        "detail": "Choose from: Canonical (the original pictures of the characters), the first or last appearance in this version, or the first or last appearance in the sessions in this book, which is the new default. A book whose layout was already saved keeps the picture it had. The choice shows when Include character page is ticked.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.27",
     "staged_on": "2026-10-29",
     "entries": [

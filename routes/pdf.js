@@ -834,6 +834,10 @@ var CO_DEFAULTS = {
   // parseCustomOpts drops any key not in this object and reads it back through
   // the type it finds here.
   castimg: 0,
+  // v3.3.28 -- WHICH PICTURE THE COMPANY PAGE USES, now a choice of five (Ian, 2026-10-29). A STRING, so parseCustomOpts
+  // keeps it as written: canon | vfirst | vlast | bfirst | blast. '' = not in the co string; parseCustomOpts then
+  // decides -- from castimg when the string carries one (a layout saved before this), else bfirst, the new default.
+  castpic: '',
   hidelogo: 0,
   // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
   // and paper, so they reach every render path automatically and persist through layout_opts with
@@ -875,10 +879,11 @@ function coFontFamily(f){ if (!f || f === 'classic') return ''; return CO_FONTS[
 // exactly the same type. CO_FONT_IMPORTS is kept only as the record of which family each key means.
 function coFontImport(f){ return bookFontCss(f); }
 
+var CAST_PICS = ['canon', 'vfirst', 'vlast', 'bfirst', 'blast'];   // v3.3.28 -- see castpic in CO_DEFAULTS
 function parseCustomOpts(str) {
   var o = {};
   for (var k in CO_DEFAULTS) o[k] = CO_DEFAULTS[k];
-  if (!str) return o;
+  if (!str) { o.castpic = 'bfirst'; return o; }   // v3.3.28 -- a new book: the default
   String(str).split(',').forEach(function (pair) {
     var idx = pair.indexOf(':');
     if (idx < 0) return;
@@ -888,6 +893,8 @@ function parseCustomOpts(str) {
     if (typeof CO_DEFAULTS[k] === 'number') o[k] = (v === '1' || v === 'true') ? 1 : 0;
     else o[k] = v;
   });
+  // v3.3.28 -- a layout saved before castpic keeps the picture it had: castimg 0 = first in the version, 1 = last.
+  if (CAST_PICS.indexOf(o.castpic) < 0) o.castpic = /(^|,)\s*castimg\s*:/.test(String(str)) ? (o.castimg ? 'vlast' : 'vfirst') : 'bfirst';
   // AUTHORITATIVE GATE: a withheld layout never reaches the packer, however the request was formed.
   if (o.arrange && !layoutIsEnabled(o.arrange)) o.arrange = CO_LAYOUT_FALLBACK;
   // v3.0.497 -- PAPER COLOUR IS A PHYSICAL STOCK, NOT A RENDER. ALWAYS WHITE.
@@ -4271,7 +4278,7 @@ function includeFingerprint(incMap) {
 // recording more at save time, not comparing harder here.
 var CO_TITLE_KEYS = { titleStyle: 1, titlePlace: 1, titleSize: 1 };
 var CO_COMPARABLE = {
-  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1, castimg: 1,
+  arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1, castimg: 1, castpic: 1,
   toc: 1, header: 1, markers: 1, markerbreak: 1,
   titleStyle: 1, titlePlace: 1, titleSize: 1
 };
@@ -4336,7 +4343,7 @@ function bookMismatch(approvedInc, nowInc, approvedCo, nowCo, opts) {
 // NOT TOLD IS NOT CHANGED (TD-610): a request with no co compares as the same.
 var CO_CHANGE_LABELS = {
   arrange: 'Layout', border: 'Picture border', caption: 'Caption style', font: 'Font', dropcap: 'Drop cap',
-  cover: 'Cover page', cast: 'Character page', castnpc: 'NPCs on the character page', castimg: 'Character portrait',
+  cover: 'Cover page', cast: 'Character page', castnpc: 'NPCs on the character page', castimg: 'Character portrait', castpic: 'Character pictures',
   toc: 'Contents page', header: 'Running header', markers: 'Session markers', markerbreak: 'Session page breaks',
   titleStyle: 'Title style', titlePlace: 'Title placement', titleSize: 'Title size'
 };
@@ -5744,17 +5751,57 @@ function pickVersionRefs(characters, verRows, styledRows) {
 // then the canonical and the image_* fields, which is exactly what shipped before
 // v3.0.823. A character with no per-version reference is therefore untouched, and
 // so is every render that never calls attachVersionReferences at all.
-function castRefFor(c, wantNewest) {
+// v3.3.28 -- mode is one of CAST_PICS (true/false still mean vlast/vfirst, for the older caller). Each choice
+// falls down the chain to the Canonical, so nobody on the page is ever blank.
+function castRefFor(c, mode) {
   if (!c) return null;
-  var v = wantNewest ? (c.version_ref_newest || c.version_ref_oldest)
-                     : (c.version_ref_oldest || c.version_ref_newest);
-  return v || c.version_ref_styled || c.canonical_reference_url || c.image_portrait ||
-         c.image_fullbody || c.image_action || c.image_other || c.image || null;
+  if (mode === true) mode = 'vlast'; else if (!mode) mode = 'vfirst';
+  var canon = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image || null;
+  if (mode === 'canon') return canon;
+  var ver = (mode === 'vlast' || mode === 'blast') ? (c.version_ref_newest || c.version_ref_oldest)
+                                                   : (c.version_ref_oldest || c.version_ref_newest);
+  var book = (mode === 'blast') ? (c.book_ref_last || c.book_ref_first)
+           : (mode === 'bfirst') ? (c.book_ref_first || c.book_ref_last) : null;
+  return book || ver || c.version_ref_styled || canon;
 }
 
-async function attachVersionReferences(db, characters, campaignId, versionId) {
+// v3.3.28 -- THE BOOK'S OWN CAST. incMap (the sessions ticked for this book) and asUser pick, per session, the
+// fork the book reads (bookForkForSession, the same call the page gathering makes). Each character then gets
+// book_ref_first / book_ref_last from those sessions only, and in_book if it is in the cast of any of them
+// (Ian, 2026-10-29: "If they don't appear until later I don't think they should be there"). book_cast_known
+// says the book's sessions recorded a cast at all; without one the Company page keeps everyone, as before.
+async function attachBookCast(db, characters, incMap, asUser, versionId) {
+  (characters || []).forEach(function (c) { c.in_book = false; c.book_ref_first = null; c.book_ref_last = null; c.book_cast_known = false; });
+  var sids = Object.keys(incMap || {}).filter(function (k) { return incMap[k]; }).map(Number).filter(function (n) { return n > 0; });
+  if (!sids.length || !characters || !characters.length) return;
+  var forks = [];
+  for (var i = 0; i < sids.length; i++) {
+    var f = await bookForkForSession(db, sids[i], { asUser: asUser || null, versionId: versionId || null });
+    if (f) forks.push(Number(f));
+  }
+  if (!forks.length) return;
+  var rows = await db.prepare(
+    'SELECT sc.character_id, sc.reference_url FROM session_characters sc JOIN sessions s ON s.id = sc.session_id ' +
+    'WHERE sc.fork_id IN (' + forks.map(function () { return '?'; }).join(',') + ') ' +
+    'ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC, sc.id ASC'
+  ).all(...forks);
+  if (!rows || !rows.length) return;
+  var first = {}, last = {}, inb = {};
+  rows.forEach(function (r) {
+    var k = String(r.character_id); inb[k] = true;
+    if (r.reference_url) { if (first[k] === undefined) first[k] = r.reference_url; last[k] = r.reference_url; }
+  });
+  characters.forEach(function (c) {
+    var k = String(c.id);
+    c.book_cast_known = true; c.in_book = !!inb[k];
+    c.book_ref_first = first[k] || null; c.book_ref_last = last[k] || null;
+  });
+}
+
+async function attachVersionReferences(db, characters, campaignId, versionId, incMap, asUser) {
   try {
     if (!characters || !characters.length) return;
+    try { await attachBookCast(db, characters, incMap, asUser, versionId); } catch (e) { console.error('attachBookCast error (non-fatal):', e.message); }
     if (!versionId) { pickVersionRefs(characters, [], []); return; }
     // The style this book renders in: the version's FIRST session, a fork's
     // art_style_override beating the session's own style. Only used for the
@@ -5819,6 +5866,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fCast   = co ? !!co.cast      : true;
   var fCastNpc = co ? !!co.castnpc  : false;   // v3.0.611 -- NPCs on the Company page; off unless asked
   var fCastNewest = co ? !!co.castimg : false;  // v3.0.823 -- TD-657; 0/absent = OLDEST, which is the default
+  var fCastPic = co ? (CAST_PICS.indexOf(co.castpic) >= 0 ? co.castpic : (fCastNewest ? 'vlast' : 'vfirst')) : 'vfirst';   // v3.3.28
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
@@ -5866,6 +5914,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // full portraits up to 12, compressed to 30, names past 60. A party of 7 plus 6 NPCs crosses 12,
   // so switching this on can shrink every figure on the page.
   var castChars = fCastNpc ? characters.slice() : characters.filter(function (c) { return !_isNpc(c); });
+  // v3.3.28 -- only the characters in the cast of the sessions in this book, when those sessions recorded one.
+  if (characters.some(function (c) { return c && c.book_cast_known; })) castChars = castChars.filter(function (c) { return c.in_book; });
   var _castN = castChars.length;
   // v3.0.525 -- THE COMPANY IS A LINE-UP, NOT A GRID OF CARDS.
   // Ian, looking at a four-character page that rendered 3 + 1 with 40 percent of the page empty:
@@ -6057,7 +6107,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         var _left = _x0 + j * _S + (_wRow - _fw) / 2;
         var _bottom = _H * _raiseU[i];
         var _dim = Math.max(0.22, 0.42 - _rowDist(i) * 0.05);
-        var _img = castRefFor(c, fCastNewest);
+        var _img = castRefFor(c, fCastPic);   // v3.3.28
         _slotX.push({ l: _left, w: _fw });
         _slots.push(
           '<div class="cast-slot" style="left:' + _left.toFixed(3) + 'in;bottom:' + _bottom.toFixed(3) +
@@ -6867,8 +6917,8 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
   // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
   // four builders, and this is the first line after both at every one of them.
-  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  await attachVersionReferences(db, characters, campaign.id, asVersion, _incMap, asUser);   // v3.3.28 -- the book's sessions, for its cast
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
   // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
@@ -7127,8 +7177,8 @@ async function printInteriorHandler(req, res) {
   // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
   // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
   // four builders, and this is the first line after both at every one of them.
-  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  await attachVersionReferences(db, characters, campaign.id, asVersion, _incMap, asUser);   // v3.3.28 -- the book's sessions, for its cast
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
   // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
@@ -8150,8 +8200,8 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
   // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
   // four builders, and this is the first line after both at every one of them.
-  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  await attachVersionReferences(db, characters, campaign.id, asVersion, _incMap, asUser);   // v3.3.28 -- the book's sessions, for its cast
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
   // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
@@ -8555,7 +8605,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       // reader can change; protecting a url that is never drawn costs one row, and guessing
       // wrong costs a customer their book. Over-protect deliberately.
       var _PORTRAIT_FIELDS = [
-        'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'canonical_reference_url',
+        'version_ref_newest', 'version_ref_oldest', 'version_ref_styled', 'book_ref_first', 'book_ref_last', 'canonical_reference_url',
         'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'image'
       ];
       for (var _cx = 0; _cx < (_pubChars || []).length; _cx++) {   // v3.2.12
@@ -8677,9 +8727,10 @@ router.post('/story-blurb/:campaignId', requireAuth, async function(req, res) {
 router.post('/story/:id/unpublish', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var row = await db.prepare('SELECT pdf_url FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    var row = await db.prepare('SELECT pdf_url, thumb_url FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);   // v3.3.30 -- thumb_url
     if (!row) return res.status(404).json({ error: 'Story not found.' });
     await db.prepare('DELETE FROM public_stories WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+    if (row.thumb_url) { try { await deleteFile(row.thumb_url); } catch (e3) {} }   // v3.3.30 -- the cover page picture goes with it
     if (row.pdf_url) { try { await deleteFile(row.pdf_url); } catch (e2) { console.error('[story unpublish] R2 cleanup failed (non-fatal):', e2 && e2.message ? e2.message : e2); } }
     return res.json({ success: true });
   } catch (e) {
@@ -8803,8 +8854,8 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
   // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
   // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
   // four builders, and this is the first line after both at every one of them.
-  await attachVersionReferences(db, characters, campaign.id, asVersion);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
+  await attachVersionReferences(db, characters, campaign.id, asVersion, _incMap, asUser);   // v3.3.28 -- the book's sessions, for its cast
   // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
   // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
   // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the

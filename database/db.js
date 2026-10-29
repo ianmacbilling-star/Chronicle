@@ -546,6 +546,11 @@ async function initPostgres() {
     // SAME SHAPE AS genres BESIDE IT, deliberately: text[] + GIN + overlap, frozen at the
     // flip (TD-219). One pattern across both facets and both tabs instead of two.
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS art_styles text[]',
+    // v3.3.30 -- THE STORY'S REAL COVER (Ian, 2026-10-29: "show the Cover with the title on it as it is in the book").
+    // Page 1 of the published PDF as a picture, drawn the first time it is asked for (routes/public.js, story-cover).
+    // thumb_pdf is the pdf_url it was drawn from, so a Replace (a new PDF) draws a fresh one.
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_url TEXT',
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_pdf TEXT',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // v3.1.66 -- TD-964. The questions: the 18 answers (JSON), up to three options, each
     // { text, edited, previews: { closeup, outdoors, group } } (JSON), and which one won (0-2, or null).
@@ -2152,6 +2157,10 @@ async function migrateBookshelf(pool) {
   // v3.2.10 -- TD-988. The saved book's cover record (JSON: cover, back, title-page and built-title
   // pictures, title, subtitle, colour), so a book brought back orders with its own cover.
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS book_cover_meta TEXT');
+  // v3.3.31 -- a book put on the shelf from one of your own published stories (My Stuff > Published Stories):
+  // the story's PDF address at the time, so the same story is not added twice until it is replaced.
+  // public_story_id (already here for Library pointers) names the story; kind stays 'book'.
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS src_pdf TEXT');
   // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
   // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
   // into anything that touches an order.

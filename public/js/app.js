@@ -2287,6 +2287,7 @@ function loadMyStories() {
       var items = (d && d.items) || [];
       if (!items.length) { if (empty) empty.style.display = 'block'; return; }
       items.forEach(function(it){ list.appendChild(myStoryCard(it)); });
+      myStoryShelfStatus(items);   // v3.3.31
     })
     .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
 }
@@ -2440,6 +2441,17 @@ function myStoryCard(it) {
   renderVis();
   visWrap.appendChild(visBadge); visWrap.appendChild(visBtn); visWrap.appendChild(copyBtn); visWrap.appendChild(visMsg);
   card.appendChild(visWrap);
+  // v3.3.31 -- ADD TO MY BOOKSHELF (Ian): your own story goes on your shelf as your own book, a copy of its PDF, not
+  // as a pointer to the Library. Hidden until the shelf answers whether it is already there (myStoryShelfStatus).
+  var shelfWrap = document.createElement('div');
+  shelfWrap.style.cssText = 'padding:0 8px 8px;';
+  var shelfPill = document.createElement('button');
+  shelfPill.type = 'button'; shelfPill.className = 'btn btn-sm mystory-shelf-pill';
+  shelfPill.setAttribute('data-story', String(it.id));
+  shelfPill.style.cssText = 'font-size:11px;padding:3px 10px;border-radius:999px;display:none;';
+  shelfPill.onclick = function () { myStoryShelfAdd(it, shelfPill); };
+  shelfWrap.appendChild(shelfPill);
+  card.appendChild(shelfWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   // v3.2.02 -- TD-984. Asked in our own window (was click twice), and it says what happens to shared links.
@@ -2450,6 +2462,46 @@ function myStoryCard(it) {
   };
   card.appendChild(btn);
   return card;
+}
+
+// v3.3.31 -- the Add to my Bookshelf pill on each published story (myStoryCard). On the shelf it reads "On your
+// Bookshelf" and opens the Bookshelf tab. A story replaced since it was added can be added again (a new book).
+function myStoryShelfPaint(pill, on) {
+  if (!pill) return;
+  pill.style.display = '';
+  pill.disabled = false;
+  pill.setAttribute('data-on', on ? '1' : '0');
+  pill.textContent = on ? 'On your Bookshelf' : '+ Add to my Bookshelf';
+  pill.title = on ? 'Open your Bookshelf' : 'Put a copy of this book on your Bookshelf';
+}
+function myStoryShelfStatus(items) {
+  var ids = (items || []).map(function (it) { return it && it.id; }).filter(Boolean);
+  var paint = function (part, on) {
+    part.forEach(function (id) { myStoryShelfPaint(document.querySelector('.mystory-shelf-pill[data-story="' + Number(id) + '"]'), !!on[String(id)]); });
+  };
+  for (var i = 0; i < ids.length; i += 60) {
+    (function (part) {
+      fetch('/api/bookshelf/story-status?ids=' + part.join(','))
+        .then(function (r) { return r.json(); })
+        .then(function (j) { paint(part, (j && j.items) || {}); })
+        .catch(function () { paint(part, {}); });
+    })(ids.slice(i, i + 60));
+  }
+}
+function myStoryShelfAdd(it, pill) {
+  if (!pill || pill.disabled) return;
+  if (pill.getAttribute('data-on') === '1') { mystuffShowTab('shelf'); return; }
+  pill.disabled = true; pill.textContent = 'Adding...';
+  fetch('/api/bookshelf/story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storyId: it.id }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      var j = res.j || {};
+      if (res.ok && j.ok) { myStoryShelfPaint(pill, true); billingToast('Added to your Bookshelf.', 'success'); return; }
+      if (j.code === 'already_shelved') { myStoryShelfPaint(pill, true); return; }
+      myStoryShelfPaint(pill, false);
+      billingToast(j.error || 'Could not add it to your Bookshelf.', 'error');
+    })
+    .catch(function () { myStoryShelfPaint(pill, false); billingToast('Could not add it to your Bookshelf.', 'error'); });
 }
 
 function removeMyStory(storyId, card, btn) {
@@ -3387,6 +3439,8 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
+  if (view === 'account') accountNoteFrom();
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -3455,6 +3509,7 @@ function showCampaignSection(section) {
   paintPublishLock();
   if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
+  if (section === 'characters') charsNoteFrom();   // v3.3.34 -- for the Characters page's Back button
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -10981,6 +11036,7 @@ function clearFinalizePanes() {
   try { if (typeof loadFinalize !== 'undefined') loadFinalize._lastUrl = null; } catch (e) {}
 }
 function loadNovelPreview(layout) {
+  try { prepMarkPreviewStale(false); } catch (e) {}   // v3.3.33 -- the preview is being drawn: nothing left to refresh
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
   if (!iframe) return;
@@ -12627,15 +12683,16 @@ function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title fr
 function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
 function _tbOpenPicker(mode, heading) {
   if (!state.currentCampaign) return;
-  state.pickerCtx = { mode: mode };
-  state.pickerFilters = Object.assign(emptyArchiveFilters(), { type: 'title' });
+  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title' };   // v3.3.29
+  state.pickerFilters = fpApply('titlebuilder', state.currentCampaign.id, Object.assign(emptyArchiveFilters(), { type: 'title' }));
+  state.pickerFilters.type = 'title';   // pinned or not, this picker offers titles only
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(renderPicker);
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); });   // v3.3.29
 }
 
 function prepSaveTitleColor() {
@@ -13202,7 +13259,7 @@ function openPrepImagePicker(kind, campaignId) {
     showError('Switch to your own version to change the cover, back, or title image.');
     return;
   }
-  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId, pinArea: 'prep' };   // v3.3.29 -- one pin for all four
   // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
   // shape filtering... and give the faint line showing how the pictures would be cropped."
   //
@@ -13211,14 +13268,14 @@ function openPrepImagePicker(kind, campaignId) {
   // worked. It also hid every legacy archive, since `shape` is null on all of them. The soft
   // fallback that undid an empty prefilter went with it: nothing sets that flag now, and dead
   // machinery is a liability rather than an option held open.
-  var f = emptyArchiveFilters();
+  var f = fpApply('prep', _campId, emptyArchiveFilters());   // v3.3.29 -- pinned filters, if any
   state.pickerFilters = f;
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = cfg.label;
   var modal = document.getElementById('replace-picker-modal');
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   // v3.0.680 -- TD-481. The archives of the campaign being EDITED, not of whatever is on screen.
-  ensureArchivesLoaded(renderPicker, _campId);
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); }, _campId);   // v3.3.29
 }
 
 // v3.0.679 -- TD-480. A PICKER OPENED FROM A MODAL HAS TO OUTRANK IT.
@@ -13337,7 +13394,7 @@ function selectPrepImage(kind, archiveId) {
     _prepMemberSetImage(kind, (cur === a.image_url) ? '' : a.image_url);
     return;
   }
-  var cb = function(){ renderPrepThumbs(); };
+  var cb = function(){ renderPrepThumbs(); try { prepMarkPreviewStale(true); } catch (e) {} };   // v3.3.33 -- a new picture is not in the preview yet
   if (kind === 'cover') setCampaignCover(archiveId, cb);
   else if (kind === 'back') setCampaignBackCover(archiveId, cb);
   else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
@@ -13363,6 +13420,34 @@ function refreshNovelPreview() {
   if (pt && title) pt.value = title;
   if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
 }
+
+// v3.3.33 -- REFRESH PREVIEW ASKS TO BE PRESSED. Ian: "any time they make a change to something on the prep and
+// preview panel that button to shimmer or light up or wiggle... So they know to refresh." Any edit made on the Prep
+// panel (typing, a dropdown, a tick box, a colour, a cover picture) marks the preview out of date: the button wiggles
+// once and keeps a soft gold glow until the preview is drawn again (loadNovelPreview clears it, whatever drew it).
+// Edits that already redraw the preview themselves (Apply & preview, Done & Use) clear it straight away.
+// Programmatic fills fire no events, so loading a book never lights it.
+function prepMarkPreviewStale(on) {
+  var b = document.getElementById('prep-refresh-btn');
+  if (!b) return;
+  var was = b.classList.contains('prep-refresh-stale');
+  if (!on) {
+    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle');
+    b.title = 'Redraw the preview with your latest changes.';
+    return;
+  }
+  b.classList.add('prep-refresh-stale');
+  b.title = 'Your changes are not in the preview yet. Press to redraw it.';
+  if (!was) { b.classList.remove('prep-refresh-wiggle'); void b.offsetWidth; b.classList.add('prep-refresh-wiggle'); }
+}
+function _prepPanelEdited(e) {
+  var t = e && e.target;
+  if (!t || typeof t.closest !== 'function' || !t.closest('#novel-prep-panel')) return;
+  if (t.readOnly || t.disabled) return;
+  prepMarkPreviewStale(true);
+}
+document.addEventListener('input', _prepPanelEdited, true);
+document.addEventListener('change', _prepPanelEdited, true);
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
@@ -13644,6 +13729,11 @@ function bshelfTime(v) { var t = Date.parse(v || ''); return isNaN(t) ? 0 : t; }
 // The picture for a book's face: a shelf book's own first page, a Library book's story cover.
 function bshelfFaceUrl(b) {
   if (b && b.kind === 'book' && b.id != null) return '/api/bookshelf/' + encodeURIComponent(b.id) + '/cover';
+  // v3.3.30 -- a Library book shows its story's own cover page too (routes/public.js, story-cover), found from the
+  // story's address: the share token when it has one, else the id. The cover picture is the fallback.
+  var su = String((b && b.storyUrl) || ''), m;
+  if ((m = /^\/library\/story\/s\/([A-Za-z0-9_-]+)(\/|$)/.exec(su))) return '/api/public/story-cover/s/' + m[1];
+  if ((m = /^\/library\/story\/(\d+)(\/|$)/.exec(su))) return '/api/public/story-cover/' + m[1];
   return bshelfSafeUrl(b && b.coverUrl);
 }
 function paintBookshelf(body, data) {
@@ -13769,8 +13859,8 @@ function bookshelfFace(b, leather, isLib) {
   if (src) {
     var im = document.createElement('img');
     im.alt = '';
-    // The real first page first; if the server cannot draw it, the campaign picture; then leather.
-    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    // The real first page first; if the server cannot draw it, the campaign picture (a Library book: its cover picture); then leather.
+    var fallback = bshelfSafeUrl(b.coverUrl);   // v3.3.30 -- Library books fall back to their cover picture too
     im.onerror = function () {
       if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
       im.style.display = 'none';
@@ -13858,7 +13948,7 @@ function bookshelfShowCard(b, isLib) {
   if (src) {
     var im = document.createElement('img');
     im.className = 'bshelf-card-cover bopen-cover'; im.alt = '';
-    var fallback = (!isLib) ? bshelfSafeUrl(b.coverUrl) : '';
+    var fallback = bshelfSafeUrl(b.coverUrl);   // v3.3.30
     im.onerror = function () {
       if (fallback && im.src !== fallback && im.getAttribute('data-fell') !== '1') { im.setAttribute('data-fell', '1'); im.src = fallback; return; }
       im.style.display = 'none';
@@ -13899,7 +13989,7 @@ function bookshelfShowCard(b, isLib) {
     meta(bits.join(' \u00b7 '));
     styleLines();
     meta((shelfDate(b.savedAt) ? 'Optimized ' + shelfDate(b.savedAt) : '') + (shelfDate(b.createdAt) ? (shelfDate(b.savedAt) ? ' \u00b7 ' : '') + 'shelved ' + shelfDate(b.createdAt) : ''));
-    if (!b.editable) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');
+    if (!b.editable && !b.fromStory) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');   // v3.3.31
   }
   var acts = document.createElement('div');
   acts.className = 'bshelf-card-acts';
@@ -13920,7 +14010,7 @@ function bookshelfShowCard(b, isLib) {
       document.body.appendChild(a);
       try { a.click(); } finally { document.body.removeChild(a); }
     });
-    btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');
+    if (!b.fromStory) btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');   // v3.3.31 -- a published story keeps no layout to bring back
   }
   btn('Remove', function () { bookshelfRemove(b); });
   info.appendChild(acts);
@@ -15005,7 +15095,11 @@ function loadArchives() {
   if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){ state.archives = Array.isArray(data) ? data : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; updateArchivesCount(); renderArchives(); })
+    .then(function(data){ state.archives = Array.isArray(data) ? data : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; updateArchivesCount();
+      // v3.3.29 -- a pinned Archive screen opens with its filters
+      var _pc = state.currentCampaign && state.currentCampaign.id;
+      if (fpGet('archive', _pc)) { state.archiveFilters = fpApply('archive', _pc, emptyArchiveFilters()); _pickerSettle(state.archiveFilters); }
+      renderArchives(); })
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
 }
 
@@ -15048,7 +15142,47 @@ function archiveTypeCaption(a) {
 function setArchiveFilter(key, val) {
   if (!state.archiveFilters) state.archiveFilters = {};
   state.archiveFilters[key] = val;
+  fpRemember('archive', state.currentCampaign && state.currentCampaign.id, state.archiveFilters);   // v3.3.29
   if (key === 'moment') { renderArchiveGrid(); } else { renderArchives(); }
+}
+
+// v3.3.29 -- PINNED FILTERS (Ian, 2026-10-29: "a small filter lock button that when checked keeps your filtering as
+// you last left it for the next time you pull it up... Or a Pin like the versions have" -- "on all areas where you
+// filter"). One pin per place, per campaign, kept in this browser: the Archive screen, each kind of Replace window,
+// the four Prep & Preview pictures together, and the Title Builder's pickers. Pinned, the filters are saved as they
+// change and come back when that place opens; unpinned, it opens as it always has. A pinned value that no longer
+// matches anything is dropped on opening (_pickerSettle), so a pin can never open on an empty grid.
+function _fpKey(area, cid) { return 'campaignia.filterPin.' + area + '.' + cid; }
+function fpGet(area, cid) {
+  if (!area || !cid) return null;
+  try { var v = JSON.parse(window.localStorage.getItem(_fpKey(area, cid)) || 'null'); return (v && v.f && typeof v.f === 'object') ? v : null; } catch (e) { return null; }
+}
+function fpSet(area, cid, f) { if (!area || !cid) return; try { window.localStorage.setItem(_fpKey(area, cid), JSON.stringify({ f: f })); } catch (e) {} }
+function fpClear(area, cid) { try { window.localStorage.removeItem(_fpKey(area, cid)); } catch (e) {} }
+function fpRemember(area, cid, f) { if (fpGet(area, cid)) fpSet(area, cid, f); }   // only while pinned
+function fpApply(area, cid, f) {   // the pinned filters over f, when pinned; returns f
+  var p = fpGet(area, cid); if (!p) return f;
+  var e = emptyArchiveFilters();
+  Object.keys(e).forEach(function (k) { f[k] = (p.f[k] !== undefined && p.f[k] !== null) ? String(p.f[k]) : e[k]; });
+  return f;
+}
+function fpButtonHTML(on, handler) {
+  return '<button type="button" class="archive-filter archive-pin" onclick="' + handler + '()" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+    ' title="' + (on ? 'Pinned: these filters come back the next time you open this. Click to unpin.' : 'Pin: keep these filters for the next time you open this.') + '"' +
+    ' style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;' + (on ? 'border-color:var(--gold);color:var(--gold);' : '') + '">' +
+    _vpickPinSvg(on) + '<span>' + (on ? 'Pinned' : 'Pin') + '</span></button>';
+}
+function _fpPickerArea() { return (state.pickerCtx && state.pickerCtx.pinArea) || ''; }
+function _fpPickerCid() { return (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id) || null; }
+function togglePickerPin() {
+  var a = _fpPickerArea(), c = _fpPickerCid(); if (!a || !c) return;
+  if (fpGet(a, c)) fpClear(a, c); else fpSet(a, c, state.pickerFilters || emptyArchiveFilters());
+  renderPicker();
+}
+function toggleArchivePin() {
+  var c = state.currentCampaign && state.currentCampaign.id; if (!c) return;
+  if (fpGet('archive', c)) fpClear('archive', c); else fpSet('archive', c, state.archiveFilters || emptyArchiveFilters());
+  renderArchiveFilters();
 }
 
 // v3.0.670 -- TD-474. The empty filter set, written once. It was a literal in three places, and a
@@ -15107,12 +15241,19 @@ function renderArchiveFilters() {
   var host = document.getElementById('archives-filters');
   if (!host) return;
   if (!state.archiveFilters) state.archiveFilters = emptyArchiveFilters();
+  // v3.3.34 -- the Archive SCREEN's pin is back beside Clear filters (Ian: "we have plenty of room. It's weird near the
+  // back button"). The screen is wide enough that the two stay on the filters' row; the picture WINDOWS keep theirs
+  // on the title row (v3.3.32), where room is short.
+  // The two are held together, so if the filters ever wrap, Clear filters and the pin move as a pair.
   host.innerHTML = archiveFilterBarHTML(state.archiveFilters, 'setArchiveFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
+    '<span class="archive-clear-pin" style="display:inline-flex;gap:8px;">' +
+    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>' +
+    fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin') + '</span>';   // v3.3.29
 }
 
 function clearArchiveFilters() {
   state.archiveFilters = emptyArchiveFilters();
+  fpRemember('archive', state.currentCampaign && state.currentCampaign.id, state.archiveFilters);   // v3.3.29
   renderArchives();
 }
 
@@ -16548,7 +16689,7 @@ function submitRetouch() {
 
 function openReplacePicker(mode, id) {
   if (mode === 'moment' && panelJobBlocked(id)) return;   // v3.2.91 -- TD-1025
-  state.pickerCtx = { mode: mode };
+  state.pickerCtx = { mode: mode, pinArea: 'replace-' + (mode === 'canonical' ? 'character' : mode) };   // v3.3.29 -- one pin per kind of window
   try { _rpReset(); } catch (e) {}   // v3.1.15 -- every open starts on From Archive with no upload in hand
   var f = emptyArchiveFilters();
   var tEl = document.getElementById('replace-picker-title');
@@ -16584,7 +16725,8 @@ function openReplacePicker(mode, id) {
     f.character = String(id);
     if (tEl) tEl.textContent = 'Replace character image from Archive';
   }
-  state.pickerFilters = f;
+  state.pickerFilters = fpApply(state.pickerCtx.pinArea, _fpPickerCid(), f);   // v3.3.29 -- pinned filters win over the defaults above
+  if ((mode === 'canonical' || mode === 'character') && fpGet(state.pickerCtx.pinArea, _fpPickerCid())) { state.pickerFilters.character = String(id); }   // v3.3.29 -- but a character's window always opens on that character
   var modal = document.getElementById('replace-picker-modal');
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
@@ -16620,11 +16762,14 @@ function closeReplacePicker() {
 function setPickerFilter(key, val) {
   if (!state.pickerFilters) state.pickerFilters = {};
   state.pickerFilters[key] = val;
+  fpRemember(_fpPickerArea(), _fpPickerCid(), state.pickerFilters);   // v3.3.29
   if (key === 'moment') { renderPickerGrid(); } else { renderPicker(); }
 }
 
 function clearPickerFilters() {
   state.pickerFilters = emptyArchiveFilters();
+  if (state.pickerCtx && state.pickerCtx.forceType) state.pickerFilters.type = state.pickerCtx.forceType;   // v3.3.29 -- the Title Builder offers titles only
+  fpRemember(_fpPickerArea(), _fpPickerCid(), state.pickerFilters);   // v3.3.29
   renderPicker();
 }
 
@@ -16634,7 +16779,16 @@ function renderPicker() {
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
     '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
+  // v3.3.32 -- the pin sits on the window's title row, beside the close X, so it never adds a row of its own.
+  var _pinHost = document.getElementById('replace-picker-pin');
+  if (_pinHost) _pinHost.innerHTML = _fpPickerArea() ? fpButtonHTML(!!fpGet(_fpPickerArea(), _fpPickerCid()), 'togglePickerPin') : '';   // v3.3.29
+  _fpPinSync();
   renderPickerGrid();
+}
+// v3.3.32 -- the title-row pin shows only while the filters do (not on the Upload tab, not while framing a cover).
+function _fpPinSync() {
+  var p = document.getElementById('replace-picker-pin'), fh = document.getElementById('replace-picker-filters');
+  if (p) p.style.display = (fh && fh.style.display === 'none') ? 'none' : '';
 }
 
 function renderPickerGrid() {
@@ -17933,6 +18087,8 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
+  if (view === 'account') accountNoteFrom();
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -18001,6 +18157,7 @@ function showCampaignSection(section) {
   paintPublishLock();
   if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
+  if (section === 'characters') charsNoteFrom();   // v3.3.34 -- for the Characters page's Back button
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -19826,6 +19983,7 @@ function selNovelLayout(el, layout) {
 }
 
 function loadNovelPreview(layout) {
+  try { prepMarkPreviewStale(false); } catch (e) {}   // v3.3.33 -- the preview is being drawn: nothing left to refresh
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
   if (!iframe) return;
@@ -23623,7 +23781,8 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   // dropped on every reload -- it would set, serialise once, and then quietly forget itself.
   // The server has the identical trap in CO_DEFAULTS, and this is its twin.
   castnpc:0,
-  castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest
+  castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest (read only to carry an older layout forward)
+  castpic:'bfirst',   // v3.3.28 -- the Character pictures dropdown: canon | vfirst | vlast | bfirst | blast
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -23639,6 +23798,11 @@ var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
 function clMerge(saved){
   var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
+  // v3.3.28 -- a layout saved before the Character pictures dropdown keeps the picture it had (the server's
+  // parseCustomOpts makes the same choice): the old tick box off = first in the version, on = last.
+  if (['canon','vfirst','vlast','bfirst','blast'].indexOf(r.castpic) < 0 || (saved && !saved.hasOwnProperty('castpic') && saved.hasOwnProperty('castimg'))) {
+    r.castpic = (saved && saved.hasOwnProperty('castimg')) ? (saved.castimg ? 'vlast' : 'vfirst') : 'bfirst';
+  }
   // v3.0.497 -- PAPER IS ALWAYS WHITE NOW, whatever is stored.
   // The two layout pickers are gone (Ian: "Do away with the paper color on the layout
   // tab... it doesn't work anyway"), but removing the controls does not remove the value:
@@ -23784,18 +23948,18 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle'];   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic'];   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 // v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
 // whichever half somebody remembered.
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc','castimg'];   // v3.0.616 -- hidelogo retired
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc'];   // v3.3.28 -- castimg became the castpic dropdown   // v3.0.616 -- hidelogo retired
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
 function clSyncCastNpc(){
   var ck=document.getElementById('cl-cast');
-  clGateCastImg(ck, 'cl-castimg', 'cl-castimg-label');   // v3.0.823 -- TD-657
+  clGateCastImg(ck, 'cl-castpic', 'cl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   var cn=document.getElementById('cl-castnpc');
   var cnl=document.getElementById('cl-castnpc-label');
   if(!cn) return;
@@ -23906,13 +24070,13 @@ function clGateCastImg(ck, id, labelId){
   var ci=document.getElementById(id);
   if(!ci) return;
   var on = ck ? !!ck.checked : true;
-  ci.disabled = !on;
+  // v3.3.28 -- Ian: "you can only show it when character page is ticked". Hidden, not dimmed; the value is kept.
   var cil=document.getElementById(labelId);
-  if(cil){ cil.style.opacity = on ? '1' : '0.55'; }
+  if(cil){ cil.style.display = on ? '' : 'none'; }
 }
 function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
-  clGateCastImg(ck, 'pcl-castimg', 'pcl-castimg-label');   // v3.0.823 -- TD-657
+  clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
   if(!cn) return;
@@ -23943,7 +24107,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castimg'];
+                       'pcl-castpic'];   // v3.3.28
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24159,6 +24323,7 @@ function openCustomLayout(ctx){
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
+  if (_clCtx==='novel') clGateCastImg(document.getElementById('cl-cast'), 'cl-castpic', 'cl-castpic-label');   // v3.3.28 -- after the loop, which shows every novel-only row
 }
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
 function resetCustomLayout(){ customOpts=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(_clCtx); openCustomLayout(_clCtx); }
@@ -29354,6 +29519,58 @@ var _cstyleBackFrom = null;
 function cstyleBack() {
   var t = _cstyleBackFrom;
   if (t && (ORDERS_BACK_PLAIN.indexOf(t) !== -1 || t === 'orders')) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
+}
+
+// v3.3.34 -- THE CHARACTERS PAGE'S BACK BUTTON (Ian), the same idea as My Account's: back to the page Characters was
+// opened from, else the campaign's Sessions. Its OWN note, so it never disturbs the Archive and Asset Library Back
+// (_sectionBackFrom); and arriving back from a page Characters itself opened (their Back) keeps the note, so two
+// pages never send you to each other.
+var _charsBackFrom = null;
+function charsNoteFrom() {
+  var cur = _visibleViewId();
+  if (cur === 'characters') return;
+  if ((cur === 'archives' || cur === 'assets') && _sectionBackFrom === 'characters') return;
+  if (cur === 'account' && _accountBackFrom === 'characters') return;
+  _charsBackFrom = cur || null;
+}
+function charactersBack() {
+  var t = _charsBackFrom;
+  if (t === 'account' || t === 'orders' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1)) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { if (state.currentCampaign && state.currentCampaign.id) showCampaignSection('sessions'); else showView('campaigns'); return; }
+  var keep = _sectionBackFrom;
+  _sectionBackFrom = t;
+  sectionBack();
+  _sectionBackFrom = keep;
+}
+
+// v3.3.31 -- MY ACCOUNT'S BACK BUTTON (Ian), the same rule as My Stuff's and Custom Art Styles': back to the page
+// Account was opened from when that is known and can still be shown, otherwise My Campaigns. Account opens from
+// the profile menu, so it can start anywhere. Going BACK to My Stuff or Custom Art Styles keeps their own notes
+// (and arriving from their Back buttons keeps this one), or two pages would send you to each other.
+var _accountBackFrom = null;
+function accountNoteFrom() {
+  var cur = _visibleViewId();
+  if (!cur) {
+    ['custom-styles', 'feedback'].forEach(function (v) {
+      var el = document.getElementById('view-' + v);
+      if (!cur && el && el.style.display !== 'none' && window.getComputedStyle(el).display !== 'none') cur = v;
+    });
+  }
+  if (cur === 'account') return;
+  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account')) return;
+  _accountBackFrom = cur || null;
+}
+function accountBack() {
+  var t = _accountBackFrom;
+  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
+    var keepO = _ordersBackFrom, keepC = _cstyleBackFrom;
+    if (t === 'custom-styles') openCustomStylesView(); else showView(t);
+    _ordersBackFrom = keepO; _cstyleBackFrom = keepC;
+    return;
+  }
   if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
   _sectionBackFrom = t;
   sectionBack();
@@ -35016,6 +35233,7 @@ function _rpSync() {
   if (!forPanel) {
     e.tabs.style.display = 'none'; e.pane.style.display = 'none';
     e.filters.style.display = ''; e.grid.style.display = '';
+    _fpPinSync();   // v3.3.32
     return;
   }
   var tab = state.rpTab === 'upload' ? 'upload' : 'archive';
@@ -35030,6 +35248,7 @@ function _rpSync() {
   e.grid.style.display = tab === 'archive' ? '' : 'none';
   e.pane.style.display = tab === 'upload' ? 'block' : 'none';
   if (tab === 'upload' && !e.pane.getAttribute('data-built')) _rpBuildPane();
+  _fpPinSync();   // v3.3.32
 }
 
 function _rpShowTab(t) { state.rpTab = t; _rpSync(); }
@@ -35443,6 +35662,7 @@ function _cvShow(W, H) {
   var c = _cvCrop; if (!c) return;
   var grid = document.getElementById('replace-picker-grid'); if (!grid) return;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = 'none';
+  _fpPinSync();   // v3.3.32
   // v3.1.19 -- the grid scrolls at 60vh for the Archive tiles; the frame, its lines and its buttons must
   // all show at once, so the grid stops scrolling while framing and the picture is sized to fit instead.
   grid.style.maxHeight = 'none'; grid.style.overflowY = 'visible';
@@ -35488,6 +35708,7 @@ function _cvBack() { _cvCrop = null; renderPicker(); }
 function _cvClear() {
   _cvCrop = null;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = '';
+  _fpPinSync();   // v3.3.32
   var g = document.getElementById('replace-picker-grid'); if (g) { g.style.maxHeight = ''; g.style.overflowY = ''; }   // v3.1.19
 }
 
