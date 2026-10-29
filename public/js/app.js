@@ -15212,8 +15212,11 @@ function renderArchiveFilters() {
   if (!host) return;
   if (!state.archiveFilters) state.archiveFilters = emptyArchiveFilters();
   host.innerHTML = archiveFilterBarHTML(state.archiveFilters, 'setArchiveFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>' +
-    fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin');   // v3.3.29
+    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
+  // v3.3.32 -- the pin sits on the title row beside Back (Ian: "Do what you can to avoid another row pushing everything
+  // down"). At the end of the filters it wrapped onto a row of its own whenever the filters filled the line.
+  var pin = document.getElementById('archives-pin');
+  if (pin) pin.innerHTML = fpButtonHTML(!!fpGet('archive', state.currentCampaign && state.currentCampaign.id), 'toggleArchivePin');   // v3.3.29
 }
 
 function clearArchiveFilters() {
@@ -16743,9 +16746,17 @@ function renderPicker() {
   try { _rpSync(); } catch (e) {}   // v3.1.15
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
-    '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>' +
-    (_fpPickerArea() ? fpButtonHTML(!!fpGet(_fpPickerArea(), _fpPickerCid()), 'togglePickerPin') : '');   // v3.3.29
+    '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
+  // v3.3.32 -- the pin sits on the window's title row, beside the close X, so it never adds a row of its own.
+  var _pinHost = document.getElementById('replace-picker-pin');
+  if (_pinHost) _pinHost.innerHTML = _fpPickerArea() ? fpButtonHTML(!!fpGet(_fpPickerArea(), _fpPickerCid()), 'togglePickerPin') : '';   // v3.3.29
+  _fpPinSync();
   renderPickerGrid();
+}
+// v3.3.32 -- the title-row pin shows only while the filters do (not on the Upload tab, not while framing a cover).
+function _fpPinSync() {
+  var p = document.getElementById('replace-picker-pin'), fh = document.getElementById('replace-picker-filters');
+  if (p) p.style.display = (fh && fh.style.display === 'none') ? 'none' : '';
 }
 
 function renderPickerGrid() {
@@ -35166,6 +35177,7 @@ function _rpSync() {
   if (!forPanel) {
     e.tabs.style.display = 'none'; e.pane.style.display = 'none';
     e.filters.style.display = ''; e.grid.style.display = '';
+    _fpPinSync();   // v3.3.32
     return;
   }
   var tab = state.rpTab === 'upload' ? 'upload' : 'archive';
@@ -35180,6 +35192,7 @@ function _rpSync() {
   e.grid.style.display = tab === 'archive' ? '' : 'none';
   e.pane.style.display = tab === 'upload' ? 'block' : 'none';
   if (tab === 'upload' && !e.pane.getAttribute('data-built')) _rpBuildPane();
+  _fpPinSync();   // v3.3.32
 }
 
 function _rpShowTab(t) { state.rpTab = t; _rpSync(); }
@@ -35593,6 +35606,7 @@ function _cvShow(W, H) {
   var c = _cvCrop; if (!c) return;
   var grid = document.getElementById('replace-picker-grid'); if (!grid) return;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = 'none';
+  _fpPinSync();   // v3.3.32
   // v3.1.19 -- the grid scrolls at 60vh for the Archive tiles; the frame, its lines and its buttons must
   // all show at once, so the grid stops scrolling while framing and the picture is sized to fit instead.
   grid.style.maxHeight = 'none'; grid.style.overflowY = 'visible';
@@ -35638,6 +35652,7 @@ function _cvBack() { _cvCrop = null; renderPicker(); }
 function _cvClear() {
   _cvCrop = null;
   var fh = document.getElementById('replace-picker-filters'); if (fh) fh.style.display = '';
+  _fpPinSync();   // v3.3.32
   var g = document.getElementById('replace-picker-grid'); if (g) { g.style.maxHeight = ''; g.style.overflowY = ''; }   // v3.1.19
 }
 

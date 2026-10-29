@@ -366,7 +366,7 @@ router.get('/stories', async function (req, res) {
     // absent from this directory and from the sitemap, and present everywhere a reader
     // who already holds the link needs it -- including the report form below, which is
     // deliberately still `public = TRUE` alone.
-    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
+    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
@@ -381,7 +381,10 @@ router.get('/stories', async function (req, res) {
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
       return { cover_page_url: storyCoverPath(r),   // v3.3.30 -- the book's own cover, title and all
-        id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
+        id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at,
+        // v3.3.32 -- the subtitle on the book's cover, as recorded when it was published (the same rule as the Publish as
+        // picker, pdf.js my-stories-for-campaign). A story published before books kept it has none, and none is guessed.
+        subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

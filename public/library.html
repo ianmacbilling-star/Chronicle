@@ -122,6 +122,7 @@
     .story-card .sc-cover { width:100%; aspect-ratio:17/22; object-fit:cover; background:#160e06; display:block; }
     .story-card .sc-ph { width:100%; aspect-ratio:17/22; background:#160e06; display:flex; align-items:center; justify-content:center; color:rgba(201,168,76,0.45); font-family:'Cinzel',serif; font-size:13px; text-align:center; padding:10px; }
     .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:8px 10px 11px; line-height:1.3; }
+    .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(240,232,208,0.72); padding:0 10px; margin:-7px 0 9px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
     .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(201,168,76,0.55); padding:0 10px 10px; margin-top:-5px; }
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
@@ -501,6 +502,8 @@
       }
       var t = document.createElement('div'); t.className = 'sc-title'; t.textContent = item.title || 'Untitled';
       a.appendChild(t);
+      // v3.3.32 -- the subtitle under the title (Ian), two lines at most.
+      if (item.subtitle) { var su = document.createElement('div'); su.className = 'sc-sub'; su.textContent = item.subtitle; su.title = item.subtitle; a.appendChild(su); }
       if (item.created_at) {
         var d = document.createElement('div'); d.className = 'sc-date';
         try { d.textContent = new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
