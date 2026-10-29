@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.3.31",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3331-story-to-bookshelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "Put your own published stories on your Bookshelf.",
+        "detail": "On My Stuff, Published Stories, each story has an Add to my Bookshelf button. It puts a copy of the book on your shelf as one of your own books, so it stays there even if you later unpublish or replace the story. It counts toward your Bookshelf limit.",
+        "td": []
+      },
+      {
+        "id": "3331-account-back",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Account has a Back button.",
+        "detail": "It takes you back to the page you opened My Account from, or to My Campaigns if that is not known.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.30",
     "staged_on": "2026-10-29",
     "entries": [

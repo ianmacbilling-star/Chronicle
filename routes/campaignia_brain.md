@@ -469,6 +469,13 @@ Plans without a Bookshelf see the tab with an invitation to upgrade.
 - **Library books:** **Add to Bookshelf** on a story's Library page or Library card puts
   that story on your shelf as well — anyone's, including your own. These are links to the
   Library, not copies, and **do not count** toward your plan's limit.
+- **Your own published stories:** on **My Stuff → Published Stories**, each of your stories
+  has an **Add to my Bookshelf** pill. It puts a **copy** of the published book on your shelf as
+  one of your own books (not a Library link), so it **counts toward your plan's limit** and **stays
+  on your shelf even if you later unpublish or replace the story**. Once it is there the pill reads
+  **On your Bookshelf**. After you replace a story, the new version can be added as another book.
+  These books can be viewed and downloaded but **not brought back to Publish**: a published story
+  keeps only the finished book, not its layout.
 - **The bookcase:** each campaign's books stand together, the **first book of the series
   facing out** with its real first page and a brass name plate, the rest as spines. Library
   books stand on the bottom shelf, one of them facing out. The case grows a shelf as books
@@ -2324,7 +2331,8 @@ Friction points and what's actually going on.
   Library books you add do not count toward the limit.
 - **"I can't bring a book back from my Bookshelf."** Either the version it came from has been
   deleted, or it came from someone else's version and they have since changed that version's
-  layout type. It stays on your shelf to view and download.
+  layout type, or it was added from one of your published stories (those keep only the finished
+  book, so they never offer Bring back). It stays on your shelf to view and download.
 - **"My uploaded picture was cropped."** Every panel is one of seven shapes, so the picture is cut to
   the one it fits best. Pick another shape, or drag the frame and corners to choose the part that is
   kept. The original on your computer is untouched if you want to try again.

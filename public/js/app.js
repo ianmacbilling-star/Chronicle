@@ -2287,6 +2287,7 @@ function loadMyStories() {
       var items = (d && d.items) || [];
       if (!items.length) { if (empty) empty.style.display = 'block'; return; }
       items.forEach(function(it){ list.appendChild(myStoryCard(it)); });
+      myStoryShelfStatus(items);   // v3.3.31
     })
     .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
 }
@@ -2440,6 +2441,17 @@ function myStoryCard(it) {
   renderVis();
   visWrap.appendChild(visBadge); visWrap.appendChild(visBtn); visWrap.appendChild(copyBtn); visWrap.appendChild(visMsg);
   card.appendChild(visWrap);
+  // v3.3.31 -- ADD TO MY BOOKSHELF (Ian): your own story goes on your shelf as your own book, a copy of its PDF, not
+  // as a pointer to the Library. Hidden until the shelf answers whether it is already there (myStoryShelfStatus).
+  var shelfWrap = document.createElement('div');
+  shelfWrap.style.cssText = 'padding:0 8px 8px;';
+  var shelfPill = document.createElement('button');
+  shelfPill.type = 'button'; shelfPill.className = 'btn btn-sm mystory-shelf-pill';
+  shelfPill.setAttribute('data-story', String(it.id));
+  shelfPill.style.cssText = 'font-size:11px;padding:3px 10px;border-radius:999px;display:none;';
+  shelfPill.onclick = function () { myStoryShelfAdd(it, shelfPill); };
+  shelfWrap.appendChild(shelfPill);
+  card.appendChild(shelfWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   // v3.2.02 -- TD-984. Asked in our own window (was click twice), and it says what happens to shared links.
@@ -2450,6 +2462,46 @@ function myStoryCard(it) {
   };
   card.appendChild(btn);
   return card;
+}
+
+// v3.3.31 -- the Add to my Bookshelf pill on each published story (myStoryCard). On the shelf it reads "On your
+// Bookshelf" and opens the Bookshelf tab. A story replaced since it was added can be added again (a new book).
+function myStoryShelfPaint(pill, on) {
+  if (!pill) return;
+  pill.style.display = '';
+  pill.disabled = false;
+  pill.setAttribute('data-on', on ? '1' : '0');
+  pill.textContent = on ? 'On your Bookshelf' : '+ Add to my Bookshelf';
+  pill.title = on ? 'Open your Bookshelf' : 'Put a copy of this book on your Bookshelf';
+}
+function myStoryShelfStatus(items) {
+  var ids = (items || []).map(function (it) { return it && it.id; }).filter(Boolean);
+  var paint = function (part, on) {
+    part.forEach(function (id) { myStoryShelfPaint(document.querySelector('.mystory-shelf-pill[data-story="' + Number(id) + '"]'), !!on[String(id)]); });
+  };
+  for (var i = 0; i < ids.length; i += 60) {
+    (function (part) {
+      fetch('/api/bookshelf/story-status?ids=' + part.join(','))
+        .then(function (r) { return r.json(); })
+        .then(function (j) { paint(part, (j && j.items) || {}); })
+        .catch(function () { paint(part, {}); });
+    })(ids.slice(i, i + 60));
+  }
+}
+function myStoryShelfAdd(it, pill) {
+  if (!pill || pill.disabled) return;
+  if (pill.getAttribute('data-on') === '1') { mystuffShowTab('shelf'); return; }
+  pill.disabled = true; pill.textContent = 'Adding...';
+  fetch('/api/bookshelf/story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storyId: it.id }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      var j = res.j || {};
+      if (res.ok && j.ok) { myStoryShelfPaint(pill, true); billingToast('Added to your Bookshelf.', 'success'); return; }
+      if (j.code === 'already_shelved') { myStoryShelfPaint(pill, true); return; }
+      myStoryShelfPaint(pill, false);
+      billingToast(j.error || 'Could not add it to your Bookshelf.', 'error');
+    })
+    .catch(function () { myStoryShelfPaint(pill, false); billingToast('Could not add it to your Bookshelf.', 'error'); });
 }
 
 function removeMyStory(storyId, card, btn) {
@@ -3387,6 +3439,8 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
+  if (view === 'account') accountNoteFrom();
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -13905,7 +13959,7 @@ function bookshelfShowCard(b, isLib) {
     meta(bits.join(' \u00b7 '));
     styleLines();
     meta((shelfDate(b.savedAt) ? 'Optimized ' + shelfDate(b.savedAt) : '') + (shelfDate(b.createdAt) ? (shelfDate(b.savedAt) ? ' \u00b7 ' : '') + 'shelved ' + shelfDate(b.createdAt) : ''));
-    if (!b.editable) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');
+    if (!b.editable && !b.fromStory) meta('Saved before layouts were kept: it can be viewed, ordered and published, but not edited.');   // v3.3.31
   }
   var acts = document.createElement('div');
   acts.className = 'bshelf-card-acts';
@@ -13926,7 +13980,7 @@ function bookshelfShowCard(b, isLib) {
       document.body.appendChild(a);
       try { a.click(); } finally { document.body.removeChild(a); }
     });
-    btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');
+    if (!b.fromStory) btn('Bring back to Publish', function () { bookshelfBringBack(b); }, 'btn-primary', 'bookshelf-bring-back');   // v3.3.31 -- a published story keeps no layout to bring back
   }
   btn('Remove', function () { bookshelfRemove(b); });
   info.appendChild(acts);
@@ -17990,6 +18044,8 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
+  if (view === 'account') accountNoteFrom();
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -29418,6 +29474,36 @@ var _cstyleBackFrom = null;
 function cstyleBack() {
   var t = _cstyleBackFrom;
   if (t && (ORDERS_BACK_PLAIN.indexOf(t) !== -1 || t === 'orders')) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
+}
+
+// v3.3.31 -- MY ACCOUNT'S BACK BUTTON (Ian), the same rule as My Stuff's and Custom Art Styles': back to the page
+// Account was opened from when that is known and can still be shown, otherwise My Campaigns. Account opens from
+// the profile menu, so it can start anywhere. Going BACK to My Stuff or Custom Art Styles keeps their own notes
+// (and arriving from their Back buttons keeps this one), or two pages would send you to each other.
+var _accountBackFrom = null;
+function accountNoteFrom() {
+  var cur = _visibleViewId();
+  if (!cur) {
+    ['custom-styles', 'feedback'].forEach(function (v) {
+      var el = document.getElementById('view-' + v);
+      if (!cur && el && el.style.display !== 'none' && window.getComputedStyle(el).display !== 'none') cur = v;
+    });
+  }
+  if (cur === 'account') return;
+  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account')) return;
+  _accountBackFrom = cur || null;
+}
+function accountBack() {
+  var t = _accountBackFrom;
+  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
+    var keepO = _ordersBackFrom, keepC = _cstyleBackFrom;
+    if (t === 'custom-styles') openCustomStylesView(); else showView(t);
+    _ordersBackFrom = keepO; _cstyleBackFrom = keepC;
+    return;
+  }
   if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
   _sectionBackFrom = t;
   sectionBack();

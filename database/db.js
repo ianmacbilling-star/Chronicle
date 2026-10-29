@@ -2157,6 +2157,10 @@ async function migrateBookshelf(pool) {
   // v3.2.10 -- TD-988. The saved book's cover record (JSON: cover, back, title-page and built-title
   // pictures, title, subtitle, colour), so a book brought back orders with its own cover.
   await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS book_cover_meta TEXT');
+  // v3.3.31 -- a book put on the shelf from one of your own published stories (My Stuff > Published Stories):
+  // the story's PDF address at the time, so the same story is not added twice until it is replaced.
+  // public_story_id (already here for Library pointers) names the story; kind stays 'book'.
+  await pool.query('ALTER TABLE bookshelf_books ADD COLUMN IF NOT EXISTS src_pdf TEXT');
   // v3.0.989 -- the front of each order's print cover as a picture (routes/orderCovers.js). Its OWN
   // table: nothing about print_orders changes. No foreign key, so this can never block or cascade
   // into anything that touches an order.
