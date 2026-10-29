@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.28",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3328-company-page-cast",
+        "kind": "feature",
+        "public": true,
+        "summary": "The character page (The Company) now shows only the characters in the sessions you put in the book, and a new Character pictures choice decides which picture of each one is used.",
+        "detail": "Choose from: Canonical (the original pictures of the characters), the first or last appearance in this version, or the first or last appearance in the sessions in this book, which is the new default. A book whose layout was already saved keeps the picture it had. The choice shows when Include character page is ticked.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.27",
     "staged_on": "2026-10-29",
     "entries": [

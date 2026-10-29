@@ -23623,7 +23623,8 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   // dropped on every reload -- it would set, serialise once, and then quietly forget itself.
   // The server has the identical trap in CO_DEFAULTS, and this is its twin.
   castnpc:0,
-  castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest
+  castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest (read only to carry an older layout forward)
+  castpic:'bfirst',   // v3.3.28 -- the Character pictures dropdown: canon | vfirst | vlast | bfirst | blast
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -23639,6 +23640,11 @@ var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
 function clMerge(saved){
   var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
+  // v3.3.28 -- a layout saved before the Character pictures dropdown keeps the picture it had (the server's
+  // parseCustomOpts makes the same choice): the old tick box off = first in the version, on = last.
+  if (['canon','vfirst','vlast','bfirst','blast'].indexOf(r.castpic) < 0 || (saved && !saved.hasOwnProperty('castpic') && saved.hasOwnProperty('castimg'))) {
+    r.castpic = (saved && saved.hasOwnProperty('castimg')) ? (saved.castimg ? 'vlast' : 'vfirst') : 'bfirst';
+  }
   // v3.0.497 -- PAPER IS ALWAYS WHITE NOW, whatever is stored.
   // The two layout pickers are gone (Ian: "Do away with the paper color on the layout
   // tab... it doesn't work anyway"), but removing the controls does not remove the value:
@@ -23784,18 +23790,18 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle'];   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic'];   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 // v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
 // whichever half somebody remembered.
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc','castimg'];   // v3.0.616 -- hidelogo retired
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc'];   // v3.3.28 -- castimg became the castpic dropdown   // v3.0.616 -- hidelogo retired
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
 function clSyncCastNpc(){
   var ck=document.getElementById('cl-cast');
-  clGateCastImg(ck, 'cl-castimg', 'cl-castimg-label');   // v3.0.823 -- TD-657
+  clGateCastImg(ck, 'cl-castpic', 'cl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   var cn=document.getElementById('cl-castnpc');
   var cnl=document.getElementById('cl-castnpc-label');
   if(!cn) return;
@@ -23906,13 +23912,13 @@ function clGateCastImg(ck, id, labelId){
   var ci=document.getElementById(id);
   if(!ci) return;
   var on = ck ? !!ck.checked : true;
-  ci.disabled = !on;
+  // v3.3.28 -- Ian: "you can only show it when character page is ticked". Hidden, not dimmed; the value is kept.
   var cil=document.getElementById(labelId);
-  if(cil){ cil.style.opacity = on ? '1' : '0.55'; }
+  if(cil){ cil.style.display = on ? '' : 'none'; }
 }
 function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
-  clGateCastImg(ck, 'pcl-castimg', 'pcl-castimg-label');   // v3.0.823 -- TD-657
+  clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
   if(!cn) return;
@@ -23943,7 +23949,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castimg'];
+                       'pcl-castpic'];   // v3.3.28
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24159,6 +24165,7 @@ function openCustomLayout(ctx){
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
+  if (_clCtx==='novel') clGateCastImg(document.getElementById('cl-cast'), 'cl-castpic', 'cl-castpic-label');   // v3.3.28 -- after the loop, which shows every novel-only row
 }
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
 function resetCustomLayout(){ customOpts=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(_clCtx); openCustomLayout(_clCtx); }
