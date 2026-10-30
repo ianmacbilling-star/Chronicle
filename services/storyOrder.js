@@ -25,8 +25,22 @@ const WINDOW_COLS =
   AUTHOR_KEY + ' AS o_key, user_id AS o_user, story_pos AS o_spos';
 const ORDER_IN_ROW = 'o_user, o_camp ASC NULLS FIRST, o_campnew DESC, o_spos ASC NULLS LAST, id ASC';
 
+// v3.3.47 -- TD-1060. THE LIBRARY ORDERS BY CAMPAIGN, NOT BY PEN NAME (Ian, 2026-10-30: "treat the campaign like a
+// single book for ordering the entire library"). A campaign -- one author's books from one campaign under one pen
+// name -- moves to the top, all its books together, when a new book of it is published; that pen name's other
+// campaigns stay where their own newest book puts them. A story in no campaign is a campaign of one. "Newest" is the
+// newest story row (the largest id): publishing again over a book already in the Library updates its row and keeps
+// its id, so it does not move the campaign up (Ian: correct). Inside a campaign, the order the author set on My Stuff,
+// as before. My Stuff itself is unchanged (wrap / ORDER_IN_ROW, for the author's own organizing: Ian).
+const LIBRARY_COLS = WINDOW_COLS + ', ' +
+  'max(id) OVER (PARTITION BY user_id, ' + AUTHOR_KEY + ', campaign_id, CASE WHEN campaign_id IS NULL THEN id END) AS o_unew';
+function libraryWrap(innerSql) {
+  return 'SELECT * FROM (' + innerSql + ') o ORDER BY o_unew DESC, o_spos ASC NULLS LAST, id ASC';
+}
+
 function wrap(innerSql, rowOrder) {
   return 'SELECT * FROM (' + innerSql + ') o ORDER BY ' + rowOrder + ', ' + ORDER_IN_ROW;
 }
 
-module.exports = { AUTHOR_KEY: AUTHOR_KEY, WINDOW_COLS: WINDOW_COLS, ORDER_IN_ROW: ORDER_IN_ROW, wrap: wrap };
+module.exports = { AUTHOR_KEY: AUTHOR_KEY, WINDOW_COLS: WINDOW_COLS, ORDER_IN_ROW: ORDER_IN_ROW, wrap: wrap,
+  LIBRARY_COLS: LIBRARY_COLS, libraryWrap: libraryWrap };

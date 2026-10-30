@@ -166,8 +166,8 @@
       opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility 0s linear .18s; }
     .lb-card::after { content:''; position:absolute; left:0; right:0; top:100%; height:16px; }
     /* v3.3.46 -- the whole cover, bigger than the book, at the top of the card -- spines too (Ian). Its picture loads
-       the first time the card opens. Near the top of the window the card slides down over the book it belongs to
-       (Ian: "the hover over could open up slightly over the book"), since it shows that book's cover anyway. */
+       the first time the card opens. It covers the top half of its own book (v3.3.47), since it shows that book's
+       cover anyway, and slides further down rather than going under the menu bar. */
     .lb-big { position:relative; width:100%; aspect-ratio:17/22; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 0 9px;
       box-shadow:3px 4px 10px rgba(0,0,0,0.7); }
     .lb-big img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
@@ -644,8 +644,11 @@
       var w = 238, cx = (r.left + r.right) / 2, left = cx - w / 2;
       left = Math.max(box.left + 4, Math.min(box.right - 4 - w, left));
       c.style.marginLeft = Math.round(left - cx) + 'px';
-      // Above the book; with not enough room in the window, down over the book, its top 4px inside the window.
-      var top = -(c.offsetHeight + 12), minTop = 4 - (r.top - 8);   // an open book stands 8px up
+      // v3.3.47 -- its bottom halfway down the book (Ian: "let the pop up be halfway on the book itself"); and never
+      // under the menu bar, which stays at the top of the window and covered the top of the card.
+      var nav = document.querySelector('nav'), navB = 0;
+      try { if (nav && /sticky|fixed/.test(getComputedStyle(nav).position)) navB = Math.max(0, nav.getBoundingClientRect().bottom); } catch (e) {}
+      var top = r.height / 2 - c.offsetHeight, minTop = navB + 6 - (r.top - 8);   // an open book stands 8px up
       c.style.top = Math.round(Math.max(top, minTop)) + 'px'; c.style.bottom = 'auto';
     }
     // On a phone there is no hover: the first tap opens the card, a second tap opens the story.
