@@ -3917,6 +3917,8 @@
   <div class="modal" style="max-width:1040px;width:96%;max-height:90vh;display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
       <div class="modal-title">Public Library &mdash; Moderation</div>
+      <!-- v3.3.41 -- filter by name (adminLibFilter in app.js) -->
+      <input type="search" id="admin-library-q" class="form-input" placeholder="Filter by name&hellip;" oninput="adminLibFilter()" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" style="flex:1 1 auto;max-width:320px;height:32px;margin-left:auto;font-size:13px;" />
       <button class="btn btn-sm" onclick="closeAdminLibrary()">&#10005;</button>
     </div>
     <div class="muted" style="font-size:13px;margin:6px 0 12px;">Remove anything inappropriate. This only un-publishes it from the public Library &mdash; the owner&#39;s archived copy is untouched.</div>
@@ -3929,6 +3931,8 @@
   <div class="modal" style="max-width:1040px;width:96%;max-height:90vh;display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
       <div class="modal-title">Published Stories &mdash; Moderation</div>
+      <!-- v3.3.41 -- filter by name (adminStoriesFilter in app.js) -->
+      <input type="search" id="admin-stories-q" class="form-input" placeholder="Filter by name&hellip;" oninput="adminStoriesFilter()" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" style="flex:1 1 auto;max-width:320px;height:32px;margin-left:auto;font-size:13px;" />
       <button class="btn btn-sm" onclick="closeAdminStories()">&#10005;</button>
     </div>
     <div class="muted" style="font-size:13px;margin:6px 0 12px;">Remove anything inappropriate. This only un-publishes the Story from the public Library &mdash; the owner&#39;s book is untouched.</div>

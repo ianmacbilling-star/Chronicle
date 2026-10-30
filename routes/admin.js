@@ -568,6 +568,14 @@ router.put('/generation-settings', requireAuth, requireAdmin, async function (re
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// v3.3.41 -- the text of a moderation name filter as an ILIKE pattern ('' = no filter). % and _ are matched as
+// themselves, and it is capped at 100 characters.
+function adminLike(v) {
+  var t = String(v == null ? '' : v).trim().slice(0, 100);
+  if (!t) return '';
+  return '%' + t.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%';
+}
+
 // GET /api/admin/library -- moderation view of ALL public Library images (no
 // time window), newest first, keyset-paginated. Returns the archive id so an
 // admin can pull an item down.
@@ -578,16 +586,21 @@ router.get('/library', requireAuth, requireAdmin, async function (req, res) {
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
-    let sql = 'SELECT id, image_url, title, created_at FROM campaign_archives WHERE public = TRUE';
+    // v3.3.41 -- a name filter (Ian: "so I can filter the name to find them"): the caption, the campaign, or the person
+    // who shared it (name, pen name or email). Who and which campaign also ride along for the card.
+    const q = adminLike(req.query.q);
+    let sql = 'SELECT a.id, a.image_url, a.title, a.created_at, c.name AS campaign_name, u.pen_name, u.name AS user_name FROM campaign_archives a ' +
+      'LEFT JOIN campaigns c ON c.id = a.campaign_id LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
     const params = [];
-    if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
-    sql += ' ORDER BY id DESC LIMIT ?';
+    if (q) { sql += ' AND (a.title ILIKE ? OR c.name ILIKE ? OR u.pen_name ILIKE ? OR u.name ILIKE ? OR u.email ILIKE ?)'; params.push(q, q, q, q, q); }
+    if (beforeId > 0) { sql += ' AND a.id < ?'; params.push(beforeId); }
+    sql += ' ORDER BY a.id DESC LIMIT ?';
     params.push(limit + 1);
     const stmt = db.prepare(sql);
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
-    const items = slice.map(function (r) { return { id: r.id, image_url: r.image_url, caption: r.title || '', created_at: r.created_at }; });
+    const items = slice.map(function (r) { return { id: r.id, image_url: r.image_url, caption: r.title || '', created_at: r.created_at, campaign: r.campaign_name || '', who: r.pen_name || r.user_name || '' }; });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
   } catch (e) {
@@ -747,8 +760,11 @@ router.get('/stories', requireAuth, requireAdmin, async function (req, res) {
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
+    // v3.3.41 -- a name filter: the story's title, its pen name, or its campaign's name.
+    const q = adminLike(req.query.q);
     let sql = 'SELECT id, author_name, title, cover_url, pdf_url, created_at FROM public_stories WHERE public = TRUE';
     const params = [];
+    if (q) { sql += ' AND (title ILIKE ? OR author_name ILIKE ? OR EXISTS (SELECT 1 FROM campaigns c WHERE c.id = public_stories.campaign_id AND c.name ILIKE ?))'; params.push(q, q, q); }
     if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
     sql += ' ORDER BY id DESC LIMIT ?';
     params.push(limit + 1);

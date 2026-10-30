@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.41",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3341-admin-moderation-filter",
+        "kind": "fix",
+        "public": false,
+        "summary": "Dashboard, Public Library: Open Stories and Open Library have a name filter.",
+        "detail": "Admin only. Stories: title, pen name or campaign. Images: caption, campaign, or the name, pen name or email of whoever shared it; each image tile now says who and which campaign.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.40",
     "staged_on": "2026-10-29",
     "entries": [
