@@ -10,6 +10,7 @@ const { TIERS, getTier, canCreate, tierRank, accessRank, artStyleAllowed, narrat
 const { getDb } = require('../database/db');
 const { publicImageUrl } = require('../storage/storage');   // v3.1.85 -- TD-954, display-time image address
 const { galleryAlt } = require('../services/altText');   // v3.1.89 -- TD-953
+const storyOrder = require('../services/storyOrder');   // v3.3.36 -- the order authors set for their stories
 const rightsCheck = require('../services/rightsCheck');   // v3.1.96 -- TD-979, a rejected picture is never archived or made a cover
 const { listPasses } = require('../services/billing/passes');   // v3.0.924 -- TD-780 Push 7
 const { sendReportEmail } = require('./email');
@@ -353,7 +354,9 @@ router.get('/stories', async function (req, res) {
     let limit = parseInt(req.query.limit, 10) || 36;
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
-    const beforeId = parseInt(req.query.beforeId, 10) || 0;
+    // v3.3.36 -- paged by POSITION, not by id: the stories are no longer in id order (services/storyOrder.js). An older
+    // page still sends beforeId; it is read as the same number.
+    const offset = Math.max(0, parseInt(req.query.offset != null ? req.query.offset : req.query.beforeId, 10) || 0);
     const q = (req.query.q || '').trim();
     // v3.0.487 -- genre facet. The value is validated against the fixed list, so an
     // arbitrary string can never reach the query; an unknown genre is simply ignored
@@ -366,15 +369,15 @@ router.get('/stories', async function (req, res) {
     // absent from this directory and from the sitemap, and present everywhere a reader
     // who already holds the link needs it -- including the report form below, which is
     // deliberately still `public = TRUE` alone.
-    let sql = "SELECT id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
+    let sql = "SELECT id, campaign_id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, " + storyOrder.WINDOW_COLS + " FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
     if (genres.length) sql += arrayOverlap('genres', genres, params);
     if (styles.length) sql += arrayOverlap('art_styles', styles, params);
-    if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
-    sql += ' ORDER BY id DESC LIMIT ?';
-    params.push(limit + 1);
+    // v3.3.36 -- rows newest-author first, then each author's own order (services/storyOrder.js).
+    sql = storyOrder.wrap(sql, 'o_author DESC, o_key') + ' LIMIT ? OFFSET ?';
+    params.push(limit + 1, offset);
     const stmt = db.prepare(sql);
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
@@ -384,9 +387,12 @@ router.get('/stories', async function (req, res) {
         id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: rightsCheck.isRejectedSync(r.cover_url) ? rightsCheck.REMOVED_PICTURE : publicImageUrl(r.cover_url || ''),   /* v3.1.96 -- TD-979 */ pdf_url: publicImageUrl(r.pdf_url), slug: r.slug || '', share_token: r.share_token || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at,
         // v3.3.32 -- the subtitle on the book's cover, as recorded when it was published (the same rule as the Publish as
         // picker, pdf.js my-stories-for-campaign). A story published before books kept it has none, and none is guessed.
-        subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() };
+        subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim(),
+        // v3.3.37 -- which campaign group the story belongs to inside its author's row, so the Library can start each
+        // campaign on its own line (no name shown: Ian). The campaign id only; the order comes from storyOrder.
+        group: String(r.campaign_id == null ? '' : r.campaign_id) };
     });
-    const nextCursor = slice.length ? slice[slice.length - 1].id : null;
+    const nextCursor = slice.length ? offset + slice.length : null;   // v3.3.36 -- where the next page starts
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
   } catch (e) {
     console.error('GET public stories error:', e.message);

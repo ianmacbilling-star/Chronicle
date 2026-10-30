@@ -112,6 +112,7 @@
     .author-block { margin:0 0 28px; }
     .author-name { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--gold); border-bottom:1px solid rgba(201,168,76,0.25); padding-bottom:6px; margin-bottom:14px; letter-spacing:1px; }
     .author-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
+    .author-row + .author-row { margin-top:22px; }   /* v3.3.37 -- a gap between an author's campaigns, no name (Ian) */
     .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     .story-card { position:relative; }
@@ -461,20 +462,30 @@
       loadStories();
     }
 
-    function storyAuthorRow(author) {
+    // v3.3.37 -- one block per author, and inside it one row per campaign, in the order the author set on My Stuff
+    // (the server sends the stories in that order; services/storyOrder.js). A new campaign starts a new row; a
+    // campaign continued on the next page joins its row.
+    function storyAuthorRow(author, group) {
       var key = (author || '').trim().toLowerCase() || '__anon';
-      if (authorSections[key]) return authorSections[key];
-      var block = document.createElement('div'); block.className = 'author-block';
-      var nm = document.createElement('div'); nm.className = 'author-name';
-      nm.textContent = (author && author.trim()) ? author.trim() : 'Anonymous';
-      var row = document.createElement('div'); row.className = 'author-row';
-      block.appendChild(nm); block.appendChild(row);
-      storiesEl.appendChild(block); authorSections[key] = row;
-      return row;
+      var sec = authorSections[key];
+      if (!sec) {
+        var block = document.createElement('div'); block.className = 'author-block';
+        var nm = document.createElement('div'); nm.className = 'author-name';
+        nm.textContent = (author && author.trim()) ? author.trim() : 'Anonymous';
+        block.appendChild(nm);
+        storiesEl.appendChild(block);
+        sec = authorSections[key] = { block: block, rows: {} };
+      }
+      var gk = String(group == null ? '' : group);
+      if (!sec.rows[gk]) {
+        var row = document.createElement('div'); row.className = 'author-row';
+        sec.block.appendChild(row); sec.rows[gk] = row;
+      }
+      return sec.rows[gk];
     }
 
     function renderStoryCard(item) {
-      var row = storyAuthorRow(item.author);
+      var row = storyAuthorRow(item.author, item.group);   // v3.3.37 -- its campaign's row
       var a = document.createElement('a'); a.className = 'story-card';
       a.setAttribute('data-story', String(item.id));   // v3.0.983 -- TD-901, for the Bookshelf button
       // v3.0.830 -- TD-675. Link the canonical token url. An internal link pointing at
@@ -524,7 +535,7 @@
     function loadStories() {
       if (sstate.loading || sstate.done) return;
       sstate.loading = true; spinner();
-      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&offset=' + sstate.cursor : '');   // v3.3.36 -- a position, not an id
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];

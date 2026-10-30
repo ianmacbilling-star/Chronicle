@@ -503,6 +503,18 @@ shows whether it is **Public** or **Link only**, with a button to switch between
 republishing, and **Remove from Library** takes it out entirely. Switching a **Family
 Story** or **Skill Story** from link only to public asks you to confirm first. See 15a.
 
+**Putting them in order.** Published Stories is grouped by **pen name**, then by **campaign**. The Library
+shows one row per pen name, and inside your row your books appear in the order set here, left to right:
+drag a book (or use its ← → arrows) to move it within its campaign, and drag a campaign's heading (or
+use its ↑ ↓ arrows) to move the whole campaign. It saves at once. A new book goes at the end of its
+campaign. Your row stays where it is among other authors; this only orders your own books.
+
+**Another pen name.** A campaign (or one book) can be filed under another pen name you have published
+under, or your current one: drag it onto that pen name, or use **Move campaign to…** / **Move to…**. Moving
+one book away from the rest of its campaign asks first. The Library listing changes at once, but the
+copyright line printed inside the book keeps the name it was published with until you publish it again
+with **Replace** (the card says so). Publishing again with Replace lists it under your current pen name.
+
 ---
 
 ## 6. Getting your story out: Export, Print, Publish, Order
