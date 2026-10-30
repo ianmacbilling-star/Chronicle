@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.45",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3345-library-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's stories now look like books on a bookshelf.",
+        "detail": "Each story stands like a book on the Bookshelf, with its pen name on a brass plate on the shelf. A campaign of three or more books shows its first and last books face out and the ones between with their spines out. Hover over a book (tap once on a phone) to see its title, subtitle, date, genres and + Bookshelf. The author search now sits on the same row as Show everything.",
+        "td": [
+          "TD-1058"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.44",
     "staged_on": "2026-10-29",
     "entries": [

@@ -114,33 +114,69 @@
        new campaign starts (v3.3.37), none at the start of a shelf. Books stand on their bottoms; libLayoutShelves()
        lays a walnut board (the Bookshelf's colours) under each shelf of books and writes each pen name above its run
        of books on that shelf, underlined across them. */
-    .stories { max-width:1100px; margin:0 auto; padding:34px 14px 40px; position:relative;
-      display:flex; flex-wrap:wrap; align-items:flex-end; column-gap:14px; row-gap:70px; }
+    /* v3.3.45 -- TD-1058. The books are drawn like the Bookshelf's (Ian: "make them look like books"). A campaign of
+       three or more books shows its first and last books face out and the ones between standing with their spines
+       out; the pen name is on a brass plate on the board, not above the books; the title, subtitle, date, genres and
+       + Bookshelf appear in a card when a book is hovered (tapped once on a phone; a second tap opens it). */
+    .stories { max-width:1100px; margin:0 auto; padding:20px 14px 40px; position:relative; --fh:194px;
+      display:flex; flex-wrap:wrap; align-items:flex-end; column-gap:14px; row-gap:52px; }
     .lib-slot { width:150px; flex:0 0 150px; position:relative; z-index:1; }
+    .lib-slot.lib-sp { width:34px; flex-basis:34px; }
+    .lib-slot.lib-tight { margin-left:-11px; }   /* the books of one campaign stand close together */
     .lib-slot.lib-astart { margin-left:42px; }
     .lib-slot.lib-cstart { margin-left:18px; }
     .lib-slot.lib-linestart { margin-left:0; }
+    .lib-slot:hover { z-index:6; } .lib-slot.lb-on { z-index:7; }
     .lib-board { position:absolute; height:22px; z-index:0; pointer-events:none; border-radius:2px;
       background:linear-gradient(to bottom, #94602f 0, #74461f 2px, #5a3417 14px, #3a200d 20px, #170b04 22px);
       box-shadow:0 10px 16px rgba(0,0,0,0.55), 0 -2px 6px rgba(0,0,0,0.35); }
-    .lib-pen { position:absolute; z-index:1; font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--gold); letter-spacing:1px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-bottom:1px solid rgba(201,168,76,0.35); padding-bottom:3px; line-height:1.2; }
-    @media (max-width:420px) { .lib-slot { width:136px; flex-basis:136px; } .lib-slot.lib-astart { margin-left:24px; } }
-    .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
+    /* The Bookshelf's brass plate (app.html .bplaque), carrying the pen name. */
+    .lib-plate { position:absolute; z-index:2; pointer-events:none; padding:1px 10px; font-family:'Cinzel',serif; font-size:11px; font-weight:700;
+      letter-spacing:0.04em; line-height:1.4; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      background:linear-gradient(to bottom, #f0d88a, #c9a84c 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
+    @media (max-width:420px) { .stories { --fh:176px; } .lib-slot { width:136px; flex-basis:136px; } .lib-slot.lib-sp { width:34px; flex-basis:34px; } .lib-slot.lib-astart { margin-left:24px; } }
+    .story-card { display:block; position:relative; cursor:pointer; text-decoration:none; color:inherit; transition:transform .15s ease; }
+    .story-card:hover, .story-card:focus-visible, .story-card.lb-open { transform:translateY(-8px); outline:none; }
+    /* Face out: the Bookshelf's .bface, the cover with the spine's shading down its left edge. */
+    .lb-face { position:relative; width:100%; aspect-ratio:17/22; overflow:hidden; border-radius:2px 4px 4px 2px; background:#3a2010;
+      box-shadow:5px 6px 12px rgba(0,0,0,0.7); }
+    .lb-face img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+    .lb-face::after { content:''; position:absolute; top:0; bottom:0; left:0; width:10px; z-index:1;
+      background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.18) 55%, rgba(0,0,0,0.15)); }
+    .lb-face-t { position:absolute; inset:12px 10px 12px 16px; display:flex; align-items:center; justify-content:center; text-align:center;
+      color:#e8cf7a; font-family:'Cinzel',serif; font-size:14px; line-height:1.25; }
+    /* Spine out: the Bookshelf's .bspine, leather in the campaign's colour, gold bands, the title up the spine. */
+    .lb-spine { position:relative; width:34px; height:calc(var(--fh) * var(--k, 0.92)); overflow:hidden; border-radius:2px 2px 1px 1px;
+      background-image:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.22) 78%, rgba(0,0,0,0.55));
+      box-shadow:2px 0 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
+    .lb-spine::before, .lb-spine::after { content:''; position:absolute; left:0; right:0; height:5px; z-index:1;
+      border-top:1px solid rgba(222,190,100,0.9); border-bottom:1px solid rgba(222,190,100,0.9); }
+    .lb-spine::before { top:14px; } .lb-spine::after { bottom:16px; }
+    .lb-spine-t { position:absolute; inset:30px 0 32px; display:flex; flex-direction:column; gap:1px; align-items:center; justify-content:center;
+      writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:'Cinzel',serif;
+      font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
+    .lb-tt, .lb-ts { display:block; max-height:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-ts { font-size:8px; letter-spacing:0.03em; opacity:0.78; }
+    .lib-slot.lib-sp .lb-face, .lib-slot:not(.lib-sp) .lb-spine { display:none; }
+    /* The card above a hovered book. It opens when the mouse rests on a book (libHoverCard), so crossing other spines
+       on the way to + Bookshelf does not swap cards; it stays a moment after the mouse leaves, and its bridge
+       (::after) covers the gap down to the book. */
+    .lb-card { position:absolute; bottom:calc(100% + 12px); left:50%; width:230px; margin-left:-115px; z-index:7; text-align:left;
+      background:#160e06; border:2px solid #c9a84c; border-radius:4px; padding:10px 12px 4px; box-shadow:0 8px 20px rgba(0,0,0,0.75);
+      opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility 0s linear .18s; }
+    .lb-card::after { content:''; position:absolute; left:0; right:0; top:100%; height:16px; }
+    .story-card:focus-visible .lb-card, .story-card.lb-open .lb-card { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
-    .story-card { position:relative; }
     /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
     .sc-shelf { font-family:'Crimson Text',serif; font-size:10px; font-weight:700; letter-spacing:0.02em; line-height:1.4;
       color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:9px; padding:0 7px; cursor:pointer; }
     .sc-shelf:hover { background:#e2c270; }
     .sc-shelf[disabled] { cursor:default; color:#f7ecd2; background:rgba(40,70,40,0.92); border-color:#1f3a1f; }
-    .story-card .sc-cover { width:100%; aspect-ratio:17/22; object-fit:cover; background:#160e06; display:block; }
-    .story-card .sc-ph { width:100%; aspect-ratio:17/22; background:#160e06; display:flex; align-items:center; justify-content:center; color:rgba(201,168,76,0.45); font-family:'Cinzel',serif; font-size:13px; text-align:center; padding:10px; }
-    .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:8px 10px 11px; line-height:1.3; }
-    .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(240,232,208,0.72); padding:0 10px; margin:-7px 0 9px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
-    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(201,168,76,0.55); padding:0 10px 10px; margin-top:-5px; }
+    .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:0 0 6px; line-height:1.3; }
+    .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(240,232,208,0.72); margin:-3px 0 6px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
+    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(201,168,76,0.6); padding:0 0 7px; }
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
-    .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
+    .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 0 8px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
     /* v3.0.846 -- Ian, 2026-09-10: "I don't like that control at all. Can you do the control
        that matches the Genre Control on the Campaign details Dialog box." So this IS that
@@ -165,6 +201,9 @@
     .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.2); border-radius:3px; transition:all .15s; }
     .facet-clear:hover { color:var(--gold); border-color:var(--gold); }
     #lib-actions { gap:10px; margin-top:2px; }
+    #lib-actions .lib-search { padding:0; flex:0 1 380px; min-width:220px; }   /* v3.3.45 -- on the Show everything row */
+    #lib-actions { width:100%; max-width:760px; }   /* the full width, or the row shrinks to its widest item and the search wraps */
+    #lib-actions .lib-search input { padding:7px 12px; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -226,11 +265,12 @@
         <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
         <button class="filter-btn" data-window="all" id="f-all">All Time</button>
       </span>
+      <!-- v3.3.45 -- the author search moved up onto this row, beside Show everything (Ian). switchTab still shows it on
+           the Stories tab only. -->
+      <div class="lib-search" id="stories-search" style="display:none;">
+        <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
+      </div>
     </div>
-  </div>
-
-  <div class="lib-search" id="stories-search" style="display:none;">
-    <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -502,17 +542,47 @@
     //   3. each pen name written above its run of books on each shelf it reaches.
     var _libBoardsQueued = false;
     function _libBottom(el) { return el.offsetTop + el.offsetHeight; }
+    // v3.3.45 -- TD-1058. The Bookshelf's leather (app.js BSHELF_LEATHER / bshelfLeather), one colour per campaign.
+    var LIB_LEATHER = ['#4a1c14', '#1f3325', '#1c2a40', '#3d1f36', '#4d3a17', '#40181d', '#17302f', '#2f1c12', '#2b2b30'];
+    function libLeather(s) {
+      var h = 0, str = String(s || '');
+      for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+      return LIB_LEATHER[h % LIB_LEATHER.length];
+    }
+    // v3.3.45 -- a campaign of three or more books: its first and last books face out, the ones between show their
+    // spines (Ian). Decided over everything loaded so far, so a campaign that runs onto the next page is settled when
+    // that page arrives. Each volume is a shade apart and a little taller or shorter, as on the Bookshelf.
+    function libSetShapes() {
+      var slots = storiesEl.querySelectorAll('.lib-slot');
+      for (var i = 0; i < slots.length;) {
+        var g = slots[i].getAttribute('data-grp'), j = i;
+        while (j + 1 < slots.length && slots[j + 1].getAttribute('data-grp') === g) j++;
+        var n = j - i + 1;
+        for (var k = 0; k < n; k++) {
+          var s = slots[i + k], spine = n >= 3 && k > 0 && k < n - 1;
+          s.classList.toggle('lib-sp', spine);
+          s.classList.toggle('lib-tight', n >= 3 && k > 0);
+          var sp = s.querySelector('.lb-spine');
+          if (sp) {
+            sp.style.setProperty('--k', String(0.9 + (k % 3) * 0.03));
+            sp.style.filter = 'brightness(' + (0.85 + (k % 3) * 0.1).toFixed(2) + ')';
+          }
+        }
+        i = j + 1;
+      }
+    }
     function libLayoutShelves() {
       _libBoardsQueued = false;
       if (!storiesEl) return;
-      Array.prototype.forEach.call(storiesEl.querySelectorAll('.lib-board, .lib-pen'), function (b) { b.parentNode.removeChild(b); });
+      Array.prototype.forEach.call(storiesEl.querySelectorAll('.lib-board, .lib-plate'), function (b) { b.parentNode.removeChild(b); });
       if (storiesEl.offsetParent === null) return;   // hidden (the Images tab)
+      libSetShapes();
       var slots = Array.prototype.slice.call(storiesEl.querySelectorAll('.lib-slot'));
       // One pass, front to back. A gapped book that wrapped loses its gap; if losing it would let the book slip back
       // onto the shelf above (where it would sit without the gap), it keeps the gap instead.
       slots.forEach(function (sl) { sl.classList.remove('lib-linestart'); });
       for (var i = 0; i < slots.length; i++) {
-        if (!(slots[i].classList.contains('lib-astart') || slots[i].classList.contains('lib-cstart'))) continue;
+        if (!(slots[i].classList.contains('lib-astart') || slots[i].classList.contains('lib-cstart') || slots[i].classList.contains('lib-tight'))) continue;
         var startsLine = (i === 0) || _libBottom(slots[i]) > _libBottom(slots[i - 1]) + 2;   // books stand on their bottoms
         if (!startsLine) continue;
         slots[i].classList.add('lib-linestart');
@@ -529,17 +599,21 @@
       lines.forEach(function (ln) {
         var b = document.createElement('div'); b.className = 'lib-board';
         var l = Math.max(0, ln.left - box.left - 14), rr = Math.min(box.width, ln.right - box.left + 14);
-        b.style.top = Math.round(ln.bottom - box.top + 3) + 'px'; b.style.left = Math.round(l) + 'px'; b.style.width = Math.round(rr - l) + 'px';
+        var bt = Math.round(ln.bottom - box.top + 3);
+        b.style.top = bt + 'px'; b.style.left = Math.round(l) + 'px'; b.style.width = Math.round(rr - l) + 'px';
         storiesEl.appendChild(b);
+        // v3.3.45 -- the pen name on a brass plate on the board, centred under its run of books on this shelf (Ian).
         for (var k = 0; k < ln.slots.length; k++) {
           var first = ln.slots[k], key = first.el.getAttribute('data-pen'), last = first;
           while (k + 1 < ln.slots.length && ln.slots[k + 1].el.getAttribute('data-pen') === key) { k++; last = ln.slots[k]; }
-          var p = document.createElement('div'); p.className = 'lib-pen';
-          p.textContent = first.el.getAttribute('data-pen-name'); p.title = p.textContent;
-          p.style.left = Math.round(first.r.left - box.left) + 'px';
-          p.style.width = Math.round(last.r.right - first.r.left) + 'px';
-          p.style.top = Math.round(ln.top - box.top - 28) + 'px';
+          var p = document.createElement('div'); p.className = 'lib-plate';
+          p.textContent = first.el.getAttribute('data-pen-name');
+          var runW = last.r.right - first.r.left;
+          p.style.maxWidth = Math.round(Math.min(rr - l - 8, Math.max(runW, 150))) + 'px';
           storiesEl.appendChild(p);
+          var pw = p.offsetWidth, cx = (first.r.left + last.r.right) / 2 - box.left;
+          p.style.left = Math.round(Math.max(l + 4, Math.min(rr - 4 - pw, cx - pw / 2))) + 'px';
+          p.style.top = (bt + 3) + 'px';
         }
       });
     }
@@ -551,41 +625,99 @@
     try { if (window.ResizeObserver) new ResizeObserver(libQueueShelves).observe(storiesEl); } catch (e) {}
     window.addEventListener('resize', libQueueShelves);
 
+    // v3.3.45 -- TD-1058. The card above a book stays inside the stories area, so a book at either end of a shelf
+    // does not push it off the page.
+    function libPlaceCard(a) {
+      var c = a && a.querySelector('.lb-card'); if (!c) return;
+      var box = storiesEl.getBoundingClientRect(), r = a.getBoundingClientRect();
+      var w = 230, cx = (r.left + r.right) / 2, left = cx - w / 2;
+      left = Math.max(box.left + 4, Math.min(box.right - 4 - w, left));
+      c.style.marginLeft = Math.round(left - cx) + 'px';
+    }
+    // On a phone there is no hover: the first tap opens the card, a second tap opens the story.
+    var _libTouch = false;
+    try { _libTouch = !!(window.matchMedia && window.matchMedia('(hover: none)').matches); } catch (e) {}
+    function libOpenCard(a) {
+      Array.prototype.forEach.call(storiesEl.querySelectorAll('.story-card.lb-open'), function (o) {
+        if (o === a) return;
+        o.classList.remove('lb-open'); if (o.parentNode) o.parentNode.classList.remove('lb-on');
+      });
+      if (!a) return;
+      libPlaceCard(a);
+      a.classList.add('lb-open'); if (a.parentNode) a.parentNode.classList.add('lb-on');
+    }
+    // With a mouse: open after it rests on a book a moment, close a moment after it leaves.
+    var _libHoverT = null;
+    function libHoverCard(a) {
+      a.addEventListener('mouseenter', function () {
+        if (_libTouch) return;
+        clearTimeout(_libHoverT); clearTimeout(a._lbClose);
+        if (!a.classList.contains('lb-open')) _libHoverT = setTimeout(function () { libOpenCard(a); }, 120);
+      });
+      a.addEventListener('mouseleave', function () {
+        if (_libTouch) return;
+        clearTimeout(_libHoverT);
+        a._lbClose = setTimeout(function () { a.classList.remove('lb-open'); if (a.parentNode) a.parentNode.classList.remove('lb-on'); }, 300);
+      });
+    }
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('.story-card')) return;
+      libOpenCard(null);
+    });
+
     function renderStoryCard(item) {
-      var row = storyAuthorRow(item.author, item.group);   // v3.3.37 -- its campaign's row
+      var row = storyAuthorRow(item.author, item.group);   // v3.3.37 -- its campaign's slot
+      // v3.3.45 -- the books of one campaign (by one pen name) share a colour and the face-or-spine rule; a story in
+      // no campaign stands alone.
+      var hasGroup = !(item.group == null || item.group === '');
+      var grp = hasGroup ? (row.getAttribute('data-pen') + '|' + String(item.group)) : ('s' + item.id);
+      row.setAttribute('data-grp', grp);
+      var leather = libLeather(hasGroup ? String(item.group) : (item.title || item.id));
+      var title = item.title || 'Untitled';
       var a = document.createElement('a'); a.className = 'story-card';
       a.setAttribute('data-story', String(item.id));   // v3.0.983 -- TD-901, for the Bookshelf button
+      a.setAttribute('aria-label', title + (item.subtitle ? ': ' + item.subtitle : ''));
       // v3.0.830 -- TD-675. Link the canonical token url. An internal link pointing at
       // a url that only 301s wastes the hop and disagrees with the sitemap.
       a.href = item.share_token
         ? ('/library/story/s/' + item.share_token + '/' + (item.slug || 'story'))
         : ('/library/story/' + item.id + '/' + (item.slug || 'story'));
       a.target = '_blank'; a.rel = 'noopener';
+      // Face out.
+      var face = document.createElement('div'); face.className = 'lb-face'; face.style.backgroundColor = leather;
+      var ft = document.createElement('span'); ft.className = 'lb-face-t'; ft.textContent = title;
+      face.appendChild(ft);
       if (item.cover_page_url || item.cover_url) {
-        var img = document.createElement('img'); img.className = 'sc-cover';
-        img.setAttribute('loading', 'lazy'); img.alt = item.title || 'story cover';
-        // v3.3.30 -- the book's own cover page, title and all; if it cannot be drawn, the cover picture as before.
+        var img = document.createElement('img');
+        img.setAttribute('loading', 'lazy'); img.alt = '';
+        // v3.3.30 -- the book's own cover page, title and all; if it cannot be drawn, the cover picture; then leather.
         var _fb = item.cover_url || '';
         img.onerror = function () {
           if (_fb && img.getAttribute('data-fell') !== '1') { img.setAttribute('data-fell', '1'); img.src = _fb; return; }
-          img.onerror = null;
-          var ph0 = document.createElement('div'); ph0.className = 'sc-ph'; ph0.textContent = item.title || 'Untitled';
-          if (img.parentNode) img.parentNode.replaceChild(ph0, img);
+          img.onerror = null; img.style.display = 'none';
         };
         img.src = item.cover_page_url || item.cover_url;
-        a.appendChild(img);
-      } else {
-        var ph = document.createElement('div'); ph.className = 'sc-ph'; ph.textContent = item.title || 'Untitled';
-        a.appendChild(ph);
+        face.appendChild(img);
       }
-      var t = document.createElement('div'); t.className = 'sc-title'; t.textContent = item.title || 'Untitled';
-      a.appendChild(t);
-      // v3.3.32 -- the subtitle under the title (Ian), two lines at most.
-      if (item.subtitle) { var su = document.createElement('div'); su.className = 'sc-sub'; su.textContent = item.subtitle; su.title = item.subtitle; a.appendChild(su); }
+      a.appendChild(face);
+      // Spine out.
+      var sp = document.createElement('div'); sp.className = 'lb-spine'; sp.style.backgroundColor = leather;
+      var st = document.createElement('span'); st.className = 'lb-spine-t';
+      var st1 = document.createElement('span'); st1.className = 'lb-tt'; st1.textContent = title; st.appendChild(st1);
+      if (item.subtitle) { var st2 = document.createElement('span'); st2.className = 'lb-ts'; st2.textContent = item.subtitle; st.appendChild(st2); }
+      sp.appendChild(st);
+      a.appendChild(sp);
+      // The card shown on hover: title, subtitle, published date, genres, and + Bookshelf (added by cmpShelfButton).
+      var card = document.createElement('div'); card.className = 'lb-card';
+      var t = document.createElement('div'); t.className = 'sc-title'; t.textContent = title;
+      card.appendChild(t);
+      // v3.3.32 -- the subtitle under the title (Ian).
+      if (item.subtitle) { var su = document.createElement('div'); su.className = 'sc-sub'; su.textContent = item.subtitle; card.appendChild(su); }
       if (item.created_at) {
         var d = document.createElement('div'); d.className = 'sc-date';
-        try { d.textContent = new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
-        a.appendChild(d);
+        try { d.textContent = 'Published ' + new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
+        card.appendChild(d);
       }
       if (item.genres && item.genres.length) {
         var gw = document.createElement('div'); gw.className = 'sc-genres';
@@ -593,8 +725,15 @@
           var gp = document.createElement('span'); gp.className = 'sc-genre'; gp.textContent = g;
           gw.appendChild(gp);
         });
-        a.appendChild(gw);
+        card.appendChild(gw);
       }
+      a.appendChild(card);
+      libHoverCard(a);
+      a.addEventListener('focus', function () { libPlaceCard(a); });
+      a.addEventListener('click', function (e) {
+        if (!_libTouch || a.classList.contains('lb-open')) return;
+        e.preventDefault(); libOpenCard(a);
+      });
       row.appendChild(a);
       libQueueShelves();   // v3.3.44
       return a;
@@ -827,8 +966,10 @@ function cmpShelfButton(card, id, onShelf) {
       .catch(function () { b.disabled = false; b.textContent = '+ Bookshelf'; });
   });
   // v3.3.44 -- beside the genre pills (a row is made when the story has no genres).
-  var row = card.querySelector('.sc-genres');
-  if (!row) { row = document.createElement('div'); row.className = 'sc-genres'; card.appendChild(row); }
+  // v3.3.45 -- in the card shown when the book is hovered.
+  var host = card.querySelector('.lb-card') || card;
+  var row = host.querySelector('.sc-genres');
+  if (!row) { row = document.createElement('div'); row.className = 'sc-genres'; host.appendChild(row); }
   row.appendChild(b);
 }
 function cmpShelfDecorate(cards) {
