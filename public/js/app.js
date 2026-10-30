@@ -33272,7 +33272,7 @@ function _runLayoutAiOptimize() {
                 if (s.state === 'running') {
                   var p = s.progress || {};
                   if (p.of) {
-                    _liveNote('AI Loop ' + roundNum + ': applying change ' + p.op + ' of ' + p.of +
+                    _liveNote('Editor Loop ' + roundNum + ': applying change ' + p.op + ' of ' + p.of +
                               (p.viewerPage != null ? (' &mdash; page ' + p.viewerPage) : ''));
                   }
                   setTimeout(tick, APPLY_POLL_MS);
@@ -33373,9 +33373,9 @@ function _runLayoutAiOptimize() {
           var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; _rb.classList.add('has-token'); }
           return Promise.resolve();
         }
-        loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
+        loopStatus('Editor Loop ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
-        _liveStart('AI Loop ' + roundNum + ': reviewing the layout');   // v3.0.807 -- TD-623, ticks while it waits
+        _liveStart('Editor Loop ' + roundNum + ': reviewing the layout');   // v3.0.807 -- TD-623, ticks while it waits
         // v3.0.649 -- the run id goes with every pass so a stop can actually reach this loop.
         var _runQ = window._optimizeRunId ? ((_q.indexOf('?') === -1 ? '?' : '&') + 'run=' + encodeURIComponent(window._optimizeRunId)) : '';
         return fetch('/api/pdf/layout-review/' + _cid + _q + _runQ, { credentials: 'same-origin' })
@@ -33388,7 +33388,7 @@ function _runLayoutAiOptimize() {
               window._optimizeCancelled = true;
               window._aiLoopRunning = false;
               aiLog('This run was stopped from another tab. Nothing further will be saved from it.');
-              _settleLive(false, 'AI Loop ' + roundNum + ': stopped.');
+              _settleLive(false, 'Editor Loop ' + roundNum + ': stopped.');
               optimizeProgress('This Optimize run was stopped.', { done: true });
               var _rb2 = document.getElementById('layoutai-run-btn');
               if (_rb2) { _rb2.disabled = false; _rb2.textContent = 'Optimize layout'; _rb2.classList.add('has-token'); }
@@ -33456,8 +33456,8 @@ function _runLayoutAiOptimize() {
                 if (!_reviewRetried) {
                   _reviewRetried = true;
                   aiLog('Pass ' + roundNum + ': retrying once in 6s...', 'skip');
-                  _settleLive(false, 'AI Loop ' + roundNum + ': the AI could not be reached.');
-                  optimizeProgress('The AI could not be reached (' + String(j.error).slice(0, 80) + ') &mdash; retrying...', { dim: true });
+                  _settleLive(false, 'Editor Loop ' + roundNum + ': the editor could not be reached.');
+                  optimizeProgress('The editor could not be reached (' + String(j.error).slice(0, 80) + ') &mdash; retrying...', { dim: true });
                   // v3.0.402 -- lastBlob DOES NOT EXIST HERE, and never has.
                   // It is a parameter of iterate(), which is a SIBLING of runRound -- so this line has
                   // thrown ReferenceError since the retry was written in v3.0.320. It only fires when
@@ -33468,23 +33468,23 @@ function _runLayoutAiOptimize() {
                   // HAS the blob, does the waiting and the re-entry.
                   return { retry: true, done: false, applied: 0, blob: null, report: null };
                 }
-                _settleLive(false, 'AI Loop ' + roundNum + ': the AI service was unavailable.');
-                optimizeProgress('Stopped early &mdash; the AI service was unavailable. Your book was NOT fully optimized; try again shortly.', { done: true });
+                _settleLive(false, 'Editor Loop ' + roundNum + ': the editor was unavailable.');
+                optimizeProgress('Stopped early &mdash; the editor was unavailable. Your book was NOT fully optimized; try again shortly.', { done: true });
                 return { done: true, applied: 0, blob: null, report: null, failed: true };
               }
               aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
-              _settleLive(true, 'AI Loop ' + roundNum + ': reviewed.');
+              _settleLive(true, 'Editor Loop ' + roundNum + ': reviewed.');
               optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
               return { done: true, applied: 0, blob: null, report: null };
             }
             aiLog('Pass ' + roundNum + ': AI proposed ' + _ops.length + ' op(s) -- applying...');
-            loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
+            loopStatus('Editor Loop ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
             // v3.0.807 -- TD-623. THE LINE THAT WAS MISSING. Everything above this point reported
             // itself; from here the run went dark for minutes. The apply is the longest step in the
             // pass -- it re-measures the whole book after essentially every op -- so it is the step
             // that most needs to be seen working, and it was the only one with nothing to show.
-            _settleLive(true, 'AI Loop ' + roundNum + ': reviewed &mdash; ' + _plural(_ops.length, 'change') + ' to make.');
-            _liveStart('AI Loop ' + roundNum + ': applying ' + _plural(_ops.length, 'change'));
+            _settleLive(true, 'Editor Loop ' + roundNum + ': reviewed &mdash; ' + _plural(_ops.length, 'change') + ' to make.');
+            _liveStart('Editor Loop ' + roundNum + ': applying ' + _plural(_ops.length, 'change'));
             // v3.0.809 -- TD-624. Was one fetch that held the connection open for the length of the
             // apply. Everything below this line is unchanged: _applyStart hands back the same two
             // things the response used to carry -- the raw X-Apply-Report header and the PDF blob --
@@ -33497,7 +33497,7 @@ function _runLayoutAiOptimize() {
                 // v3.0.807 -- TD-623. Settle here, not further down: the bytes have arrived, so the
                 // wait this line describes is genuinely over. Reading the count off the report keeps
                 // the settled line a fact rather than a repeat of the promise made when it started.
-                _settleLive(true, 'AI Loop ' + roundNum + ': applied ' + _plural((rep && rep.appliedCount) || 0, 'change') + '.');
+                _settleLive(true, 'Editor Loop ' + roundNum + ': applied ' + _plural((rep && rep.appliedCount) || 0, 'change') + '.');
                 try { if (window._optimizeCapture) window._optimizeCapture.applies.push({ pass: roundNum, report: rep }); } catch (e) {}
                 // Log the detail of what actually happened this pass.
                 if (rep) {
@@ -33648,7 +33648,7 @@ function _runLayoutAiOptimize() {
           if (res.failed) {
             optimizeProgress(totalApplied > 0
               ? ('Stopped early &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') +
-                 ' applied before the AI stopped responding. Saving what was done.')
+                 ' applied before the editor stopped responding. Saving what was done.')
               : 'Stopped early &mdash; nothing was changed. Try again shortly.', { done: true });
           } else {
             optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
@@ -33739,7 +33739,7 @@ function _runLayoutAiOptimize() {
           if (_fB != null && _fA != null) {
             _html += '<br>Density: <strong style="color:' + finalizeFillColor(_fB) + ';">' + _fB + '%</strong> &nbsp;&rarr;&nbsp; <strong style="color:' + finalizeFillColor(_fA) + ';">' + _fA + '% full</strong>';
             var _eB = bp * (100 - _fB), _eA = cnt * (100 - _fA);
-            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100); if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall (after AI)</strong>'; }
+            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100); if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall (after editing)</strong>'; }
           }
           _dEl.innerHTML = _html;
           var _vEl = document.getElementById('pub-pick-verdict');
