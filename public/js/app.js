@@ -8073,10 +8073,7 @@ function renderAssets() {
       '</div>' +
     '</div>';
   }).join('');
-  var _cur = state.currentCampaign;
-  var _role = _cur ? _cur.my_role : null;
-  var _allowAssets = _cur && (_cur.allow_member_assets === true || _cur.allow_member_assets === 1 || _cur.allow_member_assets === 't' || _cur.allow_member_assets === 'true');
-  var _canAddAsset = (_role === 'dm') || _allowAssets;
+  var _canAddAsset = canAddAssets();   // v3.3.43 -- the one rule, shared with the Archive's + Assets
   var _addCard = _canAddAsset
     ? '<div class="add-char-card" onclick="openAssetModal()"><div class="plus">+</div><span>Add asset</span></div>'
     : '';
@@ -17231,11 +17228,24 @@ function renderArchives() {
   renderArchiveGrid();
 }
 
+// v3.3.43 -- MAY THIS PERSON ADD ASSETS TO THE CAMPAIGN? The Story Master always; a member when the campaign's
+// "members can add assets" switch is on. The server's gate is the same (verifyCampaignAssetCreator, which also guards
+// Copy to Assets from the Archive). Ian: the Archive's + Assets showed for the Story Master only, so a member who could
+// add assets never saw it. Add asset, Import and + Assets all ask this one function.
+function canAddAssets() {
+  var c = state.currentCampaign;
+  if (!c) return false;
+  if (c.my_role === 'dm') return true;
+  var v = c.allow_member_assets;
+  return v === true || v === 1 || v === 't' || v === 'true';
+}
+
 function renderArchiveGrid() {
   var grid = document.getElementById('archives-grid');
   if (!grid) return;
   var meId = (state.user && state.user.id) || null;
   var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  var canAsset = canAddAssets();   // v3.3.43
   if (!(state.archives || []).length) {
     grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Press Archive on any picture (a panel, a character\u2019s reference picture or a drawn title) to save a copy here.</div>';
     return;
@@ -17265,7 +17275,7 @@ function renderArchiveGrid() {
       '<div class="archive-thumb">' +
         '<img loading="lazy" src="' + a.image_url + '" alt="' + escapeHtml(a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
         promptBtn +
-        (isDM ? '<button class="archive-asset-thumb" onclick="openCopyToAssetModal(' + a.id + ')" title="Copy this image to Assets">&#43; Assets</button>' : '') +
+        (canAsset ? '<button class="archive-asset-thumb" onclick="openCopyToAssetModal(' + a.id + ')" title="Copy this image to Assets">&#43; Assets</button>' : '') +
         (canDelete ? '<button class="archive-del-thumb" onclick="deleteArchive(' + a.id + ')" title="Remove from Archive">&#10005; Remove</button>' : '') +
       '</div>' +
       '<div class="archive-meta">' +
