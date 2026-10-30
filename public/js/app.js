@@ -2337,6 +2337,12 @@ function myStoryCard(it) {
   meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
   meta.textContent = it.title || 'Untitled';
   card.appendChild(meta);
+  // v3.3.38 -- the subtitle under the title, as on the Library card: the one the book was published with, two lines at most.
+  if (it.subtitle) {
+    var subEl = document.createElement('div'); subEl.className = 'ms-subtitle'; subEl.textContent = it.subtitle; subEl.title = it.subtitle;
+    subEl.style.cssText = 'font-size:11px;font-style:italic;color:rgba(240,232,208,0.72);padding:0 8px;margin:-3px 0 4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;';
+    card.appendChild(subEl);
+  }
   var dateLine = document.createElement('div');
   var _dt = it.created_at ? new Date(it.created_at) : null;
   dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';

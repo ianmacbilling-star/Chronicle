@@ -8720,10 +8720,11 @@ router.get('/my-stories', requireAuth, async function(req, res) {
     // v3.3.36 -- in the order the author set (services/storyOrder.js), with each story's campaign name and the pen name
     // printed inside the book (the details page's copyright line: the campaign owner's pen name when it was made).
     var rows = await db.prepare(storyOrder.wrap("SELECT id, campaign_id, user_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at, camp_pos, story_pos, " +
-      "(SELECT c.name FROM campaigns c WHERE c.id = public_stories.campaign_id) AS campaign_name, snapshot->'campaign'->>'name' AS snap_camp, snapshot->'campaign'->>'owner_pen_name' AS printed_name, " +
+      "(SELECT c.name FROM campaigns c WHERE c.id = public_stories.campaign_id) AS campaign_name, snapshot->'campaign'->>'name' AS snap_camp, snapshot->'campaign'->>'owner_pen_name' AS printed_name, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, " +
       storyOrder.WINDOW_COLS + " FROM public_stories WHERE user_id = ? AND public = TRUE", 'o_key')).all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
     var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: rightsCheck.maskUrl(r.cover_url || ''), pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at,
-      campaign_name: String(r.campaign_name || r.snap_camp || '').trim() || 'Untitled campaign', printed_name: String(r.printed_name || '').trim() }; });   // v3.3.36
+      campaign_name: String(r.campaign_name || r.snap_camp || '').trim() || 'Untitled campaign', printed_name: String(r.printed_name || '').trim(),
+      subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() }; });   // v3.3.36; subtitle v3.3.38 (the Library's rule, public.js /stories)
     var pens = await myPenNames(db, req.session.userId);   // v3.3.36
     return res.json({ items: items, pen_names: pens.names, current_pen: pens.current });
   } catch (e) {

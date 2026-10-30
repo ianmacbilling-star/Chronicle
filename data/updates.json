@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.38",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3338-mystories-subtitles",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Published Stories cards show the subtitle under the title.",
+        "detail": "The one the book was published with, as on the Library card.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.37",
     "staged_on": "2026-10-29",
     "entries": [
