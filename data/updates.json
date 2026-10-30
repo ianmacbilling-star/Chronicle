@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.48",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3348-library-blurb",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's hover card now shows the start of each book's blurb.",
+        "detail": "The card shows the blurb up to its first line break, with an ellipsis when there is more. Hover over that line (tap it on a phone) to read the whole blurb in the card. A book with no blurb shows the opening of its story, as its page does.",
+        "td": [
+          "TD-1061"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.47",
     "staged_on": "2026-10-30",
     "entries": [

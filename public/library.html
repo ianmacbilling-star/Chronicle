@@ -172,6 +172,14 @@
       box-shadow:3px 4px 10px rgba(0,0,0,0.7); }
     .lb-big img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
     .lb-big .lb-face-t { font-size:17px; }
+    /* v3.3.48 -- TD-1061. The blurb in the card (Ian): its first line and "...", and the whole of it, in the card, only
+       while that line is hovered (tapped on a phone). The story page's text: the author's blurb, else the teaser. */
+    .lb-blurb { font-family:'Crimson Text',serif; font-size:13px; line-height:1.35; color:rgba(240,232,208,0.86); margin:0 0 7px; }
+    .lb-blurb-short { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .lb-blurb-full { display:none; white-space:pre-line; max-height:220px; overflow-y:auto; padding-right:4px; }
+    .lb-blurb.lb-more { cursor:help; }
+    .lb-blurb.lb-more:hover .lb-blurb-short, .lb-blurb.lb-more.lb-bopen .lb-blurb-short { display:none; }
+    .lb-blurb.lb-more:hover .lb-blurb-full, .lb-blurb.lb-more.lb-bopen .lb-blurb-full { display:block; }
     .story-card:focus-visible .lb-card, .story-card.lb-open .lb-card { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
@@ -746,6 +754,27 @@
       card.appendChild(t);
       // v3.3.32 -- the subtitle under the title (Ian).
       if (item.subtitle) { var su = document.createElement('div'); su.className = 'sc-sub'; su.textContent = item.subtitle; card.appendChild(su); }
+      // v3.3.48 -- TD-1061. The blurb: up to its first line break, with "..." when there is more; the whole of it while
+      // that line is hovered, or after a tap on a phone (the tap does not open the story).
+      var bl = String(item.blurb || '').replace(/\r\n?/g, '\n').trim();
+      if (bl) {
+        var bw = document.createElement('div'); bw.className = 'lb-blurb';
+        var first = bl.split('\n')[0].trim(), more = bl.length > first.length || first.length > 70;
+        var bs = document.createElement('div'); bs.className = 'lb-blurb-short';
+        bs.textContent = first + (bl.length > first.length ? ' \u2026' : '');
+        bw.appendChild(bs);
+        if (more) {
+          bw.className += ' lb-more';
+          var bf = document.createElement('div'); bf.className = 'lb-blurb-full'; bf.textContent = bl;
+          bw.appendChild(bf);
+          bw.addEventListener('click', function (e) {
+            if (!_libTouch) return;
+            e.preventDefault(); e.stopPropagation();
+            bw.classList.toggle('lb-bopen');
+          });
+        }
+        card.appendChild(bw);
+      }
       if (item.created_at) {
         var d = document.createElement('div'); d.className = 'sc-date';
         try { d.textContent = 'Published ' + new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
