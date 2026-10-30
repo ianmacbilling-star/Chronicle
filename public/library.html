@@ -172,6 +172,20 @@
       box-shadow:3px 4px 10px rgba(0,0,0,0.7); }
     .lb-big img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
     .lb-big .lb-face-t { font-size:17px; }
+    /* v3.3.48 -- TD-1061. The blurb in the card (Ian): its first line and "...". The story page's text: the author's
+       blurb, else the teaser.
+       v3.3.49 -- the whole blurb opens only on a click of that line (Ian: the mouse often lands on it, and the card must
+       not grow), over the big cover in the same space, scrolling when long. Clicking it again, or the blurb itself,
+       brings the cover back; so does the card closing. */
+    .lb-blurb { display:flex; align-items:flex-end; gap:6px; font-family:'Crimson Text',serif; font-size:13px; line-height:1.35;
+      color:rgba(240,232,208,0.86); margin:0 0 7px; }
+    .lb-blurb-short { flex:1 1 auto; min-width:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .lb-blurb-more { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:0.03em; color:var(--gold); text-decoration:underline; cursor:pointer; }
+    .lb-blurb.lb-more { cursor:pointer; }
+    .lb-blurb-full { display:none; position:absolute; inset:0; z-index:2; padding:12px 12px 12px 18px; overflow-y:auto; cursor:pointer;
+      white-space:pre-line; font-family:'Crimson Text',serif; font-size:13px; line-height:1.4; color:rgba(240,232,208,0.92);
+      background:rgba(14,9,4,0.95); }
+    .lb-card.lb-bopen .lb-blurb-full { display:block; }
     .story-card:focus-visible .lb-card, .story-card.lb-open .lb-card { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
@@ -641,6 +655,7 @@
       if (bi && !bi.getAttribute('src') && bi.getAttribute('data-src')) bi.src = bi.getAttribute('data-src');
       // Measured from the book's slot, which does not rise on hover as the book does.
       var box = storiesEl.getBoundingClientRect(), r = (a.parentNode || a).getBoundingClientRect();
+      var sy = window.pageYOffset || document.documentElement.scrollTop || 0;
       var w = 238, cx = (r.left + r.right) / 2, left = cx - w / 2;
       left = Math.max(box.left + 4, Math.min(box.right - 4 - w, left));
       c.style.marginLeft = Math.round(left - cx) + 'px';
@@ -649,6 +664,9 @@
       var nav = document.querySelector('nav'), navB = 0;
       try { if (nav && /sticky|fixed/.test(getComputedStyle(nav).position)) navB = Math.max(0, nav.getBoundingClientRect().bottom); } catch (e) {}
       var top = r.height / 2 - c.offsetHeight, minTop = navB + 6 - (r.top - 8);   // an open book stands 8px up
+      // v3.3.49 -- its bottom just above where the pointer first came onto the book (Ian), kept in page terms so a
+      // scroll does not move it; halfway down the book when there is no such point (the keyboard).
+      if (a._lbY != null) top = (a._lbY - sy - 10 - c.offsetHeight) - (r.top - 8);
       c.style.top = Math.round(Math.max(top, minTop)) + 'px'; c.style.bottom = 'auto';
     }
     // On a phone there is no hover: the first tap opens the card, a second tap opens the story.
@@ -657,25 +675,35 @@
     function libOpenCard(a) {
       Array.prototype.forEach.call(storiesEl.querySelectorAll('.story-card.lb-open'), function (o) {
         if (o === a) return;
-        o.classList.remove('lb-open'); if (o.parentNode) o.parentNode.classList.remove('lb-on');
+        libShutCard(o);
       });
       if (!a) return;
       libPlaceCard(a);
       a.classList.add('lb-open'); if (a.parentNode) a.parentNode.classList.add('lb-on');
     }
+    // v3.3.49 -- a card that closes forgets its blurb and where it opened.
+    function libShutCard(o) {
+      o.classList.remove('lb-open'); if (o.parentNode) o.parentNode.classList.remove('lb-on');
+      var c = o.querySelector('.lb-card'); if (c) c.classList.remove('lb-bopen');
+      var m = o.querySelector('.lb-blurb-more'); if (m) m.textContent = 'more';
+      o._lbY = null;
+    }
     // With a mouse: open after it rests on a book a moment, close a moment after it leaves.
     var _libHoverT = null;
     function libHoverCard(a) {
-      a.addEventListener('mouseenter', function () {
+      a.addEventListener('mouseenter', function (e) {
         if (_libTouch) return;
         clearTimeout(_libHoverT); clearTimeout(a._lbClose);
-        if (!a.classList.contains('lb-open')) _libHoverT = setTimeout(function () { libOpenCard(a); }, 120);
+        if (!a.classList.contains('lb-open')) {
+          a._lbY = (e && e.clientY != null) ? e.clientY + (window.pageYOffset || document.documentElement.scrollTop || 0) : null;
+          _libHoverT = setTimeout(function () { libOpenCard(a); }, 120);
+        }
         else libPlaceCard(a);   // v3.3.46 -- still open (back within the moment): place it again, the page may have scrolled
       });
       a.addEventListener('mouseleave', function () {
         if (_libTouch) return;
         clearTimeout(_libHoverT);
-        a._lbClose = setTimeout(function () { a.classList.remove('lb-open'); if (a.parentNode) a.parentNode.classList.remove('lb-on'); }, 300);
+        a._lbClose = setTimeout(function () { libShutCard(a); }, 300);
       });
     }
     document.addEventListener('click', function (e) {
@@ -746,6 +774,33 @@
       card.appendChild(t);
       // v3.3.32 -- the subtitle under the title (Ian).
       if (item.subtitle) { var su = document.createElement('div'); su.className = 'sc-sub'; su.textContent = item.subtitle; card.appendChild(su); }
+      // v3.3.48 -- TD-1061. The blurb: up to its first line break, with "..." when there is more.
+      // v3.3.49 -- the whole of it on a click of that line ("more"), over the big cover; the card keeps its size.
+      // Neither click opens the story.
+      var bl = String(item.blurb || '').replace(/\r\n?/g, '\n').trim();
+      if (bl) {
+        var bw = document.createElement('div'); bw.className = 'lb-blurb';
+        var first = bl.split('\n')[0].trim(), more = bl.length > first.length || first.length > 70;
+        var bs = document.createElement('div'); bs.className = 'lb-blurb-short';
+        bs.textContent = first + (bl.length > first.length ? ' \u2026' : '');
+        bw.appendChild(bs);
+        if (more) {
+          bw.className += ' lb-more';
+          var bm = document.createElement('span'); bm.className = 'lb-blurb-more'; bm.textContent = 'more';
+          bw.appendChild(bm);
+          var bf = document.createElement('div'); bf.className = 'lb-blurb-full'; bf.textContent = bl;
+          big.appendChild(bf);
+          var flip = function (e) {
+            e.preventDefault(); e.stopPropagation();
+            var on = card.classList.toggle('lb-bopen');
+            bm.textContent = on ? 'less' : 'more';
+            if (on) bf.scrollTop = 0;
+          };
+          bw.addEventListener('click', flip);
+          bf.addEventListener('click', flip);
+        }
+        card.appendChild(bw);
+      }
       if (item.created_at) {
         var d = document.createElement('div'); d.className = 'sc-date';
         try { d.textContent = 'Published ' + new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
@@ -764,7 +819,9 @@
       a.addEventListener('focus', function () { libPlaceCard(a); });
       a.addEventListener('click', function (e) {
         if (!_libTouch || a.classList.contains('lb-open')) return;
-        e.preventDefault(); libOpenCard(a);
+        e.preventDefault();
+        a._lbY = (e.clientY != null) ? e.clientY + (window.pageYOffset || document.documentElement.scrollTop || 0) : null;   // v3.3.49
+        libOpenCard(a);
       });
       row.appendChild(a);
       libQueueShelves();   // v3.3.44
