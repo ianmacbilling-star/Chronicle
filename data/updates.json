@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.46",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3346-library-cover-card",
+        "kind": "feature",
+        "public": true,
+        "summary": "Hovering over a book in the Library now shows its whole cover, bigger.",
+        "detail": "Books standing with their spines out show their cover too. Near the top of the window the card slides down over the book instead of being cut off.",
+        "td": [
+          "TD-1059"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.45",
     "staged_on": "2026-10-30",
     "entries": [

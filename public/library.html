@@ -161,10 +161,17 @@
     /* The card above a hovered book. It opens when the mouse rests on a book (libHoverCard), so crossing other spines
        on the way to + Bookshelf does not swap cards; it stays a moment after the mouse leaves, and its bridge
        (::after) covers the gap down to the book. */
-    .lb-card { position:absolute; bottom:calc(100% + 12px); left:50%; width:230px; margin-left:-115px; z-index:7; text-align:left;
+    .lb-card { position:absolute; bottom:calc(100% + 12px); left:50%; width:238px; margin-left:-119px; z-index:7; text-align:left;
       background:#160e06; border:2px solid #c9a84c; border-radius:4px; padding:10px 12px 4px; box-shadow:0 8px 20px rgba(0,0,0,0.75);
       opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility 0s linear .18s; }
     .lb-card::after { content:''; position:absolute; left:0; right:0; top:100%; height:16px; }
+    /* v3.3.46 -- the whole cover, bigger than the book, at the top of the card -- spines too (Ian). Its picture loads
+       the first time the card opens. Near the top of the window the card slides down over the book it belongs to
+       (Ian: "the hover over could open up slightly over the book"), since it shows that book's cover anyway. */
+    .lb-big { position:relative; width:100%; aspect-ratio:17/22; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 0 9px;
+      box-shadow:3px 4px 10px rgba(0,0,0,0.7); }
+    .lb-big img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+    .lb-big .lb-face-t { font-size:17px; }
     .story-card:focus-visible .lb-card, .story-card.lb-open .lb-card { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
@@ -629,10 +636,17 @@
     // does not push it off the page.
     function libPlaceCard(a) {
       var c = a && a.querySelector('.lb-card'); if (!c) return;
-      var box = storiesEl.getBoundingClientRect(), r = a.getBoundingClientRect();
-      var w = 230, cx = (r.left + r.right) / 2, left = cx - w / 2;
+      // v3.3.46 -- the big cover's picture, the first time the card opens.
+      var bi = c.querySelector('.lb-big img');
+      if (bi && !bi.getAttribute('src') && bi.getAttribute('data-src')) bi.src = bi.getAttribute('data-src');
+      // Measured from the book's slot, which does not rise on hover as the book does.
+      var box = storiesEl.getBoundingClientRect(), r = (a.parentNode || a).getBoundingClientRect();
+      var w = 238, cx = (r.left + r.right) / 2, left = cx - w / 2;
       left = Math.max(box.left + 4, Math.min(box.right - 4 - w, left));
       c.style.marginLeft = Math.round(left - cx) + 'px';
+      // Above the book; with not enough room in the window, down over the book, its top 4px inside the window.
+      var top = -(c.offsetHeight + 12), minTop = 4 - (r.top - 8);   // an open book stands 8px up
+      c.style.top = Math.round(Math.max(top, minTop)) + 'px'; c.style.bottom = 'auto';
     }
     // On a phone there is no hover: the first tap opens the card, a second tap opens the story.
     var _libTouch = false;
@@ -653,6 +667,7 @@
         if (_libTouch) return;
         clearTimeout(_libHoverT); clearTimeout(a._lbClose);
         if (!a.classList.contains('lb-open')) _libHoverT = setTimeout(function () { libOpenCard(a); }, 120);
+        else libPlaceCard(a);   // v3.3.46 -- still open (back within the moment): place it again, the page may have scrolled
       });
       a.addEventListener('mouseleave', function () {
         if (_libTouch) return;
@@ -710,6 +725,20 @@
       a.appendChild(sp);
       // The card shown on hover: title, subtitle, published date, genres, and + Bookshelf (added by cmpShelfButton).
       var card = document.createElement('div'); card.className = 'lb-card';
+      // v3.3.46 -- the whole cover, bigger (Ian); leather and the title until (or unless) the picture arrives.
+      var big = document.createElement('div'); big.className = 'lb-big'; big.style.backgroundColor = leather;
+      var bt = document.createElement('span'); bt.className = 'lb-face-t'; bt.textContent = title; big.appendChild(bt);
+      if (item.cover_page_url || item.cover_url) {
+        var bimg = document.createElement('img'); bimg.alt = '';
+        bimg.setAttribute('data-src', item.cover_page_url || item.cover_url);
+        var _bfb = item.cover_url || '';
+        bimg.onerror = function () {
+          if (_bfb && bimg.getAttribute('data-fell') !== '1') { bimg.setAttribute('data-fell', '1'); bimg.src = _bfb; return; }
+          bimg.onerror = null; bimg.style.display = 'none';
+        };
+        big.appendChild(bimg);
+      }
+      card.appendChild(big);
       var t = document.createElement('div'); t.className = 'sc-title'; t.textContent = title;
       card.appendChild(t);
       // v3.3.32 -- the subtitle under the title (Ian).
