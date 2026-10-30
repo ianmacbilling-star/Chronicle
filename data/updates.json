@@ -1,5 +1,67 @@
 [
   {
+    "version": "3.3.47",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3347-library-campaign-order",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library now lists campaigns newest first.",
+        "detail": "When a new book is published, its whole campaign moves to the top of the Library, all its books together in the author's order. That author's other campaigns stay where their own newest book puts them. Publishing again over a book that is already in the Library does not move it. The card shown when you hover over a book now covers the top half of the book and never goes under the menu bar.",
+        "td": [
+          "TD-1060"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.46",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3346-library-cover-card",
+        "kind": "feature",
+        "public": true,
+        "summary": "Hovering over a book in the Library now shows its whole cover, bigger.",
+        "detail": "Books standing with their spines out show their cover too. Near the top of the window the card slides down over the book instead of being cut off.",
+        "td": [
+          "TD-1059"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.45",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3345-library-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's stories now look like books on a bookshelf.",
+        "detail": "Each story stands like a book on the Bookshelf, with its pen name on a brass plate on the shelf. A campaign of three or more books shows its first and last books face out and the ones between with their spines out. Hover over a book (tap once on a phone) to see its title, subtitle, date, genres and + Bookshelf. The author search now sits on the same row as Show everything.",
+        "td": [
+          "TD-1058"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.44",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3344-library-shelves",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's stories now stand on wooden shelves, pen names side by side.",
+        "detail": "Each pen name is written above its books, with a gap between pen names and a smaller one between campaigns. The + Bookshelf button is smaller and sits with the genre pills under the title instead of on the cover.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.43",
     "staged_on": "2026-10-29",
     "entries": [

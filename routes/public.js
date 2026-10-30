@@ -369,14 +369,15 @@ router.get('/stories', async function (req, res) {
     // absent from this directory and from the sitemap, and present everywhere a reader
     // who already holds the link needs it -- including the report form below, which is
     // deliberately still `public = TRUE` alone.
-    let sql = "SELECT id, campaign_id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, " + storyOrder.WINDOW_COLS + " FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
+    let sql = "SELECT id, campaign_id, author_name, title, cover_url, pdf_url, slug, genres, share_token, created_at, updated_at, snapshot->>'subtitle' AS snap_sub, snapshot->'campaign'->>'_memberSubtitle' AS camp_sub, " + storyOrder.LIBRARY_COLS + " FROM public_stories WHERE public = TRUE AND visibility = 'public'";   // v3.3.32 -- the subtitle the book was published with   // v3.3.30 -- updated_at, for the cover picture's address   // share_token v3.0.830 -- TD-675, so the grid can link canonically
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
     if (genres.length) sql += arrayOverlap('genres', genres, params);
     if (styles.length) sql += arrayOverlap('art_styles', styles, params);
     // v3.3.36 -- rows newest-author first, then each author's own order (services/storyOrder.js).
-    sql = storyOrder.wrap(sql, 'o_author DESC, o_key') + ' LIMIT ? OFFSET ?';
+    // v3.3.47 -- TD-1060: campaigns newest first, each campaign's books together in the author's order.
+    sql = storyOrder.libraryWrap(sql) + ' LIMIT ? OFFSET ?';
     params.push(limit + 1, offset);
     const stmt = db.prepare(sql);
     const rows = await stmt.all.apply(stmt, params);
