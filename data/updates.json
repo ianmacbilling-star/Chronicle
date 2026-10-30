@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.42",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3342-session-characters-parallel",
+        "kind": "fix",
+        "public": true,
+        "summary": "Session Characters tab: retouch several characters at once and approve each as it comes back.",
+        "detail": "Approving, discarding or cancelling one character used to close every other open edit and hide the retouches still running. Now only that character closes; the others keep their text, their spinner and their new picture when it arrives.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.41",
     "staged_on": "2026-10-29",
     "entries": [

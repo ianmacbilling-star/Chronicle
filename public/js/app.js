@@ -4359,6 +4359,20 @@ function renderSessionCharacters(rows) {
   var canEditPrompt = canAct;
   var list = document.getElementById('sc-list');
   if (!list) return;
+  // v3.3.42 -- OPEN EDIT PANELS SURVIVE A RE-RENDER (Ian: "once you approve one... you lose the running of all the others.
+  // So you have to do one at a time"). Approving one card reloaded the whole list, which threw away every other card's
+  // open Edit panel: its typed text, its retouch spinner, and the place its finished draft would land. The cards that
+  // are open are now kept AS THEY ARE (the same elements, so a retouch still running keeps its spinner, its message
+  // line and its button) and only the others are redrawn. A card closes only through scCloseReview.
+  // Only for the SAME session and version: a card left open on another session must never come back on this one.
+  var _scKey = String(state.currentSession && state.currentSession.id) + '|' + forkQ();
+  var _scKeep = {};
+  if (list.getAttribute('data-sc-key') === _scKey) {
+    Array.prototype.forEach.call(list.querySelectorAll('.sc-card'), function (c) {
+      if (c.id && c.querySelector('.sc-review, .char-prompt-editor')) _scKeep[c.id] = c;
+    });
+  }
+  list.setAttribute('data-sc-key', _scKey);
   list.innerHTML = rows.map(function(r) {
     var isNpc = (r.is_npc === true || r.is_npc === 1 || r.is_npc === '1');
     // Reference image is the preferred thumbnail.
@@ -4417,6 +4431,10 @@ function renderSessionCharacters(rows) {
         scStyleStripHtml(r) + '</div>' +
     '</div>';
   }).join('');
+  Object.keys(_scKeep).forEach(function (id) {   // v3.3.42 -- put the open cards back in their places
+    var fresh = document.getElementById(id);
+    if (fresh && fresh.parentNode === list) list.replaceChild(_scKeep[id], fresh);
+  });
   // Keep the rows available for the review screen.
   state.sessionCharacterRows = rows;
   // v3.0.816 -- TD-645. Paint the strips immediately from what we already
@@ -4778,6 +4796,14 @@ function applyStyledRetouch(charId) {
     });
 }
 
+// v3.3.42 -- close ONE card's Edit panel (or inline description editor) and redraw the list; every other open card is
+// kept as it is (renderSessionCharacters). Used by Approve, Discard, Save description and Cancel.
+function scCloseReview(charId) {
+  var c = document.getElementById('sc-card-' + charId);
+  if (c) Array.prototype.forEach.call(c.querySelectorAll('.sc-review, .char-prompt-editor'), function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+  loadSessionCharacters();
+}
+
 function startEditSnapshot(charId) {
   var card = document.getElementById('sc-card-' + charId);
   var promptEl = document.getElementById('sc-prompt-' + charId);
@@ -4787,7 +4813,7 @@ function startEditSnapshot(charId) {
     '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + current + '</textarea>' +
     '<div class="char-prompt-actions" id="sc-actions-' + charId + '">' +
       '<button class="btn btn-sm btn-primary" onclick="saveSnapshot(' + charId + ')">Save</button>' +
-      '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
+      '<button class="btn btn-sm" onclick="scCloseReview(' + charId + ')">Cancel</button>' +
     '</div>';
 }
 
@@ -4805,7 +4831,7 @@ function saveSnapshot(charId) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.success) {
-        loadSessionCharacters();
+        scCloseReview(charId);   // v3.3.42 -- only this card closes
       } else {
         ta.disabled = false;
         alert((data && data.error) || 'Could not save.');
@@ -4916,7 +4942,7 @@ function openChangeReview(charId) {
           'onclick="rejectChange(' + charId + ')" ' +
           'title="Discard this amendment and leave the character unchanged for this session">&#10005; ' +
           (isAccepted ? 'Un-approve' : 'Discard / Ignore') + '</button>' +
-        '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
+        '<button class="btn btn-sm" onclick="scCloseReview(' + charId + ')">Cancel</button>' +
       '</div>' +
     '</div>';
 }
@@ -5038,7 +5064,7 @@ function approveChange(charId) {
     .then(function(data) {
       if (data && data.success) {
         if (state.draftReference) delete state.draftReference[charId];
-        loadSessionCharacters();
+        scCloseReview(charId);   // v3.3.42 -- the others keep running
       } else {
         if (btn) { btn.disabled = false; }
         if (msg) msg.textContent = (data && data.error) || 'Could not approve.';
@@ -5067,7 +5093,7 @@ function rejectChange(charId) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.success) {
-        loadSessionCharacters();
+        scCloseReview(charId);   // v3.3.42
       } else {
         if (btn) { btn.disabled = false; }
         if (msg) msg.textContent = (data && data.error) || 'Could not reject.';
