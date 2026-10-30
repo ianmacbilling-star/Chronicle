@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.52",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3352-library-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's tabs are now called Gallery and Books.",
+        "detail": "Gallery holds the public pictures and Books the published stories. Links to the Library keep working. To test: both tabs switch as before, the Books search box and its empty messages say books, and the help assistant answers questions about the Library with the new names.",
+        "td": [
+          "TD-1065"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.51",
     "staged_on": "2026-10-30",
     "entries": [

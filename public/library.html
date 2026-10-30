@@ -252,9 +252,10 @@
     <div class="lib-sub">From tabletop campaigns to family stories — made by other Story Masters. Take a look at what's possible.</div>
   </header>
 
+  <!-- v3.3.52 -- TD-1065. The tabs read Gallery and Books (Ian); ids, switchTab values and addresses are unchanged. -->
   <div class="lib-tabs">
-    <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Images</button>
-    <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Stories</button>
+    <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Gallery</button>
+    <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Books</button>
     <!-- v3.3.01 -- TD-1037. The Artist Marketplace. Hidden by marketplace.css until the switch is on (or an admin is looking). -->
     <button class="tab-btn mkt-link" id="tab-market" onclick="switchTab('market')">The Guild</button>
   </div>
@@ -289,7 +290,7 @@
       <!-- v3.3.45 -- the author search moved up onto this row, beside Show everything (Ian). switchTab still shows it on
            the Stories tab only. -->
       <div class="lib-search" id="stories-search" style="display:none;">
-        <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
+        <input type="text" id="stories-q" placeholder="Search books by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
       </div>
     </div>
   </div>
@@ -841,11 +842,11 @@
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
-          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (anyFilter() ? 'No stories match those filters yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
+          setStatus(sstate.any ? '' : (sstate.q ? 'No books found for that name.' : (anyFilter() ? 'No books match those filters yet.' : 'No books have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
         } else { setStatus(''); }
       }).catch(function () {
         sstate.loading = false;
-        setStatus('Could not load stories right now. Please try again later.');
+        setStatus('Could not load books right now. Please try again later.');
       });
     }
 
