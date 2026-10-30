@@ -551,6 +551,10 @@ async function initPostgres() {
     // thumb_pdf is the pdf_url it was drawn from, so a Replace (a new PDF) draws a fresh one.
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_url TEXT',
     'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS thumb_pdf TEXT',
+    // v3.3.36 -- the order an author sets on My Stuff > Published Stories (services/storyOrder.js): the campaign
+    // group's place in their Library row, and the story's place in its group. NULL = not placed yet.
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS camp_pos INTEGER',
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS story_pos INTEGER',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // v3.1.66 -- TD-964. The questions: the 18 answers (JSON), up to three options, each
     // { text, edited, previews: { closeup, outdoors, group } } (JSON), and which one won (0-2, or null).

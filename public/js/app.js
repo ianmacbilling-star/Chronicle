@@ -2279,17 +2279,21 @@ function loadMyStories() {
   var list = document.getElementById('my-stories-list');
   var empty = document.getElementById('my-stories-empty');
   if (!list) return;
+  var seq = ++_msSeq;   // v3.3.36 -- only the newest answer is painted
   list.innerHTML = '';
   if (empty) empty.style.display = 'none';
   fetch('/api/pdf/my-stories')
     .then(function(r){ return r.json(); })
     .then(function(d){
+      if (seq !== _msSeq) return;
       var items = (d && d.items) || [];
       if (!items.length) { if (empty) empty.style.display = 'block'; return; }
-      items.forEach(function(it){ list.appendChild(myStoryCard(it)); });
+      // v3.3.36 -- grouped by pen name, then by campaign, in the order the author set (myStoriesPaint).
+      _msData = { items: items, pens: (d && d.pen_names) || [], current: (d && d.current_pen) || '' };
+      myStoriesPaint();
       myStoryShelfStatus(items);   // v3.3.31
     })
-    .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
+    .catch(function(){ if (seq !== _msSeq) return; if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
 }
 
 // v3.0.829 -- TD-673. ONE URL BUILDER, USED BY EVERY SHARE AFFORDANCE ON THIS CARD.
@@ -2504,15 +2508,211 @@ function myStoryShelfAdd(it, pill) {
     .catch(function () { myStoryShelfPaint(pill, false); billingToast('Could not add it to your Bookshelf.', 'error'); });
 }
 
+// v3.3.36 -- MY PUBLISHED STORIES, GROUPED AND IN ORDER (Ian, 2026-10-29: "I published them out of order. And need to get
+// them in order... group them by Pen Name and by Campaign... You should also be able to drag all the stories of a
+// campaign to a different Pen Name... You should not be able to separate stories from their Campaign without a
+// warning. And yes a warning if the Pen Name in the book doesn't match the Pen Name you publish under.")
+//   * One section per pen name (the current one first), one group per campaign inside it, cards in the order the
+//     Library shows them, left to right (services/storyOrder.js decides both lists).
+//   * Drag a card within its campaign, or press its arrows; drag a campaign's heading, or press its arrows, to move the
+//     group within the pen name. Each change saves the whole pen name at once (POST /api/pdf/my-stories/order).
+//   * Drag a heading onto another pen name, or use its Move to list, to file the whole campaign there; a single card the
+//     same way, after a warning that it leaves the rest of its campaign. Moving to a name the book does not print asks
+//     first too: the copyright line inside the PDF keeps the name it was published with.
+// Names are prefixed ms* / _ms* (checked unused in this file).
+var _msData = null, _msSeq = 0, _msDrag = null, _msBusy = false;
+function _msKey(n) { return String(n == null ? '' : n).trim().toLowerCase(); }
+function _msPens() {   // [{ name, groups: [{ camp, name, items: [...] }] }] from _msData.items, keeping their order
+  var out = [], byPen = {};
+  (_msData ? _msData.items : []).forEach(function (it) {
+    var pk = _msKey(it.author);
+    var pen = byPen[pk];
+    if (!pen) { pen = byPen[pk] = { name: String(it.author || '').trim(), key: pk, groups: [], byCamp: {} }; out.push(pen); }
+    var ck = String(it.campaign_id);
+    var g = pen.byCamp[ck];
+    if (!g) { g = pen.byCamp[ck] = { camp: ck, name: it.campaign_name || 'Untitled campaign', items: [] }; pen.groups.push(g); }
+    g.items.push(it);
+  });
+  var cur = _msKey(_msData && _msData.current);
+  out.sort(function (a, b) { return (a.key === cur ? 0 : 1) - (b.key === cur ? 0 : 1); });   // stable: the rest keep their order
+  return out;
+}
+function _msSetItems(pens) {   // write the sections back into _msData.items in their new order
+  var items = [];
+  pens.forEach(function (p) { p.groups.forEach(function (g) { g.items.forEach(function (it) { items.push(it); }); }); });
+  _msData.items = items;
+}
+function _msBtn(label, title, fn, disabled) {
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ms-arrow'; b.textContent = label; b.title = title;
+  b.style.cssText = 'font-size:11px;padding:1px 7px;min-width:0;line-height:1.4;';
+  if (disabled) b.disabled = true; else b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); fn(); };
+  return b;
+}
+function _msMoveSelect(current, onPick, label) {
+  var others = ((_msData && _msData.pens) || []).filter(function (n) { return _msKey(n) !== _msKey(current); });
+  if (!others.length) return null;
+  var sel = document.createElement('select'); sel.className = 'ms-move';
+  sel.title = label;
+  sel.style.cssText = 'font-size:11px;max-width:150px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:2px 4px;';
+  var o0 = document.createElement('option'); o0.value = ''; o0.textContent = label; sel.appendChild(o0);
+  others.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+  sel.onchange = function () { var v = sel.value; sel.value = ''; if (v) onPick(v); };
+  return sel;
+}
+function myStoriesPaint() {
+  var list = document.getElementById('my-stories-list');
+  if (!list || !_msData) return;
+  list.innerHTML = '';
+  var pens = _msPens();
+  pens.forEach(function (pen) {
+    var sec = document.createElement('div'); sec.className = 'ms-pen'; sec.setAttribute('data-pen', pen.name);
+    sec.style.cssText = 'margin:14px 0 6px;padding:10px 12px;border-radius:10px;background:rgba(12,7,3,0.55);border:1px solid rgba(201,168,76,0.22);';
+    var h = document.createElement('div'); h.className = 'ms-pen-name';
+    h.style.cssText = "font-family:'Cinzel',serif;color:#e8cf7a;font-size:15px;margin-bottom:6px;";
+    h.textContent = (pen.name || 'No pen name') + (pen.key === _msKey(_msData.current) ? '  (your pen name)' : '');
+    sec.appendChild(h);
+    pen.groups.forEach(function (g, gi) {
+      var grp = document.createElement('div'); grp.className = 'ms-camp'; grp.setAttribute('data-camp', g.camp);
+      grp.style.cssText = 'margin:8px 0 4px;';
+      var gh = document.createElement('div'); gh.className = 'ms-camp-head'; gh.draggable = true;
+      gh.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 6px;border-radius:6px;background:rgba(201,168,76,0.08);cursor:grab;';
+      var grip = document.createElement('span'); grip.textContent = '\u2630'; grip.title = 'Drag to move this campaign'; grip.style.cssText = 'color:rgba(201,168,76,0.7);font-size:13px;';
+      var gn = document.createElement('span'); gn.textContent = g.name + ' (' + g.items.length + ')';
+      gn.style.cssText = 'color:rgba(240,232,208,0.92);font-size:13px;font-weight:600;flex:1 1 auto;min-width:120px;';
+      gh.appendChild(grip); gh.appendChild(gn);
+      gh.appendChild(_msBtn('\u2191', 'Move this campaign up', function () { myStoriesMoveGroup(pen.key, gi, gi - 1); }, gi === 0));
+      gh.appendChild(_msBtn('\u2193', 'Move this campaign down', function () { myStoriesMoveGroup(pen.key, gi, gi + 1); }, gi === pen.groups.length - 1));
+      var gs = _msMoveSelect(pen.name, function (to) { myStoriesMoveTo(g.items, to, false); }, 'Move campaign to\u2026');
+      if (gs) gh.appendChild(gs);
+      gh.addEventListener('dragstart', function (e) { _msDrag = { kind: 'camp', pen: pen.key, gi: gi }; try { e.dataTransfer.setData('text/plain', 'camp'); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
+      gh.addEventListener('dragover', function (e) { if (_msDrag) e.preventDefault(); });
+      gh.addEventListener('drop', function (e) { e.preventDefault(); e.stopPropagation(); _msDropOnGroup(pen, gi, e, gh); });
+      grp.appendChild(gh);
+      var grid = document.createElement('div'); grid.className = 'ms-grid';
+      grid.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;';
+      g.items.forEach(function (it, si) {
+        var card = myStoryCard(it);
+        card.draggable = true; card.setAttribute('data-ms-story', String(it.id));
+        var bar = document.createElement('div');
+        bar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:5px 6px;background:rgba(0,0,0,0.35);cursor:grab;flex-wrap:wrap;';
+        bar.title = 'Drag to change the order';
+        bar.appendChild(_msBtn('\u2190', 'Move earlier', function () { myStoriesMoveStory(pen.key, gi, si, si - 1); }, si === 0));
+        bar.appendChild(_msBtn('\u2192', 'Move later', function () { myStoriesMoveStory(pen.key, gi, si, si + 1); }, si === g.items.length - 1));
+        var pos = document.createElement('span'); pos.textContent = (si + 1) + ' of ' + g.items.length; pos.style.cssText = 'font-size:10px;color:rgba(240,232,208,0.6);flex:1 1 auto;';
+        bar.appendChild(pos);
+        var cs = _msMoveSelect(pen.name, function (to) { myStoriesMoveTo([it], to, true); }, 'Move to\u2026');
+        if (cs) bar.appendChild(cs);
+        card.insertBefore(bar, card.firstChild);
+        // The pen name printed inside the book, when it is not the one this story is listed under.
+        if (it.printed_name && _msKey(it.printed_name) !== _msKey(it.author)) {
+          var pn = document.createElement('div'); pn.className = 'ms-printed';
+          pn.style.cssText = 'font-size:10px;line-height:1.35;color:#e8a85a;padding:0 8px 6px;';
+          pn.textContent = 'The book itself says \u00a9 ' + it.printed_name + '. Publish it again with Replace to change that.';
+          card.appendChild(pn);
+        }
+        card.addEventListener('dragstart', function (e) { _msDrag = { kind: 'story', pen: pen.key, gi: gi, si: si }; try { e.dataTransfer.setData('text/plain', 'story'); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
+        card.addEventListener('dragover', function (e) { if (_msDrag) e.preventDefault(); });
+        card.addEventListener('drop', function (e) { e.preventDefault(); e.stopPropagation(); _msDropOnCard(pen, gi, si, e, card); });
+        grid.appendChild(card);
+      });
+      grid.addEventListener('dragover', function (e) { if (_msDrag) e.preventDefault(); });
+      grid.addEventListener('drop', function (e) { e.preventDefault(); e.stopPropagation(); _msDropOnGroup(pen, gi, e, gh); });
+      grp.appendChild(grid);
+      sec.appendChild(grp);
+    });
+    sec.addEventListener('dragover', function (e) { if (_msDrag) e.preventDefault(); });
+    sec.addEventListener('drop', function (e) { e.preventDefault(); _msDropOnPen(pen); });
+    list.appendChild(sec);
+  });
+  document.addEventListener('dragend', function () { _msDrag = null; }, { once: true });
+}
+function _msAfter(e, el, vertical) {   // dropped on the later half of el?
+  try { var r = el.getBoundingClientRect(); return vertical ? (e.clientY > r.top + r.height / 2) : (e.clientX > r.left + r.width / 2); } catch (x) { return false; }
+}
+function _msDropOnCard(pen, gi, si, e, card) {
+  var d = _msDrag; _msDrag = null; if (!d) return;
+  if (d.kind === 'camp') { _msDropCamp(d, pen, gi, e, card); return; }
+  if (d.pen !== pen.key) { var src = _msPens().filter(function (p) { return p.key === d.pen; })[0]; if (src) myStoriesMoveTo([src.groups[d.gi].items[d.si]], pen.name, true); return; }
+  if (d.gi !== gi) { billingToast('A story stays with its campaign. To move a whole campaign, drag its heading.', 'error'); return; }
+  var to = si + (_msAfter(e, card, false) ? 1 : 0);
+  if (to > d.si) to -= 1;
+  myStoriesMoveStory(pen.key, gi, d.si, to);
+}
+function _msDropOnGroup(pen, gi, e, head) {
+  var d = _msDrag; _msDrag = null; if (!d) return;
+  if (d.kind === 'camp') { _msDropCamp(d, pen, gi, e, head); return; }
+  if (d.pen !== pen.key) { var src = _msPens().filter(function (p) { return p.key === d.pen; })[0]; if (src) myStoriesMoveTo([src.groups[d.gi].items[d.si]], pen.name, true); return; }
+  if (d.gi !== gi) billingToast('A story stays with its campaign. To move a whole campaign, drag its heading.', 'error');
+}
+function _msDropCamp(d, pen, gi, e, el) {
+  if (d.pen !== pen.key) { var src = _msPens().filter(function (p) { return p.key === d.pen; })[0]; if (src) myStoriesMoveTo(src.groups[d.gi].items, pen.name, false); return; }
+  var to = gi + (_msAfter(e, el, true) ? 1 : 0);
+  if (to > d.gi) to -= 1;
+  myStoriesMoveGroup(pen.key, d.gi, to);
+}
+function _msDropOnPen(pen) {
+  var d = _msDrag; _msDrag = null; if (!d || d.pen === pen.key) return;
+  var src = _msPens().filter(function (p) { return p.key === d.pen; })[0]; if (!src) return;
+  if (d.kind === 'camp') myStoriesMoveTo(src.groups[d.gi].items, pen.name, false);
+  else myStoriesMoveTo([src.groups[d.gi].items[d.si]], pen.name, true);
+}
+function myStoriesMoveStory(penKey, gi, from, to) {
+  var pens = _msPens(), pen = pens.filter(function (p) { return p.key === penKey; })[0];
+  if (!pen || !pen.groups[gi]) return;
+  var arr = pen.groups[gi].items;
+  if (to < 0 || to >= arr.length || to === from) return;
+  arr.splice(to, 0, arr.splice(from, 1)[0]);
+  _msSetItems(pens); myStoriesPaint(); myStoriesSaveOrder(pen);
+}
+function myStoriesMoveGroup(penKey, from, to) {
+  var pens = _msPens(), pen = pens.filter(function (p) { return p.key === penKey; })[0];
+  if (!pen || to < 0 || to >= pen.groups.length || to === from) return;
+  pen.groups.splice(to, 0, pen.groups.splice(from, 1)[0]);
+  _msSetItems(pens); myStoriesPaint(); myStoriesSaveOrder(pen);
+}
+function myStoriesSaveOrder(pen) {
+  var groups = pen.groups.map(function (g) { return g.items.map(function (it) { return it.id; }); });
+  fetch('/api/pdf/my-stories/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pen: pen.name, groups: groups }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (!res.ok || !res.j || !res.j.ok) { billingToast((res.j && res.j.error) || 'Could not save the order.', 'error'); loadMyStories(); } })
+    .catch(function () { billingToast('Could not save the order.', 'error'); loadMyStories(); });
+}
+async function myStoriesMoveTo(stories, to, single) {
+  if (_msBusy || !stories || !stories.length) return;
+  var lines = [];
+  if (single) {
+    var it = stories[0];
+    var rest = (_msData.items || []).filter(function (x) { return x.id !== it.id && String(x.campaign_id) === String(it.campaign_id) && _msKey(x.author) === _msKey(it.author); }).length;
+    if (rest) lines.push('\u201c' + (it.title || 'Untitled') + '\u201d is part of ' + (it.campaign_name || 'its campaign') + '. Its other ' + (rest === 1 ? 'story stays' : rest + ' stories stay') + ' under ' + (it.author || 'its pen name') + ', so this campaign will be split across two pen names in the Library.');
+  }
+  var printed = stories.filter(function (x) { return x.printed_name && _msKey(x.printed_name) !== _msKey(to); });
+  if (printed.length) {
+    var names = printed.map(function (x) { return x.printed_name; }).filter(function (n, i, a) { return a.indexOf(n) === i; });
+    lines.push((printed.length === 1 ? 'The book itself says' : printed.length + ' of these books say') + ' \u00a9 ' + names.join(', ') + ', not ' + to + '. The Library will list ' + (printed.length === 1 ? 'it' : 'them') + ' under ' + to + ', but what is printed inside only changes if you publish ' + (printed.length === 1 ? 'it' : 'them') + ' again with Replace.');
+  }
+  var title = single ? 'Move \u201c' + (stories[0].title || 'Untitled') + '\u201d to ' + to + '?' : 'Move ' + (stories[0].campaign_name || 'this campaign') + ' to ' + to + '?';
+  var ok = await uiConfirm(lines.length ? lines.join('\n\n') : 'It will be listed under ' + to + ' in the Library.', { title: title, preserveLines: true, okText: single ? 'Move just this one' : 'Move it', cancelText: 'Cancel' });
+  if (ok !== true) return;
+  _msBusy = true;
+  fetch('/api/pdf/my-stories/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: stories.map(function (x) { return x.id; }), to: to }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      _msBusy = false;
+      if (res.ok && res.j && res.j.ok) billingToast('Moved to ' + (res.j.to || to) + '.', 'success');
+      else billingToast((res.j && res.j.error) || 'Could not move it.', 'error');
+      loadMyStories();
+    })
+    .catch(function () { _msBusy = false; billingToast('Could not move it.', 'error'); loadMyStories(); });
+}
+
 function removeMyStory(storyId, card, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
   fetch('/api/pdf/story/' + storyId + '/unpublish', { method: 'POST' })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d && d.success) {
-        if (card && card.parentNode) card.parentNode.removeChild(card);
-        var list = document.getElementById('my-stories-list'); var empty = document.getElementById('my-stories-empty');
-        if (list && !list.children.length && empty) empty.style.display = 'block';
+        // v3.3.36 -- the list is grouped now, so it is drawn again rather than one card taken out of it.
+        loadMyStories();
       } else {
         if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; }
         billingToast((d && d.error) || 'Could not remove.', 'error');

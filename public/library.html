@@ -524,7 +524,7 @@
     function loadStories() {
       if (sstate.loading || sstate.done) return;
       sstate.loading = true; spinner();
-      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + filterQS() + (sstate.cursor ? '&offset=' + sstate.cursor : '');   // v3.3.36 -- a position, not an id
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];

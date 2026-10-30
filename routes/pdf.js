@@ -31,6 +31,7 @@ const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { logDebug } = require('./debug');
 const rightsCheck = require('../services/rightsCheck');   // v3.1.92 -- TD-979, a rejected picture is never drawn
+const storyOrder = require('../services/storyOrder');   // v3.3.36 -- the order authors set for their stories
 
 // Count pages in a rendered PDF buffer. Prefers pdf-lib (exact); if that module
 // is unavailable or throws, falls back to a structural scan of the PDF bytes
@@ -8690,6 +8691,25 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 
 // The caller's own published Stories, across all campaigns -- the durable place
 // to manage them even after they lose access to a campaign.
+// v3.3.36 -- the pen names an account may file its stories under on My Stuff: every name it has published under
+// (still published) and its current pen name. Never a free-typed one, so nobody can list work under someone else's name.
+async function myPenNames(db, uid) {
+  var names = [], seen = {};
+  function add(n) { n = String(n == null ? '' : n).trim(); var k = n.toLowerCase(); if (!n || seen[k]) return; seen[k] = true; names.push(n); }
+  var cur = '';
+  try { var u = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(uid); cur = (u && u.pen_name) ? String(u.pen_name).trim() : ''; } catch (e) {}
+  add(cur);
+  var rs = await db.prepare("SELECT DISTINCT btrim(author_name) AS n FROM public_stories WHERE user_id = ? AND public = TRUE AND btrim(coalesce(author_name, '')) <> ''").all(uid);
+  (rs || []).map(function (r) { return r.n; }).sort(function (a, b) { return String(a).toLowerCase() < String(b).toLowerCase() ? -1 : 1; }).forEach(add);
+  return { current: cur, names: names };
+}
+function idList(v, max) {
+  if (!Array.isArray(v) || !v.length || v.length > max) return null;
+  var out = [];
+  for (var i = 0; i < v.length; i++) { var n = Number(v[i]); if (!Number.isInteger(n) || n <= 0 || out.indexOf(n) !== -1) return null; out.push(n); }
+  return out;
+}
+
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
@@ -8697,12 +8717,85 @@ router.get('/my-stories', requireAuth, async function(req, res) {
     // must see their own unlisted stories or they lose sight of their own books, which is
     // the failure nobody thinks to test. visibility and share_token ride along so the
     // page can badge the state and offer the link that actually works for it.
-    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: rightsCheck.maskUrl(r.cover_url || ''), pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at }; });
-    return res.json({ items: items });
+    // v3.3.36 -- in the order the author set (services/storyOrder.js), with each story's campaign name and the pen name
+    // printed inside the book (the details page's copyright line: the campaign owner's pen name when it was made).
+    var rows = await db.prepare(storyOrder.wrap("SELECT id, campaign_id, user_id, title, author_name, cover_url, pdf_url, slug, blurb, visibility, share_token, safety_level, created_at, updated_at, camp_pos, story_pos, " +
+      "(SELECT c.name FROM campaigns c WHERE c.id = public_stories.campaign_id) AS campaign_name, snapshot->'campaign'->>'name' AS snap_camp, snapshot->'campaign'->>'owner_pen_name' AS printed_name, " +
+      storyOrder.WINDOW_COLS + " FROM public_stories WHERE user_id = ? AND public = TRUE", 'o_key')).all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: rightsCheck.maskUrl(r.cover_url || ''), pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at,
+      campaign_name: String(r.campaign_name || r.snap_camp || '').trim() || 'Untitled campaign', printed_name: String(r.printed_name || '').trim() }; });   // v3.3.36
+    var pens = await myPenNames(db, req.session.userId);   // v3.3.36
+    return res.json({ items: items, pen_names: pens.names, current_pen: pens.current });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not load your stories.' });
+  }
+});
+
+// v3.3.36 -- SAVE THE ORDER OF ONE PEN NAME'S STORIES. body { pen, groups: [[storyId, ...], ...] }: the campaign groups in
+// order, each with its stories in order -- the whole pen name, every time, so a page that is out of date is refused
+// rather than half-applied. Each group is one campaign and each campaign one group: a story never leaves its campaign.
+router.post('/my-stories/order', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var uid = req.session.userId, b = req.body || {};
+    var pen = String(b.pen == null ? '' : b.pen).trim().toLowerCase();
+    var groups = Array.isArray(b.groups) ? b.groups : null;
+    if (!groups || !groups.length || groups.length > 200) return res.status(400).json({ error: 'Nothing to order.' });
+    var flat = [];
+    for (var g = 0; g < groups.length; g++) { if (!Array.isArray(groups[g]) || !groups[g].length) return res.status(400).json({ error: 'Nothing to order.' }); flat = flat.concat(groups[g]); }
+    var ids = idList(flat, 1000);
+    if (!ids) return res.status(400).json({ error: 'Nothing to order.' });
+    var mine = await db.prepare("SELECT id, campaign_id FROM public_stories WHERE user_id = ? AND public = TRUE AND lower(btrim(coalesce(author_name, ''))) = ?").all(uid, pen);
+    var camp = {};
+    (mine || []).forEach(function (r) { camp[r.id] = String(r.campaign_id); });
+    if ((mine || []).length !== ids.length || !ids.every(function (id) { return camp[id] !== undefined; })) {
+      return res.status(409).json({ code: 'stale', error: 'Your stories changed since this page was opened. It has been refreshed; please try again.' });
+    }
+    var seenCamp = {};
+    for (var gi = 0; gi < groups.length; gi++) {
+      var c0 = camp[Number(groups[gi][0])];
+      if (seenCamp[c0] || !groups[gi].every(function (x) { return camp[Number(x)] === c0; })) {
+        return res.status(400).json({ code: 'campaign', error: 'A story stays with its campaign. Move the whole campaign instead.' });
+      }
+      seenCamp[c0] = true;
+    }
+    for (var gj = 0; gj < groups.length; gj++) {
+      for (var si = 0; si < groups[gj].length; si++) {
+        await db.prepare('UPDATE public_stories SET camp_pos = ?, story_pos = ? WHERE id = ? AND user_id = ?').run(gj, si, Number(groups[gj][si]), uid);
+      }
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[my-stories/order] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not save the order.' });
+  }
+});
+
+// v3.3.36 -- FILE STORIES UNDER ANOTHER OF YOUR PEN NAMES. body { ids: [storyId, ...], to }. Only a name this account has
+// published under, or its current pen name (myPenNames). The Library card, row and story page follow at once; the
+// copyright line printed inside the book does not (the page warns before it gets here). A moved story goes to the end
+// of its campaign group under the new name, or starts a new group at the front of that row.
+router.post('/my-stories/move', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var uid = req.session.userId, b = req.body || {};
+    var ids = idList(b.ids, 500);
+    if (!ids) return res.status(400).json({ error: 'Which stories?' });
+    var want = String(b.to == null ? '' : b.to).trim().toLowerCase();
+    var pens = await myPenNames(db, uid);
+    var to = pens.names.filter(function (n) { return n.toLowerCase() === want; })[0];
+    if (!to) return res.status(400).json({ code: 'not_your_pen_name', error: 'You can only move stories to a pen name you have published under, or to your current pen name (set on My Account).' });
+    var marks = ids.map(function () { return '?'; }).join(', ');
+    var found = await db.prepare('SELECT id FROM public_stories WHERE user_id = ? AND public = TRUE AND id IN (' + marks + ')').all([uid].concat(ids));
+    if ((found || []).length !== ids.length) return res.status(404).json({ code: 'stale', error: 'Some of those stories are no longer yours to move. The page has been refreshed.' });
+    await db.prepare('UPDATE public_stories SET author_name = ?, camp_pos = NULL, story_pos = NULL WHERE user_id = ? AND id IN (' + marks + ')').run([to, uid].concat(ids));
+    // Library books on Bookshelves show the author too (the same refresh a Replace does).
+    try { await db.prepare("UPDATE bookshelf_books SET campaign_name = ? WHERE kind = 'library' AND public_story_id IN (" + marks + ')').run([to].concat(ids)); } catch (e2) { console.error('[my-stories/move] bookshelf refresh failed: ' + ((e2 && e2.message) || e2)); }
+    return res.json({ ok: true, to: to });
+  } catch (e) {
+    console.error('[my-stories/move] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not move those stories.' });
   }
 });
 

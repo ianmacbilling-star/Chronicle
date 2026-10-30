@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.36",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3336-story-order",
+        "kind": "feature",
+        "public": true,
+        "summary": "Put your published stories in order: My Stuff, Published Stories, grouped by pen name and campaign.",
+        "detail": "Drag a book (or use its arrows) to move it within its campaign, or drag a campaign to move it as a whole. The Library shows your books in that order, left to right. A campaign, or a single book, can also be moved to another of your pen names.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.35",
     "staged_on": "2026-10-29",
     "entries": [
