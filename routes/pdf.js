@@ -8724,7 +8724,9 @@ router.get('/my-stories', requireAuth, async function(req, res) {
       storyOrder.WINDOW_COLS + " FROM public_stories WHERE user_id = ? AND public = TRUE", 'o_key')).all(req.session.userId);   // safety_level v3.0.832 -- TD-667, so the card knows whether to warn
     var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: rightsCheck.maskUrl(r.cover_url || ''), pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', visibility: r.visibility || 'public', share_token: r.share_token || '', safety_level: r.safety_level || 'standard', created_at: r.created_at,
       campaign_name: String(r.campaign_name || r.snap_camp || '').trim() || 'Untitled campaign', printed_name: String(r.printed_name || '').trim(),
-      subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim() }; });   // v3.3.36; subtitle v3.3.38 (the Library's rule, public.js /stories)
+      subtitle: String((r.snap_sub != null ? r.snap_sub : r.camp_sub) || '').trim(),
+      // v3.3.39 -- the book's own cover page, title and all: the same saved picture the Library shows (public.js story-cover).
+      cover_page_url: require('./public').storyCoverPath(r) }; });   // v3.3.36; subtitle v3.3.38 (the Library's rule, public.js /stories)
     var pens = await myPenNames(db, req.session.userId);   // v3.3.36
     return res.json({ items: items, pen_names: pens.names, current_pen: pens.current });
   } catch (e) {

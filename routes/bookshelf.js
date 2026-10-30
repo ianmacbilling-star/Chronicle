@@ -759,7 +759,24 @@ function makeHandlers(d) {
 // (services/printing/flattenPdf.js, GHOSTSCRIPT_PATH or gs). 72 dpi: a letter page comes out about
 // 612 by 792, sharp enough for the shelf and the open book without being heavy. Works in a private
 // temp folder that is always removed.
+// v3.3.39 -- AT MOST TWO AT A TIME, server-wide (Ian agreed). The Library, each story's page, My Stuff > Published Stories
+// and the Bookshelf all draw their covers through this one function, the first time each is seen. A page showing many
+// never-drawn books would otherwise start a Ghostscript run for every one of them at once; the rest now wait their turn
+// (first come, first served) and each is still drawn once and saved, as before.
+var _drawFree = 2, _drawWaiting = [];
 function renderFirstPageJpeg(buf) {
+  return new Promise(function (resolve, reject) {
+    function release() { _drawFree++; var next = _drawWaiting.shift(); if (next) next(); }
+    function run() {
+      _drawFree--;
+      var p;
+      try { p = _drawFirstPage(buf); } catch (e) { p = Promise.reject(e); }
+      p.then(function (v) { release(); resolve(v); }, function (e) { release(); reject(e); });
+    }
+    if (_drawFree > 0) run(); else _drawWaiting.push(run);
+  });
+}
+function _drawFirstPage(buf) {
   var fs = require('fs'), os = require('os'), path = require('path'), cp = require('child_process');
   return new Promise(function (resolve, reject) {
     var dir = null;
