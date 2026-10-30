@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.43",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3343-archive-member-assets",
+        "kind": "fix",
+        "public": true,
+        "summary": "Members who may add assets now get + Assets on the Archive pictures too.",
+        "detail": "It showed for the Story Master only, though the campaign setting lets members add assets.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.42",
     "staged_on": "2026-10-29",
     "entries": [
