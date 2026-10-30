@@ -2322,10 +2322,21 @@ function myStoryCard(it) {
   var a = document.createElement('a');
   a.href = storyShareUrl(it); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
-  if (it.cover_url) {
+  if (it.cover_page_url || it.cover_url) {
     var img = document.createElement('img');
-    img.setAttribute('loading', 'lazy'); img.src = it.cover_url; img.alt = it.title || 'story';
+    img.setAttribute('loading', 'lazy'); img.alt = it.title || 'story';
     img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:#160e06;';
+    // v3.3.39 -- the book's own cover page, title and all, as the Library shows it (Ian). If it cannot be drawn, the
+    // cover picture as before; if that fails too, the title placeholder.
+    var _fbCover = it.cover_url || '';
+    img.onerror = function () {
+      if (_fbCover && img.getAttribute('data-fell') !== '1' && img.src.indexOf(_fbCover) < 0) { img.setAttribute('data-fell', '1'); img.src = _fbCover; return; }
+      img.onerror = null;
+      var ph0 = document.createElement('div'); ph0.textContent = it.title || 'Untitled';
+      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+      if (img.parentNode) img.parentNode.replaceChild(ph0, img);
+    };
+    img.src = it.cover_page_url || it.cover_url;
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
@@ -2337,11 +2348,12 @@ function myStoryCard(it) {
   meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
   meta.textContent = it.title || 'Untitled';
   card.appendChild(meta);
-  var dateLine = document.createElement('div');
-  var _dt = it.created_at ? new Date(it.created_at) : null;
-  dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';
-  dateLine.style.cssText = 'font-size:10px;color:rgba(201,168,76,0.5);padding:0 8px 4px;';
-  card.appendChild(dateLine);
+  // v3.3.38 -- the subtitle under the title, as on the Library card: the one the book was published with, two lines at most.
+  if (it.subtitle) {
+    var subEl = document.createElement('div'); subEl.className = 'ms-subtitle'; subEl.textContent = it.subtitle; subEl.title = it.subtitle;
+    subEl.style.cssText = 'font-size:11px;font-style:italic;color:rgba(240,232,208,0.72);padding:0 8px;margin:-3px 0 4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;';
+    card.appendChild(subEl);
+  }
   var blWrap = document.createElement('div');
   blWrap.style.cssText = 'padding:0 8px 8px;';
   var blView = document.createElement('div');
@@ -2465,6 +2477,14 @@ function myStoryCard(it) {
       .then(function (ok) { if (ok) removeMyStory(it.id, card, btn); });
   };
   card.appendChild(btn);
+  // v3.3.39 -- the published date at the bottom of the card, under Remove from Library (Ian; it sat between the title and
+  // the subtitle).
+  var dateLine = document.createElement('div');
+  var _dt = it.created_at ? new Date(it.created_at) : null;
+  dateLine.className = 'ms-published';
+  dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';
+  dateLine.style.cssText = 'font-size:10px;color:rgba(201,168,76,0.5);padding:0 8px 8px;margin-top:-2px;';
+  card.appendChild(dateLine);
   return card;
 }
 

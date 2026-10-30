@@ -1,5 +1,33 @@
 [
   {
+    "version": "3.3.39",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3339-mystories-cover",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Published Stories cards show the book's own cover, title and all, with the published date at the bottom.",
+        "detail": "The same cover the Library shows. If it cannot be drawn, the cover picture shows instead.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.3.38",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3338-mystories-subtitles",
+        "kind": "feature",
+        "public": true,
+        "summary": "My Published Stories cards show the subtitle under the title.",
+        "detail": "The one the book was published with, as on the Library card.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.37",
     "staged_on": "2026-10-29",
     "entries": [

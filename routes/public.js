@@ -502,3 +502,4 @@ router.post('/report', async function (req, res) {
 });
 
 module.exports = router;
+module.exports.storyCoverPath = storyCoverPath;   // v3.3.39 -- My Stuff > Published Stories shows the same cover (routes/pdf.js my-stories)
