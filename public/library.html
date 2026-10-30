@@ -108,16 +108,30 @@
     .lib-search { display:flex; justify-content:center; padding:0 14px 10px; }
     .lib-search input { width:100%; max-width:440px; background:#0d0804; border:2px solid var(--ink); color:var(--parchment); font-family:'Crimson Text',serif; font-size:15px; padding:10px 14px; border-radius:3px; }
     .lib-search input::placeholder { color:rgba(240,232,208,0.4); }
-    .stories { max-width:1100px; margin:0 auto; padding:0 14px 30px; }
-    .author-block { margin:0 0 28px; }
-    .author-name { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--gold); border-bottom:1px solid rgba(201,168,76,0.25); padding-bottom:6px; margin-bottom:14px; letter-spacing:1px; }
-    .author-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
-    .author-row + .author-row { margin-top:22px; }   /* v3.3.37 -- a gap between an author's campaigns, no name (Ian) */
+    /* v3.3.44 -- THE STORIES STAND ON SHELVES (Ian: "the stories go across... a space between pen names if one pen name
+       can't fill the whole row... arranged a little more like the bookshelf"). Every book is one slot in a single
+       left-to-right run that wraps onto the next shelf: a wider gap where a new pen name starts, a smaller one where a
+       new campaign starts (v3.3.37), none at the start of a shelf. Books stand on their bottoms; libLayoutShelves()
+       lays a walnut board (the Bookshelf's colours) under each shelf of books and writes each pen name above its run
+       of books on that shelf, underlined across them. */
+    .stories { max-width:1100px; margin:0 auto; padding:34px 14px 40px; position:relative;
+      display:flex; flex-wrap:wrap; align-items:flex-end; column-gap:14px; row-gap:70px; }
+    .lib-slot { width:150px; flex:0 0 150px; position:relative; z-index:1; }
+    .lib-slot.lib-astart { margin-left:42px; }
+    .lib-slot.lib-cstart { margin-left:18px; }
+    .lib-slot.lib-linestart { margin-left:0; }
+    .lib-board { position:absolute; height:22px; z-index:0; pointer-events:none; border-radius:2px;
+      background:linear-gradient(to bottom, #94602f 0, #74461f 2px, #5a3417 14px, #3a200d 20px, #170b04 22px);
+      box-shadow:0 10px 16px rgba(0,0,0,0.55), 0 -2px 6px rgba(0,0,0,0.35); }
+    .lib-pen { position:absolute; z-index:1; font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--gold); letter-spacing:1px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-bottom:1px solid rgba(201,168,76,0.35); padding-bottom:3px; line-height:1.2; }
+    @media (max-width:420px) { .lib-slot { width:136px; flex-basis:136px; } .lib-slot.lib-astart { margin-left:24px; } }
     .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     .story-card { position:relative; }
-    .sc-shelf { position:absolute; top:6px; right:6px; z-index:2; font-family:'Crimson Text',serif; font-size:11px; font-weight:700; letter-spacing:0.02em;
-      color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:10px; padding:2px 9px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
+    /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
+    .sc-shelf { font-family:'Crimson Text',serif; font-size:10px; font-weight:700; letter-spacing:0.02em; line-height:1.4;
+      color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:9px; padding:0 7px; cursor:pointer; }
     .sc-shelf:hover { background:#e2c270; }
     .sc-shelf[disabled] { cursor:default; color:#f7ecd2; background:rgba(40,70,40,0.92); border-color:#1f3a1f; }
     .story-card .sc-cover { width:100%; aspect-ratio:17/22; object-fit:cover; background:#160e06; display:block; }
@@ -465,24 +479,77 @@
     // v3.3.37 -- one block per author, and inside it one row per campaign, in the order the author set on My Stuff
     // (the server sends the stories in that order; services/storyOrder.js). A new campaign starts a new row; a
     // campaign continued on the next page joins its row.
+    // v3.3.44 -- each book gets its own slot in the one run (the server sends each pen name's books together, in the
+    // author's order). The slot remembers its pen name, and starts with a wider gap when the pen name changes and a
+    // smaller one when the campaign changes.
     function storyAuthorRow(author, group) {
       var key = (author || '').trim().toLowerCase() || '__anon';
-      var sec = authorSections[key];
-      if (!sec) {
-        var block = document.createElement('div'); block.className = 'author-block';
-        var nm = document.createElement('div'); nm.className = 'author-name';
-        nm.textContent = (author && author.trim()) ? author.trim() : 'Anonymous';
-        block.appendChild(nm);
-        storiesEl.appendChild(block);
-        sec = authorSections[key] = { block: block, rows: {} };
-      }
       var gk = String(group == null ? '' : group);
-      if (!sec.rows[gk]) {
-        var row = document.createElement('div'); row.className = 'author-row';
-        sec.block.appendChild(row); sec.rows[gk] = row;
-      }
-      return sec.rows[gk];
+      var last = authorSections.__last || null;
+      var slot = document.createElement('div'); slot.className = 'lib-slot';
+      if (last && last.key !== key) slot.className += ' lib-astart';
+      else if (last && last.group !== gk) slot.className += ' lib-cstart';
+      slot.setAttribute('data-pen', key);
+      slot.setAttribute('data-pen-name', (author && author.trim()) ? author.trim() : 'Anonymous');
+      authorSections.__last = { key: key, group: gk };
+      storiesEl.appendChild(slot);
+      return slot;
     }
+
+    // v3.3.44 -- THE SHELVES. Run after the books move (more loaded, the window resized):
+    //   1. a book that starts a shelf loses its gap (the gap is only between books on the same shelf);
+    //   2. one board under each shelf, from its first book to its last (every book on a shelf ends at the same height);
+    //   3. each pen name written above its run of books on each shelf it reaches.
+    var _libBoardsQueued = false;
+    function _libBottom(el) { return el.offsetTop + el.offsetHeight; }
+    function libLayoutShelves() {
+      _libBoardsQueued = false;
+      if (!storiesEl) return;
+      Array.prototype.forEach.call(storiesEl.querySelectorAll('.lib-board, .lib-pen'), function (b) { b.parentNode.removeChild(b); });
+      if (storiesEl.offsetParent === null) return;   // hidden (the Images tab)
+      var slots = Array.prototype.slice.call(storiesEl.querySelectorAll('.lib-slot'));
+      // One pass, front to back. A gapped book that wrapped loses its gap; if losing it would let the book slip back
+      // onto the shelf above (where it would sit without the gap), it keeps the gap instead.
+      slots.forEach(function (sl) { sl.classList.remove('lib-linestart'); });
+      for (var i = 0; i < slots.length; i++) {
+        if (!(slots[i].classList.contains('lib-astart') || slots[i].classList.contains('lib-cstart'))) continue;
+        var startsLine = (i === 0) || _libBottom(slots[i]) > _libBottom(slots[i - 1]) + 2;   // books stand on their bottoms
+        if (!startsLine) continue;
+        slots[i].classList.add('lib-linestart');
+        if (i > 0 && _libBottom(slots[i]) <= _libBottom(slots[i - 1]) + 2) slots[i].classList.remove('lib-linestart');
+      }
+      var box = storiesEl.getBoundingClientRect(), lines = [];
+      slots.forEach(function (s) {
+        var r = s.getBoundingClientRect(); if (!r.width) return;
+        var line = lines.length ? lines[lines.length - 1] : null;
+        if (!line || Math.abs(line.bottom - r.bottom) > 3) { line = { bottom: r.bottom, top: r.top, left: r.left, right: r.right, slots: [] }; lines.push(line); }
+        line.top = Math.min(line.top, r.top); line.left = Math.min(line.left, r.left); line.right = Math.max(line.right, r.right);
+        line.slots.push({ el: s, r: r });
+      });
+      lines.forEach(function (ln) {
+        var b = document.createElement('div'); b.className = 'lib-board';
+        var l = Math.max(0, ln.left - box.left - 14), rr = Math.min(box.width, ln.right - box.left + 14);
+        b.style.top = Math.round(ln.bottom - box.top + 3) + 'px'; b.style.left = Math.round(l) + 'px'; b.style.width = Math.round(rr - l) + 'px';
+        storiesEl.appendChild(b);
+        for (var k = 0; k < ln.slots.length; k++) {
+          var first = ln.slots[k], key = first.el.getAttribute('data-pen'), last = first;
+          while (k + 1 < ln.slots.length && ln.slots[k + 1].el.getAttribute('data-pen') === key) { k++; last = ln.slots[k]; }
+          var p = document.createElement('div'); p.className = 'lib-pen';
+          p.textContent = first.el.getAttribute('data-pen-name'); p.title = p.textContent;
+          p.style.left = Math.round(first.r.left - box.left) + 'px';
+          p.style.width = Math.round(last.r.right - first.r.left) + 'px';
+          p.style.top = Math.round(ln.top - box.top - 28) + 'px';
+          storiesEl.appendChild(p);
+        }
+      });
+    }
+    function libQueueShelves() {
+      if (_libBoardsQueued) return;
+      _libBoardsQueued = true;
+      (window.requestAnimationFrame || setTimeout)(libLayoutShelves);
+    }
+    try { if (window.ResizeObserver) new ResizeObserver(libQueueShelves).observe(storiesEl); } catch (e) {}
+    window.addEventListener('resize', libQueueShelves);
 
     function renderStoryCard(item) {
       var row = storyAuthorRow(item.author, item.group);   // v3.3.37 -- its campaign's row
@@ -529,6 +596,7 @@
         a.appendChild(gw);
       }
       row.appendChild(a);
+      libQueueShelves();   // v3.3.44
       return a;
     }
 
@@ -758,7 +826,10 @@ function cmpShelfButton(card, id, onShelf) {
       })
       .catch(function () { b.disabled = false; b.textContent = '+ Bookshelf'; });
   });
-  card.appendChild(b);
+  // v3.3.44 -- beside the genre pills (a row is made when the story has no genres).
+  var row = card.querySelector('.sc-genres');
+  if (!row) { row = document.createElement('div'); row.className = 'sc-genres'; card.appendChild(row); }
+  row.appendChild(b);
 }
 function cmpShelfDecorate(cards) {
   if (cmpShelfOff || !cards || !cards.length) return;

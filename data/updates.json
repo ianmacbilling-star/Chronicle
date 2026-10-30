@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.44",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3344-library-shelves",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's stories now stand on wooden shelves, pen names side by side.",
+        "detail": "Each pen name is written above its books, with a gap between pen names and a smaller one between campaigns. The + Bookshelf button is smaller and sits with the genre pills under the title instead of on the cover.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.43",
     "staged_on": "2026-10-29",
     "entries": [
