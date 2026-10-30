@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.49",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3349-library-card-pointer",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library's hover card opens just above your pointer, and the blurb opens on a click.",
+        "detail": "The card sits just above where the pointer came onto the book, so the book stays in view. Click the blurb's first line (or its more link) to read the whole blurb over the cover; the card keeps its size. Click again to bring the cover back.",
+        "td": [
+          "TD-1062"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.48",
     "staged_on": "2026-10-30",
     "entries": [
