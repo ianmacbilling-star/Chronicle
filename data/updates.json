@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.50",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3350-tester-codes",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admin: Make a Tester promo codes, a Testers list, and a 1000-token cap on testers' own top-ups.",
+        "detail": "Promo Codes has a new type, Make a Tester (Platinum): anyone who signs up with such a code becomes a tester on Platinum and skips the payment page, up to the code's total uses. The Testers list shows them with an on/off switch, can make any existing account a tester, and lists the TESTER_EMAILS from Railway. Testers can give themselves tokens only up to a balance of 1000; tokens they buy are on top, and admins are not capped. Testers can no longer change a tier's session reserve.",
+        "td": [
+          "TD-1063"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.49",
     "staged_on": "2026-10-30",
     "entries": [

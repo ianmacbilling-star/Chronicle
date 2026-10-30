@@ -1964,7 +1964,9 @@ function devAddTokens() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.ok) {
-        show('Added ' + amt + ' tokens. Balance: ' + (data.balance && data.balance.total) + '.', true);
+        // v3.3.50 -- TD-1063: a tester's top-up stops at the cap.
+        var _added = (data.added != null) ? data.added : amt;
+        show('Added ' + _added + ' tokens' + (data.capped ? ' (testers can hold up to ' + data.cap + ')' : '') + '. Balance: ' + (data.balance && data.balance.total) + '.', true);
         refreshTokenBalance();
         if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {
@@ -2031,7 +2033,7 @@ function devGrantMonthly() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.ok) {
-        show('Reset to ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier, fresh account). Balance: ' + (data.balance && data.balance.total) + '.', true);
+        show('Reset to ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier, fresh account' + (data.capped ? ', trimmed to the tester limit of ' + data.cap : '') + '). Balance: ' + (data.balance && data.balance.total) + '.', true);
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
         if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {
@@ -23273,12 +23275,18 @@ function loadPromoCodes() {
       promoFormRefresh();
     })
     .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
+  loadTesters();   // v3.3.50 -- TD-1063
 }
 
 // Show and hide the parts of the form that depend on other choices. Never decides anything the
 // server does not also enforce.
 function promoFormRefresh() {
   var g = function (x) { return document.getElementById(x); };
+  // v3.3.50 -- TD-1063. A "Make a Tester" code has only a code, a label, total uses and an expiry.
+  var tester = ((g('promo-kind') || {}).value === 'tester');
+  var pane = g('settings-pane-promos');
+  if (pane) pane.classList.toggle('promo-is-tester', tester);
+  if (g('promo-tester-note')) g('promo-tester-note').style.display = tester ? '' : 'none';
   var dtype = (g('promo-discount-type') || {}).value || 'none';
   var dval = g('promo-discount-value');
   if (dval) {
@@ -23311,6 +23319,7 @@ function promoEasternDate(v) {
 }
 
 function promoDescribe(c) {
+  if (c.action_type === 'make_tester') return 'Make a Tester: Platinum, at sign-up';   // v3.3.50 -- TD-1063
   if (c.schema_v !== 2) {
     var val = (c.action_type === 'percent_off') ? (c.action_value + '% off (Stripe, set by hand)')
             : (c.action_type === 'amount_off') ? ('$' + c.action_value + ' off (Stripe, set by hand)')
@@ -23337,7 +23346,7 @@ function renderPromoCodes(codes) {
   box.innerHTML = codes.map(function (c) {
     var flags = [];
     if (c.is_signup) flags.push('Sign-up');
-    if (c.schema_v === 2) flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
+    if (c.schema_v === 2 && c.action_type !== 'make_tester') flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
     var uses = 'used ' + (c.redeemed_count || 0) + (c.max_redemptions ? ' of ' + c.max_redemptions : '');
     var stripe = c.stripe_promotion_code_id ? ('Stripe ' + (c.stripe_livemode ? 'live' : 'sandbox')) : (c.schema_v === 2 ? 'Campaignia only' : '');
     return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
@@ -23361,6 +23370,7 @@ function resetPromoForm() {
   ['promo-code-input', 'promo-label-input', 'promo-discount-value', 'promo-max-input', 'promo-expires-input', 'promo-submonths-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
   if (g('promo-bonus-input')) g('promo-bonus-input').value = '0';
   if (g('promo-discount-type')) g('promo-discount-type').value = 'none';
+  if (g('promo-kind')) g('promo-kind').value = 'std';   // v3.3.50
   if (g('promo-subdur-input')) g('promo-subdur-input').value = 'once';
   ['promo-signup-input', 'promo-once-input'].forEach(function (id) { if (g(id)) g(id).checked = false; });
   var boxes = document.querySelectorAll('.promo-prod');
@@ -23375,6 +23385,7 @@ function createPromoCode() {
   var boxes = document.querySelectorAll('.promo-prod');
   for (var i = 0; i < boxes.length; i++) { if (boxes[i].checked && !boxes[i].disabled) products.push(boxes[i].value); }
   var payload = {
+    kind: (g('promo-kind') || {}).value === 'tester' ? 'tester' : '',   // v3.3.50 -- TD-1063
     code: (g('promo-code-input') || {}).value || '',
     label: (g('promo-label-input') || {}).value || '',
     discount_type: (g('promo-discount-type') || {}).value || 'none',
@@ -23397,7 +23408,9 @@ function createPromoCode() {
     .then(function (res) {
       if (btn) btn.disabled = false;
       if (res.ok && res.j && res.j.ok) {
+        var _wasTester = payload.kind === 'tester';
         resetPromoForm();
+        if (msg && _wasTester) { msg.textContent = 'Created. Anyone who signs up with it becomes a tester on Platinum.'; loadPromoCodes(); return; }
         if (msg) msg.textContent = 'Created' + (res.j.stripe ? ', with its discount in Stripe (' + (res.j.stripe.livemode ? 'live' : 'sandbox') + ').' : ' (bonus tokens only, nothing in Stripe).');
         loadPromoCodes();
       } else {
@@ -23428,6 +23441,72 @@ function togglePromoCode(id) {
       else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
     })
     .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
+}
+
+// ============================================================
+// v3.3.50 -- TD-1063. THE TESTERS LIST (Promo Codes tab). Server: routes/admin.js /testers.
+// ============================================================
+function loadTesters() {
+  var box = document.getElementById('testers-list');
+  if (!box) return;
+  fetch('/api/admin/testers')
+    .then(function (r) { return r.json(); })
+    .then(function (d) { renderTesters((d && d.testers) || [], (d && d.envEmails) || []); })
+    .catch(function () { box.textContent = 'Could not load testers.'; });
+}
+
+function renderTesters(list, env) {
+  var box = document.getElementById('testers-list');
+  if (!box) return;
+  var html = '';
+  if (!list.length) html += '<div style="padding:6px 0;">No testers made by a code or switched on here yet.</div>';
+  html += list.map(function (t) {
+    var src = /^code:/.test(t.source) ? ('code ' + t.source.slice(5)) : 'added here';
+    var since = '';
+    try { since = t.since ? new Date(t.since).toLocaleDateString() : ''; } catch (e) {}
+    return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
+      '<strong>' + escapeHtml(t.name || '(no name)') + '</strong>' +
+      '<span>' + escapeHtml(t.email) + '</span>' +
+      (t.pen_name ? '<span style="color:var(--text-muted);">' + escapeHtml(t.pen_name) + '</span>' : '') +
+      '<span>' + escapeHtml(t.tier) + '</span>' +
+      '<span style="color:var(--text-muted);">' + escapeHtml(src) + (since ? ', ' + escapeHtml(since) : '') + '</span>' +
+      (t.onEnvList ? '<span style="color:var(--text-muted);">also on TESTER_EMAILS</span>' : '') +
+      '<span style="min-width:64px;color:' + (t.on ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (t.on ? 'Tester' : 'Off') + '</span>' +
+      '<button class="btn btn-sm" onclick="switchTester(' + t.id + ', ' + (t.on ? 'false' : 'true') + ')">' + (t.on ? 'Turn off' : 'Turn on') + '</button>' +
+      '<span class="settings-section-desc" id="tester-row-msg-' + t.id + '" style="margin:0;"></span>' +
+      '</div>';
+  }).join('');
+  html += '<div style="padding:10px 0 0;border-top:1px solid var(--border);color:var(--text-muted);">On TESTER_EMAILS in Railway: ' +
+    (env.length ? escapeHtml(env.join(', ')) : 'none') + '</div>';
+  box.innerHTML = html;
+}
+
+function switchTester(id, on) {
+  var rm = document.getElementById('tester-row-msg-' + id);
+  if (!on && !confirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.')) return;
+  if (rm) rm.textContent = 'Saving...';
+  fetch('/api/admin/testers/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: !!on }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) loadTesters();
+      else if (rm) rm.textContent = (res.j && res.j.error) || 'Could not save.';
+    })
+    .catch(function () { if (rm) rm.textContent = 'Could not save.'; });
+}
+
+function addTesterByEmail() {
+  var inp = document.getElementById('tester-add-email');
+  var msg = document.getElementById('tester-add-msg');
+  var email = inp ? inp.value.trim() : '';
+  if (!email) { if (msg) msg.textContent = 'Enter the email of an existing account.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/testers-add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) { if (inp) inp.value = ''; if (msg) msg.textContent = 'Done: that account is now a tester on Platinum.'; loadTesters(); }
+      else if (msg) msg.textContent = (res.j && res.j.error) || 'Could not save.';
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
 
 // ============================================================

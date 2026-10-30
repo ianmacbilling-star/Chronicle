@@ -44,6 +44,24 @@ function easternEndOfDay(dateStr) {
   return null;
 }
 
+// Total uses and expiry, shared by every kind of code (v3.3.50: pulled out of validate() unchanged, so the tester
+// code checks them the same way).
+function parseLimits(body, now) {
+  let maxRedemptions = null;
+  if (body.max_redemptions !== undefined && body.max_redemptions !== null && String(body.max_redemptions).trim() !== '') {
+    const n = Number(body.max_redemptions);
+    if (!Number.isInteger(n) || n < 1) return { ok: false, error: 'Total uses must be a whole number of 1 or more, or left blank.' };
+    maxRedemptions = n;
+  }
+  let expiresAt = null;
+  if (body.expires_on) {
+    expiresAt = easternEndOfDay(body.expires_on);
+    if (!expiresAt) return { ok: false, error: 'Expiry date is not a valid date.' };
+    if (expiresAt.getTime() <= now.getTime()) return { ok: false, error: 'Expiry date must be today or later.' };
+  }
+  return { ok: true, maxRedemptions: maxRedemptions, expiresAt: expiresAt };
+}
+
 // Validate and normalise the admin form. Returns { ok:true, v } or { ok:false, error }.
 function validate(body, now) {
   body = body || {};
@@ -54,6 +72,19 @@ function validate(body, now) {
   if (!CODE_RE.test(code)) return { ok: false, error: 'Code must be 2-40 characters: letters, numbers or dashes.' };
 
   const label = body.label ? String(body.label).trim().slice(0, 120) : null;
+
+  // v3.3.50 -- TD-1063. A "MAKE A TESTER" CODE (Ian). Used at sign-up, it makes the new account a tester on Platinum
+  // and skips the payment page (routes/auth.js /register). No discount, no tokens, no products, nothing in Stripe --
+  // just the code, its label, a total-uses cap and an expiry, the same as any other code.
+  if (body.kind === 'tester') {
+    const lim = parseLimits(body, now);
+    if (!lim.ok) return lim;
+    return { ok: true, v: {
+      code: code, label: label, kind: 'tester', discountType: 'none', discountValue: null, bonusTokens: 0,
+      products: [], isSignup: true, subDuration: 'once', subMonths: null,
+      oncePerCustomer: true, maxRedemptions: lim.maxRedemptions, expiresAt: lim.expiresAt
+    } };
+  }
 
   const discountType = ['none', 'percent', 'amount'].indexOf(body.discount_type) !== -1 ? body.discount_type : 'none';
   let discountValue = null;   // percent: whole number 1-100; amount: CENTS
@@ -94,19 +125,9 @@ function validate(body, now) {
 
   const oncePerCustomer = body.once_per_customer === true || body.once_per_customer === 'true';
 
-  let maxRedemptions = null;
-  if (body.max_redemptions !== undefined && body.max_redemptions !== null && String(body.max_redemptions).trim() !== '') {
-    const n = Number(body.max_redemptions);
-    if (!Number.isInteger(n) || n < 1) return { ok: false, error: 'Total uses must be a whole number of 1 or more, or left blank.' };
-    maxRedemptions = n;
-  }
-
-  let expiresAt = null;
-  if (body.expires_on) {
-    expiresAt = easternEndOfDay(body.expires_on);
-    if (!expiresAt) return { ok: false, error: 'Expiry date is not a valid date.' };
-    if (expiresAt.getTime() <= now.getTime()) return { ok: false, error: 'Expiry date must be today or later.' };
-  }
+  const lim = parseLimits(body, now);
+  if (!lim.ok) return lim;
+  const maxRedemptions = lim.maxRedemptions, expiresAt = lim.expiresAt;
 
   return { ok: true, v: {
     code: code, label: label, discountType: discountType, discountValue: discountValue, bonusTokens: bonus,
@@ -117,7 +138,9 @@ function validate(body, now) {
 
 // The old columns, filled so the EXISTING bonus-token grant in routes/tokens.js keeps working for a
 // new-style code typed into Stripe's box, unchanged, until stage 3 replaces it.
+const TESTER_ACTION = 'make_tester';   // v3.3.50 -- TD-1063
 function legacyFields(v) {
+  if (v.kind === 'tester') return { action_type: TESTER_ACTION, action_value: 0, per_user_limit: 1 };
   if (v.bonusTokens > 0) return { action_type: 'token_grant', action_value: v.bonusTokens, per_user_limit: v.oncePerCustomer ? 1 : NOT_PER_USER };
   if (v.discountType === 'percent') return { action_type: 'percent_off', action_value: v.discountValue, per_user_limit: v.oncePerCustomer ? 1 : NOT_PER_USER };
   return { action_type: 'amount_off', action_value: Math.round(v.discountValue / 100), per_user_limit: v.oncePerCustomer ? 1 : NOT_PER_USER };
@@ -183,4 +206,4 @@ async function createInStripe(v, env, sp) {
   return { couponId: coupon.id, promotionCodeId: promo.id, livemode: !!(promo.livemode || coupon.livemode) };
 }
 
-module.exports = { PRODUCT_KEYS, SIGNUP_PRODUCT_KEYS, easternEndOfDay, validate, legacyFields, resolveProductIds, createInStripe, NOT_PER_USER };
+module.exports = { PRODUCT_KEYS, SIGNUP_PRODUCT_KEYS, easternEndOfDay, validate, legacyFields, resolveProductIds, createInStripe, NOT_PER_USER, TESTER_ACTION };

@@ -1039,6 +1039,86 @@ router.post('/promo-codes/:id/toggle', requireAuth, requireAdmin, async function
 });
 
 // =================================================================================================
+// v3.3.50 -- TD-1063. TESTERS (Promo Codes tab). Everyone a "Make a Tester" code made a tester, or switched on here,
+// with an on/off switch (Ian: "Yes a tester list and on and off switch"); and the TESTER_EMAILS list, shown read-only
+// because it lives in Railway.
+//
+// OFF puts the account back to an ordinary one: Copper, unless it pays for a real subscription (then its tier is
+// left alone), and the testing panel's stand-in subscription id is taken away. ON makes it a tester on Platinum,
+// again leaving a paying subscriber's tier alone. Someone on TESTER_EMAILS stays a tester whatever this says.
+// =================================================================================================
+const authMw = require('../middleware/auth');
+const REAL_SUB_SQL = "(stripe_subscription_id IS NOT NULL AND stripe_subscription_id <> '' AND stripe_subscription_id <> 'sub_TESTING_' || id::text " +
+  "AND subscription_status IN ('active', 'trialing', 'past_due'))";
+
+router.get('/testers', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT id, name, email, pen_name, tier, is_tester, tester_source, tester_since, created_at FROM users ' +
+      'WHERE tester_source IS NOT NULL ORDER BY tester_since DESC NULLS LAST, id DESC'
+    ).all();
+    const env = authMw.testerEmails();
+    res.json({
+      testers: (rows || []).map(function (r) {
+        return { id: r.id, name: r.name || '', email: r.email || '', pen_name: r.pen_name || '', tier: r.tier || '', on: !!r.is_tester,
+          source: r.tester_source || '', since: r.tester_since || r.created_at || null,
+          onEnvList: env.indexOf(String(r.email || '').trim().toLowerCase()) >= 0 };
+      }),
+      envEmails: env
+    });
+  } catch (e) { console.error('testers list error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+async function setTester(db, userId, on, source) {
+  const now = new Date().toISOString();
+  if (on) {
+    await db.prepare(
+      "UPDATE users SET is_tester = TRUE, tester_source = COALESCE(tester_source, ?), tester_since = COALESCE(tester_since, ?), " +
+      "tier = CASE WHEN " + REAL_SUB_SQL + " THEN tier ELSE 'platinum' END, " +
+      "subscription_status = CASE WHEN " + REAL_SUB_SQL + " THEN subscription_status ELSE 'active' END WHERE id = ?"
+    ).run(source || 'manual', now, userId);
+  } else {
+    // Every CASE reads the row as it was before this statement (Postgres), so they agree with each other.
+    await db.prepare(
+      "UPDATE users SET is_tester = FALSE, " +
+      "tier = CASE WHEN " + REAL_SUB_SQL + " THEN tier ELSE 'copper' END, " +
+      "current_period_end = CASE WHEN stripe_subscription_id = 'sub_TESTING_' || id::text THEN NULL ELSE current_period_end END, " +
+      "cancel_at_period_end = CASE WHEN stripe_subscription_id = 'sub_TESTING_' || id::text THEN FALSE ELSE cancel_at_period_end END, " +
+      "stripe_subscription_id = CASE WHEN stripe_subscription_id = 'sub_TESTING_' || id::text THEN NULL ELSE stripe_subscription_id END " +
+      "WHERE id = ?"
+    ).run(userId);
+  }
+  const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+  if (u && u.email) authMw.noteTester(u.email, on);
+}
+
+router.post('/testers/:id', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id.' });
+    const row = await db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+    const on = !!(req.body && (req.body.on === true || req.body.on === 'true'));
+    await setTester(db, id, on, 'manual');
+    res.json({ ok: true, on: on });
+  } catch (e) { console.error('tester switch error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/testers-add', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Enter the email of an existing account.' });
+    const row = await db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
+    if (!row) return res.status(404).json({ error: 'No account has that email.' });
+    await setTester(db, row.id, true, 'manual');
+    res.json({ ok: true, id: row.id });
+  } catch (e) { console.error('tester add error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+// =================================================================================================
 // IMPERSONATION -- TD-179 STAGE 2, v3.0.589. Spec: ADMIN_IMPERSONATION_SPEC.md section 3.
 //
 // Ian, 2026-08-02: "a screen where I could put in their email address and it would get me in as

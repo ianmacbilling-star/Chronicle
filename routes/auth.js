@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS, ownTier, passIsLive, isOnFreeTrial, memberCapState } = require('../middleware/tiers');   // v3.2.45 memberCapState (TD-1007)
 const stripeProvider = require('../services/billing/stripeProvider');
-const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
+const { requireAdmin, requireAdminOrTester, isTesterEmail, noteTester } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendWelcomeEmail } = require('./email');
 
@@ -145,10 +145,35 @@ router.post('/register', async function(req, res) {
       await db.prepare('UPDATE users SET email_verified = false WHERE id = ?').run(newUserId);
       await require('./email').sendVerificationEmail(newUserId, name.trim(), email.toLowerCase().trim());
     } catch (verErr) { console.error('Verification email failed:', verErr.message); }
+    // v3.3.50 -- TD-1063. A "MAKE A TESTER" CODE (Ian: "I'd want it to make them a tester on platinum"). Any code of
+    // that kind -- there may be several -- makes the new account a tester on Platinum, and skips the payment page a
+    // Platinum link would otherwise send them to ("A sign up that has that code type... should skip the stripe step").
+    // The use is CLAIMED in one statement that also checks the total-uses cap, so two sign-ups at once cannot both
+    // take the last use. On, unexpired and under its cap, or it does nothing and the account is an ordinary sign-up.
+    let _madeTester = false;
+    try {
+      const _tc = promo_code ? String(promo_code).trim().toUpperCase().slice(0, 40) : '';
+      if (_tc) {
+        const _tp = await db.prepare("SELECT id, active, expires_at FROM promo_codes WHERE code = ? AND action_type = 'make_tester'").get(_tc);
+        if (_tp && _tp.active && (!_tp.expires_at || new Date(_tp.expires_at) >= new Date())) {
+          const _claim = await db.prepare(
+            'UPDATE promo_codes SET redeemed_count = redeemed_count + 1 WHERE id = ? AND active = TRUE AND (max_redemptions IS NULL OR redeemed_count < max_redemptions) RETURNING id'
+          ).get(_tp.id);
+          if (_claim && _claim.id) {
+            await db.prepare(
+              "UPDATE users SET is_tester = TRUE, tester_source = ?, tester_since = ?, tier = 'platinum', subscription_status = 'active', pending_plan = NULL WHERE id = ?"
+            ).run('code:' + _tc, now, newUserId);
+            _madeTester = true;
+            noteTester(email.toLowerCase().trim(), true);
+          }
+        }
+      }
+    } catch (testerErr) { console.error('Tester code failed (non-fatal):', testerErr.message); }
+
     // Remember a paid-plan choice from the landing page so we can route them to
     // checkout AFTER they verify (they aren't logged in until then).
     try {
-      const _plan = pendingPlanValue(plan);
+      const _plan = _madeTester ? null : pendingPlanValue(plan);   // v3.3.50 -- a tester code skips the payment page
       if (_plan) {
         await db.prepare('UPDATE users SET pending_plan = ? WHERE id = ?').run(_plan, newUserId);
         // READ IT BACK. This write has always been wrapped in a non-fatal catch, which is right --
@@ -174,8 +199,8 @@ router.post('/register', async function(req, res) {
         await db.prepare('UPDATE users SET signup_promo_code = ? WHERE id = ?').run(_pc, newUserId);
         const _promo = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(_pc);
         await db.prepare(
-          'INSERT INTO promo_redemptions (promo_code_id, code, user_id, context) VALUES (?, ?, ?, ?)'
-        ).run(_promo ? _promo.id : null, _pc, newUserId, 'signup');
+          'INSERT INTO promo_redemptions (promo_code_id, code, user_id, context, applied) VALUES (?, ?, ?, ?, ?)'
+        ).run(_promo ? _promo.id : null, _pc, newUserId, 'signup', _madeTester ? JSON.stringify({ tester: true, tier: 'platinum' }) : null);   // v3.3.50
       }
     } catch (promoErr) { console.error('Signup promo capture failed (non-fatal):', promoErr.message); }
 
