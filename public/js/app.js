@@ -23016,7 +23016,7 @@ function renderTierBadge(me) {
   // Everybody else's badge is about their PLAN, so it goes where a plan is changed: My Account, at
   // the Plans and Subscription panel rather than the top of the page.
   if (me.isTester) {
-    el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
+    el.title = 'Test account: you are not billed. Click for your testing tools.';   // v3.3.51
     el.style.cursor = 'pointer';
     el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
   } else if (me.loneCopper) {
@@ -36504,8 +36504,9 @@ function _tierBadgeTesterLabel(el, label) {
     document.head.appendChild(st);
   }
   el.textContent = '';
-  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = label + ', Test Account (Not Billed)';
-  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = label + ' \u00b7 Test';
+  // v3.3.51 -- TD-1064. "Platinum Tester" with a star (Ian, option C); "Not billed" moved to the tooltip.
+  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = '\u2605 ' + label + ' Tester';
+  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = '\u2605 Tester';
   el.appendChild(lg); el.appendChild(sh);
 }
 

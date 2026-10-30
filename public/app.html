@@ -96,7 +96,7 @@
         font-size: 12px; line-height: 1; text-decoration: none; }
     </style>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
-    <button id="help-fab" class="btn btn-sm help-nudge" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
+    <button id="help-fab" class="btn btn-sm help-nudge hq-tip" type="button" onclick="openHelp()" data-tip="Questions? Ask us anything &mdash; tips, how-tos, getting started." aria-label="Questions? Ask us anything: tips, how-tos, getting started.">?s</button>
     <div class="user-menu-wrap">
       <a id="gift-pin" href="/redeem" style="display:none;" title="Someone gave you a gift. Tap to redeem it." aria-label="Someone gave you a gift. Tap to redeem it."><span aria-hidden="true">&#127873;</span></a>
       <div class="user-menu-btn" onclick="toggleUserMenu()">
@@ -2789,7 +2789,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Title Builder</div>
-      <button class="btn btn-sm help-nudge" id="title-build-help-btn" type="button" onclick="tbOpenHelp()" title="Title Builder tips, and ask us anything" aria-label="Title Builder help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
+      <button class="btn btn-sm help-nudge hq-tip" id="title-build-help-btn" type="button" onclick="tbOpenHelp()" data-tip="Title Builder tips, and ask us anything" aria-label="Title Builder help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
       <button class="modal-close" onclick="closeTitleBuilder()" title="Close without using this title">&times;</button>
     </div>
     <div id="title-build-error" class="alert alert-error hidden"></div>
@@ -2988,7 +2988,7 @@
       <div class="modal-title" id="char-modal-title">Add Character</div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm" type="button" id="char-import-btn" onclick="charImportFromFile()" title="Read a character sheet -- PDF, Word or text -- fill these fields from it, and build the character. Reading the sheet costs one token.">&#11014; Import a sheet</button>
-        <button class="btn btn-sm help-nudge" id="char-help-btn" type="button" onclick="charOpenHelp()" title="Character tips, and ask us anything" aria-label="Character help" style="flex:none;">?s</button>
+        <button class="btn btn-sm help-nudge hq-tip" id="char-help-btn" type="button" onclick="charOpenHelp()" data-tip="Character tips, and ask us anything" aria-label="Character help" style="flex:none;">?s</button>
         <button class="modal-close" onclick="closeCharModal()">&times;</button>
       </div>
     </div>
