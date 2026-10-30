@@ -17289,7 +17289,8 @@ function openAdminLibrary() {
   if (m) m.classList.remove('hidden');
   var grid = document.getElementById('admin-library-grid');
   if (grid) grid.innerHTML = '';
-  adminLib = { cursor: 0, loading: false, done: false, any: false };
+  adminLib = { cursor: 0, loading: false, done: false, any: false, q: '' };
+  var _lq = document.getElementById('admin-library-q'); if (_lq) _lq.value = '';   // v3.3.41
   if (grid && !grid._scrollBound) {
     grid._scrollBound = true;
     grid.addEventListener('scroll', function () {
@@ -17499,8 +17500,10 @@ function loadAdminLibrary() {
   adminLib.loading = true;
   var st = document.getElementById('admin-library-status');
   if (st) st.textContent = 'Loading...';
-  var url = '/api/admin/library?limit=48' + (adminLib.cursor ? '&beforeId=' + adminLib.cursor : '');
+  var S = adminLib;   // v3.3.41 -- a reply for an older filter is dropped
+  var url = '/api/admin/library?limit=48' + (adminLib.cursor ? '&beforeId=' + adminLib.cursor : '') + (adminLib.q ? '&q=' + encodeURIComponent(adminLib.q) : '');
   fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    if (S !== adminLib) return;
     adminLib.loading = false;
     var grid = document.getElementById('admin-library-grid');
     var items = (d && d.items) || [];
@@ -17508,9 +17511,10 @@ function loadAdminLibrary() {
     if (d && d.nextCursor) adminLib.cursor = d.nextCursor;
     if (!d || !d.hasMore || !d.nextCursor) {
       adminLib.done = true;
-      if (st) st.textContent = adminLib.any ? 'End of list.' : 'Nothing has been shared to the public Library yet.';
+      if (st) st.textContent = adminLib.any ? 'End of list.' : (adminLib.q ? 'Nothing matches that name.' : 'Nothing has been shared to the public Library yet.');
     } else if (st) { st.textContent = ''; }
   }).catch(function () {
+    if (S !== adminLib) return;
     adminLib.loading = false;
     if (st) st.textContent = 'Could not load. Please try again.';
   });
@@ -17530,6 +17534,13 @@ function adminLibCard(it) {
     cap.textContent = it.caption;
     cap.style.cssText = 'font-size:12px;font-style:italic;color:rgba(240,232,208,0.75);padding:6px 8px;';
     card.appendChild(cap);
+  }
+  // v3.3.41 -- who shared it, and from which campaign: what the name filter searches.
+  if (it.who || it.campaign) {
+    var by = document.createElement('div');
+    by.textContent = (it.who ? 'by ' + it.who : '') + (it.who && it.campaign ? ' \u00b7 ' : '') + (it.campaign || '');
+    by.style.cssText = 'font-size:11px;color:rgba(201,168,76,0.75);padding:0 8px 2px;';
+    card.appendChild(by);
   }
   var btn = document.createElement('button');
   btn.className = 'btn btn-sm archive-del';
@@ -17553,7 +17564,8 @@ function openAdminStories() {
   if (m) m.classList.remove('hidden');
   var grid = document.getElementById('admin-stories-grid');
   if (grid) grid.innerHTML = '';
-  adminStories = { cursor: 0, loading: false, done: false, any: false };
+  adminStories = { cursor: 0, loading: false, done: false, any: false, q: '' };
+  var _sq = document.getElementById('admin-stories-q'); if (_sq) _sq.value = '';   // v3.3.41
   if (grid && !grid._scrollBound) {
     grid._scrollBound = true;
     grid.addEventListener('scroll', function () {
@@ -17561,6 +17573,27 @@ function openAdminStories() {
     });
   }
   loadAdminStories();
+}
+// v3.3.41 -- THE NAME FILTERS on the two moderation windows (Ian: "put a filter at the top of both modals so I can filter
+// the name to find them"). Typing waits a moment, then starts the list again from the top with the filter.
+var _adminFilterTimers = {};
+function adminLibFilter() {
+  clearTimeout(_adminFilterTimers.lib);
+  _adminFilterTimers.lib = setTimeout(function () {
+    var el = document.getElementById('admin-library-q'), g = document.getElementById('admin-library-grid');
+    if (g) { g.innerHTML = ''; g.scrollTop = 0; }
+    adminLib = { cursor: 0, loading: false, done: false, any: false, q: el ? el.value.trim() : '' };
+    loadAdminLibrary();
+  }, 300);
+}
+function adminStoriesFilter() {
+  clearTimeout(_adminFilterTimers.stories);
+  _adminFilterTimers.stories = setTimeout(function () {
+    var el = document.getElementById('admin-stories-q'), g = document.getElementById('admin-stories-grid');
+    if (g) { g.innerHTML = ''; g.scrollTop = 0; }
+    adminStories = { cursor: 0, loading: false, done: false, any: false, q: el ? el.value.trim() : '' };
+    loadAdminStories();
+  }, 300);
 }
 function closeAdminStories() {
   var m = document.getElementById('admin-stories-modal');
@@ -17571,8 +17604,10 @@ function loadAdminStories() {
   adminStories.loading = true;
   var st = document.getElementById('admin-stories-status');
   if (st) st.textContent = 'Loading...';
-  var url = '/api/admin/stories?limit=48' + (adminStories.cursor ? '&beforeId=' + adminStories.cursor : '');
+  var S = adminStories;   // v3.3.41 -- a reply for an older filter is dropped
+  var url = '/api/admin/stories?limit=48' + (adminStories.cursor ? '&beforeId=' + adminStories.cursor : '') + (adminStories.q ? '&q=' + encodeURIComponent(adminStories.q) : '');
   fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    if (S !== adminStories) return;
     adminStories.loading = false;
     var grid = document.getElementById('admin-stories-grid');
     var items = (d && d.items) || [];
@@ -17580,9 +17615,10 @@ function loadAdminStories() {
     if (d && d.nextCursor) adminStories.cursor = d.nextCursor;
     if (!d || !d.hasMore || !d.nextCursor) {
       adminStories.done = true;
-      if (st) st.textContent = adminStories.any ? 'End of list.' : 'No stories have been published yet.';
+      if (st) st.textContent = adminStories.any ? 'End of list.' : (adminStories.q ? 'Nothing matches that name.' : 'No stories have been published yet.');
     } else if (st) { st.textContent = ''; }
   }).catch(function () {
+    if (S !== adminStories) return;
     adminStories.loading = false;
     if (st) st.textContent = 'Could not load. Please try again.';
   });
