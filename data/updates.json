@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.3.40",
+    "staged_on": "2026-10-29",
+    "entries": [
+      {
+        "id": "3340-admin-moderation-grid",
+        "kind": "fix",
+        "public": false,
+        "summary": "Dashboard, Public Library: Open Stories and Open Library show whole cards again, with their Remove buttons, and scroll to load more.",
+        "detail": "Admin only.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.3.39",
     "staged_on": "2026-10-29",
     "entries": [
