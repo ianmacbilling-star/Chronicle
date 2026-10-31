@@ -98,7 +98,7 @@ router.post('/register', async function(req, res) {
     const _pcCheck = promo_code ? String(promo_code).trim().toUpperCase().slice(0, 40) : '';
     if (_pcCheck) {
       try {
-        const _row = await db.prepare('SELECT active, expires_at, max_redemptions, redeemed_count, action_type FROM promo_codes WHERE code = ?').get(_pcCheck);
+        const _row = await db.prepare('SELECT active, expires_at, max_redemptions, redeemed_count, action_type, products FROM promo_codes WHERE code = ?').get(_pcCheck);
         let _why = null;
         if (_row) {
           if (!_row.active) _why = 'is no longer active';
@@ -106,6 +106,30 @@ router.post('/register', async function(req, res) {
           else if (_row.action_type === 'make_tester' && _row.max_redemptions && Number(_row.redeemed_count) >= Number(_row.max_redemptions)) _why = 'has been used up';
         }
         if (_why) return res.json({ error: 'The promo code ' + _pcCheck + ' ' + _why + '. Remove it, or enter a different code, to continue.', field: 'promo' });
+        // v3.3.61 -- TD-1073. THE CODE IS FOR A DIFFERENT PLAN THAN THE ONE CHOSEN (Ian: "If I try to use a gold [code]
+        // on a silver sign up I should get a Warning message"; "Warn and stop"). Only when a plan was chosen on the
+        // way in (a pass or a tier button) and the code names the products it covers; a plain sign-up, a tester code
+        // and a code with no product list are not checked, since what they will buy is not known yet.
+        const _planNow = pendingPlanValue(plan);
+        let _prods = _row ? _row.products : null;
+        if (typeof _prods === 'string') { try { _prods = JSON.parse(_prods); } catch (e) { _prods = null; } }
+        if (_row && _planNow && _row.action_type !== 'make_tester' && Array.isArray(_prods) && _prods.length) {
+          const _key = (_planNow.indexOf('pass:') === 0) ? 'pass' : ('sub:' + _planNow);
+          if (_prods.indexOf(_key) < 0) {
+            const _name = function (k) {
+              if (k === 'pass') return 'a Platinum Pass';
+              if (k === 'token_pack') return 'token packs';
+              if (k === 'book') return 'printed books';
+              if (k.indexOf('sub:') === 0) return 'the ' + k.charAt(4).toUpperCase() + k.slice(5) + ' plan';
+              return k;
+            };
+            const _for = _prods.map(_name);
+            const _forText = _for.length > 1 ? (_for.slice(0, -1).join(', ') + ' or ' + _for[_for.length - 1]) : _for[0];
+            const _chosen = _name(_key);
+            return res.json({ error: 'The promo code ' + _pcCheck + ' is for ' + _forText + ', and you are signing up for ' + _chosen +
+              '. Remove the code to continue with ' + _chosen + ', or go back and choose the plan the code is for.', field: 'promo' });
+          }
+        }
       } catch (e) { console.error('promo pre-check failed (non-fatal):', e.message); }
     }
 

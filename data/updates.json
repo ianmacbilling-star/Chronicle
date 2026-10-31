@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.61",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3361-wrong-plan-code",
+        "kind": "fix",
+        "public": true,
+        "summary": "Signing up for one plan with a promo code meant for another now says so, instead of taking you to full price.",
+        "detail": "For example a Gold code used from the Silver sign-up button. The message sits by Create Account and the promo box is highlighted; remove the code or go back and choose the plan the code is for. To test: from GET SILVER, sign up with a Gold-only code (stopped, with the message); from GET GOLD, the same code goes through and the Gold checkout shows the discount; a plain sign-up (no plan chosen) with the Gold code is not stopped.",
+        "td": [
+          "TD-1073"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.60",
     "staged_on": "2026-10-31",
     "entries": [
