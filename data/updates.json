@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.55",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3355-library-pickers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's genre and art style filters keep your choices inside the drop-down, so the page no longer jumps around.",
+        "detail": "Click Genre or Art style for a list with a tick box beside each choice; ticking filters at once. The button shows what is picked (for example Genre: Fantasy +2) and turns gold. Clear unticks that list; Show everything clears both. To test: tick and untick on Gallery and Books, check nothing on the row moves, Esc or a click elsewhere closes the list, a Library link with a genre already in it shows that genre on the button, and on a phone the list opens full width under its button.",
+        "td": [
+          "TD-1068"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.54",
     "staged_on": "2026-10-31",
     "entries": [
