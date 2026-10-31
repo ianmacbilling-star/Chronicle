@@ -23979,7 +23979,7 @@ function tierDerived(tierKey, noCascade) {
       keep + ' kept from the Free Trial + ' + utlt + ' UTLT + ' + cot + ' CO + ' + bonus + ' sign-up bonus)';
   }
   out.innerHTML = 'Monthly: <strong>' + tokens + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO)' +
-    '<br />' + signup + ' <span style="opacity:0.7;">-- promo codes not included</span>' +
+    '<br />' + signup + ' + (?? Promo Code)' +   // v3.3.60 -- TD-1072, Ian's wording: a code's tokens come on top
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
     (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
   // The Free Trial's numbers feed every paid plan's sign-up total.
