@@ -23809,8 +23809,19 @@ function passPerMonth(id) {
   if (!months || isNaN(price) || isNaN(tokens)) { out.innerHTML = ''; return; }
   // Two lines rather than one: at a third of the panel width a single run of three figures
   // wraps in the middle of a number, which reads as a typo.
+  // v3.3.63 -- TD-1075. WHAT SOMEONE WHO SIGNS UP STRAIGHT TO THIS PASS GETS (Ian: "the same up token count on the
+  // passes"). A pass does not replace the Free Trial underneath it (users.tier stays 'trial'), so the trial's tokens
+  // are all still there -- its UTLT too -- and a pass carries no sign-up bonus; then the pass's own tokens. Read
+  // from the Free Trial panel on this same tab, so it follows edits there.
+  var trialLine = '';
+  var tU = document.getElementById('tcf-trial-monthly_utlt'), tC = document.getElementById('tcf-trial-monthly_cot'), tB = document.getElementById('tcf-trial-signup_bonus');
+  if (tU && tC) {
+    var nU = parseFloat(tU.value) || 0, nC = parseFloat(tC.value) || 0, nB = tB ? (parseFloat(tB.value) || 0) : 0;
+    trialLine = '<br />At sign-up, straight to this pass: <strong>' + (nU + nC + nB + tokens) + ' tokens</strong> (' +
+      nU + ' UTLT + ' + nC + ' CO' + (nB ? ' + ' + nB + ' sign-up bonus' : '') + ' from the Free Trial + ' + tokens + ' pass) + (?? Promo Code)';
+  }
   out.innerHTML = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
-    Math.round(tokens / months) + ' tokens per month' +
+    Math.round(tokens / months) + ' tokens per month' + trialLine +
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>';
 }
 
@@ -23983,7 +23994,11 @@ function tierDerived(tierKey, noCascade) {
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
     (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
   // The Free Trial's numbers feed every paid plan's sign-up total.
-  if (tierKey === 'trial' && !noCascade) ['copper', 'silver', 'gold', 'platinum'].forEach(function (k) { tierDerived(k, true); });
+  if (tierKey === 'trial' && !noCascade) {
+    ['copper', 'silver', 'gold', 'platinum'].forEach(function (k) { tierDerived(k, true); });
+    // v3.3.63 -- TD-1075. The passes' sign-up totals read the Free Trial too.
+    Array.prototype.forEach.call(document.querySelectorAll('[id^="pass-derived-"]'), function (el) { passPerMonth(el.id.slice(13)); });
+  }
 }
 
 function saveTierPanel(tierKey) {

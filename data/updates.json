@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.64",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3364-pass-totals",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: each Platinum Pass on Tiers and Passes shows what someone who buys it at sign-up gets.",
+        "detail": "The Free Trial's tokens (a pass sits on top of the trial, so all of them stay) plus the pass's tokens, + (?? Promo Code). Updates as you edit the pass or the Free Trial.",
+        "td": [
+          "TD-1075"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.62",
     "staged_on": "2026-10-31",
     "entries": [
