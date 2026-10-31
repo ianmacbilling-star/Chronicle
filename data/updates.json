@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.62",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3362-pass-signup",
+        "kind": "fix",
+        "public": true,
+        "summary": "Signing up from a Platinum Pass button now takes you on to buy that pass after you confirm your email.",
+        "detail": "Before, a pass sign-up landed on the Free Trial with no checkout. To test: from GET THE 3-MONTH PASS (and the 6- and 12-month buttons), sign up, confirm the email, and check the pass checkout opens at the right price; with a Gold-only code, the sign-up stops with the wrong-plan message; with a pass code, the checkout shows the discount.",
+        "td": [
+          "TD-1074"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.61",
     "staged_on": "2026-10-31",
     "entries": [

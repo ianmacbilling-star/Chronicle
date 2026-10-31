@@ -309,6 +309,15 @@ var _inviteTok = null;
 try { _inviteTok = new URLSearchParams(window.location.search).get('invite') || null; } catch (e) {}
 var _signupPlan = '';
 try { _signupPlan = (new URLSearchParams(window.location.search).get('plan') || '').toLowerCase(); } catch (e) {}
+// v3.3.62 -- TD-1074. THE PASS BUTTONS on the home page send ?pass=p3 (not ?plan=), so a pass sign-up never recorded
+// the pass: no checkout after confirming the email (straight to the Free Trial), and nothing for the promo-code plan
+// check to compare against (Ian, 2026-10-31). The server takes "pass:<id>" and checks the id against the catalog.
+try {
+  if (!_signupPlan) {
+    var _sp = (new URLSearchParams(window.location.search).get('pass') || '').trim().toLowerCase();
+    if (/^[a-z0-9_-]{1,20}$/.test(_sp)) _signupPlan = 'pass:' + _sp;
+  }
+} catch (e) {}
 
 // Prefill the optional promo field from an ad-link ?promo= (or the stashed cookie),
 // so signups from an ad carry attribution without the person typing anything.
