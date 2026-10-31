@@ -45,6 +45,42 @@ let PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';
 while (PUBLIC_BASE_URL.length && PUBLIC_BASE_URL.charAt(PUBLIC_BASE_URL.length - 1) === '/') PUBLIC_BASE_URL = PUBLIC_BASE_URL.slice(0, -1);
 function falWebhookUrl() { return PUBLIC_BASE_URL ? (PUBLIC_BASE_URL + '/api/images/webhook/fal') : ''; }
 
+// v3.3.69 -- TD-1031 / TD-1032. WHAT FAL KEEPS. fal stores every request's JSON (our prompts and its
+// results) for its request history unless told not to, and keeps the generated picture on its CDN for
+// its own default period unless told otherwise. fal's written answer of 2026-10-26: X-Fal-Store-IO 0 stops the first, and
+// X-Fal-Object-Lifecycle-Preference sets the second per request. Neither is a dashboard setting for us.
+// EVERY FAL CALL IN THIS FILE GOES THROUGH falSetup, so no call can leave without the headers (the
+// v3.3.69 guard counts the raw client set-up call and allows exactly one, the one below).
+// The headers go on POST only: the queue submit, which fal.subscribe also uses. The status checks
+// and the result read are GETs and are left alone. With storage off fal still keeps a finished result
+// for at least 6 minutes (its queue docs), and fal.subscribe reads it within seconds of completion;
+// the queued calls get theirs in the webhook body and never read it back.
+// 30 days, not shorter: persistToR2 keeps the fal address when the copy to R2 fails, and an expiry
+// turns that failure into a missing picture (TD-1032). Shorten only after that fallback is changed.
+// Railway switches, read at start-up: FAL_STORE_IO=1 lets fal store payloads again; FAL_CDN_EXPIRY_DAYS
+// sets the days (unset = 30; 0, off or blank = no expiry header, fal's own default).
+const FAL_STORE_IO_ALLOWED = String(process.env.FAL_STORE_IO || '').trim() === '1';
+const FAL_CDN_EXPIRY_DAYS = (function () {
+  const raw = process.env.FAL_CDN_EXPIRY_DAYS;
+  if (raw === undefined) return 30;
+  const n = Number(String(raw).trim());
+  return (isFinite(n) && n > 0) ? n : 0;
+})();
+function falExtraHeaders() {
+  const h = {};
+  if (!FAL_STORE_IO_ALLOWED) h['x-fal-store-io'] = '0';
+  if (FAL_CDN_EXPIRY_DAYS > 0) h['x-fal-object-lifecycle-preference'] = JSON.stringify({ expiration_duration_seconds: Math.round(FAL_CDN_EXPIRY_DAYS * 86400) });
+  return h;
+}
+function falRequestMiddleware(request) {
+  if (String(request && request.method || '').toUpperCase() !== 'POST') return Promise.resolve(request);
+  return Promise.resolve(Object.assign({}, request, { headers: Object.assign({}, (request && request.headers) || {}, falExtraHeaders()) }));
+}
+function falSetup(key) {
+  fal.config({ credentials: key, requestMiddleware: falRequestMiddleware });
+}
+console.log('[fal] payload storage ' + (FAL_STORE_IO_ALLOWED ? 'ON (FAL_STORE_IO=1)' : 'off (X-Fal-Store-IO 0)') + '; CDN expiry ' + (FAL_CDN_EXPIRY_DAYS > 0 ? FAL_CDN_EXPIRY_DAYS + ' days' : 'not sent (fal default)'));
+
 // Fetch an image URL and read its true pixel dimensions from the header bytes. Returns
 // { width, height } or null. Only the first ~64KB is needed to parse any header, but some
 // CDNs ignore Range, so we cap the body defensively and measure whatever we get.
@@ -501,7 +537,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
 // this project keeps paying for. Existing callers pass fewer arguments, so genOpts is undefined and
 // persistToR2 is called exactly as before.
 async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText, genOpts) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
@@ -569,7 +605,7 @@ function applyMomentDirection(basePrompt, dirText) {
 }
 
 async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model, prompt: built.input.prompt, system_prompt: built.input.system_prompt || '' };
@@ -580,7 +616,7 @@ async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, 
 // one requested change. Always uses Nano Banana 2 /edit (the only model that
 // conditions on an input image).
 async function retouchImage(currentImageUrl, instruction, style, falKey, shape) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const ar = shapeAspectRatio(shape);
   // A falsy style means "no style prefix" (used by the style-neutral character
   // reference retouch). Moments always pass a real style, so they're unchanged.
@@ -610,7 +646,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
 async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape, markedUrl, onlyRefName, isTile, wholeUrl) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   // v3.0.773 -- a tile is square, and saying so is what stops the model
   // stacking duplicates to fill an extreme aspect.
   const ar = isTile ? '1:1' : shapeAspectRatio(shape);
@@ -1301,7 +1337,7 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
 }
 
 async function generateReferenceImage(falKey, descriptionText, portraitUrl, modelKey) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildReferenceInput(descriptionText, portraitUrl, modelKey);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
@@ -1312,7 +1348,7 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
 
 // Async character reference: submit to fal's queue with our webhook.
 async function submitReference(falKey, descriptionText, portraitUrl, modelKey, webhookUrl) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildReferenceInput(descriptionText, portraitUrl, modelKey);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
@@ -1351,7 +1387,7 @@ function buildAssetReferenceInput(descriptionText, category, modelKey) {
 }
 
 async function submitAssetReference(falKey, descriptionText, category, modelKey, webhookUrl) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildAssetReferenceInput(descriptionText, category, modelKey);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
@@ -1412,7 +1448,7 @@ function buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey) {
 }
 
 async function editReferenceImage(falKey, baseImageUrl, changeText, charName, modelKey) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
@@ -1426,7 +1462,7 @@ async function editReferenceImage(falKey, baseImageUrl, changeText, charName, mo
 
 // Async amended session reference: submit to fal's queue with our webhook.
 async function submitEditReference(falKey, baseImageUrl, changeText, charName, modelKey, webhookUrl) {
-  fal.config({ credentials: falKey });
+  falSetup(falKey);
   const built = buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
@@ -2991,7 +3027,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
       'Add no other text, no signature, no border, no frame and no page edges.'
     ].join(' ');
 
-    fal.config({ credentials: fal_key });
+    falSetup(fal_key);
     const result = await fal.subscribe(IMAGE_EDIT_MODELS.nano2, {
       input: {
         prompt: editPrompt,

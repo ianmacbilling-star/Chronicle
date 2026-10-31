@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.3.69",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3369-fal-retention",
+        "kind": "ops",
+        "public": false,
+        "summary": "Image generation: fal no longer stores our prompts and results, and deletes its copy of each new picture after 30 days.",
+        "detail": "Every fal call sends X-Fal-Store-IO 0 and a 30-day Object Lifecycle header. Railway FAL_STORE_IO=1 turns storage back on; FAL_CDN_EXPIRY_DAYS changes the days (0 = no header). Our own copy in R2 is unaffected.",
+        "td": [
+          "TD-1031",
+          "TD-1032"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.68",
     "staged_on": "2026-10-31",
     "entries": [
