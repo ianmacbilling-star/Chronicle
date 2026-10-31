@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.3.58",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3358-signup-bonus-tokens",
+        "kind": "fix",
+        "public": true,
+        "summary": "Bonus tokens from a promo code you entered at sign-up are now given when you make your first purchase.",
+        "detail": "A once-per-customer code entered at sign-up was counted as already used, so its bonus tokens were skipped. To test: sign up with a code that gives bonus tokens on a subscription, pay, and check the balance includes them (trial carry-over tokens + the plan's monthly tokens + the plan's sign-up bonus + the code's tokens); a second purchase should not give them again.",
+        "td": [
+          "TD-1071"
+        ]
+      },
+      {
+        "id": "3358-tier-note",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: the tiers' Sign-up bonus setting reminds you that people also keep their Free Trial carry-over tokens.",
+        "detail": "Dashboard, Tiers and Passes.",
+        "td": [
+          "TD-1071"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.57",
     "staged_on": "2026-10-31",
     "entries": [

@@ -23912,8 +23912,10 @@ function renderTiersConfig(data) {
     fields.forEach(function (f) {
       var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
       var label = TIER_FIELD_LABELS[f] || f;
+      // v3.3.58 -- TD-1071. Ian: "So I know not to over do it. Those CO tokens are like a bonus."
+      var labelNote = (f === 'signup_bonus') ? '<span style="display:block;margin-top:3px;font-size:11.5px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(240,232,208,0.72);">Remember they keep the Free Trial CO tokens as well, even on a sign-up that went right to payment.</span>' : '';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);break-inside:avoid;">' +
-        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + '</label>' +
+        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + labelNote + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
         // v3.0.922 -- recompute as you type. Bound on EVERY field rather than only the three

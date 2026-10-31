@@ -853,7 +853,10 @@ async function recordAndGrantPromo(session, eventId) {
     // all their purchases. Count prior redemptions of this code by this user; at/over
     // the limit we still log the redemption (attribution) but skip the token grant.
     const _limit = (promo.per_user_limit && promo.per_user_limit > 0) ? promo.per_user_limit : 1;
-    const _prior = await db.prepare('SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ?').get(uid, promo.id);
+    // v3.3.58 -- TD-1071. PURCHASES ONLY. The row written when the code was typed at sign-up (context 'signup', for
+    // attribution) was counted too, so a once-per-customer code entered at sign-up looked already used on the very
+    // first purchase and its bonus tokens were never given (Ian's NEWGOLD10 test: 95 tokens, should have been 105).
+    const _prior = await db.prepare("SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ? AND context = 'purchase'").get(uid, promo.id);
     if (_prior && Number(_prior.n) >= _limit) grant = 0;
   }
   // Insert the redemption row FIRST. The unique (user_id, stripe_session_id) index
