@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.68",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3368-compare-tiers",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: Tiers and Passes has a button at the top that opens the Compare the Tiers grid, as visitors see it.",
+        "detail": "The same window as the landing page, with the live numbers; it reloads on each press, so it reflects what was just saved.",
+        "td": [
+          "TD-1078"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.66",
     "staged_on": "2026-10-31",
     "entries": [

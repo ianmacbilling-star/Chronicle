@@ -2064,6 +2064,11 @@
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
+        <!-- v3.3.67 -- TD-1078. The landing page's Compare the Tiers grid, opened here with the live numbers (Ian). -->
+        <div style="margin:0 0 14px;">
+          <button type="button" class="btn btn-sm" onclick="openCompareTiersGrid(this)">Compare the Tiers (as visitors see it)</button>
+          <span class="settings-section-desc" id="compare-tiers-msg" style="margin:0 0 0 8px;"></span>
+        </div>
         <!-- v3.0.920 -- TD-780 Push 4a. PASSES SIT ABOVE THE TIERS. Ian, 2026-09-16: "I think
              passes are really going to be bigger than subscriptions so lets put it up top."
              The tab id stays 'tiers' so the admin/tester gating in SETTINGS_TABS_ALL is

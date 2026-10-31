@@ -38347,3 +38347,34 @@ function _hdrTitleTips() {
   });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _hdrTitleTips); else _hdrTitleTips();
+
+// =====================================================================================
+// v3.3.67 -- TD-1078. COMPARE THE TIERS FROM THE DASHBOARD (Ian: "at the very top of the tab... a button that pulls
+// up the Compare Tiers Grid page from the landing pages"). The landing page's own grid -- public/js/tier-grid.js and
+// its stylesheet -- loaded on first use. The script is run afresh on every press (its window is removed first),
+// because it fetches the numbers once per load and they should match what was just saved here.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function openCompareTiersGrid(btn) {
+  var msg = document.getElementById('compare-tiers-msg');
+  if (msg) msg.textContent = '';
+  if (!document.getElementById('tier-grid-css')) {
+    var l = document.createElement('link');
+    l.id = 'tier-grid-css'; l.rel = 'stylesheet'; l.href = '/css/tier-grid.css?v=3.0.896';
+    document.head.appendChild(l);
+  }
+  var old = document.getElementById('tg-overlay');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  var prev = document.getElementById('tier-grid-js');
+  if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+  if (btn) btn.disabled = true;
+  var sc = document.createElement('script');
+  sc.id = 'tier-grid-js';
+  sc.src = '/js/tier-grid.js?v=3.2.47';
+  sc.onload = function () {
+    if (btn) btn.disabled = false;
+    try { window.campaigniaTierGrid.open(); } catch (e) { if (msg) msg.textContent = 'Could not open the grid.'; }
+  };
+  sc.onerror = function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not load the grid. Try again.'; };
+  document.body.appendChild(sc);
+}
