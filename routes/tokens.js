@@ -235,6 +235,33 @@ async function requireAdminOrTesterLocal(req, res) {
   return false;
 }
 
+// v3.3.57 -- TD-1070. THE DISCOUNT CODE THIS BUYER TYPED AT SIGN-UP, IF IT FITS THIS PURCHASE: the Stripe promotion
+// code id to apply at checkout (services/billing/stripeProvider.js createWithSignupDiscount), or null. It fits when
+// the code is one of ours with a Stripe side, is on, has not expired, covers this product (token_pack, pass,
+// sub:silver / sub:gold / sub:platinum), and this account has not already used it on a purchase (every completed
+// checkout records its code -- recordAndGrantPromo). Stripe still has the last word (first purchase only, total
+// uses); if it refuses, the checkout opens without the code. Any failure here means "no code", never "no checkout".
+async function signupDiscountFor(userId, productKey) {
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT signup_promo_code FROM users WHERE id = ?').get(userId);
+    const code = (u && u.signup_promo_code) ? String(u.signup_promo_code).trim().toUpperCase() : '';
+    if (!code) return null;
+    const p = await db.prepare('SELECT id, active, expires_at, products, stripe_promotion_code_id FROM promo_codes WHERE code = ?').get(code);
+    if (!p || !p.active || !p.stripe_promotion_code_id) return null;
+    if (p.expires_at && new Date(p.expires_at) < new Date()) return null;
+    let prods = p.products;
+    if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch (e) { prods = null; } }
+    if (!Array.isArray(prods) || prods.indexOf(productKey) < 0) return null;
+    const used = await db.prepare("SELECT 1 AS x FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ? AND context = 'purchase' LIMIT 1").get(userId, p.id);
+    if (used) return null;
+    return p.stripe_promotion_code_id;
+  } catch (e) {
+    console.error('sign-up discount lookup failed (checkout goes ahead without it):', e && e.message);
+    return null;
+  }
+}
+
 // v3.3.50 -- TD-1063. A TESTER CAN HOLD AT MOST 1000 TOKENS THAT THEY GAVE THEMSELVES (Ian: "cap it at how many tokens
 // they can have at any given time... no more than 1000. That way they can always add more... but they can never end
 // up with more than 1000"). Applies to the three self-only testing controls below; admins are never capped, and
@@ -523,6 +550,7 @@ router.post('/checkout', async function(req, res) {
       customerId: _buyerCustomerId,
       attributedCampaignId: attributed,
       customerEmail: buyerEmail,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'token_pack'),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?purchase=success',
       cancelUrl: base + '/app.html?purchase=cancel'
     });
@@ -606,6 +634,7 @@ router.post('/pass-checkout', async function(req, res) {
       // v3.1.45 -- TD-938. Recorded for the support trail: 'pause' for a Silver/Gold subscriber, else empty.
       // The webhook does not depend on it; it re-reads the account and applies the same rule.
       extraMetadata: { sub_choice: (_subPlan && (_subPlan.sub === 'silver' || _subPlan.sub === 'gold')) ? 'pause' : '' },
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'pass'),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?pass=success',
       cancelUrl: base + '/app.html?pass=cancel'
     });
@@ -651,6 +680,7 @@ router.post('/subscribe', async function(req, res) {
       userId: req.session.userId,
       customerId: customerId,
       customerEmail: (u && u.email) || null,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'sub:' + tier),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
     });
@@ -712,6 +742,7 @@ router.post('/change-plan', async function(req, res) {
       userId: req.session.userId,
       customerId: (await ensureStripeCustomer(req.session.userId)) || (u && u.stripe_customer_id) || null,   // v3.0.945 -- TD-791
       customerEmail: (u && u.email) || null,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'sub:' + tier),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
     });

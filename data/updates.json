@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.57",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3357-signup-discount",
+        "kind": "fix",
+        "public": true,
+        "summary": "A discount code you enter when you sign up is now applied for you at checkout.",
+        "detail": "When you go on to buy a subscription, a pass or tokens that your sign-up code covers, the checkout opens with the discount already applied. If the code cannot be used on that purchase (for example it is for first purchases only), the checkout opens as before and you can still enter a code there. To test: make a discount code for a subscription tier, sign up with it from that tier's button on the home page, confirm the email, and check the Stripe checkout shows the discount; sign up with a code for a different product and check the checkout is full price with the code box; use the code once and check a second purchase does not get it again.",
+        "td": [
+          "TD-1070"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.56",
     "staged_on": "2026-10-31",
     "entries": [

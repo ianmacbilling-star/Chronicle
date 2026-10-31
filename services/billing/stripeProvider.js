@@ -137,6 +137,24 @@ async function updateCustomerEmail(customerId, email) {
 // Create a hosted Checkout Session for a one-time token-pack purchase. The
 // caller redirects the buyer to the returned session.url. Amount + description
 // come from the server pack -- never from the client.
+// v3.3.57 -- TD-1070. A DISCOUNT CODE TYPED AT SIGN-UP IS APPLIED AT CHECKOUT (Ian: "a normal discount code... used
+// at sign up will and should flow through to stripe"). Until now it was only recorded, and the buyer met full price
+// with Stripe's own code box. routes/tokens.js decides whether this buyer's sign-up code fits this purchase and passes
+// its Stripe promotion code id; here it is applied. Stripe will not take an applied discount and the code box on one
+// session, so the box goes when a code is applied. IF STRIPE REFUSES THE CODE (spent, first-purchase-only, wrong
+// product), THE CHECKOUT OPENS WITHOUT IT, EXACTLY AS BEFORE -- a code must never stop somebody paying.
+async function createWithSignupDiscount(stripe, params, promotionCodeId) {
+  if (!promotionCodeId) return await stripe.checkout.sessions.create(params);
+  const withCode = Object.assign({}, params, { discounts: [{ promotion_code: promotionCodeId }] });
+  delete withCode.allow_promotion_codes;
+  try {
+    return await stripe.checkout.sessions.create(withCode);
+  } catch (e) {
+    console.error('sign-up discount not applied (' + promotionCodeId + '), checkout opened without it:', e && e.message);
+    return await stripe.checkout.sessions.create(params);
+  }
+}
+
 async function createCheckoutSession(opts) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
@@ -166,7 +184,7 @@ async function createCheckoutSession(opts) {
   // Stripe Link identity isn't the default. (Link may still be offered by the browser.)
   // v3.0.945 -- TD-791. With a customer id the email comes from that customer instead.
   Object.assign(params, buyerRef(opts), invoiceRef(opts, 'token_pack', { pack_id: String(pack.id) }));   // v3.0.946
-  return await stripe.checkout.sessions.create(params);
+  return await createWithSignupDiscount(stripe, params, opts.signupPromotionCodeId);   // v3.3.57 -- TD-1070
 }
 
 // v3.0.923 -- TD-780 Push 5. A PLATINUM PASS IS A ONE-TIME PAYMENT, so this is the token-pack
@@ -213,7 +231,7 @@ async function createPassCheckout(opts) {
     Object.keys(opts.extraMetadata).forEach(function (k) { params.metadata[k] = String(opts.extraMetadata[k]); });
   }
   Object.assign(params, buyerRef(opts), invoiceRef(opts, 'pass', { pass_id: String(pass.id) }));   // v3.0.945 -- TD-791, v3.0.946 invoice
-  return await stripe.checkout.sessions.create(params);
+  return await createWithSignupDiscount(stripe, params, opts.signupPromotionCodeId);   // v3.3.57 -- TD-1070
 }
 
 // v3.0.923 -- TD-780 Push 5. NOT CALLED BY ANYTHING YET, and that is deliberate -- see the note
@@ -329,7 +347,7 @@ async function createSubscriptionCheckout(opts) {
   };
   if (opts.customerId) params.customer = opts.customerId;
   else if (opts.customerEmail) params.customer_email = opts.customerEmail;
-  return await stripe.checkout.sessions.create(params);
+  return await createWithSignupDiscount(stripe, params, opts.signupPromotionCodeId);   // v3.3.57 -- TD-1070
 }
 
 // Create a Stripe Billing Portal session -- the hosted, white-labeled page where a
