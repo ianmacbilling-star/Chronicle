@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.54",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3354-signup-errors",
+        "kind": "fix",
+        "public": true,
+        "summary": "Sign-up problems now show right by the Create Account button, and the field to fix is highlighted.",
+        "detail": "The field that needs fixing gets an amber outline, shakes once and is scrolled into view; fixing it clears the message. To test: on the sign-up form, leave the name empty, use a short password, leave out the date of birth, use a date under 18, leave either box unticked, use an email that already has an account and a pen name already taken -- each time the message should be by the button and the right field should shake.",
+        "td": [
+          "TD-1067"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.53",
     "staged_on": "2026-10-31",
     "entries": [

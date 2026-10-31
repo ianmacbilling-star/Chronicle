@@ -129,6 +129,13 @@
     font-size: 13px;
     margin-bottom: 16px;
   }
+  /* v3.3.54 -- TD-1067. The shake SOP (claude/UI_CONVENTIONS.md section 1): the field that needs fixing gets an amber
+     outline and tint, shakes once, scrolls to the middle and takes focus. Fixing it clears the outline. */
+  .field-nag { outline: 2px solid #e8a85a !important; outline-offset: 2px; background-color: rgba(232,168,90,0.12) !important;
+    border-radius: 6px; animation: fieldNagShake .45s ease-in-out 1; }
+  @keyframes fieldNagShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+  @media (prefers-reduced-motion: reduce) { .field-nag { animation: none; } }
 </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -199,7 +206,6 @@
       <div class="auth-title">Campaignia — Where Your Story Begins</div>
       <div class="auth-subtitle">Create your Story Master account</div>
       <div class="auth-divider"></div>
-      <div id="register-error" class="alert-error hidden"></div>
       <div class="form-group">
         <label class="form-label">Your name</label>
         <input class="form-input" type="text" id="reg-name" placeholder="e.g. Story Master Dave" autocomplete="name" />
@@ -234,6 +240,8 @@
         <input type="checkbox" id="reg-upload" style="margin-top:3px;flex-shrink:0;" />
         <span>I will only use content (images and text) that I own or have the rights to use, and I will not upload or generate material that infringes anyone else&#39;s copyright or trademarks.</span>
       </label>
+      <!-- v3.3.54 -- TD-1067. The error sits by the button, not above the form (Ian: "You don't see them when they are at the top"). -->
+      <div id="register-error" class="alert-error hidden" role="alert"></div>
       <button class="btn btn-primary" id="register-btn">Create Account</button>
       <div class="auth-switch">Already have an account? <a onclick="showLogin()">Sign in</a></div>
     </div>
@@ -333,8 +341,57 @@ document.getElementById('login-btn').addEventListener('click', async function() 
   } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter Campaignia'; }
 });
 
+// v3.3.54 -- TD-1067. WHICH FIELD AN ERROR IS ABOUT, and the shake (UI_CONVENTIONS section 1). The error shows by the
+// Create Account button; the field it names is outlined amber, shakes once, scrolls to the middle and takes focus.
+// Changing that field clears its outline, and the error with it.
+var _regNagEl = null;
+function _regNagTarget(id) {
+  var el = document.getElementById(id);
+  if (!el) return null;
+  return (el.type === 'checkbox' && el.parentNode) ? el.parentNode : el;   // a tick box: its whole line
+}
+function _regFieldFor(msg) {
+  var m = String(msg || '');
+  if (/pen name/i.test(m)) return 'reg-penname';
+  if (/birth|18 years/i.test(m)) return 'reg-dob';
+  if (/terms of service/i.test(m)) return 'reg-terms';
+  if (/copyright|content/i.test(m)) return 'reg-upload';
+  if (/password/i.test(m)) return 'reg-password';
+  if (/email/i.test(m)) return 'reg-email';
+  return null;
+}
+function _regClearNag() {
+  if (_regNagEl) { _regNagEl.classList.remove('field-nag'); _regNagEl = null; }
+}
+function regFail(msg, fieldId) {
+  showError('register-error', msg);
+  _regClearNag();
+  var id = fieldId || _regFieldFor(msg);
+  var t = id ? _regNagTarget(id) : null;
+  if (!t) {
+    try { document.getElementById('register-error').scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    return;
+  }
+  t.classList.remove('field-nag'); void t.offsetWidth; t.classList.add('field-nag');   // restart the shake
+  _regNagEl = t;
+  try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+  var input = document.getElementById(id);
+  try { if (input) input.focus({ preventScroll: true }); } catch (e) {}
+}
+['reg-name', 'reg-penname', 'reg-email', 'reg-password', 'reg-dob', 'reg-terms', 'reg-upload'].forEach(function (id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var fix = function () {
+    var t = _regNagTarget(id);
+    if (t && t === _regNagEl) { _regClearNag(); hideError('register-error'); }
+  };
+  el.addEventListener('input', fix);
+  el.addEventListener('change', fix);
+});
+
 document.getElementById('register-btn').addEventListener('click', async function() {
   hideError('register-error');
+  _regClearNag();
   var name = document.getElementById('reg-name').value.trim();
   var email = document.getElementById('reg-email').value.trim();
   var password = document.getElementById('reg-password').value;
@@ -342,20 +399,22 @@ document.getElementById('register-btn').addEventListener('click', async function
   var dob = document.getElementById('reg-dob').value;
   var accept_terms = document.getElementById('reg-terms').checked;
   var accept_upload = document.getElementById('reg-upload').checked;
-  if (!name||!email||!password) { showError('register-error','All fields are required.'); return; }
-  if (password.length < 8) { showError('register-error','Password must be at least 8 characters.'); return; }
-  if (!dob) { showError('register-error','Please enter your date of birth.'); return; }
-  if (!accept_terms) { showError('register-error','Please read and accept the Terms of Service to continue.'); return; }
-  if (!accept_upload) { showError('register-error','Please accept the content and copyright agreement to continue.'); return; }
+  if (!name) { regFail('Please enter your name.', 'reg-name'); return; }
+  if (!email) { regFail('Please enter your email.', 'reg-email'); return; }
+  if (!password) { regFail('Please choose a password.', 'reg-password'); return; }
+  if (password.length < 8) { regFail('Password must be at least 8 characters.', 'reg-password'); return; }
+  if (!dob) { regFail('Please enter your date of birth.', 'reg-dob'); return; }
+  if (!accept_terms) { regFail('Please read and accept the Terms of Service to continue.', 'reg-terms'); return; }
+  if (!accept_upload) { regFail('Please accept the content and copyright agreement to continue.', 'reg-upload'); return; }
   this.disabled=true; this.textContent='Creating...';
   try {
     var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok,promo_code:(document.getElementById('reg-promo')||{}).value||'',plan:_signupPlan})});
     var data = await res.json();
-    if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
+    if (data.error) { regFail(data.error); this.disabled=false; this.textContent='Create Account'; return; }   // v3.3.54 -- by the button, its field shaken
     // Full-strict: the account exists but stays inactive until they confirm their
     // email. Any paid-plan choice is stored server-side and resumes after verifying.
     showVerify(data.email || email);
-    this.disabled = false; this.textContent = 'Create Account';  } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
+    this.disabled = false; this.textContent = 'Create Account';  } catch(e) { regFail('Connection error. Please try again.'); this.disabled=false; this.textContent='Create Account'; }
 });
 
 document.getElementById('login-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('login-btn').click(); });
