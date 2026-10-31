@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.53",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3353-library-top",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's top is much shorter, so the books and pictures start higher up.",
+        "detail": "The headline sits at the top left with its line beside it, and the tabs, genre and art style pickers, search (or Last 6 Months / All Time on the Gallery) and Show everything share one row under it. To test: Gallery and Books at full width, tablet and phone widths; pick a genre and an art style and check the chips and Show everything appear on the row; The Guild tab (when on) still hides the filters.",
+        "td": [
+          "TD-1066"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.52",
     "staged_on": "2026-10-30",
     "entries": [

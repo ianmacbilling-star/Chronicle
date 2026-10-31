@@ -225,6 +225,26 @@
     #lib-actions .lib-search { padding:0; flex:0 1 380px; min-width:220px; }   /* v3.3.45 -- on the Show everything row */
     #lib-actions { width:100%; max-width:760px; }   /* the full width, or the row shrinks to its widest item and the search wraps */
     #lib-actions .lib-search input { padding:7px 12px; }
+    /* v3.3.53 -- TD-1066. A COMPACT TOP (Ian: "The current layout takes up TONS of vertical space"; option 1 of the
+       mock-up). The headline sits top left with the subtitle beside it, and the tabs, genre, art style, search / time
+       window and Show everything share ONE row under it -- for every tab. #lib-facets stays as the wrapper The Guild
+       hides (marketplace.js), but lays out as display:contents, so its pieces are items of the row. */
+    .lib-top { max-width:1100px; margin:0 auto; padding:18px 14px 14px; }
+    .lib-top .lib-head { display:flex; align-items:baseline; gap:6px 20px; flex-wrap:wrap; text-align:left; padding:0; max-width:none; margin:0 0 14px; }
+    .lib-top .lib-title { font-size:clamp(32px,4vw,46px); white-space:nowrap; }
+    .lib-top .lib-sub { margin:0; font-size:clamp(15px,1.6vw,17px); flex:1 1 300px; }
+    .lib-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
+    .lib-row .lib-tabs { margin:0; justify-content:flex-start; }
+    .lib-row .tab-btn { padding:7px 14px; }
+    .lib-sep { width:1px; height:28px; background:rgba(201,168,76,0.35); margin:0 2px; }
+    .lib-row .lib-facets { display:contents; }
+    .lib-row #facet-genre, .lib-row #facet-style { flex-wrap:nowrap; }
+    .lib-row #lib-actions { width:auto; max-width:none; flex:1 1 260px; justify-content:flex-start; margin:0; }
+    .lib-row #lib-actions .lib-search { flex:1 1 220px; }
+    .lib-row #lib-actions .lib-search input { max-width:none; }
+    .lib-top.lib-top-wide { max-width:1300px; padding-left:16px; padding-right:16px; }   /* the Gallery's width, so the two line up */
+    .lib-row #facet-genre-chips:empty, .lib-row #facet-style-chips:empty { display:none; }   /* no gap before an empty picker */
+    @media (max-width:600px) { .lib-sep { display:none; } .lib-top .lib-sub { flex-basis:100%; } }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -247,11 +267,14 @@
     </div>
   </nav>
 
+  <!-- v3.3.53 -- TD-1066. The compact top: headline and subtitle on one line, everything else on the row under it. -->
+  <div class="lib-top lib-top-wide" id="lib-top">
   <header class="lib-head">
     <h1 class="lib-title">The Public Library</h1>
     <div class="lib-sub">From tabletop campaigns to family stories — made by other Story Masters. Take a look at what's possible.</div>
   </header>
 
+  <div class="lib-row">
   <!-- v3.3.52 -- TD-1065. The tabs read Gallery and Books (Ian); ids, switchTab values and addresses are unchanged. -->
   <div class="lib-tabs">
     <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Gallery</button>
@@ -259,6 +282,7 @@
     <!-- v3.3.01 -- TD-1037. The Artist Marketplace. Hidden by marketplace.css until the switch is on (or an admin is looking). -->
     <button class="tab-btn mkt-link" id="tab-market" onclick="switchTab('market')">The Guild</button>
   </div>
+  <span class="lib-sep" aria-hidden="true"></span>
 
   <!-- v3.0.845 -- TD-693/TD-694/TD-672. ONE filter row above BOTH tabs. The v3.0.843
        arrangement gave each tab its own picker, which meant the same question was asked
@@ -293,6 +317,8 @@
         <input type="text" id="stories-q" placeholder="Search books by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
       </div>
     </div>
+  </div>
+  </div>
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -515,6 +541,7 @@
       document.getElementById('stories-search').style.display = onStories ? '' : 'none';
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
+      try { document.getElementById('lib-top').classList.toggle('lib-top-wide', !onStories); } catch (e) {}   // v3.3.53
       setStatus('');
       // v3.0.845 -- a filter changed while this tab was hidden leaves it STALE, and the
       // old `!any` test cannot see that: a tab that legitimately found nothing also has
