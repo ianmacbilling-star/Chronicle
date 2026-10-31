@@ -794,7 +794,7 @@ remembering to be careful.
 
 - **Publishing to the Library goes out as LINK ONLY by default.** You do not have to ask
   for it. The story gets a private link that works for anyone you send it to, and it does
-  **not** appear in the public Stories directory and is **not** offered to search engines.
+  **not** appear on the Library's public **Books** tab and is **not** offered to search engines.
 - **Making one public asks you first.** From **My Stuff → Published Stories** you can list it publicly,
   and when you do, Campaignia warns you plainly that the story may show a real person and
   asks you to confirm. Decline and it stays link only.
@@ -1854,13 +1854,13 @@ remembered one.
 Every book you publish to the Library is one of two things, and you choose which at the
 moment you publish.
 
-**Public** — listed in the Library. It appears in the Stories directory, it can be found
+**Public** — listed in the Library. It appears on the **Books** tab, it can be found
 by browsing and filtering, and it is offered to search engines. This is the normal choice
 for a campaign you want read.
 
 **Link only** — published, but unlisted. It is a real Library page with a real, permanent
 address, and anyone you send that address to can read it without an account. It is **not**
-in the Stories directory, **not** in the site's search-engine sitemap, and **cannot be
+on the Books tab, **not** in the site's search-engine sitemap, and **cannot be
 found by browsing, filtering or searching the Library**. The only way in is the link.
 
 Tick **Publish as link only** on the Order & Publish tab to choose it. **Family Stories
@@ -1896,17 +1896,26 @@ can also do from My Stuff → Published Stories. That stops it working for every
 ## 16. The public Library
 
 The Library is where you browse everything the Campaignia community has made public. Two
-sides: a gallery of **public images** (single images users flagged public, credited to
-their pen names) and a **Stories** directory of **published graphic novels**. Search by
+tabs: the **Gallery** of **public images** (single images users flagged public, credited to
+their pen names) and **Books**, the **published graphic novels**. Search by
 **author / pen name**, then open a story to **read** it on its page or **download** it.
 It's also where your own published stories and public images appear to the world.
+
+**How Books looks.** The books stand on wooden shelves, with each author's **pen name on a brass plate**
+on the shelf under their books. A campaign of three or more books shows its first and last books facing
+out and the ones between with their **spines** out. **Hover over a book** (tap it once on a phone) for a
+card with a larger cover, the title, subtitle, the first line of the blurb, the date, the genres and
+**+ Bookshelf**; click the blurb's first line or **more** to read the whole blurb, and click the book to open
+it (on a phone, tap it a second time). **The newest campaign is at the top:** when a new book is published,
+its whole campaign moves to the top of Books, all its books together in the order the author set on
+My Stuff. Publishing again over a book that is already there does not move it.
 
 **Story links.** Every published story has its own permanent address, and **it is the same
 link whether the story is public or link only** — so a link you send someone keeps working
 if you change your mind later. **Copy link** on My Stuff → Published Stories gives
 you that address, and so does the **Share** button on the story's own page.
 
-**What you will not find here.** The Stories directory lists only stories published
+**What you will not find here.** The Books tab lists only stories published
 publicly. A **link only** story is not in it, is not in the site's search-engine sitemap,
 and cannot be reached by browsing, filtering or searching — only by its link. That is the
 point of it: a family book you want to send to relatives, not to strangers. See 15a.

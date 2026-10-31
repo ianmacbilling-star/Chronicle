@@ -96,7 +96,7 @@
         font-size: 12px; line-height: 1; text-decoration: none; }
     </style>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
-    <button id="help-fab" class="btn btn-sm help-nudge" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
+    <button id="help-fab" class="btn btn-sm help-nudge hq-tip" type="button" onclick="openHelp()" data-tip="Questions? Ask us anything &mdash; tips, how-tos, getting started." aria-label="Questions? Ask us anything: tips, how-tos, getting started.">?s</button>
     <div class="user-menu-wrap">
       <a id="gift-pin" href="/redeem" style="display:none;" title="Someone gave you a gift. Tap to redeem it." aria-label="Someone gave you a gift. Tap to redeem it."><span aria-hidden="true">&#127873;</span></a>
       <div class="user-menu-btn" onclick="toggleUserMenu()">
@@ -2113,15 +2113,23 @@
           <div class="settings-section-title">Create a promo code</div>
           <div class="settings-section-desc" style="margin-bottom:10px;">A code can take a % or $ amount off, give bonus tokens, or both. Saving creates the matching discount in Stripe automatically &mdash; in the sandbox on staging, in live on production. Once saved, only the label and the on/off switch can change; to change anything else, switch the code off and make a new one.</div>
           <div id="promo-stripe-warn" class="settings-section-desc" style="display:none;margin-bottom:10px;color:var(--error);">Stripe is not configured on this server, so only bonus-token codes can be created.</div>
+          <!-- v3.3.50 -- TD-1063. "Make a Tester" codes: the rows marked promo-std are hidden for them. -->
+          <style>#settings-pane-promos.promo-is-tester .promo-std { display:none !important; }</style>
           <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;max-width:640px;">
+            <label style="color:var(--gold);font-size:13px;">Type</label>
+            <select class="form-input" id="promo-kind" onchange="promoFormRefresh()" style="width:260px;">
+              <option value="std">Discount and/or bonus tokens</option>
+              <option value="tester">Make a Tester (Platinum)</option>
+            </select>
+
             <label style="color:var(--gold);font-size:13px;">Code</label>
             <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
 
             <label style="color:var(--gold);font-size:13px;">Label (source)</label>
             <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (where this code is used)" />
 
-            <label style="color:var(--gold);font-size:13px;">Discount</label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label class="promo-std" style="color:var(--gold);font-size:13px;">Discount</label>
+            <div class="promo-std" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <select class="form-input" id="promo-discount-type" onchange="promoFormRefresh()" style="width:160px;">
                 <option value="none">No discount</option>
                 <option value="percent">% off</option>
@@ -2130,17 +2138,17 @@
               <input class="form-input" id="promo-discount-value" type="number" min="0" step="1" placeholder="e.g. 20" style="width:120px;display:none;" oninput="promoFormRefresh()" />
             </div>
 
-            <label style="color:var(--gold);font-size:13px;">Bonus tokens</label>
-            <input class="form-input" id="promo-bonus-input" type="number" min="0" step="1" value="0" style="width:120px;" />
+            <label class="promo-std" style="color:var(--gold);font-size:13px;">Bonus tokens</label>
+            <input class="form-input promo-std" id="promo-bonus-input" type="number" min="0" step="1" value="0" style="width:120px;" />
 
-            <label style="color:var(--gold);font-size:13px;">Sign-up code</label>
-            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+            <label class="promo-std" style="color:var(--gold);font-size:13px;">Sign-up code</label>
+            <label class="promo-std" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
               <input type="checkbox" id="promo-signup-input" onchange="promoFormRefresh()" />
               <span>First-time only: can be entered at sign-up, applies to a customer's first pass or subscription purchase</span>
             </label>
 
-            <label style="color:var(--gold);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
-            <div id="promo-products" style="display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;">
+            <label class="promo-std" style="color:var(--gold);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
+            <div class="promo-std" id="promo-products" style="display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;">
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="token_pack" onchange="promoFormRefresh()" /> Token packs</label>
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="pass" onchange="promoFormRefresh()" /> Passes</label>
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="book" onchange="promoFormRefresh()" /> Books</label>
@@ -2149,8 +2157,8 @@
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:platinum" onchange="promoFormRefresh()" /> Platinum subscription</label>
             </div>
 
-            <label id="promo-subdur-label" style="color:var(--gold);font-size:13px;display:none;">Subscription discount lasts</label>
-            <div id="promo-subdur-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label class="promo-std" id="promo-subdur-label" style="color:var(--gold);font-size:13px;display:none;">Subscription discount lasts</label>
+            <div class="promo-std" id="promo-subdur-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
               <select class="form-input" id="promo-subdur-input" onchange="promoFormRefresh()" style="width:180px;">
                 <option value="once">First payment only</option>
                 <option value="repeating">A number of payments</option>
@@ -2159,8 +2167,8 @@
               <input class="form-input" id="promo-submonths-input" type="number" min="1" max="36" step="1" placeholder="payments" style="width:110px;display:none;" />
             </div>
 
-            <label style="color:var(--gold);font-size:13px;">Once per customer</label>
-            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
+            <label class="promo-std" style="color:var(--gold);font-size:13px;">Once per customer</label>
+            <label class="promo-std" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
               <input type="checkbox" id="promo-once-input" />
               <span>Each customer can use it one time</span>
             </label>
@@ -2174,7 +2182,8 @@
               <span class="settings-section-desc" style="margin:0;">end of that day, Eastern</span>
             </div>
           </div>
-          <div id="promo-book-warn" class="settings-section-desc" style="display:none;margin-top:10px;color:var(--error);">Books are priced at Lulu's print cost plus our markup. A discount bigger than the markup sells the book for less than Lulu charges you.</div>
+          <div id="promo-tester-note" class="settings-section-desc" style="display:none;margin-top:10px;">Anyone who signs up with this code becomes a tester on Platinum, and skips the payment page. It works at sign-up only. Set Total uses, so a shared code cannot be used without limit. Testers can give themselves up to 1000 tokens; tokens they buy are on top. Turn testers off in the Testers list below.</div>
+          <div id="promo-book-warn" class="settings-section-desc promo-std" style="display:none;margin-top:10px;color:var(--error);">Books are priced at Lulu's print cost plus our markup. A discount bigger than the markup sells the book for less than Lulu charges you.</div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
             <button class="btn btn-primary btn-sm" id="promo-submit-btn" onclick="createPromoCode()">Create code</button>
             <span class="settings-section-desc" id="promo-create-msg" style="margin:0;"></span>
@@ -2183,6 +2192,18 @@
         <div class="settings-section">
           <div class="settings-section-title">Existing codes</div>
           <div id="promo-codes-list" class="settings-section-desc">Loading...</div>
+        </div>
+        <!-- v3.3.50 -- TD-1063. TESTERS: made by a "Make a Tester" code or switched on here, each with an on/off switch;
+             and the TESTER_EMAILS list from Railway, read-only. -->
+        <div class="settings-section">
+          <div class="settings-section-title">Testers</div>
+          <div class="settings-section-desc" style="margin-bottom:8px;">Turning a tester off puts the account back to Copper (an account paying for a subscription keeps its tier). Turning one on makes it a tester on Platinum. Testers on the TESTER_EMAILS list in Railway are listed at the bottom; change those in Railway.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+            <input class="form-input" id="tester-add-email" placeholder="email of an existing account" style="width:260px;" />
+            <button class="btn btn-sm" onclick="addTesterByEmail()">Make tester</button>
+            <span class="settings-section-desc" id="tester-add-msg" style="margin:0;"></span>
+          </div>
+          <div id="testers-list" class="settings-section-desc">Loading...</div>
         </div>
       </div>
       <!-- v3.0.674 -- TD-475. SUPPORT, ADMIN ONLY. Impersonation carries an audit trail and a
@@ -2485,7 +2506,7 @@
           <button class="btn btn-primary btn-sm" onclick="devAddTokens()">Add tokens</button>
           <button class="btn btn-sm" onclick="devGrantMonthly()">Grant monthly (reset to fresh)</button>
         </div>
-        <div class="settings-section-desc" style="margin-top:12px;">Or set exact balances (wipes your ledger first). Reserve writes the session reserve on your <em>current</em> tier.</div>
+        <div class="settings-section-desc" style="margin-top:12px;">Or set exact balances (wipes your ledger first). Reserve writes the session reserve on your <em>current</em> tier. Testers: up to 1000 tokens in total, and the reserve is for admins only.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
           <div><label class="form-label" style="font-size:12px;">CO tokens</label><input class="form-input" id="dev-set-cot" type="number" min="0" step="1" value="20" style="max-width:110px;" /></div>
           <div><label class="form-label" style="font-size:12px;">UTOLT tokens</label><input class="form-input" id="dev-set-utlt" type="number" min="0" step="1" value="35" style="max-width:110px;" /></div>
@@ -2768,7 +2789,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Title Builder</div>
-      <button class="btn btn-sm help-nudge" id="title-build-help-btn" type="button" onclick="tbOpenHelp()" title="Title Builder tips, and ask us anything" aria-label="Title Builder help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
+      <button class="btn btn-sm help-nudge hq-tip" id="title-build-help-btn" type="button" onclick="tbOpenHelp()" data-tip="Title Builder tips, and ask us anything" aria-label="Title Builder help" style="flex:none;margin-left:auto;margin-right:12px;">?s</button>
       <button class="modal-close" onclick="closeTitleBuilder()" title="Close without using this title">&times;</button>
     </div>
     <div id="title-build-error" class="alert alert-error hidden"></div>
@@ -2967,7 +2988,7 @@
       <div class="modal-title" id="char-modal-title">Add Character</div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm" type="button" id="char-import-btn" onclick="charImportFromFile()" title="Read a character sheet -- PDF, Word or text -- fill these fields from it, and build the character. Reading the sheet costs one token.">&#11014; Import a sheet</button>
-        <button class="btn btn-sm help-nudge" id="char-help-btn" type="button" onclick="charOpenHelp()" title="Character tips, and ask us anything" aria-label="Character help" style="flex:none;">?s</button>
+        <button class="btn btn-sm help-nudge hq-tip" id="char-help-btn" type="button" onclick="charOpenHelp()" data-tip="Character tips, and ask us anything" aria-label="Character help" style="flex:none;">?s</button>
         <button class="modal-close" onclick="closeCharModal()">&times;</button>
       </div>
     </div>

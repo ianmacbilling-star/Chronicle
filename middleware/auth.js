@@ -334,9 +334,41 @@ async function verifyForkOwnerOrDm(req, res, next) {
 function testerEmails() {
   return (process.env.TESTER_EMAILS || '').split(',').map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean);
 }
+// v3.3.50 -- TD-1063. TESTERS FLAGGED ON THEIR ACCOUNT, as well as the list above (Ian: "Add a tester flag to the
+// user table. Read that into isTesterEmail()"). A "Make a Tester" promo code sets users.is_tester at sign-up, and the
+// Dashboard (Promo Codes > Testers) switches it on and off. Every tester check in the app comes through
+// isTesterEmail(), so this one place covers them all.
+//
+// Kept IN MEMORY so isTesterEmail() stays a plain, synchronous lookup: loaded before the server takes requests
+// (server.js), updated at once by the routes that change the flag (noteTester), and re-read every minute, which also
+// catches an email change and a second server process.
+let _flaggedTesters = new Set();
+let _testerTimer = null;
+async function refreshTesterCache() {
+  const db = await getDb();
+  const rows = await db.prepare('SELECT lower(email) AS e FROM users WHERE is_tester = TRUE').all();
+  const next = new Set();
+  (rows || []).forEach(function (r) { if (r && r.e) next.add(String(r.e).trim()); });
+  _flaggedTesters = next;
+}
+async function startTesterCache() {
+  await refreshTesterCache();
+  if (!_testerTimer) {
+    _testerTimer = setInterval(function () {
+      refreshTesterCache().catch(function (e) { console.error('tester cache refresh failed:', e && e.message); });
+    }, 60 * 1000);
+    if (_testerTimer.unref) _testerTimer.unref();
+  }
+}
+function noteTester(email, on) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return;
+  if (on) _flaggedTesters.add(e); else _flaggedTesters.delete(e);
+}
 function isTesterEmail(email) {
   if (!email) return false;
-  return testerEmails().indexOf(String(email).trim().toLowerCase()) >= 0;
+  const e = String(email).trim().toLowerCase();
+  return testerEmails().indexOf(e) >= 0 || _flaggedTesters.has(e);
 }
 
 // Admin gate. Source of truth = ADMIN_EMAILS env var (comma-separated
@@ -403,6 +435,10 @@ module.exports = {
   requireAdminOrTester,
   isAdminEmail,
   isTesterEmail,
+  testerEmails,         // v3.3.50 -- TD-1063: the TESTER_EMAILS list alone, for the Dashboard's Testers list
+  startTesterCache,     // v3.3.50
+  refreshTesterCache,   // v3.3.50
+  noteTester,           // v3.3.50
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,

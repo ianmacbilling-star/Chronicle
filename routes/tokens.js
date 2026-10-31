@@ -235,6 +235,45 @@ async function requireAdminOrTesterLocal(req, res) {
   return false;
 }
 
+// v3.3.57 -- TD-1070. THE DISCOUNT CODE THIS BUYER TYPED AT SIGN-UP, IF IT FITS THIS PURCHASE: the Stripe promotion
+// code id to apply at checkout (services/billing/stripeProvider.js createWithSignupDiscount), or null. It fits when
+// the code is one of ours with a Stripe side, is on, has not expired, covers this product (token_pack, pass,
+// sub:silver / sub:gold / sub:platinum), and this account has not already used it on a purchase (every completed
+// checkout records its code -- recordAndGrantPromo). Stripe still has the last word (first purchase only, total
+// uses); if it refuses, the checkout opens without the code. Any failure here means "no code", never "no checkout".
+async function signupDiscountFor(userId, productKey) {
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT signup_promo_code FROM users WHERE id = ?').get(userId);
+    const code = (u && u.signup_promo_code) ? String(u.signup_promo_code).trim().toUpperCase() : '';
+    if (!code) return null;
+    const p = await db.prepare('SELECT id, active, expires_at, products, stripe_promotion_code_id FROM promo_codes WHERE code = ?').get(code);
+    if (!p || !p.active || !p.stripe_promotion_code_id) return null;
+    if (p.expires_at && new Date(p.expires_at) < new Date()) return null;
+    let prods = p.products;
+    if (typeof prods === 'string') { try { prods = JSON.parse(prods); } catch (e) { prods = null; } }
+    if (!Array.isArray(prods) || prods.indexOf(productKey) < 0) return null;
+    const used = await db.prepare("SELECT 1 AS x FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ? AND context = 'purchase' LIMIT 1").get(userId, p.id);
+    if (used) return null;
+    return p.stripe_promotion_code_id;
+  } catch (e) {
+    console.error('sign-up discount lookup failed (checkout goes ahead without it):', e && e.message);
+    return null;
+  }
+}
+
+// v3.3.50 -- TD-1063. A TESTER CAN HOLD AT MOST 1000 TOKENS THAT THEY GAVE THEMSELVES (Ian: "cap it at how many tokens
+// they can have at any given time... no more than 1000. That way they can always add more... but they can never end
+// up with more than 1000"). Applies to the three self-only testing controls below; admins are never capped, and
+// tokens anybody buys are not touched. Returns the cap for this caller, or null for an admin.
+const TESTER_TOKEN_CAP = 1000;
+async function testerCapFor(req) {
+  const db = await getDb();
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+  return (user && adminEmails.includes(user.email)) ? null : TESTER_TOKEN_CAP;
+}
+
 async function requireAdmin(req, res) {
   const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
   const db = await getDb();
@@ -296,12 +335,20 @@ router.post('/dev-credit', async function(req, res) {
     return res.status(400).json({ error: 'Amount too large (max 100000)' });
   }
   try {
-    const bal = await creditTokens(req.session.userId, amt, {
+    // v3.3.50 -- TD-1063. Up to the tester cap and no further.
+    const cap = await testerCapFor(req);
+    let give = amt;
+    if (cap !== null) {
+      const before = await getBalance(req.session.userId);
+      give = Math.max(0, Math.min(amt, cap - before.total));
+      if (give <= 0) return res.status(400).json({ error: 'Testers can hold up to ' + cap + ' tokens, and this account already has ' + before.total + '.', cap: cap });
+    }
+    const bal = await creditTokens(req.session.userId, give, {
       bucket: 'cot',
       event_type: 'manual_credit',
       source: 'self_test'
     });
-    res.json({ ok: true, balance: bal });
+    res.json({ ok: true, balance: bal, added: give, capped: give < amt, cap: cap });
   } catch (e) {
     res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
@@ -327,6 +374,11 @@ router.post('/dev-grant-monthly', async function(req, res) {
     let gCot = parseInt(tier && tier.monthly_cot, 10);
     if (!Number.isFinite(gUtlt) || gUtlt < 0) gUtlt = 0;
     if (!Number.isFinite(gCot) || gCot < 0) gCot = 0;
+    // v3.3.50 -- TD-1063. A tester's fresh balance is trimmed to the cap: the monthly (use-it-or-lose-it) part first,
+    // then the carry-over part with whatever room is left.
+    const _cap = await testerCapFor(req);
+    let _capped = false;
+    if (_cap !== null && gUtlt + gCot > _cap) { _capped = true; gUtlt = Math.min(gUtlt, _cap); gCot = Math.min(gCot, _cap - gUtlt); }
     // Reset to a fresh state first so repeated clicks reproduce a brand-new
     // account at this tier rather than stacking grants.
     await db.prepare('DELETE FROM token_ledger WHERE user_id = ?').run(req.session.userId);
@@ -334,7 +386,7 @@ router.post('/dev-grant-monthly', async function(req, res) {
     if (gUtlt > 0) await creditTokens(req.session.userId, gUtlt, { bucket: 'utlt', event_type: 'monthly_grant', source: 'manual_test' });
     if (gCot > 0) await creditTokens(req.session.userId, gCot, { bucket: 'cot', event_type: 'monthly_cot_grant', source: 'manual_test' });
     const bal = await getBalance(req.session.userId);
-    res.json({ ok: true, tier: tierName, granted: { utlt: gUtlt, cot: gCot }, balance: bal });
+    res.json({ ok: true, tier: tierName, granted: { utlt: gUtlt, cot: gCot }, balance: bal, capped: _capped, cap: _cap });
   } catch (e) {
     res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
@@ -358,6 +410,15 @@ router.post('/dev-set-balance', async function(req, res) {
   }
   if (cot > 100000 || utlt > 100000) {
     return res.status(400).json({ error: 'Amount too large (max 100000)' });
+  }
+  // v3.3.50 -- TD-1063. A tester cannot set a balance over the cap -- and cannot change the session reserve, which is
+  // the tier's setting for EVERY account on that tier, not this one's; only an admin may.
+  const _cap = await testerCapFor(req);
+  if (_cap !== null && cot + utlt > _cap) {
+    return res.status(400).json({ error: 'Testers can hold up to ' + _cap + ' tokens. Set a total of ' + _cap + ' or less.', cap: _cap });
+  }
+  if (_cap !== null && body.reserve !== undefined && body.reserve !== null && body.reserve !== '') {
+    return res.status(403).json({ error: 'Only an admin can change the session reserve: it applies to every account on the tier.' });
   }
   try {
     const db = await getDb();
@@ -489,6 +550,7 @@ router.post('/checkout', async function(req, res) {
       customerId: _buyerCustomerId,
       attributedCampaignId: attributed,
       customerEmail: buyerEmail,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'token_pack'),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?purchase=success',
       cancelUrl: base + '/app.html?purchase=cancel'
     });
@@ -572,6 +634,7 @@ router.post('/pass-checkout', async function(req, res) {
       // v3.1.45 -- TD-938. Recorded for the support trail: 'pause' for a Silver/Gold subscriber, else empty.
       // The webhook does not depend on it; it re-reads the account and applies the same rule.
       extraMetadata: { sub_choice: (_subPlan && (_subPlan.sub === 'silver' || _subPlan.sub === 'gold')) ? 'pause' : '' },
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'pass'),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?pass=success',
       cancelUrl: base + '/app.html?pass=cancel'
     });
@@ -617,6 +680,7 @@ router.post('/subscribe', async function(req, res) {
       userId: req.session.userId,
       customerId: customerId,
       customerEmail: (u && u.email) || null,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'sub:' + tier),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
     });
@@ -678,6 +742,7 @@ router.post('/change-plan', async function(req, res) {
       userId: req.session.userId,
       customerId: (await ensureStripeCustomer(req.session.userId)) || (u && u.stripe_customer_id) || null,   // v3.0.945 -- TD-791
       customerEmail: (u && u.email) || null,
+      signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'sub:' + tier),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
     });
@@ -788,7 +853,10 @@ async function recordAndGrantPromo(session, eventId) {
     // all their purchases. Count prior redemptions of this code by this user; at/over
     // the limit we still log the redemption (attribution) but skip the token grant.
     const _limit = (promo.per_user_limit && promo.per_user_limit > 0) ? promo.per_user_limit : 1;
-    const _prior = await db.prepare('SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ?').get(uid, promo.id);
+    // v3.3.58 -- TD-1071. PURCHASES ONLY. The row written when the code was typed at sign-up (context 'signup', for
+    // attribution) was counted too, so a once-per-customer code entered at sign-up looked already used on the very
+    // first purchase and its bonus tokens were never given (Ian's NEWGOLD10 test: 95 tokens, should have been 105).
+    const _prior = await db.prepare("SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ? AND context = 'purchase'").get(uid, promo.id);
     if (_prior && Number(_prior.n) >= _limit) grant = 0;
   }
   // Insert the redemption row FIRST. The unique (user_id, stripe_session_id) index

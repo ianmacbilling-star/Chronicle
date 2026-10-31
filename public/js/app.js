@@ -1964,7 +1964,9 @@ function devAddTokens() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.ok) {
-        show('Added ' + amt + ' tokens. Balance: ' + (data.balance && data.balance.total) + '.', true);
+        // v3.3.50 -- TD-1063: a tester's top-up stops at the cap.
+        var _added = (data.added != null) ? data.added : amt;
+        show('Added ' + _added + ' tokens' + (data.capped ? ' (testers can hold up to ' + data.cap + ')' : '') + '. Balance: ' + (data.balance && data.balance.total) + '.', true);
         refreshTokenBalance();
         if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {
@@ -1991,6 +1993,8 @@ function devSetBalance() {
   var cot = cotEl ? parseInt(cotEl.value, 10) : NaN;
   var utlt = utltEl ? parseInt(utltEl.value, 10) : NaN;
   if (!Number.isFinite(cot) || cot < 0 || !Number.isFinite(utlt) || utlt < 0) { show('Enter non-negative CO and UTOLT amounts.', false); return; }
+  // v3.3.56 -- TD-1069. Say the tester limit here, before asking (the server refuses it too).
+  if (!(state.user && state.user.is_admin) && cot + utlt > 1000) { show('Testers can hold up to 1000 tokens. CO + UTOLT must total 1000 or less (you entered ' + (cot + utlt) + ').', false); try { msg.scrollIntoView({ block: 'nearest' }); } catch (e) {} return; }
   var bodyObj = { cot: cot, utlt: utlt };
   if (resEl && resEl.value !== '') bodyObj.reserve = parseInt(resEl.value, 10);
   fetch('/api/tokens/dev-set-balance', {
@@ -2031,7 +2035,7 @@ function devGrantMonthly() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.ok) {
-        show('Reset to ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier, fresh account). Balance: ' + (data.balance && data.balance.total) + '.', true);
+        show('Reset to ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier, fresh account' + (data.capped ? ', trimmed to the tester limit of ' + data.cap : '') + '). Balance: ' + (data.balance && data.balance.total) + '.', true);
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
         if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {
@@ -23014,7 +23018,7 @@ function renderTierBadge(me) {
   // Everybody else's badge is about their PLAN, so it goes where a plan is changed: My Account, at
   // the Plans and Subscription panel rather than the top of the page.
   if (me.isTester) {
-    el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
+    el.title = 'Test account: you are not billed. Click for your testing tools.';   // v3.3.51
     el.style.cursor = 'pointer';
     el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
   } else if (me.loneCopper) {
@@ -23273,12 +23277,18 @@ function loadPromoCodes() {
       promoFormRefresh();
     })
     .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
+  loadTesters();   // v3.3.50 -- TD-1063
 }
 
 // Show and hide the parts of the form that depend on other choices. Never decides anything the
 // server does not also enforce.
 function promoFormRefresh() {
   var g = function (x) { return document.getElementById(x); };
+  // v3.3.50 -- TD-1063. A "Make a Tester" code has only a code, a label, total uses and an expiry.
+  var tester = ((g('promo-kind') || {}).value === 'tester');
+  var pane = g('settings-pane-promos');
+  if (pane) pane.classList.toggle('promo-is-tester', tester);
+  if (g('promo-tester-note')) g('promo-tester-note').style.display = tester ? '' : 'none';
   var dtype = (g('promo-discount-type') || {}).value || 'none';
   var dval = g('promo-discount-value');
   if (dval) {
@@ -23311,6 +23321,7 @@ function promoEasternDate(v) {
 }
 
 function promoDescribe(c) {
+  if (c.action_type === 'make_tester') return 'Make a Tester: Platinum, at sign-up';   // v3.3.50 -- TD-1063
   if (c.schema_v !== 2) {
     var val = (c.action_type === 'percent_off') ? (c.action_value + '% off (Stripe, set by hand)')
             : (c.action_type === 'amount_off') ? ('$' + c.action_value + ' off (Stripe, set by hand)')
@@ -23337,8 +23348,12 @@ function renderPromoCodes(codes) {
   box.innerHTML = codes.map(function (c) {
     var flags = [];
     if (c.is_signup) flags.push('Sign-up');
-    if (c.schema_v === 2) flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
+    if (c.schema_v === 2 && c.action_type !== 'make_tester') flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
     var uses = 'used ' + (c.redeemed_count || 0) + (c.max_redemptions ? ' of ' + c.max_redemptions : '');
+    // v3.3.56 -- TD-1069. A code that is on but can no longer be used says why (tester note).
+    var _dead = '';
+    if (c.active && c.expires_at && new Date(c.expires_at) < new Date()) _dead = 'Expired';
+    else if (c.active && c.max_redemptions && Number(c.redeemed_count || 0) >= Number(c.max_redemptions)) _dead = 'Used up';
     var stripe = c.stripe_promotion_code_id ? ('Stripe ' + (c.stripe_livemode ? 'live' : 'sandbox')) : (c.schema_v === 2 ? 'Campaignia only' : '');
     return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
@@ -23349,7 +23364,7 @@ function renderPromoCodes(codes) {
       '<span>' + escapeHtml(uses) + '</span>' +
       '<span>expires ' + escapeHtml(promoEasternDate(c.expires_at)) + '</span>' +
       (stripe ? '<span style="color:var(--text-muted);">' + escapeHtml(stripe) + '</span>' : '') +
-      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (c.active ? 'On' : 'Off') + '</span>' +
+      '<span style="min-width:64px;color:' + (_dead ? 'var(--error)' : (c.active ? 'var(--gold)' : 'var(--text-muted)')) + ';">' + (_dead || (c.active ? 'On' : 'Off')) + '</span>' +
       '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Switch off' : 'Switch on') + '</button>' +
       '<span class="settings-section-desc" id="promo-row-msg-' + c.id + '" style="margin:0;flex-basis:100%;"></span>' +
       '</div>';
@@ -23361,6 +23376,7 @@ function resetPromoForm() {
   ['promo-code-input', 'promo-label-input', 'promo-discount-value', 'promo-max-input', 'promo-expires-input', 'promo-submonths-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
   if (g('promo-bonus-input')) g('promo-bonus-input').value = '0';
   if (g('promo-discount-type')) g('promo-discount-type').value = 'none';
+  if (g('promo-kind')) g('promo-kind').value = 'std';   // v3.3.50
   if (g('promo-subdur-input')) g('promo-subdur-input').value = 'once';
   ['promo-signup-input', 'promo-once-input'].forEach(function (id) { if (g(id)) g(id).checked = false; });
   var boxes = document.querySelectorAll('.promo-prod');
@@ -23375,6 +23391,7 @@ function createPromoCode() {
   var boxes = document.querySelectorAll('.promo-prod');
   for (var i = 0; i < boxes.length; i++) { if (boxes[i].checked && !boxes[i].disabled) products.push(boxes[i].value); }
   var payload = {
+    kind: (g('promo-kind') || {}).value === 'tester' ? 'tester' : '',   // v3.3.50 -- TD-1063
     code: (g('promo-code-input') || {}).value || '',
     label: (g('promo-label-input') || {}).value || '',
     discount_type: (g('promo-discount-type') || {}).value || 'none',
@@ -23397,7 +23414,9 @@ function createPromoCode() {
     .then(function (res) {
       if (btn) btn.disabled = false;
       if (res.ok && res.j && res.j.ok) {
+        var _wasTester = payload.kind === 'tester';
         resetPromoForm();
+        if (msg && _wasTester) { msg.textContent = 'Created. Anyone who signs up with it becomes a tester on Platinum.'; loadPromoCodes(); return; }
         if (msg) msg.textContent = 'Created' + (res.j.stripe ? ', with its discount in Stripe (' + (res.j.stripe.livemode ? 'live' : 'sandbox') + ').' : ' (bonus tokens only, nothing in Stripe).');
         loadPromoCodes();
       } else {
@@ -23428,6 +23447,72 @@ function togglePromoCode(id) {
       else if (rm) { rm.textContent = (res.j && res.j.error) || 'Could not switch the code.'; rm.style.color = 'var(--error)'; }
     })
     .catch(function () { if (rm) { rm.textContent = 'Could not switch the code.'; rm.style.color = 'var(--error)'; } });
+}
+
+// ============================================================
+// v3.3.50 -- TD-1063. THE TESTERS LIST (Promo Codes tab). Server: routes/admin.js /testers.
+// ============================================================
+function loadTesters() {
+  var box = document.getElementById('testers-list');
+  if (!box) return;
+  fetch('/api/admin/testers')
+    .then(function (r) { return r.json(); })
+    .then(function (d) { renderTesters((d && d.testers) || [], (d && d.envEmails) || []); })
+    .catch(function () { box.textContent = 'Could not load testers.'; });
+}
+
+function renderTesters(list, env) {
+  var box = document.getElementById('testers-list');
+  if (!box) return;
+  var html = '';
+  if (!list.length) html += '<div style="padding:6px 0;">No testers made by a code or switched on here yet.</div>';
+  html += list.map(function (t) {
+    var src = /^code:/.test(t.source) ? ('code ' + t.source.slice(5)) : 'added here';
+    var since = '';
+    try { since = t.since ? new Date(t.since).toLocaleDateString() : ''; } catch (e) {}
+    return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
+      '<strong>' + escapeHtml(t.name || '(no name)') + '</strong>' +
+      '<span>' + escapeHtml(t.email) + '</span>' +
+      (t.pen_name ? '<span style="color:var(--text-muted);">' + escapeHtml(t.pen_name) + '</span>' : '') +
+      '<span>' + escapeHtml(t.tier) + '</span>' +
+      '<span style="color:var(--text-muted);">' + escapeHtml(src) + (since ? ', ' + escapeHtml(since) : '') + '</span>' +
+      (t.onEnvList ? '<span style="color:var(--text-muted);">also on TESTER_EMAILS</span>' : '') +
+      '<span style="min-width:64px;color:' + (t.on ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (t.on ? 'Tester' : 'Off') + '</span>' +
+      '<button class="btn btn-sm" onclick="switchTester(' + t.id + ', ' + (t.on ? 'false' : 'true') + ')">' + (t.on ? 'Turn off' : 'Turn on') + '</button>' +
+      '<span class="settings-section-desc" id="tester-row-msg-' + t.id + '" style="margin:0;"></span>' +
+      '</div>';
+  }).join('');
+  html += '<div style="padding:10px 0 0;border-top:1px solid var(--border);color:var(--text-muted);">On TESTER_EMAILS in Railway: ' +
+    (env.length ? escapeHtml(env.join(', ')) : 'none') + '</div>';
+  box.innerHTML = html;
+}
+
+function switchTester(id, on) {
+  var rm = document.getElementById('tester-row-msg-' + id);
+  if (!on && !confirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.')) return;
+  if (rm) rm.textContent = 'Saving...';
+  fetch('/api/admin/testers/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: !!on }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) loadTesters();
+      else if (rm) rm.textContent = (res.j && res.j.error) || 'Could not save.';
+    })
+    .catch(function () { if (rm) rm.textContent = 'Could not save.'; });
+}
+
+function addTesterByEmail() {
+  var inp = document.getElementById('tester-add-email');
+  var msg = document.getElementById('tester-add-msg');
+  var email = inp ? inp.value.trim() : '';
+  if (!email) { if (msg) msg.textContent = 'Enter the email of an existing account.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/testers-add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) { if (inp) inp.value = ''; if (msg) msg.textContent = 'Done: that account is now a tester on Platinum.'; loadTesters(); }
+      else if (msg) msg.textContent = (res.j && res.j.error) || 'Could not save.';
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
 
 // ============================================================
@@ -23724,8 +23809,19 @@ function passPerMonth(id) {
   if (!months || isNaN(price) || isNaN(tokens)) { out.innerHTML = ''; return; }
   // Two lines rather than one: at a third of the panel width a single run of three figures
   // wraps in the middle of a number, which reads as a typo.
+  // v3.3.63 -- TD-1075. WHAT SOMEONE WHO SIGNS UP STRAIGHT TO THIS PASS GETS (Ian: "the same up token count on the
+  // passes"). A pass does not replace the Free Trial underneath it (users.tier stays 'trial'), so the trial's tokens
+  // are all still there -- its UTLT too -- and a pass carries no sign-up bonus; then the pass's own tokens. Read
+  // from the Free Trial panel on this same tab, so it follows edits there.
+  var trialLine = '';
+  var tU = document.getElementById('tcf-trial-monthly_utlt'), tC = document.getElementById('tcf-trial-monthly_cot'), tB = document.getElementById('tcf-trial-signup_bonus');
+  if (tU && tC) {
+    var nU = parseFloat(tU.value) || 0, nC = parseFloat(tC.value) || 0, nB = tB ? (parseFloat(tB.value) || 0) : 0;
+    trialLine = '<br />At sign-up, straight to this pass: <strong>' + (nU + nC + nB + tokens) + ' tokens</strong> (' +
+      nU + ' UTLT + ' + nC + ' CO' + (nB ? ' + ' + nB + ' sign-up bonus' : '') + ' from the Free Trial + ' + tokens + ' pass) + (?? Promo Code)';
+  }
   out.innerHTML = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
-    Math.round(tokens / months) + ' tokens per month' +
+    Math.round(tokens / months) + ' tokens per month' + trialLine +
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>';
 }
 
@@ -23827,8 +23923,10 @@ function renderTiersConfig(data) {
     fields.forEach(function (f) {
       var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
       var label = TIER_FIELD_LABELS[f] || f;
+      // v3.3.58 -- TD-1071. Ian: "So I know not to over do it. Those CO tokens are like a bonus."
+      var labelNote = (f === 'signup_bonus') ? '<span style="display:block;margin-top:3px;font-size:11.5px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(240,232,208,0.72);">Remember they keep the Free Trial CO tokens as well, even on a sign-up that went right to payment.</span>' : '';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);break-inside:avoid;">' +
-        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + '</label>' +
+        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + labelNote + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
         // v3.0.922 -- recompute as you type. Bound on EVERY field rather than only the three
@@ -23857,24 +23955,50 @@ function renderTiersConfig(data) {
 // keep: only the CO half carries over, and roughly a quarter of the UTLT half has
 // historically expired unspent. That is a margin question and this is a shopping-comparison
 // line, so the label says "incl. UTLT" and leaves the other question to the financial model.
-function tierDerived(tierKey) {
+function tierDerived(tierKey, noCascade) {
   var out = document.getElementById('tier-derived-' + tierKey);
   if (!out) return;
-  function num(field) {
-    var el = document.getElementById('tcf-' + tierKey + '-' + field);
+  function numOf(tk, field) {
+    var el = document.getElementById('tcf-' + tk + '-' + field);
     if (!el) return NaN;
     var v = parseFloat(el.value);
     return (el.value === '' || isNaN(v)) ? 0 : v;   // a blank field means zero, not broken
   }
+  function num(field) { return numOf(tierKey, field); }
   var price = num('price');
   var utlt = num('monthly_utlt');
   var cot = num('monthly_cot');
   var priceEl = document.getElementById('tcf-' + tierKey + '-price');
   if (!priceEl) { out.innerHTML = ''; return; }   // this tier has no price field to divide
   var tokens = utlt + cot;
-  out.innerHTML = tokens + ' tokens per month (' + utlt + ' UTLT + ' + cot + ' CO)' +
+  // v3.3.59 -- TD-1072. WHAT A NEW ACCOUNT GETS AT SIGN-UP, beside what it gets each month (Ian: "Have what they
+  // will get monthly. And what they will get at initial sign up"), from the numbers on screen, promo codes left out.
+  // The paths are routes/auth.js /register and the upgrade: a cold sign-up starts on the Free Trial (its monthly
+  // tokens + its sign-up bonus); joining by invite starts on Copper; choosing a paid plan at sign-up still starts
+  // on the Free Trial and then pays, so it keeps the trial's CO and sign-up bonus (the trial's UTLT ends at the
+  // upgrade) and gets this plan's monthly tokens and sign-up bonus on top.
+  var bonus = num('signup_bonus');
+  var signup = '';
+  if (tierKey === 'trial') {
+    signup = 'At sign-up: <strong>' + (utlt + cot + bonus) + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO' + (bonus ? ' + ' + bonus + ' sign-up bonus' : '') + ')';
+  } else if (tierKey === 'copper') {
+    signup = 'At sign-up, joining by invite: <strong>' + (utlt + cot + bonus) + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO' + (bonus ? ' + ' + bonus + ' sign-up bonus' : '') + ')';
+  } else {
+    var keep = numOf('trial', 'monthly_cot') + numOf('trial', 'signup_bonus');
+    if (isNaN(keep)) keep = 0;
+    signup = 'At sign-up, straight to this plan: <strong>' + (keep + utlt + cot + bonus) + ' tokens</strong> (' +
+      keep + ' kept from the Free Trial + ' + utlt + ' UTLT + ' + cot + ' CO + ' + bonus + ' sign-up bonus)';
+  }
+  out.innerHTML = 'Monthly: <strong>' + tokens + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO)' +
+    '<br />' + signup + ' + (?? Promo Code)' +   // v3.3.60 -- TD-1072, Ian's wording: a code's tokens come on top
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
     (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
+  // The Free Trial's numbers feed every paid plan's sign-up total.
+  if (tierKey === 'trial' && !noCascade) {
+    ['copper', 'silver', 'gold', 'platinum'].forEach(function (k) { tierDerived(k, true); });
+    // v3.3.63 -- TD-1075. The passes' sign-up totals read the Free Trial too.
+    Array.prototype.forEach.call(document.querySelectorAll('[id^="pass-derived-"]'), function (el) { passPerMonth(el.id.slice(13)); });
+  }
 }
 
 function saveTierPanel(tierKey) {
@@ -36425,8 +36549,9 @@ function _tierBadgeTesterLabel(el, label) {
     document.head.appendChild(st);
   }
   el.textContent = '';
-  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = label + ', Test Account (Not Billed)';
-  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = label + ' \u00b7 Test';
+  // v3.3.51 -- TD-1064. "Platinum Tester" with a star (Ian, option C); "Not billed" moved to the tooltip.
+  var lg = document.createElement('span'); lg.className = 'tb-long'; lg.textContent = '\u2605 ' + label + ' Tester';
+  var sh = document.createElement('span'); sh.className = 'tb-short'; sh.textContent = '\u2605 Tester';
   el.appendChild(lg); el.appendChild(sh);
 }
 

@@ -1393,6 +1393,22 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   background:#b87333!important;font-weight:700!important;}
 .tier-badge-tester{border-color:var(--warn-orange-line)!important;color:var(--warn-orange)!important;   /* v3.0.887 -- same value, now read from the token */
   background:rgba(194,65,12,0.12)!important;}
+/* v3.3.51 -- TD-1064. THE TESTER BADGE, MADE INVITING (Ian chose option C, "Platinum"): a silver sheen with a star,
+   "Platinum Tester", lifting a little on hover. "Not billed" is in the tooltip now. Overrides the orange above. */
+#tier-badge.tier-badge-tester{border:1px solid #cfd6e3!important;color:#1b2230!important;font-weight:700!important;
+  background:linear-gradient(110deg,#e9edf5 0%,#ffffff 40%,#b9c2d3 60%,#eef1f7 100%)!important;
+  box-shadow:0 0 10px rgba(220,228,245,0.4);transition:transform .15s ease, box-shadow .15s ease;}
+#tier-badge.tier-badge-tester:hover{transform:translateY(-1px);box-shadow:0 0 14px rgba(232,238,250,0.7);}
+/* v3.3.51 -- TD-1064. The ?s help buttons' tooltip: shown at once on hover (the browser's own title tooltip came late
+   and was easy to miss -- Ian). Text in data-tip; below the button, right-aligned, with a small arrow. */
+.hq-tip{position:relative;}
+@media (hover:hover){
+  .hq-tip:hover::after,.hq-tip:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 9px);right:0;z-index:300;
+    white-space:nowrap;background:#f8f3e6;color:#2a1d08;font:400 13px/1.3 Georgia,serif;letter-spacing:0;text-transform:none;
+    padding:7px 11px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;}
+  .hq-tip:hover::before,.hq-tip:focus-visible::before{content:'';position:absolute;top:calc(100% + 3px);right:12px;z-index:301;
+    border:6px solid transparent;border-top:0;border-bottom-color:#f8f3e6;pointer-events:none;}
+}
 .archive-pick-item img{max-width:100%;max-height:178px;width:auto;height:auto;display:block;
   cursor:pointer;border-radius:4px;}
 /* v3.0.671 -- TD-474. The part of the picture the cover keeps. Faint on purpose: it is a guide over

@@ -658,6 +658,13 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expires TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_plan TEXT',
+    // v3.3.50 -- TD-1063. A tester made by a "Make a Tester" promo code at sign-up, or switched on in the Dashboard
+    // (Promo Codes > Testers). middleware/auth.js isTesterEmail() counts these alongside the TESTER_EMAILS list.
+    // tester_source says how they came to be one ('code:BETA', 'manual') and stays when the switch is turned off,
+    // so the Dashboard list can still show them.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester BOOLEAN NOT NULL DEFAULT FALSE',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS tester_source TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS tester_since TIMESTAMP',
     // Token system (Phase 1). last_active_campaign_id drives DM bonus
     // attribution: it's stamped on a player's image generations, then
     // looked up when they purchase tokens to credit the right DM.

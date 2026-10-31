@@ -214,6 +214,24 @@
     .facet-chip button:hover { color:#fff; }
     .facet-add { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; max-width:260px; }
     .facet-add:disabled { opacity:0.55; cursor:default; }
+    /* v3.3.55 -- TD-1068. THE PICKER WITH ITS CHOICES INSIDE. A fixed-width button ("Genre", "Genre: Fantasy",
+       "Genre: Fantasy +2", gold once anything is ticked) and a list of tick boxes under it, so choosing never moves
+       the row. */
+    .fdd { position:relative; flex:0 0 auto; }
+    .fdd-btn { display:inline-flex; align-items:center; gap:6px; width:200px; text-align:left; cursor:pointer; }
+    .fdd-btn .fdd-t { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fdd-btn .fdd-c { flex:0 0 auto; font-size:10px; opacity:0.8; }
+    .fdd-btn.fdd-on { background:#8a6a2a; border-color:#c9a84c; color:#f7ecd2; }
+    .fdd-panel { position:absolute; top:calc(100% + 6px); left:0; z-index:60; min-width:240px; max-height:320px; overflow-y:auto;
+      background:#120b05; border:1px solid rgba(201,168,76,0.55); border-radius:6px; box-shadow:0 10px 26px rgba(0,0,0,0.7); padding:6px 0; }
+    .fdd-panel[hidden] { display:none; }
+    .fdd-opt { display:flex; align-items:center; gap:9px; padding:6px 12px; font-family:'Crimson Text',serif; font-size:14px; color:rgba(240,232,208,0.92); cursor:pointer; }
+    .fdd-opt:hover { background:rgba(201,168,76,0.12); }
+    .fdd-opt input { margin:0; accent-color:#c9a84c; }
+    .fdd-foot { display:flex; justify-content:space-between; padding:6px 12px 2px; margin-top:4px; border-top:1px solid rgba(201,168,76,0.2); }
+    .fdd-foot button { background:none; border:none; color:#c9a84c; font-family:'Crimson Text',serif; font-size:13px; cursor:pointer; padding:2px 0; }
+    .fdd-foot button:hover { text-decoration:underline; }
+    @media (max-width:600px) { .fdd-panel { min-width:0; width:calc(100vw - 28px); max-width:420px; } }   /* phones: full width, under its button */
     /* Show everything shares a row with Last 6 Months and All Time, so it takes their
        metrics exactly -- same face, size, letter-spacing, padding, border width and radius
        -- or the three sit at different heights and the row reads as an accident. It keeps a
@@ -225,6 +243,26 @@
     #lib-actions .lib-search { padding:0; flex:0 1 380px; min-width:220px; }   /* v3.3.45 -- on the Show everything row */
     #lib-actions { width:100%; max-width:760px; }   /* the full width, or the row shrinks to its widest item and the search wraps */
     #lib-actions .lib-search input { padding:7px 12px; }
+    /* v3.3.53 -- TD-1066. A COMPACT TOP (Ian: "The current layout takes up TONS of vertical space"; option 1 of the
+       mock-up). The headline sits top left with the subtitle beside it, and the tabs, genre, art style, search / time
+       window and Show everything share ONE row under it -- for every tab. #lib-facets stays as the wrapper The Guild
+       hides (marketplace.js), but lays out as display:contents, so its pieces are items of the row. */
+    .lib-top { max-width:1100px; margin:0 auto; padding:18px 14px 14px; }
+    .lib-top .lib-head { display:flex; align-items:baseline; gap:6px 20px; flex-wrap:wrap; text-align:left; padding:0; max-width:none; margin:0 0 14px; }
+    .lib-top .lib-title { font-size:clamp(32px,4vw,46px); white-space:nowrap; }
+    .lib-top .lib-sub { margin:0; font-size:clamp(15px,1.6vw,17px); flex:1 1 300px; }
+    .lib-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
+    .lib-row .lib-tabs { margin:0; justify-content:flex-start; }
+    .lib-row .tab-btn { padding:7px 14px; }
+    .lib-sep { width:1px; height:28px; background:rgba(201,168,76,0.35); margin:0 2px; }
+    .lib-row .lib-facets { display:contents; }
+    .lib-row #facet-genre, .lib-row #facet-style { flex-wrap:nowrap; }
+    .lib-row #lib-actions { width:auto; max-width:none; flex:1 1 260px; justify-content:flex-start; margin:0; }
+    .lib-row #lib-actions .lib-search { flex:1 1 220px; }
+    .lib-row #lib-actions .lib-search input { max-width:none; }
+    .lib-top.lib-top-wide { max-width:1300px; padding-left:16px; padding-right:16px; }   /* the Gallery's width, so the two line up */
+    .lib-row #facet-genre-chips:empty, .lib-row #facet-style-chips:empty { display:none; }   /* no gap before an empty picker */
+    @media (max-width:600px) { .lib-sep { display:none; } .lib-top .lib-sub { flex-basis:100%; } }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -247,17 +285,22 @@
     </div>
   </nav>
 
+  <!-- v3.3.53 -- TD-1066. The compact top: headline and subtitle on one line, everything else on the row under it. -->
+  <div class="lib-top lib-top-wide" id="lib-top">
   <header class="lib-head">
     <h1 class="lib-title">The Public Library</h1>
     <div class="lib-sub">From tabletop campaigns to family stories — made by other Story Masters. Take a look at what's possible.</div>
   </header>
 
+  <div class="lib-row">
+  <!-- v3.3.52 -- TD-1065. The tabs read Gallery and Books (Ian); ids, switchTab values and addresses are unchanged. -->
   <div class="lib-tabs">
-    <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Images</button>
-    <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Stories</button>
+    <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Gallery</button>
+    <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Books</button>
     <!-- v3.3.01 -- TD-1037. The Artist Marketplace. Hidden by marketplace.css until the switch is on (or an admin is looking). -->
     <button class="tab-btn mkt-link" id="tab-market" onclick="switchTab('market')">The Guild</button>
   </div>
+  <span class="lib-sep" aria-hidden="true"></span>
 
   <!-- v3.0.845 -- TD-693/TD-694/TD-672. ONE filter row above BOTH tabs. The v3.0.843
        arrangement gave each tab its own picker, which meant the same question was asked
@@ -266,13 +309,15 @@
        Filled from /api/public/genres and /api/public/art-styles, the same two lists the
        server validates against. -->
   <div class="lib-facets" id="lib-facets">
-    <div class="facet-row" id="facet-genre">
-      <div class="facet-row" id="facet-genre-chips"></div>
-      <select class="facet-add" id="facet-genre-add" aria-label="Add a genre to the filter"></select>
+    <!-- v3.3.55 -- TD-1068. Each picker is a button with its ticked choices inside a drop-down list, not pills beside
+         it (Ian: "the genre and style pills push everything around"). makeFacet fills them. -->
+    <div class="fdd" id="facet-genre">
+      <button type="button" class="facet-add fdd-btn" id="facet-genre-add" aria-haspopup="true" aria-expanded="false" style="display:none;"></button>
+      <div class="fdd-panel" id="facet-genre-panel" role="group" aria-label="Genres" hidden></div>
     </div>
-    <div class="facet-row" id="facet-style">
-      <div class="facet-row" id="facet-style-chips"></div>
-      <select class="facet-add" id="facet-style-add" aria-label="Add an art style to the filter"></select>
+    <div class="fdd" id="facet-style">
+      <button type="button" class="facet-add fdd-btn" id="facet-style-add" aria-haspopup="true" aria-expanded="false" style="display:none;"></button>
+      <div class="fdd-panel" id="facet-style-panel" role="group" aria-label="Art styles" hidden></div>
     </div>
     <!-- v3.0.846 -- Ian: "If you can put Show Everything, Last 6 months and All Time on the
          same row." So the window buttons MOVE UP into the filter block rather than a copy
@@ -289,9 +334,11 @@
       <!-- v3.3.45 -- the author search moved up onto this row, beside Show everything (Ian). switchTab still shows it on
            the Stories tab only. -->
       <div class="lib-search" id="stories-search" style="display:none;">
-        <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
+        <input type="text" id="stories-q" placeholder="Search books by author name..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" />
       </div>
     </div>
+  </div>
+  </div>
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -514,6 +561,7 @@
       document.getElementById('stories-search').style.display = onStories ? '' : 'none';
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
+      try { document.getElementById('lib-top').classList.toggle('lib-top-wide', !onStories); } catch (e) {}   // v3.3.53
       setStatus('');
       // v3.0.845 -- a filter changed while this tab was hidden leaves it STALE, and the
       // old `!any` test cannot see that: a tab that legitimately found nothing also has
@@ -841,11 +889,11 @@
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
-          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (anyFilter() ? 'No stories match those filters yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
+          setStatus(sstate.any ? '' : (sstate.q ? 'No books found for that name.' : (anyFilter() ? 'No books match those filters yet.' : 'No books have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
         } else { setStatus(''); }
       }).catch(function () {
         sstate.loading = false;
-        setStatus('Could not load stories right now. Please try again later.');
+        setStatus('Could not load books right now. Please try again later.');
       });
     }
 
@@ -871,61 +919,87 @@
     //
     // Everything BEHIND the control is unchanged from v3.0.845 -- one shared selection, the
     // url kept in step, the stale-tab flag. This is a new face on the same machinery.
+    // v3.3.55 -- TD-1068. THE CHOICES LIVE INSIDE THE PICKER (Ian: "the genre and style pills push everything around...
+    // Have the drop down controls have the selections inside the drop down"). The button says what is ticked; the
+    // list under it has a tick box per option, which filters at once, and Clear. Everything behind it is unchanged:
+    // one shared selection, any-of, the url kept in step, the stale-tab flag, a retired slug dropped.
+    var _fddOpen = null;
+    function fddClose() {
+      if (!_fddOpen) return;
+      _fddOpen.panel.hidden = true; _fddOpen.btn.setAttribute('aria-expanded', 'false');
+      _fddOpen = null;
+    }
+    document.addEventListener('click', function (e) {
+      if (_fddOpen && !_fddOpen.wrap.contains(e.target)) fddClose();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && _fddOpen) { var b = _fddOpen.btn; fddClose(); try { b.focus(); } catch (x) {} }
+    });
     function makeFacet(key, label, noun, options, hidden) {
-      var chips = document.getElementById('facet-' + key + '-chips');
-      var add = document.getElementById('facet-' + key + '-add');
-      if (!chips || !add || !options.length) return null;
+      var btn = document.getElementById('facet-' + key + '-add');
+      var panel = document.getElementById('facet-' + key + '-panel');
+      var wrap = document.getElementById('facet-' + key);
+      if (!btn || !panel || !wrap || !options.length) return null;
+      var name = label.replace(/s$/, '');   // "Genres" -> "Genre", "Art styles" -> "Art style"
       var labelFor = {};
       options.forEach(function (o) { labelFor[o.slug] = o.label; });
-      // v3.0.858 -- an option this tab does not offer. Genre passes nothing and behaves
-      // exactly as before; the style facet passes styleOptHidden.
+      // v3.0.858 -- an option this tab does not offer. Genre passes nothing; the style facet passes styleOptHidden.
       function isHidden(s) { return !!(hidden && hidden(s)); }
 
-      function paint() {
-        // Built with createElement and textContent rather than innerHTML: these labels come
-        // off the wire, and the story cards next to them already take that care.
-        chips.innerHTML = '';
-        filters[key].filter(function (s) { return !isHidden(s); }).forEach(function (slug) {
-          var chip = document.createElement('span'); chip.className = 'facet-chip';
-          var txt = document.createElement('span'); txt.textContent = labelFor[slug] || slug;
-          var x = document.createElement('button');
-          x.type = 'button'; x.title = 'Remove'; x.innerHTML = '&times;';
-          x.setAttribute('aria-label', 'Remove ' + (labelFor[slug] || slug));
-          x.addEventListener('click', function () {
-            var i = filters[key].indexOf(slug);
-            if (i > -1) filters[key].splice(i, 1);
-            paint(); applyFilters();
-          });
-          chip.appendChild(txt); chip.appendChild(x); chips.appendChild(chip);
-        });
-
-        // The select offers what is left. When nothing is left it says so and disables
-        // itself, rather than letting a click do nothing -- the csGenreRender rule.
-        var left = options.filter(function (o) { return !isHidden(o.slug) && filters[key].indexOf(o.slug) < 0; });
-        add.innerHTML = '';
-        var head = document.createElement('option');
-        head.value = '';
-        head.textContent = left.length ? ('+ Add ' + noun) : ('All ' + label.toLowerCase() + ' added');
-        add.appendChild(head);
-        left.forEach(function (o) {
-          var op = document.createElement('option');
-          op.value = o.slug; op.textContent = o.label;
-          add.appendChild(op);
-        });
-        add.value = '';
-        add.disabled = !left.length;
+      function paintButton() {
+        // createElement and textContent, not innerHTML: these labels come off the wire.
+        var picked = filters[key].filter(function (s) { return !isHidden(s); });
+        btn.innerHTML = '';
+        var t = document.createElement('span'); t.className = 'fdd-t';
+        t.textContent = picked.length ? (name + ': ' + (labelFor[picked[0]] || picked[0]) + (picked.length > 1 ? ' +' + (picked.length - 1) : '')) : name;
+        var c = document.createElement('span'); c.className = 'fdd-c'; c.textContent = '\u25BE';
+        btn.appendChild(t); btn.appendChild(c);
+        btn.classList.toggle('fdd-on', picked.length > 0);
+        btn.title = picked.length ? picked.map(function (s) { return labelFor[s] || s; }).join(', ') : ('Filter by ' + noun.replace(/^an? /, ''));
+        btn.setAttribute('aria-label', name + (picked.length ? ': ' + btn.title : ''));
+        btn.style.display = '';
       }
+      function paintPanel() {
+        panel.innerHTML = '';
+        options.filter(function (o) { return !isHidden(o.slug); }).forEach(function (o) {
+          var row = document.createElement('label'); row.className = 'fdd-opt';
+          var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = filters[key].indexOf(o.slug) >= 0;
+          cb.addEventListener('change', function () {
+            var i = filters[key].indexOf(o.slug);
+            if (cb.checked && i < 0) filters[key].push(o.slug);
+            if (!cb.checked && i > -1) filters[key].splice(i, 1);
+            paintButton(); applyFilters();
+          });
+          var sp = document.createElement('span'); sp.textContent = o.label;
+          row.appendChild(cb); row.appendChild(sp); panel.appendChild(row);
+        });
+        var foot = document.createElement('div'); foot.className = 'fdd-foot';
+        var clr = document.createElement('button'); clr.type = 'button'; clr.textContent = 'Clear';
+        clr.addEventListener('click', function () {
+          if (!filters[key].length) return;
+          filters[key] = [];
+          // Untick in place: rebuilding the list would remove this very button mid-click, and the page would take the
+          // click for one outside the list and close it.
+          Array.prototype.forEach.call(panel.querySelectorAll('input[type=checkbox]'), function (x) { x.checked = false; });
+          paintButton(); applyFilters();
+        });
+        var done = document.createElement('button'); done.type = 'button'; done.textContent = 'Done';
+        done.addEventListener('click', function () { fddClose(); try { btn.focus(); } catch (x) {} });
+        foot.appendChild(clr); foot.appendChild(done); panel.appendChild(foot);
+      }
+      function paint() { paintButton(); paintPanel(); }
 
-      add.addEventListener('change', function () {
-        var slug = add.value;
-        if (!slug) return;
-        if (filters[key].indexOf(slug) < 0) filters[key].push(slug);
-        paint(); applyFilters();
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (_fddOpen && _fddOpen.btn === btn) { fddClose(); return; }
+        fddClose();
+        paintPanel();
+        panel.hidden = false; btn.setAttribute('aria-expanded', 'true');
+        _fddOpen = { btn: btn, panel: panel, wrap: wrap };
       });
 
-      // A url can carry a slug this list does not contain (a retired one). The server
-      // already drops it; drop it here too, or it would sit in the url as an invisible
-      // filter with no chip to remove it by.
+      // A url can carry a slug this list does not contain (a retired one). The server already drops it; drop it here
+      // too, or it would sit in the url as an invisible filter with nothing to untick.
       filters[key] = filters[key].filter(function (s) { return !!labelFor[s]; });
       paint();
       return { repaint: paint };

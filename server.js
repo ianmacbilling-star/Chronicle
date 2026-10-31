@@ -540,6 +540,9 @@ getDb().then(async function() {
   // v3.1.92 -- TD-979. The renderers ask an in-memory set of rejected pictures; load it before the first
   // request and keep it fresh (services/rightsCheck.js). A failure shows pictures rather than blanking them.
   try { await require('./services/rightsCheck').startRejectedCache(); } catch (e) { console.error('rejected-picture cache load failed:', e.message); }
+  // v3.3.50 -- TD-1063. Testers flagged on their account (a "Make a Tester" code, or the Dashboard), read before the
+  // first request so isTesterEmail() knows them from the start.
+  try { await require('./middleware/auth').startTesterCache(); } catch (e) { console.error('tester cache load failed:', e.message); }
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');

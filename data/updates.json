@@ -1,5 +1,259 @@
 [
   {
+    "version": "3.3.64",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3364-pass-totals",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: each Platinum Pass on Tiers and Passes shows what someone who buys it at sign-up gets.",
+        "detail": "The Free Trial's tokens (a pass sits on top of the trial, so all of them stay) plus the pass's tokens, + (?? Promo Code). Updates as you edit the pass or the Free Trial.",
+        "td": [
+          "TD-1075"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.62",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3362-pass-signup",
+        "kind": "fix",
+        "public": true,
+        "summary": "Signing up from a Platinum Pass button now takes you on to buy that pass after you confirm your email.",
+        "detail": "Before, a pass sign-up landed on the Free Trial with no checkout. To test: from GET THE 3-MONTH PASS (and the 6- and 12-month buttons), sign up, confirm the email, and check the pass checkout opens at the right price; with a Gold-only code, the sign-up stops with the wrong-plan message; with a pass code, the checkout shows the discount.",
+        "td": [
+          "TD-1074"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.61",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3361-wrong-plan-code",
+        "kind": "fix",
+        "public": true,
+        "summary": "Signing up for one plan with a promo code meant for another now says so, instead of taking you to full price.",
+        "detail": "For example a Gold code used from the Silver sign-up button. The message sits by Create Account and the promo box is highlighted; remove the code or go back and choose the plan the code is for. To test: from GET SILVER, sign up with a Gold-only code (stopped, with the message); from GET GOLD, the same code goes through and the Gold checkout shows the discount; a plain sign-up (no plan chosen) with the Gold code is not stopped.",
+        "td": [
+          "TD-1073"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.60",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3360-tier-promo",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: the tiers' At sign-up line now ends + (?? Promo Code), as a reminder that a code's tokens come on top.",
+        "detail": "Dashboard, Tiers and Passes.",
+        "td": [
+          "TD-1072"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.59",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3359-tier-totals",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: each tier on Tiers and Passes shows its monthly tokens and what a new account gets at sign-up.",
+        "detail": "Free Trial: its monthly tokens plus its sign-up bonus. Copper: what someone joining by invite gets. Silver, Gold and Platinum: what someone who chooses that plan at sign-up gets -- the Free Trial CO and sign-up bonus they keep, plus the plan's monthly tokens and its sign-up bonus. Promo codes not included. The totals update as you type, and changing the Free Trial updates the paid plans.",
+        "td": [
+          "TD-1072"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.58",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3358-signup-bonus-tokens",
+        "kind": "fix",
+        "public": true,
+        "summary": "Bonus tokens from a promo code you entered at sign-up are now given when you make your first purchase.",
+        "detail": "A once-per-customer code entered at sign-up was counted as already used, so its bonus tokens were skipped. To test: sign up with a code that gives bonus tokens on a subscription, pay, and check the balance includes them (trial carry-over tokens + the plan's monthly tokens + the plan's sign-up bonus + the code's tokens); a second purchase should not give them again.",
+        "td": [
+          "TD-1071"
+        ]
+      },
+      {
+        "id": "3358-tier-note",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: the tiers' Sign-up bonus setting reminds you that people also keep their Free Trial carry-over tokens.",
+        "detail": "Dashboard, Tiers and Passes.",
+        "td": [
+          "TD-1071"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.57",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3357-signup-discount",
+        "kind": "fix",
+        "public": true,
+        "summary": "A discount code you enter when you sign up is now applied for you at checkout.",
+        "detail": "When you go on to buy a subscription, a pass or tokens that your sign-up code covers, the checkout opens with the discount already applied. If the code cannot be used on that purchase (for example it is for first purchases only), the checkout opens as before and you can still enter a code there. To test: make a discount code for a subscription tier, sign up with it from that tier's button on the home page, confirm the email, and check the Stripe checkout shows the discount; sign up with a code for a different product and check the checkout is full price with the code box; use the code once and check a second purchase does not get it again.",
+        "td": [
+          "TD-1070"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.56",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3356-dead-promo",
+        "kind": "fix",
+        "public": true,
+        "summary": "Sign-up now tells you when a promo code is used up, expired or switched off, instead of ignoring it.",
+        "detail": "The message appears by Create Account and the promo code box is highlighted; remove the code or enter another to continue. A code we do not recognise is still accepted as before. To test: sign up with a used-up code, an expired code and a switched-off code (each should stop with its reason, no account made); clear the box and sign up normally; a working tester code still makes a tester.",
+        "td": [
+          "TD-1069"
+        ]
+      },
+      {
+        "id": "3356-promo-admin",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin and testers: promo codes that can no longer be used say Used up or Expired in the list; Set exact says the 1000 tester limit before sending.",
+        "detail": "Promo Codes list: a code that is on but past its expiry or out of uses shows Expired or Used up in red. Tester tools: Set exact over 1000 in total now says so at once.",
+        "td": [
+          "TD-1069"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.55",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3355-library-pickers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's genre and art style filters keep your choices inside the drop-down, so the page no longer jumps around.",
+        "detail": "Click Genre or Art style for a list with a tick box beside each choice; ticking filters at once. The button shows what is picked (for example Genre: Fantasy +2) and turns gold. Clear unticks that list; Show everything clears both. To test: tick and untick on Gallery and Books, check nothing on the row moves, Esc or a click elsewhere closes the list, a Library link with a genre already in it shows that genre on the button, and on a phone the list opens full width under its button.",
+        "td": [
+          "TD-1068"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.54",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3354-signup-errors",
+        "kind": "fix",
+        "public": true,
+        "summary": "Sign-up problems now show right by the Create Account button, and the field to fix is highlighted.",
+        "detail": "The field that needs fixing gets an amber outline, shakes once and is scrolled into view; fixing it clears the message. To test: on the sign-up form, leave the name empty, use a short password, leave out the date of birth, use a date under 18, leave either box unticked, use an email that already has an account and a pen name already taken -- each time the message should be by the button and the right field should shake.",
+        "td": [
+          "TD-1067"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.53",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3353-library-top",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's top is much shorter, so the books and pictures start higher up.",
+        "detail": "The headline sits at the top left with its line beside it, and the tabs, genre and art style pickers, search (or Last 6 Months / All Time on the Gallery) and Show everything share one row under it. To test: Gallery and Books at full width, tablet and phone widths; pick a genre and an art style and check the chips and Show everything appear on the row; The Guild tab (when on) still hides the filters.",
+        "td": [
+          "TD-1066"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.52",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3352-library-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's tabs are now called Gallery and Books.",
+        "detail": "Gallery holds the public pictures and Books the published stories. Links to the Library keep working. To test: both tabs switch as before, the Books search box and its empty messages say books, and the help assistant answers questions about the Library with the new names.",
+        "td": [
+          "TD-1065"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.51",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3351-help-tooltip",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The ?s help buttons now say what they do as soon as you hover over them.",
+        "detail": "Hover over ?s to see: Questions? Ask us anything -- tips, how-tos, getting started. The ?s buttons in the Title Builder and on characters show their own tips the same way.",
+        "td": [
+          "TD-1064"
+        ]
+      },
+      {
+        "id": "3351-tester-badge",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Testers: the badge in the top bar is now a silver Platinum Tester button.",
+        "detail": "It still opens the testing tools; that the account is not billed is in its tooltip.",
+        "td": [
+          "TD-1064"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.50",
+    "staged_on": "2026-10-30",
+    "entries": [
+      {
+        "id": "3350-tester-codes",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admin: Make a Tester promo codes, a Testers list, and a 1000-token cap on testers' own top-ups.",
+        "detail": "Promo Codes has a new type, Make a Tester (Platinum): anyone who signs up with such a code becomes a tester on Platinum and skips the payment page, up to the code's total uses. The Testers list shows them with an on/off switch, can make any existing account a tester, and lists the TESTER_EMAILS from Railway. Testers can give themselves tokens only up to a balance of 1000; tokens they buy are on top, and admins are not capped. Testers can no longer change a tier's session reserve.",
+        "td": [
+          "TD-1063"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.49",
     "staged_on": "2026-10-30",
     "entries": [
