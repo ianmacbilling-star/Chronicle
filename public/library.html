@@ -254,6 +254,10 @@
     .lib-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
     .lib-row .lib-tabs { margin:0; justify-content:flex-start; }
     .lib-row .tab-btn { padding:7px 14px; }
+    /* v3.3.65 -- TD-1076. The unselected tabs and time-window button get the same dark fill as the Genre and Art style
+       pickers, so the background does not show through them (Ian: "darken their interiors a little"). */
+    .tab-btn:not(.active), .filter-btn:not(.active), .facet-clear { background:rgba(12,8,4,0.75); }
+    .tab-btn:not(.active):hover, .filter-btn:not(.active):hover, .facet-clear:hover { background:rgba(20,13,6,0.88); }
     .lib-sep { width:1px; height:28px; background:rgba(201,168,76,0.35); margin:0 2px; }
     .lib-row .lib-facets { display:contents; }
     .lib-row #facet-genre, .lib-row #facet-style { flex-wrap:nowrap; }
@@ -704,7 +708,9 @@
       // Measured from the book's slot, which does not rise on hover as the book does.
       var box = storiesEl.getBoundingClientRect(), r = (a.parentNode || a).getBoundingClientRect();
       var sy = window.pageYOffset || document.documentElement.scrollTop || 0;
-      var w = 238, cx = (r.left + r.right) / 2, left = cx - w / 2;
+      // v3.3.66 -- TD-1077. The card's right edge at the book's right edge, the card reaching left, so the books to the right
+      // stay in view and the mouse can slide along a run of spines (Ian: "It covers up other spine books to the right").
+      var w = 238, cx = (r.left + r.right) / 2, left = r.right + 2 - w;
       left = Math.max(box.left + 4, Math.min(box.right - 4 - w, left));
       c.style.marginLeft = Math.round(left - cx) + 'px';
       // v3.3.47 -- its bottom halfway down the book (Ian: "let the pop up be halfway on the book itself"); and never
@@ -988,6 +994,17 @@
         foot.appendChild(clr); foot.appendChild(done); panel.appendChild(foot);
       }
       function paint() { paintButton(); paintPanel(); }
+
+      // v3.3.66 -- TD-1077. With a mouse, the list closes a moment after the pointer leaves the button and the list
+      // (Ian: "when your mouse hovers off of them they close"). The pause lets it cross the gap between the two.
+      var _leaveT = null, _hoverDev = false;
+      try { _hoverDev = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches); } catch (x) {}
+      wrap.addEventListener('mouseleave', function () {
+        if (!_hoverDev) return;
+        clearTimeout(_leaveT);
+        _leaveT = setTimeout(function () { if (_fddOpen && _fddOpen.wrap === wrap) fddClose(); }, 350);
+      });
+      wrap.addEventListener('mouseenter', function () { clearTimeout(_leaveT); });
 
       btn.addEventListener('click', function (e) {
         e.stopPropagation();

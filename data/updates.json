@@ -1,5 +1,37 @@
 [
   {
+    "version": "3.3.66",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3366-library-card-left",
+        "kind": "improvement",
+        "public": true,
+        "summary": "In the Library, a book's card now opens to its left, so the books to its right stay in view, and the Genre and Art style lists close when the mouse moves away.",
+        "detail": "To test: hover along a row of spines from left to right and check the next spines stay visible; open Genre, move into the list and tick something, then move away and check it closes after a moment (and stays open if you come straight back).",
+        "td": [
+          "TD-1077"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.65",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3365-library-buttons",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's tab and filter buttons are easier to read against the background.",
+        "detail": "Gallery, Books, The Guild, All Time and Show everything have a dark fill when not selected, like the Genre and Art style pickers.",
+        "td": [
+          "TD-1076"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.64",
     "staged_on": "2026-10-31",
     "entries": [
