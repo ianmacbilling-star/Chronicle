@@ -90,6 +90,25 @@ router.post('/register', async function(req, res) {
     const existing = await db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email.toLowerCase().trim());
     if (existing) return res.json({ error: 'An account with this email already exists' });
 
+    // v3.3.56 -- TD-1069. A PROMO CODE WE KNOW BUT THAT CANNOT BE USED IS SAID SO, BEFORE THE ACCOUNT IS MADE (tester
+    // finding 2026-10-31: a used-up or expired code was silently ignored and the person was sent on to a full-price
+    // checkout believing it had been applied). Switched off, past its expiry, or -- for a Make a Tester code, whose
+    // uses we count ourselves -- out of uses: the sign-up stops and names the code. A code we do not know at all is
+    // still taken as before (ad-link attribution).
+    const _pcCheck = promo_code ? String(promo_code).trim().toUpperCase().slice(0, 40) : '';
+    if (_pcCheck) {
+      try {
+        const _row = await db.prepare('SELECT active, expires_at, max_redemptions, redeemed_count, action_type FROM promo_codes WHERE code = ?').get(_pcCheck);
+        let _why = null;
+        if (_row) {
+          if (!_row.active) _why = 'is no longer active';
+          else if (_row.expires_at && new Date(_row.expires_at) < new Date()) _why = 'has expired';
+          else if (_row.action_type === 'make_tester' && _row.max_redemptions && Number(_row.redeemed_count) >= Number(_row.max_redemptions)) _why = 'has been used up';
+        }
+        if (_why) return res.json({ error: 'The promo code ' + _pcCheck + ' ' + _why + '. Remove it, or enter a different code, to continue.', field: 'promo' });
+      } catch (e) { console.error('promo pre-check failed (non-fatal):', e.message); }
+    }
+
     const penRes = await resolvePenName(db, pen_name, 0);
     if (!penRes.ok) return res.json({ error: penRes.error });
 

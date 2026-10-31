@@ -1993,6 +1993,8 @@ function devSetBalance() {
   var cot = cotEl ? parseInt(cotEl.value, 10) : NaN;
   var utlt = utltEl ? parseInt(utltEl.value, 10) : NaN;
   if (!Number.isFinite(cot) || cot < 0 || !Number.isFinite(utlt) || utlt < 0) { show('Enter non-negative CO and UTOLT amounts.', false); return; }
+  // v3.3.56 -- TD-1069. Say the tester limit here, before asking (the server refuses it too).
+  if (!(state.user && state.user.is_admin) && cot + utlt > 1000) { show('Testers can hold up to 1000 tokens. CO + UTOLT must total 1000 or less (you entered ' + (cot + utlt) + ').', false); try { msg.scrollIntoView({ block: 'nearest' }); } catch (e) {} return; }
   var bodyObj = { cot: cot, utlt: utlt };
   if (resEl && resEl.value !== '') bodyObj.reserve = parseInt(resEl.value, 10);
   fetch('/api/tokens/dev-set-balance', {
@@ -23348,6 +23350,10 @@ function renderPromoCodes(codes) {
     if (c.is_signup) flags.push('Sign-up');
     if (c.schema_v === 2 && c.action_type !== 'make_tester') flags.push(c.once_per_customer ? 'Once per customer' : 'Reusable');
     var uses = 'used ' + (c.redeemed_count || 0) + (c.max_redemptions ? ' of ' + c.max_redemptions : '');
+    // v3.3.56 -- TD-1069. A code that is on but can no longer be used says why (tester note).
+    var _dead = '';
+    if (c.active && c.expires_at && new Date(c.expires_at) < new Date()) _dead = 'Expired';
+    else if (c.active && c.max_redemptions && Number(c.redeemed_count || 0) >= Number(c.max_redemptions)) _dead = 'Used up';
     var stripe = c.stripe_promotion_code_id ? ('Stripe ' + (c.stripe_livemode ? 'live' : 'sandbox')) : (c.schema_v === 2 ? 'Campaignia only' : '');
     return '<div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">' + escapeHtml(c.code) + '</strong>' +
@@ -23358,7 +23364,7 @@ function renderPromoCodes(codes) {
       '<span>' + escapeHtml(uses) + '</span>' +
       '<span>expires ' + escapeHtml(promoEasternDate(c.expires_at)) + '</span>' +
       (stripe ? '<span style="color:var(--text-muted);">' + escapeHtml(stripe) + '</span>' : '') +
-      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (c.active ? 'On' : 'Off') + '</span>' +
+      '<span style="min-width:64px;color:' + (_dead ? 'var(--error)' : (c.active ? 'var(--gold)' : 'var(--text-muted)')) + ';">' + (_dead || (c.active ? 'On' : 'Off')) + '</span>' +
       '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Switch off' : 'Switch on') + '</button>' +
       '<span class="settings-section-desc" id="promo-row-msg-' + c.id + '" style="margin:0;flex-basis:100%;"></span>' +
       '</div>';

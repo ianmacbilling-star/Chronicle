@@ -352,6 +352,7 @@ function _regNagTarget(id) {
 }
 function _regFieldFor(msg) {
   var m = String(msg || '');
+  if (/promo code/i.test(m)) return 'reg-promo';   // v3.3.56 -- TD-1069
   if (/pen name/i.test(m)) return 'reg-penname';
   if (/birth|18 years/i.test(m)) return 'reg-dob';
   if (/terms of service/i.test(m)) return 'reg-terms';
@@ -378,7 +379,7 @@ function regFail(msg, fieldId) {
   var input = document.getElementById(id);
   try { if (input) input.focus({ preventScroll: true }); } catch (e) {}
 }
-['reg-name', 'reg-penname', 'reg-email', 'reg-password', 'reg-dob', 'reg-terms', 'reg-upload'].forEach(function (id) {
+['reg-name', 'reg-penname', 'reg-email', 'reg-password', 'reg-dob', 'reg-terms', 'reg-upload', 'reg-promo'].forEach(function (id) {
   var el = document.getElementById(id);
   if (!el) return;
   var fix = function () {

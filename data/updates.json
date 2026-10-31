@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.3.56",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3356-dead-promo",
+        "kind": "fix",
+        "public": true,
+        "summary": "Sign-up now tells you when a promo code is used up, expired or switched off, instead of ignoring it.",
+        "detail": "The message appears by Create Account and the promo code box is highlighted; remove the code or enter another to continue. A code we do not recognise is still accepted as before. To test: sign up with a used-up code, an expired code and a switched-off code (each should stop with its reason, no account made); clear the box and sign up normally; a working tester code still makes a tester.",
+        "td": [
+          "TD-1069"
+        ]
+      },
+      {
+        "id": "3356-promo-admin",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin and testers: promo codes that can no longer be used say Used up or Expired in the list; Set exact says the 1000 tester limit before sending.",
+        "detail": "Promo Codes list: a code that is on but past its expiry or out of uses shows Expired or Used up in red. Tester tools: Set exact over 1000 in total now says so at once.",
+        "td": [
+          "TD-1069"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.55",
     "staged_on": "2026-10-31",
     "entries": [
