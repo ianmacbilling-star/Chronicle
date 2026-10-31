@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.65",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3365-library-buttons",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Library's tab and filter buttons are easier to read against the background.",
+        "detail": "Gallery, Books, The Guild, All Time and Show everything have a dark fill when not selected, like the Genre and Art style pickers.",
+        "td": [
+          "TD-1076"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.64",
     "staged_on": "2026-10-31",
     "entries": [

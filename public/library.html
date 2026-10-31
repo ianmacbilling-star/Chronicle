@@ -254,6 +254,10 @@
     .lib-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
     .lib-row .lib-tabs { margin:0; justify-content:flex-start; }
     .lib-row .tab-btn { padding:7px 14px; }
+    /* v3.3.65 -- TD-1076. The unselected tabs and time-window button get the same dark fill as the Genre and Art style
+       pickers, so the background does not show through them (Ian: "darken their interiors a little"). */
+    .tab-btn:not(.active), .filter-btn:not(.active), .facet-clear { background:rgba(12,8,4,0.75); }
+    .tab-btn:not(.active):hover, .filter-btn:not(.active):hover, .facet-clear:hover { background:rgba(20,13,6,0.88); }
     .lib-sep { width:1px; height:28px; background:rgba(201,168,76,0.35); margin:0 2px; }
     .lib-row .lib-facets { display:contents; }
     .lib-row #facet-genre, .lib-row #facet-style { flex-wrap:nowrap; }
