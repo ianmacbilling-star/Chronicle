@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.59",
+    "staged_on": "2026-10-31",
+    "entries": [
+      {
+        "id": "3359-tier-totals",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Admin: each tier on Tiers and Passes shows its monthly tokens and what a new account gets at sign-up.",
+        "detail": "Free Trial: its monthly tokens plus its sign-up bonus. Copper: what someone joining by invite gets. Silver, Gold and Platinum: what someone who chooses that plan at sign-up gets -- the Free Trial CO and sign-up bonus they keep, plus the plan's monthly tokens and its sign-up bonus. Promo codes not included. The totals update as you type, and changing the Free Trial updates the paid plans.",
+        "td": [
+          "TD-1072"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.58",
     "staged_on": "2026-10-31",
     "entries": [

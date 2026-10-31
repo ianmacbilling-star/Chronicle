@@ -23944,24 +23944,46 @@ function renderTiersConfig(data) {
 // keep: only the CO half carries over, and roughly a quarter of the UTLT half has
 // historically expired unspent. That is a margin question and this is a shopping-comparison
 // line, so the label says "incl. UTLT" and leaves the other question to the financial model.
-function tierDerived(tierKey) {
+function tierDerived(tierKey, noCascade) {
   var out = document.getElementById('tier-derived-' + tierKey);
   if (!out) return;
-  function num(field) {
-    var el = document.getElementById('tcf-' + tierKey + '-' + field);
+  function numOf(tk, field) {
+    var el = document.getElementById('tcf-' + tk + '-' + field);
     if (!el) return NaN;
     var v = parseFloat(el.value);
     return (el.value === '' || isNaN(v)) ? 0 : v;   // a blank field means zero, not broken
   }
+  function num(field) { return numOf(tierKey, field); }
   var price = num('price');
   var utlt = num('monthly_utlt');
   var cot = num('monthly_cot');
   var priceEl = document.getElementById('tcf-' + tierKey + '-price');
   if (!priceEl) { out.innerHTML = ''; return; }   // this tier has no price field to divide
   var tokens = utlt + cot;
-  out.innerHTML = tokens + ' tokens per month (' + utlt + ' UTLT + ' + cot + ' CO)' +
+  // v3.3.59 -- TD-1072. WHAT A NEW ACCOUNT GETS AT SIGN-UP, beside what it gets each month (Ian: "Have what they
+  // will get monthly. And what they will get at initial sign up"), from the numbers on screen, promo codes left out.
+  // The paths are routes/auth.js /register and the upgrade: a cold sign-up starts on the Free Trial (its monthly
+  // tokens + its sign-up bonus); joining by invite starts on Copper; choosing a paid plan at sign-up still starts
+  // on the Free Trial and then pays, so it keeps the trial's CO and sign-up bonus (the trial's UTLT ends at the
+  // upgrade) and gets this plan's monthly tokens and sign-up bonus on top.
+  var bonus = num('signup_bonus');
+  var signup = '';
+  if (tierKey === 'trial') {
+    signup = 'At sign-up: <strong>' + (utlt + cot + bonus) + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO' + (bonus ? ' + ' + bonus + ' sign-up bonus' : '') + ')';
+  } else if (tierKey === 'copper') {
+    signup = 'At sign-up, joining by invite: <strong>' + (utlt + cot + bonus) + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO' + (bonus ? ' + ' + bonus + ' sign-up bonus' : '') + ')';
+  } else {
+    var keep = numOf('trial', 'monthly_cot') + numOf('trial', 'signup_bonus');
+    if (isNaN(keep)) keep = 0;
+    signup = 'At sign-up, straight to this plan: <strong>' + (keep + utlt + cot + bonus) + ' tokens</strong> (' +
+      keep + ' kept from the Free Trial + ' + utlt + ' UTLT + ' + cot + ' CO + ' + bonus + ' sign-up bonus)';
+  }
+  out.innerHTML = 'Monthly: <strong>' + tokens + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO)' +
+    '<br />' + signup + ' <span style="opacity:0.7;">-- promo codes not included</span>' +
     '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
     (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
+  // The Free Trial's numbers feed every paid plan's sign-up total.
+  if (tierKey === 'trial' && !noCascade) ['copper', 'silver', 'gold', 'platinum'].forEach(function (k) { tierDerived(k, true); });
 }
 
 function saveTierPanel(tierKey) {
