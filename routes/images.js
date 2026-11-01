@@ -2531,8 +2531,17 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         }
         // v3.3.71 -- TD-1080. An Image Builder picture: its gallery row takes the picture and its measured size.
         if (job.kind === 'builder' && job.builder_image_id) {
-          await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, updated_at = ? WHERE id = ?')
-            .run(imageUrl, imgW, imgH, new Date().toISOString(), job.builder_image_id);
+          // v3.3.74 -- a Regen: the picture on show moves into the one-deep undo slot (with its size) and the one
+          // that was there is released AFTER the row stops naming it (TD-1006's order), so Revert can swap back.
+          const _bi = await db.prepare('SELECT image_url, img_w, img_h, prev_image_url FROM builder_images WHERE id = ?').get(job.builder_image_id);
+          if (_bi && _bi.image_url && _bi.image_url !== imageUrl) {
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, updated_at = ? WHERE id = ?')
+              .run(imageUrl, imgW, imgH, _bi.image_url, _bi.img_w || null, _bi.img_h || null, new Date().toISOString(), job.builder_image_id);
+            if (_bi.prev_image_url && _bi.prev_image_url !== _bi.image_url && _bi.prev_image_url !== imageUrl) await releaseImage(db, _bi.prev_image_url);
+          } else {
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, updated_at = ? WHERE id = ?')
+              .run(imageUrl, imgW, imgH, new Date().toISOString(), job.builder_image_id);
+          }
           await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
         }
       const genSource = (job.kind === 'char_ref') ? 'character_reference'
@@ -3199,7 +3208,7 @@ router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, re
 // webhook), so styles, references, the campaign standing instruction and the fal headers all behave as on a panel.
 // =====================================================================================================
 const IB_SHAPES = { panoramic: 1, wide: 1, standard: 1, square: 1, fullpage: 1, tall: 1, tower: 1 };
-const IB_NAME_MAX = 80, IB_DESC_MAX = 1500, IB_LORE_MAX = 2000;
+const IB_NAME_MAX = 80, IB_DESC_MAX = 1500, IB_LORE_MAX = 2000, IB_WORDS_MAX = 6000;
 const IB_JOB_WINDOW_MS = 15 * 60 * 1000;   // the same 15 minutes as job_stale in IB_LIST_SQL
 const IB_LOST = 'This picture did not come back from the image service. Nothing was charged. Delete it and try again.';
 // One sentence per image type, added before the description. candid:false drops the story-panel rule that people
@@ -3235,13 +3244,19 @@ function ibRow(r) {
   var refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
   // No sweeper ends a job whose webhook never came, so a picture still pending after IB_JOB_WINDOW_MS is shown as
   // failed (and can be deleted). Nothing was charged: tokens are spent only when the picture arrives.
-  var st = r.image_url ? 'done' : (r.job_status || 'queued');
-  if ((st === 'queued' || st === 'processing') && r.job_stale === true) st = 'failed';
+  // v3.3.74 -- a Regen draws over a picture already on show, so "drawing" comes from the latest job, not from a
+  // missing picture: a live job means drawing; otherwise a picture means done; a lost or failed first job, failed.
+  var js = r.job_status || null;
+  var live = (js === 'queued' || js === 'processing') && r.job_stale !== true;
+  var st = live ? js : (r.image_url ? 'done' : ((js === 'queued' || js === 'processing') ? 'failed' : (js || 'queued')));
+  // The last Regen of a picture that is still on show did not work (failed, or never came back).
+  var lastErr = (r.image_url && !live && js && js !== 'done') ? (js === 'failed' ? (r.job_error || IB_LOST) : 'It did not come back from the image service. Nothing was charged.') : null;
   return { id: r.id, campaign_id: r.campaign_id, user_id: r.user_id, maker: r.maker_name || '', name: r.name || '', description: r.description || '',
     image_type: r.image_type || '', shape: r.shape || '', art_style: r.art_style || '', art_style_name: r.art_style_name || '', include_lore: !!r.include_lore,
     refs: refs || { characters: [], assets: [] }, prompt: r.prompt || '', image_url: r.image_url || null, img_w: r.img_w || null, img_h: r.img_h || null,
     status: st, error: r.image_url ? null : (st === 'failed' ? (r.job_error || IB_LOST) : null), job_id: r.job_id || null,
-    created_at: r.created_at || null, ready: r.is_ready !== false };   // v3.3.73 -- a NULL (never set) counts as Ready
+    created_at: r.created_at || null, ready: r.is_ready !== false,   // v3.3.73 -- a NULL (never set) counts as Ready
+    words: r.words || '', has_prev: !!r.prev_image_url, copied_from: r.copied_from || null, last_error: lastErr };   // v3.3.74
 }
 const IB_LIST_SQL = 'SELECT b.*, u.name AS maker_name, ' +
   '(SELECT j.status FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_status, ' +
@@ -3361,78 +3376,112 @@ function ibPrompt(o) {
   return parts.join('\n\n');
 }
 
+// v3.3.74 -- stage 2. Generate and Regen build the picture the SAME way, here: references resolved from the database,
+// style locks, the prompt words, the flags, and the submit. Returns null when it has already answered (an error,
+// or a rights refusal written by refuseRejected). recipe: { description, shape, style, type (key or null),
+// include_lore, refs: { characters: [{ id, look }], assets: [ids] } }; words: the picture's own words to send instead
+// of building them from the recipe (Edit Prompt, and every Regen once the words are stored).
+async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
+  const fal_key = process.env.FAL_API_KEY;
+  if (!fal_key) { res.json({ error: 'Image generation is not configured. Please contact support.' }); return null; }
+  const webhookUrl = falWebhookUrl();
+  if (!webhookUrl) { res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' }); return null; }
+  const style = recipe.style, shape = recipe.shape;
+  const type = recipe.type ? ibType(String(recipe.type)) : null;
+  if (recipe.type && !type) { res.json({ error: 'That image type is not recognised.' }); return null; }
+  if (!IB_SHAPES[shape]) { res.json({ error: 'Choose a shape for the picture.', field: 'shape' }); return null; }
+  if (!style) { res.json({ error: 'Choose an art style.', field: 'style' }); return null; }
+  const effRank = accessRank(await getEffectiveTier(uid, cid));
+  if (style.indexOf('custom:') !== 0 && !artStyleAllowed(effRank, style)) { res.json({ error: 'STYLE_LOCKED', message: 'That art style isn\u2019t available on your current plan.' }); return null; }
+  const _rs = await resolveGenStyle(db, style, uid, cid);
+  if (_rs.locked) { res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' }); return null; }
+
+  const refsIn = (recipe.refs && typeof recipe.refs === 'object') ? recipe.refs : {};
+  const rc = await ibResolveCharacters(db, cid, uid, refsIn.characters);
+  if (rc.error) { res.json({ error: rc.error }); return null; }
+  const chars = rc.chars;
+  const assetIds = (Array.isArray(refsIn.assets) ? refsIn.assets : []).map(function (x) { return parseInt(x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
+  const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
+  const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
+  if (assets.length !== assetIds.length) { res.json({ error: 'One of the assets is no longer available, or its picture was removed.' }); return null; }
+  if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
+  if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
+
+  const charIds = chars.map(function (c) { return c.character_id; });
+  const charList = buildCharacterBlock(chars, '', 0, charIds);
+  const assetList = buildAssetBlock(assets, '', assetIds);
+  const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
+    refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
+
+  let prompt = (typeof words === 'string' && words.trim()) ? words.trim().slice(0, IB_WORDS_MAX) : '';
+  if (!prompt) {
+    const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
+    const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore });
+  }
+  // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
+  // own flags pass through untouched, exactly as a panel would send them.
+  let flags = _rs.isFade;
+  if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
+
+  const modelKey = await getSelectedModel(db);
+  const cost = await getTokenCost(modelKey);
+  if (!(await canAfford(uid, cost))) { res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' }); return null; }
+  const _campPrompt = await loadCampaignPrompt(db, cid);
+  const seed = Math.floor(Math.random() * 2147483647);
+  const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
+  const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
+    assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
+  return { sub: sub, cost: cost, words: prompt, refsOut: refsOut, styleName: _rs.name || null, type: type, panelBlock: panelBlock };
+}
+async function ibQueueJob(db, uid, cid, sub, style, cost, imageId, prevImage) {
+  const now = new Date().toISOString();
+  return db.prepare(
+    'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, prev_image, created_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, style, cost, imageId, prevImage || null, now, now);
+}
+// The maker's own picture, in a campaign they may still use the Builder in, with nothing being drawn for it.
+async function ibOwnIdle(req, res, db) {
+  const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+  if (!r) { res.status(404).json({ error: 'That picture is no longer in the gallery.' }); return null; }
+  if (String(r.user_id) !== String(req.session.userId)) { res.status(403).json({ error: 'Only the person who made a picture can change it. Make your own copy to work on it.' }); return null; }
+  if (!(await ibAllowed(req.session.userId, r.campaign_id))) { res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' }); return null; }
+  const busy = await db.prepare("SELECT id FROM image_jobs WHERE builder_image_id = ? AND status IN ('queued', 'processing') AND created_at > ? LIMIT 1").get(r.id, new Date(Date.now() - IB_JOB_WINDOW_MS).toISOString());
+  if (busy) { res.json({ error: 'That picture is still being drawn. Try again once it has finished.' }); return null; }
+  return r;
+}
+function ibRecipeOf(r) {
+  let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
+  refs = refs || {};
+  return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }) } };
+}
+
 router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
   try {
     if (!(await ibGate(req, res))) return;
-    const fal_key = process.env.FAL_API_KEY;
-    if (!fal_key) return res.json({ error: 'Image generation is not configured. Please contact support.' });
-    const webhookUrl = falWebhookUrl();
-    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const b = req.body || {}, uid = req.session.userId, cid = parseInt(req.params.cid, 10);
     const name = String(b.name || '').trim().slice(0, IB_NAME_MAX);
     const description = String(b.description || '').trim().slice(0, IB_DESC_MAX);
-    const shape = String(b.shape || '');
-    const style = String(b.art_style || '').trim();
-    const type = b.image_type ? ibType(String(b.image_type)) : null;
-    if (b.image_type && !type) return res.json({ error: 'That image type is not recognised.' });
     if (!name) return res.json({ error: 'Give the picture a name.', field: 'name' });
     if (!description) return res.json({ error: 'Describe the picture you want.', field: 'description' });
-    if (!IB_SHAPES[shape]) return res.json({ error: 'Choose a shape for the picture.', field: 'shape' });
-    if (!style) return res.json({ error: 'Choose an art style.', field: 'style' });
     const db = await getDb();
-    const effRank = accessRank(await getEffectiveTier(uid, cid));
-    if (style.indexOf('custom:') !== 0 && !artStyleAllowed(effRank, style)) return res.json({ error: 'STYLE_LOCKED', message: 'That art style isn\u2019t available on your current plan.' });
-    const _rs = await resolveGenStyle(db, style, uid, cid);
-    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' });
-
-    const refsIn = (b.refs && typeof b.refs === 'object') ? b.refs : {};
-    const rc = await ibResolveCharacters(db, cid, uid, refsIn.characters);
-    if (rc.error) return res.json({ error: rc.error });
-    const chars = rc.chars;
-    const assetIds = (Array.isArray(refsIn.assets) ? refsIn.assets : []).map(function (x) { return parseInt(x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
-    const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
-    const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
-    if (assets.length !== assetIds.length) return res.json({ error: 'One of the assets is no longer available, or its picture was removed.' });
-    if (chars.length + assets.length > MAX_PANEL_REFS) return res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' });
-    if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return;
-
-    const charIds = chars.map(function (c) { return c.character_id; });
-    const charList = buildCharacterBlock(chars, '', 0, charIds);
-    const assetList = buildAssetBlock(assets, '', assetIds);
-    const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
-      refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
-
-    const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
-    const includeLore = b.include_lore !== false;
-    const lore = (includeLore && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    const prompt = ibPrompt({ type: type, description: description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore });
-    // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
-    // own flags pass through untouched, exactly as a panel would send them.
-    let flags = _rs.isFade;
-    if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
-
-    const modelKey = await getSelectedModel(db);
-    const cost = await getTokenCost(modelKey);
-    if (!(await canAfford(uid, cost))) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
-    const _campPrompt = await loadCampaignPrompt(db, cid);
-    const seed = Math.floor(Math.random() * 2147483647);
-    const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
-
-    const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
-      assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
-    const now = new Date().toISOString();
+    const style = String(b.art_style || '').trim(), shape = String(b.shape || '');
+    const recipe = { description: description, shape: shape, style: style, type: b.image_type || null, include_lore: b.include_lore !== false,
+      refs: (b.refs && typeof b.refs === 'object') ? b.refs : {} };
+    const built = await ibBuildAndSubmit(req, res, db, uid, cid, recipe, null);
+    if (!built) return;
+    const sub = built.sub, type = built.type, now = new Date().toISOString();
     const ins = await db.prepare(
-      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, is_ready, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(cid, uid, name, description, type ? type.key : null, shape, style, _rs.name || null, includeLore, JSON.stringify(refsOut), sub.prompt || prompt, false, now, now);   // v3.3.73 -- starts as a Draft
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, is_ready, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, type ? type.key : null, shape, style, built.styleName, recipe.include_lore, JSON.stringify(built.refsOut), sub.prompt || built.words, built.words, false, now, now);   // v3.3.73 -- starts as a Draft
     const imageId = ins.lastInsertRowid;
-    const job = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, style, cost, imageId, now, now);
+    const job = await ibQueueJob(db, uid, cid, sub, style, built.cost, imageId, null);
     await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate',
       message: 'Submitted Image Builder picture ' + imageId + ' (request ' + sub.request_id + ')',
-      detail: { campaign_id: cid, image_type: type ? type.key : null, shape: shape, style: style, refs: (panelBlock.refs || []).map(function (r) { return r.name; }), finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
+      detail: { campaign_id: cid, image_type: type ? type.key : null, shape: shape, style: style, refs: (built.panelBlock.refs || []).map(function (r) { return r.name; }), finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(imageId);
     res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
   } catch (e) {
@@ -3442,8 +3491,106 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
   }
 });
 
-// Delete: the maker only (Ian: only the person who made it). The picture file goes through releaseImage, which keeps
-// it while anything else (an Archive copy, an asset) still names it.
+// v3.3.74 -- Edit Prompt: the picture's own words (what follows the house rules, style and references in the
+// prompt). Saved here; Regen sends them. The whole assembled prompt stays read-only (builder_images.prompt).
+router.post('/builder/images/:id/words', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const words = String((req.body && req.body.words) || '').trim().slice(0, IB_WORDS_MAX);
+    if (!words) return res.json({ error: 'The prompt can\u2019t be empty.' });
+    await db.prepare('UPDATE builder_images SET words = ?, updated_at = ? WHERE id = ?').run(words, new Date().toISOString(), r.id);
+    res.json({ success: true, words: words });
+  } catch (e) { console.error('[image-builder] words error:', e.message); res.json({ error: 'Could not save the prompt.' }); }
+});
+
+// v3.3.74 -- Regen: the same recipe and words, a new seed, one token (spent when the picture arrives). The picture
+// on show goes to the one-deep undo slot (prev_image_url) when the new one lands, so Revert can bring it back.
+router.post('/builder/images/:id/regen', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const uid = req.session.userId, cid = r.campaign_id;
+    const built = await ibBuildAndSubmit(req, res, db, uid, cid, ibRecipeOf(r), r.words || null);
+    if (!built) return;
+    const sub = built.sub;
+    await db.prepare('UPDATE builder_images SET prompt = ?, words = ?, refs = ?, art_style_name = ?, updated_at = ? WHERE id = ?')
+      .run(sub.prompt || built.words, built.words, JSON.stringify(built.refsOut), built.styleName, new Date().toISOString(), r.id);
+    const job = await ibQueueJob(db, uid, cid, sub, r.art_style, built.cost, r.id, r.image_url || null);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/regen',
+      message: 'Regenerating Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] regen error:', e.message);
+    res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// v3.3.74 -- Revert: swap the picture and the one in the undo slot (so a second Revert goes forward again).
+router.post('/builder/images/:id/revert', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.prev_image_url) return res.json({ error: 'There is no earlier picture to go back to.' });
+    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, updated_at = ? WHERE id = ?')
+      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.image_url, r.img_w || null, r.img_h || null, new Date().toISOString(), r.id);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] revert error:', e.message); res.json({ error: 'Could not go back to the earlier picture.' }); }
+});
+
+// v3.3.74 -- Archive: a copy of the picture into the campaign's Archive (as a picture, image_type 'moment' with no
+// session, so the cover, title and Replace pickers take it like any archived panel). The archive cap and the rights
+// check apply as on every other Archive button. The maker only.
+router.post('/builder/images/:id/archive', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be archived.' });
+    const already = await db.prepare("SELECT id FROM campaign_archives WHERE campaign_id = ? AND source_url = ? LIMIT 1").get(r.campaign_id, r.image_url);
+    if (already) return res.json({ success: true, already: true });
+    try {
+      const effTier = getTier(await getEffectiveTier(req.session.userId, r.campaign_id));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(r.campaign_id);
+        if (cnt && Number(cnt.c) >= cap) return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+      }
+    } catch (capErr) { console.error('[image-builder] archive cap check error:', capErr.message); }
+    if (await rightsCheck.refuseRejected(res, [r.image_url], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
+    const { archiveCopy } = require('../storage/storage');
+    const archivedUrl = await archiveCopy(r.image_url);
+    await db.prepare(
+      'INSERT INTO campaign_archives (campaign_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(r.campaign_id, 'moment', r.name || 'Image Builder picture', archivedUrl, r.image_url, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
+    res.json({ success: true });
+  } catch (e) { console.error('[image-builder] archive error:', e.message); res.json({ error: 'Could not archive the picture.' }); }
+});
+
+// v3.3.74 -- Make My Copy: anyone in the campaign who can see the picture (Ready, or their own) gets their own copy
+// of its recipe, words and current picture, as a new Draft of theirs in the same campaign. Free: nothing is drawn.
+// The picture file is shared, which releaseImage already allows for (it keeps a file any row still names).
+router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const uid = req.session.userId;
+    const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (!(await ibAllowed(uid, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    if (r.is_ready === false && String(r.user_id) !== String(uid)) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be copied.' });
+    const now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, is_ready, copied_from, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(r.campaign_id, uid, String(r.name || 'Picture').slice(0, IB_NAME_MAX - 7) + ' (copy)', r.description, r.image_type, r.shape, r.art_style, r.art_style_name, r.include_lore, r.refs, r.prompt, r.words, r.image_url, r.img_w, r.img_h, false, r.id, now, now);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
+});
+
 // v3.3.73 -- Draft / Ready: the maker only, in a campaign they may still use the Builder in, and only once the
 // picture has arrived (a picture still drawing, or one that failed, stays a draft).
 router.post('/builder/images/:id/ready', requireAuth, async function (req, res) {

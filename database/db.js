@@ -2320,6 +2320,10 @@ async function migrateGifts(pool) {
     // v3.3.73 -- Draft / Ready. DEFAULT true, so every picture made before this stays visible to the campaign;
     // a new picture is inserted with false (a draft only its maker sees) by the generate route.
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS is_ready BOOLEAN DEFAULT true');
+    // v3.3.74 -- stage 2: the picture's own words (Edit Prompt; Regen sends them) and the undo slot's size.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS words TEXT');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_w INTEGER');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_h INTEGER');
   } catch (e) { console.error('[image-builder] migration skipped this boot:', e && e.message); }
 }
 

@@ -15371,6 +15371,7 @@ function archiveVersionLabel(a) {
 
 function archiveMomentLabel(a) {
   if (a.moment_title) return a.moment_title;
+  if (!a.moment_id && !a.session_id && a.title) return a.title;   // v3.3.74 -- an Image Builder picture: its name
   if (a.moment_panel_order !== null && a.moment_panel_order !== undefined) return 'Panel ' + (a.moment_panel_order + 1);
   return null;
 }
@@ -38606,16 +38607,19 @@ function ibGalleryHtml() {
   if (!IB.images.length) return '<div class="ib-meta">No pictures yet. Make one on the Make a picture tab.</div>';
   return IB.images.map(function (im) {
     var mine = String(im.user_id) === String(IB.me);
-    var pic;
-    if (im.image_url) pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    var busy = ibBusy(im), pic;
+    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
     else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
     else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
     if (mine && !im.ready) pic = pic.replace('<div class="ib-pic', '<div style="position:relative;"><span class="ib-draft">Draft</span><div class="ib-pic') + '</div>';
+    var btns = '';
+    if (mine && !busy && (im.image_url || im.status === 'failed')) btns += '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>';
+    if (!mine && im.image_url && !busy) btns += '<button class="btn btn-sm" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>';
     return '<div class="ib-img">' + pic +
       '<b style="font-size:14px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + '</div>' +
       '<div class="ib-meta">By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
-      (mine && (im.image_url || im.status === 'failed') ? '<div><button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button></div>' : '') +
+      (btns ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + btns + '</div>' : '') +
       '</div>';
   }).join('');
 }
@@ -38660,22 +38664,33 @@ function ibViewerHtml() {
   var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
   var w = im.img_w || shp.w, h = im.img_h || shp.h;
   var mine = String(im.user_id) === String(IB.me);
+  var busy = ibBusy(im);
   var inner;
   if (im.image_url) inner = '<img src="' + escapeHtml(im.image_url) + '" alt="' + escapeHtml(im.name) + '" onclick="ibView(' + im.id + ')">';
   else if (im.status === 'failed') inner = '<div class="ib-err" style="padding:16px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div>';
   else inner = '';
-  // Draft / Ready, the maker's own (others never receive a draft).
-  var state = '';
+  // The maker's buttons (v3.3.74, stage 2). Nothing that changes the picture while it is being drawn.
+  var b = [];
   if (mine) {
-    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
-      (im.image_url ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
+    b.push('<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>');
+    if (im.image_url && !busy) b.push('<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>');
+    if (!busy) {
+      b.push('<button class="btn btn-sm" onclick="ibEditPrompt(' + im.id + ')">Edit Prompt</button>');
+      b.push('<button class="btn btn-sm" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt">Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>');
+      if (im.has_prev) b.push('<button class="btn btn-sm" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen">Revert</button>');
+      if (im.image_url) b.push('<button class="btn btn-sm" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
+      if (im.image_url || im.status === 'failed') b.push('<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>');
+    }
+  } else if (im.image_url && !busy) {
+    b.push('<button class="btn btn-sm" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
   }
-  return zoom + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (!im.image_url && im.status !== 'failed' ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div></div>' +
+  return zoom + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div></div>' +
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + state +
-        (mine && (im.image_url || im.status === 'failed') ? '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>' : '') + '</div>' +
+      (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
+      '<div id="ib-act-msg" class="ib-err"></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + b.join('') + '</div>' +
     '</div>';
 }
 // v3.3.73 -- zoom, as the Prep & Preview row: 10% steps, 50%..300%, "Fit" until zoomed; kept until Fit is pressed.
@@ -38715,23 +38730,46 @@ function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
   var f = document.getElementById('ib-frame');
-  if (f && f.getAttribute('data-pending') === '1') showBusyOverlay(f, 'Generating', 'Drawing your picture\u2026');
+  if (f && f.getAttribute('data-pending') === '1') {
+    if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');
+    else showBusyOverlay(f, 'Generating', 'Drawing your picture\u2026');
+  }
 }
 function ibGalleryBusy() {
-  Array.prototype.forEach.call(document.querySelectorAll('#ib-gallery .ib-pending'), function (el) { showBusyOverlay(el, 'Generating'); });
+  Array.prototype.forEach.call(document.querySelectorAll('#ib-gallery .ib-pending'), function (el) {
+    var im = IB.images.filter(function (x) { return String(x.id) === el.getAttribute('data-id'); })[0];
+    showBusyOverlay(el, im && im.image_url ? 'Regenerating' : 'Generating');
+  });
 }
 function ibTab(t) {
   ibReadForm();
   IB.tab = (t === 'gallery') ? 'gallery' : 'make';
   ibRender();
 }
-// A Gallery picture opens in the Make tab's viewer (stage 2 also loads its recipe into the form there).
+// A Gallery picture opens in the Make tab's viewer. Your own picture also loads its recipe into the form (Generate
+// then makes a new picture from it; Regen redraws this one). Someone else's is shown as it is, with Make My Copy.
 function ibOpen(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
   IB.viewId = id;
   IB.tab = 'make';
+  if (im && String(im.user_id) === String(IB.me)) ibLoadRecipe(im);
   ibRender();
   var v = document.getElementById('ib-viewer'); if (v && v.scrollIntoView) { try { v.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
 }
+function ibLoadRecipe(im) {
+  var refs = im.refs || {};
+  IB.desc = im.description || ''; IB.name = im.name || ''; IB.type = im.image_type || ''; IB.lore = im.include_lore !== false;
+  if (im.shape) IB.shape = im.shape;
+  if (im.art_style) IB.style = im.art_style;
+  IB.chars = (refs.characters || []).map(function (c) { return { id: c.id, name: c.name, look: c.look, label: c.label }; });
+  IB.assets = (refs.assets || []).map(function (a) { return { id: a.id, name: a.name, category: a.category }; });
+  // ibRender reads the form back first; put the recipe into the fields so it is what gets read.
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
+  var l = document.getElementById('ib-lore'); if (l) l.checked = IB.lore;
+}
+// Drawing right now: a first Generate, or a Regen of a picture already on show.
+function ibBusy(im) { return !!im && (im.status === 'queued' || im.status === 'processing'); }
 
 // Loads what the chosen campaign brings: its custom art styles (for the style window) and its gallery.
 function ibLoadCampaign() {
@@ -38764,13 +38802,100 @@ function ibLoadGallery() {
 function ibStopPoll() { if (IB.poll) { clearTimeout(IB.poll); IB.poll = null; } }
 function ibSchedulePoll() {
   ibStopPoll();
-  var pending = IB.images.some(function (im) { return !im.image_url && im.status !== 'failed'; });
+  var pending = IB.images.some(ibBusy);
   if (!pending) return;
   IB.poll = setTimeout(function () {
     IB.poll = null;
     if (state.currentView !== 'image-builder') return;
     ibLoadGallery();
   }, 4000);
+}
+// ---------------------------------------------------------------- v3.3.74, stage 2: the buttons on a picture
+function ibImg(id) { return IB.images.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+function ibActMsg(t) { var m = document.getElementById('ib-act-msg'); if (m) m.innerHTML = t || ''; }
+function ibPut(img) {   // replace (or add) a row from the server and redraw
+  if (!img) return;
+  var found = false;
+  IB.images = IB.images.map(function (x) { if (String(x.id) === String(img.id)) { found = true; return img; } return x; });
+  if (!found) IB.images.unshift(img);
+  ibPaintGallery(); ibSchedulePoll();
+}
+function ibPost(url, body, cb) {
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) {
+        if (d && d.error === 'INSUFFICIENT_TOKENS') { ibActMsg(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+        ibActMsg(escapeHtml((d && (d.message || d.error)) || 'Something went wrong. Please try again.'));
+        return;
+      }
+      cb(d);
+    })
+    .catch(function () { ibActMsg('Connection error. Please try again.'); });
+}
+function ibRegen(id) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/regen', {}, function (d) {
+    ibPut(d.image);
+    if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+  });
+}
+function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/revert', {}, function (d) { ibPut(d.image); }); }
+function ibArchive(id) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/archive', {}, function (d) {
+    showAlert(d.already ? 'This picture is already in the campaign\u2019s Archive.' : 'Archived. It is in the campaign\u2019s Archive, ready to use as a cover, title picture or replacement.');
+  });
+}
+function ibCopy(id) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/copy', {}, function (d) {
+    if (!d.image) return;
+    IB.images.unshift(d.image);
+    IB.sig = '';
+    ibOpen(d.image.id);
+  });
+}
+// Edit Prompt: the whole prompt last sent (read only) and the picture's own words (editable); Save, or Save & Regen.
+function ibEditPrompt(id) {
+  var im = ibImg(id); if (!im) return;
+  ibClosePrompt();
+  var overlay = document.createElement('div');
+  overlay.id = 'ib-prompt-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) ibClosePrompt(); });
+  overlay.innerHTML =
+    '<div class="prep-img-modal-box" style="max-width:760px;">' +
+      '<div class="prep-img-modal-head"><div class="prep-img-modal-title">Edit prompt \u2014 ' + escapeHtml(im.name || 'Untitled') + '</div>' +
+        '<button type="button" class="prep-img-modal-x" onclick="ibClosePrompt()">&times;</button></div>' +
+      '<div style="overflow-y:auto;color:#f0e8d0;">' +
+        '<div class="ib-lbl">The picture\u2019s words</div>' +
+        '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
+        '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
+        '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:#e8d49a;">The whole prompt last sent</summary>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
+        '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
+        '<button class="btn btn-sm" onclick="ibClosePrompt()">Cancel</button>' +
+        '<button class="btn btn-sm" onclick="ibSavePrompt(' + im.id + ', false)">Save</button>' +
+        '<button class="btn btn-sm btn-primary" onclick="ibSavePrompt(' + im.id + ', true)">Save &amp; Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>' +
+      '</div></div>';
+  document.body.appendChild(overlay);
+}
+function ibClosePrompt() { var m = document.getElementById('ib-prompt-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibSavePrompt(id, andRegen) {
+  var ta = document.getElementById('ib-words'), msg = document.getElementById('ib-words-msg');
+  var words = ta ? ta.value : '';
+  if (!words.trim()) { if (msg) msg.textContent = 'The prompt can\u2019t be empty.'; return; }
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/words', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ words: words }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (msg) msg.textContent = (d && (d.message || d.error)) || 'Could not save the prompt.'; return; }
+      var im = ibImg(id); if (im) im.words = d.words;
+      ibClosePrompt();
+      if (andRegen) ibRegen(id);
+    })
+    .catch(function () { if (msg) msg.textContent = 'Connection error. Please try again.'; });
 }
 
 function ibPickCampaign() {
