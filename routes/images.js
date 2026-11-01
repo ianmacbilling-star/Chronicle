@@ -3370,7 +3370,7 @@ async function ibResolveCharacters(db, cid, uid, list) {
 function ibPrompt(o) {
   var parts = [];
   if (o.type) parts.push(o.type.text);
-  parts.push('THE PICTURE: ' + o.description);
+  if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
   if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
   if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
   return parts.join('\n\n');
@@ -3465,7 +3465,8 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
     const name = String(b.name || '').trim().slice(0, IB_NAME_MAX);
     const description = String(b.description || '').trim().slice(0, IB_DESC_MAX);
     if (!name) return res.json({ error: 'Give the picture a name.', field: 'name' });
-    if (!description) return res.json({ error: 'Describe the picture you want.', field: 'description' });
+    // v3.3.81 -- an image type is enough on its own (Ian); the description is required only without one.
+    if (!description && !b.image_type) return res.json({ error: 'Describe the picture you want, or choose an image type.', field: 'description' });
     const db = await getDb();
     const style = String(b.art_style || '').trim(), shape = String(b.shape || '');
     const recipe = { description: description, shape: shape, style: style, type: b.image_type || null, include_lore: b.include_lore !== false,

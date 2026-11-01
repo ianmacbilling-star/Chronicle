@@ -38792,13 +38792,20 @@ function ibReady(id, ready) {
 async function ibNew() {
   ibReadForm();
   if ((IB.desc.trim() || IB.name.trim()) && !await uiConfirm('Start a new picture? This clears the description, name, image type and references. Your pictures stay in the Gallery.', { okText: 'Clear', cancelText: 'Keep' })) return;
+  ibClearForm(false);
+  IB.tab = 'make';
+  ibRender();
+}
+// v3.3.81 -- empties the form, in IB AND in the page: ibRender reads the page back into IB first, so clearing only
+// IB left the old name and description in place. everything: also the shape and art style (a campaign change);
+// New picture keeps those.
+function ibClearForm(everything) {
   IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null;
+  if (everything) { IB.shape = 'standard'; IB.style = ''; IB.zoom = null; }
   var d = document.getElementById('ib-desc'); if (d) d.value = '';
   var n = document.getElementById('ib-name'); if (n) n.value = '';
   var t = document.getElementById('ib-type'); if (t) t.value = '';
   var l = document.getElementById('ib-lore'); if (l) l.checked = true;
-  IB.tab = 'make';
-  ibRender();
 }
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
@@ -38978,6 +38985,7 @@ function ibPickCampaign() {
   _ci = { step: 'campaigns', mode: 'builder', onCampaign: function (id, name) {
     if (String(id) === String(IB.cid)) return;
     ibClearCampaign();
+    ibClearForm(true);   // v3.3.81 -- a new campaign starts a blank form (its pictures are already saved in the old campaign's gallery)
     IB.cid = parseInt(id, 10); IB.cname = name;
     ibRender(); ibLoadCampaign();
   } };
@@ -39101,7 +39109,7 @@ function ibMsg(text, field) {
 function ibGenerate() {
   if (!IB.cid || IB.busy) return;
   ibReadForm();
-  if (!IB.desc.trim()) { ibMsg('Describe the picture you want.', 'description'); return; }
+  if (!IB.desc.trim() && !IB.type) { ibMsg('Describe the picture you want, or choose an image type.', 'description'); return; }   // v3.3.81
   if (!IB.name.trim()) { ibMsg('Give the picture a name.', 'name'); return; }
   if (!IB.shape) { ibMsg('Choose a shape for the picture.', 'shape'); return; }
   if (!IB.style) { ibMsg('Choose an art style.', 'style'); return; }
