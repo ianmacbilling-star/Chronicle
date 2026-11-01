@@ -11974,7 +11974,7 @@ function _tbBody(extra) {
   var t = _tbTarget();
   var body = Object.assign({ campaignId: state.currentCampaign && state.currentCampaign.id }, extra || {});
   if (t.kind !== 'book') body.target = t;
-  if (t.kind === 'ib') { body.campaignId = IB.cid; body.ibTitle = _tbWords().title; body.ibSubtitle = _tbWords().subtitle; }   // v3.3.83
+  if (t.kind === 'ib') { body.campaignId = IB.cid; body.ibTitle = _tbWords().title; body.ibSubtitle = _tbWords().subtitle; body.ibCur = { url: _tbCur().url, src: _tbCur().src }; }   // v3.3.83; v3.3.87 -- ibCur
   return body;
 }
 
@@ -11982,7 +11982,7 @@ function _tbBody(extra) {
 // has; for a chapter it is fetched by title-read and held here for the life of the modal.
 function _tbCur() {
   if (_tbIsSession()) return (state && state._tbSessionCur) || {};
-  if (_tbIsIb()) { var ic = (state && state._tbIbCur) || {}; return { url: ic.url || '', src: ic.src || '', text: '', sub: null, prompt: '', prevUrl: '' }; }   // v3.3.83
+  if (_tbIsIb()) { var ic = (state && state._tbIbCur) || {}; return { url: ic.url || '', src: ic.src || '', text: '', sub: null, prompt: '', prevUrl: ic.prevUrl || '', prevSrc: ic.prevSrc || '' }; }   // v3.3.83; v3.3.87 -- prev for Revert
   var bm = (state && state.bookMeta) || {};
   return { url: bm.built_title_url || '', src: bm.built_title_src || '', text: bm.built_title_text || '',
            sub: (bm.built_title_sub == null ? null : String(bm.built_title_sub)),
@@ -12180,6 +12180,7 @@ function openTitleBuilder(target) {
   // in the archive list rather than on the book. Loaded after the modal is shown so the panel is not
   // held back by a fetch; the pill settles a moment later.
   if (existing && !_tbIsIb() && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+  if (_tbIsIb() && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill, IB.cid);   // v3.3.87 -- the Builder's campaign
 }
 
 // _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
@@ -12319,7 +12320,14 @@ function _tbDoneIdle() {
 // the modal. Same words, same adapter behind both -- different client state to maintain.
 function _tbSave(patch, then) {
   // v3.3.83 -- the Image Builder's title: a new drawing is held for Done & Use, never written to a book.
-  if (_tbIsIb()) { if (patch && patch.url) state._tbIbCur = { url: patch.url, src: patch.src || '' }; if (then) then(); return; }
+  if (_tbIsIb()) {
+    var _o = state._tbIbCur || {};
+    if (patch && patch.url) state._tbIbCur = { url: patch.url, src: patch.src || '',
+      prevUrl: (patch.prevUrl !== undefined) ? patch.prevUrl : (_o.url && _o.url !== patch.url ? _o.url : (_o.prevUrl || '')),
+      prevSrc: (patch.prevSrc !== undefined) ? patch.prevSrc : (_o.url && _o.url !== patch.url ? (_o.src || '') : (_o.prevSrc || '')) };   // v3.3.87 -- one-deep Revert
+    var _rv = _tbEl('title-build-revert-btn'); if (_rv) _rv.classList.toggle('hidden', !(state._tbIbCur && state._tbIbCur.url && state._tbIbCur.prevUrl));
+    if (then) then(); return;
+  }
   // v3.0.652 -- TD-443. THE ONE PLACE THAT KNOWS A WRITE HAPPENED.
   //
   // Ian, 2026-08-12: "If I have a regular picture there... open up the title builder... do nothing
@@ -12445,7 +12453,8 @@ function _tbArchiveRow() {
   }) || null;
 }
 function _tbSyncArchivePill() {
-  if (_tbIsIb()) return;   // v3.3.83 -- no Archive here; the Builder's campaign need not be the one on the page
+  // v3.3.87 -- for an Image Builder title, state.archives is the Builder's campaign's (loaded on open, archivesCid).
+  if (_tbIsIb() && String(state.archivesCid || '') !== String(IB.cid || '')) return;
   var btn = _tbEl('title-build-archive-btn');
   if (!btn) return;
   var row = _tbArchiveRow();
@@ -12548,6 +12557,8 @@ function closeTitleBuilder() {
     _tbDoneIdle(); state._tbTarget = null; state._tbIbCur = null; state._tbDirty = false;
     var _im = _tbEl('title-build-modal'); if (_im) _im.classList.add('hidden');
     _tbIbMode();
+    // v3.3.87 -- the Archive list loaded for the Builder's campaign is not left standing in for the page's campaign.
+    if (String(state.archivesCid || '') === String(IB.cid || '') && !(state.currentCampaign && String(state.currentCampaign.id) === String(IB.cid))) { state.archives = []; state.archivesCid = null; }
     return;
   }
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
@@ -12580,8 +12591,10 @@ function closeTitleBuilder() {
 // v3.3.83 -- the controls that act on a book or chapter (its Archive, Replace, Retouch, Stash) are set aside while the
 // Title Builder designs an Image Builder title, and come back for every other target.
 function _tbIbMode() {
-  var ib = _tbIsIb(), m = _tbEl('title-build-modal'); if (!m) return;
-  Array.prototype.forEach.call(m.querySelectorAll('[onclick*="openTitleReplacePicker"], [onclick*="openTitleRefPicker"], #title-build-retouch-btn, #title-build-archive-btn, #title-build-stash'), function (el) { el.style.display = ib ? 'none' : ''; });
+  // v3.3.87 -- Ian: bring them all back. Nothing is hidden now; each control knows the Image Builder target. Left as the
+  // one place that would set controls aside again, and to clear any style an older page left behind.
+  var m = _tbEl('title-build-modal'); if (!m) return;
+  Array.prototype.forEach.call(m.querySelectorAll('[onclick*="openTitleReplacePicker"], [onclick*="openTitleRefPicker"], #title-build-retouch-btn, #title-build-archive-btn, #title-build-stash'), function (el) { el.style.display = ''; });
 }
 function _tbShowResult(url) {
   // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper
@@ -12759,6 +12772,7 @@ function titleBuildGenerate() {
 // null each other. That is a five-place invariant and the apply script counts it.
 function titleBuildRetouchOpen() {
   state.retouchTitle = true;
+  state.retouchIb = null;   // v3.3.87 -- an Image Builder picture retouch must not take this one
   state.retouchMomentId = null;
   state.retouchCharId = null;
   state.retouchSessionCharId = null;
@@ -12775,7 +12789,7 @@ function titleBuildRetouchClose() { state.retouchTitle = null; }
 // Synchronous, like Generate above it and unlike every other Retouch in the product -- see the note
 // on the route. Costs a token, because it is a call to fal.
 function titleBuildRetouch(instruction) {
-  if (!state.currentCampaign) return;
+  if (!state.currentCampaign && !_tbIsIb()) return;   // v3.3.87
   instruction = String(instruction || '').trim();
   if (!instruction) return;
   _tbErr('');
@@ -12850,6 +12864,17 @@ function titleBuildRevert() {
 // ONE WRITE, not two. Live and draft move in a single patch so there is no instant where the
 // artwork is off the cover and not yet held anywhere.
 function titleBuildStash() {
+  // v3.3.87 -- an Image Builder title: keep the drawing for the next opening, but take it out of the Title section, so
+  // the art style letters any typed title again (as Stash takes a drawn title off a cover).
+  if (_tbIsIb()) {
+    var _sc = _tbCur();
+    if (_sc.url) IB.ttlDraft = { url: _sc.url, src: _sc.src || '' };
+    IB.ttl.url = ''; IB.ttl.src = '';
+    closeTitleBuilder();
+    ibRender();
+    showAlert('Stashed. The drawing is kept in the Title Builder; press Done & Use to put it back.');
+    return;
+  }
   if (!state.currentCampaign) return;
   var cur = _tbCur();
   if (!cur.url) {
@@ -12945,6 +12970,7 @@ function titleBuildRemove() {
 
 // TD-402. Archive on, archive off -- the same toggle every other image in the product has.
 function titleBuildArchiveToggle() {
+  if (_tbIsIb()) { _tbIbArchiveToggle(); return; }   // v3.3.87
   if (!state.currentCampaign) return;
   var url = _tbCur().url || '';
   if (!url) return;
@@ -12978,12 +13004,40 @@ function titleBuildArchiveToggle() {
 // Two pickers, one grid. Ian: "You should be able to pull in a reference image from the archive. And
 // even Pull in an actual title from the archive. For pulling in an archive only pull in Archived items
 // with the type Title." Both filter to type 'title' and neither costs a token -- no fal call is made.
+// v3.3.87 -- Archive / Archived for an Image Builder title, into (or out of) the Builder's campaign's Archive.
+function _tbIbArchiveToggle() {
+  var cur = _tbCur(); if (!cur.url || !IB.cid) return;
+  var row = (String(state.archivesCid || '') === String(IB.cid)) ? _tbArchiveRow() : null;
+  _tbErr('');
+  if (row) {
+    fetch('/api/campaigns/' + encodeURIComponent(IB.cid) + '/archives/' + row.id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.error) { _tbErr(d.message || d.error); return; }
+        state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
+        _tbSyncArchivePill(); showAlert('Removed from the Archive.');
+      })
+      .catch(function () { _tbErr('Could not update the Archive.'); });
+    return;
+  }
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/title-archive', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: cur.url, src: cur.src, title: _tbWords().title, subtitle: _tbWords().subtitle, prompt: ((_tbEl('title-build-desc') || {}).value || '') }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.archive) { _tbErr((d && (d.message || d.error)) || 'Could not archive the title.'); return; }
+      if (String(state.archivesCid || '') === String(IB.cid)) state.archives = (state.archives || []).filter(function (a) { return a.id !== d.archive.id; }).concat([d.archive]);
+      _tbSyncArchivePill(); showAlert('Title saved to ' + (IB.cname || 'the campaign') + '\u2019s Archive.');
+    })
+    .catch(function () { _tbErr('Could not archive the title.'); });
+}
 function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title from your Archive'); }
 function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
 function _tbOpenPicker(mode, heading) {
-  if (!state.currentCampaign) return;
-  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title' };   // v3.3.29
-  state.pickerFilters = fpApply('titlebuilder', state.currentCampaign.id, Object.assign(emptyArchiveFilters(), { type: 'title' }));
+  // v3.3.87 -- an Image Builder title picks from the Builder's campaign's Archive (ctx.cid), not the page's.
+  var _pcid = _tbIsIb() ? IB.cid : (state.currentCampaign && state.currentCampaign.id);
+  if (!_pcid) return;
+  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title', cid: _tbIsIb() ? IB.cid : undefined };   // v3.3.29; v3.3.87 -- cid
+  state.pickerFilters = fpApply('titlebuilder', _pcid, Object.assign(emptyArchiveFilters(), { type: 'title' }));
   state.pickerFilters.type = 'title';   // pinned or not, this picker offers titles only
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
@@ -12991,7 +13045,7 @@ function _tbOpenPicker(mode, heading) {
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); });   // v3.3.29
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); }, _pcid);   // v3.3.29; v3.3.87 -- _pcid
 }
 
 function prepSaveTitleColor() {
@@ -17174,7 +17228,7 @@ function applyArchiveToTarget(archiveId) {
   // The prep kinds carry their own campaign id and do not need this one, so they are let past and
   // checked by their own handler. Everything else still needs a campaign on screen, because /apply
   // is scoped to it -- and now says so rather than shrugging.
-  var cid = state.currentCampaign && state.currentCampaign.id;
+  var cid = (ctx && ctx.cid) || (state.currentCampaign && state.currentCampaign.id);   // v3.3.87 -- ctx.cid: the Image Builder's campaign
   if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
     'That image cannot be applied because no campaign is on screen.',
     'Open the campaign and try again.'); return; }
@@ -17189,6 +17243,18 @@ function applyArchiveToTarget(archiveId) {
     if (_cvMaybeCrop(ctx.prepKind, archiveId)) return;   // v3.1.18 -- TD-911: frame the front or back cover first
     closeReplacePicker();
     selectPrepImage(ctx.prepKind, archiveId);
+    return;
+  }
+  // v3.3.87 -- Replace, for an Image Builder title: the archived lettering becomes the drawing in the window. Nothing is
+  // written to a book; the archive row already has the cut copy and (in layout_meta) its uncut original.
+  if (ctx.mode === 'title' && _tbIsIb()) {
+    var _ar = (state.archives || []).filter(function (a) { return String(a.id) === String(archiveId); })[0];
+    if (!_ar || !_ar.image_url) return;
+    var _am = {}; try { _am = JSON.parse(_ar.layout_meta || '{}') || {}; } catch (e) { _am = {}; }
+    closeReplacePicker();
+    _tbSave({ url: _ar.image_url, src: _am.src || '' });
+    _tbShowResult(_ar.image_url);
+    _tbSyncArchivePill();
     return;
   }
   if (ctx.mode === 'title') {
@@ -38633,6 +38699,7 @@ function ibTitleBody() {
         '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
         : '<span class="ib-meta">Optional. Without it, the art style decides the lettering.</span>') +
     '</div>' +
+    '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
     // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
     (t.url
       ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, Apply title lays it on for free.</div>'
@@ -38644,11 +38711,32 @@ function ibOpenTitleBuilder() {
   if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first, then design its lettering.', 'title'); return; }
   openTitleBuilder({ kind: 'ib', campaignId: IB.cid });
 }
+// v3.3.87 -- Apply title, in the Title section (Ian: "down on the left hand side inside the title accordion"). It acts on
+// the picture in the viewer when it is yours and finished; repainted with the viewer, so it appears when a picture lands.
+function ibTtlApplyHtml() {
+  if (!IB.ttl || !IB.ttl.url) return '';
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  if (!mine) return '<span class="ib-meta">Make or open one of your pictures, then Apply title lays this lettering on it.</span>';
+  return '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibApplyTitle(' + im.id + ')">Apply title to picture</button>' +
+    ' <span class="ib-meta" id="ib-ttl-apply-msg">Lays the lettering on \u201c' + escapeHtml(im.name || 'this picture') + '\u201d at the placement and size above. Free; Revert takes it off.</span>';
+}
+function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
 function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (no title)'); }   // v3.3.85
 // v3.3.85 -- lay the Title section's lettering on this picture, free.
 function ibApplyTitle(id) {
   ibReadForm(); ibActMsg('');
-  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/title', { title: Object.assign({}, IB.ttl) }, function (d) { ibPut(d.image); });
+  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first.', 'title'); return; }
+  var b = document.getElementById('ib-ttl-apply-btn'); if (b) { b.disabled = true; b.textContent = 'Applying\u2026'; }
+  // v3.3.87 -- a refusal or failure is said where the button is, and as a message, so it cannot pass unseen.
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: Object.assign({}, IB.ttl) }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the title on the picture.'; ibTtlApplyPaint(); ibActMsg(escapeHtml(m)); showError(m); return; }
+      ibPut(d.image);
+      var ms = document.getElementById('ib-ttl-apply-msg'); if (ms) ms.textContent = 'Done. The title is on the picture; Without title shows the clean copy.';
+    })
+    .catch(function () { ibTtlApplyPaint(); showError('Connection error. Please try again.'); });
 }
 function ibTitleClearArt() { ibReadForm(); IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.desc = ''; ibRender(); }
 // v3.3.83 -- Ian: "The name change save should happen on blur." Leaving the Name field renames the picture in the
@@ -38897,7 +38985,7 @@ function ibViewerHtml() {
       p.push('<button class="panel-pill" onclick="ibEditPrompt(' + im.id + ')" title="Change the words the picture is drawn from">Edit Prompt</button>');
       p.push('<button class="panel-pill" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Regen</button>');
       // v3.3.85 -- Apply title: the Title section's lettering laid on this picture (free); Without title: the clean copy.
-      if (im.image_url && IB.ttl && IB.ttl.url && String(IB.ttl.title || '').trim()) p.push('<button class="panel-pill" onclick="ibApplyTitle(' + im.id + ')" title="Lay the Title section\u2019s lettering on this picture at its placement and size (free, no redraw)">Apply title</button>');
+      // v3.3.87 -- Apply title is in the Title section now (Ian), not on the picture.
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibRetouch(' + im.id + ')" title="Change one thing in the picture (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Retouch</button>');   // v3.3.82
       if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen or Retouch">Revert</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
@@ -38976,7 +39064,8 @@ function ibTtlFields() {
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
-  v.style.position = IB.zoom ? 'static' : '';   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
+  v.style.position = IB.zoom ? 'static' : '';
+  ibTtlApplyPaint();   // v3.3.87 -- the Title section's Apply button follows the picture   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
   var f = document.getElementById('ib-frame');
   if (f && f.getAttribute('data-pending') === '1') {
     if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');

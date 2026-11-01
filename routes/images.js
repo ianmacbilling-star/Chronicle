@@ -3022,7 +3022,12 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const own = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    // v3.3.87 -- target kind 'ib': the Image Builder's lettering, sent by the window (our own files only).
+    const _ibRt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
+    if (_ibRt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    const _ibCur = (req.body && req.body.ibCur) || {};
+    const own = _ibRt ? { current: { url: isOurPublicUrl(String(_ibCur.url || '')) ? String(_ibCur.url) : '', src: isOurPublicUrl(String(_ibCur.src || '')) ? String(_ibCur.src) : '' } }
+      : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (own.error) return res.status(403).json({ error: own.error });
     // v3.0.729 -- TD-527. THE DRAFT WINS, BECAUSE THE DRAFT IS WHAT THE READER CAN SEE.
     // It lives INSIDE current rather than beside it -- app.js has read d.current.draft since
@@ -3595,6 +3600,40 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
   }
 });
 
+// v3.3.87 -- the Title Builder's Archive, pointed at an Image Builder title: the lettering (and its uncut original) into
+// the campaign's Archive as a title, exactly as archive-title does for a cover, so it can be reused anywhere.
+router.post('/builder/campaigns/:cid/title-archive', requireAuth, async function (req, res) {
+  try {
+    if (!(await isTruePlatinum(req.session.userId))) return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    if (!(await ibGate(req, res))) return;
+    const cid = parseInt(req.params.cid, 10), b = req.body || {};
+    const url = String(b.url || '').trim(), src = String(b.src || '').trim();
+    if (!url || !isOurPublicUrl(url)) return res.json({ error: 'There is no lettering to archive yet.' });
+    const db = await getDb();
+    const already = await db.prepare("SELECT * FROM campaign_archives WHERE campaign_id = ? AND image_type = 'title' AND source_url = ? LIMIT 1").get(cid, url);
+    if (already) return res.json({ success: true, archive: already });
+    if (await rightsCheck.refuseRejected(res, [url], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
+    try {
+      const effTier = getTier(await getEffectiveTier(req.session.userId, cid));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(cid);
+        if (cnt && Number(cnt.c) >= cap) return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+      }
+    } catch (capErr) { console.error('[image-builder] title archive cap check error:', capErr.message); }
+    const { archiveCopy } = require('../storage/storage');
+    const archivedUrl = await archiveCopy(url);
+    let archivedSrc = '';
+    if (src && isOurPublicUrl(src)) { try { archivedSrc = await archiveCopy(src); } catch (e) { console.error('[image-builder] archive title source failed (keeping the cut copy):', e.message); } }
+    const meta = JSON.stringify({ subtitle: ibClip(b.subtitle, 140), src: archivedSrc || null });
+    const ins = await db.prepare(
+      'INSERT INTO campaign_archives (campaign_id, fork_id, image_type, title, image_url, source_url, image_prompt, layout_meta, archived_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, null, 'title', ibClip(b.title, 100) || null, archivedUrl, url, ibClip(b.prompt, 300) || null, meta, req.session.userId, new Date().toISOString());
+    const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, archive: row });
+  } catch (e) { console.error('[image-builder] title archive error:', e.message); res.json({ error: 'Could not archive the title. Please try again.' }); }
+});
+
 // v3.3.85 -- Apply title: the Title section's lettering, laid on the clean copy at its placement and size, with no
 // redraw and no token. A picture with no clean copy is used as it is and becomes the clean copy -- unless its title was
 // drawn by the art style (typed, with no lettering), which cannot be lifted off. The picture before goes to Revert.
@@ -3613,6 +3652,7 @@ router.post('/builder/images/:id/title', requireAuth, async function (req, res) 
     let shown;
     try { shown = await ibOverlayTitle(base, ttl, r.id); } catch (e) {
       console.error('[image-builder] apply title error:', e.message);
+      try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/title', message: 'Could not lay the title on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, lettering: ttl.url, place: ttl.place, size: ttl.size } }); } catch (_le) {}   // v3.3.87
       return res.json({ error: 'Could not lay the title on the picture. Please try again.' });
     }
     refs.title = ttl;
