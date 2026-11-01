@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.91",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3391-image-builder-open-replaces",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: opening a Gallery picture replaces every field with its own.",
+        "detail": "Opening any picture from the Gallery now fills every field on the left with the picture's own name, description, type, references, title and style, instead of leaving some from the picture before.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.90",
     "staged_on": "2026-11-01",
     "entries": [

@@ -39208,13 +39208,15 @@ function ibTab(t) {
   IB.tab = (t === 'gallery') ? 'gallery' : 'make';
   ibRender();
 }
-// A Gallery picture opens in the Make tab's viewer. Your own picture also loads its recipe into the form (Generate
-// then makes a new picture from it; Regen redraws this one). Someone else's is shown as it is, with Make My Copy.
+// A Gallery picture opens in the Make tab's viewer, and its recipe replaces EVERY field on the left (v3.3.91 -- Ian:
+// "if you load up a picture from the gallery... it clears and replaces ALL the fields". Someone else's used to leave the
+// form as it was, so the last picture's description sat beside a different picture). Generate then makes a new picture
+// of your own from it; Regen, Retouch and the rest still act only on your own pictures.
 function ibOpen(id) {
   var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
   IB.viewId = id;
   IB.tab = 'make';
-  if (im && String(im.user_id) === String(IB.me)) ibLoadRecipe(im);
+  if (im) ibLoadRecipe(im);   // v3.3.91 -- every picture, yours or not
   ibRender();
   var v = document.getElementById('ib-viewer'); if (v && v.scrollIntoView) { try { v.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
 }
