@@ -29959,6 +29959,7 @@ function _visibleViewId() {
 }
 function sectionBack() {
   var t = _sectionBackFrom || 'sessions';
+  if (t === 'image-builder') { _sectionBackFrom = null; openImageBuilder(true); return; }   // v3.3.84 -- opened from the Image Builder
   if (t === 'session-detail') {
     // selectSession() only hides a partial set of views, which left the
     // Asset/Archive view stacked above the session. The detail DOM is still
@@ -38687,7 +38688,11 @@ function ibRender() {
   var camps = IB.campaigns || [];
   var head = camps.length
     ? '<div class="ib-head"><span class="ib-lbl" style="margin:0;">Campaign</span><b style="font-size:16px;">' + (IB.cid ? escapeHtml(IB.cname) : '<span style="opacity:0.6;">No campaign chosen</span>') + '</b>' +
-      '<button class="btn btn-sm" onclick="ibPickCampaign()">' + (IB.cid ? 'Change' : 'Choose a campaign') + '</button></div>'
+      '<button class="btn btn-sm" onclick="ibPickCampaign()">' + (IB.cid ? 'Change' : 'Choose a campaign') + '</button>' +
+      // v3.3.84 -- Ian: on the campaign line, buttons to the campaign, its Assets and its Archive.
+      (IB.cid ? '<span style="flex:1;"></span><button class="btn btn-sm" onclick="ibGoCampaign(\'sessions\')" title="Open this campaign">Campaign</button>' +
+        '<button class="btn btn-sm" onclick="ibGoCampaign(\'assets\')" title="This campaign\u2019s Asset Library">Assets</button>' +
+        '<button class="btn btn-sm" onclick="ibGoCampaign(\'archives\')" title="This campaign\u2019s Archive">Archive</button>' : '') + '</div>'
     : '<div class="ib-meta" style="margin-bottom:12px;">You have no campaigns the Image Builder can use yet. Create a campaign first.</div>';
   if (!IB.cid) { root.innerHTML = head + '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>'; return; }
   var tabs = '<div class="ib-tabs">' +
@@ -39235,12 +39240,16 @@ function ibAssetPicker(rows) {
 }
 
 // Go to Assets: the chosen campaign's Asset Library. The form is kept (IB), so coming back finds it as it was.
-function ibGoAssets() {
+function ibGoAssets() { ibGoCampaign('assets'); }
+// v3.3.84 -- the Builder's campaign: its Sessions page, Asset Library or Archive. The Assets and Archive pages' Back
+// comes back here (sectionBack); the campaign itself is a place you went to, so it has none.
+function ibGoCampaign(section) {
   ibReadForm(); ibStopPoll();
   var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(IB.cid); })[0];
-  if (!c) { showError('Open the campaign from My Campaigns to reach its Asset Library.'); return; }
+  if (!c) { showError('Open the campaign from My Campaigns first.'); return; }
   selectCampaign(c.id);
-  showCampaignSection('assets');
+  showCampaignSection(section);
+  if (section === 'assets' || section === 'archives') _sectionBackFrom = 'image-builder';
 }
 
 function ibPickShape(k) {

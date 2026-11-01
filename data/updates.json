@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.84",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3384-image-builder-header",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Campaign, Assets and Archive buttons beside the campaign.",
+        "detail": "The campaign line at the top of the Image Builder now has buttons to open the campaign, its Asset Library and its Archive. Back on the Assets and Archive pages returns to the Image Builder.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.83",
     "staged_on": "2026-11-01",
     "entries": [
