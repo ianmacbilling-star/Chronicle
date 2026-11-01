@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.99",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3399-image-builder-help-tour",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a guided tour, and the help assistant now knows it.",
+        "detail": "The first time you open the Image Builder, a short tour walks through each part of the page. The help assistant (the ?s button) can now answer questions about the Image Builder: who can use it, picture types, titles, handouts, the Gallery and Make My Copy, and it knows when you are asking from that page.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.98",
     "staged_on": "2026-11-01",
     "entries": [

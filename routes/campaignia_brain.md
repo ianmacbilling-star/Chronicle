@@ -1675,6 +1675,8 @@ belongs here as a Supporting Character / NPC asset; a *major, important* recurri
 character (a main villain, a key ally) belongs on the **Characters screen** with the
 Supporting Character / NPC flag.
 
+**From the Image Builder:** **Save as Asset** on an Image Builder picture makes it a campaign asset, with an optional frame to keep only part of it. If the picture has a title or handout writing, you choose **with** or **without** it. See §17b.
+
 ---
 
 ## 13. Archives
@@ -1700,6 +1702,8 @@ storyboard or from character creation. See each image full-size with details, an
 **Asset & Archive limits:** both the Asset Library and the Archive have a per-campaign
 limit that scales with tier (higher tiers allow more); the live number comes from the
 dashboard.
+
+**From the Image Builder:** **Archive** on an Image Builder picture copies it here, ready to use as a cover, chapter title, replacement or campaign picture. A copy saved without its title or writing is named "... (clean copy)". See §17b.
 
 ---
 
@@ -2043,6 +2047,8 @@ instead of set in type. You can access the Title Builder under the title section
 **Prep & Preview** tab on the Publish page, or on the **Opening Panel** on the
 **Storyboard** and **Review** tabs on the Session page.
 
+You can also open it from the **Title** panel of the **Image Builder** (§17b), to put a drawn title on a picture.
+
 Your title and subtitle come from the book — the drawing uses **those exact words**, so
 change them on the prior screen if they aren't right. Then describe **how the lettering
 should look** — emeralds embedded in decorative iron, gold and black ribbons, carved in
@@ -2064,6 +2070,92 @@ Notes: the Title Builder needs a **true Platinum subscription**. **The five type
 styles are on every plan** — this is the drawn alternative to them.
 
 ---
+## 17b. The Image Builder (Platinum)
+
+The **Image Builder** makes stand-alone pictures for a campaign, outside any story: a movie poster of the party, a character sheet, a map, a wanted poster, a portrait, an item laid out on a table. It builds them from the campaign's **characters, assets and lore**, in any **art style**, including your custom styles. Each picture is kept in the campaign's **Gallery**, where the campaign's members can see it once it is marked Ready.
+
+**WHO CAN USE IT**
+
+- It is a **Platinum** feature. You can use it in **your own campaigns** if you are on Platinum, and in **any campaign whose Story Master is on Platinum**, even if you are not. A Gold player in a Platinum Story Master's campaign can make pictures there.
+- **The Title Builder inside it needs your own Platinum plan.** Without it, you can make pictures but not drawn titles.
+- If none of your campaigns qualify, opening it shows what Platinum gives instead.
+
+**WHERE TO FIND IT**
+
+Open your name at the top right, then **Image Builder** (just under Custom Art Styles). Choose a campaign on the campaign line; **Change** picks another. The **Campaign**, **Assets** and **Archive** buttons on that line open that campaign's pages. Back from Assets or the Archive returns you to the Image Builder **with your form as you left it**.
+
+There are two tabs:
+- **Make a picture:** the recipe on the left and the picture on the right.
+- **Gallery:** the pictures made with the Image Builder in this campaign.
+
+**MAKING A PICTURE**
+
+The recipe is a set of panels. Each one opens and closes, and shows its choice in its header when closed.
+
+- **Image name** (required): a name for the Gallery. On a picture of yours, changing it renames the picture as soon as you leave the box.
+- **References**: **+ Add character** picks a character and then which **look** to use: their **Original**, or how they looked in a particular session. **+ Add asset** picks a location, item or Supporting Character / NPC from the Asset Library. A picture can use up to **14 reference pictures** in all.
+  - **Characters are drawn at the heights set on them**, so a tall half-orc stands well above a dwarf.
+- **Image type** (optional): **Movie Poster / Book Cover, Character / Creature Study, Group Portrait, Location / Establishing Shot, Action Scene, Map, Item Showcase, In-world Handout** or **Portrait / Headshot**. Each type tells the drawing how to lay the picture out.
+  - A **Character / Creature Study** is a character sheet: the full figure plus three close-ups of the face. It works best with one character.
+  - An **Item Showcase** lays the items out like a still life.
+  - **See / edit instructions** shows the type's own wording. You can change it for **this picture only**; **Reset** brings back the standard wording.
+  - Leave the type at **None** to build the picture from your description alone.
+- **Shape**: wide, square, tall and so on.
+- **Art style**: any built-in style, or one of the campaign's custom styles.
+- **Description**: what the picture should show. It works together with the references, image type, shape and art style to make the picture, so it is the place for what those don't say: the moment, the mood, the setting. It is **required unless you chose an image type**. **Include the campaign's lore** is ticked by default, so the picture knows the world.
+- **Title**: see Titles, below.
+
+**Generate** draws the picture and costs a token; the button shows the price. **The token is taken only when the picture arrives**, so a picture that fails costs nothing. It usually takes under a minute. If something required is missing, that box shakes and says what it needs. **New picture** clears the form.
+
+**DRAFT AND READY**
+
+A new picture is a **Draft**: only you can see it. **Mark Ready** shares it with the campaign's members in the Gallery. Ready pictures can be put back to Draft.
+
+**WORKING ON A PICTURE**
+
+The buttons appear on the picture when you hover over it, just like the Moment buttons on a session, and always on a phone. These are on your own pictures:
+
+- **Edit Prompt**: change the words the picture is drawn from; **Save & Regen** redraws it (a token).
+- **Regen**: draw it again from the same recipe (a token).
+- **Retouch**: change one thing, using the same Retouch window as story panels, with markers and reference pictures (a token).
+- **Revert**: swap back to the picture before the last Regen, Retouch, title or writing change. Press it again to go forward.
+- **Archive**: copy the picture into the campaign's Archive, to use as a book cover, chapter title, replacement or campaign picture.
+- **Save as Asset**: make it a campaign asset (a Supporting Character / NPC, item or location), with a frame to keep only part of it. Who can add assets follows the campaign's usual rule.
+- **Delete**: removes it, after asking.
+
+Zoom with **-** and **+**; **Fit** goes back.
+
+**THE GALLERY, AND OTHER MEMBERS' PICTURES**
+
+- The Gallery shows your own Image Builder pictures (Drafts marked) and every member's **Ready** ones. **Drafts are never shown to anyone else.**
+- **Opening a picture fills the whole recipe** with what it was made from, so you can see exactly how it was built.
+- On someone else's picture, the only button is **Make My Copy**. It is free, and gives you your own copy (a Draft) to change, redraw or retitle. Their picture is never changed.
+
+**TITLES**
+
+You can put a drawn title on a picture: a poster's film title, the name on a portrait.
+
+- Type the **Title** (and a **Subtitle** if you like) in the Title panel, then press **Title Builder**. The Title Builder works as in §17a: describe the lettering, add a reference if you like, and Generate (a token). Press **Done & Use** to bring the lettering back to the Title panel.
+- **Placing it:** drag the lettering onto the picture, or press **Place title on picture**. The title appears in a dashed box. **Drag the box to move it**, and **drag the small yellow square in its bottom-right corner to make it bigger or smaller**; it keeps its shape. Then press **Apply title here**. Placing and applying are free. The title gets a soft dark halo so it reads on any background.
+- **A clean copy, without the title, is always kept.** Regen and Retouch work on the clean copy and put the title back exactly where you placed it.
+- **Without title** on the picture shows the clean copy. **Archive** and **Save as Asset** ask whether you want it **with** or **without** the title; a clean copy saved to the Archive is named "... (clean copy)".
+- **Remove title** takes it off the picture and out of the panel. The drawing stays in the Title Builder, and **Done & Use** brings it back without another token.
+
+**HANDOUTS: EXACT WORDS ON THE PAGE**
+
+Choose **In-world Handout** and a **Handout text** box opens in the same panel. Type the words exactly as they should read, then choose:
+- **First line as a heading**;
+- a **font**: Old book, Engraved capitals, Classic print, Handwritten, Quill script, Storybook, Sturdy print or Bold poster;
+- an **ink**: Iron-gall brown, Black, Faded red or Indigo;
+- whether the lines are centred or left.
+
+**Your words are never sent to the drawing.** The picture is drawn with an empty writing area, and your words are laid on the paper afterwards, so **the spelling is always exactly what you typed.**
+- **Place writing on picture** (or drag the chip) puts the writing in a dashed box. Drag the box to move it, and drag the yellow square in its corner to change its width and height. Changing the words, font or ink while it is on the picture redraws it in place.
+- **Apply writing here** keeps it. **Remove writing from picture** takes it off; your words stay in the box.
+- A handout can have a **title too**. Each can be placed or removed without touching the other.
+
+---
+
 ## 18. Tokens at the top + buying bundles
 
 - **Token count (top bar):** the gem icon and number in the header is your current total
@@ -2220,6 +2312,12 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"I want to give a gift to myself."** That works: buy it with your own address as the
   recipient and redeem it. You just get no separate copy of the code, because the receipt already
   has it.
+- **"I want a movie poster of our party."** Open **Image Builder** from the menu under your name, choose the campaign, add the characters under **References**, choose **Movie Poster / Book Cover** and a tall shape, then press **Generate**. To add the film's title, use the **Title** panel and the **Title Builder**, then drag the lettering onto the picture, size it with the yellow corner square, and press **Apply title here**. Archive it to use it as a book cover.
+- **"I want a character sheet for my character."** In the Image Builder, add just that character, choose **Character / Creature Study**, and Generate. You don't need a description.
+- **"I want a wanted poster / letter / scroll my players can read."** Choose **In-world Handout**, type the words exactly in **Handout text**, pick a font and ink, and Generate. The words are laid on the paper afterwards, so they are always spelled right.
+- **"I want to share a picture with my group."** Press **Mark Ready**. Every member of the campaign then sees it in the Image Builder's **Gallery**.
+- **"I like someone else's picture and want my own version."** Open it in the Image Builder's Gallery and press **Make My Copy** (free). Change anything and press Generate or Regen.
+- **"I want to use an Image Builder picture as my book cover."** Press **Archive** on it, then choose it from the Archive on the Prep & Preview cover picker.
 
 ---
 
@@ -2405,6 +2503,17 @@ Friction points and what's actually going on.
 - **"Can I get a refund on a gift?"** Payments are non-refundable under the Terms of Service except
   where the law requires. Contact support if something has gone wrong; a gift that is refunded is
   cancelled and its code stops working.
+- **"I can't find the Image Builder," or "it says Platinum."** It is under your name at the top right. It works in your own campaigns if you are on Platinum, and in campaigns whose Story Master is on Platinum. If neither applies, it shows what Platinum includes.
+- **"The Title Builder says I need Platinum, but I can use the Image Builder."** The Image Builder follows the **Story Master's** plan; the Title Builder needs **your own** Platinum plan.
+- **"My title isn't on the picture."** A title typed in the Image Builder's Title panel is drawn only once it has been made in the **Title Builder** and placed with **Apply title here**. Check the Title panel shows the lettering, then place it.
+- **"My title is too big / too small."** Press **Place title on picture** again, drag the small yellow square in the bottom-right corner of the title's box to resize it, and press **Apply title here**.
+- **"A member can't see my Image Builder picture."** It is still a **Draft**. Press **Mark Ready**.
+- **"I can't change someone else's Image Builder picture."** Only its maker can. Press **Make My Copy** to get your own.
+- **"The words on my handout are wrong."** They are exactly what is in **Handout text**. Change the words there (while the writing box is on the picture it redraws as you type) and press **Apply writing here**.
+- **"The Image Builder ignored one of my characters."** Check they are under **References** with the look you meant. Then try **Retouch** with a marker where they should be, or name them in the description.
+- **"I can't add any more references in the Image Builder."** A picture can use up to 14 reference pictures in all. Remove one to add another.
+- **"Was I charged for an Image Builder picture that failed?"** No. The token is taken only when the picture arrives.
+- **"I can't save my Image Builder picture as an asset."** Adding assets follows the campaign's usual rule: the Story Master, or members when the Story Master allows it.
 
 ---
 
@@ -2548,6 +2657,11 @@ Friction points and what's actually going on.
   restart by themselves. Platinum subscribers take the gift as tokens, and the subscription is not
   affected.
 - **Can I use a promo code on a gift?** Not at the moment.
+- **What is the Image Builder?** A place to make stand-alone pictures for a campaign (posters, character sheets, maps, handouts, portraits) from its characters, assets and lore. See §17b.
+- **Who can use the Image Builder?** Platinum members in their own campaigns, and anyone in a campaign whose Story Master is on Platinum.
+- **What does an Image Builder picture cost?** A token for each Generate, Regen or Retouch, taken only when the picture arrives. Naming, Ready, Revert, Archive, Save as Asset, Make My Copy and placing titles or writing are free.
+- **Who sees my Image Builder pictures?** Drafts: only you. Ready pictures: the campaign's members. Nobody outside the campaign.
+- **Can I use an Image Builder picture in my book?** Yes: Archive it, then use it as a cover, chapter title, replacement or campaign picture.
 
 ---
 

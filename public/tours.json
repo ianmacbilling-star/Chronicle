@@ -586,6 +586,84 @@
           "placement": "auto"
         }
       ]
+    },
+    "image-builder": {
+      "title": "Image Builder",
+      "requires": "#ib-form",
+      "steps": [
+        {
+          "selector": ".ib-head",
+          "title": "Your {campaign}",
+          "text": "Pictures are made for one {campaign} at a time, from its characters, assets and lore. Change picks another; Campaign, Assets and Archive open its pages, and Back brings you here with your work as you left it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-name",
+          "title": "Name it",
+          "text": "Every picture needs a name for the Gallery.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-refs",
+          "title": "Who and what is in it",
+          "text": "Add characters (choosing which look) and assets from the Asset Library.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-type",
+          "title": "What kind of picture",
+          "text": "A poster, a character sheet, a map, a handout and more. Each type tells the drawing how to lay it out, and See / edit instructions lets you adjust that for this picture only.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-shape",
+          "title": "Its shape",
+          "text": "Wide, square, tall and so on. Posters and portraits usually look best tall.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-style",
+          "title": "Its art style",
+          "text": "Any built-in style, or one of the {campaign}’s custom styles.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-desc",
+          "title": "Describe it",
+          "text": "What the picture should show. Your description works together with your references, image type, shape and art style to make the picture, so say what those don’t: the moment, the mood, the setting. With an image type chosen you can leave it empty. The {campaign}’s lore is included unless you untick it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-acc-title",
+          "title": "Add a title",
+          "text": "Type a title and press Title Builder to have it drawn as lettering, then drag it onto your picture and press Apply. A clean copy without the title is always kept.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-go",
+          "title": "Draw it",
+          "text": "Costs a token, taken only when the picture arrives; a failed picture costs nothing. It starts as a Draft only you can see.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-bar-state button",
+          "title": "Share it",
+          "text": "Mark Ready puts the picture in the Gallery for the {campaign}’s members.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-viewer .ib-pills",
+          "title": "Work on it",
+          "text": "Hover over the picture for its buttons, just like the Moment buttons on a {session}: Edit Prompt, Regen and Retouch redraw it; Revert swaps back; Archive and Save as Asset send it to the rest of the {campaign}.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ib-tab-gallery",
+          "title": "The Gallery",
+          "text": "The pictures made with the Image Builder in this {campaign}. Open one to load its whole recipe. On someone else’s, Make My Copy gives you your own to change, free.",
+          "placement": "auto"
+        }
+      ]
     }
   }
 }

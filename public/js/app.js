@@ -5647,6 +5647,7 @@ function _helpCurrentViewId() {
   if (_open('title-build-modal')) return 'title_builder';
   if (_open('char-modal')) return 'character_builder';
   if (_open('campaign-settings-modal')) return 'campaign_details';
+  if (state && state.currentView === 'image-builder') return 'image_builder';   // v3.3.99 -- before the session check: a session may still be chosen underneath
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -30546,7 +30547,7 @@ function _tourPlace(el, step) {
   _tourCurEl = el; _tourCurStep = step;
   _tourShownAny = true;
   if (_tourPanelEl) { try { _tourPanelEl.classList.remove('tour-show-pills'); } catch (e) {} _tourPanelEl = null; }
-  if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }
+  if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel') || el.closest('.ib-frame'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }   // v3.3.99 -- the Image Builder's picture too
   var ov = document.getElementById('tour-overlay');
   var hl = document.getElementById('tour-highlight');
   var tip = document.getElementById('tour-tip');
@@ -38643,6 +38644,7 @@ function ibCss() {
     '.ib-bar{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}' +   // v3.3.76
     '.ib-bar-left{display:flex;gap:6px;flex-wrap:wrap;}' +
     '.ib-frame:hover .panel-pill{opacity:1;}' +
+    '.ib-frame.tour-show-pills .panel-pill{opacity:1;}' +   // v3.3.99 -- shown while the tour points at them
     '@media (max-width:820px){#ib-root .ib-pills{position:absolute;top:8px;left:8px;right:8px;margin:0;padding:0;}}' +
     '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
@@ -39248,6 +39250,7 @@ function ibRender() {
     '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
   ibPaintViewer();
+  try { maybeStartTour('image-builder'); } catch (e) {}   // v3.3.99 -- its tour, once (no-op once seen or while one runs)
 }
 // v3.3.80 -- the accordion panels. Open / closed is kept per panel on this computer (localStorage, wrapped: it can
 // throw or be empty); every panel starts open.

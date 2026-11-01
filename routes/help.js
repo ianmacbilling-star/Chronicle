@@ -135,6 +135,8 @@ const VIEW_NAMES = {
   // v3.1.95 -- sent while each of these windows is open, from its ?s or the help button.
   title_builder: 'the Title Builder (they are having a book or chapter title drawn as artwork)',
   character_builder: 'the character window (they are adding or editing a character: name, role, description, reference pictures, Build)',
+  // v3.3.99 -- TD-1080
+  image_builder: 'the Image Builder (they are making a stand-alone campaign picture: references, image type, shape, art style, description, title, handout text, Gallery)',
   campaign_details: 'the campaign details window (they are creating a new campaign or editing one: name, description, lore, genres, Campaign Prompt, campaign image)'
 };
 
