@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.00",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3400-ib-remove-title-own",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: Remove title only shows on your own pictures.",
+        "detail": "When you open a picture made by another member in the Image Builder, the Title panel no longer offers Remove title, since you cannot change their picture. Make My Copy gives you your own copy to change.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.99",
     "staged_on": "2026-11-01",
     "entries": [

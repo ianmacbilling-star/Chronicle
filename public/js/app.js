@@ -38753,7 +38753,7 @@ function ibTitleBody() {
       '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the title\u2019s lettering (a token)">Title Builder</button>' +
       '<span id="ib-ttl-msg" class="ib-meta"></span>' +   // v3.3.93 -- the shake's message
       (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
-        '<button class="btn btn-sm" type="button" onclick="ibRemoveTitle()" title="Take the title off the picture and out of this section. The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>'   // v3.3.95 -- the one Remove
+        (ibOthersOpen() ? '' : '<button class="btn btn-sm" type="button" onclick="ibRemoveTitle()" title="Take the title off the picture and out of this section. The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>')   // v3.3.95 -- the one Remove; v3.4.00 -- not on another member's picture (Ian)
         : '<span class="ib-meta">Titles are made in the Title Builder.</span>') +   // v3.3.93
     '</div>' +
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
@@ -39144,7 +39144,11 @@ function ibApplyTitle(id) {
 // v3.3.95 -- REMOVE TITLE, ONE BUTTON. Takes the title off the picture in the viewer when it is yours and the title is on
 // it (free; Revert puts it back), and clears the lettering from the Title section. The drawing is kept as the Title
 // Builder's draft, so reopening the Title Builder shows it and Done & Use brings it back without a token.
+// v3.4.00 -- is the picture on show someone else's? Then Remove title is not offered (tester finding 2026-11-01: it
+// only cleared the lettering from the viewer's own form, but looked like it changed their picture; Ian chose to hide it).
+function ibOthersOpen() { var im = IB.viewId ? ibImg(IB.viewId) : null; return !!(im && String(im.user_id) !== String(IB.me)); }
 function ibRemoveTitle() {
+  if (ibOthersOpen()) return;
   ibReadForm();
   var im = ibImg(IB.viewId);
   var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
