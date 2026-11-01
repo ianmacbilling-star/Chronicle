@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.3.70",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3370-custom-styles-button",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Choose an art style window has a Go to Custom Art Styles button at the bottom.",
+        "detail": "On Platinum it opens your Custom Art Styles page, where New art style starts a new one; on other plans it explains that custom styles are a Platinum feature.",
+        "td": [
+          "TD-1079"
+        ]
+      },
+      {
+        "id": "3370-author-note-size",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Author's Note in your book is now printed at the same size as the subtitle.",
+        "detail": "A very long note on a busy page is set a little smaller so it always fits on the page. Books saved earlier keep the old size until they are optimized again.",
+        "td": [
+          "TD-1079"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.69",
     "staged_on": "2026-10-31",
     "entries": [
