@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.77",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3377-image-builder-draft-in-bar",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Draft / Ready sits with Generate and New picture, and the form headings match Prep & Preview.",
+        "detail": "The Draft or Ready label and its Mark Ready / Back to Draft button moved up from under the picture to the row of buttons above it. The form's headings (References, Shape, Art style and the rest) use the same lettering as Prepare to Publish.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.76",
     "staged_on": "2026-11-01",
     "entries": [

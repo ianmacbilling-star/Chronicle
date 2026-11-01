@@ -38457,8 +38457,8 @@ function ibCss() {
     '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
-    '.ib-lbl{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim, #b89a52);margin-bottom:6px;font-weight:600;}' +
-    '.ib-lbl .ib-req{color:#e8a090;margin-left:4px;text-transform:none;letter-spacing:0;font-weight:400;}' +
+    '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
+    '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
     '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
@@ -38663,6 +38663,7 @@ function ibViewerHtml() {
     '<div class="ib-bar-left">' +
       '<button class="btn btn-primary btn-sm" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
       '<button class="btn btn-sm" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
+      '<span id="ib-bar-state" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">@@IBSTATE@@</span>' +   // v3.3.77 -- Draft / Ready
     '</div>' +
     '<div class="ib-zoom" title="Zoom the picture">' +
       '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
@@ -38673,7 +38674,7 @@ function ibViewerHtml() {
     '<div id="ib-msg" class="ib-err" style="width:100%;"></div>';
   if (!im) {
     var s = _rpShapeByKey(IB.shape) || { w: 4, h: 3, label: 'Standard' };
-    return bar + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
+    return bar.replace('@@IBSTATE@@', '') + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
   }
   var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
   var w = im.img_w || shp.w, h = im.img_h || shp.h;
@@ -38698,19 +38699,18 @@ function ibViewerHtml() {
     }
   }
   var pills = p.length ? '<div class="panel-img-actions ib-pills">' + p.join('') + '</div>' : '';
-  // Draft / Ready stays under the picture with its name: it is about who sees it, not about the picture.
+  // Draft / Ready: in the toolbar beside Generate and New picture (v3.3.77, Ian), for the maker's own picture only.
   var state = '';
   if (mine) {
     state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
-  return bar + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
+  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
       (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
       '<div id="ib-act-msg" class="ib-err"></div>' +
-      (state ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + state + '</div>' : '') +
     '</div>';
 }
 
