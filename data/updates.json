@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.3.98",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3398-help-tip-promo-check",
+        "kind": "fix",
+        "public": true,
+        "summary": "The ?s help tooltip shows its words again, and a promo code is checked as soon as you leave its box.",
+        "detail": "The tooltip on the ?s help buttons was opening underneath the bar below the header, so it looked empty; it now opens on top. When signing up, a promo code that has expired, been used up or is for a different plan is now flagged as soon as you leave the promo code box, instead of after you have filled in the whole form.",
+        "td": [
+          "TD-1082",
+          "TD-1083"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.97",
     "staged_on": "2026-11-01",
     "entries": [

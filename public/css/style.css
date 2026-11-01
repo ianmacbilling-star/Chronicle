@@ -121,7 +121,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   gap:12px;
   height:44px;
   position:relative;
-  z-index:50;
+  z-index:70;   /* v3.3.98 -- TD-1082: above .breadcrumb-row (60), or the ?s tooltip opens underneath it; still below the help panels (96/97) and modals (100+) */
   border-bottom:1px solid rgba(201,168,76,0.15);
   box-shadow:0 2px 12px rgba(0,0,0,0.4);
 }

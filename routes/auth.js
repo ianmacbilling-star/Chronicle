@@ -69,6 +69,60 @@ function pendingPlanValue(raw) {
   return null;
 }
 
+// v3.3.98 -- TD-1083. WHAT IS WRONG WITH A PROMO CODE AT SIGN-UP, or null. The v3.3.56 / v3.3.61 checks, moved here
+// unchanged from /register so /promo-check can say the same thing the moment the box is left. A code we do not
+// know is never a problem (ad-link attribution).
+async function promoSignupProblem(db, _pcCheck, plan) {
+      try {
+        const _row = await db.prepare('SELECT active, expires_at, max_redemptions, redeemed_count, action_type, products FROM promo_codes WHERE code = ?').get(_pcCheck);
+        let _why = null;
+        if (_row) {
+          if (!_row.active) _why = 'is no longer active';
+          else if (_row.expires_at && new Date(_row.expires_at) < new Date()) _why = 'has expired';
+          else if (_row.action_type === 'make_tester' && _row.max_redemptions && Number(_row.redeemed_count) >= Number(_row.max_redemptions)) _why = 'has been used up';
+        }
+        if (_why) return 'The promo code ' + _pcCheck + ' ' + _why + '. Remove it, or enter a different code, to continue.';
+        // v3.3.61 -- TD-1073. THE CODE IS FOR A DIFFERENT PLAN THAN THE ONE CHOSEN (Ian: "If I try to use a gold [code]
+        // on a silver sign up I should get a Warning message"; "Warn and stop"). Only when a plan was chosen on the
+        // way in (a pass or a tier button) and the code names the products it covers; a plain sign-up, a tester code
+        // and a code with no product list are not checked, since what they will buy is not known yet.
+        const _planNow = pendingPlanValue(plan);
+        let _prods = _row ? _row.products : null;
+        if (typeof _prods === 'string') { try { _prods = JSON.parse(_prods); } catch (e) { _prods = null; } }
+        if (_row && _planNow && _row.action_type !== 'make_tester' && Array.isArray(_prods) && _prods.length) {
+          const _key = (_planNow.indexOf('pass:') === 0) ? 'pass' : ('sub:' + _planNow);
+          if (_prods.indexOf(_key) < 0) {
+            const _name = function (k) {
+              if (k === 'pass') return 'a Platinum Pass';
+              if (k === 'token_pack') return 'token packs';
+              if (k === 'book') return 'printed books';
+              if (k.indexOf('sub:') === 0) return 'the ' + k.charAt(4).toUpperCase() + k.slice(5) + ' plan';
+              return k;
+            };
+            const _for = _prods.map(_name);
+            const _forText = _for.length > 1 ? (_for.slice(0, -1).join(', ') + ' or ' + _for[_for.length - 1]) : _for[0];
+            const _chosen = _name(_key);
+            return 'The promo code ' + _pcCheck + ' is for ' + _forText + ', and you are signing up for ' + _chosen +
+              '. Remove the code to continue with ' + _chosen + ', or go back and choose the plan the code is for.';
+          }
+        }
+      } catch (e) { console.error('promo pre-check failed (non-fatal):', e.message); }
+      return null;
+}
+
+// v3.3.98 -- TD-1083. The sign-up form asks this when the promo box is left (tester note 2026-10-31: someone with a
+// dead code filled in the whole form before being told). The same answer /register gives; an error here never
+// blocks anything, since /register checks again.
+router.post('/promo-check', async function(req, res) {
+  try {
+    const code = (req.body && req.body.code) ? String(req.body.code).trim().toUpperCase().slice(0, 40) : '';
+    if (!code) return res.json({ ok: true });
+    const db = await getDb();
+    const why = await promoSignupProblem(db, code, req.body.plan);
+    res.json(why ? { error: why, field: 'promo' } : { ok: true });
+  } catch (e) { res.json({ ok: true }); }
+});
+
 router.post('/register', async function(req, res) {
   try {
     const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload, promo_code, plan } = req.body;
@@ -95,42 +149,11 @@ router.post('/register', async function(req, res) {
     // checkout believing it had been applied). Switched off, past its expiry, or -- for a Make a Tester code, whose
     // uses we count ourselves -- out of uses: the sign-up stops and names the code. A code we do not know at all is
     // still taken as before (ad-link attribution).
+    // v3.3.98 -- TD-1083: the checks themselves are in promoSignupProblem(), shared with /promo-check.
     const _pcCheck = promo_code ? String(promo_code).trim().toUpperCase().slice(0, 40) : '';
     if (_pcCheck) {
-      try {
-        const _row = await db.prepare('SELECT active, expires_at, max_redemptions, redeemed_count, action_type, products FROM promo_codes WHERE code = ?').get(_pcCheck);
-        let _why = null;
-        if (_row) {
-          if (!_row.active) _why = 'is no longer active';
-          else if (_row.expires_at && new Date(_row.expires_at) < new Date()) _why = 'has expired';
-          else if (_row.action_type === 'make_tester' && _row.max_redemptions && Number(_row.redeemed_count) >= Number(_row.max_redemptions)) _why = 'has been used up';
-        }
-        if (_why) return res.json({ error: 'The promo code ' + _pcCheck + ' ' + _why + '. Remove it, or enter a different code, to continue.', field: 'promo' });
-        // v3.3.61 -- TD-1073. THE CODE IS FOR A DIFFERENT PLAN THAN THE ONE CHOSEN (Ian: "If I try to use a gold [code]
-        // on a silver sign up I should get a Warning message"; "Warn and stop"). Only when a plan was chosen on the
-        // way in (a pass or a tier button) and the code names the products it covers; a plain sign-up, a tester code
-        // and a code with no product list are not checked, since what they will buy is not known yet.
-        const _planNow = pendingPlanValue(plan);
-        let _prods = _row ? _row.products : null;
-        if (typeof _prods === 'string') { try { _prods = JSON.parse(_prods); } catch (e) { _prods = null; } }
-        if (_row && _planNow && _row.action_type !== 'make_tester' && Array.isArray(_prods) && _prods.length) {
-          const _key = (_planNow.indexOf('pass:') === 0) ? 'pass' : ('sub:' + _planNow);
-          if (_prods.indexOf(_key) < 0) {
-            const _name = function (k) {
-              if (k === 'pass') return 'a Platinum Pass';
-              if (k === 'token_pack') return 'token packs';
-              if (k === 'book') return 'printed books';
-              if (k.indexOf('sub:') === 0) return 'the ' + k.charAt(4).toUpperCase() + k.slice(5) + ' plan';
-              return k;
-            };
-            const _for = _prods.map(_name);
-            const _forText = _for.length > 1 ? (_for.slice(0, -1).join(', ') + ' or ' + _for[_for.length - 1]) : _for[0];
-            const _chosen = _name(_key);
-            return res.json({ error: 'The promo code ' + _pcCheck + ' is for ' + _forText + ', and you are signing up for ' + _chosen +
-              '. Remove the code to continue with ' + _chosen + ', or go back and choose the plan the code is for.', field: 'promo' });
-          }
-        }
-      } catch (e) { console.error('promo pre-check failed (non-fatal):', e.message); }
+      const _pcWhy = await promoSignupProblem(db, _pcCheck, plan);
+      if (_pcWhy) return res.json({ error: _pcWhy, field: 'promo' });
     }
 
     const penRes = await resolvePenName(db, pen_name, 0);
