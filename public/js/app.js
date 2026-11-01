@@ -15929,6 +15929,7 @@ function rgArticle(s) {
 // characters and assets in one list and a bare name cannot say which. Names are all the
 // server matches on, so the tag is for the label only and never for the value.
 function rgPanelRefs() {
+  if (rgState.ib) return (rgState.ib.refs || []).slice();   // v3.3.82 -- a Builder picture's own references
   var out = rgPanelCast().map(function (c) { return { name: c.name, kind: 'character' }; });
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
@@ -15976,7 +15977,7 @@ function rgCastBlockInner(label) {
   var mid = rgState.momentId;
   var p = (typeof _reviewPanel === 'function') ? _reviewPanel(mid) : null;
   var canEdit = (typeof canEditCurrentVersion === 'function') ? canEditCurrentVersion() : true;
-  var rows = castRowsHtml(p, mid, canEdit, { head: false });
+  var rows = rgState.ib ? '' : castRowsHtml(p, mid, canEdit, { head: false });   // v3.3.82 -- a Builder picture has no panel cast rows
   // v3.0.885 -- TD-761. COMPUTED, NOT REMEMBERED. Anything cast on this panel that did not
   // reach the reference list has no reference picture, so it cannot be used to correct a
   // figure. v3.0.884 recorded only the last one added; deriving it covers every one, and is
@@ -16021,6 +16022,7 @@ function rgCastSelect(label) {
   // session. Kicked on a timeout so the html below is in the DOM before the repaint looks for
   // it, and ensureReviewData is a no-op when the payload is already there for this fork.
   setTimeout(function () {
+    if (rgState.ib) return;   // v3.3.82 -- nothing to fetch for a Builder picture
     try { ensureReviewData(function () { rgRefreshCastBlock(null); }); } catch (e) {}
   }, 0);
   return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>';
@@ -16521,7 +16523,7 @@ function rgBuildFinal(done) {
   out.value = tpl || typed;
   if (note) note.textContent = 'Working on the wording...';
   var body = {
-    moment_id: rgState.momentId,
+    moment_id: rgState.ib ? null : rgState.momentId,   // v3.3.82 -- 'ib<id>' is not a panel
     action: action,
     typed: typed,
     template: tpl,
@@ -16609,6 +16611,7 @@ function rgTeardown() {
   if (srow) srow.classList.add('hidden');
   rgState.imageUrl = null;
   rgState.momentId = null;
+  rgState.ib = null;   // v3.3.82
   rgState.from = null;
   rgState.to = null;
   rgState.active = 'from';
@@ -16620,7 +16623,7 @@ function rgTeardown() {
 // Only the MOMENT path gets the grid. The same modal serves character
 // references, session characters, assets and built titles, which are single
 // figures or lettering where a grid buys nothing.
-function rgSetup(momentId) {
+function rgSetup(momentId, ibTarget) {   // v3.3.82 -- ibTarget { url, shape, refs }: an Image Builder picture (no moment)
   rgTeardown();
   if (!RG_ON) return;
   var wrap = document.getElementById('retouch-grid-wrap');
@@ -16631,9 +16634,11 @@ function rgSetup(momentId) {
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) { if (ms[i] && String(ms[i].id) === String(momentId)) { m = ms[i]; break; } }
   var url = m && (m.image || m.image_url);
+  if (ibTarget) { m = { shape: ibTarget.shape }; url = ibTarget.url; }
   if (!url) return;
   var g = rgGrid(m.shape);
   rgState.momentId = momentId;
+  rgState.ib = ibTarget || null;
   rgState.cols = g.c;
   rgState.rows = g.r;
   // Through our own origin: R2 is a different origin and a cross-origin draw
@@ -16675,6 +16680,7 @@ function openRetouch(momentId) {
 
 function closeRetouch() {
   state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
+  state.retouchIb = null;      // v3.3.82
   rgTeardown();                // v3.0.750 -- the grid belongs to the moment path only
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
@@ -16756,6 +16762,16 @@ function submitRetouch() {
   // v3.0.758 -- grid words must resolve on the RAW path as well.
   else if (typeof rgResolveRefs === 'function' && rgState.momentId) instruction = rgResolveRefs(instruction);
   if (!instruction) { if (ta) ta.focus(); return; }
+
+  // v3.3.82 -- an Image Builder picture (read before closeRetouch disarms it).
+  if (state.retouchIb && state.currentView === 'image-builder') {
+    var _ibId = state.retouchIb;
+    var _ibSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
+    var _ibRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+    closeRetouch();
+    ibRetouchSend(_ibId, instruction, _ibSnap, _ibRef);
+    return;
+  }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.
   if (state.retouchAssetId) {
@@ -17745,6 +17761,8 @@ function submitCopyToAsset() {
     if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
     return;
   }
+  // v3.3.82 -- an Image Builder picture (the window was opened by ibSaveAsset with an 'ib:' key).
+  if (_caArchiveId && String(_caArchiveId).indexOf('ib:') === 0) { ibSaveAssetSend(Number(String(_caArchiveId).slice(3)), name, catEl ? catEl.value : 'location', _caCropFrac() || undefined, errEl, saveBtn); return; }
   if (!_caArchiveId || !state.currentCampaign) { closeCopyToAssetModal(); return; }
   if (saveBtn) saveBtn.disabled = true;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/from-archive', {
@@ -38741,8 +38759,10 @@ function ibViewerHtml() {
     if (mine) {
       p.push('<button class="panel-pill" onclick="ibEditPrompt(' + im.id + ')" title="Change the words the picture is drawn from">Edit Prompt</button>');
       p.push('<button class="panel-pill" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Regen</button>');
-      if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen">Revert</button>');
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibRetouch(' + im.id + ')" title="Change one thing in the picture (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Retouch</button>');   // v3.3.82
+      if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen or Retouch">Revert</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibSaveAsset(' + im.id + ')" title="Make it a campaign asset (an NPC, item or location); you can frame part of it">Save as Asset</button>');   // v3.3.82
       if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
     } else if (im.image_url) {
       p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
@@ -38963,6 +38983,64 @@ function ibEditPrompt(id) {
         '<button class="btn btn-sm btn-primary" onclick="ibSavePrompt(' + im.id + ', true)">Save &amp; Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>' +
       '</div></div>';
   document.body.appendChild(overlay);
+}
+// v3.3.82 -- Retouch: the Story panels' Retouch window, pointed at this picture (its grid, markers and reference
+// picker; the references are the picture's own). Sent by submitRetouch's Builder branch to ibRetouchSend.
+function ibRetouch(id) {
+  var im = ibImg(id); if (!im || !im.image_url) return;
+  state.retouchMomentId = null; state.retouchTitle = null; state.retouchCharId = null; state.retouchSessionCharId = null; state.retouchAssetId = null;
+  state.retouchIb = id;
+  var ta = document.getElementById('retouch-instruction'); if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal'); if (modal) modal.classList.remove('hidden');
+  var refs = [];
+  ((im.refs && im.refs.characters) || []).forEach(function (c) { if (c && c.name) refs.push({ name: c.name, kind: 'character' }); });
+  ((im.refs && im.refs.assets) || []).forEach(function (a) { if (a && a.name) refs.push({ name: a.name, kind: 'asset', category: a.category || '' }); });
+  rgSetup('ib' + id, { url: im.image_url, shape: im.shape, refs: refs });
+  if (ta) setTimeout(function () { ta.focus(); }, 30);
+}
+function ibRetouchSend(id, instruction, snap, refName) {
+  var im = ibImg(id), was = im ? im.status : null;
+  var spin = function () { var f = document.getElementById('ib-frame'); if (f) { hideBusyOverlay(f); showBusyOverlay(f, 'Retouching', 'Applying your change\u2026'); } };
+  if (im) { im.status = 'queued'; ibPaintViewer(); spin(); }   // the Retouching spinner while the markers go up
+  var undo = function (msg) { var cur = ibImg(id); if (cur && cur.status === 'queued') { cur.status = was || 'done'; ibPaintViewer(); } ibActMsg(msg); };
+  rgUploadMarked(snap).then(function (markedUrl) {
+    return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null }) });
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) {
+      if (d && d.error === 'INSUFFICIENT_TOKENS') { undo(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+      undo(escapeHtml((d && (d.message || d.error)) || 'Could not retouch the picture.'));
+      return;
+    }
+    ibPut(d.image); spin();
+    if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+  }).catch(function () { undo('Connection error. Please try again.'); });
+}
+// v3.3.82 -- Save as Asset: the Archive's Copy to Assets window (name, type, crop frame), keyed 'ib:<id>'.
+function ibSaveAsset(id) {
+  var im = ibImg(id); if (!im || !im.image_url) return;
+  _caArchiveId = 'ib:' + id;
+  var nameEl = document.getElementById('ca-name'), catEl = document.getElementById('ca-category'), errEl = document.getElementById('ca-error');
+  if (errEl) errEl.classList.add('hidden');
+  if (nameEl) nameEl.value = im.name || '';
+  if (catEl) catEl.value = (im.image_type === 'item') ? 'item' : ((im.image_type === 'character' || im.image_type === 'creature' || im.image_type === 'token') ? 'npc' : 'location');
+  var m = document.getElementById('copy-asset-modal'); if (m) m.classList.remove('hidden');
+  try { _caCropStart({ id: 'ib:' + id, image_url: im.image_url }); } catch (e) {}
+  if (nameEl) setTimeout(function () { nameEl.focus(); nameEl.select(); }, 0);
+}
+function ibSaveAssetSend(id, name, category, crop, errEl, saveBtn) {
+  if (!IB.cid) { closeCopyToAssetModal(); return; }
+  if (saveBtn) saveBtn.disabled = true;
+  fetch('/api/campaigns/' + encodeURIComponent(IB.cid) + '/assets/from-builder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ builder_image_id: id, name: name, category: category, crop: crop }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (saveBtn) saveBtn.disabled = false;
+      if (!d || d.error) { if (errEl) { errEl.textContent = (d && (d.message || d.error)) || 'Could not save it as an asset.'; errEl.classList.remove('hidden'); } return; }
+      closeCopyToAssetModal();
+      showAlert('Saved to the campaign\u2019s Assets as \u201c' + (d.name || name) + '\u201d.');
+    })
+    .catch(function () { if (saveBtn) saveBtn.disabled = false; if (errEl) { errEl.textContent = 'Could not save it as an asset.'; errEl.classList.remove('hidden'); } });
 }
 function ibClosePrompt() { var m = document.getElementById('ib-prompt-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
 function ibSavePrompt(id, andRegen) {

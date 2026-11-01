@@ -3347,7 +3347,7 @@ async function ibResolveCharacters(db, cid, uid, list) {
   let visible = null;
   for (const it of (Array.isArray(list) ? list : [])) {
     const id = parseInt(it && it.id, 10); if (!(id > 0) || seen[id]) continue; seen[id] = 1;
-    const ch = await db.prepare('SELECT id, name, cls, description, canonical_prompt, canonical_reference_url FROM characters WHERE id = ? AND campaign_id = ?').get(id, cid);
+    const ch = await db.prepare('SELECT id, name, cls, description, canonical_prompt, canonical_reference_url, height_ft FROM characters WHERE id = ? AND campaign_id = ?').get(id, cid);
     if (!ch) return { error: 'One of the characters is no longer in this campaign.' };
     const look = String((it && it.look) || 'original');
     let url = ch.canonical_reference_url || null, prompt = null, label = 'Original';
@@ -3360,6 +3360,10 @@ async function ibResolveCharacters(db, cid, uid, list) {
       if (!visible.some(function (v) { return String(v.version_id) === String(sc.version_id); })) return { error: 'That look of ' + ch.name + ' is in a version that is not shared with you.' };
       url = sc.reference_url; prompt = sc.prompt || null; label = sc.session_name || 'Session';
     }
+    // v3.3.82 -- THE CHARACTER'S HEIGHT, as set on the character now. Story panels get it from the session snapshot
+    // (extract.js writes the HEIGHT: marker); the canonical prompt never carries one, so an Original look went without.
+    // charPromptWithHeight replaces any older marker, and buildCharacterBlock puts it on the character's name line.
+    if (ch.height_ft != null && Number(ch.height_ft) > 0) prompt = charPromptWithHeight(prompt || ch.canonical_prompt || ch.description || '', ch.height_ft);
     out.push({ character_id: ch.id, name: ch.name, cls: ch.cls, description: ch.description, canonical_prompt: ch.canonical_prompt,
       canonical_reference_url: ch.canonical_reference_url, snapshot_prompt: prompt, snapshot_reference_url: url, _look: look, _label: label });
   }
@@ -3590,6 +3594,77 @@ router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
     res.json({ success: true, image: ibRow(row) });
   } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
+});
+
+// v3.3.82 -- Retouch a Builder picture, through the same submitRetouch the Story panels use: the picture is Image 1,
+// the recipe's references follow, the reader's markers ride along as a location diagram (marked_url), and a picked
+// reference narrows the payload to that one (ref_name). One token, spent when the picture arrives; the picture on
+// show moves into the Revert slot (the 'builder' webhook branch). The maker only, nothing being drawn.
+router.post('/builder/images/:id/retouch', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const uid = req.session.userId, cid = r.campaign_id;
+    const instruction = String((req.body && req.body.instruction) || '').trim();
+    if (!instruction) return res.json({ error: 'Describe the change you want.' });
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be retouched.' });
+    if (await rightsCheck.refuseRejected(res, [r.image_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;
+    const fal_key = process.env.FAL_API_KEY;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured. Please contact support.' });
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const _rs = await resolveGenStyle(db, r.art_style, uid, cid);
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' });
+    // The references this picture was drawn with, resolved again from the database (a removed one is left out
+    // rather than refusing the retouch: the picture itself is what is being changed).
+    const recipe = ibRecipeOf(r);
+    const chars = [];
+    for (const c of (recipe.refs.characters || [])) {
+      const one = await ibResolveCharacters(db, cid, uid, [c]);
+      if (!one.error && one.chars.length) chars.push(one.chars[0]);
+    }
+    const assetIds = (recipe.refs.assets || []).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return x > 0; });
+    const assets = assetIds.length ? (await db.prepare(ASSET_REF_SQL).all(cid)).filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; }) : [];
+    const charList = buildCharacterBlock(chars, '', 0, chars.map(function (c) { return c.character_id; }));
+    const assetList = buildAssetBlock(assets, '', assets.map(function (a) { return a.id; }));
+    const refs = combineRefs(charList.refs, assetList.refs);
+    // {{REF:Name}} placeholders and a picked reference, worded exactly as the panel route words them.
+    let instr = instruction;
+    if (instr.indexOf('{{REF:') !== -1) {
+      instr = instr.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+        const want = String(nm || '').trim().toLowerCase();
+        for (let i = 0; i < refs.length; i++) {
+          const rn = refs[i] && refs[i].name;
+          if (rn && String(rn).trim().toLowerCase() === want) return 'the single reference picture supplied with this request, which is the reference for ' + rn + ',';
+        }
+        return 'the supplied reference image for ' + nm;
+      });
+    }
+    const pick = String((req.body && req.body.ref_name) || '').trim();
+    if (pick) {
+      const hit = refs.filter(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })[0];
+      if (hit) instr = 'The character or object being corrected is ' + hit.name + '. The single reference picture supplied with this request is the reference for ' + hit.name +
+        ', and it is the only one supplied. Apply the change to ' + hit.name + ' and to no one else.\n\n' + instr;
+    }
+    let marked = String((req.body && req.body.marked_url) || '').trim();
+    if (marked && !isOurPublicUrl(marked)) marked = '';
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(uid, cost))) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    const sub = await submitRetouch(r.image_url, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charList.text }, r.shape, marked || null, pick || null, false, null);
+    const now = new Date().toISOString();
+    const job = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, prev_image, temp_inputs, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, r.art_style, cost, r.id, r.image_url, marked ? JSON.stringify([marked]) : null, now, now);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/retouch',
+      message: 'Retouching Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { instruction_raw: instruction, ref_name_picked: pick || null, refs: refs.map(function (x) { return x && x.name; }), marked_url: marked ? 'yes' : 'no', instruction_sent: instr } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] retouch error:', e.message);
+    res.json({ error: friendlyImageError(e) });
+  }
 });
 
 // v3.3.73 -- Draft / Ready: the maker only, in a campaign they may still use the Builder in, and only once the

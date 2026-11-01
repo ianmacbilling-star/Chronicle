@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.82",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3382-image-builder-retouch-asset",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Retouch and Save as Asset, and characters drawn at their set height.",
+        "detail": "Retouch opens the same Retouch window as story pictures, with its markers and reference picker, and costs one token; Revert brings back the picture from before. Save as Asset makes the picture a campaign asset, and you can frame just part of it. Every character in an Image Builder picture is now described at the height set on the character.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.81",
     "staged_on": "2026-11-01",
     "entries": [
