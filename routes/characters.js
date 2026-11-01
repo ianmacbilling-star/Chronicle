@@ -950,3 +950,4 @@ router.post('/:id/revert-reference', requireAuth, verifyCampaignDmOrCharacterOwn
 });
 
 module.exports = router;
+module.exports.importLooksForVersion = importLooksForVersion;   // v3.3.71 -- TD-1080: the Image Builder's looks step

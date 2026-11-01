@@ -306,7 +306,8 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   var _panels = !!(_flags && _flags.panels), _sfx = !!(_flags && _flags.sfx);
   var edgeDirective = _panels ? COMIC_PAGE : (_fade ? FADE_WHITE : NO_BORDER);
   var marksDirective = NO_MARKS + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));
-  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
+  // v3.3.71 -- TD-1080. noCandid: an Image Builder poster, portrait or token may face the viewer. Panels never set it.
+  var hint = ((_flags && _flags.noCandid) ? '' : COMPOSITION_IMG) + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
   // It must land here and not only in extract.js, because extract writes each
   // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
@@ -2528,12 +2529,19 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           }
           await logImageGeneration(db, job.user_id, 'asset_reference', job.asset_id, null);
         }
+        // v3.3.71 -- TD-1080. An Image Builder picture: its gallery row takes the picture and its measured size.
+        if (job.kind === 'builder' && job.builder_image_id) {
+          await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, updated_at = ? WHERE id = ?')
+            .run(imageUrl, imgW, imgH, new Date().toISOString(), job.builder_image_id);
+          await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
+        }
       const genSource = (job.kind === 'char_ref') ? 'character_reference'
         : (job.kind === 'session_ref') ? 'amendment_reference'
         : (job.kind === 'asset_ref') ? 'asset_reference'
         : (job.kind === 'asset_retouch') ? 'asset_retouch'
         : (job.kind === 'retouch') ? 'panel_retouch'
-        : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
+        : (job.kind === 'batch') ? 'panel_batch'
+        : (job.kind === 'builder') ? 'builder_image' : 'panel_regen';   // v3.3.71 -- TD-1080
       if (job.cost && job.cost > 0) {
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: genSource, event_type: 'generation_spend' });
       }
@@ -3182,6 +3190,274 @@ router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, re
     return res.status(500).json({ error: (e && e.message) || 'backfill-dims failed' });
   }
 });
+// =====================================================================================================
+// v3.3.71 -- TD-1080. THE IMAGE BUILDER, stage 1 (spec claude/IMAGE_BUILDER_SPEC.md). Pictures made outside any
+// story panel, kept per campaign in builder_images with their whole recipe. A campaign is open to the Builder for
+// a user whose EFFECTIVE tier there is Platinum: their own plan, or the Story Master's (Ian: "inheritable from a
+// SM on platinum"). Every route asks that question for the campaign it touches; the page asking it too only saves
+// a round trip. The generation itself is the panel pipeline (buildPanelInput through submitPanelGen and the fal
+// webhook), so styles, references, the campaign standing instruction and the fal headers all behave as on a panel.
+// =====================================================================================================
+const IB_SHAPES = { panoramic: 1, wide: 1, standard: 1, square: 1, fullpage: 1, tall: 1, tower: 1 };
+const IB_NAME_MAX = 80, IB_DESC_MAX = 1500, IB_LORE_MAX = 2000;
+const IB_JOB_WINDOW_MS = 15 * 60 * 1000;   // the same 15 minutes as job_stale in IB_LIST_SQL
+const IB_LOST = 'This picture did not come back from the image service. Nothing was charged. Delete it and try again.';
+// One sentence per image type, added before the description. candid:false drops the story-panel rule that people
+// never face the viewer (COMPOSITION_IMG), which a poster, a portrait or a token needs to break.
+const IB_TYPES = [
+  { key: 'poster', label: 'Movie Poster / Book Cover', candid: false, text: 'IMAGE TYPE: a dramatic movie-poster or book-cover composition. A bold, striking arrangement with the main figures large and heroic, strong lighting, and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.' },
+  { key: 'character', label: 'Character Study', candid: false, text: 'IMAGE TYPE: a character study of one figure, shown clearly from head to toe or as a three-quarter portrait, against a simple, softly suggested background that does not compete with the figure. Show their clothing, gear and expression in detail.' },
+  { key: 'group', label: 'Group Portrait', candid: false, text: 'IMAGE TYPE: a group portrait of the named characters together, every one clearly visible and recognisable, arranged with depth and a variety of poses, as if gathered for a memorable moment.' },
+  { key: 'location', label: 'Location / Establishing Shot', candid: true, text: 'IMAGE TYPE: an establishing shot of a place. The location itself is the subject: its architecture or landscape, light and atmosphere. People, if any, are small in the scene.' },
+  { key: 'action', label: 'Action Scene', candid: true, text: 'IMAGE TYPE: an action scene full of motion and drama, such as a battle, a chase or a moment of danger, with a strong diagonal composition and a clear focal point.' },
+  { key: 'map', label: 'Map', candid: true, text: 'IMAGE TYPE: a hand-drawn illustrated map seen from directly above, as if drawn on parchment by a cartographer: coastlines, rivers, roads, forests, mountains and settlements drawn as small illustrations. Place names, if any, are short and written in a simple hand.' },
+  { key: 'item', label: 'Item Showcase', candid: false, text: 'IMAGE TYPE: a detailed showcase of a single object, weapon or artifact filling most of the picture, against a simple, softly lit background, with its materials, wear and craftsmanship clearly visible.' },
+  { key: 'creature', label: 'Creature Study', candid: false, text: 'IMAGE TYPE: a creature study in the manner of a bestiary illustration: one creature shown whole and clearly, in a natural pose that shows its shape, size and features, with a suggestion of its habitat behind it.' },
+  { key: 'handout', label: 'In-world Handout', candid: false, text: 'IMAGE TYPE: an in-world handout seen flat and filling the picture: a single document such as a wanted poster, letter, scroll or notice, aged and weathered to suit the setting. Any writing on it is short.' },
+  { key: 'token', label: 'Portrait Token', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }
+];
+function ibType(key) { return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }
+
+async function ibAllowed(userId, campaignId) {
+  if (!userId || !campaignId) return false;
+  try {
+    if (!(await getCampaignRole(userId, campaignId))) return false;
+    return (await getEffectiveTier(userId, campaignId)) === 'platinum';
+  } catch (e) { return false; }   // never fail OPEN on an entitlement question
+}
+async function ibGate(req, res) {
+  if (await ibAllowed(req.session.userId, req.params.cid)) return true;
+  res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature. It is open in your own Platinum campaigns, and in campaigns whose Story Master is on Platinum.' });
+  return false;
+}
+function ibRow(r) {
+  if (!r) return null;
+  var refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
+  // No sweeper ends a job whose webhook never came, so a picture still pending after IB_JOB_WINDOW_MS is shown as
+  // failed (and can be deleted). Nothing was charged: tokens are spent only when the picture arrives.
+  var st = r.image_url ? 'done' : (r.job_status || 'queued');
+  if ((st === 'queued' || st === 'processing') && r.job_stale === true) st = 'failed';
+  return { id: r.id, campaign_id: r.campaign_id, user_id: r.user_id, maker: r.maker_name || '', name: r.name || '', description: r.description || '',
+    image_type: r.image_type || '', shape: r.shape || '', art_style: r.art_style || '', art_style_name: r.art_style_name || '', include_lore: !!r.include_lore,
+    refs: refs || { characters: [], assets: [] }, prompt: r.prompt || '', image_url: r.image_url || null, img_w: r.img_w || null, img_h: r.img_h || null,
+    status: st, error: r.image_url ? null : (st === 'failed' ? (r.job_error || IB_LOST) : null), job_id: r.job_id || null,
+    created_at: r.created_at || null };
+}
+const IB_LIST_SQL = 'SELECT b.*, u.name AS maker_name, ' +
+  '(SELECT j.status FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_status, ' +
+  '(SELECT j.error FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_error, ' +
+  '(SELECT j.id FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_id, ' +
+  // Stale is decided in SQL: created_at holds a UTC time with no zone, which the driver would read in the server's zone.
+  "(SELECT (j.created_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '15 minutes') FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_stale " +
+  'FROM builder_images b LEFT JOIN users u ON u.id = b.user_id ';
+
+// The campaigns this user may use here, with the image types for the form.
+router.get('/builder/campaigns', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT c.id, c.name, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id WHERE cm.user_id = ? ORDER BY LOWER(c.name) ASC'
+    ).all(req.session.userId);
+    const out = [];
+    for (const r of (rows || [])) {
+      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0 });
+    }
+    let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
+    res.json({ campaigns: out, types: IB_TYPES.map(function (t) { return { key: t.key, label: t.label }; }), max_refs: MAX_PANEL_REFS, cost: cost });
+  } catch (e) {
+    console.error('[image-builder] campaigns error:', e.message);
+    res.json({ error: 'Could not load your campaigns.' });
+  }
+});
+
+// The character steps of the Import Character picker, read from the chosen campaign itself. Same answers as
+// /characters/import (routes/characters.js), which is Story Master only and reads another campaign.
+router.get('/builder/campaigns/:cid/characters', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare('SELECT id, name, cls, is_npc, canonical_reference_url, image_portrait, image FROM characters WHERE campaign_id = ? ORDER BY created_at ASC, id ASC').all(req.params.cid);
+    res.json({ characters: (rows || []).map(function (c) {
+      return { id: c.id, name: c.name, cls: c.cls || '', is_npc: !!c.is_npc, thumb: c.canonical_reference_url || c.image_portrait || c.image || null };
+    }) });
+  } catch (e) { console.error('[image-builder] characters error:', e.message); res.json({ error: 'Could not load the characters.' }); }
+});
+router.get('/builder/campaigns/:cid/characters/:charId/looks', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const { versionsForCampaign } = require('../database/db');
+    const { importLooksForVersion } = require('./characters');
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.charId, req.params.cid);
+    if (!ch) return res.status(404).json({ error: 'That character is no longer in the campaign.' });
+    const visible = await versionsForCampaign(db, req.params.cid, req.session.userId, null);
+    if (req.query.version_id) {
+      const v = visible.filter(function (x) { return String(x.version_id) === String(req.query.version_id); })[0];
+      if (!v) return res.status(403).json({ error: 'That version is not shared with you.' });
+      return res.json({ version_id: v.version_id, looks: await importLooksForVersion(db, ch.id, v.version_id) });
+    }
+    res.json({
+      character: { id: ch.id, name: ch.name, cls: ch.cls || '' },
+      original: ch.canonical_reference_url ? { key: 'original', label: 'Original', url: ch.canonical_reference_url } : null,
+      versions: visible.map(function (v) { return { version_id: v.version_id, label: v.label, is_canonical: v.is_canonical, is_mine: v.is_mine }; })
+    });
+  } catch (e) { console.error('[image-builder] looks error:', e.message); res.json({ error: 'Could not load that character\u2019s pictures.' }); }
+});
+router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare(ASSET_REF_SQL + ' ORDER BY LOWER(a.name) ASC').all(req.params.cid);
+    res.json({ assets: (rows || []).filter(function (a) { return !!a.image_url; }).map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location', image_url: a.image_url }; }) });
+  } catch (e) { console.error('[image-builder] assets error:', e.message); res.json({ error: 'Could not load the assets.' }); }
+});
+// The gallery: every image in the campaign, everyone's (Ian: visible to the whole campaign), newest first.
+router.get('/builder/campaigns/:cid/images', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare(IB_LIST_SQL + 'WHERE b.campaign_id = ? ORDER BY b.id DESC LIMIT 200').all(req.params.cid);
+    res.json({ images: (rows || []).map(ibRow), me: req.session.userId });
+  } catch (e) { console.error('[image-builder] list error:', e.message); res.json({ error: 'Could not load the Image Builder gallery.' }); }
+});
+
+// Character references are a character id and a look ('original' or 'sc:<session_characters id>'), resolved HERE
+// from the database: a picture address from the page is a claim, not proof. A session look must belong to a
+// version this user may see. Returns rows shaped like generate-moment's chars, or { error }.
+async function ibResolveCharacters(db, cid, uid, list) {
+  const out = [], seen = {};
+  const { versionsForCampaign } = require('../database/db');
+  let visible = null;
+  for (const it of (Array.isArray(list) ? list : [])) {
+    const id = parseInt(it && it.id, 10); if (!(id > 0) || seen[id]) continue; seen[id] = 1;
+    const ch = await db.prepare('SELECT id, name, cls, description, canonical_prompt, canonical_reference_url FROM characters WHERE id = ? AND campaign_id = ?').get(id, cid);
+    if (!ch) return { error: 'One of the characters is no longer in this campaign.' };
+    const look = String((it && it.look) || 'original');
+    let url = ch.canonical_reference_url || null, prompt = null, label = 'Original';
+    if (look !== 'original') {
+      const m = /^sc:(\d+)$/.exec(look);
+      if (!m) return { error: 'That character look is not recognised.' };
+      const sc = await db.prepare('SELECT sc.reference_url, sc.prompt, sf.version_id, s.name AS session_name FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id WHERE sc.id = ? AND sc.character_id = ? AND s.campaign_id = ?').get(parseInt(m[1], 10), id, cid);
+      if (!sc || !sc.reference_url) return { error: 'That look of ' + ch.name + ' is no longer available.' };
+      if (visible === null) visible = await versionsForCampaign(db, cid, uid, null);
+      if (!visible.some(function (v) { return String(v.version_id) === String(sc.version_id); })) return { error: 'That look of ' + ch.name + ' is in a version that is not shared with you.' };
+      url = sc.reference_url; prompt = sc.prompt || null; label = sc.session_name || 'Session';
+    }
+    out.push({ character_id: ch.id, name: ch.name, cls: ch.cls, description: ch.description, canonical_prompt: ch.canonical_prompt,
+      canonical_reference_url: ch.canonical_reference_url, snapshot_prompt: prompt, snapshot_reference_url: url, _look: look, _label: label });
+  }
+  return { chars: out };
+}
+
+// The words sent to the image model, before buildPanelInput adds the style, references and house rules.
+function ibPrompt(o) {
+  var parts = [];
+  if (o.type) parts.push(o.type.text);
+  parts.push('THE PICTURE: ' + o.description);
+  if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
+  if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
+  return parts.join('\n\n');
+}
+
+router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const fal_key = process.env.FAL_API_KEY;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured. Please contact support.' });
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const b = req.body || {}, uid = req.session.userId, cid = parseInt(req.params.cid, 10);
+    const name = String(b.name || '').trim().slice(0, IB_NAME_MAX);
+    const description = String(b.description || '').trim().slice(0, IB_DESC_MAX);
+    const shape = String(b.shape || '');
+    const style = String(b.art_style || '').trim();
+    const type = b.image_type ? ibType(String(b.image_type)) : null;
+    if (b.image_type && !type) return res.json({ error: 'That image type is not recognised.' });
+    if (!name) return res.json({ error: 'Give the picture a name.', field: 'name' });
+    if (!description) return res.json({ error: 'Describe the picture you want.', field: 'description' });
+    if (!IB_SHAPES[shape]) return res.json({ error: 'Choose a shape for the picture.', field: 'shape' });
+    if (!style) return res.json({ error: 'Choose an art style.', field: 'style' });
+    const db = await getDb();
+    const effRank = accessRank(await getEffectiveTier(uid, cid));
+    if (style.indexOf('custom:') !== 0 && !artStyleAllowed(effRank, style)) return res.json({ error: 'STYLE_LOCKED', message: 'That art style isn\u2019t available on your current plan.' });
+    const _rs = await resolveGenStyle(db, style, uid, cid);
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' });
+
+    const refsIn = (b.refs && typeof b.refs === 'object') ? b.refs : {};
+    const rc = await ibResolveCharacters(db, cid, uid, refsIn.characters);
+    if (rc.error) return res.json({ error: rc.error });
+    const chars = rc.chars;
+    const assetIds = (Array.isArray(refsIn.assets) ? refsIn.assets : []).map(function (x) { return parseInt(x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
+    const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
+    const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
+    if (assets.length !== assetIds.length) return res.json({ error: 'One of the assets is no longer available, or its picture was removed.' });
+    if (chars.length + assets.length > MAX_PANEL_REFS) return res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' });
+    if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return;
+
+    const charIds = chars.map(function (c) { return c.character_id; });
+    const charList = buildCharacterBlock(chars, '', 0, charIds);
+    const assetList = buildAssetBlock(assets, '', assetIds);
+    const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
+      refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
+
+    const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
+    const includeLore = b.include_lore !== false;
+    const lore = (includeLore && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
+    const prompt = ibPrompt({ type: type, description: description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore });
+    // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
+    // own flags pass through untouched, exactly as a panel would send them.
+    let flags = _rs.isFade;
+    if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
+
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(uid, cost))) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    const _campPrompt = await loadCampaignPrompt(db, cid);
+    const seed = Math.floor(Math.random() * 2147483647);
+    const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
+
+    const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
+      assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
+    const now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, type ? type.key : null, shape, style, _rs.name || null, includeLore, JSON.stringify(refsOut), sub.prompt || prompt, now, now);
+    const imageId = ins.lastInsertRowid;
+    const job = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, style, cost, imageId, now, now);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate',
+      message: 'Submitted Image Builder picture ' + imageId + ' (request ' + sub.request_id + ')',
+      detail: { campaign_id: cid, image_type: type ? type.key : null, shape: shape, style: style, refs: (panelBlock.refs || []).map(function (r) { return r.name; }), finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(imageId);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] generate error:', e.message);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate', message: 'Image Builder generation failed: ' + (e && e.message) }); } catch (_le) {}
+    res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// Delete: the maker only (Ian: only the person who made it). The picture file goes through releaseImage, which keeps
+// it while anything else (an Archive copy, an asset) still names it.
+router.delete('/builder/images/:id', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can delete it.' });
+    const busy = await db.prepare("SELECT id FROM image_jobs WHERE builder_image_id = ? AND status IN ('queued', 'processing') AND created_at > ? LIMIT 1").get(r.id, new Date(Date.now() - IB_JOB_WINDOW_MS).toISOString());
+    if (busy) return res.json({ error: 'That picture is still being drawn. Delete it once it has finished.' });
+    await db.prepare('DELETE FROM builder_images WHERE id = ?').run(r.id);
+    if (r.image_url) await releaseImage(db, r.image_url);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    res.json({ success: true });
+  } catch (e) { console.error('[image-builder] delete error:', e.message); res.json({ error: 'Could not delete the picture.' }); }
+});
+
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.71",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3371-image-builder",
+        "kind": "feature",
+        "public": true,
+        "summary": "New: the Image Builder, on the profile menu under Custom Art Styles (Platinum).",
+        "detail": "Make posters, portraits, maps, handouts and more for a campaign: choose its characters and assets as references, a shape, an art style and an optional image type, describe the picture and press Generate. Each picture costs one token and goes into the campaign's gallery, which every member of the campaign can see. It is open in your own Platinum campaigns and in campaigns whose Story Master is on Platinum.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.70",
     "staged_on": "2026-11-01",
     "entries": [

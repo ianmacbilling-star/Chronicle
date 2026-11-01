@@ -211,7 +211,7 @@ function _navRestore(st) {
       return;
     }
     if (state.currentSession && state.currentSession.id) {
-      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
+      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback','image-builder'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
       ids.forEach(function (x) { var el = document.getElementById('view-' + x); if (el) el.style.display = 'none'; });
       var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
       state.currentView = 'session-detail';
@@ -3663,9 +3663,14 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.71 -- TD-1080. The Image Builder remembers where it was opened from, for ibBack().
+  if (view === 'image-builder') {
+    var _curIb = _visibleViewId();
+    if (_curIb !== 'image-builder') _ibBackFrom = _curIb || null;
+  }
   // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
   if (view === 'account') accountNoteFrom();
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -4239,7 +4244,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -7029,6 +7034,7 @@ function deleteCustomStyle(id) {
 
 function openStylePicker(kind) {
   STYLE_PICKER_KIND = kind || 'narrative';
+  _ibStyleMode = !!_ibStyleNext && STYLE_PICKER_KIND === 'art'; _ibStyleNext = false;   // v3.3.71 -- TD-1080: only ibOpenStyle opens it for the Image Builder
   var titleEl = document.getElementById('style-picker-title');
   var grid = document.getElementById('style-picker-grid');
   if (!grid) return;
@@ -7039,9 +7045,9 @@ function openStylePicker(kind) {
     meta = NARR_STYLE_META;
   } else if (STYLE_PICKER_KIND === 'art') {
     if (titleEl) titleEl.textContent = 'Choose an art style';
-    cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
+    cur = _ibStyleMode ? (IB.style || '') : (state.artStyle ? state.artStyle : 'High fantasy illustration');
     meta = ART_STYLE_META;
-    if (!availableStylesLoaded()) { loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ openStylePicker('art'); }); return; }
+    if (!_ibStyleMode && !availableStylesLoaded()) { loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ openStylePicker('art'); }); return; }
   } else if (STYLE_PICKER_KIND === 'layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
     cur = normalizeLayoutId(state.layoutStyle || 'Classic');
@@ -7054,14 +7060,14 @@ function openStylePicker(kind) {
   var _subEl = document.getElementById('style-picker-sub');
   if (_subEl) {
     _subEl.textContent =
-      (STYLE_PICKER_KIND === 'art') ? 'Pick the art style for this version. It applies to new image generations; change it any time.' :
+      (STYLE_PICKER_KIND === 'art') ? (_ibStyleMode ? 'Pick the art style for this picture.' : 'Pick the art style for this version. It applies to new image generations; change it any time.') :
       (STYLE_PICKER_KIND === 'narrative') ? 'Pick the narrative voice for this version. It applies whenever the narrative is generated or regenerated; change it any time.' :
       'Pick the page layout. The preview updates when you choose; change it any time.';
   }
   grid.innerHTML = meta.map(function(s) {
     var TLABEL = {2:'Silver',3:'Gold',4:'Platinum'};
     var _locks = (STYLE_PICKER_KIND === 'art') ? (state.tierInfo && state.tierInfo.art_locks) : (STYLE_PICKER_KIND === 'narrative') ? (state.tierInfo && state.tierInfo.narrative_locks) : null;
-    var _eff = (state.tierInfo && state.tierInfo.effective_rank) || 99;
+    var _eff = _ibStyleMode ? 4 : ((state.tierInfo && state.tierInfo.effective_rank) || 99);   // v3.3.71 -- the Image Builder's campaigns are Platinum (the server checks)
     var _min = (_locks && _locks[s.id]) || 1;
     var _locked = _min > _eff;
     var on = _locked ? ' is-locked' : ((s.id === cur) ? ' is-selected' : '');
@@ -7077,7 +7083,7 @@ function openStylePicker(kind) {
       '</div>';
   }).join('');
   if (STYLE_PICKER_KIND === 'art') {
-    var _av = getAvailableStyles();
+    var _av = _ibStyleMode ? (IB.customStyles || []) : getAvailableStyles();   // v3.3.71 -- the Image Builder's campaign, not the open one
     var _mine = _av.filter(function(s){ return !s.shared_by_sm; });
     var _sm = _av.filter(function(s){ return s.shared_by_sm; });
     var _renderCustGroup = function(title, arr) {
@@ -7116,12 +7122,12 @@ function openStylePicker(kind) {
     } else {
       _vd.classList.add('hidden');
       _narratorPanelHide();
-      if (STYLE_PICKER_KIND === 'art') _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921
+      if (STYLE_PICKER_KIND === 'art' && !_ibStyleMode) _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921; v3.3.71 not for the Image Builder
     }
   }
   // v3.3.70 -- TD-1079. Go to Custom Art Styles, art window only, every plan (the page itself gates Platinum).
   var _csFoot = document.getElementById('style-picker-cstyle');
-  if (_csFoot) _csFoot.style.display = (STYLE_PICKER_KIND === 'art') ? 'flex' : 'none';
+  if (_csFoot) _csFoot.style.display = (STYLE_PICKER_KIND === 'art' && !_ibStyleMode) ? 'flex' : 'none';
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
 }
@@ -7154,6 +7160,7 @@ function setVerbosity(v) {
 
 function closeStylePicker() {
   if (typeof _narratorBlockClose === 'function' && _narratorBlockClose()) return;   // v3.1.31 -- pick a narrator first
+  _ibStyleMode = false;   // v3.3.71 -- TD-1080
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -7177,6 +7184,7 @@ function selectStyleCard(kind, id) {
     })
     .catch(function(e) { showError('Could not set narrative style: ' + e.message); });
   } else if (kind === 'art') {
+    if (_ibStyleMode && state.currentView === 'image-builder') { ibSetStyle(id); closeStylePicker(); return; }   // v3.3.71 -- TD-1080: the picture's style, not the session's
     state.artStyle = id;
     mpSave('session', { art_style: id });
     if (state.currentSession && state.currentCampaign) {
@@ -18387,9 +18395,14 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.71 -- TD-1080. The Image Builder remembers where it was opened from, for ibBack().
+  if (view === 'image-builder') {
+    var _curIb = _visibleViewId();
+    if (_curIb !== 'image-builder') _ibBackFrom = _curIb || null;
+  }
   // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
   if (view === 'account') accountNoteFrom();
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -18867,7 +18880,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -29892,7 +29905,7 @@ function sectionBack() {
     // Asset/Archive view stacked above the session. The detail DOM is still
     // populated (it was only hidden), so just hide every view and reveal it.
     if (!(state.currentSession && state.currentSession.id)) { showCampaignSection('sessions'); return; }
-    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
+    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback','image-builder'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
     ids.forEach(function(v){ var el = document.getElementById('view-' + v); if (el) el.style.display = 'none'; });
     var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
     state.currentView = 'session-detail';
@@ -29974,20 +29987,20 @@ var _accountBackFrom = null;
 function accountNoteFrom() {
   var cur = _visibleViewId();
   if (!cur) {
-    ['custom-styles', 'feedback'].forEach(function (v) {
+    ['custom-styles', 'feedback', 'image-builder'].forEach(function (v) {
       var el = document.getElementById('view-' + v);
       if (!cur && el && el.style.display !== 'none' && window.getComputedStyle(el).display !== 'none') cur = v;
     });
   }
   if (cur === 'account') return;
-  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account')) return;
+  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account') || (cur === 'image-builder' && _ibBackFrom === 'account')) return;
   _accountBackFrom = cur || null;
 }
 function accountBack() {
   var t = _accountBackFrom;
-  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
+  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || t === 'image-builder' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
     var keepO = _ordersBackFrom, keepC = _cstyleBackFrom;
-    if (t === 'custom-styles') openCustomStylesView(); else showView(t);
+    if (t === 'custom-styles') openCustomStylesView(); else if (t === 'image-builder') openImageBuilder(true); else showView(t);   // v3.3.71
     _ordersBackFrom = keepO; _cstyleBackFrom = keepC;
     return;
   }
@@ -35681,11 +35694,11 @@ function _rpReset() {
   if (pane) { pane.innerHTML = ''; pane.removeAttribute('data-built'); }
 }
 
-function _rpShapeStrip(activeKey) {
+function _rpShapeStrip(activeKey, pickFn) {   // v3.3.71 -- TD-1080: pickFn, the Image Builder's handler (a function name)
   return RP_SHAPES.map(function (s) {
     var bw = s.w >= s.h ? 44 : Math.round(44 * s.w / s.h), bh = s.w >= s.h ? Math.round(44 * s.h / s.w) : 44;
-    var on = s.key === activeKey, clickable = !!(state.rpUp && state.rpUp.img);
-    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="_rpPickShape(\'' + s.key + '\')"' : '') +
+    var on = s.key === activeKey, clickable = pickFn ? true : !!(state.rpUp && state.rpUp.img);
+    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="' + (pickFn || '_rpPickShape') + '(\'' + s.key + '\')"' : '') +
       ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;min-height:82px;padding:4px;background:' +
       (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
       // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
@@ -36354,7 +36367,10 @@ function _impPick(email) {
 // =====================================================================================
 var _ci = null;   // { step, source, sourceName, charId, charName, look, observer }
 
-function _ciBase() { return '/api/campaigns/' + state.currentCampaign.id + '/characters/import'; }
+function _ciBase() {
+  if (_ci && _ci.mode === 'builder') return '/api/images/builder';   // v3.3.71 -- TD-1080: the Image Builder asks its own routes
+  return '/api/campaigns/' + state.currentCampaign.id + '/characters/import';
+}
 
 function _ciModal() {
   var m = document.getElementById('char-import-modal');
@@ -36400,8 +36416,8 @@ function _ciSet(title, sub, html) {
   var s = document.getElementById('ci-sub'); if (s) s.textContent = sub || '';
   var b = document.getElementById('ci-body'); if (b) { b.innerHTML = html; b.scrollTop = 0; }
   var msg = document.getElementById('ci-msg'); if (msg) msg.textContent = '';
-  var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns') ? '' : 'none';
-  var go = document.getElementById('ci-go'); if (go) { go.style.display = (_ci && _ci.step === 'looks') ? '' : 'none'; go.disabled = true; }
+  var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns' && !(_ci.start === 'characters' && _ci.step === 'characters')) ? '' : 'none';
+  var go = document.getElementById('ci-go'); if (go) { go.style.display = (_ci && _ci.step === 'looks') ? '' : 'none'; go.disabled = true; go.textContent = (_ci && _ci.mode === 'builder') ? 'Use this look' : 'Import this picture'; }
 }
 
 function _ciErr(text) { var m = document.getElementById('ci-msg'); if (m) m.textContent = text || ''; }
@@ -36417,11 +36433,12 @@ var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;te
 
 function _ciCampaigns() {
   _ci.step = 'campaigns';
-  _ciSet('Import a character', 'Choose the campaign the character comes from. These are the campaigns you run or belong to.', '<div style="padding:16px;opacity:0.7;">Loading your campaigns\u2026</div>');
+  var _ib = _ci.mode === 'builder';   // v3.3.71 -- TD-1080: choosing the Image Builder's campaign
+  _ciSet(_ib ? 'Choose a campaign' : 'Import a character', _ib ? 'The Image Builder works in one campaign at a time: its characters, assets, lore and gallery.' : 'Choose the campaign the character comes from. These are the campaigns you run or belong to.', '<div style="padding:16px;opacity:0.7;">Loading your campaigns\u2026</div>');
   _ciGet(_ciBase() + '/campaigns', function (d) {
     if (!_ci || _ci.step !== 'campaigns') return;
     var list = d.campaigns || [];
-    if (!list.length) { _ciSet('Import a character', '', '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
+    if (!list.length) { _ciSet(_ib ? 'Choose a campaign' : 'Import a character', '', _ib ? '<div style="padding:16px;">None of your campaigns can use the Image Builder yet.</div>' : '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
     var b = document.getElementById('ci-body');
     b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
       return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' +
@@ -36429,7 +36446,10 @@ function _ciCampaigns() {
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
     }).join('') + '</div>';
     Array.prototype.forEach.call(b.querySelectorAll('.ci-camp'), function (el) {
-      el.onclick = function () { _ciCharacters(el.getAttribute('data-id'), el.getAttribute('data-name')); };
+      el.onclick = function () {
+        if (_ib && _ci && typeof _ci.onCampaign === 'function') { var _f = _ci.onCampaign; closeCharImport(); _f(el.getAttribute('data-id'), el.getAttribute('data-name')); return; }
+        _ciCharacters(el.getAttribute('data-id'), el.getAttribute('data-name'));
+      };
     });
   });
 }
@@ -36465,13 +36485,13 @@ function _ciLookTile(l) {
 function _ciLooks(charId, charName) {
   if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; }
   _ci.step = 'looks'; _ci.charId = charId; _ci.charName = charName; _ci.look = null;
-  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. Pick one to copy into this campaign.', '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
+  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
   var base = _ciBase() + '/campaigns/' + encodeURIComponent(_ci.source) + '/characters/' + encodeURIComponent(charId) + '/looks';
   _ciGet(base, function (d) {
     if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
     var grid = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;';
     var html = '<div style="margin-bottom:14px;"><div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">Original (the campaign\u2019s character card)</div>' +
-      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 it will be imported without one.</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
+      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 ' + (_ci.mode === 'builder' ? 'its description is used instead.' : 'it will be imported without one.') + '</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
     (d.versions || []).forEach(function (v) {
       html += '<div class="ci-group" data-version="' + v.version_id + '" style="margin-bottom:14px;min-height:60px;">' +
         '<div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">' + escapeHtml(v.label) + '</div>' +
@@ -36508,17 +36528,23 @@ function _ciPickFromEvent(ev) {
   Array.prototype.forEach.call(document.querySelectorAll('#ci-body .ci-look'), function (el) { el.style.outline = ''; });
   t.style.outline = '2px solid #e8d49a';
   _ci.look = t.getAttribute('data-key');
+  var _lb = t.querySelector('b'); _ci.lookLabel = _lb ? _lb.textContent : '';   // v3.3.71 -- TD-1080: the Image Builder's chip
   var go = document.getElementById('ci-go'); if (go) go.disabled = false;
 }
 
 function _ciBack() {
   if (!_ci) return;
   if (_ci.step === 'looks') { var b = document.getElementById('ci-body'); if (b) b.removeEventListener('click', _ciPickFromEvent); if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; } _ciCharacters(_ci.source, _ci.sourceName); }
-  else if (_ci.step === 'characters') _ciCampaigns();
+  else if (_ci.step === 'characters' && _ci.start !== 'characters') _ciCampaigns();
 }
 
 function _ciImport() {
   if (!_ci || !_ci.look) return;
+  if (_ci.mode === 'builder') {   // v3.3.71 -- TD-1080: the Image Builder takes the look as a reference; nothing is copied
+    var _bl = _ci; closeCharImport();
+    if (typeof _bl.onLook === 'function') _bl.onLook({ charId: _bl.charId, charName: _bl.charName, look: _bl.look, label: _bl.lookLabel || '' });
+    return;
+  }
   var go = document.getElementById('ci-go'); if (go) go.disabled = true;
   _ciErr('');
   var s = document.getElementById('ci-sub'); if (s) s.textContent = 'Copying ' + _ci.charName + ' into this campaign\u2026';
@@ -38392,4 +38418,388 @@ function openCompareTiersGrid(btn) {
 function cstyleFromPicker() {
   var _hide = function () { var m = document.getElementById('style-picker-modal'); if (m) m.classList.add('hidden'); };
   openCustomStylesView(_hide, _hide);
+}
+
+// =====================================================================================================
+// v3.3.71 -- TD-1080. THE IMAGE BUILDER, stage 1. Spec: claude/IMAGE_BUILDER_SPEC.md.
+//
+// Ian, 2026-11-01: a page off the profile menu where a Platinum member makes pictures that are not story panels --
+// a poster, a portrait, a map, a handout -- from a description, a shape, an art style and reference pictures of the
+// campaign's characters and assets. Every picture belongs to ONE campaign and is seen by that campaign's members
+// only; only its maker may change or delete it. Stage 1 is the page, the pickers, Generate and the gallery.
+//
+// It borrows rather than copies: the Import Character window (builder mode, _ci.mode), the Upload-your-own shape
+// strip (_rpShapeStrip with a pick function), the art style window (_ibStyleMode), the Review tab's chips and the
+// Add-an-asset window's look. The server decides who may use which campaign; the page only asks it.
+// APPENDED, NOT INSERTED (TD-853); every name here starts ib / IB and is declared nowhere else.
+// =====================================================================================================
+var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
+  type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0 };
+var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
+var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
+var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
+
+function ibCss() {
+  if (document.getElementById('ib-css')) return;
+  var st = document.createElement('style');
+  st.id = 'ib-css';
+  st.textContent =
+    '#ib-root{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;align-items:start;color:#f0e8d0;}' +
+    '#ib-root b,#ib-root label{color:#f0e8d0;}' +
+    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
+    '.ib-sec{margin-bottom:14px;}' +
+    '.ib-lbl{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim, #b89a52);margin-bottom:6px;font-weight:600;}' +
+    '.ib-lbl .ib-req{color:#e8a090;margin-left:4px;text-transform:none;letter-spacing:0;font-weight:400;}' +
+    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
+    '.ib-in.ib-bad{border-color:#e07a6a;}' +
+    '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
+    '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}' +
+    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:8px;}' +
+    '.ib-pic{width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;}' +
+    '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
+    '.ib-meta{font-size:12px;color:rgba(240,232,208,0.7);}' +
+    '.ib-err{color:#f0a090;font-size:13px;}' +
+    '@media (max-width:800px){#ib-root{grid-template-columns:1fr;}}';
+  document.head.appendChild(st);
+}
+
+function openImageBuilder(keepBack) {
+  var _kb = _ibBackFrom;
+  fetch('/api/images/builder/campaigns', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && d.error) || 'Could not open the Image Builder.'); return; }
+      var list = d.campaigns || [];
+      if (!list.length && !(state && state.user && state.user.tier === 'platinum')) {
+        platinumGate('the Image Builder', 'The Image Builder makes posters, portraits, maps and handouts for a campaign from its characters and assets. It is open in your own Platinum campaigns, and in any campaign whose Story Master is on Platinum.');
+        return;
+      }
+      IB.campaigns = list; IB.types = d.types || []; IB.maxRefs = d.max_refs || 14; IB.cost = (d.cost == null ? 1 : d.cost);
+      if (IB.cid && !ibCampaign(IB.cid)) ibClearCampaign();
+      if (!IB.cid) {
+        var here = state.currentCampaign && ibCampaign(state.currentCampaign.id);
+        var pick = here || (list.length === 1 ? list[0] : null);
+        if (pick) { IB.cid = pick.id; IB.cname = pick.name; }
+      }
+      ibCss();
+      showView('image-builder');
+      if (keepBack) _ibBackFrom = _kb;   // arriving from My Account's Back keeps the note, so the two never send you to each other
+      var _sn = document.getElementById('campaign-subnav'); if (_sn) _sn.style.display = 'none';
+      setBreadcrumb([{ label: 'My Campaigns', action: "showView('campaigns')" }, { label: 'Image Builder' }]);
+      ibRender();
+      if (IB.cid) ibLoadCampaign();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+
+function ibCampaign(id) { return (IB.campaigns || []).filter(function (c) { return String(c.id) === String(id); })[0] || null; }
+function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
+
+// Back: to the page the Builder was opened from, by the same rule as Custom Art Styles' Back.
+function ibBack() {
+  ibStopPoll();
+  var t = _ibBackFrom;
+  if (t && (ORDERS_BACK_PLAIN.indexOf(t) !== -1 || t === 'orders')) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
+}
+
+function ibReadForm() {
+  var g = function (id) { return document.getElementById(id); };
+  if (g('ib-desc')) IB.desc = g('ib-desc').value;
+  if (g('ib-name')) IB.name = g('ib-name').value;
+  if (g('ib-type')) IB.type = g('ib-type').value;
+  if (g('ib-lore')) IB.lore = !!g('ib-lore').checked;
+}
+
+function ibStyleName() {
+  if (!IB.style) return '';
+  if (IB.style.indexOf('custom:') === 0) {
+    var id = IB.style.slice(7);
+    var s = (IB.customStyles || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return s ? ('Custom: ' + (s.name || 'Untitled')) : 'Custom style';
+  }
+  return artStyleName(IB.style);
+}
+
+function ibChipsHtml() {
+  var c = IB.chars.map(function (x, i) {
+    return '<span class="review-chip" title="' + escapeHtml(x.label || '') + '">' + escapeHtml(charDisplayName(x.name)) +
+      (x.label && x.look !== 'original' ? ' <span style="opacity:0.65;">(' + escapeHtml(x.label) + ')</span>' : '') +
+      '<button class="review-chip-x" title="Remove" onclick="ibRemoveChar(' + i + ')">&#215;</button></span>';
+  }).join('');
+  var a = IB.assets.map(function (x, i) {
+    return '<span class="review-chip review-chip-asset">' + escapeHtml(x.name) +
+      '<button class="review-chip-x" title="Remove" onclick="ibRemoveAsset(' + i + ')">&#215;</button></span>';
+  }).join('');
+  var full = (IB.chars.length + IB.assets.length) >= IB.maxRefs;
+  return '<div class="review-row"><span class="review-label">Characters</span>' + (c || '<span class="review-none">none</span>') +
+      (full ? '' : '<button class="review-add-btn" onclick="ibAddChar()">+ Add character</button>') + '</div>' +
+    '<div class="review-row"><span class="review-label">Assets</span>' + (a || '<span class="review-none">none</span>') +
+      (full ? '' : '<button class="review-add-btn" onclick="ibAddAsset()">+ Add asset</button>') +
+      '<button class="review-add-btn" onclick="ibGoAssets()">Go to Assets</button></div>' +
+    '<div class="ib-meta" style="margin-top:4px;">' + (IB.chars.length + IB.assets.length) + ' of ' + IB.maxRefs + ' reference pictures.</div>';
+}
+
+function ibRender() {
+  var root = document.getElementById('ib-root'); if (!root) return;
+  ibReadForm();
+  var camps = IB.campaigns || [];
+  var campHtml = camps.length
+    ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:15px;">' + (IB.cid ? escapeHtml(IB.cname) : '<span style="opacity:0.6;">No campaign chosen</span>') + '</b>' +
+      '<button class="btn btn-sm" onclick="ibPickCampaign()">' + (IB.cid ? 'Change' : 'Choose a campaign') + '</button></div>'
+    : '<div class="ib-meta">You have no campaigns the Image Builder can use yet. Create a campaign first.</div>';
+  var typeOpts = '<option value="">None \u2014 just my description</option>' + (IB.types || []).map(function (t) {
+    return '<option value="' + escapeHtml(t.key) + '"' + (IB.type === t.key ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>';
+  }).join('');
+  var off = !IB.cid;
+  root.innerHTML =
+    '<div class="ib-card" id="ib-form"' + (off ? '' : '') + '>' +
+      '<div class="ib-sec"><div class="ib-lbl">Campaign<span class="ib-req">required</span></div>' + campHtml + '</div>' +
+      (off ? '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>' :
+      '<div class="ib-sec"><div class="ib-lbl">References</div><div id="ib-chips">' + ibChipsHtml() + '</div></div>' +
+      '<div class="ib-sec"><div class="ib-lbl">Shape<span class="ib-req">required</span></div><div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div></div>' +
+      '<div class="ib-sec"><div class="ib-lbl">Art style<span class="ib-req">required</span></div>' +
+        '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button></div>' +
+      '<div class="ib-sec"><div class="ib-lbl">Image type<span class="ib-req" style="color:rgba(240,232,208,0.55);">optional</span></div>' +
+        '<select class="ib-in" id="ib-type">' + typeOpts + '</select></div>' +
+      '<div class="ib-sec"><label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + '> Include the campaign\u2019s lore</label></div>' +
+      '<div class="ib-sec"><div class="ib-lbl">Description<span class="ib-req">required</span></div>' +
+        '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?">' + escapeHtml(IB.desc) + '</textarea></div>' +
+      '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
+        '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
+      '<div id="ib-msg" class="ib-err" style="margin-bottom:8px;"></div>' +
+      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>') +
+    '</div>' +
+    '<div>' +
+      '<div class="ib-lbl" style="font-size:12px;">' + (IB.cid ? 'Gallery \u2014 ' + escapeHtml(IB.cname) : 'Gallery') + '</div>' +
+      '<div class="ib-meta" style="margin-bottom:10px;">Every picture made in this campaign, by any member. Only the campaign\u2019s members can see them.</div>' +
+      '<div id="ib-gallery" class="ib-gal">' + ibGalleryHtml() + '</div>' +
+    '</div>';
+}
+
+function ibGalleryHtml() {
+  if (!IB.cid) return '<div class="ib-meta">Choose a campaign to see its pictures.</div>';
+  if (!IB.images.length) return '<div class="ib-meta">No pictures yet. Describe one and press Generate.</div>';
+  return IB.images.map(function (im) {
+    var mine = String(im.user_id) === String(IB.me);
+    var pic;
+    if (im.image_url) pic = '<div class="ib-pic" onclick="ibView(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    else if (im.status === 'failed') pic = '<div class="ib-pic" style="cursor:default;"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
+    else pic = '<div class="ib-pic" style="cursor:default;"><div style="font-size:13px;opacity:0.75;">Drawing\u2026</div></div>';
+    var type = '';
+    (IB.types || []).forEach(function (t) { if (t.key === im.image_type) type = t.label; });
+    var bits = [type, (_rpShapeByKey(im.shape) || {}).label, im.art_style_name ? ('Custom: ' + im.art_style_name) : artStyleLabel(im.art_style)].filter(Boolean);
+    return '<div class="ib-img">' + pic +
+      '<b style="font-size:14px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
+      '<div class="ib-meta">' + escapeHtml(bits.join(' \u00b7 ')) + '</div>' +
+      '<div class="ib-meta">By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
+      (mine && (im.image_url || im.status === 'failed') ? '<div><button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button></div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function ibPaintGallery() { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = ibGalleryHtml(); }
+function ibPaintChips() { var c = document.getElementById('ib-chips'); if (c) c.innerHTML = ibChipsHtml(); }
+
+function ibView(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
+  if (im && im.image_url) openLightbox(im.image_url, im.name || '');
+}
+
+// Loads what the chosen campaign brings: its custom art styles (for the style window) and its gallery.
+function ibLoadCampaign() {
+  var cid = IB.cid, seq = ++IB.loadSeq;
+  fetch('/api/art-styles/custom/available/' + encodeURIComponent(cid), { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (seq !== IB.loadSeq) return; IB.customStyles = Array.isArray(d) ? d : []; var b = document.getElementById('ib-style-btn'); if (b && IB.style) b.textContent = ibStyleName(); })
+    .catch(function () {});
+  ibLoadGallery();
+}
+
+function ibLoadGallery() {
+  var cid = IB.cid; if (!cid) return;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/images', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (String(IB.cid) !== String(cid)) return;
+      if (!d || d.error) { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = '<div class="ib-err">' + escapeHtml((d && d.error) || 'Could not load the gallery.') + '</div>'; return; }
+      IB.images = d.images || []; IB.me = d.me;
+      ibPaintGallery();
+      ibSchedulePoll();
+    })
+    .catch(function () {});
+}
+
+// While any picture is still being drawn, the gallery asks again every few seconds -- anyone's, so a member
+// watching sees another member's picture arrive. Stops when nothing is pending or the page is left.
+function ibStopPoll() { if (IB.poll) { clearTimeout(IB.poll); IB.poll = null; } }
+function ibSchedulePoll() {
+  ibStopPoll();
+  var pending = IB.images.some(function (im) { return !im.image_url && im.status !== 'failed'; });
+  if (!pending) return;
+  IB.poll = setTimeout(function () {
+    IB.poll = null;
+    if (state.currentView !== 'image-builder') return;
+    ibLoadGallery();
+  }, 4000);
+}
+
+function ibPickCampaign() {
+  ibReadForm();
+  _ci = { step: 'campaigns', mode: 'builder', onCampaign: function (id, name) {
+    if (String(id) === String(IB.cid)) return;
+    ibClearCampaign();
+    IB.cid = parseInt(id, 10); IB.cname = name;
+    ibRender(); ibLoadCampaign();
+  } };
+  var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
+  _ciCampaigns();
+}
+
+function ibAddChar() {
+  if (!IB.cid) return;
+  ibReadForm();
+  _ci = { step: 'characters', mode: 'builder', start: 'characters', source: String(IB.cid), sourceName: IB.cname, onLook: function (p) {
+    if (IB.chars.some(function (c) { return String(c.id) === String(p.charId); })) {
+      IB.chars = IB.chars.map(function (c) { return String(c.id) === String(p.charId) ? { id: c.id, name: p.charName, look: p.look, label: p.label } : c; });
+    } else if (IB.chars.length + IB.assets.length < IB.maxRefs) {
+      IB.chars.push({ id: parseInt(p.charId, 10), name: p.charName, look: p.look, label: p.label });
+    }
+    ibPaintChips();
+  } };
+  var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
+  _ciCharacters(String(IB.cid), IB.cname);
+}
+function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); }
+function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); }
+
+// The Add-an-asset window, in the Review tab's look, listing the chosen campaign's assets with a picture.
+function ibAddAsset() {
+  if (!IB.cid) return;
+  ibReadForm();
+  var cid = IB.cid;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/assets', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (String(IB.cid) !== String(cid)) return;
+      if (!d || d.error) { showError((d && d.error) || 'Could not load the assets.'); return; }
+      ibAssetPicker(d.assets || []);
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+function ibCloseAssetPicker() { var m = document.getElementById('ib-asset-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibAssetPicker(rows) {
+  ibCloseAssetPicker();
+  var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
+  var have = {}; IB.assets.forEach(function (a) { have[String(a.id)] = true; });
+  var items = rows.filter(function (a) { return !have[String(a.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'ib-asset-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseAssetPicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add an asset';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', ibCloseAssetPicker);
+  head.appendChild(h); head.appendChild(x);
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = rows.length ? 'Every asset with a picture is already added.' : 'This campaign has no assets with a picture yet. Make them in the Asset Library (Go to Assets).';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function (it) {
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + ' \u00b7 ' + (ACAT[it.category] || it.category || '');
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function () {
+        if (IB.chars.length + IB.assets.length < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
+        ibCloseAssetPicker(); ibPaintChips();
+      });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+// Go to Assets: the chosen campaign's Asset Library. The form is kept (IB), so coming back finds it as it was.
+function ibGoAssets() {
+  ibReadForm(); ibStopPoll();
+  var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(IB.cid); })[0];
+  if (!c) { showError('Open the campaign from My Campaigns to reach its Asset Library.'); return; }
+  selectCampaign(c.id);
+  showCampaignSection('assets');
+}
+
+function ibPickShape(k) {
+  if (!_rpShapeByKey(k)) return;
+  IB.shape = k;
+  var s = document.getElementById('ib-shapes'); if (s) s.innerHTML = _rpShapeStrip(IB.shape, 'ibPickShape');
+}
+
+function ibOpenStyle() {
+  if (!IB.cid) return;
+  ibReadForm();
+  _ibStyleNext = true;
+  openStylePicker('art');
+}
+function ibSetStyle(id) {
+  IB.style = id;
+  var b = document.getElementById('ib-style-btn'); if (b) b.textContent = ibStyleName();
+}
+
+function ibMsg(text, field) {
+  var m = document.getElementById('ib-msg'); if (m) m.innerHTML = text || '';
+  ['ib-desc', 'ib-name'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
+  var f = field === 'description' ? 'ib-desc' : (field === 'name' ? 'ib-name' : null);
+  if (f) { var el = document.getElementById(f); if (el) { el.classList.add('ib-bad'); try { el.focus(); } catch (e) {} } }
+}
+
+function ibGenerate() {
+  if (!IB.cid || IB.busy) return;
+  ibReadForm();
+  if (!IB.desc.trim()) { ibMsg('Describe the picture you want.', 'description'); return; }
+  if (!IB.name.trim()) { ibMsg('Give the picture a name.', 'name'); return; }
+  if (!IB.shape) { ibMsg('Choose a shape for the picture.'); return; }
+  if (!IB.style) { ibMsg('Choose an art style.'); return; }
+  ibMsg('');
+  IB.busy = true;
+  var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+  var cid = IB.cid;
+  var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
+    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }) } };
+  var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      done();
+      if (!d || d.error) {
+        if (d && d.error === 'INSUFFICIENT_TOKENS') { ibMsg(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+        ibMsg(escapeHtml((d && (d.message || d.error)) || 'Could not start the picture.'), d && d.field);
+        return;
+      }
+      if (String(IB.cid) !== String(cid)) return;
+      if (d.image) IB.images.unshift(d.image);
+      ibPaintGallery(); ibSchedulePoll();
+      if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+    })
+    .catch(function () { done(); ibMsg('Connection error. Please try again.'); });
+}
+
+async function ibDelete(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0]; if (!im) return;
+  if (!await uiConfirm('Delete \u201c' + (im.name || 'this picture') + '\u201d from the gallery? This cannot be undone.', { okText: 'Delete', cancelText: 'Cancel' })) return;
+  fetch('/api/images/builder/images/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && d.error) || 'Could not delete the picture.'); return; }
+      IB.images = IB.images.filter(function (x) { return String(x.id) !== String(id); });
+      ibPaintGallery();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
 }
