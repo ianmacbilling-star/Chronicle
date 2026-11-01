@@ -32815,6 +32815,21 @@ function finalizeAwaitSaveJob(jobId, postedAt, q) {
     setTimeout(tick, POLL_MS);
   });
 }
+// v3.3.96 -- WHAT A FAILED SAVE SAYS. A storage blip used to put Cloudflare's whole JSON error into the run log. A
+// temporary one (R2 5xx / 429, a dropped connection, the network) now reads in plain words; the raw text goes to the
+// debug log. Every failure gets Try again, which runs just the save -- the optimized book is still on screen.
+function optimizeSaveFailText(raw) {
+  raw = String(raw || '');
+  var temp = /Image upload failed: (5\d\d|429|408)\b|cloudflare|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|network error|Failed to fetch/i.test(raw);
+  try { cgLogClient({ url: '/optimize/save', fn: 'finalizeSaveOptimized', kind: temp ? 'storage' : 'save', message: raw }); } catch (e) {}
+  var again = ' <a href="#" onclick="optimizeSaveRetry(this);return false;" style="color:var(--gold);text-decoration:underline;">Try again</a>';
+  if (temp) return 'Couldn\u2019t save: Cloudflare\u2019s file storage was briefly unavailable. Your optimized book is still on screen; wait a minute, then' + again + '.';
+  return 'Could not save this version: ' + escapeHtml(raw.slice(0, 300)) + '.' + again;
+}
+function optimizeSaveRetry(a) {
+  try { if (a && a.parentNode) a.parentNode.removeChild(a); } catch (e) {}
+  finalizeSaveOptimized(false);
+}
 function finalizeSaveOptimized(quiet) {
   if (!state.currentCampaign) return Promise.resolve(false);
   try {
@@ -32911,7 +32926,7 @@ function finalizeSaveOptimized(quiet) {
       // this used to report nothing at all, which is how a run of silent 409s went unnoticed long
       // enough that 'Load Last Optimized File' had no file behind it.
       var _code = (rj.j && rj.j.error) || '';
-      var _msg = 'Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');
+      var _msg = optimizeSaveFailText((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');   // v3.3.96 -- plain words, Try again
       // v3.0.389 -- the ticking line must never be left spinning on a failure.
       // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
       // forever. Never removes it while a loop is still running: the protective save can overlap
@@ -32921,7 +32936,7 @@ function finalizeSaveOptimized(quiet) {
       else if (!(quiet && _code === 'optimize_required')) { optimizeLogLine(_msg, 'stop'); }
       return false;
     }).catch(function (e) {
-      var _m = 'Could not save this version: ' + ((e && e.message) || 'network error');
+      var _m = optimizeSaveFailText((e && e.message) || 'network error');   // v3.3.96
       // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
       // forever. Never removes it while a loop is still running: the protective save can overlap
       // the tail of a run, and the bar belongs to the loop then.

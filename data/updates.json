@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.96",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3396-upload-retry",
+        "kind": "fix",
+        "public": true,
+        "summary": "Saving no longer fails on a brief file-storage hiccup.",
+        "detail": "When the file store is briefly unavailable, saving now tries again by itself a few times. If it still cannot save, the message says so in plain words and has a Try again link, and your optimized book stays on screen.",
+        "td": [
+          "TD-1081"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.95",
     "staged_on": "2026-11-01",
     "entries": [

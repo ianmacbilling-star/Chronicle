@@ -222,36 +222,60 @@ async function listObjects(prefix, bkt) {
   return out;
 }
 
+// v3.3.96 -- A STORAGE BLIP MUST NOT FAIL A SAVE. Ian's Optimize save on 2026-11-01 failed on one "502 Bad gateway"
+// from Cloudflare R2 itself (zone r2.cloudflarestorage.com, marked retryable): the upload tried exactly once. Now a
+// TEMPORARY failure -- a 5xx, 429 or 408 from R2, or a dropped / timed-out connection -- is tried again after about
+// 2, 5 and 10 seconds, signed afresh each time. A PUT to the same key is idempotent (it replaces the same object), so
+// a retry can never leave two files or half of one. Anything else (403, 400, a bad key) fails at once, as before.
+// This is every upload in the product, the print interior and cover included.
+var UPLOAD_WAITS_MS = [2000, 5000, 10000];
+var UPLOAD_RETRY_CODES = ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EPIPE', 'EAI_AGAIN', 'ECONNREFUSED', 'ESOCKETTIMEDOUT'];
+function uploadRetryable(e) {
+  const st = e && e.response && e.response.status;
+  if (st) return st >= 500 || st === 429 || st === 408;
+  if (e && UPLOAD_RETRY_CODES.indexOf(e.code) >= 0) return true;
+  return /socket hang up|timeout/i.test(String((e && e.message) || ''));
+}
+function _setUploadWaitsForTest(w) { UPLOAD_WAITS_MS = w; }
 async function uploadFile(fileBuffer, filename, mimetype, prefix) {
   prefix = prefix || 'uploads';
   if (useCloud) {
-    try {
-      const key = prefix + '/' + filename;
-      const signed = signRequest('PUT', key, mimetype, fileBuffer);
-      console.log('  R2 uploading to:', signed.url.substring(0, 60));
+    const key = prefix + '/' + filename;
+    let lastErr = null;
+    for (let attempt = 0; attempt <= UPLOAD_WAITS_MS.length; attempt++) {
+      try {
+        const signed = signRequest('PUT', key, mimetype, fileBuffer);
+        console.log('  R2 uploading to:', signed.url.substring(0, 60) + (attempt ? ' (try ' + (attempt + 1) + ')' : ''));
 
-      const axios = require('axios');
-      const https = require('https');
-      const agent = new https.Agent({
-        minVersion: 'TLSv1.2',
-        rejectUnauthorized: false
-      });
+        const axios = require('axios');
+        const https = require('https');
+        const agent = new https.Agent({
+          minVersion: 'TLSv1.2',
+          rejectUnauthorized: false
+        });
 
-      const response = await axios.put(signed.url, fileBuffer, {
-        headers: signed.headers,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        httpsAgent: agent
-      });
+        const response = await axios.put(signed.url, fileBuffer, {
+          headers: signed.headers,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+          httpsAgent: agent
+        });
 
-      const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
-      console.log('  R2 success:', response.status, url);
-      return url;
-    } catch(e) {
-      const msg = e.response ? (e.response.status + ' ' + JSON.stringify(e.response.data)) : e.message;
-      console.error('R2 upload error:', msg);
-      throw new Error('Image upload failed: ' + msg);
+        const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
+        console.log('  R2 success:', response.status, url);
+        return url;
+      } catch(e) {
+        lastErr = e;
+        const st = e.response ? e.response.status : (e.code || 'no response');
+        if (!uploadRetryable(e) || attempt >= UPLOAD_WAITS_MS.length) break;
+        console.error('R2 upload try ' + (attempt + 1) + ' failed (' + st + '), trying again in ' + UPLOAD_WAITS_MS[attempt] + 'ms: ' + key);
+        await new Promise(function (r) { setTimeout(r, UPLOAD_WAITS_MS[attempt]); });
+      }
     }
+    const e = lastErr || new Error('unknown');
+    const msg = e.response ? (e.response.status + ' ' + JSON.stringify(e.response.data)) : e.message;
+    console.error('R2 upload error:', msg);
+    throw new Error('Image upload failed: ' + msg);
   } else {
     const uploadsDir = path.join(__dirname, '../uploads');
     fs.writeFileSync(path.join(uploadsDir, filename), fileBuffer);
@@ -581,4 +605,4 @@ async function restoreCopy(sourceUrl) {
   return restUrl;
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey, holdingBucket, copyBetween, headObject, deleteHeld, getObject };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
+module.exports = { _setUploadWaitsForTest, uploadRetryable, initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy, r2PublicBases, isOurPublicUrl, publicImageUrl, rewritePublicUrls, listObjects, copyFromBucket, bucketName, deleteKey, holdingBucket, copyBetween, headObject, deleteHeld, getObject };   // r2PublicBases..rewritePublicUrls: v3.1.85, TD-954; listObjects: v3.2.65, TD-1006
