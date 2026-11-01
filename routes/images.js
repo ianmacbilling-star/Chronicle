@@ -3951,7 +3951,7 @@ router.post('/builder/images/:id/archive', requireAuth, async function (req, res
     await db.prepare(
       'INSERT INTO campaign_archives (campaign_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(r.campaign_id, 'moment', (r.name || 'Image Builder picture') + (_src !== r.image_url ? ' (no title)' : ''), archivedUrl, _src, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
+    ).run(r.campaign_id, 'moment', (r.name || 'Image Builder picture') + (_src !== r.image_url ? ' (clean copy)' : ''), archivedUrl, _src, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
     res.json({ success: true });
   } catch (e) { console.error('[image-builder] archive error:', e.message); res.json({ error: 'Could not archive the picture.' }); }
 });

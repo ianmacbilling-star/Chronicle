@@ -38736,7 +38736,7 @@ function ibTitleBody() {
       '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the title\u2019s lettering (a token)">Title Builder</button>' +
       '<span id="ib-ttl-msg" class="ib-meta"></span>' +   // v3.3.93 -- the shake's message
       (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
-        '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
+        '<button class="btn btn-sm" type="button" onclick="ibRemoveTitle()" title="Take the title off the picture and out of this section. The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>'   // v3.3.95 -- the one Remove
         : '<span class="ib-meta">Titles are made in the Title Builder.</span>') +   // v3.3.93
     '</div>' +
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
@@ -38765,7 +38765,7 @@ function ibTtlApplyHtml() {
   var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the lettering above onto the picture, <b>drop</b> it where you want it, and drag its corner to <b>resize</b> it. Then press Apply.</div>';
   if (!mine) return how + '<span class="ib-meta">Make or open one of your pictures first.</span>';
   return how + '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibPlaceStart()">Place title on picture</button>' +
-    (ibLayerOn(im, 'title') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'title\')" title="Take the title off this picture (free; Revert puts it back)">Remove title from picture</button>' : '') +   // v3.3.93
+    // v3.3.95 -- Remove title is the one button by the lettering above.
     ' <span class="ib-meta" id="ib-ttl-apply-msg">Free; Revert takes it off.</span>';
 }
 // =====================================================================================================
@@ -39108,7 +39108,7 @@ function ibHoApply() {
   }).catch(function (e) { msg(''); showError((e && e.message) || 'Could not lay the writing on the picture.'); });
 }
 function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
-function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (no title)'); }   // v3.3.85
+function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (clean copy)'); }   // v3.3.85; v3.3.95 -- clean copy
 // v3.3.85 -- lay the Title section's lettering on this picture, free.
 function ibApplyTitle(id) {
   ibReadForm(); ibActMsg('');
@@ -39124,7 +39124,21 @@ function ibApplyTitle(id) {
     })
     .catch(function () { ibTtlApplyPaint(); showError('Connection error. Please try again.'); });
 }
-function ibTitleClearArt() { ibReadForm(); IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.desc = ''; ibRender(); }
+// v3.3.95 -- REMOVE TITLE, ONE BUTTON. Takes the title off the picture in the viewer when it is yours and the title is on
+// it (free; Revert puts it back), and clears the lettering from the Title section. The drawing is kept as the Title
+// Builder's draft, so reopening the Title Builder shows it and Done & Use brings it back without a token.
+function ibRemoveTitle() {
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  var clearForm = function () { if (IB.ttl.url) IB.ttlDraft = { url: IB.ttl.url, src: IB.ttl.src || '' }; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; ibRender(); };
+  if (mine && ibLayerOn(im, 'title')) {
+    ibActMsg('');
+    ibPost('/api/images/builder/images/' + encodeURIComponent(im.id) + '/layer-off', { what: 'title' }, function (d) { ibPut(d.image); clearForm(); });
+    return;
+  }
+  clearForm();
+}
 // v3.3.83 -- Ian: "The name change save should happen on blur." Leaving the Name field renames the picture in the
 // viewer when it is yours; with nothing in the viewer the name waits for Generate, as before.
 function ibNameChanged() {
@@ -39379,7 +39393,7 @@ function ibViewerHtml() {
       if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen or Retouch">Revert</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibSaveAsset(' + im.id + ')" title="Make it a campaign asset (an NPC, item or location); you can frame part of it">Save as Asset</button>');   // v3.3.82
-      if (im.has_clean && im.clean_url) p.push('<button class="panel-pill" onclick="ibViewClean(' + im.id + ')" title="The clean copy, without the title">Without title</button>');   // v3.3.85
+      if (im.has_clean && im.clean_url) p.push('<button class="panel-pill" onclick="ibViewClean(' + im.id + ')" title="The clean copy, without the title">Without ' + (ibLaidOnWords(im) === 'the title' ? 'title' : (ibLaidOnWords(im) === 'the text' ? 'text' : 'title and text')) + '</button>');   // v3.3.85; v3.3.95 -- names what is laid on
       if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
     } else if (im.image_url) {
       p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
@@ -39581,8 +39595,15 @@ function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + enc
 function ibWhichCopy(id, verb) {
   var im = ibImg(id);
   if (!im || !im.has_clean) return Promise.resolve(false);
-  return uiChoose(verb, 'This picture has a title laid on it. Which version?', ['With the title', 'Without the title (the clean copy)'])
+  // v3.3.95 -- Ian: "With Title and Text... Without title and text." The choice names what is laid on.
+  var what = ibLaidOnWords(im);
+  return uiChoose(verb, 'This picture has ' + what + ' laid on it. Which version?', ['With ' + what, 'Without ' + what + ' (the clean copy)'])
     .then(function (i) { return i === null ? null : i === 1; });
+}
+// v3.3.95 -- what is laid on a picture, in words: "the title", "the text", or "the title and text".
+function ibLaidOnWords(im) {
+  var t = ibLayerOn(im, 'title'), h = ibLayerOn(im, 'handout');
+  return (t && h) ? 'the title and text' : (h ? 'the text' : 'the title');
 }
 async function ibArchive(id) {
   ibActMsg('');
