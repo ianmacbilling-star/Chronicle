@@ -3439,8 +3439,42 @@ async function ibOverlayTitle(pictureUrl, t, imageId) {
   const lt = await sharp(lettering).resize({ width: Math.max(1, Math.round(W * box[0])), height: Math.max(1, Math.round(H * box[1])), fit: 'inside' }).png().toBuffer({ resolveWithObject: true });
   const lw = lt.info.width, lh = lt.info.height, m = Math.round(Math.min(W, H) * 0.04);
   const top = t.place === 'middle' ? Math.round((H - lh) / 2) : (t.place === 'bottom' ? H - lh - m : m);
-  const out = await sharp(pic).composite([{ input: lt.data, left: Math.max(0, Math.round((W - lw) / 2)), top: Math.max(0, Math.min(H - lh, top)) }]).png().toBuffer();
+  // v3.3.88 -- THE COVER'S DARK FADE. Ian: "we now need the dark fade under it same as what we do on the cover." The
+  // cover puts two things behind a built title (services/printing/scrimRamp.js): a soft dark HAZE, full strength over
+  // the lettering's box and falling away outside it, and a HALO, three dark drop-shadows on the lettering's own alpha,
+  // tight to wide. The same image, the same semi-axes, the same colour and strengths are used here, so a titled
+  // picture reads like a cover. The CSS blur radii (0.035in, 0.09in, 0.22in on a ~6in cover) are taken as shares of the
+  // picture's width; a CSS blur radius is two standard deviations.
+  const L = Math.max(0, Math.round((W - lw) / 2)), T = Math.max(0, Math.min(H - lh, top));
+  const scrim = require('../services/printing/scrimRamp');
+  const layers = [];
+  const hw = Math.max(1, Math.round(lw * scrim.HAZE_RX)), hh = Math.max(1, Math.round(lh * scrim.HAZE_RY));
+  const haze = await sharp(scrim.hazePng()).resize(hw, hh, { fit: 'fill' }).png().toBuffer();
+  layers.push(await ibClipLayer(sharp, haze, hw, hh, L + Math.round((lw - hw) / 2), T + Math.round((lh - hh) / 2), W, H));
+  const alpha = await sharp(lt.data).ensureAlpha().extractChannel(3).raw().toBuffer();
+  const rgb = scrim.SCRIM_RGB;
+  for (const pass of IB_TITLE_HALO) {
+    const sigma = Math.max(0.5, W * pass[0] / 2), M = Math.ceil(sigma * 3);
+    const rgba = Buffer.alloc(lw * lh * 4);
+    for (let i = 0, j = 0; i < lw * lh; i++, j += 4) { rgba[j] = rgb[0]; rgba[j + 1] = rgb[1]; rgba[j + 2] = rgb[2]; rgba[j + 3] = Math.round(alpha[i] * pass[1]); }
+    const padded = await sharp(rgba, { raw: { width: lw, height: lh, channels: 4 } }).extend({ top: M, bottom: M, left: M, right: M, background: { r: rgb[0], g: rgb[1], b: rgb[2], alpha: 0 } }).png().toBuffer();
+    const shadow = await sharp(padded).blur(sigma).png().toBuffer();
+    layers.push(await ibClipLayer(sharp, shadow, lw + 2 * M, lh + 2 * M, L - M, T - M, W, H));
+  }
+  layers.push({ input: lt.data, left: L, top: T });
+  const out = await sharp(pic).composite(layers.filter(Boolean)).png().toBuffer();
   return uploadFile(out, 'ibtitled-' + imageId + '-' + Date.now() + '.png', 'image/png');
+}
+// v3.3.88 -- the halo's three passes: [blur radius as a share of the picture's width, opacity], tight to wide, as the
+// cover's drop-shadows (0.035in at 0.95, 0.09in at 0.8, 0.22in at 0.5, on a cover about 6in wide).
+var IB_TITLE_HALO = [[0.0058, 0.95], [0.015, 0.8], [0.037, 0.5]];
+// A layer for sharp's composite, cut to the picture: composite refuses anything that reaches past the edges.
+async function ibClipLayer(sharp, buf, bw, bh, left, top, W, H) {
+  const x0 = Math.max(0, left), y0 = Math.max(0, top), x1 = Math.min(W, left + bw), y1 = Math.min(H, top + bh);
+  if (x1 <= x0 || y1 <= y0) return null;
+  const whole = (x0 === left && y0 === top && x1 - x0 === bw && y1 - y0 === bh);
+  const part = whole ? buf : await sharp(buf).extract({ left: x0 - left, top: y0 - top, width: x1 - x0, height: y1 - y0 }).png().toBuffer();
+  return { input: part, left: x0, top: y0 };
 }
 // The recipe's title when it has lettering to lay on, else null.
 function ibOverlayOf(refsJson) {

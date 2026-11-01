@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.88",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3388-image-builder-title-fade",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a dark fade behind laid-on titles, as on covers.",
+        "detail": "Title lettering laid on an Image Builder picture now gets the same soft dark haze and halo a cover title gets, so it stands out from the picture. Apply title again to give an existing picture the new look.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.87",
     "staged_on": "2026-11-01",
     "entries": [
