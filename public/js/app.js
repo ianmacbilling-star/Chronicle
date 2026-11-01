@@ -38612,6 +38612,13 @@ function ibCss() {
     '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
     '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
     '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
+    // v3.3.89 -- the title being placed
+    '.ib-place{position:absolute;z-index:4;cursor:move;touch-action:none;outline:1px dashed rgba(201,168,76,0.9);}' +
+    '.ib-place canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
+    '.ib-place-h{position:absolute;right:0;bottom:0;width:16px;height:16px;background:#c9a84c;border:2px solid #0a0604;border-radius:3px;cursor:nwse-resize;touch-action:none;}' +
+    '.ib-place-bar{position:absolute;left:8px;top:8px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}' +
+    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(10,6,4,0.75);color:#e8d9b0;}' +
+    '.ib-placing .panel-img-actions{display:none !important;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
@@ -38653,7 +38660,7 @@ function openImageBuilder(keepBack) {
     .catch(function () { showError('Connection error. Please try again.'); });
 }
 
-function ibTtlBlank() { return { title: '', subtitle: '', place: 'top', size: 'medium', desc: '', url: '', src: '' }; }
+function ibTtlBlank() { return { title: '', subtitle: '', place: 'bottom', size: 'medium', desc: '', url: '', src: '', pos: null }; }   // v3.3.89 -- pos; bottom by default
 function ibCampaign(id) { return (IB.campaigns || []).filter(function (c) { return String(c.id) === String(id); })[0] || null; }
 function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; IB.viewId = null; IB.sig = ''; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
 
@@ -38691,18 +38698,17 @@ function ibTitleBody() {
   };
   return '<div class="ib-lbl">Title</div><input class="ib-in" id="ib-ttl-title" maxlength="100" placeholder="Leave empty for no title" value="' + escapeHtml(t.title) + '" oninput="ibReadForm();ibAccRefresh()">' +
     '<div class="ib-lbl" style="margin-top:10px;">Subtitle</div><input class="ib-in" id="ib-ttl-sub" maxlength="140" placeholder="Optional" value="' + escapeHtml(t.subtitle) + '" oninput="ibReadForm();ibAccRefresh()">' +
-    '<div style="display:flex;gap:12px;margin-top:10px;"><div style="flex:1;"><div class="ib-lbl">Placement</div>' + sel('ib-ttl-place', t.place, [['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']]) + '</div>' +
-      '<div style="flex:1;"><div class="ib-lbl">Size</div>' + sel('ib-ttl-size', t.size, [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']]) + '</div></div>' +
+    // v3.3.89 -- no Placement or Size: the lettering is dragged onto the picture, dropped and resized there (Ian).
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the lettering first (a token). Without it, the art style decides.">Title Builder</button>' +
-      (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Click to enlarge" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:zoom-in;" onclick="openLightbox(this.src, \'Title lettering\')">' +
+      (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
         '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
         : '<span class="ib-meta">Optional. Without it, the art style decides the lettering.</span>') +
     '</div>' +
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
     // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
     (t.url
-      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, Apply title lays it on for free.</div>'
+      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, drag it on and Apply, for free.</div>'
       : '<div class="ib-meta" style="margin-top:10px;color:var(--gold-light);">Without Title Builder lettering, the art style draws the title into the picture, and it can\u2019t be removed afterwards. If you want this picture for a book cover, make a version without the title: the book puts its own title on the cover.</div>');
 }
 function ibOpenTitleBuilder() {
@@ -38717,9 +38723,127 @@ function ibTtlApplyHtml() {
   if (!IB.ttl || !IB.ttl.url) return '';
   var im = ibImg(IB.viewId);
   var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
-  if (!mine) return '<span class="ib-meta">Make or open one of your pictures, then Apply title lays this lettering on it.</span>';
-  return '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibApplyTitle(' + im.id + ')">Apply title to picture</button>' +
-    ' <span class="ib-meta" id="ib-ttl-apply-msg">Lays the lettering on \u201c' + escapeHtml(im.name || 'this picture') + '\u201d at the placement and size above. Free; Revert takes it off.</span>';
+  // v3.3.89 -- drag, drop and resize (Ian), with a button for anyone who would rather not drag.
+  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the lettering above onto the picture, <b>drop</b> it where you want it, and drag its corner to <b>resize</b> it. Then press Apply.</div>';
+  if (!mine) return how + '<span class="ib-meta">Make or open one of your pictures first.</span>';
+  return how + '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibPlaceStart()">Place title on picture</button>' +
+    ' <span class="ib-meta" id="ib-ttl-apply-msg">Free; Revert takes it off.</span>';
+}
+// =====================================================================================================
+// v3.3.89 -- PLACING THE TITLE BY HAND. Ian: "drag and drop the title image from the bottom onto the image where you
+// want it", with a corner handle for the size. The lettering (its transparent margins trimmed, as the server trims
+// them) sits over the picture -- the clean copy, when there is one -- with the cover's halo drawn live. Its box is kept
+// as fractions of the picture (IB.ttl.pos), which the server uses when it lays the title on.
+// =====================================================================================================
+function ibTtlDragStart(e) { IB._ttlDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-title'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
+function ibTtlDragOver(e) { if (IB._ttlDrag) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} } }
+function ibTtlDrop(e) {
+  if (!IB._ttlDrag) return;
+  e.preventDefault(); IB._ttlDrag = false;
+  var b = ibPlaceBox(); if (!b) { ibPlaceStart(); return; }
+  var fr = document.getElementById('ib-frame').getBoundingClientRect();
+  ibPlaceStart((e.clientX - fr.left - b.ox) / b.cw, (e.clientY - fr.top - b.oy) / b.ch);
+}
+document.addEventListener('dragend', function () { IB._ttlDrag = false; });
+// The picture's drawn area inside the frame (object-fit: contain), in the frame's pixels.
+function ibPlaceBox() {
+  var f = document.getElementById('ib-frame'), img = f && f.querySelector('img:not(.ib-place-x)');
+  if (!img || !img.naturalWidth) return null;
+  var fr = f.getBoundingClientRect(), ir = img.getBoundingClientRect();
+  var s = Math.min(ir.width / img.naturalWidth, ir.height / img.naturalHeight), cw = img.naturalWidth * s, ch = img.naturalHeight * s;
+  return { ox: ir.left - fr.left + (ir.width - cw) / 2, oy: ir.top - fr.top + (ir.height - ch) / 2, cw: cw, ch: ch };
+}
+// The lettering, trimmed to its ink, on a canvas. Read through the same-origin proxy so the pixels can be measured.
+function ibTtlCanvas(url, cb) {
+  var img = new Image();
+  img.onload = function () {
+    var c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    var minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+    try {
+      var d = x.getImageData(0, 0, c.width, c.height).data;
+      for (var yy = 0; yy < c.height; yy++) for (var xx = 0; xx < c.width; xx++) {
+        if (d[(yy * c.width + xx) * 4 + 3] > 16) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; if (yy < minY) minY = yy; if (yy > maxY) maxY = yy; }
+      }
+    } catch (e) { minX = 0; minY = 0; maxX = c.width - 1; maxY = c.height - 1; }
+    if (maxX < 0) { minX = 0; minY = 0; maxX = c.width - 1; maxY = c.height - 1; }
+    var o = document.createElement('canvas'); o.width = maxX - minX + 1; o.height = maxY - minY + 1;
+    o.getContext('2d').drawImage(c, minX, minY, o.width, o.height, 0, 0, o.width, o.height);
+    cb(o);
+  };
+  img.onerror = function () { cb(null); };
+  img.src = (/^\//.test(url)) ? url : ('/api/images/proxy?u=' + encodeURIComponent(url));
+}
+function ibPlaceStart(fx, fy) {
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your pictures first, then drag the title onto it.'); return; }
+  if (!IB.ttl || !IB.ttl.url) return;
+  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first.', 'title'); return; }
+  ibTtlCanvas(IB.ttl.url, function (cv) {
+    if (!cv) { showError('Could not load the lettering.'); return; }
+    var pa = (im.img_w && im.img_h) ? im.img_w / im.img_h : 1, asp = cv.width / cv.height;
+    var p = IB.ttl.pos ? { x: IB.ttl.pos.x, y: IB.ttl.pos.y, w: IB.ttl.pos.w } : { w: 0.62, x: 0.19, y: null };
+    var hf = function (w) { return w * pa / asp; };
+    if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - hf(p.w) / 2; }
+    else if (p.y == null) p.y = 1 - hf(p.w) - 0.04;   // the default: bottom, centred, as the posters
+    IB.placing = { id: im.id, cv: cv, asp: asp, pa: pa, x: p.x, y: p.y, w: p.w };
+    ibPlaceClamp();
+    ibPaintViewer();
+  });
+}
+function ibPlaceClamp() {
+  var P = IB.placing; if (!P) return;
+  var maxW = Math.min(1, P.asp / P.pa);   // never taller than the picture
+  P.w = Math.max(0.05, Math.min(maxW, P.w));
+  var h = P.w * P.pa / P.asp;
+  P.x = Math.max(0, Math.min(1 - P.w, P.x)); P.y = Math.max(0, Math.min(1 - h, P.y));
+}
+// Drawn over the picture whenever the viewer paints (it repaints while pictures are polled).
+function ibPlaceMount() {
+  var P = IB.placing; if (!P) return;
+  if (String(P.id) !== String(IB.viewId)) { IB.placing = null; return; }
+  var f = document.getElementById('ib-frame'); if (!f) return;
+  var im = ibImg(P.id), img = f.querySelector('img');
+  if (!img) return;
+  if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);   // no second title underneath
+  img.style.pointerEvents = 'none';
+  f.classList.add('ib-placing');
+  if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibPlaceMount(); }; return; }
+  var b = ibPlaceBox(); if (!b) return;
+  var old = f.querySelector('.ib-place'); if (old) old.parentNode.removeChild(old);
+  var oldBar = f.querySelector('.ib-place-bar'); if (oldBar) oldBar.parentNode.removeChild(oldBar);
+  var box = document.createElement('div'); box.className = 'ib-place';
+  var c = document.createElement('canvas'); c.width = P.cv.width; c.height = P.cv.height; c.getContext('2d').drawImage(P.cv, 0, 0);
+  var rgb = 'rgba(10,6,4,';   // the cover's halo, as scrimRamp draws it
+  c.style.filter = 'drop-shadow(0 0 ' + (b.cw * 0.0058).toFixed(1) + 'px ' + rgb + '0.95)) drop-shadow(0 0 ' + (b.cw * 0.015).toFixed(1) + 'px ' + rgb + '0.8)) drop-shadow(0 0 ' + (b.cw * 0.037).toFixed(1) + 'px ' + rgb + '0.5))';
+  var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize';
+  box.appendChild(c); box.appendChild(h); f.appendChild(box);
+  var bar = document.createElement('div'); bar.className = 'ib-place-bar';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibPlaceApply()">Apply title here</button><button class="btn btn-sm" type="button" onclick="ibPlaceCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  f.appendChild(bar);
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.w * bb.cw / P.asp) + 'px'; };
+  put();
+  var drag = null;
+  var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
+  box.addEventListener('pointerdown', down('move'));
+  h.addEventListener('pointerdown', down('size'));
+  var move = function (e) {
+    if (!drag) return;
+    var bb = ibPlaceBox() || b, dx = (e.clientX - drag.sx) / bb.cw, dy = (e.clientY - drag.sy) / bb.ch;
+    if (drag.mode === 'move') { P.x = drag.x + dx; P.y = drag.y + dy; } else { P.w = drag.w + dx; P.x = drag.x; P.y = drag.y; }
+    ibPlaceClamp(); put();
+  };
+  var up = function () { drag = null; };
+  box.addEventListener('pointermove', move); box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+function ibPlaceCancel() { IB.placing = null; ibPaintViewer(); }
+function ibPlaceApply() {
+  var P = IB.placing; if (!P) return;
+  IB.ttl.pos = { x: Math.round(P.x * 10000) / 10000, y: Math.round(P.y * 10000) / 10000, w: Math.round(P.w * 10000) / 10000 };
+  var id = P.id; IB.placing = null;
+  ibPaintViewer();
+  ibApplyTitle(id);
 }
 function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
 function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (no title)'); }   // v3.3.85
@@ -38734,7 +38858,7 @@ function ibApplyTitle(id) {
     .then(function (d) {
       if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the title on the picture.'; ibTtlApplyPaint(); ibActMsg(escapeHtml(m)); showError(m); return; }
       ibPut(d.image);
-      var ms = document.getElementById('ib-ttl-apply-msg'); if (ms) ms.textContent = 'Done. The title is on the picture; Without title shows the clean copy.';
+      var ms = document.getElementById('ib-ttl-apply-msg'); if (ms) ms.textContent = 'Done. The title is on the picture; Without title shows the clean copy. Place it again to move it.';
     })
     .catch(function () { ibTtlApplyPaint(); showError('Connection error. Please try again.'); });
 }
@@ -39003,7 +39127,7 @@ function ibViewerHtml() {
     state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
-  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
+  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
@@ -39065,7 +39189,8 @@ function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
   v.style.position = IB.zoom ? 'static' : '';
-  ibTtlApplyPaint();   // v3.3.87 -- the Title section's Apply button follows the picture   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
+  ibTtlApplyPaint();   // v3.3.87 -- the Title section's Apply button follows the picture
+  ibPlaceMount();      // v3.3.89 -- the title being placed, if any   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
   var f = document.getElementById('ib-frame');
   if (f && f.getAttribute('data-pending') === '1') {
     if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');

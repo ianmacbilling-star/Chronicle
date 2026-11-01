@@ -3408,6 +3408,18 @@ function ibCleanTitle(t) {
   if (!title) return null;
   var out = { title: title, subtitle: ibClip(t.subtitle, 140), place: IB_TITLE_PLACE[t.place] ? t.place : 'top', size: IB_TITLE_SIZE[t.size] ? t.size : 'medium',
     desc: ibClip(t.desc, 300), url: '', src: '' };
+  // v3.3.89 -- a hand-placed title: its box as fractions of the picture (left, top, width; the height follows the
+  // lettering). Kept inside the picture; place and size are worked out from it for the model's title-space line.
+  const p = (t.pos && typeof t.pos === 'object') ? t.pos : null;
+  if (p) {
+    let w = Number(p.w), x = Number(p.x), y = Number(p.y);
+    if (isFinite(w) && isFinite(x) && isFinite(y) && w > 0) {
+      w = Math.min(1, Math.max(0.05, w)); x = Math.min(1 - w, Math.max(0, x)); y = Math.min(0.98, Math.max(0, y));
+      out.pos = { x: Math.round(x * 10000) / 10000, y: Math.round(y * 10000) / 10000, w: Math.round(w * 10000) / 10000 };
+      out.size = w < 0.45 ? 'small' : (w < 0.75 ? 'medium' : 'large');
+      out.place = y < 0.3 ? 'top' : (y > 0.55 ? 'bottom' : 'middle');
+    }
+  }
   var u = String(t.url || '').trim(), s = String(t.src || '').trim();
   if (u && isOurPublicUrl(u)) out.url = u;
   if (out.url && s && isOurPublicUrl(s)) out.src = s;
@@ -3436,16 +3448,19 @@ async function ibOverlayTitle(pictureUrl, t, imageId) {
   const W = meta.width, H = meta.height;
   if (!W || !H) throw new Error('the picture has no size');
   const box = IB_TITLE_BOX[t.size] || IB_TITLE_BOX.medium;
-  const lt = await sharp(lettering).resize({ width: Math.max(1, Math.round(W * box[0])), height: Math.max(1, Math.round(H * box[1])), fit: 'inside' }).png().toBuffer({ resolveWithObject: true });
+  // v3.3.89 -- hand-placed: the width chosen (never taller than the picture); otherwise the old place / size box.
+  const lt = t.pos
+    ? await sharp(lettering).resize({ width: Math.max(1, Math.round(W * t.pos.w)), height: H, fit: 'inside' }).png().toBuffer({ resolveWithObject: true })
+    : await sharp(lettering).resize({ width: Math.max(1, Math.round(W * box[0])), height: Math.max(1, Math.round(H * box[1])), fit: 'inside' }).png().toBuffer({ resolveWithObject: true });
   const lw = lt.info.width, lh = lt.info.height, m = Math.round(Math.min(W, H) * 0.04);
-  const top = t.place === 'middle' ? Math.round((H - lh) / 2) : (t.place === 'bottom' ? H - lh - m : m);
+  const top = t.pos ? Math.round(H * t.pos.y) : (t.place === 'middle' ? Math.round((H - lh) / 2) : (t.place === 'bottom' ? H - lh - m : m));   // v3.3.89 -- pos
   // v3.3.88 -- THE COVER'S DARK FADE. Ian: "we now need the dark fade under it same as what we do on the cover." The
   // cover puts two things behind a built title (services/printing/scrimRamp.js): a soft dark HAZE, full strength over
   // the lettering's box and falling away outside it, and a HALO, three dark drop-shadows on the lettering's own alpha,
   // tight to wide. The same image, the same semi-axes, the same colour and strengths are used here, so a titled
   // picture reads like a cover. The CSS blur radii (0.035in, 0.09in, 0.22in on a ~6in cover) are taken as shares of the
   // picture's width; a CSS blur radius is two standard deviations.
-  const L = Math.max(0, Math.round((W - lw) / 2)), T = Math.max(0, Math.min(H - lh, top));
+  const L = t.pos ? Math.max(0, Math.min(W - lw, Math.round(W * t.pos.x))) : Math.max(0, Math.round((W - lw) / 2)), T = Math.max(0, Math.min(H - lh, top));   // v3.3.89 -- pos
   const scrim = require('../services/printing/scrimRamp');
   const layers = [];
   const hw = Math.max(1, Math.round(lw * scrim.HAZE_RX)), hh = Math.max(1, Math.round(lh * scrim.HAZE_RY));
