@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.80",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3380-image-builder-panels",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: the form is in folding panels, with the picture's name on top.",
+        "detail": "References, Shape, Art style, Image type and Description each have their own panel that opens and closes like the Prep & Preview panels, and remembers how you left it. A closed panel shows your choice in its header. The References panel is easier to read.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.79",
     "staged_on": "2026-11-01",
     "entries": [

@@ -38462,6 +38462,15 @@ function ibCss() {
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
+    '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid #e07a6a;outline-offset:2px;border-radius:8px;}' +
+    '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
+    '.ib-acc-sum{font-weight:400;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.ib-acc.open .ib-acc-sum{display:none;}' +
+    '#ib-chips .review-row{font-size:14px;gap:7px;margin-top:6px;}' +   // v3.3.80 -- References bigger (Ian)
+    '#ib-chips .review-label{font-size:12px;min-width:84px;}' +
+    '#ib-chips .review-chip,#ib-chips .review-add-btn,#ib-chips .review-none{font-size:13px;padding:3px 10px;}' +
+    '#ib-chips .review-none{padding:0;}' +
+    '#ib-chips .ib-meta{font-size:13px;margin-top:8px !important;}' +
     '.ib-shapes{display:flex;flex-wrap:nowrap;gap:4px;}' +   // v3.3.78 -- one row (the strip's own min-width and padding are overridden here only)
     '#ib-shapes .rp-shape{flex:1 1 0;min-width:0 !important;padding:4px 1px !important;}' +
     '#ib-shapes .rp-shape > span:last-child{font-size:10px !important;}' +
@@ -38591,24 +38600,61 @@ function ibRender() {
   var typeOpts = '<option value="">None \u2014 just my description</option>' + (IB.types || []).map(function (t) {
     return '<option value="' + escapeHtml(t.key) + '"' + (IB.type === t.key ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>';
   }).join('');
+  // v3.3.80 -- Ian: the Image name on top, then one accordion panel per part of the recipe, as the Prep & Preview
+  // pane does (prep-acc). Each remembers open / closed; a closed one shows its choice in its header.
   root.innerHTML = head + tabs +
     '<div class="ib-make">' +
     '<div class="ib-card" id="ib-form">' +
-      '<div class="ib-sec"><div class="ib-lbl">References</div><div id="ib-chips">' + ibChipsHtml() + '</div></div>' +
-      '<div class="ib-sec"><div class="ib-lbl">Shape<span class="ib-req">required</span></div><div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div></div>' +
-      '<div class="ib-sec"><div class="ib-lbl">Art style<span class="ib-req">required</span></div>' +
-        '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button></div>' +
-      '<div class="ib-sec"><div class="ib-lbl">Image type<span class="ib-req" style="color:rgba(240,232,208,0.55);">optional</span></div>' +
-        '<select class="ib-in" id="ib-type">' + typeOpts + '</select></div>' +
-      '<div class="ib-sec"><label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + '> Include the campaign\u2019s lore</label></div>' +
-      '<div class="ib-sec"><div class="ib-lbl">Description<span class="ib-req">required</span></div>' +
-        '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?">' + escapeHtml(IB.desc) + '</textarea></div>' +
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
+      ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
+      ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
+      ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
+      ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibReadForm();ibAccRefresh()">' + typeOpts + '</select>' +
+        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>') +
+      ibAccHtml('desc', 'Description',
+        '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
+        '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
   ibPaintViewer();
+}
+// v3.3.80 -- the accordion panels. Open / closed is kept per panel on this computer (localStorage, wrapped: it can
+// throw or be empty); every panel starts open.
+var IB_ACC_KEY = 'ibAccClosed';
+function ibAccClosed() { try { var v = JSON.parse(window.localStorage.getItem(IB_ACC_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+function ibAccHtml(key, title, body) {
+  var shut = !!ibAccClosed()[key];
+  return '<div class="prep-acc ib-acc' + (shut ? '' : ' open') + '" id="ib-acc-' + key + '">' +
+    '<button class="prep-acc-head" type="button" onclick="ibAccToggle(\'' + key + '\')" aria-expanded="' + (shut ? 'false' : 'true') + '">' +
+      '<span class="ib-acc-title">' + title + '<span class="ib-acc-sum" id="ib-acc-sum-' + key + '">' + escapeHtml(ibAccSummary(key)) + '</span></span>' +
+      '<span class="prep-acc-chev">&#9662;</span></button>' +
+    '<div class="prep-acc-body"' + (shut ? ' style="display:none;"' : '') + '>' + body + '</div></div>';
+}
+function ibAccSet(key, open) {
+  var acc = document.getElementById('ib-acc-' + key); if (!acc) return;
+  var body = acc.querySelector('.prep-acc-body'), head = acc.querySelector('.prep-acc-head');
+  if (body) body.style.display = open ? '' : 'none';
+  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  acc.classList.toggle('open', !!open);
+  var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
+  try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
+}
+function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
+function ibAccSummary(key) {
+  if (key === 'refs') {
+    var n = IB.chars.length, m = IB.assets.length;
+    return (n || m) ? (n + ' character' + (n === 1 ? '' : 's') + ', ' + m + ' asset' + (m === 1 ? '' : 's')) : 'none';
+  }
+  if (key === 'shape') { var s = _rpShapeByKey(IB.shape); return s ? (s.label + ' ' + s.w + ':' + s.h) : 'not chosen'; }
+  if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
+  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? t.label : 'None'; }
+  if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
+  return '';
+}
+function ibAccRefresh() {
+  ['refs', 'shape', 'style', 'type', 'desc'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
 }
 
 function ibGalleryHtml() {
@@ -38637,7 +38683,7 @@ function ibPaintGallery() {
   var g = document.getElementById('ib-gallery'); if (g) { g.innerHTML = ibGalleryHtml(); ibGalleryBusy(); }
   ibPaintViewer();
 }
-function ibPaintChips() { var c = document.getElementById('ib-chips'); if (c) c.innerHTML = ibChipsHtml(); }
+function ibPaintChips() { var c = document.getElementById('ib-chips'); if (c) c.innerHTML = ibChipsHtml(); ibAccRefresh(); }
 
 function ibView(id) {
   var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
@@ -39021,6 +39067,7 @@ function ibPickShape(k) {
   if (!_rpShapeByKey(k)) return;
   IB.shape = k;
   var s = document.getElementById('ib-shapes'); if (s) s.innerHTML = _rpShapeStrip(IB.shape, 'ibPickShape');
+  ibAccRefresh();
   // The empty frame follows the shape; a picture already on show keeps its own.
   var viewing = IB.viewId && IB.images.some(function (x) { return String(x.id) === String(IB.viewId); });
   if (!viewing) ibPaintViewer();
@@ -39034,14 +39081,21 @@ function ibOpenStyle() {
 }
 function ibSetStyle(id) {
   IB.style = id;
-  var b = document.getElementById('ib-style-btn'); if (b) b.textContent = ibStyleName();
+  var b = document.getElementById('ib-style-btn'); if (b) { b.textContent = ibStyleName(); b.classList.remove('ib-bad'); }
+  ibAccRefresh();
 }
 
 function ibMsg(text, field) {
   var m = document.getElementById('ib-msg'); if (m) m.innerHTML = text || '';
-  ['ib-desc', 'ib-name'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
-  var f = field === 'description' ? 'ib-desc' : (field === 'name' ? 'ib-name' : null);
-  if (f) { var el = document.getElementById(f); if (el) { el.classList.add('ib-bad'); try { el.focus(); } catch (e) {} } }
+  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
+  // v3.3.80 -- the field's panel is opened first, so a missing field in a closed panel is seen.
+  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'] };
+  var f = map[field];
+  if (f) {
+    if (f[0]) ibAccSet(f[0], true);
+    var el = document.getElementById(f[1]);
+    if (el) { el.classList.add('ib-bad'); try { el.focus(); } catch (e) {} }
+  }
 }
 
 function ibGenerate() {
@@ -39049,8 +39103,8 @@ function ibGenerate() {
   ibReadForm();
   if (!IB.desc.trim()) { ibMsg('Describe the picture you want.', 'description'); return; }
   if (!IB.name.trim()) { ibMsg('Give the picture a name.', 'name'); return; }
-  if (!IB.shape) { ibMsg('Choose a shape for the picture.'); return; }
-  if (!IB.style) { ibMsg('Choose an art style.'); return; }
+  if (!IB.shape) { ibMsg('Choose a shape for the picture.', 'shape'); return; }
+  if (!IB.style) { ibMsg('Choose an art style.', 'style'); return; }
   ibMsg('');
   IB.busy = true;
   var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
