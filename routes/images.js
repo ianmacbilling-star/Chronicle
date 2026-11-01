@@ -255,6 +255,8 @@ var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or cr
 // RETOUCH IS NOT COVERED: retouchImage() does not call buildPanelInput. A
 // retouch preserves the image it is given, so it cannot introduce a mark that
 // was not already there -- but it cannot remove one either.
+// v3.3.83 -- an Image Builder picture with a title its maker typed: the same rule, except the one title asked for.
+var NO_MARKS_TITLED = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date or credit anywhere in the image, in any corner or along any edge. The ONLY lettering laid over the picture is the title the prompt asks for, spelled exactly as given.';
 var NO_MARKS = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date, caption, title, or credit anywhere in the image, in any corner or along any edge. Text that genuinely belongs to the scene itself \u2014 a sign, a banner, runes carved in stone, writing on an open page \u2014 is fine; a mark laid on top of the picture is not.';
 
 // v3.2.52 -- TD-966. A CUSTOM STYLE'S COMIC PAGE AND SOUND EFFECTS (Ian, 2026-10-23: "In picture Panels.. comic style",
@@ -305,7 +307,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   var _fade = (_fadeIn === true || _fadeIn === false) ? _fadeIn : isFadeStyle(style);
   var _panels = !!(_flags && _flags.panels), _sfx = !!(_flags && _flags.sfx);
   var edgeDirective = _panels ? COMIC_PAGE : (_fade ? FADE_WHITE : NO_BORDER);
-  var marksDirective = NO_MARKS + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));
+  var marksDirective = ((_flags && _flags.titled) ? NO_MARKS_TITLED : NO_MARKS) + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));   // v3.3.83 -- titled: Image Builder only
   // v3.3.71 -- TD-1080. noCandid: an Image Builder poster, portrait or token may face the viewer. Panels never set it.
   var hint = ((_flags && _flags.noCandid) ? '' : COMPOSITION_IMG) + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
@@ -2853,9 +2855,13 @@ router.post('/title-build', requireAuth, async function (req, res) {
     // so since v3.0.617 while the line beneath it read req.body.bookTitle -- true only because the
     // client happened to send the right thing. Resolving the target answers it properly AND is what
     // lets a chapter draw its session name instead (TD-422).
-    const tgt = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    // v3.3.83 -- target kind 'ib': the Image Builder's Title section. Its words are the ones typed there.
+    const _ibTgt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
+    if (_ibTgt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    const tgt = _ibTgt ? { current: { words: { title: ibClip(req.body.ibTitle, 100), subtitle: ibClip(req.body.ibSubtitle, 140) } } }
+      : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (tgt.error) return res.status(403).json({ error: tgt.error });
-    const bookTitle = String((tgt.current.words && tgt.current.words.title) || campaign.name || '').trim();
+    const bookTitle = String((tgt.current.words && tgt.current.words.title) || (_ibTgt ? '' : campaign.name) || '').trim();
     if (!bookTitle) return res.json({ error: 'This has no title yet. Name it first, then draw it.' });
     const subtitle = String((tgt.current.words && tgt.current.words.subtitle) || '').trim();
     const description = String((req.body && req.body.description) || '').trim();
@@ -3371,10 +3377,40 @@ async function ibResolveCharacters(db, cid, uid, list) {
 }
 
 // The words sent to the image model, before buildPanelInput adds the style, references and house rules.
+// v3.3.83 -- the Title section (Ian: "Drawn In with warning", typed freely, "let the art style decide", with the
+// cover's placement and size). Clean: one line, no double quotes (they would close the quoted title), capped.
+function ibClip(v, max) { return String(v == null ? '' : v).replace(/[\r\n\t]+/g, ' ').replace(/"/g, '\'').replace(/\s{2,}/g, ' ').trim().slice(0, max); }
+var IB_TITLE_PLACE = { top: 'across the TOP of the picture', middle: 'across the MIDDLE of the picture', bottom: 'across the BOTTOM of the picture' };
+var IB_TITLE_SIZE = { small: 'SMALL, about a third of the picture\'s width', medium: 'MEDIUM, about two thirds of the picture\'s width', large: 'LARGE, nearly the full width of the picture' };
+// The stored form, or null when there is no title text. The lettering (Title Builder artwork) is kept only when it is
+// one of our own files; src is the uncut original on its black ground, which is what the model is shown.
+function ibCleanTitle(t) {
+  if (!t || typeof t !== 'object') return null;
+  var title = ibClip(t.title, 100);
+  if (!title) return null;
+  var out = { title: title, subtitle: ibClip(t.subtitle, 140), place: IB_TITLE_PLACE[t.place] ? t.place : 'top', size: IB_TITLE_SIZE[t.size] ? t.size : 'medium',
+    desc: ibClip(t.desc, 300), url: '', src: '' };
+  var u = String(t.url || '').trim(), s = String(t.src || '').trim();
+  if (u && isOurPublicUrl(u)) out.url = u;
+  if (out.url && s && isOurPublicUrl(s)) out.src = s;
+  return out;
+}
+function ibTitleText(t, hasRef) {
+  var s = 'TITLE LETTERING (part of this picture): letter exactly this title into the picture, spelled letter for letter: "' + t.title + '".';
+  if (t.subtitle) s += ' Underneath it, smaller, letter exactly: "' + t.subtitle + '".';
+  s += ' Place the title ' + IB_TITLE_PLACE[t.place] + ', ' + IB_TITLE_SIZE[t.size] + ', and keep it clear of faces.';
+  if (hasRef) s += ' Copy the lettering design (the letter shapes, colours and ornament) from the title lettering reference image, but not its plain black background: the lettering sits on this picture.';
+  if (t.desc) s += ' Lettering style: ' + t.desc + '.';
+  return s + ' Add no other words over the picture.';
+}
 function ibPrompt(o) {
   var parts = [];
-  if (o.type) parts.push(o.type.text);
+  var typeText = o.type ? o.type.text : '';
+  // A poster is told to leave the title out; with a title asked for, it is part of the design instead.
+  if (typeText && o.title) typeText = typeText.replace(', and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.', ', with the title below lettered into the design.').replace(/ Do not draw any title, lettering or text\./g, '');
+  if (typeText) parts.push(typeText);
   if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
+  if (o.title) parts.push(ibTitleText(o.title, !!o.titleRef));   // v3.3.83
   if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
   if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
   return parts.join('\n\n');
@@ -3408,7 +3444,9 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
   const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
   if (assets.length !== assetIds.length) { res.json({ error: 'One of the assets is no longer available, or its picture was removed.' }); return null; }
-  if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
+  const ttl = ibCleanTitle(refsIn.title);   // v3.3.83
+  const ttlRef = ttl ? (ttl.src || ttl.url) : '';
+  if (chars.length + assets.length + (ttlRef ? 1 : 0) > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image' + (ttlRef ? ' (the title lettering counts as one).' : '.') }); return null; }
   if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
 
   const charIds = chars.map(function (c) { return c.character_id; });
@@ -3416,17 +3454,19 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const assetList = buildAssetBlock(assets, '', assetIds);
   const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
     refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
+  if (ttlRef) panelBlock.refs = panelBlock.refs.concat([{ url: ttlRef, name: 'the title lettering' }]);   // v3.3.83 -- last, after the cast
 
   let prompt = (typeof words === 'string' && words.trim()) ? words.trim().slice(0, IB_WORDS_MAX) : '';
   if (!prompt) {
     const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
     const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore });
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleRef: ttlRef });
   }
   // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
   // own flags pass through untouched, exactly as a panel would send them.
   let flags = _rs.isFade;
   if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
+  if (ttl) flags = Object.assign((flags && typeof flags === 'object') ? Object.assign({}, flags) : { fade: flags }, { titled: true });   // v3.3.83 -- the title is allowed
 
   const modelKey = await getSelectedModel(db);
   const cost = await getTokenCost(modelKey);
@@ -3436,6 +3476,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
   const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
     assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
+  if (ttl) refsOut.title = ttl;   // v3.3.83
   return { sub: sub, cost: cost, words: prompt, refsOut: refsOut, styleName: _rs.name || null, type: type, panelBlock: panelBlock };
 }
 async function ibQueueJob(db, uid, cid, sub, style, cost, imageId, prevImage) {
@@ -3459,7 +3500,7 @@ function ibRecipeOf(r) {
   let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
   refs = refs || {};
   return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
-    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }) } };
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null } };   // v3.3.83 -- title
 }
 
 router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
@@ -3494,6 +3535,22 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate', message: 'Image Builder generation failed: ' + (e && e.message) }); } catch (_le) {}
     res.json({ error: friendlyImageError(e) });
   }
+});
+
+// v3.3.83 -- Rename: Ian, "The name change save should happen on blur". The maker only; allowed while it is drawing,
+// since the name is not part of the picture.
+router.post('/builder/images/:id/name', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT id, user_id, campaign_id FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can rename it.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    const name = String((req.body && req.body.name) || '').trim().slice(0, IB_NAME_MAX);
+    if (!name) return res.json({ error: 'Give the picture a name.' });
+    await db.prepare('UPDATE builder_images SET name = ?, updated_at = ? WHERE id = ?').run(name, new Date().toISOString(), r.id);
+    res.json({ success: true, name: name });
+  } catch (e) { console.error('[image-builder] rename error:', e.message); res.json({ error: 'Could not rename the picture.' }); }
 });
 
 // v3.3.74 -- Edit Prompt: the picture's own words (what follows the house rules, style and references in the

@@ -11964,6 +11964,9 @@ function _tbTarget() {
   return (state && state._tbTarget) || { kind: 'book' };
 }
 function _tbIsSession() { return _tbTarget().kind === 'session'; }
+// v3.3.83 -- the Image Builder's Title section: the words typed there, the lettering held by the Builder until it
+// draws the picture. Nothing about a book or a chapter is read or written.
+function _tbIsIb() { return _tbTarget().kind === 'ib'; }
 
 // _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
 // a field does not need six call sites updated.
@@ -11971,6 +11974,7 @@ function _tbBody(extra) {
   var t = _tbTarget();
   var body = Object.assign({ campaignId: state.currentCampaign && state.currentCampaign.id }, extra || {});
   if (t.kind !== 'book') body.target = t;
+  if (t.kind === 'ib') { body.campaignId = IB.cid; body.ibTitle = _tbWords().title; body.ibSubtitle = _tbWords().subtitle; }   // v3.3.83
   return body;
 }
 
@@ -11978,6 +11982,7 @@ function _tbBody(extra) {
 // has; for a chapter it is fetched by title-read and held here for the life of the modal.
 function _tbCur() {
   if (_tbIsSession()) return (state && state._tbSessionCur) || {};
+  if (_tbIsIb()) { var ic = (state && state._tbIbCur) || {}; return { url: ic.url || '', src: ic.src || '', text: '', sub: null, prompt: '', prevUrl: '' }; }   // v3.3.83
   var bm = (state && state.bookMeta) || {};
   return { url: bm.built_title_url || '', src: bm.built_title_src || '', text: bm.built_title_text || '',
            sub: (bm.built_title_sub == null ? null : String(bm.built_title_sub)),
@@ -12000,6 +12005,7 @@ function _tbBookKey() {
 // v3.0.622 there were no chapter titles yet.
 function _tbTargetKey() {
   var t = _tbTarget();
+  if (t.kind === 'ib') return 'ib/' + String(IB.cid || '');   // v3.3.83
   return _tbBookKey() + '/' + String(t.kind || 'book') + '/' + String(t.sessionId || '') + '/' + String(t.forkId || '');
 }
 // platinumGate: the refusal every Platinum-only tool shows, in ONE place.
@@ -12037,7 +12043,8 @@ function openTitleBuilder(target) {
   // v3.0.652 -- TD-443. A MODAL THAT HAS WRITTEN NOTHING MUST CHANGE NOTHING.
   // Cleared on open rather than on close, so an abandoned modal cannot leave the next one dirty.
   state._tbDirty = false;
-  if (!state.currentCampaign) return;
+  _tbIbMode();   // v3.3.83
+  if (!state.currentCampaign && !_tbIsIb()) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
   // the title builder. When I hit the button I should get a message stating such."
   //
@@ -12056,7 +12063,7 @@ function openTitleBuilder(target) {
   // v3.0.641 -- a BOOK question only. A chapter's ownership is its session fork, which
   // resolveTitleTarget answers server-side; novelOwnView here would refuse a chapter you do own
   // simply because the book version on screen belongs to someone else.
-  if (!_tbIsSession() && typeof novelOwnView === 'function' && !novelOwnView()) {
+  if (!_tbIsSession() && !_tbIsIb() && typeof novelOwnView === 'function' && !novelOwnView()) {
     appConfirm({
       title: 'This version is not yours',
       body: 'You are looking at someone else\u2019s version of this book, so its cover cannot be changed from here.',
@@ -12145,7 +12152,8 @@ function openTitleBuilder(target) {
   //
   // The empty-box gate stays: with the clear above, a new target arrives empty and seeds correctly,
   // while a reader who has typed something and reopened the same target keeps their own words.
-  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta) {
+  if (_tbIsIb() && dEl && !dEl.value) dEl.value = (IB.ttl && IB.ttl.desc) || '';   // v3.3.83
+  if (!_tbIsSession() && !_tbIsIb() && dEl && !dEl.value && state.bookMeta) {
     dEl.value = state.bookMeta.built_title_draft_prompt || state.bookMeta.built_title_prompt || '';
   }
 
@@ -12158,6 +12166,11 @@ function openTitleBuilder(target) {
   // v3.0.656 -- THE DRAFT WINS ON REOPEN. Ian: "when they open it back up again the text image
   // they just generated will be there. It just did not get used."
   var existing = _tbIsSession() ? '' : ((state.bookMeta && (state.bookMeta.built_title_draft_url || state.bookMeta.built_title_url)) || '');
+  if (_tbIsIb()) {   // v3.3.83 -- the last drawing made here wins on reopen, as a book's draft does; else the one in use
+    var _dr = IB.ttlDraft && IB.ttlDraft.url ? IB.ttlDraft : null;
+    state._tbIbCur = _dr ? { url: _dr.url, src: _dr.src || '' } : { url: (IB.ttl && IB.ttl.url) || '', src: (IB.ttl && IB.ttl.src) || '' };
+    existing = state._tbIbCur.url;
+  }
   if (_tbIsSession()) _tbLoadSession();
   _tbShowResult(existing);
   titleBuildRetouchClose();
@@ -12166,7 +12179,7 @@ function openTitleBuilder(target) {
   // The Archive pill has to know whether THIS picture is already in the chest, and that answer lives
   // in the archive list rather than on the book. Loaded after the modal is shown so the panel is not
   // held back by a fetch; the pill settles a moment later.
-  if (existing && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+  if (existing && !_tbIsIb() && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
 }
 
 // _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
@@ -12305,6 +12318,8 @@ function _tbDoneIdle() {
 // has no such local mirror, so it posts to title-write and holds the answer on state for the life of
 // the modal. Same words, same adapter behind both -- different client state to maintain.
 function _tbSave(patch, then) {
+  // v3.3.83 -- the Image Builder's title: a new drawing is held for Done & Use, never written to a book.
+  if (_tbIsIb()) { if (patch && patch.url) state._tbIbCur = { url: patch.url, src: patch.src || '' }; if (then) then(); return; }
   // v3.0.652 -- TD-443. THE ONE PLACE THAT KNOWS A WRITE HAPPENED.
   //
   // Ian, 2026-08-12: "If I have a regular picture there... open up the title builder... do nothing
@@ -12430,6 +12445,7 @@ function _tbArchiveRow() {
   }) || null;
 }
 function _tbSyncArchivePill() {
+  if (_tbIsIb()) return;   // v3.3.83 -- no Archive here; the Builder's campaign need not be the one on the page
   var btn = _tbEl('title-build-archive-btn');
   if (!btn) return;
   var row = _tbArchiveRow();
@@ -12451,6 +12467,7 @@ function _tbSyncArchivePill() {
 // always. Half a pair following the target and half not -- the third time in three builds, and the
 // reason both halves now come from one place.
 function _tbWords() {
+  if (_tbIsIb()) return { title: String((IB.ttl && IB.ttl.title) || '').trim(), subtitle: String((IB.ttl && IB.ttl.subtitle) || '').trim() };   // v3.3.83
   if (_tbIsSession()) {
     var w = (state && state._tbSessionWords) || {};
     return { title: w.title || '', subtitle: w.subtitle || '' };
@@ -12496,6 +12513,15 @@ function _tbRenderWarn() {
 // unless the modal wrote something -- and a draft write does not touch the live title. So the two
 // controls need no special casing to behave identically: they already do.
 function titleBuilderUse() {
+  // v3.3.83 -- the Image Builder: the lettering and its description go to the Title section, to be drawn in.
+  if (_tbIsIb()) {
+    var cur = (state && state._tbIbCur) || {};
+    IB.ttl.url = cur.url || ''; IB.ttl.src = cur.url ? (cur.src || '') : '';
+    IB.ttl.desc = ((_tbEl('title-build-desc') || {}).value || '').trim();
+    closeTitleBuilder();
+    ibRender();
+    return;
+  }
   // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
   // straight through it: deleting one left the other satisfying the check. _tbSave already routes
   // book and chapter; there was never a second thing to say here.
@@ -12516,6 +12542,14 @@ function titleBuilderUse() {
   });
 }
 function closeTitleBuilder() {
+  // v3.3.83 -- the Image Builder's title: nothing on the page to repaint or reload.
+  if (_tbIsIb()) {
+    if (state._tbIbCur && state._tbIbCur.url) IB.ttlDraft = state._tbIbCur;   // a paid-for drawing comes back on reopen, used or not
+    _tbDoneIdle(); state._tbTarget = null; state._tbIbCur = null; state._tbDirty = false;
+    var _im = _tbEl('title-build-modal'); if (_im) _im.classList.add('hidden');
+    _tbIbMode();
+    return;
+  }
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
   // so I left and came back and then the image was there." The save landed; nothing told the page.
   //
@@ -12542,6 +12576,12 @@ function closeTitleBuilder() {
   // only a draft (the live words are still the old ones); Done & Use, Stash and Remove then land here and nothing
   // repainted. Every exit from the builder now re-reads the title mode, which repaints the note.
   try { if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock(); } catch (e) {}
+}
+// v3.3.83 -- the controls that act on a book or chapter (its Archive, Replace, Retouch, Stash) are set aside while the
+// Title Builder designs an Image Builder title, and come back for every other target.
+function _tbIbMode() {
+  var ib = _tbIsIb(), m = _tbEl('title-build-modal'); if (!m) return;
+  Array.prototype.forEach.call(m.querySelectorAll('[onclick*="openTitleReplacePicker"], [onclick*="openTitleRefPicker"], #title-build-retouch-btn, #title-build-archive-btn, #title-build-stash'), function (el) { el.style.display = ib ? 'none' : ''; });
 }
 function _tbShowResult(url) {
   // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper
@@ -12629,8 +12669,8 @@ function _tbSendRefFile(file) {
     .catch(function () { _tbErr('Could not store that image.'); });
 }
 function titleBuildGenerate() {
-  if (!state.currentCampaign) return;
-  var t = _tbTitle();
+  if (!state.currentCampaign && !_tbIsIb()) return;
+  var t = _tbIsIb() ? _tbWords().title : _tbTitle();   // v3.3.83
   if (!t) { _tbErr('Give the book a title first.'); return; }
   _tbErr('');
   var btn = _tbEl('title-build-go');
@@ -12644,7 +12684,7 @@ function titleBuildGenerate() {
   // states, which is the only requirement an overlay actually has.
   showBusyOverlay('title-build-result', 'Generating', 'Drawing your title\u2026');
   var body = {
-    campaignId: state.currentCampaign.id,
+    campaignId: _tbIsIb() ? IB.cid : state.currentCampaign.id,   // v3.3.83
     bookTitle: t,
     subtitle: _tbSubtitle(),
     description: (_tbEl('title-build-desc') || {}).value || '',
@@ -12698,7 +12738,7 @@ function titleBuildGenerate() {
         prompt: ((_tbEl('title-build-desc') || {}).value || '')
       });
       _tbRenderWarn();
-      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+      if (!_tbIsIb() && typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();   // v3.3.83 -- not for the Builder
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
@@ -38455,7 +38495,7 @@ function cstyleFromPicker() {
 // =====================================================================================================
 var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
   type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0,
-  tab: 'make', viewId: null, sig: '', zoom: null };   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
+  tab: 'make', viewId: null, sig: '', zoom: null, ttl: ibTtlBlank(), ttlDraft: null };   // v3.3.83 -- ttl: the Title section   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
 var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
 var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
 var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
@@ -38546,6 +38586,7 @@ function openImageBuilder(keepBack) {
     .catch(function () { showError('Connection error. Please try again.'); });
 }
 
+function ibTtlBlank() { return { title: '', subtitle: '', place: 'top', size: 'medium', desc: '', url: '', src: '' }; }
 function ibCampaign(id) { return (IB.campaigns || []).filter(function (c) { return String(c.id) === String(id); })[0] || null; }
 function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; IB.viewId = null; IB.sig = ''; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
 
@@ -38565,6 +38606,50 @@ function ibReadForm() {
   if (g('ib-name')) IB.name = g('ib-name').value;
   if (g('ib-type')) IB.type = g('ib-type').value;
   if (g('ib-lore')) IB.lore = !!g('ib-lore').checked;
+  if (g('ib-ttl-title')) IB.ttl.title = g('ib-ttl-title').value;   // v3.3.83
+  if (g('ib-ttl-sub')) IB.ttl.subtitle = g('ib-ttl-sub').value;
+  if (g('ib-ttl-place')) IB.ttl.place = g('ib-ttl-place').value;
+  if (g('ib-ttl-size')) IB.ttl.size = g('ib-ttl-size').value;
+}
+// v3.3.83 -- Ian: "Let's add the title builder button to this... one more accordian option at the bottom after
+// description", "Drawn In with warning", typed freely, "let the art style decide" with the cover's placement and size.
+function ibTitleBody() {
+  var t = IB.ttl, sel = function (id, cur, opts) {
+    return '<select class="ib-in" id="' + id + '" onchange="ibReadForm();ibAccRefresh()">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  return '<div class="ib-lbl">Title</div><input class="ib-in" id="ib-ttl-title" maxlength="100" placeholder="Leave empty for no title" value="' + escapeHtml(t.title) + '" oninput="ibReadForm();ibAccRefresh()">' +
+    '<div class="ib-lbl" style="margin-top:10px;">Subtitle</div><input class="ib-in" id="ib-ttl-sub" maxlength="140" placeholder="Optional" value="' + escapeHtml(t.subtitle) + '" oninput="ibReadForm();ibAccRefresh()">' +
+    '<div style="display:flex;gap:12px;margin-top:10px;"><div style="flex:1;"><div class="ib-lbl">Placement</div>' + sel('ib-ttl-place', t.place, [['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']]) + '</div>' +
+      '<div style="flex:1;"><div class="ib-lbl">Size</div>' + sel('ib-ttl-size', t.size, [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']]) + '</div></div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+      '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the lettering first (a token). Without it, the art style decides.">Title Builder</button>' +
+      (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Click to enlarge" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:zoom-in;" onclick="openLightbox(this.src, \'Title lettering\')">' +
+        '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
+        : '<span class="ib-meta">Optional. Without it, the art style decides the lettering.</span>') +
+    '</div>' +
+    '<div class="ib-meta" style="margin-top:10px;color:var(--gold-light);">Titles are drawn into the picture and can\u2019t be removed afterwards. If you want this picture for a book cover, make a version without the title: the book puts its own title on the cover.</div>';
+}
+function ibOpenTitleBuilder() {
+  ibReadForm();
+  if (!IB.cid) return;
+  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first, then design its lettering.', 'title'); return; }
+  openTitleBuilder({ kind: 'ib', campaignId: IB.cid });
+}
+function ibTitleClearArt() { ibReadForm(); IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.desc = ''; ibRender(); }
+// v3.3.83 -- Ian: "The name change save should happen on blur." Leaving the Name field renames the picture in the
+// viewer when it is yours; with nothing in the viewer the name waits for Generate, as before.
+function ibNameChanged() {
+  ibReadForm();
+  var im = ibImg(IB.viewId), name = String(IB.name || '').trim();
+  if (!im || String(im.user_id) !== String(IB.me) || !name || name === im.name) return;
+  fetch('/api/images/builder/images/' + encodeURIComponent(im.id) + '/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { ibActMsg(escapeHtml((d && (d.message || d.error)) || 'Could not rename the picture.')); return; }
+      var cur = ibImg(im.id); if (cur) cur.name = d.name;
+      ibPaintGallery(); ibPaintViewer();
+    })
+    .catch(function () { ibActMsg('Connection error. Please try again.'); });
 }
 
 function ibStyleName() {
@@ -38624,7 +38709,7 @@ function ibRender() {
     '<div class="ib-make">' +
     '<div class="ib-card" id="ib-form">' +
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
-        '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
+        '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '" onchange="ibNameChanged()"></div>' +   // v3.3.83 -- saves on blur
       ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
       ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
       ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
@@ -38633,6 +38718,7 @@ function ibRender() {
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
+      ibAccHtml('title', 'Title', ibTitleBody()) +   // v3.3.83
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
@@ -38669,10 +38755,11 @@ function ibAccSummary(key) {
   if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
   if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? t.label : 'None'; }
   if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
+  if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
   return '';
 }
 function ibAccRefresh() {
-  ['refs', 'shape', 'style', 'type', 'desc'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
+  ['refs', 'shape', 'style', 'type', 'desc', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
 }
 
 function ibGalleryHtml() {
@@ -38826,6 +38913,12 @@ function ibClearForm(everything) {
   var n = document.getElementById('ib-name'); if (n) n.value = '';
   var t = document.getElementById('ib-type'); if (t) t.value = '';
   var l = document.getElementById('ib-lore'); if (l) l.checked = true;
+  IB.ttl = ibTtlBlank(); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
+}
+// v3.3.83 -- the Title fields, set from IB.ttl (ibRender reads the page back into IB first).
+function ibTtlFields() {
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-ttl-title', IB.ttl.title); set('ib-ttl-sub', IB.ttl.subtitle); set('ib-ttl-place', IB.ttl.place); set('ib-ttl-size', IB.ttl.size);
 }
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
@@ -38869,6 +38962,7 @@ function ibLoadRecipe(im) {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
   set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
   var l = document.getElementById('ib-lore'); if (l) l.checked = IB.lore;
+  IB.ttl = Object.assign(ibTtlBlank(), (refs.title && typeof refs.title === 'object') ? refs.title : {}); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
 }
 // Drawing right now: a first Generate, or a Regen of a picture already on show.
 function ibBusy(im) { return !!im && (im.status === 'queued' || im.status === 'processing'); }
@@ -39173,9 +39267,9 @@ function ibSetStyle(id) {
 
 function ibMsg(text, field) {
   var m = document.getElementById('ib-msg'); if (m) m.innerHTML = text || '';
-  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
+  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes', 'ib-ttl-title'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
   // v3.3.80 -- the field's panel is opened first, so a missing field in a closed panel is seen.
-  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'] };
+  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'], title: ['title', 'ib-ttl-title'] };   // v3.3.83 -- title
   var f = map[field];
   if (f) {
     if (f[0]) ibAccSet(f[0], true);
@@ -39196,7 +39290,8 @@ function ibGenerate() {
   var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
   var cid = IB.cid;
   var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
-    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }) } };
+    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }),
+      title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null } };   // v3.3.83
   var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
   fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json(); })

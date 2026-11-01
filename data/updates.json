@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.83",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3383-image-builder-title",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a Title section, and the name saves when you leave it.",
+        "detail": "A new Title section, after Description, letters a title and subtitle you type into the picture, at the placement and size you choose. The Title Builder can design the lettering first, from a description and a reference picture; without it the art style decides. A title drawn into a picture cannot be taken out again, so make a version without it if you want the picture for a book cover. Renaming a picture you made now saves as soon as you leave the Name field.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.82",
     "staged_on": "2026-11-01",
     "entries": [
