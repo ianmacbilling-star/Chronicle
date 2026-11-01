@@ -38562,7 +38562,7 @@ function cstyleFromPicker() {
 // =====================================================================================================
 var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
   type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0,
-  tab: 'make', viewId: null, sig: '', zoom: null, ttl: ibTtlBlank(), ttlDraft: null };   // v3.3.83 -- ttl: the Title section   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
+  tab: 'make', viewId: null, sig: '', zoom: null, ttl: ibTtlBlank(), ttlDraft: null, ho: ibHoBlank() };   // v3.3.92 -- ho: the handout's writing   // v3.3.83 -- ttl: the Title section   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
 var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
 var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
 var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
@@ -38619,6 +38619,10 @@ function ibCss() {
     '.ib-place-bar{position:absolute;left:8px;top:8px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}' +
     '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(10,6,4,0.75);color:#e8d9b0;}' +
     '.ib-placing .panel-img-actions{display:none !important;}' +
+    // v3.3.92 -- the handout's writing being placed
+    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(201,168,76,0.95);background:rgba(255,248,225,0.12);}' +
+    '.ib-ho-box canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
+    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(201,168,76,0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
@@ -38689,6 +38693,12 @@ function ibReadForm() {
   if (g('ib-ttl-sub')) IB.ttl.subtitle = g('ib-ttl-sub').value;
   if (g('ib-ttl-place')) IB.ttl.place = g('ib-ttl-place').value;
   if (g('ib-ttl-size')) IB.ttl.size = g('ib-ttl-size').value;
+  // v3.3.92 -- the handout's writing
+  if (g('ib-ho-text')) IB.ho.text = g('ib-ho-text').value;
+  if (g('ib-ho-font')) IB.ho.font = g('ib-ho-font').value;
+  if (g('ib-ho-ink')) IB.ho.ink = g('ib-ho-ink').value;
+  if (g('ib-ho-align')) IB.ho.align = g('ib-ho-align').value;
+  if (g('ib-ho-heading')) IB.ho.heading = !!g('ib-ho-heading').checked;
 }
 // v3.3.83 -- Ian: "Let's add the title builder button to this... one more accordian option at the bottom after
 // description", "Drawn In with warning", typed freely, "let the art style decide" with the cover's placement and size.
@@ -38736,15 +38746,16 @@ function ibTtlApplyHtml() {
 // as fractions of the picture (IB.ttl.pos), which the server uses when it lays the title on.
 // =====================================================================================================
 function ibTtlDragStart(e) { IB._ttlDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-title'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
-function ibTtlDragOver(e) { if (IB._ttlDrag) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} } }
+function ibTtlDragOver(e) { if (IB._ttlDrag || IB._hoDrag) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} } }
 function ibTtlDrop(e) {
+  if (IB._hoDrag) { e.preventDefault(); IB._hoDrag = false; var hb = ibPlaceBox(); if (!hb) { ibHoPlaceStart(); return; } var hfr = document.getElementById('ib-frame').getBoundingClientRect(); ibHoPlaceStart((e.clientX - hfr.left - hb.ox) / hb.cw, (e.clientY - hfr.top - hb.oy) / hb.ch); return; }   // v3.3.92
   if (!IB._ttlDrag) return;
   e.preventDefault(); IB._ttlDrag = false;
   var b = ibPlaceBox(); if (!b) { ibPlaceStart(); return; }
   var fr = document.getElementById('ib-frame').getBoundingClientRect();
   ibPlaceStart((e.clientX - fr.left - b.ox) / b.cw, (e.clientY - fr.top - b.oy) / b.ch);
 }
-document.addEventListener('dragend', function () { IB._ttlDrag = false; });
+document.addEventListener('dragend', function () { IB._ttlDrag = false; IB._hoDrag = false; });   // v3.3.92 -- _hoDrag
 // The picture's drawn area inside the frame (object-fit: contain), in the frame's pixels.
 function ibPlaceBox() {
   var f = document.getElementById('ib-frame'), img = f && f.querySelector('img:not(.ib-place-x)');
@@ -38775,6 +38786,7 @@ function ibTtlCanvas(url, cb) {
   img.src = (/^\//.test(url)) ? url : ('/api/images/proxy?u=' + encodeURIComponent(url));
 }
 function ibPlaceStart(fx, fy) {
+  if (IB.hoPlacing) { IB.hoPlacing = null; }   // v3.3.92 -- one thing placed at a time
   ibReadForm();
   var im = ibImg(IB.viewId);
   if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your pictures first, then drag the title onto it.'); return; }
@@ -38844,6 +38856,177 @@ function ibPlaceApply() {
   var id = P.id; IB.placing = null;
   ibPaintViewer();
   ibApplyTitle(id);
+}
+// =====================================================================================================
+// v3.3.92 -- THE HANDOUT'S WRITING. Ian chose the writing laid on, exactly as typed: the browser sets it in one of the
+// nine book faces (loaded by /css/fonts.css), fitted to a box the reader drags onto the picture and sizes by its corner,
+// uploads it as a transparent PNG, and the server multiplies it onto the paper. The box (IB.ho.pos) is fractions of the
+// picture: x, y, w, h. Generate sets the writing first, at the remembered box (or the default), so a new handout comes
+// back finished.
+// =====================================================================================================
+var IB_HO_FONT_LIST = [['garamond', 'Old book', "'EB Garamond', Georgia, serif"], ['cinzel', 'Engraved capitals', "'Cinzel', serif"], ['crimson-text', 'Classic print', "'Crimson Text', Georgia, serif"],
+  ['journal', 'Handwritten', "'Caveat', cursive"], ['script', 'Quill script', "'Dancing Script', cursive"], ['lora', 'Storybook', "'Lora', Georgia, serif"],
+  ['merriweather', 'Sturdy print', "'Merriweather', Georgia, serif"], ['bangers', 'Bold poster', "'Bangers', cursive"]];
+var IB_HO_INK_LIST = [['brown', 'Iron-gall brown', '#3b2312'], ['black', 'Black', '#17120d'], ['red', 'Faded red', '#6e1f14'], ['blue', 'Indigo', '#22305a']];
+var IB_HO_DEFAULT_POS = { x: 0.12, y: 0.22, w: 0.76, h: 0.6 };
+function ibHoBlank() { return { text: '', font: 'garamond', ink: 'brown', align: 'center', heading: true, url: '', pos: null }; }
+function ibHoFields() {
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-ho-text', IB.ho.text); set('ib-ho-font', IB.ho.font); set('ib-ho-ink', IB.ho.ink); set('ib-ho-align', IB.ho.align);
+  var h = document.getElementById('ib-ho-heading'); if (h) h.checked = IB.ho.heading !== false;
+}
+function ibHandoutBody() {
+  var h = IB.ho, sel = function (id, cur, list) {
+    return '<select class="ib-in" id="' + id + '" onchange="ibReadForm();ibAccRefresh()">' + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  return '<div class="ib-meta" style="margin-bottom:6px;">The words on the handout, exactly as they should read. They are set in the font you choose and laid on the paper, so the spelling is always right.</div>' +
+    '<textarea class="ib-in" id="ib-ho-text" rows="6" maxlength="1500" placeholder="WANTED&#10;Grimbald the Grey&#10;for crimes against the Crown&#10;Reward: 500 gold" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(h.text) + '</textarea>' +
+    '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="ib-ho-heading"' + (h.heading !== false ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> First line as a heading</label>' +
+    '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;"><div style="flex:1;min-width:120px;"><div class="ib-lbl">Font</div>' + sel('ib-ho-font', h.font, IB_HO_FONT_LIST) + '</div>' +
+      '<div style="flex:1;min-width:120px;"><div class="ib-lbl">Ink</div>' + sel('ib-ho-ink', h.ink, IB_HO_INK_LIST) + '</div>' +
+      '<div style="flex:1;min-width:100px;"><div class="ib-lbl">Lines</div>' + sel('ib-ho-align', h.align, [['center', 'Centred'], ['left', 'Left']]) + '</div></div>' +
+    '<div id="ib-ho-apply" style="margin-top:10px;">' + ibHoApplyHtml() + '</div>';
+}
+function ibHoApplyHtml() {
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the box below onto the picture, <b>drop</b> it where the writing goes, and drag its corner to <b>resize</b> it. Then press Apply. A new handout is drawn with the writing already on it.</div>';
+  if (!mine) return how + '<span class="ib-meta">Make or open one of your handouts to place the writing on it.</span>';
+  return how + '<span class="ib-ho-chip" draggable="true" ondragstart="ibHoDragStart(event)">\u270e Drag the writing onto the picture</span> ' +
+    '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button> <span class="ib-meta" id="ib-ho-msg"></span>';
+}
+function ibHoApplyPaint() { var el = document.getElementById('ib-ho-apply'); if (el) el.innerHTML = ibHoApplyHtml(); }
+function ibHoDragStart(e) { IB._hoDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-handout'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
+function ibHoFamily(key) { var f = IB_HO_FONT_LIST.filter(function (x) { return x[0] === key; })[0]; return f ? f[2] : IB_HO_FONT_LIST[0][2]; }
+function ibHoInk(key) { var f = IB_HO_INK_LIST.filter(function (x) { return x[0] === key; })[0]; return f ? f[2] : IB_HO_INK_LIST[0][2]; }
+// Lays the text out at size s inside iw x ih: paragraphs from the line breaks, the first line larger when it is a
+// heading, words wrapped. ok is false when a single word cannot fit across.
+function ibHoLayout(ctx, ho, fam, s, iw) {
+  var paras = String(ho.text || '').split('\n'), lines = [], total = 0, ok = true;
+  paras.forEach(function (p, pi) {
+    var head = (pi === 0 && ho.heading !== false && paras.length > 1), sz = head ? s * 1.7 : s;
+    ctx.font = (head ? '700 ' : '') + sz + 'px ' + fam;
+    var words = p.split(/\s+/).filter(Boolean);
+    if (!words.length) { lines.push({ t: '', sz: sz, h: sz * 0.7 }); total += sz * 0.7; return; }
+    var cur = '';
+    words.forEach(function (w) {
+      if (ctx.measureText(w).width > iw) ok = false;
+      var tryL = cur ? cur + ' ' + w : w;
+      if (cur && ctx.measureText(tryL).width > iw) { lines.push({ t: cur, sz: sz, head: head, h: sz * 1.28 }); total += sz * 1.28; cur = w; } else cur = tryL;
+    });
+    lines.push({ t: cur, sz: sz, head: head, h: sz * 1.28 }); total += sz * 1.28;
+    if (head) { lines.push({ t: '', sz: s, h: s * 0.35 }); total += s * 0.35; }
+  });
+  return { lines: lines, h: total, ok: ok };
+}
+// The writing on a transparent canvas W x H: the largest size that fits, centred top to bottom.
+function ibHoCanvas(ho, W, H) {
+  var fam = ibHoFamily(ho.font);
+  var load = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('40px ' + fam), document.fonts.load('700 40px ' + fam)]).catch(function () {}) : Promise.resolve();
+  return load.then(function () {
+    var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
+    var x = c.getContext('2d'), pad = Math.round(Math.min(c.width, c.height) * 0.05), iw = c.width - 2 * pad, ih = c.height - 2 * pad;
+    var lo = 4, hi = Math.max(6, ih), best = null;
+    for (var i = 0; i < 22; i++) { var mid = (lo + hi) / 2, l = ibHoLayout(x, ho, fam, mid, iw); if (l.ok && l.h <= ih) { best = { s: mid, l: l }; lo = mid; } else hi = mid; }
+    if (!best) best = { s: lo, l: ibHoLayout(x, ho, fam, lo, iw) };
+    x.fillStyle = ibHoInk(ho.ink); x.globalAlpha = 0.92; x.textBaseline = 'top';
+    x.textAlign = ho.align === 'left' ? 'left' : 'center';
+    var y = pad + Math.max(0, (ih - best.l.h) / 2), tx = ho.align === 'left' ? pad : c.width / 2;
+    best.l.lines.forEach(function (ln) {
+      if (ln.t) { x.font = (ln.head ? '700 ' : '') + ln.sz + 'px ' + fam; x.textAlign = ln.head ? 'center' : (ho.align === 'left' ? 'left' : 'center'); x.fillText(ln.t, ln.head ? c.width / 2 : tx, y + ln.sz * 0.12); }
+      y += ln.h;
+    });
+    return c;
+  });
+}
+// Sets the writing at the box's real size and stores it; resolves to its address.
+function ibHoUpload(ho, W, H) {
+  return ibHoCanvas(ho, W, H).then(function (c) {
+    return fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/handout-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: c.toDataURL('image/png') }) });
+  }).then(function (r) { return r.json(); }).then(function (d) { if (!d || d.error || !d.url) throw new Error((d && d.error) || 'Could not store the writing.'); return d.url; });
+}
+// Before Generate: a handout with words gets its writing set at the remembered (or default) box, sized from the shape.
+function ibHoForGenerate(body) {
+  if (body.image_type !== 'handout' || !String(IB.ho.text || '').trim()) return Promise.resolve();
+  var s = _rpShapeByKey(IB.shape) || { w: 1, h: 1 }, pos = IB.ho.pos || IB_HO_DEFAULT_POS;
+  var PW = s.w >= s.h ? 1600 : Math.round(1600 * s.w / s.h), PH = s.w >= s.h ? Math.round(1600 * s.h / s.w) : 1600;
+  return ibHoUpload(IB.ho, PW * pos.w, PH * pos.h).then(function (url) {
+    IB.ho.url = url; IB.ho.pos = pos;
+    body.refs.handout = Object.assign({}, IB.ho);
+  }).catch(function () { body.refs.handout = Object.assign({}, IB.ho, { url: '' }); });
+}
+function ibHoPlaceStart(fx, fy) {
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your handouts first, then drag the writing onto it.'); return; }
+  if (!String(IB.ho.text || '').trim()) { ibAccSet('handout', true); var t = document.getElementById('ib-ho-text'); if (t) { t.classList.add('ib-bad'); t.focus(); } return; }
+  IB.placing = null;
+  var p = Object.assign({}, IB.ho.pos || IB_HO_DEFAULT_POS);
+  if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - p.h / 2; }
+  IB.hoPlacing = { id: im.id, x: p.x, y: p.y, w: p.w, h: p.h };
+  ibHoClamp();
+  ibPaintViewer();
+}
+function ibHoClamp() {
+  var P = IB.hoPlacing; if (!P) return;
+  P.w = Math.max(0.08, Math.min(1, P.w)); P.h = Math.max(0.08, Math.min(1, P.h));
+  P.x = Math.max(0, Math.min(1 - P.w, P.x)); P.y = Math.max(0, Math.min(1 - P.h, P.y));
+}
+function ibHoMount() {
+  var P = IB.hoPlacing; if (!P) return;
+  if (String(P.id) !== String(IB.viewId)) { IB.hoPlacing = null; return; }
+  var f = document.getElementById('ib-frame'); if (!f) return;
+  var im = ibImg(P.id), img = f.querySelector('img'); if (!img) return;
+  if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);
+  img.style.pointerEvents = 'none';
+  f.classList.add('ib-placing');
+  if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibHoMount(); }; return; }
+  var b = ibPlaceBox(); if (!b) return;
+  ['.ib-ho-box', '.ib-place-bar'].forEach(function (q) { var o = f.querySelector(q); if (o) o.parentNode.removeChild(o); });
+  var box = document.createElement('div'); box.className = 'ib-ho-box';
+  var c = document.createElement('canvas'); box.appendChild(c);
+  var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize'; box.appendChild(h);
+  f.appendChild(box);
+  var bar = document.createElement('div'); bar.className = 'ib-place-bar';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibHoApply()">Apply writing here</button><button class="btn btn-sm" type="button" onclick="ibHoCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  f.appendChild(bar);
+  var draw = function () {   // the preview, set as it will be, at the box's size on screen
+    var bb = ibPlaceBox() || b, pw = P.w * bb.cw, ph = P.h * bb.ch;
+    ibHoCanvas(IB.ho, pw * 2, ph * 2).then(function (cv) { c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0); });
+  };
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.h * bb.ch) + 'px'; };
+  put(); draw();
+  var drag = null;
+  var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w, h: P.h }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
+  box.addEventListener('pointerdown', down('move'));
+  h.addEventListener('pointerdown', down('size'));
+  box.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var bb = ibPlaceBox() || b, dx = (e.clientX - drag.sx) / bb.cw, dy = (e.clientY - drag.sy) / bb.ch;
+    if (drag.mode === 'move') { P.x = drag.x + dx; P.y = drag.y + dy; } else { P.w = drag.w + dx; P.h = drag.h + dy; P.x = drag.x; P.y = drag.y; }
+    ibHoClamp(); put();
+  });
+  var up = function () { if (drag && drag.mode === 'size') draw(); drag = null; };
+  box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+function ibHoCancel() { IB.hoPlacing = null; ibPaintViewer(); }
+function ibHoApply() {
+  var P = IB.hoPlacing; if (!P) return;
+  var f = document.getElementById('ib-frame'), img = f && f.querySelector('img');
+  var NW = (img && img.naturalWidth) || 1600, NH = (img && img.naturalHeight) || 1600;
+  var r4 = function (v) { return Math.round(v * 10000) / 10000; };
+  var pos = { x: r4(P.x), y: r4(P.y), w: r4(P.w), h: r4(P.h) }, id = P.id;
+  IB.hoPlacing = null; ibPaintViewer();
+  var msg = function (t) { var m = document.getElementById('ib-ho-msg'); if (m) m.textContent = t; };
+  msg('Setting the writing\u2026');
+  ibHoUpload(IB.ho, NW * pos.w, NH * pos.h).then(function (url) {
+    IB.ho.url = url; IB.ho.pos = pos;
+    return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/handout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handout: Object.assign({}, IB.ho) }) });
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the writing on the picture.'; msg(''); showError(m); return; }
+    ibPut(d.image); ibAccRefresh();
+    msg('Done. The writing is on the handout; Without title shows the clean copy. Place it again to move it.');
+  }).catch(function (e) { msg(''); showError((e && e.message) || 'Could not lay the writing on the picture.'); });
 }
 function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
 function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (no title)'); }   // v3.3.85
@@ -38949,6 +39132,7 @@ function ibRender() {
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
+      (IB.type === 'handout' ? ibAccHtml('handout', 'Handout text', ibHandoutBody()) : '') +   // v3.3.92 -- only for a handout
       ibAccHtml('title', 'Title', ibTitleBody()) +   // v3.3.83
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
@@ -38986,11 +39170,12 @@ function ibAccSummary(key) {
   if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
   if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? (t.label + (IB.typeText ? ' \u00b7 edited' : '')) : 'None'; }   // v3.3.86 -- edited
   if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
+  if (key === 'handout') { var hx = String(IB.ho.text || '').trim().split('\n')[0]; return hx ? (hx.length > 30 ? hx.slice(0, 30) + '\u2026' : hx) + (IB.ho.url && IB.ho.pos ? ' \u00b7 placed' : '') : 'empty'; }   // v3.3.92
   if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
   return '';
 }
 function ibAccRefresh() {
-  ['refs', 'shape', 'style', 'type', 'desc', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
+  ['refs', 'shape', 'style', 'type', 'desc', 'handout', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
   var tn = document.getElementById('ib-type-note'); if (tn) tn.innerHTML = ibTypeNoteHtml();   // v3.3.86
 }
 // v3.3.86 -- THE TYPE'S INSTRUCTIONS, FOR THIS PICTURE. Ian: "they need to be able to see and edit the prompt for that
@@ -39179,6 +39364,7 @@ function ibClearForm(everything) {
   var t = document.getElementById('ib-type'); if (t) t.value = '';
   var l = document.getElementById('ib-lore'); if (l) l.checked = true;
   IB.ttl = ibTtlBlank(); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
+  IB.ho = ibHoBlank(); IB.hoPlacing = null; ibHoFields();   // v3.3.92
 }
 // v3.3.83 -- the Title fields, set from IB.ttl (ibRender reads the page back into IB first).
 function ibTtlFields() {
@@ -39190,7 +39376,9 @@ function ibPaintViewer() {
   v.innerHTML = ibViewerHtml();
   v.style.position = IB.zoom ? 'static' : '';
   ibTtlApplyPaint();   // v3.3.87 -- the Title section's Apply button follows the picture
-  ibPlaceMount();      // v3.3.89 -- the title being placed, if any   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
+  ibPlaceMount();      // v3.3.89 -- the title being placed, if any
+  ibHoMount();         // v3.3.92 -- the handout's writing being placed, if any
+  ibHoApplyPaint();   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
   var f = document.getElementById('ib-frame');
   if (f && f.getAttribute('data-pending') === '1') {
     if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');
@@ -39222,7 +39410,7 @@ function ibOpen(id) {
 }
 function ibLoadRecipe(im) {
   var refs = im.refs || {};
-  IB.desc = im.description || ''; IB.name = im.name || ''; IB.type = im.image_type || ''; IB.lore = im.include_lore !== false;
+  IB.desc = im.description || ''; IB.name = im.name || ''; IB.type = (im.image_type === 'creature') ? 'character' : (im.image_type || ''); IB.lore = im.include_lore !== false;   // v3.3.92 -- creature is character
   IB.typeText = refs.type_text || '';   // v3.3.86
   var _tt = document.getElementById('ib-type-text'); if (_tt) { _tt.value = IB.typeText || ibTypeDefault(IB.type); _tt.setAttribute('data-type', IB.type); }
   if (im.shape) IB.shape = im.shape;
@@ -39234,6 +39422,7 @@ function ibLoadRecipe(im) {
   set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
   var l = document.getElementById('ib-lore'); if (l) l.checked = IB.lore;
   IB.ttl = Object.assign(ibTtlBlank(), (refs.title && typeof refs.title === 'object') ? refs.title : {}); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
+  IB.ho = Object.assign(ibHoBlank(), (refs.handout && typeof refs.handout === 'object') ? refs.handout : {}); IB.hoPlacing = null; ibHoFields();   // v3.3.92
 }
 // Drawing right now: a first Generate, or a Regen of a picture already on show.
 function ibBusy(im) { return !!im && (im.status === 'queued' || im.status === 'processing'); }
@@ -39578,7 +39767,7 @@ function ibGenerate() {
     refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }),
       title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null }, type_text: (IB.type && IB.typeText) ? IB.typeText : null };   // v3.3.83; v3.3.86 -- type_text
   var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
-  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  ibHoForGenerate(body).then(function () { return fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); })   // v3.3.92 -- the writing is set first
     .then(function (r) { return r.json(); })
     .then(function (d) {
       done();

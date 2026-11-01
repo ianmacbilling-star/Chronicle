@@ -2539,9 +2539,9 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           // v3.3.85 -- a title with Title Builder lettering is laid on now; what the model drew is kept as the clean copy.
           // If the overlay fails the picture still lands, untitled, and the failure is logged.
           let _shown = imageUrl, _clean = null;
-          const _ov = _bi ? ibOverlayOf(_bi.refs) : null;
+          const _ov = _bi ? ibLayersOf(_bi.refs) : null;   // v3.3.92 -- the handout's writing and the title
           if (_ov) {
-            try { const _t = await ibOverlayTitle(imageUrl, _ov, job.builder_image_id); if (_t) { _shown = _t; _clean = imageUrl; } }
+            try { const _t = await ibCompose(imageUrl, _ov, job.builder_image_id); if (_t) { _shown = _t; _clean = imageUrl; } }
             catch (_oe) { try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'webhook builder title', message: 'Could not lay the title on Image Builder picture ' + job.builder_image_id + ': ' + (_oe && _oe.message) }); } catch (_le) {} }
           }
           if (_bi && _bi.image_url && _bi.image_url !== imageUrl) {
@@ -3238,18 +3238,19 @@ const IB_TYPES = [
   // v3.3.86 -- Movie Poster / Book Cover and Character Study rewritten from Ian's examples (key-art montage posters; a
   // character sheet: full figure plus three close-ups).
   { key: 'poster', label: 'Movie Poster / Book Cover', candid: false, text: 'IMAGE TYPE: a cinematic movie poster or book cover in classic key-art style, one continuous composition with no frames, borders or panels. The main characters form a montage: the most important as large head-and-shoulders portraits in the upper half, overlapping and scaled by importance, gazing intently at the viewer or into the distance. The hero stands in the foreground, centred and larger than life, holding their signature weapon or object, with supporting figures smaller around and behind them, building a pyramid. Below and behind them, a key moment from the story and glimpses of its places blend into one another through light, smoke and cloud. Dramatic, high-contrast lighting with strong backlight and rim light, a glowing light source, and a bold split of warm and cool colour. Embers, sparks, rain, snow or dust fill the air. With only one character, they alone dominate the poster in a powerful stance, the setting rising behind them. Keep one band of the picture calm and uncluttered for a title laid on later: the bottom fifth, unless a title space is given below. Draw no title, lettering, names or credits.' },
-  { key: 'character', label: 'Character Study', candid: false, text: 'IMAGE TYPE: a character sheet of ONE character, painted as a single continuous illustration with no frames, borders or dividing lines. The character appears head to toe, large, in a pose that shows who they are, taken from the description when there is one; with none, an action pose with their signature weapon or gear for a fighter, a calmer, characterful stance for a scholar, a bard or a mystic. Every piece of clothing, armour and equipment is clearly visible. Alongside, three head-and-shoulders close-ups of the SAME character (front view, three-quarter view and near-profile), each with a different expression, fading softly into the background. On a wide or square picture the full figure fills the left two-thirds and the close-ups are stacked down the right side; on a tall picture the full figure fills the top and the close-ups sit in a row along the bottom. Behind everything, an atmospheric setting from the character\'s world, darker and softer than the figure so it never competes with it. The face, hair, scars, markings, clothing and gear match exactly in every view.' },
+  // v3.3.92 -- Character Study and Creature Study are ONE type (Ian, 2026-11-01). The old key 'creature' still opens
+  // pictures made with it; ibType maps it here.
+  { key: 'character', label: 'Character / Creature Study', candid: false, text: 'IMAGE TYPE: a character sheet of ONE character or creature, painted as a single continuous illustration with no frames, borders or dividing lines. The subject appears whole and large: a person head to toe, a creature nose to tail. Its pose shows who or what it is, taken from the description when there is one; with none, an action pose with their signature weapon or gear for a fighter, a calmer, characterful stance for a scholar, a bard or a mystic, and for a beast a natural pose that shows its shape, size and features. Every piece of clothing, armour, equipment, hide, scale and feather is clearly visible. Alongside, three close-ups of the SAME subject\'s head (front view, three-quarter view and near-profile), each with a different expression, fading softly into the background. On a wide or square picture the full figure fills the left two-thirds and the close-ups are stacked down the right side; on a tall picture the full figure fills the top and the close-ups sit in a row along the bottom. Behind everything, an atmospheric setting from its world, darker and softer than the figure so it never competes with it. The face, markings, scars, colouring, clothing and gear match exactly in every view.' },
   { key: 'group', label: 'Group Portrait', candid: false, text: 'IMAGE TYPE: a group portrait of the named characters together, every one clearly visible and recognisable, arranged with depth and a variety of poses, as if gathered for a memorable moment.' },
   { key: 'location', label: 'Location / Establishing Shot', candid: true, text: 'IMAGE TYPE: an establishing shot of a place. The location itself is the subject: its architecture or landscape, light and atmosphere. People, if any, are small in the scene.' },
   { key: 'action', label: 'Action Scene', candid: true, text: 'IMAGE TYPE: an action scene full of motion and drama, such as a battle, a chase or a moment of danger, with a strong diagonal composition and a clear focal point.' },
   { key: 'map', label: 'Map', candid: true, text: 'IMAGE TYPE: a hand-drawn illustrated map seen from directly above, as if drawn on parchment by a cartographer: coastlines, rivers, roads, forests, mountains and settlements drawn as small illustrations. Place names, if any, are short and written in a simple hand.' },
   { key: 'item', label: 'Item Showcase', candid: false, text: 'IMAGE TYPE: a detailed showcase of a single object, weapon or artifact filling most of the picture, against a simple, softly lit background, with its materials, wear and craftsmanship clearly visible.' },
-  { key: 'creature', label: 'Creature Study', candid: false, text: 'IMAGE TYPE: a creature study in the manner of a bestiary illustration: one creature shown whole and clearly, in a natural pose that shows its shape, size and features, with a suggestion of its habitat behind it.' },
   { key: 'handout', label: 'In-world Handout', candid: false, text: 'IMAGE TYPE: an in-world handout seen flat and filling the picture: a single document such as a wanted poster, letter, scroll or notice, aged and weathered to suit the setting. Any writing on it is short.' },
   { key: 'token', label: 'Portrait Token', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }
 ];
 var IB_TYPE_TEXT_MAX = 2500;   // v3.3.86
-function ibType(key) { return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }
+function ibType(key) { if (key === 'creature') key = 'character'; return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }   // v3.3.92 -- creature is character
 
 async function ibAllowed(userId, campaignId) {
   if (!userId || !campaignId) return false;
@@ -3439,13 +3440,26 @@ async function ibFetchImage(u) {
   if (!r.ok) throw new Error('could not fetch ' + u + ' (' + r.status + ')');
   return Buffer.from(await r.arrayBuffer());
 }
-async function ibOverlayTitle(pictureUrl, t, imageId) {
+// v3.3.92 -- the title alone (Apply title, older callers).
+async function ibOverlayTitle(pictureUrl, t, imageId) { return ibCompose(pictureUrl, { title: t, handout: null }, imageId); }
+// v3.3.92 -- everything laid on a finished picture, in order: the handout's writing, then the title (with its haze and
+// halo). Returns the new file's address.
+async function ibCompose(pictureUrl, layersOf, imageId) {
   const sharp = require('sharp');
   const pic = await ibFetchImage(pictureUrl);
+  const meta0 = await sharp(pic).metadata();
+  const lay = [];
+  if (layersOf && layersOf.handout) lay.push(await ibHandoutLayer(sharp, layersOf.handout, meta0.width, meta0.height));
+  const t = layersOf && layersOf.title;
+  if (t) lay.push.apply(lay, await ibTitleLayers(sharp, t, meta0.width, meta0.height));
+  if (!lay.length) throw new Error('nothing to lay on');
+  const out = await sharp(pic).composite(lay.filter(Boolean)).png().toBuffer();
+  return uploadFile(out, 'ibtitled-' + imageId + '-' + Date.now() + '.png', 'image/png');
+}
+// v3.3.92 -- the title's layers (haze, halo, lettering), as ibOverlayTitle built them since v3.3.88.
+async function ibTitleLayers(sharp, t, W, H) {
   let lettering = await ibFetchImage(t.url);
   try { lettering = await sharp(lettering).trim().png().toBuffer(); } catch (e) {}   // transparent margins off, so the size is the lettering's
-  const meta = await sharp(pic).metadata();
-  const W = meta.width, H = meta.height;
   if (!W || !H) throw new Error('the picture has no size');
   const box = IB_TITLE_BOX[t.size] || IB_TITLE_BOX.medium;
   // v3.3.89 -- hand-placed: the width chosen (never taller than the picture); otherwise the old place / size box.
@@ -3477,8 +3491,7 @@ async function ibOverlayTitle(pictureUrl, t, imageId) {
     layers.push(await ibClipLayer(sharp, shadow, lw + 2 * M, lh + 2 * M, L - M, T - M, W, H));
   }
   layers.push({ input: lt.data, left: L, top: T });
-  const out = await sharp(pic).composite(layers.filter(Boolean)).png().toBuffer();
-  return uploadFile(out, 'ibtitled-' + imageId + '-' + Date.now() + '.png', 'image/png');
+  return layers;
 }
 // v3.3.88 -- the halo's three passes: [blur radius as a share of the picture's width, opacity], tight to wide, as the
 // cover's drop-shadows (0.035in at 0.95, 0.09in at 0.8, 0.22in at 0.5, on a cover about 6in wide).
@@ -3490,6 +3503,60 @@ async function ibClipLayer(sharp, buf, bw, bh, left, top, W, H) {
   const whole = (x0 === left && y0 === top && x1 - x0 === bw && y1 - y0 === bh);
   const part = whole ? buf : await sharp(buf).extract({ left: x0 - left, top: y0 - top, width: x1 - x0, height: y1 - y0 }).png().toBuffer();
   return { input: part, left: x0, top: y0 };
+}
+// =====================================================================================================
+// v3.3.92 -- THE HANDOUT'S WRITING, LAID ON. Ian chose "Laid on, exact text": image models misspell anything longer
+// than a few words, so the model draws the document with a clear writing area and the words are set by the browser in
+// one of the book faces (it has all nine, /css/fonts.css), uploaded as a transparent PNG, and laid over the picture here
+// with a multiply blend, so the ink takes the paper's grain. The box is fractions of the picture (x, y, w, h). The clean
+// copy is kept exactly as for a title, and the two are laid on together, text first.
+// =====================================================================================================
+var IB_HO_FONTS = ['garamond', 'cinzel', 'crimson-text', 'journal', 'script', 'lora', 'merriweather', 'bangers'];
+var IB_HO_INKS = ['brown', 'black', 'red', 'blue'];
+var IB_HO_TEXT_MAX = 1500;
+function ibCleanHandout(h) {
+  if (!h || typeof h !== 'object') return null;
+  const text = String(h.text == null ? '' : h.text).replace(/\r/g, '').replace(/\t/g, ' ').slice(0, IB_HO_TEXT_MAX).trim();
+  if (!text) return null;
+  const out = { text: text, font: IB_HO_FONTS.indexOf(h.font) >= 0 ? h.font : 'garamond', ink: IB_HO_INKS.indexOf(h.ink) >= 0 ? h.ink : 'brown',
+    align: h.align === 'left' ? 'left' : 'center', heading: h.heading !== false, url: '', pos: null };
+  const u = String(h.url || '').trim();
+  if (u && isOurPublicUrl(u)) out.url = u;
+  const p = (h.pos && typeof h.pos === 'object') ? h.pos : null;
+  if (p) {
+    let x = Number(p.x), y = Number(p.y), w = Number(p.w), hh = Number(p.h);
+    if ([x, y, w, hh].every(isFinite) && w > 0 && hh > 0) {
+      w = Math.min(1, Math.max(0.08, w)); hh = Math.min(1, Math.max(0.08, hh));
+      x = Math.min(1 - w, Math.max(0, x)); y = Math.min(1 - hh, Math.max(0, y));
+      const r4 = function (v) { return Math.round(v * 10000) / 10000; };
+      out.pos = { x: r4(x), y: r4(y), w: r4(w), h: r4(hh) };
+    }
+  }
+  return out;
+}
+// What the model is told when the writing will be laid on: a clear, EMPTY writing area where the box is.
+function ibHandoutSpaceText(h) {
+  const p = h.pos || { x: 0.12, y: 0.22, w: 0.76, h: 0.6 };
+  const cy = p.y + p.h / 2;
+  const where = cy < 0.38 ? 'the upper part' : (cy > 0.62 ? 'the lower part' : 'the middle');
+  return 'WRITING AREA: the writing on this document is added afterwards, so leave a large, clear area of plain, EMPTY paper for it in ' + where +
+    ' of the picture, about ' + Math.round(p.w * 100) + ' percent of the width and ' + Math.round(p.h * 100) + ' percent of the height. Draw no words, letters, numbers or scribbles anywhere on it; a drawing, seal, stain or border may frame the writing area but never cross it.';
+}
+// The layers a picture gets once it is drawn: the handout's writing and the title, each only when ready to lay on.
+function ibLayersOf(refsJson) {
+  let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
+  if (!refs) return null;
+  const t = refs.title, h = refs.handout;
+  const title = (t && t.title && t.url) ? t : null, handout = (h && h.text && h.url && h.pos) ? h : null;
+  return (title || handout) ? { title: title, handout: handout } : null;
+}
+// The handout's writing as a composite layer: the uploaded PNG fitted to its box, multiplied onto the paper.
+async function ibHandoutLayer(sharp, h, W, H) {
+  const buf = await ibFetchImage(h.url);
+  const bw = Math.max(1, Math.round(W * h.pos.w)), bh = Math.max(1, Math.round(H * h.pos.h));
+  const fitted = await sharp(buf).resize(bw, bh, { fit: 'fill' }).png().toBuffer();
+  const L = Math.max(0, Math.min(W - bw, Math.round(W * h.pos.x))), T = Math.max(0, Math.min(H - bh, Math.round(H * h.pos.y)));
+  return { input: fitted, left: L, top: T, blend: 'multiply' };
 }
 // The recipe's title when it has lettering to lay on, else null.
 function ibOverlayOf(refsJson) {
@@ -3516,8 +3583,10 @@ function ibPrompt(o) {
   // A poster is told to leave the title out; with a title asked for, it is part of the design instead.
   // v3.3.86 -- a typed title (drawn by the art style) replaces any "no lettering" sentence in the type's text.
   if (typeText && o.title && !o.titleOver) typeText = typeText.replace(/Draw no title, lettering, names or credits\.|Do not draw any title, lettering or text\./g, 'The only lettering is the title described below.');
+  if (typeText && o.handout) typeText = typeText.replace(' Any writing on it is short.', ' Its writing area is left blank.');   // v3.3.92
   if (typeText) parts.push(typeText);
   if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
+  if (o.handout) parts.push(ibHandoutSpaceText(o.handout));   // v3.3.92
   if (o.title) parts.push(o.titleOver ? ibTitleSpaceText(o.title) : ibTitleText(o.title, false));   // v3.3.83; v3.3.85 -- lettering is laid on afterwards
   if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
   if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
@@ -3557,6 +3626,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
   if (assets.length !== assetIds.length) { res.json({ error: 'One of the assets is no longer available, or its picture was removed.' }); return null; }
   const ttl = ibCleanTitle(refsIn.title);   // v3.3.83
+  const ho = (type && type.key === 'handout') ? ibCleanHandout(refsIn.handout) : null;   // v3.3.92 -- the handout's writing
   const ttlOver = !!(ttl && ttl.url);   // v3.3.85 -- Title Builder lettering is laid over the finished picture, not drawn by the model
   if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
   if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
@@ -3571,7 +3641,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   if (!prompt) {
     const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
     const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleOver: ttlOver });
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleOver: ttlOver, handout: ho });
   }
   // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
   // own flags pass through untouched, exactly as a panel would send them.
@@ -3588,6 +3658,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
     assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
   if (ttl) refsOut.title = ttl;   // v3.3.83
+  if (ho) refsOut.handout = ho;   // v3.3.92
   if (type && type.edited) refsOut.type_text = type.text;   // v3.3.86
   return { sub: sub, cost: cost, words: prompt, refsOut: refsOut, styleName: _rs.name || null, type: type, panelBlock: panelBlock };
 }
@@ -3612,7 +3683,7 @@ function ibRecipeOf(r) {
   let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
   refs = refs || {};
   return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
-    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null, type_text: refs.type_text || null } };   // v3.3.86 -- type_text   // v3.3.83 -- title
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null, type_text: refs.type_text || null, handout: refs.handout || null } };   // v3.3.92 -- handout   // v3.3.86 -- type_text   // v3.3.83 -- title
 }
 
 router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
@@ -3683,6 +3754,51 @@ router.post('/builder/campaigns/:cid/title-archive', requireAuth, async function
   } catch (e) { console.error('[image-builder] title archive error:', e.message); res.json({ error: 'Could not archive the title. Please try again.' }); }
 });
 
+// v3.3.92 -- the handout's writing, as the browser set it: a transparent PNG, checked, stored. Only a PNG, at most
+// 4096 pixels a side and 8 MB; its metadata is checked as every upload's is.
+router.post('/builder/campaigns/:cid/handout-image', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String((req.body && req.body.data) || ''));
+    if (!m) return res.json({ error: 'The writing did not come through. Please try again.' });
+    const buf = Buffer.from(m[1], 'base64');
+    if (!buf.length || buf.length > 8 * 1024 * 1024) return res.json({ error: 'The writing is too large. Make the text box smaller and try again.' });
+    let meta = null; try { meta = await require('sharp')(buf).metadata(); } catch (e) { meta = null; }
+    if (!meta || meta.format !== 'png' || !(meta.width > 0) || !(meta.height > 0) || meta.width > 4096 || meta.height > 4096) return res.json({ error: 'The writing did not come through. Please try again.' });
+    const _tm = rightsCheck.metadataCheck(buf);
+    if (_tm && _tm.verdict === 'reject') return res.json({ error: 'That picture can\u2019t be used.' });
+    const url = await uploadFile(buf, 'ibtext-' + req.session.userId + '-' + Date.now() + '.png', 'image/png');
+    res.json({ url: url });
+  } catch (e) { console.error('[image-builder] handout image error:', e.message); res.json({ error: 'Could not store the writing. Please try again.' }); }
+});
+// v3.3.92 -- lay the handout's writing on the clean copy (with the title, if the picture has one). Free; Revert undoes.
+router.post('/builder/images/:id/handout', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing first.' });
+    const ho = ibCleanHandout(req.body && req.body.handout);
+    if (!ho) return res.json({ error: 'Type the handout\u2019s text first.' });
+    if (!ho.url || !ho.pos) return res.json({ error: 'Place the text on the picture first.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    const base = r.clean_image_url || r.image_url;
+    const _tl = ibLayersOf(refs);
+    let shown;
+    try { shown = await ibCompose(base, { handout: ho, title: _tl && _tl.title }, r.id); } catch (e) {
+      console.error('[image-builder] apply handout error:', e.message);
+      try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/handout', message: 'Could not lay the writing on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, writing: ho.url, pos: ho.pos } }); } catch (_le) {}
+      return res.json({ error: 'Could not lay the writing on the picture. Please try again.' });
+    }
+    refs.handout = ho;
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] apply handout error:', e.message); res.json({ error: 'Could not lay the writing on the picture.' }); }
+});
+
 // v3.3.85 -- Apply title: the Title section's lettering, laid on the clean copy at its placement and size, with no
 // redraw and no token. A picture with no clean copy is used as it is and becomes the clean copy -- unless its title was
 // drawn by the art style (typed, with no lettering), which cannot be lifted off. The picture before goes to Revert.
@@ -3699,7 +3815,8 @@ router.post('/builder/images/:id/title', requireAuth, async function (req, res) 
     }
     const base = r.clean_image_url || r.image_url;
     let shown;
-    try { shown = await ibOverlayTitle(base, ttl, r.id); } catch (e) {
+    const _hoL = ibLayersOf(refs); // v3.3.92 -- the handout's writing goes back on too
+    try { shown = await ibCompose(base, { title: ttl, handout: _hoL && _hoL.handout }, r.id); } catch (e) {
       console.error('[image-builder] apply title error:', e.message);
       try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/title', message: 'Could not lay the title on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, lettering: ttl.url, place: ttl.place, size: ttl.size } }); } catch (_le) {}   // v3.3.87
       return res.json({ error: 'Could not lay the title on the picture. Please try again.' });

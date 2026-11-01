@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.92",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3392-image-builder-handout-text",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: handouts with your exact words, and one Character / Creature Study.",
+        "detail": "An In-world Handout now has a Handout text section: type the words, choose a font, ink and layout, and they are set on the paper exactly as typed, so the spelling is always right. Drag the box onto the picture to place and size it. Character Study and Creature Study are now one type, Character / Creature Study.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.91",
     "staged_on": "2026-11-01",
     "entries": [
