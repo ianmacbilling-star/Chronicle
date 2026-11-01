@@ -3230,8 +3230,10 @@ const IB_LOST = 'This picture did not come back from the image service. Nothing 
 // One sentence per image type, added before the description. candid:false drops the story-panel rule that people
 // never face the viewer (COMPOSITION_IMG), which a poster, a portrait or a token needs to break.
 const IB_TYPES = [
-  { key: 'poster', label: 'Movie Poster / Book Cover', candid: false, text: 'IMAGE TYPE: a dramatic movie-poster or book-cover composition. A bold, striking arrangement with the main figures large and heroic, strong lighting, and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.' },
-  { key: 'character', label: 'Character Study', candid: false, text: 'IMAGE TYPE: a character study of one figure, shown clearly from head to toe or as a three-quarter portrait, against a simple, softly suggested background that does not compete with the figure. Show their clothing, gear and expression in detail.' },
+  // v3.3.86 -- Movie Poster / Book Cover and Character Study rewritten from Ian's examples (key-art montage posters; a
+  // character sheet: full figure plus three close-ups).
+  { key: 'poster', label: 'Movie Poster / Book Cover', candid: false, text: 'IMAGE TYPE: a cinematic movie poster or book cover in classic key-art style, one continuous composition with no frames, borders or panels. The main characters form a montage: the most important as large head-and-shoulders portraits in the upper half, overlapping and scaled by importance, gazing intently at the viewer or into the distance. The hero stands in the foreground, centred and larger than life, holding their signature weapon or object, with supporting figures smaller around and behind them, building a pyramid. Below and behind them, a key moment from the story and glimpses of its places blend into one another through light, smoke and cloud. Dramatic, high-contrast lighting with strong backlight and rim light, a glowing light source, and a bold split of warm and cool colour. Embers, sparks, rain, snow or dust fill the air. With only one character, they alone dominate the poster in a powerful stance, the setting rising behind them. Keep one band of the picture calm and uncluttered for a title laid on later: the bottom fifth, unless a title space is given below. Draw no title, lettering, names or credits.' },
+  { key: 'character', label: 'Character Study', candid: false, text: 'IMAGE TYPE: a character sheet of ONE character, painted as a single continuous illustration with no frames, borders or dividing lines. The character appears head to toe, large, in a pose that shows who they are, taken from the description when there is one; with none, an action pose with their signature weapon or gear for a fighter, a calmer, characterful stance for a scholar, a bard or a mystic. Every piece of clothing, armour and equipment is clearly visible. Alongside, three head-and-shoulders close-ups of the SAME character (front view, three-quarter view and near-profile), each with a different expression, fading softly into the background. On a wide or square picture the full figure fills the left two-thirds and the close-ups are stacked down the right side; on a tall picture the full figure fills the top and the close-ups sit in a row along the bottom. Behind everything, an atmospheric setting from the character\'s world, darker and softer than the figure so it never competes with it. The face, hair, scars, markings, clothing and gear match exactly in every view.' },
   { key: 'group', label: 'Group Portrait', candid: false, text: 'IMAGE TYPE: a group portrait of the named characters together, every one clearly visible and recognisable, arranged with depth and a variety of poses, as if gathered for a memorable moment.' },
   { key: 'location', label: 'Location / Establishing Shot', candid: true, text: 'IMAGE TYPE: an establishing shot of a place. The location itself is the subject: its architecture or landscape, light and atmosphere. People, if any, are small in the scene.' },
   { key: 'action', label: 'Action Scene', candid: true, text: 'IMAGE TYPE: an action scene full of motion and drama, such as a battle, a chase or a moment of danger, with a strong diagonal composition and a clear focal point.' },
@@ -3241,6 +3243,7 @@ const IB_TYPES = [
   { key: 'handout', label: 'In-world Handout', candid: false, text: 'IMAGE TYPE: an in-world handout seen flat and filling the picture: a single document such as a wanted poster, letter, scroll or notice, aged and weathered to suit the setting. Any writing on it is short.' },
   { key: 'token', label: 'Portrait Token', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }
 ];
+var IB_TYPE_TEXT_MAX = 2500;   // v3.3.86
 function ibType(key) { return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }
 
 async function ibAllowed(userId, campaignId) {
@@ -3295,7 +3298,7 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
       if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0 });
     }
     let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
-    res.json({ campaigns: out, types: IB_TYPES.map(function (t) { return { key: t.key, label: t.label }; }), max_refs: MAX_PANEL_REFS, cost: cost });
+    res.json({ campaigns: out, types: IB_TYPES.map(function (t) { return { key: t.key, label: t.label, text: t.text }; }), max_refs: MAX_PANEL_REFS, cost: cost });
   } catch (e) {
     console.error('[image-builder] campaigns error:', e.message);
     res.json({ error: 'Could not load your campaigns.' });
@@ -3457,8 +3460,8 @@ function ibPrompt(o) {
   var parts = [];
   var typeText = o.type ? o.type.text : '';
   // A poster is told to leave the title out; with a title asked for, it is part of the design instead.
-  if (typeText && o.title && o.titleOver) typeText = typeText.replace('near the top where a title can be added later', 'near the ' + o.title.place + ' where the title will be laid');   // v3.3.85
-  else if (typeText && o.title) typeText = typeText.replace(', and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.', ', with the title below lettered into the design.').replace(/ Do not draw any title, lettering or text\./g, '');
+  // v3.3.86 -- a typed title (drawn by the art style) replaces any "no lettering" sentence in the type's text.
+  if (typeText && o.title && !o.titleOver) typeText = typeText.replace(/Draw no title, lettering, names or credits\.|Do not draw any title, lettering or text\./g, 'The only lettering is the title described below.');
   if (typeText) parts.push(typeText);
   if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
   if (o.title) parts.push(o.titleOver ? ibTitleSpaceText(o.title) : ibTitleText(o.title, false));   // v3.3.83; v3.3.85 -- lettering is laid on afterwards
@@ -3478,7 +3481,11 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const webhookUrl = falWebhookUrl();
   if (!webhookUrl) { res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' }); return null; }
   const style = recipe.style, shape = recipe.shape;
-  const type = recipe.type ? ibType(String(recipe.type)) : null;
+  let type = recipe.type ? ibType(String(recipe.type)) : null;
+  // v3.3.86 -- the type's instructions as edited for this picture (Ian: "see and edit the prompt for that selection just
+  // for that image generation"). Kept only when it differs from the type's own text.
+  const typeText = type ? ibClip(recipe.type_text || (recipe.refs && recipe.refs.type_text), IB_TYPE_TEXT_MAX) : '';
+  if (type && typeText && typeText !== type.text) type = Object.assign({}, type, { text: typeText, edited: true });
   if (recipe.type && !type) { res.json({ error: 'That image type is not recognised.' }); return null; }
   if (!IB_SHAPES[shape]) { res.json({ error: 'Choose a shape for the picture.', field: 'shape' }); return null; }
   if (!style) { res.json({ error: 'Choose an art style.', field: 'style' }); return null; }
@@ -3527,6 +3534,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
     assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
   if (ttl) refsOut.title = ttl;   // v3.3.83
+  if (type && type.edited) refsOut.type_text = type.text;   // v3.3.86
   return { sub: sub, cost: cost, words: prompt, refsOut: refsOut, styleName: _rs.name || null, type: type, panelBlock: panelBlock };
 }
 async function ibQueueJob(db, uid, cid, sub, style, cost, imageId, prevImage) {
@@ -3550,7 +3558,7 @@ function ibRecipeOf(r) {
   let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
   refs = refs || {};
   return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
-    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null } };   // v3.3.83 -- title
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null, type_text: refs.type_text || null } };   // v3.3.86 -- type_text   // v3.3.83 -- title
 }
 
 router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
@@ -3565,7 +3573,7 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
     const db = await getDb();
     const style = String(b.art_style || '').trim(), shape = String(b.shape || '');
     const recipe = { description: description, shape: shape, style: style, type: b.image_type || null, include_lore: b.include_lore !== false,
-      refs: (b.refs && typeof b.refs === 'object') ? b.refs : {} };
+      refs: (b.refs && typeof b.refs === 'object') ? b.refs : {}, type_text: b.type_text || null };   // v3.3.86 -- type_text
     const built = await ibBuildAndSubmit(req, res, db, uid, cid, recipe, null);
     if (!built) return;
     const sub = built.sub, type = built.type, now = new Date().toISOString();

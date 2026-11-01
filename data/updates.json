@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.86",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3386-image-builder-types",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: new Character Study and Movie Poster / Book Cover, and editable type instructions.",
+        "detail": "Character Study now paints a character sheet: the character head to toe, with three close-ups of their face from different angles. Movie Poster / Book Cover now paints classic key art: a montage of the main characters, the hero up front, a key moment and dramatic lighting. Under the Image type, See / edit instructions shows what the type asks for, and you can change it for one picture; Reset brings the standard text back.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.85",
     "staged_on": "2026-11-01",
     "entries": [

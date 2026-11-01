@@ -38606,6 +38606,11 @@ function ibReadForm() {
   if (g('ib-desc')) IB.desc = g('ib-desc').value;
   if (g('ib-name')) IB.name = g('ib-name').value;
   if (g('ib-type')) IB.type = g('ib-type').value;
+  // v3.3.86 -- the instructions box is read only while it still belongs to the chosen type (data-type); a cleared or
+  // changed type sets IB.typeText itself.
+  var _ta = g('ib-type-text');
+  if (!IB.type) IB.typeText = '';
+  else if (_ta && _ta.getAttribute('data-type') === IB.type) { var _tv = _ta.value; IB.typeText = (_tv.trim() === ibTypeDefault(IB.type).trim()) ? '' : _tv; }
   if (g('ib-lore')) IB.lore = !!g('ib-lore').checked;
   if (g('ib-ttl-title')) IB.ttl.title = g('ib-ttl-title').value;   // v3.3.83
   if (g('ib-ttl-sub')) IB.ttl.subtitle = g('ib-ttl-sub').value;
@@ -38727,8 +38732,8 @@ function ibRender() {
       ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
       ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
       ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
-      ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibReadForm();ibAccRefresh()">' + typeOpts + '</select>' +
-        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>') +
+      ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
+        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml()) +   // v3.3.86
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
@@ -38767,13 +38772,44 @@ function ibAccSummary(key) {
   }
   if (key === 'shape') { var s = _rpShapeByKey(IB.shape); return s ? (s.label + ' ' + s.w + ':' + s.h) : 'not chosen'; }
   if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
-  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? t.label : 'None'; }
+  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? (t.label + (IB.typeText ? ' \u00b7 edited' : '')) : 'None'; }   // v3.3.86 -- edited
   if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
   if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
   return '';
 }
 function ibAccRefresh() {
   ['refs', 'shape', 'style', 'type', 'desc', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
+  var tn = document.getElementById('ib-type-note'); if (tn) tn.innerHTML = ibTypeNoteHtml();   // v3.3.86
+}
+// v3.3.86 -- THE TYPE'S INSTRUCTIONS, FOR THIS PICTURE. Ian: "they need to be able to see and edit the prompt for that
+// selection just for that image generation... in case there are conflicts". A link under the dropdown opens the type's
+// text; edits are saved with this picture only (Regen and Make My Copy keep them), Reset brings the standard text back.
+function ibTypeDefault(key) { var t = (IB.types || []).filter(function (x) { return x.key === key; })[0]; return (t && t.text) || ''; }
+function ibTypeNoteHtml() {
+  return (IB.type === 'character' && IB.chars.length > 1) ? 'A Character Study works best with one character. With ' + IB.chars.length + ', it will do what it can.' : '';
+}
+function ibTypeEditHtml() {
+  var note = '<div class="ib-meta" id="ib-type-note" style="margin-top:6px;color:var(--gold-light);">' + ibTypeNoteHtml() + '</div>';
+  if (!IB.type || !ibTypeDefault(IB.type)) return note;
+  return note + '<div style="margin-top:6px;"><a href="#" onclick="ibTypeEditToggle();return false;" style="font-size:13px;">' + (IB.typeEditOpen ? 'Hide instructions' : 'See / edit instructions') + '</a></div>' +
+    '<div id="ib-type-edit"' + (IB.typeEditOpen ? '' : ' style="display:none;"') + '>' +
+      '<textarea class="ib-in" id="ib-type-text" data-type="' + escapeHtml(IB.type) + '" rows="8" maxlength="2500" style="margin-top:6px;font-size:13px;" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.typeText || ibTypeDefault(IB.type)) + '</textarea>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><button class="btn btn-sm" type="button" onclick="ibTypeReset()">Reset</button>' +
+      '<span class="ib-meta">Changes apply to this picture only.</span></div></div>';
+}
+function ibTypeEditToggle() { ibReadForm(); IB.typeEditOpen = !IB.typeEditOpen; ibRender(); }
+function ibTypeReset() { var ta = document.getElementById('ib-type-text'); if (ta) ta.value = ibTypeDefault(IB.type); IB.typeText = ''; ibAccRefresh(); }
+// A new type brings its own text; edited text is replaced only after asking.
+async function ibTypeChanged() {
+  var sel = document.getElementById('ib-type'); if (!sel) return;
+  var next = sel.value;
+  sel.value = IB.type || '';
+  ibReadForm();   // read the form as it stood, with the old type's text
+  if (IB.typeText && !await uiConfirm('Change the image type? Your edited instructions will be replaced by the new type\u2019s.', { okText: 'Change', cancelText: 'Keep' })) return;
+  sel.value = next;
+  var ta = document.getElementById('ib-type-text'); if (ta) { ta.value = ibTypeDefault(next); ta.setAttribute('data-type', next); }
+  IB.type = next; IB.typeText = '';
+  ibRender();
 }
 
 function ibGalleryHtml() {
@@ -38924,7 +38960,7 @@ async function ibNew() {
 // IB left the old name and description in place. everything: also the shape and art style (a campaign change);
 // New picture keeps those.
 function ibClearForm(everything) {
-  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null;
+  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null; IB.typeText = '';   // v3.3.86 -- typeText
   if (everything) { IB.shape = 'standard'; IB.style = ''; IB.zoom = null; }
   var d = document.getElementById('ib-desc'); if (d) d.value = '';
   var n = document.getElementById('ib-name'); if (n) n.value = '';
@@ -38971,6 +39007,8 @@ function ibOpen(id) {
 function ibLoadRecipe(im) {
   var refs = im.refs || {};
   IB.desc = im.description || ''; IB.name = im.name || ''; IB.type = im.image_type || ''; IB.lore = im.include_lore !== false;
+  IB.typeText = refs.type_text || '';   // v3.3.86
+  var _tt = document.getElementById('ib-type-text'); if (_tt) { _tt.value = IB.typeText || ibTypeDefault(IB.type); _tt.setAttribute('data-type', IB.type); }
   if (im.shape) IB.shape = im.shape;
   if (im.art_style) IB.style = im.art_style;
   IB.chars = (refs.characters || []).map(function (c) { return { id: c.id, name: c.name, look: c.look, label: c.label }; });
@@ -39322,7 +39360,7 @@ function ibGenerate() {
   var cid = IB.cid;
   var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
     refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }),
-      title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null } };   // v3.3.83
+      title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null }, type_text: (IB.type && IB.typeText) ? IB.typeText : null };   // v3.3.83; v3.3.86 -- type_text
   var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
   fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json(); })
