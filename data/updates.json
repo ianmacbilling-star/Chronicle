@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.75",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3375-image-builder-one-scroll",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: one scroll bar, and the whole picture always shows.",
+        "detail": "The picture no longer sits in its own scrolling box. Zooming in makes it bigger up to the width of the page, and the page scrolls as normal.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.74",
     "staged_on": "2026-11-01",
     "entries": [

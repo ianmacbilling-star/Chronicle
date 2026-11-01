@@ -38462,7 +38462,7 @@ function ibCss() {
     '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
     '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}' +
     '.ib-zoom{display:inline-flex;align-items:center;gap:4px;}' +
-    '.ib-scroll{width:100%;overflow:auto;max-height:calc(100vh - 140px);}' +
+    '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
     '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
     '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
@@ -38646,9 +38646,10 @@ function ibBits(im) {
 }
 function ibFrameStyle(w, h) {
   // v3.3.73 -- Fit: as wide as the pane, and no taller than the window less room for the zoom row and the caption
-  // (Ian: bigger, not the whole window). Zoomed: Fit times the zoom; .ib-scroll scrolls when that is bigger than the pane.
+  // (Ian: bigger, not the whole window). Zoomed: Fit times the zoom, never wider than the pane (.ib-frame max-width),
+  // so the whole picture stays on the page and a tall one simply makes the page longer (v3.3.75).
   var fit = 'min(100%, (100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + ')';
-  return 'aspect-ratio:' + w + ' / ' + h + ';width:' + (IB.zoom ? 'calc(' + fit + ' * ' + IB.zoom + ');max-width:none;' : 'calc(' + fit + ');');
+  return 'aspect-ratio:' + w + ' / ' + h + ';width:' + (IB.zoom ? 'calc(' + fit + ' * ' + IB.zoom + ');' : 'calc(' + fit + ');');
 }
 function ibViewerHtml() {
   var im = IB.viewId ? IB.images.filter(function (x) { return String(x.id) === String(IB.viewId); })[0] : null;
@@ -38697,7 +38698,10 @@ function ibViewerHtml() {
 var IB_ROOM = 190;
 function ibZoomStep(d) {
   var z = Math.round(((IB.zoom || 1) + d) * 100) / 100;
-  IB.zoom = Math.min(3, Math.max(0.5, z));
+  // v3.3.75 -- the largest zoom that still fits the pane's width: no more than that, and never above 300%.
+  var maxZ = 3, f = document.querySelector('#ib-viewer .ib-frame'), v = document.getElementById('ib-viewer');
+  if (f && v && f.getBoundingClientRect().width > 0) maxZ = Math.max(1, Math.min(3, Math.floor(v.clientWidth / (f.getBoundingClientRect().width / (IB.zoom || 1)) * 100) / 100));
+  IB.zoom = Math.min(maxZ, Math.max(0.5, z));
   if (Math.abs(IB.zoom - 1) < 0.001) IB.zoom = null;
   ibPaintViewer();
 }
@@ -38729,6 +38733,7 @@ async function ibNew() {
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
+  v.style.position = IB.zoom ? 'static' : '';   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
   var f = document.getElementById('ib-frame');
   if (f && f.getAttribute('data-pending') === '1') {
     if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');
