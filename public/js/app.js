@@ -38448,8 +38448,10 @@ function ibCss() {
   st.textContent =
     '#ib-root{color:#f0e8d0;}' +
     '#ib-root b,#ib-root label{color:#f0e8d0;}' +
-    '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}' +
-    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:16px;}' +
+    '.main-content > div#view-image-builder{padding-top:0.5rem;}' +
+    '#view-image-builder .page-header{margin-bottom:8px;align-items:center;}' +
+    '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
+    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:10px;}' +
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
     '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
     '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:20px;align-items:start;}' +
@@ -38462,6 +38464,10 @@ function ibCss() {
     '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
     '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}' +
     '.ib-zoom{display:inline-flex;align-items:center;gap:4px;}' +
+    '.ib-bar{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}' +   // v3.3.76
+    '.ib-bar-left{display:flex;gap:6px;flex-wrap:wrap;}' +
+    '.ib-frame:hover .panel-pill{opacity:1;}' +
+    '@media (max-width:820px){#ib-root .ib-pills{position:absolute;top:8px;left:8px;right:8px;margin:0;padding:0;}}' +
     '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
     '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
@@ -38595,8 +38601,6 @@ function ibRender() {
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?">' + escapeHtml(IB.desc) + '</textarea></div>' +
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
-      '<div id="ib-msg" class="ib-err" style="margin-bottom:8px;"></div>' +
-      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' + ' <button class="btn" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
@@ -38653,14 +38657,23 @@ function ibFrameStyle(w, h) {
 }
 function ibViewerHtml() {
   var im = IB.viewId ? IB.images.filter(function (x) { return String(x.id) === String(IB.viewId); })[0] : null;
-  var zoom = '<div class="ib-zoom" title="Zoom the picture">' +
-    '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
-    '<span id="ib-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
-    '<button class="btn btn-sm" onclick="ibZoomStep(0.1)" title="Zoom in">+</button>' +
-    '<button class="btn btn-sm" onclick="ibZoomFit()" title="Fit the picture to the pane">Fit</button></div>';
+  // v3.3.76 -- one toolbar above the picture (Ian): Generate and New picture on the left, the zoom row on the right,
+  // and the form's messages (a missing field, out of tokens) just under it, where the button is.
+  var bar = '<div class="ib-bar">' +
+    '<div class="ib-bar-left">' +
+      '<button class="btn btn-primary btn-sm" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
+      '<button class="btn btn-sm" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
+    '</div>' +
+    '<div class="ib-zoom" title="Zoom the picture">' +
+      '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
+      '<span id="ib-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
+      '<button class="btn btn-sm" onclick="ibZoomStep(0.1)" title="Zoom in">+</button>' +
+      '<button class="btn btn-sm" onclick="ibZoomFit()" title="Fit the picture to the pane">Fit</button>' +
+    '</div></div>' +
+    '<div id="ib-msg" class="ib-err" style="width:100%;"></div>';
   if (!im) {
     var s = _rpShapeByKey(IB.shape) || { w: 4, h: 3, label: 'Standard' };
-    return zoom + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
+    return bar + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
   }
   var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
   var w = im.img_w || shp.w, h = im.img_h || shp.h;
@@ -38670,30 +38683,37 @@ function ibViewerHtml() {
   if (im.image_url) inner = '<img src="' + escapeHtml(im.image_url) + '" alt="' + escapeHtml(im.name) + '" onclick="ibView(' + im.id + ')">';
   else if (im.status === 'failed') inner = '<div class="ib-err" style="padding:16px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div>';
   else inner = '';
-  // The maker's buttons (v3.3.74, stage 2). Nothing that changes the picture while it is being drawn.
-  var b = [];
-  if (mine) {
-    b.push('<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>');
-    if (im.image_url && !busy) b.push('<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>');
-    if (!busy) {
-      b.push('<button class="btn btn-sm" onclick="ibEditPrompt(' + im.id + ')">Edit Prompt</button>');
-      b.push('<button class="btn btn-sm" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt">Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>');
-      if (im.has_prev) b.push('<button class="btn btn-sm" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen">Revert</button>');
-      if (im.image_url) b.push('<button class="btn btn-sm" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
-      if (im.image_url || im.status === 'failed') b.push('<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>');
+  // v3.3.76 -- the picture's buttons sit ON the picture, as the Story panels' pills do (panel-img-actions /
+  // panel-pill: shown on hover, always shown on a phone). Nothing that changes the picture while it is being drawn.
+  var p = [];
+  if (!busy) {
+    if (mine) {
+      p.push('<button class="panel-pill" onclick="ibEditPrompt(' + im.id + ')" title="Change the words the picture is drawn from">Edit Prompt</button>');
+      p.push('<button class="panel-pill" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Regen</button>');
+      if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen">Revert</button>');
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
+      if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
+    } else if (im.image_url) {
+      p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
     }
-  } else if (im.image_url && !busy) {
-    b.push('<button class="btn btn-sm" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
   }
-  return zoom + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div></div>' +
+  var pills = p.length ? '<div class="panel-img-actions ib-pills">' + p.join('') + '</div>' : '';
+  // Draft / Ready stays under the picture with its name: it is about who sees it, not about the picture.
+  var state = '';
+  if (mine) {
+    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
+      (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
+  }
+  return bar + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
       (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
       '<div id="ib-act-msg" class="ib-err"></div>' +
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + b.join('') + '</div>' +
+      (state ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + state + '</div>' : '') +
     '</div>';
 }
+
 // v3.3.73 -- zoom, as the Prep & Preview row: 10% steps, 50%..300%, "Fit" until zoomed; kept until Fit is pressed.
 var IB_ROOM = 190;
 function ibZoomStep(d) {

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.76",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3376-image-builder-buttons",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: a tighter page, Generate and New picture above the picture, and the picture's own buttons on it.",
+        "detail": "The short description sits beside the title and the page starts closer to the top. Generate and New picture are on the row with the zoom buttons. Edit Prompt, Regen, Revert, Archive and Delete appear on the picture when you point at it, the same way as on story pictures (always shown on a phone).",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.75",
     "staged_on": "2026-11-01",
     "entries": [
