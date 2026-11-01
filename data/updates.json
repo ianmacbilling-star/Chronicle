@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.97",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3397-image-builder-item-portrait",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Item Showcase as a still life, Portrait / Headshot, and Image type moved up.",
+        "detail": "Item Showcase now paints your items as a still life on a fitting surface, with a soft setting behind and one clear light, whether there is one item or several. Portrait Token is now called Portrait / Headshot. The Image type panel now sits just under References.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.96",
     "staged_on": "2026-11-01",
     "entries": [

@@ -39233,11 +39233,12 @@ function ibRender() {
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '" onchange="ibNameChanged()"></div>' +   // v3.3.83 -- saves on blur
       ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
-      ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
-      ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
+      // v3.3.97 -- Image type sits under References (Ian); Shape and Art style follow it.
       ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
         '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml() +
         (IB.type === 'handout' ? '<div id="ib-ho-sec" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);"><div class="ib-lbl">Handout text</div>' + ibHandoutBody() + '</div>' : '')) +   // v3.3.86; v3.3.93 -- the handout's words, under the dropdown
+      ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
+      ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
