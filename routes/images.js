@@ -3547,7 +3547,7 @@ function ibLayersOf(refsJson) {
   let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
   if (!refs) return null;
   const t = refs.title, h = refs.handout;
-  const title = (t && t.title && t.url) ? t : null, handout = (h && h.text && h.url && h.pos) ? h : null;
+  const title = (t && t.title && t.url && !t.off) ? t : null, handout = (h && h.text && h.url && h.pos && !h.off) ? h : null;   // v3.3.93 -- off: taken off the picture
   return (title || handout) ? { title: title, handout: handout } : null;
 }
 // The handout's writing as a composite layer: the uploaded PNG fitted to its box, multiplied onto the paper.
@@ -3641,13 +3641,13 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   if (!prompt) {
     const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
     const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleOver: ttlOver, handout: ho });
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttlOver ? ttl : null, titleOver: ttlOver, handout: ho });   // v3.3.93 -- only Title Builder lettering
   }
   // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
   // own flags pass through untouched, exactly as a panel would send them.
   let flags = _rs.isFade;
   if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
-  if (ttl && !ttlOver) flags = Object.assign((flags && typeof flags === 'object') ? Object.assign({}, flags) : { fade: flags }, { titled: true });   // v3.3.83 -- the title is allowed
+  // v3.3.93 -- no 'titled' flag: only Title Builder lettering makes a title, and it is laid on, never drawn.
 
   const modelKey = await getSelectedModel(db);
   const cost = await getTokenCost(modelKey);
@@ -3799,6 +3799,37 @@ router.post('/builder/images/:id/handout', requireAuth, async function (req, res
   } catch (e) { console.error('[image-builder] apply handout error:', e.message); res.json({ error: 'Could not lay the writing on the picture.' }); }
 });
 
+// v3.3.93 -- TAKE THE WRITING OR THE TITLE OFF. Ian: "I'm having trouble removing the text from the picture once it's
+// on it." The picture is laid again from the clean copy with only what is left (or becomes the clean copy itself when
+// nothing is). The recipe keeps the words and the lettering, marked off, so Place or Apply puts them back; Regen and
+// Retouch leave them off. Free; the picture before goes to Revert.
+router.post('/builder/images/:id/layer-off', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const what = (req.body && req.body.what === 'title') ? 'title' : ((req.body && req.body.what === 'handout') ? 'handout' : '');
+    if (!what) return res.json({ error: 'Nothing to take off.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    const before = ibLayersOf(refs);
+    if (!r.clean_image_url || !before || !before[what]) return res.json({ error: what === 'title' ? 'There is no title on this picture to take off.' : 'There is no writing on this picture to take off.' });
+    refs[what] = Object.assign({}, refs[what], { off: true });
+    const after = ibLayersOf(refs);
+    let shown = r.clean_image_url, clean = null;
+    if (after) {
+      try { shown = await ibCompose(r.clean_image_url, after, r.id); clean = r.clean_image_url; } catch (e) {
+        console.error('[image-builder] layer off error:', e.message);
+        return res.json({ error: 'Could not take it off. Please try again.' });
+      }
+    }
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, clean, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] layer off error:', e.message); res.json({ error: 'Could not take it off.' }); }
+});
+
 // v3.3.85 -- Apply title: the Title section's lettering, laid on the clean copy at its placement and size, with no
 // redraw and no token. A picture with no clean copy is used as it is and becomes the clean copy -- unless its title was
 // drawn by the art style (typed, with no lettering), which cannot be lifted off. The picture before goes to Revert.
@@ -3810,9 +3841,7 @@ router.post('/builder/images/:id/title', requireAuth, async function (req, res) 
     const ttl = ibCleanTitle(req.body && req.body.title);
     if (!ttl || !ttl.url) return res.json({ error: 'Design the lettering with the Title Builder first.' });
     let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
-    if (!r.clean_image_url && refs.title && refs.title.title && !refs.title.url) {
-      return res.json({ error: 'This picture\u2019s title was drawn into it by the art style, so it can\u2019t be swapped. Generate it again with the lettering.' });
-    }
+    // v3.3.93 -- a typed title is no longer drawn by the art style, so there is no drawn-in title to refuse over.
     const base = r.clean_image_url || r.image_url;
     let shown;
     const _hoL = ibLayersOf(refs); // v3.3.92 -- the handout's writing goes back on too

@@ -38468,6 +38468,29 @@ function _panelJobsSync() {
 // clears both. Nothing about what Publish does changes; the server still refuses an unattested publish.
 // =====================================================================================
 var PREP_ATTEST_NAG = 'Tick the box above first: \u201cI own or have the rights to this content\u2026\u201d';
+// v3.3.93 -- THE SHAKE, SHARED. UI_CONVENTIONS 1 (TD-1026): when a button refuses because something it needs is not
+// done, that thing gets an amber outline and tint, shakes once, scrolls to the middle and takes focus, and the line by
+// the button says what is missing in amber. Typing or choosing in it clears both (and only a message this put there).
+// "Next time it's used: turn it into one shared helper" -- this is that helper; its CSS is added once, on first use.
+function nagField(el, message, statusEl) {
+  if (!el) return;
+  if (!document.getElementById('field-nag-css')) {
+    var st = document.createElement('style'); st.id = 'field-nag-css';
+    st.textContent = '.field-nag{outline:2px solid #e8a85a !important;outline-offset:3px;border-radius:6px;background-color:rgba(232,168,90,0.12) !important;animation:fieldNagShake 0.45s ease-in-out;}' +
+      '@keyframes fieldNagShake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}';
+    document.head.appendChild(st);
+  }
+  el.classList.remove('field-nag'); void el.offsetWidth; el.classList.add('field-nag');   // restart the shake
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  try { el.focus({ preventScroll: true }); } catch (e) {}
+  if (statusEl && message) { statusEl.style.color = '#e8a85a'; statusEl.textContent = message; }
+  var clear = function () {
+    el.classList.remove('field-nag');
+    if (statusEl && message && statusEl.textContent === message) { statusEl.textContent = ''; statusEl.style.color = ''; }
+    el.removeEventListener('input', clear); el.removeEventListener('change', clear);
+  };
+  el.addEventListener('input', clear); el.addEventListener('change', clear);
+}
 function _prepAttestNag(st) {
   if (st) { st.style.display = 'block'; st.style.color = '#e8a85a'; st.textContent = PREP_ATTEST_NAG; }
   var box = document.getElementById('prep-attest');
@@ -38710,21 +38733,26 @@ function ibTitleBody() {
     '<div class="ib-lbl" style="margin-top:10px;">Subtitle</div><input class="ib-in" id="ib-ttl-sub" maxlength="140" placeholder="Optional" value="' + escapeHtml(t.subtitle) + '" oninput="ibReadForm();ibAccRefresh()">' +
     // v3.3.89 -- no Placement or Size: the lettering is dragged onto the picture, dropped and resized there (Ian).
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
-      '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the lettering first (a token). Without it, the art style decides.">Title Builder</button>' +
+      '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the title\u2019s lettering (a token)">Title Builder</button>' +
+      '<span id="ib-ttl-msg" class="ib-meta"></span>' +   // v3.3.93 -- the shake's message
       (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
         '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
-        : '<span class="ib-meta">Optional. Without it, the art style decides the lettering.</span>') +
+        : '<span class="ib-meta">Titles are made in the Title Builder.</span>') +   // v3.3.93
     '</div>' +
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
     // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
     (t.url
       ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, drag it on and Apply, for free.</div>'
-      : '<div class="ib-meta" style="margin-top:10px;color:var(--gold-light);">Without Title Builder lettering, the art style draws the title into the picture, and it can\u2019t be removed afterwards. If you want this picture for a book cover, make a version without the title: the book puts its own title on the cover.</div>');
+      : '<div class="ib-meta" style="margin-top:10px;">Press Title Builder to design the lettering for this title. It is laid over the picture exactly as designed, and a clean copy is kept.</div>');   // v3.3.93 -- titles come only from the Title Builder
 }
 function ibOpenTitleBuilder() {
   ibReadForm();
   if (!IB.cid) return;
-  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first, then design its lettering.', 'title'); return; }
+  if (!String(IB.ttl.title || '').trim()) {   // v3.3.93 -- the shake (Ian)
+    ibAccSet('title', true);
+    nagField(document.getElementById('ib-ttl-title'), 'Type the title above first, then press Title Builder.', document.getElementById('ib-ttl-msg'));
+    return;
+  }
   openTitleBuilder({ kind: 'ib', campaignId: IB.cid });
 }
 // v3.3.87 -- Apply title, in the Title section (Ian: "down on the left hand side inside the title accordion"). It acts on
@@ -38737,6 +38765,7 @@ function ibTtlApplyHtml() {
   var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the lettering above onto the picture, <b>drop</b> it where you want it, and drag its corner to <b>resize</b> it. Then press Apply.</div>';
   if (!mine) return how + '<span class="ib-meta">Make or open one of your pictures first.</span>';
   return how + '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibPlaceStart()">Place title on picture</button>' +
+    (ibLayerOn(im, 'title') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'title\')" title="Take the title off this picture (free; Revert puts it back)">Remove title from picture</button>' : '') +   // v3.3.93
     ' <span class="ib-meta" id="ib-ttl-apply-msg">Free; Revert takes it off.</span>';
 }
 // =====================================================================================================
@@ -38877,15 +38906,25 @@ function ibHoFields() {
 }
 function ibHandoutBody() {
   var h = IB.ho, sel = function (id, cur, list) {
-    return '<select class="ib-in" id="' + id + '" onchange="ibReadForm();ibAccRefresh()">' + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+    return '<select class="ib-in" id="' + id + '" onchange="ibHoLive()">' + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
   };
   return '<div class="ib-meta" style="margin-bottom:6px;">The words on the handout, exactly as they should read. They are set in the font you choose and laid on the paper, so the spelling is always right.</div>' +
-    '<textarea class="ib-in" id="ib-ho-text" rows="6" maxlength="1500" placeholder="WANTED&#10;Grimbald the Grey&#10;for crimes against the Crown&#10;Reward: 500 gold" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(h.text) + '</textarea>' +
-    '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="ib-ho-heading"' + (h.heading !== false ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> First line as a heading</label>' +
+    '<textarea class="ib-in" id="ib-ho-text" rows="6" maxlength="1500" placeholder="WANTED&#10;Grimbald the Grey&#10;for crimes against the Crown&#10;Reward: 500 gold" oninput="ibHoLive()">' + escapeHtml(h.text) + '</textarea>' +
+    '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="ib-ho-heading"' + (h.heading !== false ? ' checked' : '') + ' onchange="ibHoLive()"> First line as a heading</label>' +
     '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;"><div style="flex:1;min-width:120px;"><div class="ib-lbl">Font</div>' + sel('ib-ho-font', h.font, IB_HO_FONT_LIST) + '</div>' +
       '<div style="flex:1;min-width:120px;"><div class="ib-lbl">Ink</div>' + sel('ib-ho-ink', h.ink, IB_HO_INK_LIST) + '</div>' +
       '<div style="flex:1;min-width:100px;"><div class="ib-lbl">Lines</div>' + sel('ib-ho-align', h.align, [['center', 'Centred'], ['left', 'Left']]) + '</div></div>' +
     '<div id="ib-ho-apply" style="margin-top:10px;">' + ibHoApplyHtml() + '</div>';
+}
+// v3.3.93 -- is the writing (or the title) on this picture now? Then it can be taken off.
+function ibLayerOn(im, what) {
+  var x = im && im.refs && im.refs[what];
+  if (!x || x.off || !x.url || !im.has_clean) return false;
+  return what === 'title' ? !!x.title : !!(x.text && x.pos);
+}
+function ibLayerOff(id, what) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/layer-off', { what: what }, function (d) { ibPut(d.image); ibAccRefresh(); });
 }
 function ibHoApplyHtml() {
   var im = ibImg(IB.viewId);
@@ -38893,7 +38932,9 @@ function ibHoApplyHtml() {
   var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the box below onto the picture, <b>drop</b> it where the writing goes, and drag its corner to <b>resize</b> it. Then press Apply. A new handout is drawn with the writing already on it.</div>';
   if (!mine) return how + '<span class="ib-meta">Make or open one of your handouts to place the writing on it.</span>';
   return how + '<span class="ib-ho-chip" draggable="true" ondragstart="ibHoDragStart(event)">\u270e Drag the writing onto the picture</span> ' +
-    '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button> <span class="ib-meta" id="ib-ho-msg"></span>';
+    '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button>' +
+    (ibLayerOn(im, 'handout') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'handout\')" title="Take the writing off this picture (free; Revert puts it back)">Remove writing from picture</button>' : '') +   // v3.3.93
+    ' <span class="ib-meta" id="ib-ho-msg"></span>';
 }
 function ibHoApplyPaint() { var el = document.getElementById('ib-ho-apply'); if (el) el.innerHTML = ibHoApplyHtml(); }
 function ibHoDragStart(e) { IB._hoDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-handout'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
@@ -38959,7 +39000,7 @@ function ibHoPlaceStart(fx, fy) {
   ibReadForm();
   var im = ibImg(IB.viewId);
   if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your handouts first, then drag the writing onto it.'); return; }
-  if (!String(IB.ho.text || '').trim()) { ibAccSet('handout', true); var t = document.getElementById('ib-ho-text'); if (t) { t.classList.add('ib-bad'); t.focus(); } return; }
+  if (!String(IB.ho.text || '').trim()) { ibAccSet('type', true); nagField(document.getElementById('ib-ho-text'), 'Type the handout\u2019s words above first.', document.getElementById('ib-ho-msg')); return; }   // v3.3.93 -- the shake; the words are in the Image type panel
   IB.placing = null;
   var p = Object.assign({}, IB.ho.pos || IB_HO_DEFAULT_POS);
   if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - p.h / 2; }
@@ -38996,6 +39037,7 @@ function ibHoMount() {
   };
   var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.h * bb.ch) + 'px'; };
   put(); draw();
+  IB._hoRedraw = draw;   // v3.3.93 -- the options on the left redraw the box being placed
   var drag = null;
   var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w, h: P.h }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
   box.addEventListener('pointerdown', down('move'));
@@ -39008,6 +39050,15 @@ function ibHoMount() {
   });
   var up = function () { if (drag && drag.mode === 'size') draw(); drag = null; };
   box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+// v3.3.93 -- a change to the words, font, ink, heading or lines: read it, and redraw the box being placed (a moment
+// after the last keystroke, so typing stays smooth). Apply then sets exactly what is shown.
+var _ibHoLiveT = null;
+function ibHoLive() {
+  ibReadForm(); ibAccRefresh();
+  if (!IB.hoPlacing || !IB._hoRedraw) return;
+  clearTimeout(_ibHoLiveT);
+  _ibHoLiveT = setTimeout(function () { if (IB.hoPlacing && IB._hoRedraw) IB._hoRedraw(); }, 120);
 }
 function ibHoCancel() { IB.hoPlacing = null; ibPaintViewer(); }
 function ibHoApply() {
@@ -39128,11 +39179,12 @@ function ibRender() {
       ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
       ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
       ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
-        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml()) +   // v3.3.86
+        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml() +
+        (IB.type === 'handout' ? '<div id="ib-ho-sec" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);"><div class="ib-lbl">Handout text</div>' + ibHandoutBody() + '</div>' : '')) +   // v3.3.86; v3.3.93 -- the handout's words, under the dropdown
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
-      (IB.type === 'handout' ? ibAccHtml('handout', 'Handout text', ibHandoutBody()) : '') +   // v3.3.92 -- only for a handout
+      // v3.3.93 -- the handout's words moved into the Image type panel (Ian).
       ibAccHtml('title', 'Title', ibTitleBody()) +   // v3.3.83
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
@@ -39168,7 +39220,7 @@ function ibAccSummary(key) {
   }
   if (key === 'shape') { var s = _rpShapeByKey(IB.shape); return s ? (s.label + ' ' + s.w + ':' + s.h) : 'not chosen'; }
   if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
-  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? (t.label + (IB.typeText ? ' \u00b7 edited' : '')) : 'None'; }   // v3.3.86 -- edited
+  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? (t.label + (IB.typeText ? ' \u00b7 edited' : '') + (IB.type === 'handout' && String(IB.ho.text || '').trim() ? ' \u00b7 text' : '')) : 'None'; }   // v3.3.93 -- text   // v3.3.86 -- edited
   if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
   if (key === 'handout') { var hx = String(IB.ho.text || '').trim().split('\n')[0]; return hx ? (hx.length > 30 ? hx.slice(0, 30) + '\u2026' : hx) + (IB.ho.url && IB.ho.pos ? ' \u00b7 placed' : '') : 'empty'; }   // v3.3.92
   if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
@@ -39748,7 +39800,7 @@ function ibMsg(text, field) {
   if (f) {
     if (f[0]) ibAccSet(f[0], true);
     var el = document.getElementById(f[1]);
-    if (el) { el.classList.add('ib-bad'); try { el.focus(); } catch (e) {} }
+    if (el) { el.classList.add('ib-bad'); nagField(el, null, null); }   // v3.3.93 -- the shake
   }
 }
 

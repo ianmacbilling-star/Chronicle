@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.93",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3393-image-builder-shake",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a missing field now shakes, and titles come from the Title Builder.",
+        "detail": "Pressing Title Builder with no title typed, or Generate with something missing, now outlines and shakes the field that needs filling and says what it is. A title typed without Title Builder lettering is no longer drawn into the picture. The words for a handout now sit under the Image type choice, and Remove writing from picture and Remove title from picture take them off again (free; Revert puts them back).",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.92",
     "staged_on": "2026-11-01",
     "entries": [

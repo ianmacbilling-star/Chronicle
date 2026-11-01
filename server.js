@@ -179,7 +179,7 @@ const apiLimiter = rateLimit({
 // /api/images only: reads (GET / HEAD), deletes, the rights lookup and the Image Builder's free actions (rename, words,
 // Draft / Ready, Revert, Archive, copy, Apply title) are not counted. Everything that can spend still is. The general
 // apiLimiter still covers every one of them.
-var AI_FREE_IMAGES_POST = /^\/(rights|builder\/images\/\d+\/(name|words|ready|revert|archive|copy|title|handout)|builder\/campaigns\/\d+\/handout-image)\/?$/;   // v3.3.92 -- handout
+var AI_FREE_IMAGES_POST = /^\/(rights|builder\/images\/\d+\/(name|words|ready|revert|archive|copy|title|handout|layer-off)|builder\/campaigns\/\d+\/handout-image)\/?$/;   // v3.3.92 -- handout
 function aiLimiterSkip(req) {
   if (req.baseUrl !== '/api/images') return false;
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'DELETE') return true;
