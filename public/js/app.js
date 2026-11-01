@@ -38454,14 +38454,17 @@ function ibCss() {
     '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:10px;}' +
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
     '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
-    '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:20px;align-items:start;}' +
+    '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
-    '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
+    '.ib-shapes{display:flex;flex-wrap:nowrap;gap:4px;}' +   // v3.3.78 -- one row (the strip's own min-width and padding are overridden here only)
+    '#ib-shapes .rp-shape{flex:1 1 0;min-width:0 !important;padding:4px 1px !important;}' +
+    '#ib-shapes .rp-shape > span:last-child{font-size:10px !important;}' +
+    '@media (max-width:520px){.ib-shapes{flex-wrap:wrap;}#ib-shapes .rp-shape{flex:0 0 auto;min-width:58px !important;}}' +
     '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}' +
     '.ib-zoom{display:inline-flex;align-items:center;gap:4px;}' +
     '.ib-bar{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}' +   // v3.3.76
