@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.79",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3379-look-picker-empty-versions",
+        "kind": "fix",
+        "public": true,
+        "summary": "Choosing a character's look: versions with no pictures of that character are no longer listed.",
+        "detail": "Applies to Import a character and the Image Builder's character picker.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.78",
     "staged_on": "2026-11-01",
     "entries": [

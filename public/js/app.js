@@ -36508,7 +36508,8 @@ function _ciLooks(charId, charName) {
         if (!_ci || _ci.charId !== charId) return;
         var body = g.querySelector('.ci-group-body');
         var looks = r.looks || [];
-        body.innerHTML = looks.length ? looks.map(_ciLookTile).join('') : '<div style="font-size:12px;opacity:0.6;">No pictures of ' + escapeHtml(charName) + ' in this version.</div>';
+        if (!looks.length) { g.style.display = 'none'; return; }   // v3.3.79 -- a version with no pictures of them is left out, heading and all
+        body.innerHTML = looks.map(_ciLookTile).join('');
       });
     };
     var groups = b.querySelectorAll('.ci-group');
