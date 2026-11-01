@@ -3666,6 +3666,11 @@
       <div id="verbosity-info" class="info-tip-pop" style="display:none;">Applies when the narrative is generated or regenerated. High is the most verbose. Every setting still tells the complete story &mdash; this only changes how tersely it is written, never which events are included.</div>
     </div>
     <div id="style-picker-grid" class="style-card-grid"></div>
+    <!-- v3.3.70 -- TD-1079. Shown for the art window only (openStylePicker); the page gates Platinum. -->
+    <div id="style-picker-cstyle" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(201,168,76,0.25);">
+      <button type="button" class="btn btn-sm" onclick="cstyleFromPicker()">Go to Custom Art Styles</button>
+      <span style="font-size:11px;color:var(--gold-dim);line-height:1.4;">Make your own art style from reference pictures (Platinum).</span>
+    </div>
   </div>
 </div>
 <div class="modal-overlay hidden" id="retouch-modal">

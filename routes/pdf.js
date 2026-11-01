@@ -2542,6 +2542,36 @@ function bookAuthorNote(pageOpts, campaign) {
     : ((campaign && campaign._memberAuthorNote != null) ? campaign._memberAuthorNote : '');
   return String(raw).replace(/\r\n/g, '\n').trim().slice(0, AUTHOR_NOTE_MAX);
 }
+// v3.3.70 -- TD-1079. THE AUTHOR NOTE IS SET AT THE SUBTITLE SIZE, 16pt (Ian), AND STEPS DOWN ONLY WHEN THE DETAILS
+// PAGE WOULD OVERFLOW. The page holds the title, the subtitle, the players, the byline, the note and the footer; a full
+// 600-character note at 16pt fits on its own, but with a subtitle, a long player list and several paragraphs it does
+// not (measured in Chromium, 2026-11-01), and an overflowing front-matter page is a lost line or an extra page in print.
+// The estimate is deliberately on the large side (wide characters, a quarter inch spare), so a fitted note never
+// overflows; the cost is that a note close to the limit drops a size a little early. Same answer in preview, PDF and
+// print, because it is decided here and not in the browser. Returns 16, 14, 12, or 11.5 (the size before v3.3.70).
+function dpNoteFontPt(note, title, sub, players, blocks) {
+  if (!note) return 16;
+  function lines(text, pt, em, widthIn) {
+    if (!text) return 0;
+    var per = Math.max(1, Math.floor(widthIn * 72 / (pt * em)));
+    return Math.ceil(String(text).length / per);
+  }
+  var used = Math.max(1, lines(title, 20, 0.80, 6.3)) * 20 * 1.25 / 72 + 0.08;   // title: Cinzel capitals, wide
+  if (sub) used += lines(sub, 16, 0.48, 6.3) * 16 * 1.25 / 72 + 0.10;
+  used += 0.41;   // divider and its margins
+  if (players) used += 0.17 + lines(players, 12, 0.48, 6.3) * 12 * 1.5 / 72 + 0.22;
+  used += (blocks || 0) * 0.66;   // Chronicled by / Story Master
+  used += 2.6;   // footer: copyright line, logo, Campaignia notice
+  var room = 9.4 - used - 0.25;
+  var paras = String(note).split(/\n+/).map(function (p) { return p.trim(); }).filter(Boolean);
+  var sizes = [16, 14, 12];
+  for (var i = 0; i < sizes.length; i++) {
+    var pt = sizes[i], h = 0.12;
+    for (var j = 0; j < paras.length; j++) h += lines(paras[j], pt, 0.48, 5.4) * pt * 1.5 / 72 + 0.08;
+    if (h <= room) return pt;
+  }
+  return 11.5;
+}
 // v3.0.575 -- ONE PLACE THAT READS A FORK'S BOOK META ONTO THE CAMPAIGN. This block existed FIVE
 // times, byte-identical, in /novel, /print-interior, /print-cover, /publish-story and
 // assembleNovelHtml -- and the subtitle and the title colour had to be added to all five at once,
@@ -6314,6 +6344,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // be a working name; it shows only if the author put it in the title or subtitle.
   var _fmSub = coverSubtitle(pageOpts);
   var _fmNote = bookAuthorNote(pageOpts, campaign);
+  var _fmNotePt = dpNoteFontPt(_fmNote, _bookTitleFM, _fmSub, playerNames, (fPublic ? (copyHolder ? 1 : 0) : 1));   // v3.3.70 -- TD-1079
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
@@ -6338,7 +6369,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       (fPublic
         ? (copyHolder ? '<div class="dp-block"><div class="dp-label">Chronicled by</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' : '')
         : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
-      (_fmNote ? '<div class="dp-author-note">' + _fmNote.split(/\n+/).map(function (_ln) { return _ln.trim(); }).filter(Boolean).map(function (_ln) { return '<p>' + _fmEsc(_ln) + '</p>'; }).join('') + '</div>' : '') +   // v3.2.82 -- TD-1017
+      (_fmNote ? '<div class="dp-author-note"' + (_fmNotePt < 16 ? ' style="font-size:' + _fmNotePt + 'pt"' : '') + '>' + _fmNote.split(/\n+/).map(function (_ln) { return _ln.trim(); }).filter(Boolean).map(function (_ln) { return '<p>' + _fmEsc(_ln) + '</p>'; }).join('') + '</div>' : '') +   // v3.2.82 -- TD-1017
       '<div class="dp-footer">' +
         // v3.2.83 -- TD-1018. Ian: the copyright line sits just above the Campaignia logo, at the foot of the page.
         '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
@@ -6558,7 +6589,7 @@ ${previewScrollbarCss()}
   .dp-campaign { font-family:'Crimson Text',serif;font-size:16pt;font-style:italic;color:#6b5f55;margin:-0.02in 0 0.12in; }
   .dp-dates { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;font-style:italic;margin-bottom:0.15in; }
   .dp-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.1in auto 0.3in; }
-  .dp-author-note { font-family:'Crimson Text',serif;font-size:11.5pt;font-style:italic;color:#3a2a1a;line-height:1.5;max-width:5.4in;margin:0.12in auto 0; }
+  .dp-author-note { font-family:'Crimson Text',serif;font-size:16pt;font-style:italic;color:#3a2a1a;line-height:1.5;max-width:5.4in;margin:0.12in auto 0; }
   .dp-author-note p { margin:0 0 0.08in; }
   .dp-block { margin-bottom:0.22in; }
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }

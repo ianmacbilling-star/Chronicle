@@ -6364,11 +6364,12 @@ function resetCustomStyleForm() {
   cstyleErr(''); cstyleSaveErr('');
   csLoadQuestions(csRender);
 }
-function openCustomStylesView() {
+function openCustomStylesView(beforeUpgrade, beforeOpen) {   // v3.3.70 -- TD-1079: both optional (the art style window's button)
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.', beforeUpgrade);
     return;
   }
+  if (typeof beforeOpen === 'function') beforeOpen();
   showView('custom-styles');
   var _csn = document.getElementById('campaign-subnav'); if (_csn) _csn.style.display = 'none';
   setBreadcrumb([{ label: 'My Campaigns', action: "showView('campaigns')" }, { label: 'Custom Art Styles' }]);
@@ -7118,6 +7119,9 @@ function openStylePicker(kind) {
       if (STYLE_PICKER_KIND === 'art') _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921
     }
   }
+  // v3.3.70 -- TD-1079. Go to Custom Art Styles, art window only, every plan (the page itself gates Platinum).
+  var _csFoot = document.getElementById('style-picker-cstyle');
+  if (_csFoot) _csFoot.style.display = (STYLE_PICKER_KIND === 'art') ? 'flex' : 'none';
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
 }
@@ -12004,14 +12008,14 @@ function _tbTargetKey() {
 // A MODAL, NOT A TOAST. showAlert slides in at the top right for two and a half seconds, which is
 // easy to miss right after clicking, when you are looking at where you clicked -- and it has
 // nowhere to put an Upgrade button.
-function platinumGate(what, why) {
+function platinumGate(what, why, beforeUpgrade) {   // v3.3.70 -- beforeUpgrade: optional, runs just before goToPlans
   appConfirm({
     title: what + ' is a Platinum feature',
     body: why,
     note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
     okLabel: 'Upgrade My Plan',
     cancelLabel: 'Not now',
-    onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+    onOk: function () { if (typeof beforeUpgrade === 'function') beforeUpgrade(); if (typeof goToPlans === 'function') goToPlans(); }
   });
 }
 
@@ -38377,4 +38381,15 @@ function openCompareTiersGrid(btn) {
   };
   sc.onerror = function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not load the grid. Try again.'; };
   document.body.appendChild(sc);
+}
+
+// ==========================================================================================================
+// v3.3.70 -- TD-1079. GO TO CUSTOM ART STYLES, from the bottom of the Choose an art style window (Ian: every plan
+// sees it, Platinum uses it, everyone else gets the Upgrade My Plan window). The tier test is openCustomStylesView's
+// own, not a copy: on Platinum the window closes and the page opens (its Back returns to the session); otherwise the
+// upgrade window opens on top, Not now leaves the art window as it was, Upgrade My Plan closes it on the way out.
+// ==========================================================================================================
+function cstyleFromPicker() {
+  var _hide = function () { var m = document.getElementById('style-picker-modal'); if (m) m.classList.add('hidden'); };
+  openCustomStylesView(_hide, _hide);
 }
