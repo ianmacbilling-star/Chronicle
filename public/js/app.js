@@ -38628,13 +38628,22 @@ function ibTitleBody() {
         '<button class="btn btn-sm" type="button" onclick="ibTitleClearArt()">Remove lettering</button>'
         : '<span class="ib-meta">Optional. Without it, the art style decides the lettering.</span>') +
     '</div>' +
-    '<div class="ib-meta" style="margin-top:10px;color:var(--gold-light);">Titles are drawn into the picture and can\u2019t be removed afterwards. If you want this picture for a book cover, make a version without the title: the book puts its own title on the cover.</div>';
+    // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
+    (t.url
+      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, Apply title lays it on for free.</div>'
+      : '<div class="ib-meta" style="margin-top:10px;color:var(--gold-light);">Without Title Builder lettering, the art style draws the title into the picture, and it can\u2019t be removed afterwards. If you want this picture for a book cover, make a version without the title: the book puts its own title on the cover.</div>');
 }
 function ibOpenTitleBuilder() {
   ibReadForm();
   if (!IB.cid) return;
   if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first, then design its lettering.', 'title'); return; }
   openTitleBuilder({ kind: 'ib', campaignId: IB.cid });
+}
+function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (no title)'); }   // v3.3.85
+// v3.3.85 -- lay the Title section's lettering on this picture, free.
+function ibApplyTitle(id) {
+  ibReadForm(); ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/title', { title: Object.assign({}, IB.ttl) }, function (d) { ibPut(d.image); });
 }
 function ibTitleClearArt() { ibReadForm(); IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.desc = ''; ibRender(); }
 // v3.3.83 -- Ian: "The name change save should happen on blur." Leaving the Name field renames the picture in the
@@ -38851,10 +38860,13 @@ function ibViewerHtml() {
     if (mine) {
       p.push('<button class="panel-pill" onclick="ibEditPrompt(' + im.id + ')" title="Change the words the picture is drawn from">Edit Prompt</button>');
       p.push('<button class="panel-pill" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Regen</button>');
+      // v3.3.85 -- Apply title: the Title section's lettering laid on this picture (free); Without title: the clean copy.
+      if (im.image_url && IB.ttl && IB.ttl.url && String(IB.ttl.title || '').trim()) p.push('<button class="panel-pill" onclick="ibApplyTitle(' + im.id + ')" title="Lay the Title section\u2019s lettering on this picture at its placement and size (free, no redraw)">Apply title</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibRetouch(' + im.id + ')" title="Change one thing in the picture (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Retouch</button>');   // v3.3.82
       if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen or Retouch">Revert</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibSaveAsset(' + im.id + ')" title="Make it a campaign asset (an NPC, item or location); you can frame part of it">Save as Asset</button>');   // v3.3.82
+      if (im.has_clean && im.clean_url) p.push('<button class="panel-pill" onclick="ibViewClean(' + im.id + ')" title="The clean copy, without the title">Without title</button>');   // v3.3.85
       if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
     } else if (im.image_url) {
       p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
@@ -39042,9 +39054,17 @@ function ibRegen(id) {
   });
 }
 function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/revert', {}, function (d) { ibPut(d.image); }); }
-function ibArchive(id) {
+// v3.3.85 -- a picture with a clean copy asks which version first.
+function ibWhichCopy(id, verb) {
+  var im = ibImg(id);
+  if (!im || !im.has_clean) return Promise.resolve(false);
+  return uiChoose(verb, 'This picture has a title laid on it. Which version?', ['With the title', 'Without the title (the clean copy)'])
+    .then(function (i) { return i === null ? null : i === 1; });
+}
+async function ibArchive(id) {
   ibActMsg('');
-  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/archive', {}, function (d) {
+  var clean = await ibWhichCopy(id, 'Archive'); if (clean === null) return;
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/archive', { clean: clean }, function (d) {
     showAlert(d.already ? 'This picture is already in the campaign\u2019s Archive.' : 'Archived. It is in the campaign\u2019s Archive, ready to use as a cover, title picture or replacement.');
   });
 }
@@ -39094,7 +39114,7 @@ function ibRetouch(id) {
   var refs = [];
   ((im.refs && im.refs.characters) || []).forEach(function (c) { if (c && c.name) refs.push({ name: c.name, kind: 'character' }); });
   ((im.refs && im.refs.assets) || []).forEach(function (a) { if (a && a.name) refs.push({ name: a.name, kind: 'asset', category: a.category || '' }); });
-  rgSetup('ib' + id, { url: im.image_url, shape: im.shape, refs: refs });
+  rgSetup('ib' + id, { url: im.clean_url || im.image_url, shape: im.shape, refs: refs });   // v3.3.85 -- the clean copy is what gets retouched
   if (ta) setTimeout(function () { ta.focus(); }, 30);
 }
 function ibRetouchSend(id, instruction, snap, refName) {
@@ -39116,22 +39136,24 @@ function ibRetouchSend(id, instruction, snap, refName) {
   }).catch(function () { undo('Connection error. Please try again.'); });
 }
 // v3.3.82 -- Save as Asset: the Archive's Copy to Assets window (name, type, crop frame), keyed 'ib:<id>'.
-function ibSaveAsset(id) {
+async function ibSaveAsset(id) {
   var im = ibImg(id); if (!im || !im.image_url) return;
+  var clean = await ibWhichCopy(id, 'Save as Asset'); if (clean === null) return;   // v3.3.85
+  IB.assetClean = clean;
   _caArchiveId = 'ib:' + id;
   var nameEl = document.getElementById('ca-name'), catEl = document.getElementById('ca-category'), errEl = document.getElementById('ca-error');
   if (errEl) errEl.classList.add('hidden');
   if (nameEl) nameEl.value = im.name || '';
   if (catEl) catEl.value = (im.image_type === 'item') ? 'item' : ((im.image_type === 'character' || im.image_type === 'creature' || im.image_type === 'token') ? 'npc' : 'location');
   var m = document.getElementById('copy-asset-modal'); if (m) m.classList.remove('hidden');
-  try { _caCropStart({ id: 'ib:' + id, image_url: im.image_url }); } catch (e) {}
+  try { _caCropStart({ id: 'ib:' + id, image_url: (clean && im.clean_url) ? im.clean_url : im.image_url }); } catch (e) {}
   if (nameEl) setTimeout(function () { nameEl.focus(); nameEl.select(); }, 0);
 }
 function ibSaveAssetSend(id, name, category, crop, errEl, saveBtn) {
   if (!IB.cid) { closeCopyToAssetModal(); return; }
   if (saveBtn) saveBtn.disabled = true;
   fetch('/api/campaigns/' + encodeURIComponent(IB.cid) + '/assets/from-builder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ builder_image_id: id, name: name, category: category, crop: crop }) })
+    body: JSON.stringify({ builder_image_id: id, name: name, category: category, crop: crop, clean: !!IB.assetClean }) })   // v3.3.85
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (saveBtn) saveBtn.disabled = false;

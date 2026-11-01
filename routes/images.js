@@ -2535,14 +2535,24 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.kind === 'builder' && job.builder_image_id) {
           // v3.3.74 -- a Regen: the picture on show moves into the one-deep undo slot (with its size) and the one
           // that was there is released AFTER the row stops naming it (TD-1006's order), so Revert can swap back.
-          const _bi = await db.prepare('SELECT image_url, img_w, img_h, prev_image_url FROM builder_images WHERE id = ?').get(job.builder_image_id);
+          const _bi = await db.prepare('SELECT image_url, img_w, img_h, prev_image_url, clean_image_url, prev_clean_image_url, refs FROM builder_images WHERE id = ?').get(job.builder_image_id);
+          // v3.3.85 -- a title with Title Builder lettering is laid on now; what the model drew is kept as the clean copy.
+          // If the overlay fails the picture still lands, untitled, and the failure is logged.
+          let _shown = imageUrl, _clean = null;
+          const _ov = _bi ? ibOverlayOf(_bi.refs) : null;
+          if (_ov) {
+            try { const _t = await ibOverlayTitle(imageUrl, _ov, job.builder_image_id); if (_t) { _shown = _t; _clean = imageUrl; } }
+            catch (_oe) { try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'webhook builder title', message: 'Could not lay the title on Image Builder picture ' + job.builder_image_id + ': ' + (_oe && _oe.message) }); } catch (_le) {} }
+          }
           if (_bi && _bi.image_url && _bi.image_url !== imageUrl) {
-            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, updated_at = ? WHERE id = ?')
-              .run(imageUrl, imgW, imgH, _bi.image_url, _bi.img_w || null, _bi.img_h || null, new Date().toISOString(), job.builder_image_id);
-            if (_bi.prev_image_url && _bi.prev_image_url !== _bi.image_url && _bi.prev_image_url !== imageUrl) await releaseImage(db, _bi.prev_image_url);
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, updated_at = ? WHERE id = ?')
+              .run(_shown, imgW, imgH, _clean, _bi.image_url, _bi.img_w || null, _bi.img_h || null, _bi.clean_image_url || null, new Date().toISOString(), job.builder_image_id);
+            // Released AFTER the row stops naming them; releaseImage keeps anything still named anywhere.
+            if (_bi.prev_image_url) await releaseImage(db, _bi.prev_image_url);
+            if (_bi.prev_clean_image_url) await releaseImage(db, _bi.prev_clean_image_url);
           } else {
-            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, updated_at = ? WHERE id = ?')
-              .run(imageUrl, imgW, imgH, new Date().toISOString(), job.builder_image_id);
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, updated_at = ? WHERE id = ?')
+              .run(_shown, imgW, imgH, _clean, new Date().toISOString(), job.builder_image_id);
           }
           await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
         }
@@ -3262,7 +3272,7 @@ function ibRow(r) {
     refs: refs || { characters: [], assets: [] }, prompt: r.prompt || '', image_url: r.image_url || null, img_w: r.img_w || null, img_h: r.img_h || null,
     status: st, error: r.image_url ? null : (st === 'failed' ? (r.job_error || IB_LOST) : null), job_id: r.job_id || null,
     created_at: r.created_at || null, ready: r.is_ready !== false,   // v3.3.73 -- a NULL (never set) counts as Ready
-    words: r.words || '', has_prev: !!r.prev_image_url, copied_from: r.copied_from || null, last_error: lastErr };   // v3.3.74
+    words: r.words || '', has_prev: !!r.prev_image_url, has_clean: !!r.clean_image_url, clean_url: r.clean_image_url || null, copied_from: r.copied_from || null, last_error: lastErr };   // v3.3.74
 }
 const IB_LIST_SQL = 'SELECT b.*, u.name AS maker_name, ' +
   '(SELECT j.status FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_status, ' +
@@ -3395,6 +3405,46 @@ function ibCleanTitle(t) {
   if (out.url && s && isOurPublicUrl(s)) out.src = s;
   return out;
 }
+// v3.3.85 -- THE LETTERING GOES ON LAST. Ian: "it's not putting the image from the title builder on the image." Handed
+// to the model as a reference, the lettering was treated as what every reference is -- something to redraw in the
+// picture's style -- and was redrawn, or dropped. So the model draws the picture with the title's band left calm, and
+// the Title Builder's own artwork (transparent, trimmed) is laid over it here, centred, at the placement and size
+// chosen; the picture before that is kept as the clean copy. The box is a share of the picture's width and height.
+var IB_TITLE_BOX = { small: [0.38, 0.16], medium: [0.62, 0.24], large: [0.88, 0.32] };
+async function ibFetchImage(u) {
+  let buf = null;
+  try { buf = await fetchFile(u); } catch (e) { buf = null; }
+  if (buf) return buf;
+  const r = await fetch(u);
+  if (!r.ok) throw new Error('could not fetch ' + u + ' (' + r.status + ')');
+  return Buffer.from(await r.arrayBuffer());
+}
+async function ibOverlayTitle(pictureUrl, t, imageId) {
+  const sharp = require('sharp');
+  const pic = await ibFetchImage(pictureUrl);
+  let lettering = await ibFetchImage(t.url);
+  try { lettering = await sharp(lettering).trim().png().toBuffer(); } catch (e) {}   // transparent margins off, so the size is the lettering's
+  const meta = await sharp(pic).metadata();
+  const W = meta.width, H = meta.height;
+  if (!W || !H) throw new Error('the picture has no size');
+  const box = IB_TITLE_BOX[t.size] || IB_TITLE_BOX.medium;
+  const lt = await sharp(lettering).resize({ width: Math.max(1, Math.round(W * box[0])), height: Math.max(1, Math.round(H * box[1])), fit: 'inside' }).png().toBuffer({ resolveWithObject: true });
+  const lw = lt.info.width, lh = lt.info.height, m = Math.round(Math.min(W, H) * 0.04);
+  const top = t.place === 'middle' ? Math.round((H - lh) / 2) : (t.place === 'bottom' ? H - lh - m : m);
+  const out = await sharp(pic).composite([{ input: lt.data, left: Math.max(0, Math.round((W - lw) / 2)), top: Math.max(0, Math.min(H - lh, top)) }]).png().toBuffer();
+  return uploadFile(out, 'ibtitled-' + imageId + '-' + Date.now() + '.png', 'image/png');
+}
+// The recipe's title when it has lettering to lay on, else null.
+function ibOverlayOf(refsJson) {
+  let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
+  const t = refs && refs.title;
+  return (t && t.title && t.url) ? t : null;
+}
+// What the model is told when the lettering will be laid on afterwards: keep the band calm, draw no title.
+function ibTitleSpaceText(t) {
+  return 'TITLE SPACE: a title will be laid over the ' + t.place + ' of this picture afterwards, ' + IB_TITLE_SIZE[t.size] +
+    '. Keep that part of the picture calm and uncluttered (sky, ground, mist or shadow), with no faces or important detail in it. Do not draw any title, lettering or text yourself.';
+}
 function ibTitleText(t, hasRef) {
   var s = 'TITLE LETTERING (part of this picture): letter exactly this title into the picture, spelled letter for letter: "' + t.title + '".';
   if (t.subtitle) s += ' Underneath it, smaller, letter exactly: "' + t.subtitle + '".';
@@ -3407,10 +3457,11 @@ function ibPrompt(o) {
   var parts = [];
   var typeText = o.type ? o.type.text : '';
   // A poster is told to leave the title out; with a title asked for, it is part of the design instead.
-  if (typeText && o.title) typeText = typeText.replace(', and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.', ', with the title below lettered into the design.').replace(/ Do not draw any title, lettering or text\./g, '');
+  if (typeText && o.title && o.titleOver) typeText = typeText.replace('near the top where a title can be added later', 'near the ' + o.title.place + ' where the title will be laid');   // v3.3.85
+  else if (typeText && o.title) typeText = typeText.replace(', and a clear, uncluttered area near the top where a title can be added later. Do not draw any title, lettering or text.', ', with the title below lettered into the design.').replace(/ Do not draw any title, lettering or text\./g, '');
   if (typeText) parts.push(typeText);
   if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
-  if (o.title) parts.push(ibTitleText(o.title, !!o.titleRef));   // v3.3.83
+  if (o.title) parts.push(o.titleOver ? ibTitleSpaceText(o.title) : ibTitleText(o.title, false));   // v3.3.83; v3.3.85 -- lettering is laid on afterwards
   if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
   if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
   return parts.join('\n\n');
@@ -3445,8 +3496,8 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
   if (assets.length !== assetIds.length) { res.json({ error: 'One of the assets is no longer available, or its picture was removed.' }); return null; }
   const ttl = ibCleanTitle(refsIn.title);   // v3.3.83
-  const ttlRef = ttl ? (ttl.src || ttl.url) : '';
-  if (chars.length + assets.length + (ttlRef ? 1 : 0) > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image' + (ttlRef ? ' (the title lettering counts as one).' : '.') }); return null; }
+  const ttlOver = !!(ttl && ttl.url);   // v3.3.85 -- Title Builder lettering is laid over the finished picture, not drawn by the model
+  if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
   if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
 
   const charIds = chars.map(function (c) { return c.character_id; });
@@ -3454,19 +3505,18 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const assetList = buildAssetBlock(assets, '', assetIds);
   const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
     refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
-  if (ttlRef) panelBlock.refs = panelBlock.refs.concat([{ url: ttlRef, name: 'the title lettering' }]);   // v3.3.83 -- last, after the cast
 
   let prompt = (typeof words === 'string' && words.trim()) ? words.trim().slice(0, IB_WORDS_MAX) : '';
   if (!prompt) {
     const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
     const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleRef: ttlRef });
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttl, titleOver: ttlOver });
   }
   // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
   // own flags pass through untouched, exactly as a panel would send them.
   let flags = _rs.isFade;
   if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
-  if (ttl) flags = Object.assign((flags && typeof flags === 'object') ? Object.assign({}, flags) : { fade: flags }, { titled: true });   // v3.3.83 -- the title is allowed
+  if (ttl && !ttlOver) flags = Object.assign((flags && typeof flags === 'object') ? Object.assign({}, flags) : { fade: flags }, { titled: true });   // v3.3.83 -- the title is allowed
 
   const modelKey = await getSelectedModel(db);
   const cost = await getTokenCost(modelKey);
@@ -3537,6 +3587,36 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
   }
 });
 
+// v3.3.85 -- Apply title: the Title section's lettering, laid on the clean copy at its placement and size, with no
+// redraw and no token. A picture with no clean copy is used as it is and becomes the clean copy -- unless its title was
+// drawn by the art style (typed, with no lettering), which cannot be lifted off. The picture before goes to Revert.
+router.post('/builder/images/:id/title', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing first.' });
+    const ttl = ibCleanTitle(req.body && req.body.title);
+    if (!ttl || !ttl.url) return res.json({ error: 'Design the lettering with the Title Builder first.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    if (!r.clean_image_url && refs.title && refs.title.title && !refs.title.url) {
+      return res.json({ error: 'This picture\u2019s title was drawn into it by the art style, so it can\u2019t be swapped. Generate it again with the lettering.' });
+    }
+    const base = r.clean_image_url || r.image_url;
+    let shown;
+    try { shown = await ibOverlayTitle(base, ttl, r.id); } catch (e) {
+      console.error('[image-builder] apply title error:', e.message);
+      return res.json({ error: 'Could not lay the title on the picture. Please try again.' });
+    }
+    refs.title = ttl;
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] apply title error:', e.message); res.json({ error: 'Could not lay the title on the picture.' }); }
+});
+
 // v3.3.83 -- Rename: Ian, "The name change save should happen on blur". The maker only; allowed while it is drawing,
 // since the name is not part of the picture.
 router.post('/builder/images/:id/name', requireAuth, async function (req, res) {
@@ -3595,8 +3675,8 @@ router.post('/builder/images/:id/revert', requireAuth, async function (req, res)
     const db = await getDb();
     const r = await ibOwnIdle(req, res, db); if (!r) return;
     if (!r.prev_image_url) return res.json({ error: 'There is no earlier picture to go back to.' });
-    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, updated_at = ? WHERE id = ?')
-      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.image_url, r.img_w || null, r.img_h || null, new Date().toISOString(), r.id);
+    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, updated_at = ? WHERE id = ?')
+      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.prev_clean_image_url || null, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, new Date().toISOString(), r.id);   // v3.3.85 -- the clean copies swap too
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
     res.json({ success: true, image: ibRow(row) });
   } catch (e) { console.error('[image-builder] revert error:', e.message); res.json({ error: 'Could not go back to the earlier picture.' }); }
@@ -3610,7 +3690,9 @@ router.post('/builder/images/:id/archive', requireAuth, async function (req, res
     const db = await getDb();
     const r = await ibOwnIdle(req, res, db); if (!r) return;
     if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be archived.' });
-    const already = await db.prepare("SELECT id FROM campaign_archives WHERE campaign_id = ? AND source_url = ? LIMIT 1").get(r.campaign_id, r.image_url);
+    // v3.3.85 -- clean: the copy without the title (Archive asks which, when there is one).
+    const _src = (req.body && req.body.clean && r.clean_image_url) ? r.clean_image_url : r.image_url;
+    const already = await db.prepare("SELECT id FROM campaign_archives WHERE campaign_id = ? AND source_url = ? LIMIT 1").get(r.campaign_id, _src);
     if (already) return res.json({ success: true, already: true });
     try {
       const effTier = getTier(await getEffectiveTier(req.session.userId, r.campaign_id));
@@ -3620,13 +3702,13 @@ router.post('/builder/images/:id/archive', requireAuth, async function (req, res
         if (cnt && Number(cnt.c) >= cap) return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
       }
     } catch (capErr) { console.error('[image-builder] archive cap check error:', capErr.message); }
-    if (await rightsCheck.refuseRejected(res, [r.image_url], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
+    if (await rightsCheck.refuseRejected(res, [_src], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
     const { archiveCopy } = require('../storage/storage');
-    const archivedUrl = await archiveCopy(r.image_url);
+    const archivedUrl = await archiveCopy(_src);
     await db.prepare(
       'INSERT INTO campaign_archives (campaign_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(r.campaign_id, 'moment', r.name || 'Image Builder picture', archivedUrl, r.image_url, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
+    ).run(r.campaign_id, 'moment', (r.name || 'Image Builder picture') + (_src !== r.image_url ? ' (no title)' : ''), archivedUrl, _src, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
     res.json({ success: true });
   } catch (e) { console.error('[image-builder] archive error:', e.message); res.json({ error: 'Could not archive the picture.' }); }
 });
@@ -3645,9 +3727,9 @@ router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
     if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be copied.' });
     const now = new Date().toISOString();
     const ins = await db.prepare(
-      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, is_ready, copied_from, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(r.campaign_id, uid, String(r.name || 'Picture').slice(0, IB_NAME_MAX - 7) + ' (copy)', r.description, r.image_type, r.shape, r.art_style, r.art_style_name, r.include_lore, r.refs, r.prompt, r.words, r.image_url, r.img_w, r.img_h, false, r.id, now, now);
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, clean_image_url, is_ready, copied_from, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(r.campaign_id, uid, String(r.name || 'Picture').slice(0, IB_NAME_MAX - 7) + ' (copy)', r.description, r.image_type, r.shape, r.art_style, r.art_style_name, r.include_lore, r.refs, r.prompt, r.words, r.image_url, r.img_w, r.img_h, r.clean_image_url || null, false, r.id, now, now);   // v3.3.85 -- with its clean copy
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
     res.json({ success: true, image: ibRow(row) });
   } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
@@ -3708,7 +3790,8 @@ router.post('/builder/images/:id/retouch', requireAuth, async function (req, res
     const modelKey = await getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
     if (!(await canAfford(uid, cost))) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
-    const sub = await submitRetouch(r.image_url, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charList.text }, r.shape, marked || null, pick || null, false, null);
+    // v3.3.85 -- the clean copy is retouched; the lettering goes back on when it lands.
+    const sub = await submitRetouch(r.clean_image_url || r.image_url, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charList.text }, r.shape, marked || null, pick || null, false, null);
     const now = new Date().toISOString();
     const job = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, prev_image, temp_inputs, created_at, updated_at) ' +
@@ -3751,6 +3834,8 @@ router.delete('/builder/images/:id', requireAuth, async function (req, res) {
     await db.prepare('DELETE FROM builder_images WHERE id = ?').run(r.id);
     if (r.image_url) await releaseImage(db, r.image_url);
     if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.clean_image_url) await releaseImage(db, r.clean_image_url);   // v3.3.85
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
     res.json({ success: true });
   } catch (e) { console.error('[image-builder] delete error:', e.message); res.json({ error: 'Could not delete the picture.' }); }
 });

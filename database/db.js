@@ -2324,6 +2324,9 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS words TEXT');
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_w INTEGER');
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_h INTEGER');
+    // v3.3.85 -- the clean copy (the picture before its title lettering was laid on), and the one in the undo slot.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS clean_image_url TEXT');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_clean_image_url TEXT');
   } catch (e) { console.error('[image-builder] migration skipped this boot:', e && e.message); }
 }
 

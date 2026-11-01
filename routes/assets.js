@@ -652,8 +652,9 @@ router.post('/from-builder', requireAuth, verifyCampaignAssetCreator, async func
     const name = (req.body && req.body.name || '').trim();
     const category = cleanCategory(req.body && req.body.category);
     if (!name) return res.json({ error: 'Asset name is required' });
-    const b = await db.prepare('SELECT id, user_id, image_url, is_ready FROM builder_images WHERE id = ? AND campaign_id = ?').get(req.body && req.body.builder_image_id, req.params.campaignId);
+    const b = await db.prepare('SELECT id, user_id, image_url, clean_image_url, is_ready FROM builder_images WHERE id = ? AND campaign_id = ?').get(req.body && req.body.builder_image_id, req.params.campaignId);
     if (!b || !b.image_url || (b.is_ready === false && String(b.user_id) !== String(req.session.userId))) return res.status(404).json({ error: 'Source image not found.' });
+    if (req.body && req.body.clean && b.clean_image_url) b.image_url = b.clean_image_url;   // v3.3.85 -- the copy without the title
     if (await rightsCheck.refuseRejected(res, [b.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
     let imageUrl;
     const crop = cropMath.readFrac(req.body && req.body.crop);

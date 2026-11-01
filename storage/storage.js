@@ -475,7 +475,7 @@ async function releaseImage(db, fileUrl) {
       ['SELECT 1 FROM moments WHERE layout_meta LIKE ? LIMIT 1', ['%' + String(fileUrl).replace(/[%_]/g, '') + '%']],
       ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]],
-      ['SELECT 1 FROM builder_images WHERE image_url = ? OR prev_image_url = ? LIMIT 1', [fileUrl, fileUrl]]   // v3.3.71 -- TD-1080
+      ['SELECT 1 FROM builder_images WHERE image_url = ? OR prev_image_url = ? OR clean_image_url = ? OR prev_clean_image_url = ? LIMIT 1', [fileUrl, fileUrl, fileUrl, fileUrl]]   // v3.3.71 -- TD-1080; v3.3.85 -- the clean copies
     ];
     for (let i = 0; i < checks.length; i++) {
       const row = await db.prepare(checks[i][0]).get(...checks[i][1]);
