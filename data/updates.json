@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.72",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3372-image-builder-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Image Builder has two tabs: Make a picture and Gallery.",
+        "detail": "On Make a picture, your picture fills the right side of the page at its own shape, with the same Generating spinner as story pictures while it is drawn. The Gallery shows every picture in the campaign across the whole page; click one to open it.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.71",
     "staged_on": "2026-11-01",
     "entries": [

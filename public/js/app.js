@@ -38434,7 +38434,8 @@ function cstyleFromPicker() {
 // APPENDED, NOT INSERTED (TD-853); every name here starts ib / IB and is declared nowhere else.
 // =====================================================================================================
 var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
-  type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0 };
+  type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0,
+  tab: 'make', viewId: null, sig: '' };   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
 var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
 var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
 var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
@@ -38444,8 +38445,13 @@ function ibCss() {
   var st = document.createElement('style');
   st.id = 'ib-css';
   st.textContent =
-    '#ib-root{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;align-items:start;color:#f0e8d0;}' +
+    '#ib-root{color:#f0e8d0;}' +
     '#ib-root b,#ib-root label{color:#f0e8d0;}' +
+    '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}' +
+    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:16px;}' +
+    '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
+    '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
+    '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim, #b89a52);margin-bottom:6px;font-weight:600;}' +
@@ -38453,13 +38459,18 @@ function ibCss() {
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
     '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
-    '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}' +
+    '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;}' +
+    '.ib-frame{position:relative;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
+    '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
+    '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
+    '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
+    '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
     '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:8px;}' +
-    '.ib-pic{width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;}' +
+    '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
     '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
     '.ib-meta{font-size:12px;color:rgba(240,232,208,0.7);}' +
     '.ib-err{color:#f0a090;font-size:13px;}' +
-    '@media (max-width:800px){#ib-root{grid-template-columns:1fr;}}';
+    '@media (max-width:800px){.ib-make{grid-template-columns:1fr;}.ib-viewer{position:static;}}';
   document.head.appendChild(st);
 }
 
@@ -38493,7 +38504,7 @@ function openImageBuilder(keepBack) {
 }
 
 function ibCampaign(id) { return (IB.campaigns || []).filter(function (c) { return String(c.id) === String(id); })[0] || null; }
-function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
+function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; IB.viewId = null; IB.sig = ''; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
 
 // Back: to the page the Builder was opened from, by the same rule as Custom Art Styles' Back.
 function ibBack() {
@@ -38546,18 +38557,27 @@ function ibRender() {
   var root = document.getElementById('ib-root'); if (!root) return;
   ibReadForm();
   var camps = IB.campaigns || [];
-  var campHtml = camps.length
-    ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:15px;">' + (IB.cid ? escapeHtml(IB.cname) : '<span style="opacity:0.6;">No campaign chosen</span>') + '</b>' +
+  var head = camps.length
+    ? '<div class="ib-head"><span class="ib-lbl" style="margin:0;">Campaign</span><b style="font-size:16px;">' + (IB.cid ? escapeHtml(IB.cname) : '<span style="opacity:0.6;">No campaign chosen</span>') + '</b>' +
       '<button class="btn btn-sm" onclick="ibPickCampaign()">' + (IB.cid ? 'Change' : 'Choose a campaign') + '</button></div>'
-    : '<div class="ib-meta">You have no campaigns the Image Builder can use yet. Create a campaign first.</div>';
+    : '<div class="ib-meta" style="margin-bottom:12px;">You have no campaigns the Image Builder can use yet. Create a campaign first.</div>';
+  if (!IB.cid) { root.innerHTML = head + '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>'; return; }
+  var tabs = '<div class="ib-tabs">' +
+    '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? '' : ' on') + '" onclick="ibTab(\'make\')">Make a picture</button>' +
+    '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? ' on' : '') + '" id="ib-tab-gallery" onclick="ibTab(\'gallery\')">' + ibGalleryLabel() + '</button></div>';
+  if (IB.tab === 'gallery') {
+    root.innerHTML = head + tabs +
+      '<div class="ib-meta" style="margin-bottom:12px;">Every picture made in ' + escapeHtml(IB.cname) + ', by any member. Only the campaign\u2019s members can see them. Click one to open it.</div>' +
+      '<div id="ib-gallery" class="ib-gal">' + ibGalleryHtml() + '</div>';
+    ibGalleryBusy();
+    return;
+  }
   var typeOpts = '<option value="">None \u2014 just my description</option>' + (IB.types || []).map(function (t) {
     return '<option value="' + escapeHtml(t.key) + '"' + (IB.type === t.key ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>';
   }).join('');
-  var off = !IB.cid;
-  root.innerHTML =
-    '<div class="ib-card" id="ib-form"' + (off ? '' : '') + '>' +
-      '<div class="ib-sec"><div class="ib-lbl">Campaign<span class="ib-req">required</span></div>' + campHtml + '</div>' +
-      (off ? '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>' :
+  root.innerHTML = head + tabs +
+    '<div class="ib-make">' +
+    '<div class="ib-card" id="ib-form">' +
       '<div class="ib-sec"><div class="ib-lbl">References</div><div id="ib-chips">' + ibChipsHtml() + '</div></div>' +
       '<div class="ib-sec"><div class="ib-lbl">Shape<span class="ib-req">required</span></div><div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div></div>' +
       '<div class="ib-sec"><div class="ib-lbl">Art style<span class="ib-req">required</span></div>' +
@@ -38570,42 +38590,94 @@ function ibRender() {
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
       '<div id="ib-msg" class="ib-err" style="margin-bottom:8px;"></div>' +
-      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>') +
+      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
     '</div>' +
-    '<div>' +
-      '<div class="ib-lbl" style="font-size:12px;">' + (IB.cid ? 'Gallery \u2014 ' + escapeHtml(IB.cname) : 'Gallery') + '</div>' +
-      '<div class="ib-meta" style="margin-bottom:10px;">Every picture made in this campaign, by any member. Only the campaign\u2019s members can see them.</div>' +
-      '<div id="ib-gallery" class="ib-gal">' + ibGalleryHtml() + '</div>' +
+    '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
+  ibPaintViewer();
 }
 
 function ibGalleryHtml() {
-  if (!IB.cid) return '<div class="ib-meta">Choose a campaign to see its pictures.</div>';
-  if (!IB.images.length) return '<div class="ib-meta">No pictures yet. Describe one and press Generate.</div>';
+  if (!IB.images.length) return '<div class="ib-meta">No pictures yet. Make one on the Make a picture tab.</div>';
   return IB.images.map(function (im) {
     var mine = String(im.user_id) === String(IB.me);
     var pic;
-    if (im.image_url) pic = '<div class="ib-pic" onclick="ibView(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
-    else if (im.status === 'failed') pic = '<div class="ib-pic" style="cursor:default;"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
-    else pic = '<div class="ib-pic" style="cursor:default;"><div style="font-size:13px;opacity:0.75;">Drawing\u2026</div></div>';
-    var type = '';
-    (IB.types || []).forEach(function (t) { if (t.key === im.image_type) type = t.label; });
-    var bits = [type, (_rpShapeByKey(im.shape) || {}).label, im.art_style_name ? ('Custom: ' + im.art_style_name) : artStyleLabel(im.art_style)].filter(Boolean);
+    if (im.image_url) pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
+    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
     return '<div class="ib-img">' + pic +
       '<b style="font-size:14px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
-      '<div class="ib-meta">' + escapeHtml(bits.join(' \u00b7 ')) + '</div>' +
+      '<div class="ib-meta">' + escapeHtml(ibBits(im)) + '</div>' +
       '<div class="ib-meta">By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
       (mine && (im.image_url || im.status === 'failed') ? '<div><button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button></div>' : '') +
       '</div>';
   }).join('');
 }
 
-function ibPaintGallery() { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = ibGalleryHtml(); }
+function ibPaintGallery() {
+  var t = document.getElementById('ib-tab-gallery'); if (t) t.textContent = ibGalleryLabel();
+  var g = document.getElementById('ib-gallery'); if (g) { g.innerHTML = ibGalleryHtml(); ibGalleryBusy(); }
+  ibPaintViewer();
+}
 function ibPaintChips() { var c = document.getElementById('ib-chips'); if (c) c.innerHTML = ibChipsHtml(); }
 
 function ibView(id) {
   var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
   if (im && im.image_url) openLightbox(im.image_url, im.name || '');
+}
+// The Make tab's viewer: the picture being worked on (just generated, or opened from the Gallery), as big as the
+// pane allows at its own shape; before any, an empty frame in the chosen shape. A picture still drawing gets the
+// Storyboard's Generating spinner (showBusyOverlay), so it looks the same as a panel being drawn.
+function ibGalleryLabel() { return 'Gallery' + (IB.images.length ? ' (' + IB.images.length + ')' : ''); }
+function ibBits(im) {
+  var type = '';
+  (IB.types || []).forEach(function (t) { if (t.key === im.image_type) type = t.label; });
+  return [type, (_rpShapeByKey(im.shape) || {}).label, im.art_style_name ? ('Custom: ' + im.art_style_name) : artStyleLabel(im.art_style)].filter(Boolean).join(' \u00b7 ');
+}
+function ibFrameStyle(w, h) {
+  // As wide as the pane, but never taller than the window below the page header: width = min(100%, room * w / h).
+  return 'aspect-ratio:' + w + ' / ' + h + ';width:min(100%, calc((100vh - 320px) * ' + w + ' / ' + h + '));';
+}
+function ibViewerHtml() {
+  var im = IB.viewId ? IB.images.filter(function (x) { return String(x.id) === String(IB.viewId); })[0] : null;
+  if (!im) {
+    var s = _rpShapeByKey(IB.shape) || { w: 4, h: 3, label: 'Standard' };
+    return '<div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div>';
+  }
+  var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
+  var w = im.img_w || shp.w, h = im.img_h || shp.h;
+  var mine = String(im.user_id) === String(IB.me);
+  var inner;
+  if (im.image_url) inner = '<img src="' + escapeHtml(im.image_url) + '" alt="' + escapeHtml(im.name) + '" onclick="ibView(' + im.id + ')">';
+  else if (im.status === 'failed') inner = '<div class="ib-err" style="padding:16px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div>';
+  else inner = '';
+  return '<div class="ib-frame" id="ib-frame" data-pending="' + (!im.image_url && im.status !== 'failed' ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div>' +
+    '<div class="ib-caption" style="width:min(100%, calc((100vh - 320px) * ' + w + ' / ' + h + '));">' +
+      '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
+      '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
+      (mine && (im.image_url || im.status === 'failed') ? '<div><button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button></div>' : '') +
+    '</div>';
+}
+function ibPaintViewer() {
+  var v = document.getElementById('ib-viewer'); if (!v) return;
+  v.innerHTML = ibViewerHtml();
+  var f = document.getElementById('ib-frame');
+  if (f && f.getAttribute('data-pending') === '1') showBusyOverlay(f, 'Generating', 'Drawing your picture\u2026');
+}
+function ibGalleryBusy() {
+  Array.prototype.forEach.call(document.querySelectorAll('#ib-gallery .ib-pending'), function (el) { showBusyOverlay(el, 'Generating'); });
+}
+function ibTab(t) {
+  ibReadForm();
+  IB.tab = (t === 'gallery') ? 'gallery' : 'make';
+  ibRender();
+}
+// A Gallery picture opens in the Make tab's viewer (stage 2 also loads its recipe into the form there).
+function ibOpen(id) {
+  IB.viewId = id;
+  IB.tab = 'make';
+  ibRender();
+  var v = document.getElementById('ib-viewer'); if (v && v.scrollIntoView) { try { v.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
 }
 
 // Loads what the chosen campaign brings: its custom art styles (for the style window) and its gallery.
@@ -38626,7 +38698,9 @@ function ibLoadGallery() {
       if (String(IB.cid) !== String(cid)) return;
       if (!d || d.error) { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = '<div class="ib-err">' + escapeHtml((d && d.error) || 'Could not load the gallery.') + '</div>'; return; }
       IB.images = d.images || []; IB.me = d.me;
-      ibPaintGallery();
+      // Repaint only when something changed, so a spinner keeps turning between polls instead of restarting.
+      var sig = IB.images.map(function (im) { return im.id + ':' + im.status + ':' + (im.image_url || ''); }).join('|');
+      if (sig !== IB.sig) { IB.sig = sig; ibPaintGallery(); }
       ibSchedulePoll();
     })
     .catch(function () {});
@@ -38740,6 +38814,9 @@ function ibPickShape(k) {
   if (!_rpShapeByKey(k)) return;
   IB.shape = k;
   var s = document.getElementById('ib-shapes'); if (s) s.innerHTML = _rpShapeStrip(IB.shape, 'ibPickShape');
+  // The empty frame follows the shape; a picture already on show keeps its own.
+  var viewing = IB.viewId && IB.images.some(function (x) { return String(x.id) === String(IB.viewId); });
+  if (!viewing) ibPaintViewer();
 }
 
 function ibOpenStyle() {
@@ -38784,7 +38861,7 @@ function ibGenerate() {
         return;
       }
       if (String(IB.cid) !== String(cid)) return;
-      if (d.image) IB.images.unshift(d.image);
+      if (d.image) { IB.images.unshift(d.image); IB.viewId = d.image.id; }   // stays on the Make tab: the new picture fills the viewer
       ibPaintGallery(); ibSchedulePoll();
       if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
     })
@@ -38799,6 +38876,7 @@ async function ibDelete(id) {
     .then(function (d) {
       if (!d || d.error) { showError((d && d.error) || 'Could not delete the picture.'); return; }
       IB.images = IB.images.filter(function (x) { return String(x.id) !== String(id); });
+      if (String(IB.viewId) === String(id)) IB.viewId = null;
       ibPaintGallery();
     })
     .catch(function () { showError('Connection error. Please try again.'); });
