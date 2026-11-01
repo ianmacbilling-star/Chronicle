@@ -38853,6 +38853,7 @@ function ibPlaceMount() {
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibPlaceMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   var old = f.querySelector('.ib-place'); if (old) old.parentNode.removeChild(old);
+  ibPlaceOthers(f, b, im, 'title');   // v3.3.94 -- the writing stays in view
   var oldBar = f.querySelector('.ib-place-bar'); if (oldBar) oldBar.parentNode.removeChild(oldBar);
   var box = document.createElement('div'); box.className = 'ib-place';
   var c = document.createElement('canvas'); c.width = P.cv.width; c.height = P.cv.height; c.getContext('2d').drawImage(P.cv, 0, 0);
@@ -38877,6 +38878,32 @@ function ibPlaceMount() {
   };
   var up = function () { drag = null; };
   box.addEventListener('pointermove', move); box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+// v3.3.94 -- WHAT IS NOT BEING MOVED STAYS IN VIEW. Ian: "if I hit Place Title then it hides the text and vice versa."
+// Placing shows the clean copy (so the thing being moved is never seen twice), which took the OTHER one away as well.
+// It is drawn back on top here, where it sits: the handout's writing multiplied onto the paper, the title with the
+// cover's halo -- as the server lays them. A sequence number drops a late title drawing from an earlier mount.
+function ibPlaceOthers(f, b, im, moving) {
+  Array.prototype.forEach.call(f.querySelectorAll('.ib-other'), function (o) { o.parentNode.removeChild(o); });
+  var seq = f._ibOtherSeq = (f._ibOtherSeq || 0) + 1;
+  var R = (im && im.refs) || {};
+  var h = R.handout;
+  if (moving !== 'handout' && im && im.has_clean && h && !h.off && h.url && h.pos) {
+    var hi = document.createElement('img'); hi.className = 'ib-other'; hi.alt = ''; hi.src = h.url;
+    hi.style.cssText = 'position:absolute;z-index:3;pointer-events:none;mix-blend-mode:multiply;left:' + (b.ox + h.pos.x * b.cw) + 'px;top:' + (b.oy + h.pos.y * b.ch) + 'px;width:' + (h.pos.w * b.cw) + 'px;height:' + (h.pos.h * b.ch) + 'px;';
+    f.appendChild(hi);
+  }
+  var t = R.title;
+  if (moving !== 'title' && im && im.has_clean && t && !t.off && t.url && t.pos) {
+    ibTtlCanvas(t.url, function (cv) {
+      if (!cv || f._ibOtherSeq !== seq || !f.isConnected) return;
+      var c = document.createElement('canvas'); c.className = 'ib-other'; c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0);
+      var w = t.pos.w * b.cw, hp = w * cv.height / cv.width, rgb = 'rgba(10,6,4,';
+      c.style.cssText = 'position:absolute;z-index:3;pointer-events:none;left:' + (b.ox + t.pos.x * b.cw) + 'px;top:' + Math.min(b.oy + t.pos.y * b.ch, b.oy + b.ch - hp) + 'px;width:' + w + 'px;height:' + hp + 'px;' +
+        'filter:drop-shadow(0 0 ' + (b.cw * 0.0058).toFixed(1) + 'px ' + rgb + '0.95)) drop-shadow(0 0 ' + (b.cw * 0.015).toFixed(1) + 'px ' + rgb + '0.8)) drop-shadow(0 0 ' + (b.cw * 0.037).toFixed(1) + 'px ' + rgb + '0.5));';
+      f.appendChild(c);
+    });
+  }
 }
 function ibPlaceCancel() { IB.placing = null; ibPaintViewer(); }
 function ibPlaceApply() {
@@ -39024,6 +39051,7 @@ function ibHoMount() {
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibHoMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   ['.ib-ho-box', '.ib-place-bar'].forEach(function (q) { var o = f.querySelector(q); if (o) o.parentNode.removeChild(o); });
+  ibPlaceOthers(f, b, im, 'handout');   // v3.3.94 -- the title stays in view
   var box = document.createElement('div'); box.className = 'ib-ho-box';
   var c = document.createElement('canvas'); box.appendChild(c);
   var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize'; box.appendChild(h);

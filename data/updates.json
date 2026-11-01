@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.94",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3394-image-builder-place-both",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: placing the title keeps the handout writing in view, and the other way round.",
+        "detail": "While you place a title, any handout writing already on the picture stays in view, and while you place the writing, the title stays in view, so you can arrange the two together.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.93",
     "staged_on": "2026-11-01",
     "entries": [
