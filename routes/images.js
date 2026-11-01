@@ -3241,7 +3241,7 @@ function ibRow(r) {
     image_type: r.image_type || '', shape: r.shape || '', art_style: r.art_style || '', art_style_name: r.art_style_name || '', include_lore: !!r.include_lore,
     refs: refs || { characters: [], assets: [] }, prompt: r.prompt || '', image_url: r.image_url || null, img_w: r.img_w || null, img_h: r.img_h || null,
     status: st, error: r.image_url ? null : (st === 'failed' ? (r.job_error || IB_LOST) : null), job_id: r.job_id || null,
-    created_at: r.created_at || null };
+    created_at: r.created_at || null, ready: r.is_ready !== false };   // v3.3.73 -- a NULL (never set) counts as Ready
 }
 const IB_LIST_SQL = 'SELECT b.*, u.name AS maker_name, ' +
   '(SELECT j.status FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_status, ' +
@@ -3317,7 +3317,8 @@ router.get('/builder/campaigns/:cid/images', requireAuth, async function (req, r
   try {
     if (!(await ibGate(req, res))) return;
     const db = await getDb();
-    const rows = await db.prepare(IB_LIST_SQL + 'WHERE b.campaign_id = ? ORDER BY b.id DESC LIMIT 200').all(req.params.cid);
+    // v3.3.73 -- a Draft is seen by its maker only (not the Story Master either); Ready pictures by the whole campaign.
+    const rows = await db.prepare(IB_LIST_SQL + 'WHERE b.campaign_id = ? AND (b.is_ready IS NOT FALSE OR b.user_id = ?) ORDER BY b.id DESC LIMIT 200').all(req.params.cid, req.session.userId);
     res.json({ images: (rows || []).map(ibRow), me: req.session.userId });
   } catch (e) { console.error('[image-builder] list error:', e.message); res.json({ error: 'Could not load the Image Builder gallery.' }); }
 });
@@ -3421,9 +3422,9 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
       assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
     const now = new Date().toISOString();
     const ins = await db.prepare(
-      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(cid, uid, name, description, type ? type.key : null, shape, style, _rs.name || null, includeLore, JSON.stringify(refsOut), sub.prompt || prompt, now, now);
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, is_ready, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, type ? type.key : null, shape, style, _rs.name || null, includeLore, JSON.stringify(refsOut), sub.prompt || prompt, false, now, now);   // v3.3.73 -- starts as a Draft
     const imageId = ins.lastInsertRowid;
     const job = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, created_at, updated_at) ' +
@@ -3443,6 +3444,22 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
 
 // Delete: the maker only (Ian: only the person who made it). The picture file goes through releaseImage, which keeps
 // it while anything else (an Archive copy, an asset) still names it.
+// v3.3.73 -- Draft / Ready: the maker only, in a campaign they may still use the Builder in, and only once the
+// picture has arrived (a picture still drawing, or one that failed, stays a draft).
+router.post('/builder/images/:id/ready', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT id, user_id, campaign_id, image_url FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can change whether it is ready.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    const ready = !!(req.body && req.body.ready === true);
+    if (ready && !r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be marked Ready.' });
+    await db.prepare('UPDATE builder_images SET is_ready = ?, updated_at = ? WHERE id = ?').run(ready, new Date().toISOString(), r.id);
+    res.json({ success: true, ready: ready });
+  } catch (e) { console.error('[image-builder] ready error:', e.message); res.json({ error: 'Could not change the picture.' }); }
+});
+
 router.delete('/builder/images/:id', requireAuth, async function (req, res) {
   try {
     const db = await getDb();

@@ -2317,6 +2317,9 @@ async function migrateGifts(pool) {
       'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_builder_images_campaign ON builder_images(campaign_id, id)');
     await pool.query('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS builder_image_id INTEGER');
+    // v3.3.73 -- Draft / Ready. DEFAULT true, so every picture made before this stays visible to the campaign;
+    // a new picture is inserted with false (a draft only its maker sees) by the generate route.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS is_ready BOOLEAN DEFAULT true');
   } catch (e) { console.error('[image-builder] migration skipped this boot:', e && e.message); }
 }
 

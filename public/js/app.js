@@ -38435,7 +38435,7 @@ function cstyleFromPicker() {
 // =====================================================================================================
 var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
   type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0,
-  tab: 'make', viewId: null, sig: '' };   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
+  tab: 'make', viewId: null, sig: '', zoom: null };   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
 var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
 var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
 var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
@@ -38451,7 +38451,7 @@ function ibCss() {
     '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:16px;}' +
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
     '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
-    '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;align-items:start;}' +
+    '.ib-make{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim, #b89a52);margin-bottom:6px;font-weight:600;}' +
@@ -38459,8 +38459,13 @@ function ibCss() {
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
     '.ib-shapes{display:flex;flex-wrap:wrap;gap:6px;}' +
-    '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;}' +
-    '.ib-frame{position:relative;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
+    '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}' +
+    '.ib-zoom{display:inline-flex;align-items:center;gap:4px;}' +
+    '.ib-scroll{width:100%;overflow:auto;max-height:calc(100vh - 140px);}' +
+    '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
+    '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
+    '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
+    '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
     '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
@@ -38590,7 +38595,7 @@ function ibRender() {
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '"></div>' +
       '<div id="ib-msg" class="ib-err" style="margin-bottom:8px;"></div>' +
-      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
+      '<button class="btn btn-primary" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' + ' <button class="btn" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
     '</div>' +
     '<div class="ib-viewer" id="ib-viewer"></div>' +
     '</div>';
@@ -38605,6 +38610,7 @@ function ibGalleryHtml() {
     if (im.image_url) pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
     else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
     else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
+    if (mine && !im.ready) pic = pic.replace('<div class="ib-pic', '<div style="position:relative;"><span class="ib-draft">Draft</span><div class="ib-pic') + '</div>';
     return '<div class="ib-img">' + pic +
       '<b style="font-size:14px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + '</div>' +
@@ -38635,14 +38641,21 @@ function ibBits(im) {
   return [type, (_rpShapeByKey(im.shape) || {}).label, im.art_style_name ? ('Custom: ' + im.art_style_name) : artStyleLabel(im.art_style)].filter(Boolean).join(' \u00b7 ');
 }
 function ibFrameStyle(w, h) {
-  // As wide as the pane, but never taller than the window below the page header: width = min(100%, room * w / h).
-  return 'aspect-ratio:' + w + ' / ' + h + ';width:min(100%, calc((100vh - 320px) * ' + w + ' / ' + h + '));';
+  // v3.3.73 -- Fit: as wide as the pane, and no taller than the window less room for the zoom row and the caption
+  // (Ian: bigger, not the whole window). Zoomed: Fit times the zoom; .ib-scroll scrolls when that is bigger than the pane.
+  var fit = 'min(100%, (100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + ')';
+  return 'aspect-ratio:' + w + ' / ' + h + ';width:' + (IB.zoom ? 'calc(' + fit + ' * ' + IB.zoom + ');max-width:none;' : 'calc(' + fit + ');');
 }
 function ibViewerHtml() {
   var im = IB.viewId ? IB.images.filter(function (x) { return String(x.id) === String(IB.viewId); })[0] : null;
+  var zoom = '<div class="ib-zoom" title="Zoom the picture">' +
+    '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
+    '<span id="ib-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
+    '<button class="btn btn-sm" onclick="ibZoomStep(0.1)" title="Zoom in">+</button>' +
+    '<button class="btn btn-sm" onclick="ibZoomFit()" title="Fit the picture to the pane">Fit</button></div>';
   if (!im) {
     var s = _rpShapeByKey(IB.shape) || { w: 4, h: 3, label: 'Standard' };
-    return '<div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div>';
+    return zoom + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
   }
   var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
   var w = im.img_w || shp.w, h = im.img_h || shp.h;
@@ -38651,12 +38664,52 @@ function ibViewerHtml() {
   if (im.image_url) inner = '<img src="' + escapeHtml(im.image_url) + '" alt="' + escapeHtml(im.name) + '" onclick="ibView(' + im.id + ')">';
   else if (im.status === 'failed') inner = '<div class="ib-err" style="padding:16px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div>';
   else inner = '';
-  return '<div class="ib-frame" id="ib-frame" data-pending="' + (!im.image_url && im.status !== 'failed' ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div>' +
-    '<div class="ib-caption" style="width:min(100%, calc((100vh - 320px) * ' + w + ' / ' + h + '));">' +
+  // Draft / Ready, the maker's own (others never receive a draft).
+  var state = '';
+  if (mine) {
+    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
+      (im.image_url ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
+  }
+  return zoom + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" data-pending="' + (!im.image_url && im.status !== 'failed' ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + '</div></div>' +
+    '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
-      (mine && (im.image_url || im.status === 'failed') ? '<div><button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button></div>' : '') +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + state +
+        (mine && (im.image_url || im.status === 'failed') ? '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>' : '') + '</div>' +
     '</div>';
+}
+// v3.3.73 -- zoom, as the Prep & Preview row: 10% steps, 50%..300%, "Fit" until zoomed; kept until Fit is pressed.
+var IB_ROOM = 190;
+function ibZoomStep(d) {
+  var z = Math.round(((IB.zoom || 1) + d) * 100) / 100;
+  IB.zoom = Math.min(3, Math.max(0.5, z));
+  if (Math.abs(IB.zoom - 1) < 0.001) IB.zoom = null;
+  ibPaintViewer();
+}
+function ibZoomFit() { IB.zoom = null; ibPaintViewer(); }
+// v3.3.73 -- Draft / Ready (the maker only; the server checks).
+function ibReady(id, ready) {
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/ready', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ready: !!ready }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && (d.message || d.error)) || 'Could not change the picture.'); return; }
+      IB.images.forEach(function (x) { if (String(x.id) === String(id)) x.ready = !!d.ready; });
+      ibPaintGallery();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+// v3.3.73 -- New picture: a blank Make tab. Keeps the campaign, shape and art style; clears the rest. Nothing is
+// deleted (the last picture stays in the Gallery). Asks first only when there is typed text to lose.
+async function ibNew() {
+  ibReadForm();
+  if ((IB.desc.trim() || IB.name.trim()) && !await uiConfirm('Start a new picture? This clears the description, name, image type and references. Your pictures stay in the Gallery.', { okText: 'Clear', cancelText: 'Keep' })) return;
+  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null;
+  var d = document.getElementById('ib-desc'); if (d) d.value = '';
+  var n = document.getElementById('ib-name'); if (n) n.value = '';
+  var t = document.getElementById('ib-type'); if (t) t.value = '';
+  var l = document.getElementById('ib-lore'); if (l) l.checked = true;
+  IB.tab = 'make';
+  ibRender();
 }
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;

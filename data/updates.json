@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.3.73",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3373-image-builder-draft-zoom",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Draft and Ready, a New picture button, and a bigger picture with zoom.",
+        "detail": "A new picture starts as a Draft that only you can see; Mark Ready shares it with the campaign's gallery, and Back to Draft takes it back. New picture clears the form for the next one (your campaign, shape and art style stay). The picture is shown bigger, with the same zoom buttons as Prep & Preview.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.72",
     "staged_on": "2026-11-01",
     "entries": [
