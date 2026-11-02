@@ -38587,7 +38587,7 @@ function openCompareTiersGrid(btn) {
   if (btn) btn.disabled = true;
   var sc = document.createElement('script');
   sc.id = 'tier-grid-js';
-  sc.src = '/js/tier-grid.js?v=3.2.47';
+  sc.src = '/js/tier-grid.js?v=3.4.02';   // v3.4.02 -- the Image Builder row
   sc.onload = function () {
     if (btn) btn.disabled = false;
     try { window.campaigniaTierGrid.open(); } catch (e) { if (msg) msg.textContent = 'Could not open the grid.'; }

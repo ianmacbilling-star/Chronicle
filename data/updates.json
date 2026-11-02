@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.02",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3402-tier-grid-image-builder",
+        "kind": "feature",
+        "public": true,
+        "summary": "Compare the Tiers now lists the Image Builder.",
+        "detail": "The Compare the Tiers grid has a new Image Builder row, under the Writing Coach: it is part of Platinum, and members of a campaign whose Story Master is on Platinum can use it there too.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.01",
     "staged_on": "2026-11-01",
     "entries": [
