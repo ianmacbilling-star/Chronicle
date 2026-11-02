@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.4.03",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3403-campaign-chooser-pictures",
+        "kind": "feature",
+        "public": true,
+        "summary": "Choosing a campaign shows each campaign picture.",
+        "detail": "When you choose a campaign in the Image Builder, or choose where to import a character from, each campaign now shows its picture, the same one as on My Campaigns.",
+        "td": [
+          "TD-1080",
+          "TD-918"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.02",
     "staged_on": "2026-11-01",
     "entries": [

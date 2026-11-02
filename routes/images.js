@@ -3300,12 +3300,13 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      'SELECT c.id, c.name, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
       'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id WHERE cm.user_id = ? ORDER BY LOWER(c.name) ASC'
     ).all(req.session.userId);
     const out = [];
     for (const r of (rows || [])) {
-      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0 });
+      // v3.4.03 -- image: the picture its My Campaigns card shows (campaign picture, else the book cover)
+      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '' });
     }
     let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
     res.json({ campaigns: out, types: IB_TYPES.map(function (t) { return { key: t.key, label: t.label, text: t.text }; }), max_refs: MAX_PANEL_REFS, cost: cost });

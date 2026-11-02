@@ -36604,7 +36604,10 @@ function _ciCampaigns() {
     if (!list.length) { _ciSet(_ib ? 'Choose a campaign' : 'Import a character', '', _ib ? '<div style="padding:16px;">None of your campaigns can use the Image Builder yet.</div>' : '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
     var b = document.getElementById('ci-body');
     b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
-      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' +
+      // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
+      var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(15,10,5,0.5);">'
+        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(15,10,5,0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
+      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' + _cpic +
         '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
     }).join('') + '</div>';
