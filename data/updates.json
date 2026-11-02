@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.06",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3406-archive-both",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Archive can keep both copies of a titled picture, and Save as Asset always saves the picture without its lettering.",
+        "detail": "When a picture has a title or text laid on it, Archive now offers Both, which puts the copy with the words and the clean copy in the campaign's Archive together. Save as Asset no longer asks: an asset is always the clean picture.",
+        "td": [
+          "TD-1087"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.05",
     "staged_on": "2026-11-02",
     "entries": [
