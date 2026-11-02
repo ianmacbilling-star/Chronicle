@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.07",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3407-builder-refs-save",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: characters and assets you add or remove on one of your pictures are saved to it at once, so Retouch and Regen use them.",
+        "detail": "With one of your own pictures open, the References list now works like a Story panel's cast: each change is saved to the picture straight away. A character added after the picture was drawn now appears in Retouch, and their reference picture goes with the retouch. A character you remove no longer has their reference sent.",
+        "td": [
+          "TD-1088"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.06",
     "staged_on": "2026-11-02",
     "entries": [
