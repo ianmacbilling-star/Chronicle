@@ -2545,8 +2545,10 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
             catch (_oe) { try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'webhook builder title', message: 'Could not lay the title on Image Builder picture ' + job.builder_image_id + ': ' + (_oe && _oe.message) }); } catch (_le) {} }
           }
           if (_bi && _bi.image_url && _bi.image_url !== imageUrl) {
-            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, updated_at = ? WHERE id = ?')
-              .run(_shown, imgW, imgH, _clean, _bi.image_url, _bi.img_w || null, _bi.img_h || null, _bi.clean_image_url || null, new Date().toISOString(), job.builder_image_id);
+            let _bref = {}; try { _bref = _bi.refs ? (typeof _bi.refs === 'string' ? JSON.parse(_bi.refs) : _bi.refs) : {}; } catch (_pe) { _bref = {}; }
+            _bref.prevLayers = ibSnapLayers(_bref);   // v3.4.01 -- the picture going to the undo slot had the same layers
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+              .run(_shown, imgW, imgH, _clean, _bi.image_url, _bi.img_w || null, _bi.img_h || null, _bi.clean_image_url || null, JSON.stringify(_bref), new Date().toISOString(), job.builder_image_id);
             // Released AFTER the row stops naming them; releaseImage keeps anything still named anywhere.
             if (_bi.prev_image_url) await releaseImage(db, _bi.prev_image_url);
             if (_bi.prev_clean_image_url) await releaseImage(db, _bi.prev_clean_image_url);
@@ -3268,6 +3270,7 @@ async function ibGate(req, res) {
 function ibRow(r) {
   if (!r) return null;
   var refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
+  if (refs && refs.prevLayers) delete refs.prevLayers;   // v3.4.01 -- the undo slot's layers stay on the server
   // No sweeper ends a job whose webhook never came, so a picture still pending after IB_JOB_WINDOW_MS is shown as
   // failed (and can be deleted). Nothing was charged: tokens are spent only when the picture arrives.
   // v3.3.74 -- a Regen draws over a picture already on show, so "drawing" comes from the latest job, not from a
@@ -3543,6 +3546,19 @@ function ibHandoutSpaceText(h) {
   return 'WRITING AREA: the writing on this document is added afterwards, so leave a large, clear area of plain, EMPTY paper for it in ' + where +
     ' of the picture, about ' + Math.round(p.w * 100) + ' percent of the width and ' + Math.round(p.h * 100) + ' percent of the height. Draw no words, letters, numbers or scribbles anywhere on it; a drawing, seal, stain or border may frame the writing area but never cross it.';
 }
+// v3.4.01 -- WHAT WAS LAID ON THE PICTURE NOW IN THE UNDO SLOT. Testers 2026-11-01: Remove title, then Revert, brought
+// the picture back with its title showing while the recipe still said the title was off, so the next Apply rebuilt from
+// the clean copy and dropped the title. Every change that moves the picture on show into the undo slot now keeps the
+// title and writing as they were (refs.prevLayers), and Revert swaps them back with the picture.
+function ibSnapLayers(refs) { return { title: (refs && refs.title) || null, handout: (refs && refs.handout) || null }; }
+function ibSwapLayers(refs) {
+  if (!refs || !Object.prototype.hasOwnProperty.call(refs, 'prevLayers') || !refs.prevLayers) return false;
+  const was = refs.prevLayers, now = ibSnapLayers(refs);
+  if (was.title) refs.title = was.title; else delete refs.title;
+  if (was.handout) refs.handout = was.handout; else delete refs.handout;
+  refs.prevLayers = now;
+  return true;
+}
 // The layers a picture gets once it is drawn: the handout's writing and the title, each only when ready to lay on.
 function ibLayersOf(refsJson) {
   let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
@@ -3700,6 +3716,9 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
     const style = String(b.art_style || '').trim(), shape = String(b.shape || '');
     const recipe = { description: description, shape: shape, style: style, type: b.image_type || null, include_lore: b.include_lore !== false,
       refs: (b.refs && typeof b.refs === 'object') ? b.refs : {}, type_text: b.type_text || null };   // v3.3.86 -- type_text
+    // v3.4.01 -- A NEW HANDOUT LANDS CLEAN. Ian: "Don't do it automatically... You need to drag and drop the text on
+    // there." Its words still shape the prompt (the empty writing area); the writing goes on when it is placed and applied.
+    if (recipe.refs.handout && typeof recipe.refs.handout === 'object') recipe.refs.handout = Object.assign({}, recipe.refs.handout, { url: '' });
     const built = await ibBuildAndSubmit(req, res, db, uid, cid, recipe, null);
     if (!built) return;
     const sub = built.sub, type = built.type, now = new Date().toISOString();
@@ -3790,6 +3809,7 @@ router.post('/builder/images/:id/handout', requireAuth, async function (req, res
       try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/handout', message: 'Could not lay the writing on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, writing: ho.url, pos: ho.pos } }); } catch (_le) {}
       return res.json({ error: 'Could not lay the writing on the picture. Please try again.' });
     }
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
     refs.handout = ho;
     await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
       .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
@@ -3813,6 +3833,7 @@ router.post('/builder/images/:id/layer-off', requireAuth, async function (req, r
     let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
     const before = ibLayersOf(refs);
     if (!r.clean_image_url || !before || !before[what]) return res.json({ error: what === 'title' ? 'There is no title on this picture to take off.' : 'There is no writing on this picture to take off.' });
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
     refs[what] = Object.assign({}, refs[what], { off: true });
     const after = ibLayersOf(refs);
     let shown = r.clean_image_url, clean = null;
@@ -3851,6 +3872,7 @@ router.post('/builder/images/:id/title', requireAuth, async function (req, res) 
       try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/title', message: 'Could not lay the title on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, lettering: ttl.url, place: ttl.place, size: ttl.size } }); } catch (_le) {}   // v3.3.87
       return res.json({ error: 'Could not lay the title on the picture. Please try again.' });
     }
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
     refs.title = ttl;
     await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
       .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
@@ -3919,8 +3941,11 @@ router.post('/builder/images/:id/revert', requireAuth, async function (req, res)
     const db = await getDb();
     const r = await ibOwnIdle(req, res, db); if (!r) return;
     if (!r.prev_image_url) return res.json({ error: 'There is no earlier picture to go back to.' });
-    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, updated_at = ? WHERE id = ?')
-      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.prev_clean_image_url || null, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, new Date().toISOString(), r.id);   // v3.3.85 -- the clean copies swap too
+    // v3.4.01 -- the title and writing go back with the picture (a picture from before v3.4.01 keeps the recipe as it is).
+    let _rrefs = {}; try { _rrefs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { _rrefs = {}; }
+    const _swapped = ibSwapLayers(_rrefs);
+    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.prev_clean_image_url || null, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, _swapped ? JSON.stringify(_rrefs) : (r.refs || null), new Date().toISOString(), r.id);   // v3.3.85 -- the clean copies swap too
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
     res.json({ success: true, image: ibRow(row) });
   } catch (e) { console.error('[image-builder] revert error:', e.message); res.json({ error: 'Could not go back to the earlier picture.' }); }

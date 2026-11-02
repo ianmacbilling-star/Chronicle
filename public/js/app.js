@@ -11968,6 +11968,18 @@ function _tbIsSession() { return _tbTarget().kind === 'session'; }
 // v3.3.83 -- the Image Builder's Title section: the words typed there, the lettering held by the Builder until it
 // draws the picture. Nothing about a book or a chapter is read or written.
 function _tbIsIb() { return _tbTarget().kind === 'ib'; }
+// v3.4.01 -- the Generate button says what it costs, and opened from the Image Builder the tooltips talk about the
+// picture, not a book or a cover (testers 2026-11-01).
+function _tbGoLabel() { var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? IB.cost : 1; return 'Generate (' + c + ' token' + (c === 1 ? '' : 's') + ')'; }
+var _TB_TIPS = { book: { stash: 'Keep this drawing but take it off the cover, and go back to the title styles', replace: 'Put an archived title on the book without generating', replace2: 'Put an archived title on the book instead' },
+  ib: { stash: 'Keep this drawing in the Title Builder but take it out of the Title section', replace: 'Use a title from this campaign\u2019s Archive without generating', replace2: 'Use a title from this campaign\u2019s Archive instead' } };
+function _tbIbWording() {
+  var t = _TB_TIPS[_tbIsIb() ? 'ib' : 'book'];
+  var s = document.getElementById('title-build-stash'); if (s) s.title = t.stash;
+  var r = document.getElementById('title-build-empty-replace'); if (r) r.title = t.replace;
+  var r2 = document.getElementById('title-build-replace'); if (r2) r2.title = t.replace2;
+  var g = document.getElementById('title-build-go'); if (g && !g.disabled) g.textContent = _tbGoLabel();
+}
 
 // _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
 // a field does not need six call sites updated.
@@ -12025,7 +12037,7 @@ function _tbTargetKey() {
 // nowhere to put an Upgrade button.
 function platinumGate(what, why, beforeUpgrade) {   // v3.3.70 -- beforeUpgrade: optional, runs just before goToPlans
   appConfirm({
-    title: what + ' is a Platinum feature',
+    title: String(what || '').charAt(0).toUpperCase() + String(what || '').slice(1) + ' is a Platinum feature',   // v3.4.01 -- always a capital
     body: why,
     note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
     okLabel: 'Upgrade My Plan',
@@ -12075,7 +12087,8 @@ function openTitleBuilder(target) {
     return;
   }
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen color, size and placement.');
+    // v3.4.01 -- from the Image Builder there are no title styles to fall back on (testers), and a real dash.
+    platinumGate('The Title Builder', _tbIsIb() ? 'Drawing a title as artwork for your pictures needs your own Platinum plan.' : 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan \u2014 they set the title in a real typeface with your chosen color, size and placement.');
     return;
   }
   _tbErr('');
@@ -12105,11 +12118,13 @@ function openTitleBuilder(target) {
     // v3.0.724 -- TD-522(2). NO EMPTY-STATE GATE. See the note above: four of the five steps are
     // visible whether or not a title exists, and the fifth is skipped by the engine on its own.
     if (typeof maybeStartTour === 'function') {
-      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour('title-builder'); } catch (e) {} });
-      else maybeStartTour('title-builder');
+      var _tbTour = _tbIsIb() ? 'title-builder-ib' : 'title-builder';   // v3.4.01 -- its own words in the Image Builder
+      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour(_tbTour); } catch (e) {} });
+      else maybeStartTour(_tbTour);
     }
   } catch (e) {}
-  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
+  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || '';   // v3.4.01 -- empty, not the word None
+  _tbIbWording();   // v3.4.01
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
   // that nothing ever cleared, so a reference chosen on one book stayed selected across version
@@ -12197,7 +12212,7 @@ function _tbLoadSession() {
     state._tbSessionCur = d.current || {};
     state._tbSessionWords = d.words || { title: '', subtitle: '' };
     var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = (d.words && d.words.title) || 'This chapter has no name yet';
-    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
+    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = '';   // v3.4.01
     var dEl = _tbEl('title-build-desc');
     // v3.0.666 -- TD-468. Same rule as the book: the draft's prompt wins, because _tbShowResult on
     // the next line shows the draft's picture.
@@ -12756,7 +12771,7 @@ function titleBuildGenerate() {
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
-    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = _tbGoLabel(); } });   // v3.4.01
 }
 // =====================================================================================================
 // RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
@@ -12779,7 +12794,8 @@ function titleBuildRetouchOpen() {
   state.retouchSessionCharId = null;
   state.retouchAssetId = null;
   var ta = document.getElementById('retouch-instruction');
-  if (ta) ta.value = '';
+  if (ta) { ta.value = ''; ta.placeholder = 'Say what to change about the lettering, e.g. make the ivy blue-green and keep the letters the same'; }   // v3.4.01 -- this box has no markers
+  var _tm = document.getElementById('retouch-title-msg'); if (_tm) _tm.textContent = '';
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.remove('hidden');
   if (ta) setTimeout(function () { ta.focus(); }, 30);
@@ -16835,7 +16851,12 @@ function submitRetouch() {
   if (state.retouchTitle) {
     var _ti = document.getElementById('retouch-instruction');
     var _txt = _ti ? String(_ti.value || '').trim() : '';
-    if (!_txt) { if (_ti) _ti.focus(); return; }
+    if (!_txt) {   // v3.4.01 -- an empty box says what it needs (testers: it did nothing and said nothing)
+      var _tm = document.getElementById('retouch-title-msg');
+      if (!_tm && _ti && _ti.parentNode) { _tm = document.createElement('div'); _tm.id = 'retouch-title-msg'; _tm.style.cssText = 'margin-top:6px;font-size:12px;'; _ti.parentNode.insertBefore(_tm, _ti.nextSibling); }
+      if (_ti) nagField(_ti, 'Type the change you want first.', _tm);
+      return;
+    }
     closeRetouch();
     titleBuildRetouch(_txt);
     return;
@@ -38759,7 +38780,7 @@ function ibTitleBody() {
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
     // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
     (t.url
-      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or use it as a book cover. On a picture already drawn, drag it on and Apply, for free.</div>'
+      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or save it without the title. On a picture already drawn, drag it on and Apply, for free.</div>'
       : '<div class="ib-meta" style="margin-top:10px;">Press Title Builder to design the lettering for this title. It is laid over the picture exactly as designed, and a clean copy is kept.</div>');   // v3.3.93 -- titles come only from the Title Builder
 }
 function ibOpenTitleBuilder() {
@@ -38973,12 +38994,17 @@ function ibLayerOff(id, what) {
 function ibHoApplyHtml() {
   var im = ibImg(IB.viewId);
   var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
-  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the box below onto the picture, <b>drop</b> it where the writing goes, and drag its corner to <b>resize</b> it. Then press Apply. A new handout is drawn with the writing already on it.</div>';
+  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the box below onto the picture, <b>drop</b> it where the writing goes, and drag its corner to <b>resize</b> it. Then press Apply writing here. A new handout is drawn with a clear writing area and no words, ready for yours.</div>';
   if (!mine) return how + '<span class="ib-meta">Make or open one of your handouts to place the writing on it.</span>';
   return how + '<span class="ib-ho-chip" draggable="true" ondragstart="ibHoDragStart(event)">\u270e Drag the writing onto the picture</span> ' +
     '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button>' +
     (ibLayerOn(im, 'handout') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'handout\')" title="Take the writing off this picture (free; Revert puts it back)">Remove writing from picture</button>' : '') +   // v3.3.93
     ' <span class="ib-meta" id="ib-ho-msg"></span>';
+}
+// v3.4.01 -- a handout of yours, drawn, with words in its recipe and no writing on it yet (and not taken off on purpose).
+function ibHoWaiting(im, mine, busy) {
+  var h = im && im.refs && im.refs.handout;
+  return !!(mine && !busy && im.image_url && im.image_type === 'handout' && h && String(h.text || '').trim() && !h.off && !ibLayerOn(im, 'handout'));
 }
 function ibHoApplyPaint() { var el = document.getElementById('ib-ho-apply'); if (el) el.innerHTML = ibHoApplyHtml(); }
 function ibHoDragStart(e) { IB._hoDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-handout'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
@@ -39030,15 +39056,13 @@ function ibHoUpload(ho, W, H) {
     return fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/handout-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: c.toDataURL('image/png') }) });
   }).then(function (r) { return r.json(); }).then(function (d) { if (!d || d.error || !d.url) throw new Error((d && d.error) || 'Could not store the writing.'); return d.url; });
 }
-// Before Generate: a handout with words gets its writing set at the remembered (or default) box, sized from the shape.
+// v3.4.01 -- before Generate the writing is NOT set any more: a new handout lands clean and the writing is dragged
+// on and applied (Ian: "Don't do it automatically... You need to drag and drop the text on there."). The words
+// still go with the recipe, so the picture is drawn with an empty writing area.
 function ibHoForGenerate(body) {
   if (body.image_type !== 'handout' || !String(IB.ho.text || '').trim()) return Promise.resolve();
-  var s = _rpShapeByKey(IB.shape) || { w: 1, h: 1 }, pos = IB.ho.pos || IB_HO_DEFAULT_POS;
-  var PW = s.w >= s.h ? 1600 : Math.round(1600 * s.w / s.h), PH = s.w >= s.h ? Math.round(1600 * s.h / s.w) : 1600;
-  return ibHoUpload(IB.ho, PW * pos.w, PH * pos.h).then(function (url) {
-    IB.ho.url = url; IB.ho.pos = pos;
-    body.refs.handout = Object.assign({}, IB.ho);
-  }).catch(function () { body.refs.handout = Object.assign({}, IB.ho, { url: '' }); });
+  body.refs.handout = Object.assign({}, IB.ho, { url: '' });
+  return Promise.resolve();
 }
 function ibHoPlaceStart(fx, fy) {
   ibReadForm();
@@ -39216,8 +39240,9 @@ function ibRender() {
       (IB.cid ? '<span style="flex:1;"></span><button class="btn btn-sm" onclick="ibGoCampaign(\'sessions\')" title="Open this campaign">Campaign</button>' +
         '<button class="btn btn-sm" onclick="ibGoCampaign(\'assets\')" title="This campaign\u2019s Asset Library">Assets</button>' +
         '<button class="btn btn-sm" onclick="ibGoCampaign(\'archives\')" title="This campaign\u2019s Archive">Archive</button>' : '') + '</div>'
-    : '<div class="ib-meta" style="margin-bottom:12px;">You have no campaigns the Image Builder can use yet. Create a campaign first.</div>';
-  if (!IB.cid) { root.innerHTML = head + '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>'; return; }
+    : '<div class="ib-meta" style="margin-bottom:12px;">Pictures are made for a campaign. Create one to start.</div>' +   // v3.4.01 -- and a button to do it (testers)
+      '<button class="btn btn-primary btn-sm" type="button" onclick="showView(\'campaigns\');openCampaignModal()">Create a campaign</button>';
+  if (!IB.cid) { root.innerHTML = head + (camps.length ? '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>' : ''); return; }
   var tabs = '<div class="ib-tabs">' +
     '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? '' : ' on') + '" onclick="ibTab(\'make\')">Make a picture</button>' +
     '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? ' on' : '') + '" id="ib-tab-gallery" onclick="ibTab(\'gallery\')">' + ibGalleryLabel() + '</button></div>';
@@ -39434,6 +39459,7 @@ function ibViewerHtml() {
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
       (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
+      (ibHoWaiting(im, mine, busy) ? '<div class="ib-meta" style="color:var(--gold-light);">Next: drag your writing onto the picture (in the Image type panel), size it with the yellow corner square, then press Apply writing here.</div>' : '') +   // v3.4.01
       '<div id="ib-act-msg" class="ib-err"></div>' +
     '</div>';
 }
@@ -39538,7 +39564,9 @@ function ibLoadRecipe(im) {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
   set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
   var l = document.getElementById('ib-lore'); if (l) l.checked = IB.lore;
-  IB.ttl = Object.assign(ibTtlBlank(), (refs.title && typeof refs.title === 'object') ? refs.title : {}); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
+  IB.ttl = Object.assign(ibTtlBlank(), (refs.title && typeof refs.title === 'object') ? refs.title : {}); IB.ttlDraft = null;   // v3.3.83
+  if (IB.ttl.off) { if (IB.ttl.url) IB.ttlDraft = { url: IB.ttl.url, src: IB.ttl.src || '' }; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; }   // v3.4.01 -- a title taken off stays out of the form, as after Remove
+  delete IB.ttl.off; ibTtlFields();
   IB.ho = Object.assign(ibHoBlank(), (refs.handout && typeof refs.handout === 'object') ? refs.handout : {}); IB.hoPlacing = null; ibHoFields();   // v3.3.92
 }
 // Drawing right now: a first Generate, or a Regen of a picture already on show.
@@ -39561,7 +39589,11 @@ function ibLoadGallery() {
     .then(function (d) {
       if (String(IB.cid) !== String(cid)) return;
       if (!d || d.error) { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = '<div class="ib-err">' + escapeHtml((d && d.error) || 'Could not load the gallery.') + '</div>'; return; }
+      // v3.4.01 -- one of mine finished drawing since the last look: the token count at the top now, not 20 s later.
+      var _wasBusy = {}; (IB.images || []).forEach(function (x) { if (ibBusy(x)) _wasBusy[x.id] = 1; });
       IB.images = d.images || []; IB.me = d.me;
+      var _landed = IB.images.some(function (x) { return _wasBusy[x.id] && !ibBusy(x) && String(x.user_id) === String(IB.me); });
+      if (_landed && typeof refreshTokenBalance === 'function') { refreshTokenBalance(); setTimeout(refreshTokenBalance, 3000); }
       // Repaint only when something changed, so a spinner keeps turning between polls instead of restarting.
       var sig = IB.images.map(function (im) { return im.id + ':' + im.status + ':' + (im.image_url || ''); }).join('|');
       if (sig !== IB.sig) { IB.sig = sig; ibPaintGallery(); }
@@ -39613,7 +39645,18 @@ function ibRegen(id) {
     if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
   });
 }
-function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/revert', {}, function (d) { ibPut(d.image); }); }
+function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/revert', {}, function (d) { ibPut(d.image); if (d.image && String(IB.viewId) === String(d.image.id)) ibSyncLayers(d.image); }); }
+// v3.4.01 -- after Revert, the Title section and the handout's writing follow the picture's recipe: a title on the
+// picture shows its lettering (and Remove title); a title taken off keeps its drawing in the Title Builder, as Remove does.
+function ibSyncLayers(im) {
+  var r = im.refs || {}, t = (r.title && typeof r.title === 'object') ? r.title : null, h = (r.handout && typeof r.handout === 'object') ? r.handout : null;
+  IB.ttl = Object.assign(ibTtlBlank(), t || {});
+  if (t && t.off) { IB.ttlDraft = t.url ? { url: t.url, src: t.src || '' } : IB.ttlDraft; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; }
+  delete IB.ttl.off;
+  if (h) { IB.ho = Object.assign(ibHoBlank(), h); delete IB.ho.off; }
+  IB.placing = null; IB.hoPlacing = null;
+  ibTtlFields(); ibHoFields(); ibRender();
+}
 // v3.3.85 -- a picture with a clean copy asks which version first.
 function ibWhichCopy(id, verb) {
   var im = ibImg(id);
@@ -39868,21 +39911,34 @@ function ibMsg(text, field) {
   ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes', 'ib-ttl-title'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
   // v3.3.80 -- the field's panel is opened first, so a missing field in a closed panel is seen.
   var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'], title: ['title', 'ib-ttl-title'] };   // v3.3.83 -- title
-  var f = map[field];
-  if (f) {
+  // v3.4.01 -- one field, or several (the first is shaken and takes the cursor; the rest are outlined).
+  var _fs = Array.isArray(field) ? field : (field ? [field] : []);
+  _fs.slice().reverse().forEach(function (k, i) {
+    var f = map[k]; if (!f) return;
     if (f[0]) ibAccSet(f[0], true);
     var el = document.getElementById(f[1]);
-    if (el) { el.classList.add('ib-bad'); nagField(el, null, null); }   // v3.3.93 -- the shake
-  }
+    if (!el) return;
+    el.classList.add('ib-bad');
+    if (i === _fs.length - 1) nagField(el, null, null);   // v3.3.93 -- the shake, on the first in the form
+  });
 }
 
 function ibGenerate() {
   if (!IB.cid || IB.busy) return;
   ibReadForm();
-  if (!IB.desc.trim() && !IB.type) { ibMsg('Describe the picture you want, or choose an image type.', 'description'); return; }   // v3.3.81
-  if (!IB.name.trim()) { ibMsg('Give the picture a name.', 'name'); return; }
-  if (!IB.shape) { ibMsg('Choose a shape for the picture.', 'shape'); return; }
-  if (!IB.style) { ibMsg('Choose an art style.', 'style'); return; }
+  // v3.4.01 -- every missing field at once (testers: "you find out about your two mistakes one at a time"), in the
+  // order of the form; the first is shaken and takes the cursor, the others are outlined.
+  var _miss = [];
+  if (!IB.name.trim()) _miss.push(['name', 'Give the picture a name.', 'a name']);
+  if (!IB.shape) _miss.push(['shape', 'Choose a shape for the picture.', 'a shape']);
+  if (!IB.style) _miss.push(['style', 'Choose an art style.', 'an art style']);
+  if (!IB.desc.trim() && !IB.type) _miss.push(['description', 'Describe the picture you want, or choose an image type.', 'a description (or an image type)']);   // v3.3.81
+  if (_miss.length === 1) { ibMsg(_miss[0][1], _miss[0][0]); return; }
+  if (_miss.length > 1) {
+    var _ws = _miss.map(function (m) { return m[2]; });
+    ibMsg('Still needed: ' + _ws.slice(0, -1).join(', ') + ' and ' + _ws[_ws.length - 1] + '.', _miss.map(function (m) { return m[0]; }));
+    return;
+  }
   ibMsg('');
   IB.busy = true;
   var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }

@@ -2866,7 +2866,7 @@
          result it produces, rather than in the footer beside Done. Ian marked the move on a
          screenshot. Done stays in the footer, where a close button belongs. -->
     <div class="tb-gen-row">
-      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate (1 token)</button>
     </div>
     <div class="tb-result" id="title-build-result">
       <!-- v3.0.629 -- Ian: "make it so when you open the Title builder the Replace button is there
@@ -2892,7 +2892,7 @@
                storyboard panel and the character reference do. A retouch costs a token and can come
                back worse; without this the only way out was to spend another one. -->
           <button class="panel-pill hidden" id="title-build-revert-btn" onclick="titleBuildRevert()" title="Undo the last retouch - restore the previous title">Revert</button>
-          <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
+          <button class="panel-pill" id="title-build-replace" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
           <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
           <!-- v3.0.687 -- REMOVE IS OFF THE TOOLBAR. It was the only exit from a drawn title and it is
                a deletion: Archive first or the token is gone. Done &amp; Stash is the non-destructive

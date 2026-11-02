@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.01",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3401-ib-handout-revert-polish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: handout writing is placed by you, Revert keeps the title, and smaller fixes.",
+        "detail": "A new handout now arrives with a clear writing area and no words on it: drag your writing onto the picture, size it, and press Apply writing here. Revert now brings back the title and the writing exactly as they were with the earlier picture. Also: the Title Builder Generate button shows its token cost, the Title Builder talks about your picture rather than a book when opened from the Image Builder, Generate names every missing field at once, the token count updates as soon as a picture arrives, and the Image Builder offers a Create a campaign button when you have none.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.00",
     "staged_on": "2026-11-01",
     "entries": [
