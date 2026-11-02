@@ -1,5 +1,37 @@
 [
   {
+    "version": "3.4.09",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3409-builder-make-a-copy",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Make a Copy of your own picture, beside New picture.",
+        "detail": "A free copy of the picture you have open, as a new Draft with the same words, references, style and title, so you can change and redraw it without touching the original.",
+        "td": [
+          "TD-1090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.08",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3408-builder-pill-and-floating-apply",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: the image type's instructions open from an Edit Prompt pill, and the Apply buttons follow the title or writing you are placing.",
+        "detail": "The blue See / edit instructions link under Image type is now an Edit Prompt pill (Hide Prompt when open). When you place a title or a handout's writing on a picture, Apply and Cancel sit right under the box and move with it, above it when it is near the bottom.",
+        "td": [
+          "TD-1089"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.07",
     "staged_on": "2026-11-02",
     "entries": [

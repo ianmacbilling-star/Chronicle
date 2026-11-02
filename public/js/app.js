@@ -38925,7 +38925,7 @@ function ibPlaceMount() {
   var bar = document.createElement('div'); bar.className = 'ib-place-bar';
   bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibPlaceApply()">Apply title here</button><button class="btn btn-sm" type="button" onclick="ibPlaceCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
   f.appendChild(bar);
-  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.w * bb.cw / P.asp) + 'px'; };
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.w * bb.cw / P.asp) + 'px'; ibPlaceBarAt(f, box, bar); };   // v3.4.08 -- the bar follows the title
   put();
   var drag = null;
   var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
@@ -38939,6 +38939,21 @@ function ibPlaceMount() {
   };
   var up = function () { drag = null; };
   box.addEventListener('pointermove', move); box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+// v3.4.08 -- THE APPLY BAR FLOATS WITH THE BOX (Ian, 2026-11-02: "have them float with the title... often they are far
+// away from where you just placed the title"). Placed just under the box being placed (title or handout writing),
+// lined up with its left edge; above it when there is no room below; inside its top edge when there is room for
+// neither. Always inside the picture frame. Called by each mount's put(), so it follows every drag and resize.
+function ibPlaceBarAt(f, box, bar) {
+  if (!f || !box || !bar) return;
+  var FW = f.clientWidth, FH = f.clientHeight, gap = 6, pad = 4;
+  bar.style.maxWidth = Math.max(0, FW - pad * 2) + 'px';
+  var bx = box.offsetLeft, by = box.offsetTop, bh = box.offsetHeight, w = bar.offsetWidth, h = bar.offsetHeight;
+  var top = by + bh + gap;
+  if (top + h > FH - pad) top = by - h - gap;
+  if (top < pad) top = Math.min(Math.max(pad, by + pad), Math.max(pad, FH - h - pad));
+  var left = Math.min(Math.max(pad, bx), Math.max(pad, FW - w - pad));
+  bar.style.left = left + 'px'; bar.style.top = top + 'px';
 }
 // v3.3.94 -- WHAT IS NOT BEING MOVED STAYS IN VIEW. Ian: "if I hit Place Title then it hides the text and vice versa."
 // Placing shows the clean copy (so the thing being moved is never seen twice), which took the OTHER one away as well.
@@ -39133,7 +39148,7 @@ function ibHoMount() {
     var bb = ibPlaceBox() || b, pw = P.w * bb.cw, ph = P.h * bb.ch;
     ibHoCanvas(IB.ho, pw * 2, ph * 2).then(function (cv) { c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0); });
   };
-  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.h * bb.ch) + 'px'; };
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.h * bb.ch) + 'px'; ibPlaceBarAt(f, box, bar); };   // v3.4.08 -- the bar follows the writing
   put(); draw();
   IB._hoRedraw = draw;   // v3.3.93 -- the options on the left redraw the box being placed
   var drag = null;
@@ -39368,7 +39383,7 @@ function ibTypeNoteHtml() {
 function ibTypeEditHtml() {
   var note = '<div class="ib-meta" id="ib-type-note" style="margin-top:6px;color:var(--gold-light);">' + ibTypeNoteHtml() + '</div>';
   if (!IB.type || !ibTypeDefault(IB.type)) return note;
-  return note + '<div style="margin-top:6px;"><a href="#" onclick="ibTypeEditToggle();return false;" style="font-size:13px;">' + (IB.typeEditOpen ? 'Hide instructions' : 'See / edit instructions') + '</a></div>' +
+  return note + '<div style="margin-top:6px;"><button type="button" class="panel-pill" style="opacity:1;font-size:12px;padding:4px 10px;" onclick="ibTypeEditToggle()">' + (IB.typeEditOpen ? 'Hide Prompt' : 'Edit Prompt') + '</button></div>' +
     '<div id="ib-type-edit"' + (IB.typeEditOpen ? '' : ' style="display:none;"') + '>' +
       '<textarea class="ib-in" id="ib-type-text" data-type="' + escapeHtml(IB.type) + '" rows="8" maxlength="2500" style="margin-top:6px;font-size:13px;" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.typeText || ibTypeDefault(IB.type)) + '</textarea>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><button class="btn btn-sm" type="button" onclick="ibTypeReset()">Reset</button>' +
@@ -39489,7 +39504,10 @@ function ibViewerHtml() {
   // Draft / Ready: in the toolbar beside Generate and New picture (v3.3.77, Ian), for the maker's own picture only.
   var state = '';
   if (mine) {
-    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
+    // v3.4.09 -- TD-1090. MAKE A COPY FOR THE MAKER (Ian, 2026-11-02: "a Make a Copy next to the New Picture button"). The
+    // same free copy others get from Make My Copy (POST /copy already allowed the maker): a new Draft that opens at once.
+    state = (im.image_url && !busy ? '<button class="btn btn-sm" id="ib-copy-own" onclick="ibCopy(' + im.id + ')" title="A new Draft of this picture, to change and redraw without touching this one (free)">Make a Copy</button>' : '') +
+      '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
   return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
