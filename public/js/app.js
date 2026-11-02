@@ -39292,7 +39292,7 @@ function ibRender() {
     '<div class="ib-card" id="ib-form">' +
       '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
         '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '" onchange="ibNameChanged()"></div>' +   // v3.3.83 -- saves on blur
-      ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
+      ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div><div id="ib-refs-note" class="ib-meta" style="margin-top:6px;"></div>') +
       // v3.3.97 -- Image type sits under References (Ian); Shape and Art style follow it.
       ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
         '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml() +
@@ -39632,6 +39632,7 @@ function ibLoadGallery() {
       IB.images = d.images || []; IB.me = d.me;
       var _landed = IB.images.some(function (x) { return _wasBusy[x.id] && !ibBusy(x) && String(x.user_id) === String(IB.me); });
       if (_landed && typeof refreshTokenBalance === 'function') { refreshTokenBalance(); setTimeout(refreshTokenBalance, 3000); }
+      if (IB.refsPending && String(IB.viewId) === String(IB.refsPending) && !ibBusy(ibImg(IB.refsPending))) ibSyncRefs();   // v3.4.07 -- the list that waited
       // Repaint only when something changed, so a spinner keeps turning between polls instead of restarting.
       var sig = IB.images.map(function (im) { return im.id + ':' + im.status + ':' + (im.image_url || ''); }).join('|');
       if (sig !== IB.sig) { IB.sig = sig; ibPaintGallery(); }
@@ -39696,25 +39697,49 @@ function ibSyncLayers(im) {
   ibTtlFields(); ibHoFields(); ibRender();
 }
 // v3.3.85 -- a picture with a clean copy asks which version first.
-function ibWhichCopy(id, verb) {
-  var im = ibImg(id);
-  if (!im || !im.has_clean) return Promise.resolve(false);
-  // v3.3.95 -- Ian: "With Title and Text... Without title and text." The choice names what is laid on.
-  var what = ibLaidOnWords(im);
-  return uiChoose(verb, 'This picture has ' + what + ' laid on it. Which version?', ['With ' + what, 'Without ' + what + ' (the clean copy)'])
-    .then(function (i) { return i === null ? null : i === 1; });
-}
+// v3.4.06 -- ibWhichCopy is gone: Archive asks its own three-way question (ibArchive) and Save as Asset always
+// takes the clean picture (ibSaveAsset), so nothing asked the two-way question any more.
 // v3.3.95 -- what is laid on a picture, in words: "the title", "the text", or "the title and text".
 function ibLaidOnWords(im) {
   var t = ibLayerOn(im, 'title'), h = ibLayerOn(im, 'handout');
   return (t && h) ? 'the title and text' : (h ? 'the text' : 'the title');
 }
+// v3.4.06 -- BOTH (Ian, 2026-11-02: "Add a Both button to the Archive options"). With a title or text laid on, Archive
+// offers the copy with the words, the clean copy, or both. The server keeps one Archive entry per copy (it matches on
+// the copy's own address), so Both is the two requests in turn -- with the words first, then clean -- and one message.
+// A picture with nothing laid on it archives at once, as before.
 async function ibArchive(id) {
   ibActMsg('');
-  var clean = await ibWhichCopy(id, 'Archive'); if (clean === null) return;
-  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/archive', { clean: clean }, function (d) {
-    showAlert(d.already ? 'This picture is already in the campaign\u2019s Archive.' : 'Archived. It is in the campaign\u2019s Archive, ready to use as a cover, title picture or replacement.');
+  var im = ibImg(id); if (!im) return;
+  var pick = 0, what = '';   // 0 with the words, 1 the clean copy, 2 both
+  if (im.has_clean) {
+    what = ibLaidOnWords(im);
+    pick = await uiChoose('Archive', 'This picture has ' + what + ' laid on it. Which version?', ['With ' + what, 'Without ' + what + ' (the clean copy)', 'Both']);
+    if (pick === null) return;
+  }
+  var url = '/api/images/builder/images/' + encodeURIComponent(id) + '/archive';
+  if (pick !== 2) {
+    ibPost(url, { clean: pick === 1 }, function (d) {
+      showAlert(d.already ? 'This picture is already in the campaign\u2019s Archive.' : 'Archived. It is in the campaign\u2019s Archive, ready to use as a cover, title picture or replacement.');
+    });
+    return;
+  }
+  ibPost(url, { clean: false }, function (a) {   // a refusal here (limit, rights) shows by the buttons and stops: the clean copy is not tried
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clean: true }) })
+      .then(function (r) { return r.json(); })
+      .then(function (b) { showAlert(ibArchiveBothText(what, a, b)); })
+      .catch(function () { showAlert(ibArchiveBothText(what, a, { error: 'Connection error. Please try again.' })); });
   });
+}
+// v3.4.06 -- the one message after Both. a and b are the replies for the copy with the words and the clean copy.
+function ibArchiveBothText(what, a, b) {
+  var A = 'the campaign\u2019s Archive';
+  if (!b || b.error) return 'The copy with ' + what + ' ' + (a && a.already ? 'was already in ' + A : 'is archived') + ', but the clean copy was not: ' +
+    String((b && (b.message || b.error)) || 'Something went wrong. Please try again.').replace(/\.\s*$/, '') + '.';
+  if (a.already && b.already) return 'Both copies were already in ' + A + '.';
+  if (a.already) return 'The copy with ' + what + ' was already in ' + A + '; the clean copy is now archived.';
+  if (b.already) return 'The clean copy was already in ' + A + '; the copy with ' + what + ' is now archived.';
+  return 'Both copies are in ' + A + ', ready to use as a cover, title picture or replacement.';
 }
 function ibCopy(id) {
   ibActMsg('');
@@ -39787,7 +39812,7 @@ function ibRetouchSend(id, instruction, snap, refName) {
 // v3.3.82 -- Save as Asset: the Archive's Copy to Assets window (name, type, crop frame), keyed 'ib:<id>'.
 async function ibSaveAsset(id) {
   var im = ibImg(id); if (!im || !im.image_url) return;
-  var clean = await ibWhichCopy(id, 'Save as Asset'); if (clean === null) return;   // v3.3.85
+  var clean = !!im.has_clean;   // v3.4.06 -- an asset is the picture, never the lettering (Ian: "The asset should do the picture not the lettering")
   IB.assetClean = clean;
   _caArchiveId = 'ib:' + id;
   var nameEl = document.getElementById('ca-name'), catEl = document.getElementById('ca-category'), errEl = document.getElementById('ca-error');
@@ -39850,13 +39875,42 @@ function ibAddChar() {
     } else if (IB.chars.length + IB.assets.length < IB.maxRefs) {
       IB.chars.push({ id: parseInt(p.charId, 10), name: p.charName, look: p.look, label: p.label });
     }
-    ibPaintChips();
+    ibPaintChips(); ibSyncRefs();   // v3.4.07
   } };
   var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
   _ciCharacters(String(IB.cid), IB.cname);
 }
-function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); }
-function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); }
+function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); ibSyncRefs(); }   // v3.4.07 -- ibSyncRefs
+function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); ibSyncRefs(); }
+// v3.4.07 -- TD-1088. THE REFERENCES SAVE TO THE OPEN PICTURE, like a Story panel's cast (Ian, 2026-11-02). With one
+// of my own drawn pictures open, every add or remove posts the whole list to POST /builder/images/:id/refs, so Retouch,
+// Regen and Edit Prompt read what the form shows. Someone else's picture, or a new one not yet drawn: the form only,
+// as before. A picture still drawing: the list waits (IB.refsPending) and is saved when the gallery sees it land
+// (ibLoadGallery). Posts go one at a time, each sending the list as it is when its turn comes, so the last change wins.
+function ibRefsTarget() {
+  var im = IB.viewId ? ibImg(IB.viewId) : null;
+  return (im && String(im.user_id) === String(IB.me) && im.image_url) ? im : null;
+}
+function ibRefsNote(text) { var n = document.getElementById('ib-refs-note'); if (n) n.innerHTML = text || ''; }
+function ibSyncRefs() {
+  var im = ibRefsTarget();
+  if (!im) { IB.refsPending = null; ibRefsNote(''); return; }
+  if (ibBusy(im)) { IB.refsPending = im.id; ibRefsNote('This picture is still drawing. The references will be saved to it when it finishes.'); return; }
+  IB.refsPending = null;
+  var id = im.id;
+  IB.refsQ = (IB.refsQ || Promise.resolve()).then(function () {
+    if (String(IB.viewId) !== String(id)) return;   // moved to another picture: its own list is in the form now
+    var body = { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }) };
+    return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/refs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.error) { if (String(IB.viewId) === String(id)) ibRefsNote(escapeHtml((d && (d.message || d.error)) || 'Could not save the references to this picture.')); return; }
+        if (d.image) { IB.images = IB.images.map(function (x) { return String(x.id) === String(id) ? d.image : x; }); }
+        if (String(IB.viewId) === String(id)) ibRefsNote('Saved to this picture.');
+      })
+      .catch(function () { if (String(IB.viewId) === String(id)) ibRefsNote('Connection error. The references were not saved to this picture.'); });
+  });
+}
 
 // The Add-an-asset window, in the Review tab's look, listing the chosen campaign's assets with a picture.
 function ibAddAsset() {
@@ -39901,7 +39955,7 @@ function ibAssetPicker(rows) {
       btn.appendChild(imgEl); btn.appendChild(cap);
       btn.addEventListener('click', function () {
         if (IB.chars.length + IB.assets.length < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
-        ibCloseAssetPicker(); ibPaintChips();
+        ibCloseAssetPicker(); ibPaintChips(); ibSyncRefs();   // v3.4.07
       });
       grid.appendChild(btn);
     });

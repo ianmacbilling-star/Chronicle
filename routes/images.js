@@ -3952,6 +3952,38 @@ router.post('/builder/images/:id/revert', requireAuth, async function (req, res)
   } catch (e) { console.error('[image-builder] revert error:', e.message); res.json({ error: 'Could not go back to the earlier picture.' }); }
 });
 
+// v3.4.07 -- TD-1088. THE REFERENCES SAVE TO THE PICTURE AS THEY CHANGE (Ian, 2026-11-02: "They should behave just like
+// the story panels"). A Story panel's cast is saved the moment it is edited and Retouch reads it from the panel; the
+// Builder kept its References in the form only, while Retouch and Regen read the picture's saved list, so a character
+// added after the picture was drawn was never offered or sent. The page now posts the whole list here on every add or
+// remove while one of the maker's own pictures is open. Checked exactly as Generate checks it (ibResolveCharacters: in
+// the campaign, a look the maker may use; assets in the campaign with a picture; the reference cap; the rights check).
+// Only refs.characters and refs.assets change: the title, the handout, the type text and the undo slot's layers stay.
+// Removing a character removes their reference from the next Retouch or Regen (Ian: "that's what they get").
+router.post('/builder/images/:id/refs', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const uid = req.session.userId, cid = r.campaign_id, b = req.body || {};
+    const rc = await ibResolveCharacters(db, cid, uid, Array.isArray(b.characters) ? b.characters : []);
+    if (rc.error) return res.json({ error: rc.error });
+    const chars = rc.chars;
+    const assetIds = (Array.isArray(b.assets) ? b.assets : []).map(function (x) { return parseInt(x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
+    const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
+    const assets = assetIds.map(function (id) { return allAssets.filter(function (a) { return Number(a.id) === id && a.image_url; })[0]; }).filter(Boolean);
+    if (assets.length !== assetIds.length) return res.json({ error: 'One of the assets is no longer available, or its picture was removed.' });
+    if (chars.length + assets.length > MAX_PANEL_REFS) return res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' });
+    if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return;
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    if (!refs || typeof refs !== 'object') refs = {};
+    refs.characters = chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; });   // as Generate stores them
+    refs.assets = assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; });
+    await db.prepare('UPDATE builder_images SET refs = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(refs), new Date().toISOString(), r.id);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] refs error:', e.message); res.json({ error: 'Could not save the references to this picture.' }); }
+});
+
 // v3.3.74 -- Archive: a copy of the picture into the campaign's Archive (as a picture, image_type 'moment' with no
 // session, so the cover, title and Replace pickers take it like any archived panel). The archive cap and the rights
 // check apply as on every other Archive button. The maker only.
