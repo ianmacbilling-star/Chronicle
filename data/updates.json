@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.10",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3410-map-to-scene",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Map to Scene turns a flat map into a painted view of the real place.",
+        "detail": "Add the map to the campaign as a Location asset, add it to References, and choose the Map to Scene image type. The picture shows the place from a low hilltop at an angle, keeping the map's layout, with the paper, labels and grid gone.",
+        "td": [
+          "TD-1091"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.09",
     "staged_on": "2026-11-02",
     "entries": [
