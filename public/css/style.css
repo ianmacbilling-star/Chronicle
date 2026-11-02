@@ -2256,6 +2256,23 @@ html.staging-env .app-logo-text{color:#2b1400;}
   .storyboard-panel .moment-replace-btn { opacity: 1 !important; }
 }
 
+/* v3.4.04 -- BETWEEN PHONE AND DESKTOP the header buttons did not fit (testers: 946px of page at 763px wide, the
+   account menu off-screen). Up to 1100px the name goes (avatar only, as on a phone) and the tester badge uses its
+   short form and the wordmark goes (the logo stays); up to 900px the build stamp and My Campaigns go too (the
+   breadcrumb has it). */
+@media (min-width: 641px) and (max-width: 1100px) {
+  #user-name { display: none; }
+  .app-header-right { gap: 7px; }
+  .app-logo-text { display: none; }
+  #tier-badge .tb-long { display: none; }
+  #tier-badge .tb-short { display: inline; }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .app-header { padding: 0 0.9rem; gap: 8px; }
+  #build-stamp { display: none !important; }
+  #header-campaigns-btn { display: none; }
+}
+
 /* Phone layout: compact header, stacked page headers, tighter padding. */
 @media (max-width: 640px) {
   .app-header { padding: 0 0.75rem; gap: 8px; }

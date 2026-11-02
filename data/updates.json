@@ -1,5 +1,29 @@
 [
   {
+    "version": "3.4.04",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3404-image-builder-polish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: character counters, a better first writing box, and a tidier tour.",
+        "detail": "The Description and Handout text boxes now show how many of their 1,500 characters you have used. Place writing starts with a smaller box in the middle of the blank area. Create a campaign opens right over the Image Builder. The Image Builder tour counts only the steps you can see, and the note after Apply writing names the button as it reads.",
+        "td": [
+          "TD-1080"
+        ]
+      },
+      {
+        "id": "3404-header-mid-width",
+        "kind": "fix",
+        "public": true,
+        "summary": "The top bar fits on tablet-sized screens.",
+        "detail": "Between phone and desktop widths, the top bar no longer pushed the page sideways; it uses the shorter forms of its buttons instead.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.03",
     "staged_on": "2026-11-01",
     "entries": [

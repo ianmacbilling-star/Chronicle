@@ -590,6 +590,7 @@
     "image-builder": {
       "title": "Image Builder",
       "requires": "#ib-form",
+      "dropMissing": true,
       "steps": [
         {
           "selector": ".ib-head",

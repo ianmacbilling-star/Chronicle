@@ -26666,6 +26666,8 @@ async function csCreateCampaign() {
     if (!r.ok || (d && d.error)) { showModalError('campaign-settings-error', (d && d.error) || 'Could not create the campaign.'); return; }
     closeCampaignSettings();
     if (typeof loadCampaigns === 'function') loadCampaigns();
+    // v3.4.04 -- made from the Image Builder's Create a campaign: the Builder picks it up straight away.
+    if (state && state.currentView === 'image-builder' && typeof openImageBuilder === 'function') openImageBuilder(true);
   } catch (e) {
     showModalError('campaign-settings-error', 'Could not create the campaign.');
   } finally {
@@ -30485,6 +30487,9 @@ function tourKeyForView() {
 function startTour(viewId, manual) {
   _tourViewId = viewId;
   _tourSteps = _tourStepsFor(viewId);
+  // v3.4.04 -- a tour marked dropMissing (the Image Builder's) keeps only the steps whose part of the page is showing
+  // now, so its counter reads "of 10" rather than ending on "Step 11 of 12" (testers).
+  try { var _tdm = _toursData && _toursData[viewId]; if (_tdm && _tdm.dropMissing) _tourSteps = _tourSteps.filter(function (s) { return !s.selector || _tourVisible(document.querySelector(s.selector)); }); } catch (e) {}
   if (_tourSteps.length === 0) return;
   _tourIdx = 0;
   _tourShownAny = false;
@@ -38966,6 +38971,9 @@ var IB_HO_FONT_LIST = [['garamond', 'Old book', "'EB Garamond', Georgia, serif"]
   ['merriweather', 'Sturdy print', "'Merriweather', Georgia, serif"], ['bangers', 'Bold poster', "'Bangers', cursive"]];
 var IB_HO_INK_LIST = [['brown', 'Iron-gall brown', '#3b2312'], ['black', 'Black', '#17120d'], ['red', 'Faded red', '#6e1f14'], ['blue', 'Indigo', '#22305a']];
 var IB_HO_DEFAULT_POS = { x: 0.12, y: 0.22, w: 0.76, h: 0.6 };
+// v3.4.04 -- where Place writing starts the box: smaller, centred inside the area the drawing is asked to leave blank
+// (IB_HO_DEFAULT_POS, which still shapes the prompt), so the words start on the paper (testers).
+var IB_HO_START_POS = { x: 0.2, y: 0.32, w: 0.6, h: 0.4 };
 function ibHoBlank() { return { text: '', font: 'garamond', ink: 'brown', align: 'center', heading: true, url: '', pos: null }; }
 function ibHoFields() {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
@@ -38978,6 +38986,7 @@ function ibHandoutBody() {
   };
   return '<div class="ib-meta" style="margin-bottom:6px;">The words on the handout, exactly as they should read. They are set in the font you choose and laid on the paper, so the spelling is always right.</div>' +
     '<textarea class="ib-in" id="ib-ho-text" rows="6" maxlength="1500" placeholder="WANTED&#10;Grimbald the Grey&#10;for crimes against the Crown&#10;Reward: 500 gold" oninput="ibHoLive()">' + escapeHtml(h.text) + '</textarea>' +
+    '<div class="ib-meta" id="ib-ho-count" style="text-align:right;margin-top:2px;">' + ibCountText(h.text) + '</div>' +   // v3.4.04
     '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="ib-ho-heading"' + (h.heading !== false ? ' checked' : '') + ' onchange="ibHoLive()"> First line as a heading</label>' +
     '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;"><div style="flex:1;min-width:120px;"><div class="ib-lbl">Font</div>' + sel('ib-ho-font', h.font, IB_HO_FONT_LIST) + '</div>' +
       '<div style="flex:1;min-width:120px;"><div class="ib-lbl">Ink</div>' + sel('ib-ho-ink', h.ink, IB_HO_INK_LIST) + '</div>' +
@@ -39009,6 +39018,8 @@ function ibHoWaiting(im, mine, busy) {
   var h = im && im.refs && im.refs.handout;
   return !!(mine && !busy && im.image_url && im.image_type === 'handout' && h && String(h.text || '').trim() && !h.off && !ibLayerOn(im, 'handout'));
 }
+// v3.4.04 -- the clean-copy pill's own words: Without title / Without text / Without title and text.
+function ibWithoutLabel(im) { var w = ibLaidOnWords(im); return 'Without ' + (w === 'the title' ? 'title' : (w === 'the text' ? 'text' : 'title and text')); }
 function ibHoApplyPaint() { var el = document.getElementById('ib-ho-apply'); if (el) el.innerHTML = ibHoApplyHtml(); }
 function ibHoDragStart(e) { IB._hoDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-handout'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
 function ibHoFamily(key) { var f = IB_HO_FONT_LIST.filter(function (x) { return x[0] === key; })[0]; return f ? f[2] : IB_HO_FONT_LIST[0][2]; }
@@ -39073,7 +39084,7 @@ function ibHoPlaceStart(fx, fy) {
   if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your handouts first, then drag the writing onto it.'); return; }
   if (!String(IB.ho.text || '').trim()) { ibAccSet('type', true); nagField(document.getElementById('ib-ho-text'), 'Type the handout\u2019s words above first.', document.getElementById('ib-ho-msg')); return; }   // v3.3.93 -- the shake; the words are in the Image type panel
   IB.placing = null;
-  var p = Object.assign({}, IB.ho.pos || IB_HO_DEFAULT_POS);
+  var p = Object.assign({}, IB.ho.pos || IB_HO_START_POS);   // v3.4.04
   if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - p.h / 2; }
   IB.hoPlacing = { id: im.id, x: p.x, y: p.y, w: p.w, h: p.h };
   ibHoClamp();
@@ -39148,7 +39159,7 @@ function ibHoApply() {
   }).then(function (r) { return r.json(); }).then(function (d) {
     if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the writing on the picture.'; msg(''); showError(m); return; }
     ibPut(d.image); ibAccRefresh();
-    msg('Done. The writing is on the handout; Without title shows the clean copy. Place it again to move it.');
+    msg('Done. The writing is on the handout; ' + ibWithoutLabel(d.image) + ' shows the clean copy. Place it again to move it.');   // v3.4.04 -- the pill as it reads
   }).catch(function (e) { msg(''); showError((e && e.message) || 'Could not lay the writing on the picture.'); });
 }
 function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
@@ -39244,7 +39255,7 @@ function ibRender() {
         '<button class="btn btn-sm" onclick="ibGoCampaign(\'assets\')" title="This campaign\u2019s Asset Library">Assets</button>' +
         '<button class="btn btn-sm" onclick="ibGoCampaign(\'archives\')" title="This campaign\u2019s Archive">Archive</button>' : '') + '</div>'
     : '<div class="ib-meta" style="margin-bottom:12px;">Pictures are made for a campaign. Create one to start.</div>' +   // v3.4.01 -- and a button to do it (testers)
-      '<button class="btn btn-primary btn-sm" type="button" onclick="showView(\'campaigns\');openCampaignModal()">Create a campaign</button>';
+      '<button class="btn btn-primary btn-sm" type="button" onclick="openCampaignModal()">Create a campaign</button>'   /* v3.4.04 -- over this page: no My Campaigns tour on top of it (testers) */;
   if (!IB.cid) { root.innerHTML = head + (camps.length ? '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>' : ''); return; }
   var tabs = '<div class="ib-tabs">' +
     '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? '' : ' on') + '" onclick="ibTab(\'make\')">Make a picture</button>' +
@@ -39275,6 +39286,7 @@ function ibRender() {
       ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
       ibAccHtml('desc', 'Description',
         '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
+        '<div class="ib-meta" id="ib-desc-count" style="text-align:right;margin-top:2px;">' + ibCountText(IB.desc) + '</div>' +   // v3.4.04
         '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
       // v3.3.93 -- the handout's words moved into the Image type panel (Ian).
       ibAccHtml('title', 'Title', ibTitleBody()) +   // v3.3.83
@@ -39319,7 +39331,15 @@ function ibAccSummary(key) {
   if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
   return '';
 }
+// v3.4.04 -- the 1,500-character boxes say how full they are (testers: a paste lost its tail without a word).
+var IB_TEXT_MAX = 1500;
+function ibCountText(s) { var n = String(s || '').length; return (n >= IB_TEXT_MAX * 0.93 ? '<span style="color:#e8a85a;">' : '<span>') + n.toLocaleString() + ' / ' + IB_TEXT_MAX.toLocaleString() + '</span>'; }
+function ibCountPaint() {
+  var d = document.getElementById('ib-desc-count'); if (d) d.innerHTML = ibCountText(IB.desc);
+  var h = document.getElementById('ib-ho-count'); if (h) h.innerHTML = ibCountText(IB.ho && IB.ho.text);
+}
 function ibAccRefresh() {
+  ibCountPaint();   // v3.4.04
   ['refs', 'shape', 'style', 'type', 'desc', 'handout', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
   var tn = document.getElementById('ib-type-note'); if (tn) tn.innerHTML = ibTypeNoteHtml();   // v3.3.86
 }
