@@ -39378,6 +39378,7 @@ function ibAccRefresh() {
 // text; edits are saved with this picture only (Regen and Make My Copy keep them), Reset brings the standard text back.
 function ibTypeDefault(key) { var t = (IB.types || []).filter(function (x) { return x.key === key; })[0]; return (t && t.text) || ''; }
 function ibTypeNoteHtml() {
+  if (IB.type === 'mapscene') return 'Add the map to References as a Location asset (one only). A style without faded edges gives a full scene.';   // v3.4.10 -- TD-1091
   return (IB.type === 'character' && IB.chars.length > 1) ? 'A Character Study works best with one character. With ' + IB.chars.length + ', it will do what it can.' : '';
 }
 function ibTypeEditHtml() {
@@ -40019,9 +40020,9 @@ function ibSetStyle(id) {
 
 function ibMsg(text, field) {
   var m = document.getElementById('ib-msg'); if (m) m.innerHTML = text || '';
-  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes', 'ib-ttl-title'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
+  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes', 'ib-ttl-title', 'ib-chips'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });   // v3.4.10 -- ib-chips
   // v3.3.80 -- the field's panel is opened first, so a missing field in a closed panel is seen.
-  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'], title: ['title', 'ib-ttl-title'] };   // v3.3.83 -- title
+  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'], title: ['title', 'ib-ttl-title'], refs: ['refs', 'ib-chips'] };   // v3.3.83 -- title; v3.4.10 -- refs (Map to Scene needs its map)
   // v3.4.01 -- one field, or several (the first is shaken and takes the cursor; the rest are outlined).
   var _fs = Array.isArray(field) ? field : (field ? [field] : []);
   _fs.slice().reverse().forEach(function (k, i) {
