@@ -16206,8 +16206,12 @@ function rgActionChange() {
   if (def.size) html += rgSelect('rg-size', 'How big', [['small', 'small and contained'], ['medium', 'moderate'], ['large', 'large and dominant']]);
   if (def.scope) html += rgSelect('rg-scope', 'Apply it to', [['all', 'the whole picture'], ['one', 'just the figure I circle in red']]);
   if (def.convert) {
-    var _sn = (typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '';
-    html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Reapplies the art style set at the top of the storyboard:' +
+    // v3.4.05 -- TD-1085. FROM THE IMAGE BUILDER THIS NAMES THE PICTURE'S OWN STYLE. The builder retouch route puts the
+    // picture's saved style at the top of the prompt, never the storyboard's; this line read state.artStyle, so a Dark
+    // Fantasy picture was labelled High fantasy (Ian, 2026-11-02). Only the label was wrong. Story panels unchanged.
+    var _ibRg = rgState.ib;
+    var _sn = _ibRg ? (_ibRg.styleLabel || '') : ((typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '');
+    html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">' + (_ibRg ? 'Reapplies this picture\u2019s art style:' : 'Reapplies the art style set at the top of the storyboard:') +
       '<div style="margin-top:3px;color:var(--gold-light);font-size:13px;">' + rgEsc(_sn || 'the current art style') + '</div></div>';
     html += rgSelect('rg-convert', 'What is happening', [['drift', 'this picture drifted and needs putting back'], ['cross', 'this picture is in a different style and needs converting']]);
   }
@@ -36650,48 +36654,59 @@ function _ciLookTile(l) {
     (l.url ? '<img src="' + escapeHtml(l.url) + '" loading="lazy" alt="" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;background:#0a0604;">'
            : '<div style="width:100%;aspect-ratio:3/4;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:0.6;">No picture</div>') +
     '<span style="font-size:12px;"><b>' + escapeHtml(l.label) + '</b>' + (l.date ? '<br><span style="opacity:0.65;">' + escapeHtml(l.date) + '</span>' : '') +
-    (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') + '</span></button>';
+    (('style' in l) ? '<br><span class="ci-style" style="opacity:0.65;">' + escapeHtml(l.style ? ('Art style: ' + artStyleLabel(l.style)) : 'No art style recorded') + '</span>' : '') +   // v3.4.05 -- TD-1086 (Ian)
+    (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') +
+    ((l.uses && l.uses.length) ? '<br><span class="ci-uses" style="opacity:0.75;font-size:11px;">' + escapeHtml(l.uses.join(' \u00b7 ')) + '</span>' : '') +   // v3.4.05 -- TD-1086
+    '</span></button>';
 }
 
+// v3.4.05 -- TD-1086. ONE FLOWING GRID, EACH PICTURE ONCE (Ian, 2026-11-02: "Most of the pictures look identical... if
+// they could go across that would be helpful"). A new version copies its characters' picture LINKS (the branch copy in
+// routes/sessions.js), so one file showed once per version, each version in its own block -- one tile per row. Every
+// version is now read when the window opens; a picture already shown gains that version's name under it instead of a
+// second tile, and all the tiles share one grid. A version picture that is the card's own joins the Original tile.
+// Still oldest first: Original, then each version's looks in turn. A version that cannot be read is left out, as an
+// empty one always was.
 function _ciLooks(charId, charName) {
   if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; }
   _ci.step = 'looks'; _ci.charId = charId; _ci.charName = charName; _ci.look = null;
-  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
+  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', oldest first. A picture used by more than one version is shown once, with those versions named under it. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
   var base = _ciBase() + '/campaigns/' + encodeURIComponent(_ci.source) + '/characters/' + encodeURIComponent(charId) + '/looks';
   _ciGet(base, function (d) {
     if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
-    var grid = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;';
-    var html = '<div style="margin-bottom:14px;"><div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">Original (the campaign\u2019s character card)</div>' +
-      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 ' + (_ci.mode === 'builder' ? 'its description is used instead.' : 'it will be imported without one.') + '</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
-    (d.versions || []).forEach(function (v) {
-      html += '<div class="ci-group" data-version="' + v.version_id + '" style="margin-bottom:14px;min-height:60px;">' +
-        '<div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">' + escapeHtml(v.label) + '</div>' +
-        '<div class="ci-group-body" style="' + grid + '"><div style="font-size:12px;opacity:0.6;">Loading\u2026</div></div></div>';
+    var vers = d.versions || [];
+    Promise.all(vers.map(function (v) {
+      return fetch(base + '?version_id=' + encodeURIComponent(v.version_id), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (r) { return (r && !r.error && r.looks) ? r.looks : []; })
+        .catch(function () { return []; });
+    })).then(function (perVersion) {
+      if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
+      var b = document.getElementById('ci-body'); if (!b) return;
+      b.innerHTML = _ciLooksHtml(d, vers, perVersion);
+      b.removeEventListener('click', _ciPickFromEvent);
+      b.addEventListener('click', _ciPickFromEvent);
     });
-    var b = document.getElementById('ci-body');
-    b.innerHTML = html;
-    b.addEventListener('click', _ciPickFromEvent);
-    var load = function (g) {
-      if (g.getAttribute('data-loaded')) return;
-      g.setAttribute('data-loaded', '1');
-      _ciGet(base + '?version_id=' + encodeURIComponent(g.getAttribute('data-version')), function (r) {
-        if (!_ci || _ci.charId !== charId) return;
-        var body = g.querySelector('.ci-group-body');
-        var looks = r.looks || [];
-        if (!looks.length) { g.style.display = 'none'; return; }   // v3.3.79 -- a version with no pictures of them is left out, heading and all
-        body.innerHTML = looks.map(_ciLookTile).join('');
-      });
-    };
-    var groups = b.querySelectorAll('.ci-group');
-    if (typeof IntersectionObserver === 'function') {
-      _ci.observer = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) { if (e.isIntersecting) load(e.target); });
-      }, { root: b, rootMargin: '200px' });
-      Array.prototype.forEach.call(groups, function (g) { _ci.observer.observe(g); });
-    } else {
-      Array.prototype.forEach.call(groups, load);
-    }
   });
+}
+// v3.4.05 -- TD-1086. The tiles for _ciLooks (perVersion[i] holds vers[i]'s looks), merged by picture address.
+function _ciLooksHtml(d, vers, perVersion) {
+  var tiles = [], byUrl = {};
+  var orig = (d && d.original && d.original.url) ? { key: d.original.key || 'original', url: d.original.url, label: d.original.label || 'Original', style: null, uses: [] }
+                                                 : { key: 'original', url: '', label: 'Original (no picture)', uses: [] };
+  tiles.push(orig);
+  if (orig.url) byUrl[orig.url] = orig;
+  (vers || []).forEach(function (v, i) {
+    ((perVersion && perVersion[i]) || []).forEach(function (l) {
+      if (!l || !l.url) return;
+      var t = byUrl[l.url];
+      if (!t) { t = { key: l.key, url: l.url, label: l.label, date: l.date, changed: l.changed, style: l.style || null, uses: [] }; byUrl[l.url] = t; tiles.push(t); }
+      if (!t.style && l.style) t.style = l.style;   // a branched copy does not carry styled_art_style, so any copy that has it names it
+      if (v && v.label && t.uses.indexOf(v.label) < 0) t.uses.push(v.label);
+    });
+  });
+  var note = orig.url ? '' : '<div style="font-size:12px;opacity:0.7;margin-bottom:8px;">No reference picture on the card \u2014 ' + (_ci.mode === 'builder' ? 'its description is used instead.' : 'it will be imported without one.') + '</div>';
+  return note + '<div class="ci-looks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">' + tiles.map(_ciLookTile).join('') + '</div>';
 }
 
 function _ciPickFromEvent(ev) {
@@ -39747,7 +39762,8 @@ function ibRetouch(id) {
   var refs = [];
   ((im.refs && im.refs.characters) || []).forEach(function (c) { if (c && c.name) refs.push({ name: c.name, kind: 'character' }); });
   ((im.refs && im.refs.assets) || []).forEach(function (a) { if (a && a.name) refs.push({ name: a.name, kind: 'asset', category: a.category || '' }); });
-  rgSetup('ib' + id, { url: im.clean_url || im.image_url, shape: im.shape, refs: refs });   // v3.3.85 -- the clean copy is what gets retouched
+  rgSetup('ib' + id, { url: im.clean_url || im.image_url, shape: im.shape, refs: refs,   // v3.3.85 -- the clean copy is what gets retouched
+    styleLabel: artStyleLabel(im.art_style, im.art_style_name) });   // v3.4.05 -- TD-1085: named by Fix or reapply the art style
   if (ta) setTimeout(function () { ta.focus(); }, 30);
 }
 function ibRetouchSend(id, instruction, snap, refName) {

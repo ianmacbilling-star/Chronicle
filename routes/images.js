@@ -4068,7 +4068,8 @@ router.post('/builder/images/:id/retouch', requireAuth, async function (req, res
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, r.art_style, cost, r.id, r.image_url, marked ? JSON.stringify([marked]) : null, now, now);
     await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/retouch',
-      message: 'Retouching Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { instruction_raw: instruction, ref_name_picked: pick || null, refs: refs.map(function (x) { return x && x.name; }), marked_url: marked ? 'yes' : 'no', instruction_sent: instr } });
+      message: 'Retouching Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { instruction_raw: instruction, ref_name_picked: pick || null, refs: refs.map(function (x) { return x && x.name; }), marked_url: marked ? 'yes' : 'no', instruction_sent: instr,
+      art_style: r.art_style, art_style_name: _rs.name || null } });   // v3.4.05 -- TD-1085: the style this retouch sent
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
     res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
   } catch (e) {
