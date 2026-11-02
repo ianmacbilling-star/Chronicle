@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.4.05",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3405-looks-and-retouch-style",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: Retouch names the picture's own art style, and choosing a character's look shows each picture once, side by side.",
+        "detail": "In the Retouch window, Fix or reapply the art style now names the style of the picture you are retouching (it always used that style; only the label said otherwise). When you choose a character's look, in the Image Builder or in Import a character, a picture shared by several versions appears once with those versions listed under it, and the looks sit side by side instead of one to a row. Each look also shows its art style when it was made with Regenerate in Art Style.",
+        "td": [
+          "TD-1085",
+          "TD-1086"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.04",
     "staged_on": "2026-11-01",
     "entries": [

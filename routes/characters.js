@@ -187,7 +187,7 @@ function importDateLabel(d) {
 
 async function importLooksForVersion(db, charId, versionId) {
   const rows = await db.prepare(
-    'SELECT sc.id, sc.reference_url, sc.change_flag, sc.change_note, sc.change_detail, s.name AS session_name, s.session_date ' +
+    'SELECT sc.id, sc.reference_url, sc.styled_art_style, sc.change_flag, sc.change_note, sc.change_detail, s.name AS session_name, s.session_date ' +   // v3.4.05 -- TD-1086 styled_art_style
     'FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id ' +
     'WHERE sf.version_id = ? AND sc.character_id = ? AND sc.reference_url IS NOT NULL AND sc.reference_url <> \'\' ' +
     'ORDER BY s.session_date ASC, s.id ASC, sc.id ASC'
@@ -198,7 +198,7 @@ async function importLooksForVersion(db, charId, versionId) {
     last = r.reference_url;
     const changed = r.change_flag === true || r.change_flag === 1 || r.change_flag === 't';
     out.push({ key: 'sc:' + r.id, url: r.reference_url, label: r.session_name || 'Session',
-      date: importDateLabel(r.session_date), changed: changed,
+      date: importDateLabel(r.session_date), changed: changed, style: r.styled_art_style || null,   // v3.4.05 -- TD-1086: set only by Regenerate in Art Style
       note: changed ? String(r.change_detail || r.change_note || '').slice(0, 200) : '' });
   });
   return out;
