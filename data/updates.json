@@ -1,5 +1,559 @@
 [
   {
+    "version": "3.4.04",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3404-image-builder-polish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: character counters, a better first writing box, and a tidier tour.",
+        "detail": "The Description and Handout text boxes now show how many of their 1,500 characters you have used. Place writing starts with a smaller box in the middle of the blank area. Create a campaign opens right over the Image Builder. The Image Builder tour counts only the steps you can see, and the note after Apply writing names the button as it reads.",
+        "td": [
+          "TD-1080"
+        ]
+      },
+      {
+        "id": "3404-header-mid-width",
+        "kind": "fix",
+        "public": true,
+        "summary": "The top bar fits on tablet-sized screens.",
+        "detail": "Between phone and desktop widths, the top bar no longer pushed the page sideways; it uses the shorter forms of its buttons instead.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.03",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3403-campaign-chooser-pictures",
+        "kind": "feature",
+        "public": true,
+        "summary": "Choosing a campaign shows each campaign picture.",
+        "detail": "When you choose a campaign in the Image Builder, or choose where to import a character from, each campaign now shows its picture, the same one as on My Campaigns.",
+        "td": [
+          "TD-1080",
+          "TD-918"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.02",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3402-tier-grid-image-builder",
+        "kind": "feature",
+        "public": true,
+        "summary": "Compare the Tiers now lists the Image Builder.",
+        "detail": "The Compare the Tiers grid has a new Image Builder row, under the Writing Coach: it is part of Platinum, and members of a campaign whose Story Master is on Platinum can use it there too.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.01",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3401-ib-handout-revert-polish",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: handout writing is placed by you, Revert keeps the title, and smaller fixes.",
+        "detail": "A new handout now arrives with a clear writing area and no words on it: drag your writing onto the picture, size it, and press Apply writing here. Revert now brings back the title and the writing exactly as they were with the earlier picture. Also: the Title Builder Generate button shows its token cost, the Title Builder talks about your picture rather than a book when opened from the Image Builder, Generate names every missing field at once, the token count updates as soon as a picture arrives, and the Image Builder offers a Create a campaign button when you have none.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.00",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3400-ib-remove-title-own",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: Remove title only shows on your own pictures.",
+        "detail": "When you open a picture made by another member in the Image Builder, the Title panel no longer offers Remove title, since you cannot change their picture. Make My Copy gives you your own copy to change.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.99",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3399-image-builder-help-tour",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a guided tour, and the help assistant now knows it.",
+        "detail": "The first time you open the Image Builder, a short tour walks through each part of the page. The help assistant (the ?s button) can now answer questions about the Image Builder: who can use it, picture types, titles, handouts, the Gallery and Make My Copy, and it knows when you are asking from that page.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.98",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3398-help-tip-promo-check",
+        "kind": "fix",
+        "public": true,
+        "summary": "The ?s help tooltip shows its words again, and a promo code is checked as soon as you leave its box.",
+        "detail": "The tooltip on the ?s help buttons was opening underneath the bar below the header, so it looked empty; it now opens on top. When signing up, a promo code that has expired, been used up or is for a different plan is now flagged as soon as you leave the promo code box, instead of after you have filled in the whole form.",
+        "td": [
+          "TD-1082",
+          "TD-1083"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.97",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3397-image-builder-item-portrait",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Item Showcase as a still life, Portrait / Headshot, and Image type moved up.",
+        "detail": "Item Showcase now paints your items as a still life on a fitting surface, with a soft setting behind and one clear light, whether there is one item or several. Portrait Token is now called Portrait / Headshot. The Image type panel now sits just under References.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.96",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3396-upload-retry",
+        "kind": "fix",
+        "public": true,
+        "summary": "Saving no longer fails on a brief file-storage hiccup.",
+        "detail": "When the file store is briefly unavailable, saving now tries again by itself a few times. If it still cannot save, the message says so in plain words and has a Try again link, and your optimized book stays on screen.",
+        "td": [
+          "TD-1081"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.95",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3395-image-builder-which-copy",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: one Remove title button, and Archive names the title and the text.",
+        "detail": "Remove title takes the title off the picture and out of the Title section; the drawing stays in the Title Builder, so Done & Use brings it back. When a picture has a title or handout text laid on it, Archive and Save as Asset ask With or Without the title, the text, or the title and text, and the Without button on the picture says the same.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.94",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3394-image-builder-place-both",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: placing the title keeps the handout writing in view, and the other way round.",
+        "detail": "While you place a title, any handout writing already on the picture stays in view, and while you place the writing, the title stays in view, so you can arrange the two together.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.93",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3393-image-builder-shake",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a missing field now shakes, and titles come from the Title Builder.",
+        "detail": "Pressing Title Builder with no title typed, or Generate with something missing, now outlines and shakes the field that needs filling and says what it is. A title typed without Title Builder lettering is no longer drawn into the picture. The words for a handout now sit under the Image type choice, and Remove writing from picture and Remove title from picture take them off again (free; Revert puts them back).",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.92",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3392-image-builder-handout-text",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: handouts with your exact words, and one Character / Creature Study.",
+        "detail": "An In-world Handout now has a Handout text section: type the words, choose a font, ink and layout, and they are set on the paper exactly as typed, so the spelling is always right. Drag the box onto the picture to place and size it. Character Study and Creature Study are now one type, Character / Creature Study.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.91",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3391-image-builder-open-replaces",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: opening a Gallery picture replaces every field with its own.",
+        "detail": "Opening any picture from the Gallery now fills every field on the left with the picture's own name, description, type, references, title and style, instead of leaving some from the picture before.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.90",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3390-ai-limit-reads",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: no more \"generating very quickly\" while picking characters and assets.",
+        "detail": "Opening character lists, looks and assets, and the gallery refreshing, no longer count towards the limit on how fast you can generate, so picking characters quickly no longer stops with that message. Generating still has the same limit.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.89",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3389-image-builder-title-drag",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: drag the title onto the picture, drop it and resize it.",
+        "detail": "The Placement and Size choices are gone. Drag the lettering from the Title section onto the picture, drop it where you want it, drag its corner to resize it, and press Apply title here. Place title on picture does the same without dragging. The spot is kept, so Regen and Retouch put the title back where you placed it.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.88",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3388-image-builder-title-fade",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a dark fade behind laid-on titles, as on covers.",
+        "detail": "Title lettering laid on an Image Builder picture now gets the same soft dark haze and halo a cover title gets, so it stands out from the picture. Apply title again to give an existing picture the new look.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.87",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3387-image-builder-title-tools",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Apply title in the Title section, and Title Builder Archive, Replace, Retouch and Stash.",
+        "detail": "Apply title now sits in the Title section, under the lettering, and lays the title on the picture you have open. The Title Builder Archive, Replace from Archive, From Archive, Retouch, Revert and Done & Stash now work for Image Builder titles too, using that campaign Archive.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.86",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3386-image-builder-types",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: new Character Study and Movie Poster / Book Cover, and editable type instructions.",
+        "detail": "Character Study now paints a character sheet: the character head to toe, with three close-ups of their face from different angles. Movie Poster / Book Cover now paints classic key art: a montage of the main characters, the hero up front, a key moment and dramatic lighting. Under the Image type, See / edit instructions shows what the type asks for, and you can change it for one picture; Reset brings the standard text back.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.85",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3385-image-builder-title-overlay",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Title Builder lettering is laid on exactly as designed, and a clean copy is kept.",
+        "detail": "Lettering made in the Title Builder is now laid over the finished picture exactly as you designed it, at the placement and size you chose, instead of being redrawn by the art style. A clean copy without the title is kept: Archive and Save as Asset ask which version you want, Without title shows it, and Regen and Retouch work on the clean picture and put the title back on. Apply title lays new lettering, or a new placement or size, on a picture already drawn, for free.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.84",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3384-image-builder-header",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Campaign, Assets and Archive buttons beside the campaign.",
+        "detail": "The campaign line at the top of the Image Builder now has buttons to open the campaign, its Asset Library and its Archive. Back on the Assets and Archive pages returns to the Image Builder.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.83",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3383-image-builder-title",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: a Title section, and the name saves when you leave it.",
+        "detail": "A new Title section, after Description, letters a title and subtitle you type into the picture, at the placement and size you choose. The Title Builder can design the lettering first, from a description and a reference picture; without it the art style decides. A title drawn into a picture cannot be taken out again, so make a version without it if you want the picture for a book cover. Renaming a picture you made now saves as soon as you leave the Name field.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.82",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3382-image-builder-retouch-asset",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Retouch and Save as Asset, and characters drawn at their set height.",
+        "detail": "Retouch opens the same Retouch window as story pictures, with its markers and reference picker, and costs one token; Revert brings back the picture from before. Save as Asset makes the picture a campaign asset, and you can frame just part of it. Every character in an Image Builder picture is now described at the height set on the character.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.81",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3381-image-builder-campaign-clear",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: changing campaign starts a blank form, and a description is optional once you choose an image type.",
+        "detail": "Your pictures stay in the gallery of the campaign they were made in.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.80",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3380-image-builder-panels",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: the form is in folding panels, with the picture's name on top.",
+        "detail": "References, Shape, Art style, Image type and Description each have their own panel that opens and closes like the Prep & Preview panels, and remembers how you left it. A closed panel shows your choice in its header. The References panel is easier to read.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.79",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3379-look-picker-empty-versions",
+        "kind": "fix",
+        "public": true,
+        "summary": "Choosing a character's look: versions with no pictures of that character are no longer listed.",
+        "detail": "Applies to Import a character and the Image Builder's character picker.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.78",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3378-image-builder-shapes-row",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: the seven picture shapes fit on one row.",
+        "detail": "On a phone they still wrap onto two rows.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.77",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3377-image-builder-draft-in-bar",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Draft / Ready sits with Generate and New picture, and the form headings match Prep & Preview.",
+        "detail": "The Draft or Ready label and its Mark Ready / Back to Draft button moved up from under the picture to the row of buttons above it. The form's headings (References, Shape, Art style and the rest) use the same lettering as Prepare to Publish.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.76",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3376-image-builder-buttons",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: a tighter page, Generate and New picture above the picture, and the picture's own buttons on it.",
+        "detail": "The short description sits beside the title and the page starts closer to the top. Generate and New picture are on the row with the zoom buttons. Edit Prompt, Regen, Revert, Archive and Delete appear on the picture when you point at it, the same way as on story pictures (always shown on a phone).",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.75",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3375-image-builder-one-scroll",
+        "kind": "fix",
+        "public": true,
+        "summary": "Image Builder: one scroll bar, and the whole picture always shows.",
+        "detail": "The picture no longer sits in its own scrolling box. Zooming in makes it bigger up to the width of the page, and the page scrolls as normal.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.74",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3374-image-builder-stage-2",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: Edit Prompt, Regen, Revert, Archive and Make My Copy.",
+        "detail": "Under your picture: Edit Prompt changes the words it is drawn from, Regen draws it again (one token), Revert swaps back to the picture before the last Regen, and Archive puts a copy in the campaign's Archive to use as a cover, title picture or replacement. Opening one of your pictures from the Gallery loads its settings back into the form. On someone else's picture, Make My Copy gives you your own copy to work on, free.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.73",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3373-image-builder-draft-zoom",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Draft and Ready, a New picture button, and a bigger picture with zoom.",
+        "detail": "A new picture starts as a Draft that only you can see; Mark Ready shares it with the campaign's gallery, and Back to Draft takes it back. New picture clears the form for the next one (your campaign, shape and art style stay). The picture is shown bigger, with the same zoom buttons as Prep & Preview.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.72",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3372-image-builder-tabs",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Image Builder has two tabs: Make a picture and Gallery.",
+        "detail": "On Make a picture, your picture fills the right side of the page at its own shape, with the same Generating spinner as story pictures while it is drawn. The Gallery shows every picture in the campaign across the whole page; click one to open it.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.3.71",
+    "staged_on": "2026-11-01",
+    "entries": [
+      {
+        "id": "3371-image-builder",
+        "kind": "feature",
+        "public": true,
+        "summary": "New: the Image Builder, on the profile menu under Custom Art Styles (Platinum).",
+        "detail": "Make posters, portraits, maps, handouts and more for a campaign: choose its characters and assets as references, a shape, an art style and an optional image type, describe the picture and press Generate. Each picture costs one token and goes into the campaign's gallery, which every member of the campaign can see. It is open in your own Platinum campaigns and in campaigns whose Story Master is on Platinum.",
+        "td": [
+          "TD-1080"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.3.70",
     "staged_on": "2026-11-01",
     "entries": [

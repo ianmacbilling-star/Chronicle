@@ -2307,6 +2307,27 @@ async function migrateGifts(pool) {
     await pool.query('ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS medium TEXT');
     await pool.query('ALTER TABLE marketplace_samples ADD COLUMN IF NOT EXISTS reasons TEXT');
   } catch (e) { console.error('[marketplace] media migration skipped this boot:', e && e.message); }
+  // v3.3.71 -- TD-1080. THE IMAGE BUILDER'S GALLERY (claude/IMAGE_BUILDER_SPEC.md). One row per picture, with its
+  // whole recipe so stage 2's Edit Prompt and Regen can show and rerun it. The picture itself arrives by the fal
+  // webhook (image_jobs.kind 'builder', image_jobs.builder_image_id). Its own try-block: a failure leaves the rest booting.
+  try {
+    await pool.query('CREATE TABLE IF NOT EXISTS builder_images (id SERIAL PRIMARY KEY, campaign_id INTEGER NOT NULL, user_id INTEGER NOT NULL, ' +
+      'name TEXT, description TEXT, image_type TEXT, shape TEXT, art_style TEXT, art_style_name TEXT, include_lore BOOLEAN DEFAULT true, ' +
+      'refs TEXT, prompt TEXT, image_url TEXT, img_w INTEGER, img_h INTEGER, prev_image_url TEXT, copied_from INTEGER, ' +
+      'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_builder_images_campaign ON builder_images(campaign_id, id)');
+    await pool.query('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS builder_image_id INTEGER');
+    // v3.3.73 -- Draft / Ready. DEFAULT true, so every picture made before this stays visible to the campaign;
+    // a new picture is inserted with false (a draft only its maker sees) by the generate route.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS is_ready BOOLEAN DEFAULT true');
+    // v3.3.74 -- stage 2: the picture's own words (Edit Prompt; Regen sends them) and the undo slot's size.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS words TEXT');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_w INTEGER');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_img_h INTEGER');
+    // v3.3.85 -- the clean copy (the picture before its title lettering was laid on), and the one in the undo slot.
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS clean_image_url TEXT');
+    await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_clean_image_url TEXT');
+  } catch (e) { console.error('[image-builder] migration skipped this boot:', e && e.message); }
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

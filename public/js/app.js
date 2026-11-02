@@ -211,7 +211,7 @@ function _navRestore(st) {
       return;
     }
     if (state.currentSession && state.currentSession.id) {
-      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
+      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback','image-builder'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
       ids.forEach(function (x) { var el = document.getElementById('view-' + x); if (el) el.style.display = 'none'; });
       var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
       state.currentView = 'session-detail';
@@ -3663,9 +3663,14 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.71 -- TD-1080. The Image Builder remembers where it was opened from, for ibBack().
+  if (view === 'image-builder') {
+    var _curIb = _visibleViewId();
+    if (_curIb !== 'image-builder') _ibBackFrom = _curIb || null;
+  }
   // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
   if (view === 'account') accountNoteFrom();
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -4239,7 +4244,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -5642,6 +5647,7 @@ function _helpCurrentViewId() {
   if (_open('title-build-modal')) return 'title_builder';
   if (_open('char-modal')) return 'character_builder';
   if (_open('campaign-settings-modal')) return 'campaign_details';
+  if (state && state.currentView === 'image-builder') return 'image_builder';   // v3.3.99 -- before the session check: a session may still be chosen underneath
   if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
   return '';
 }
@@ -7029,6 +7035,7 @@ function deleteCustomStyle(id) {
 
 function openStylePicker(kind) {
   STYLE_PICKER_KIND = kind || 'narrative';
+  _ibStyleMode = !!_ibStyleNext && STYLE_PICKER_KIND === 'art'; _ibStyleNext = false;   // v3.3.71 -- TD-1080: only ibOpenStyle opens it for the Image Builder
   var titleEl = document.getElementById('style-picker-title');
   var grid = document.getElementById('style-picker-grid');
   if (!grid) return;
@@ -7039,9 +7046,9 @@ function openStylePicker(kind) {
     meta = NARR_STYLE_META;
   } else if (STYLE_PICKER_KIND === 'art') {
     if (titleEl) titleEl.textContent = 'Choose an art style';
-    cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
+    cur = _ibStyleMode ? (IB.style || '') : (state.artStyle ? state.artStyle : 'High fantasy illustration');
     meta = ART_STYLE_META;
-    if (!availableStylesLoaded()) { loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ openStylePicker('art'); }); return; }
+    if (!_ibStyleMode && !availableStylesLoaded()) { loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ openStylePicker('art'); }); return; }
   } else if (STYLE_PICKER_KIND === 'layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
     cur = normalizeLayoutId(state.layoutStyle || 'Classic');
@@ -7054,14 +7061,14 @@ function openStylePicker(kind) {
   var _subEl = document.getElementById('style-picker-sub');
   if (_subEl) {
     _subEl.textContent =
-      (STYLE_PICKER_KIND === 'art') ? 'Pick the art style for this version. It applies to new image generations; change it any time.' :
+      (STYLE_PICKER_KIND === 'art') ? (_ibStyleMode ? 'Pick the art style for this picture.' : 'Pick the art style for this version. It applies to new image generations; change it any time.') :
       (STYLE_PICKER_KIND === 'narrative') ? 'Pick the narrative voice for this version. It applies whenever the narrative is generated or regenerated; change it any time.' :
       'Pick the page layout. The preview updates when you choose; change it any time.';
   }
   grid.innerHTML = meta.map(function(s) {
     var TLABEL = {2:'Silver',3:'Gold',4:'Platinum'};
     var _locks = (STYLE_PICKER_KIND === 'art') ? (state.tierInfo && state.tierInfo.art_locks) : (STYLE_PICKER_KIND === 'narrative') ? (state.tierInfo && state.tierInfo.narrative_locks) : null;
-    var _eff = (state.tierInfo && state.tierInfo.effective_rank) || 99;
+    var _eff = _ibStyleMode ? 4 : ((state.tierInfo && state.tierInfo.effective_rank) || 99);   // v3.3.71 -- the Image Builder's campaigns are Platinum (the server checks)
     var _min = (_locks && _locks[s.id]) || 1;
     var _locked = _min > _eff;
     var on = _locked ? ' is-locked' : ((s.id === cur) ? ' is-selected' : '');
@@ -7077,7 +7084,7 @@ function openStylePicker(kind) {
       '</div>';
   }).join('');
   if (STYLE_PICKER_KIND === 'art') {
-    var _av = getAvailableStyles();
+    var _av = _ibStyleMode ? (IB.customStyles || []) : getAvailableStyles();   // v3.3.71 -- the Image Builder's campaign, not the open one
     var _mine = _av.filter(function(s){ return !s.shared_by_sm; });
     var _sm = _av.filter(function(s){ return s.shared_by_sm; });
     var _renderCustGroup = function(title, arr) {
@@ -7116,12 +7123,12 @@ function openStylePicker(kind) {
     } else {
       _vd.classList.add('hidden');
       _narratorPanelHide();
-      if (STYLE_PICKER_KIND === 'art') _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921
+      if (STYLE_PICKER_KIND === 'art' && !_ibStyleMode) _illusPanelShow(); else _illusPanelHide();   // v3.1.30 -- TD-921; v3.3.71 not for the Image Builder
     }
   }
   // v3.3.70 -- TD-1079. Go to Custom Art Styles, art window only, every plan (the page itself gates Platinum).
   var _csFoot = document.getElementById('style-picker-cstyle');
-  if (_csFoot) _csFoot.style.display = (STYLE_PICKER_KIND === 'art') ? 'flex' : 'none';
+  if (_csFoot) _csFoot.style.display = (STYLE_PICKER_KIND === 'art' && !_ibStyleMode) ? 'flex' : 'none';
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
 }
@@ -7154,6 +7161,7 @@ function setVerbosity(v) {
 
 function closeStylePicker() {
   if (typeof _narratorBlockClose === 'function' && _narratorBlockClose()) return;   // v3.1.31 -- pick a narrator first
+  _ibStyleMode = false;   // v3.3.71 -- TD-1080
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -7177,6 +7185,7 @@ function selectStyleCard(kind, id) {
     })
     .catch(function(e) { showError('Could not set narrative style: ' + e.message); });
   } else if (kind === 'art') {
+    if (_ibStyleMode && state.currentView === 'image-builder') { ibSetStyle(id); closeStylePicker(); return; }   // v3.3.71 -- TD-1080: the picture's style, not the session's
     state.artStyle = id;
     mpSave('session', { art_style: id });
     if (state.currentSession && state.currentCampaign) {
@@ -11956,6 +11965,21 @@ function _tbTarget() {
   return (state && state._tbTarget) || { kind: 'book' };
 }
 function _tbIsSession() { return _tbTarget().kind === 'session'; }
+// v3.3.83 -- the Image Builder's Title section: the words typed there, the lettering held by the Builder until it
+// draws the picture. Nothing about a book or a chapter is read or written.
+function _tbIsIb() { return _tbTarget().kind === 'ib'; }
+// v3.4.01 -- the Generate button says what it costs, and opened from the Image Builder the tooltips talk about the
+// picture, not a book or a cover (testers 2026-11-01).
+function _tbGoLabel() { var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? IB.cost : 1; return 'Generate (' + c + ' token' + (c === 1 ? '' : 's') + ')'; }
+var _TB_TIPS = { book: { stash: 'Keep this drawing but take it off the cover, and go back to the title styles', replace: 'Put an archived title on the book without generating', replace2: 'Put an archived title on the book instead' },
+  ib: { stash: 'Keep this drawing in the Title Builder but take it out of the Title section', replace: 'Use a title from this campaign\u2019s Archive without generating', replace2: 'Use a title from this campaign\u2019s Archive instead' } };
+function _tbIbWording() {
+  var t = _TB_TIPS[_tbIsIb() ? 'ib' : 'book'];
+  var s = document.getElementById('title-build-stash'); if (s) s.title = t.stash;
+  var r = document.getElementById('title-build-empty-replace'); if (r) r.title = t.replace;
+  var r2 = document.getElementById('title-build-replace'); if (r2) r2.title = t.replace2;
+  var g = document.getElementById('title-build-go'); if (g && !g.disabled) g.textContent = _tbGoLabel();
+}
 
 // _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
 // a field does not need six call sites updated.
@@ -11963,6 +11987,7 @@ function _tbBody(extra) {
   var t = _tbTarget();
   var body = Object.assign({ campaignId: state.currentCampaign && state.currentCampaign.id }, extra || {});
   if (t.kind !== 'book') body.target = t;
+  if (t.kind === 'ib') { body.campaignId = IB.cid; body.ibTitle = _tbWords().title; body.ibSubtitle = _tbWords().subtitle; body.ibCur = { url: _tbCur().url, src: _tbCur().src }; }   // v3.3.83; v3.3.87 -- ibCur
   return body;
 }
 
@@ -11970,6 +11995,7 @@ function _tbBody(extra) {
 // has; for a chapter it is fetched by title-read and held here for the life of the modal.
 function _tbCur() {
   if (_tbIsSession()) return (state && state._tbSessionCur) || {};
+  if (_tbIsIb()) { var ic = (state && state._tbIbCur) || {}; return { url: ic.url || '', src: ic.src || '', text: '', sub: null, prompt: '', prevUrl: ic.prevUrl || '', prevSrc: ic.prevSrc || '' }; }   // v3.3.83; v3.3.87 -- prev for Revert
   var bm = (state && state.bookMeta) || {};
   return { url: bm.built_title_url || '', src: bm.built_title_src || '', text: bm.built_title_text || '',
            sub: (bm.built_title_sub == null ? null : String(bm.built_title_sub)),
@@ -11992,6 +12018,7 @@ function _tbBookKey() {
 // v3.0.622 there were no chapter titles yet.
 function _tbTargetKey() {
   var t = _tbTarget();
+  if (t.kind === 'ib') return 'ib/' + String(IB.cid || '');   // v3.3.83
   return _tbBookKey() + '/' + String(t.kind || 'book') + '/' + String(t.sessionId || '') + '/' + String(t.forkId || '');
 }
 // platinumGate: the refusal every Platinum-only tool shows, in ONE place.
@@ -12010,7 +12037,7 @@ function _tbTargetKey() {
 // nowhere to put an Upgrade button.
 function platinumGate(what, why, beforeUpgrade) {   // v3.3.70 -- beforeUpgrade: optional, runs just before goToPlans
   appConfirm({
-    title: what + ' is a Platinum feature',
+    title: String(what || '').charAt(0).toUpperCase() + String(what || '').slice(1) + ' is a Platinum feature',   // v3.4.01 -- always a capital
     body: why,
     note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
     okLabel: 'Upgrade My Plan',
@@ -12029,7 +12056,8 @@ function openTitleBuilder(target) {
   // v3.0.652 -- TD-443. A MODAL THAT HAS WRITTEN NOTHING MUST CHANGE NOTHING.
   // Cleared on open rather than on close, so an abandoned modal cannot leave the next one dirty.
   state._tbDirty = false;
-  if (!state.currentCampaign) return;
+  _tbIbMode();   // v3.3.83
+  if (!state.currentCampaign && !_tbIsIb()) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
   // the title builder. When I hit the button I should get a message stating such."
   //
@@ -12048,7 +12076,7 @@ function openTitleBuilder(target) {
   // v3.0.641 -- a BOOK question only. A chapter's ownership is its session fork, which
   // resolveTitleTarget answers server-side; novelOwnView here would refuse a chapter you do own
   // simply because the book version on screen belongs to someone else.
-  if (!_tbIsSession() && typeof novelOwnView === 'function' && !novelOwnView()) {
+  if (!_tbIsSession() && !_tbIsIb() && typeof novelOwnView === 'function' && !novelOwnView()) {
     appConfirm({
       title: 'This version is not yours',
       body: 'You are looking at someone else\u2019s version of this book, so its cover cannot be changed from here.',
@@ -12059,7 +12087,8 @@ function openTitleBuilder(target) {
     return;
   }
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen color, size and placement.');
+    // v3.4.01 -- from the Image Builder there are no title styles to fall back on (testers), and a real dash.
+    platinumGate('The Title Builder', _tbIsIb() ? 'Drawing a title as artwork for your pictures needs your own Platinum plan.' : 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan \u2014 they set the title in a real typeface with your chosen color, size and placement.');
     return;
   }
   _tbErr('');
@@ -12089,11 +12118,13 @@ function openTitleBuilder(target) {
     // v3.0.724 -- TD-522(2). NO EMPTY-STATE GATE. See the note above: four of the five steps are
     // visible whether or not a title exists, and the fifth is skipped by the engine on its own.
     if (typeof maybeStartTour === 'function') {
-      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour('title-builder'); } catch (e) {} });
-      else maybeStartTour('title-builder');
+      var _tbTour = _tbIsIb() ? 'title-builder-ib' : 'title-builder';   // v3.4.01 -- its own words in the Image Builder
+      if (window.requestAnimationFrame) requestAnimationFrame(function () { try { maybeStartTour(_tbTour); } catch (e) {} });
+      else maybeStartTour(_tbTour);
     }
   } catch (e) {}
-  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
+  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || '';   // v3.4.01 -- empty, not the word None
+  _tbIbWording();   // v3.4.01
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
   // that nothing ever cleared, so a reference chosen on one book stayed selected across version
@@ -12137,7 +12168,8 @@ function openTitleBuilder(target) {
   //
   // The empty-box gate stays: with the clear above, a new target arrives empty and seeds correctly,
   // while a reader who has typed something and reopened the same target keeps their own words.
-  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta) {
+  if (_tbIsIb() && dEl && !dEl.value) dEl.value = (IB.ttl && IB.ttl.desc) || '';   // v3.3.83
+  if (!_tbIsSession() && !_tbIsIb() && dEl && !dEl.value && state.bookMeta) {
     dEl.value = state.bookMeta.built_title_draft_prompt || state.bookMeta.built_title_prompt || '';
   }
 
@@ -12150,6 +12182,11 @@ function openTitleBuilder(target) {
   // v3.0.656 -- THE DRAFT WINS ON REOPEN. Ian: "when they open it back up again the text image
   // they just generated will be there. It just did not get used."
   var existing = _tbIsSession() ? '' : ((state.bookMeta && (state.bookMeta.built_title_draft_url || state.bookMeta.built_title_url)) || '');
+  if (_tbIsIb()) {   // v3.3.83 -- the last drawing made here wins on reopen, as a book's draft does; else the one in use
+    var _dr = IB.ttlDraft && IB.ttlDraft.url ? IB.ttlDraft : null;
+    state._tbIbCur = _dr ? { url: _dr.url, src: _dr.src || '' } : { url: (IB.ttl && IB.ttl.url) || '', src: (IB.ttl && IB.ttl.src) || '' };
+    existing = state._tbIbCur.url;
+  }
   if (_tbIsSession()) _tbLoadSession();
   _tbShowResult(existing);
   titleBuildRetouchClose();
@@ -12158,7 +12195,8 @@ function openTitleBuilder(target) {
   // The Archive pill has to know whether THIS picture is already in the chest, and that answer lives
   // in the archive list rather than on the book. Loaded after the modal is shown so the panel is not
   // held back by a fetch; the pill settles a moment later.
-  if (existing && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+  if (existing && !_tbIsIb() && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+  if (_tbIsIb() && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill, IB.cid);   // v3.3.87 -- the Builder's campaign
 }
 
 // _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
@@ -12174,7 +12212,7 @@ function _tbLoadSession() {
     state._tbSessionCur = d.current || {};
     state._tbSessionWords = d.words || { title: '', subtitle: '' };
     var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = (d.words && d.words.title) || 'This chapter has no name yet';
-    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
+    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = '';   // v3.4.01
     var dEl = _tbEl('title-build-desc');
     // v3.0.666 -- TD-468. Same rule as the book: the draft's prompt wins, because _tbShowResult on
     // the next line shows the draft's picture.
@@ -12297,6 +12335,15 @@ function _tbDoneIdle() {
 // has no such local mirror, so it posts to title-write and holds the answer on state for the life of
 // the modal. Same words, same adapter behind both -- different client state to maintain.
 function _tbSave(patch, then) {
+  // v3.3.83 -- the Image Builder's title: a new drawing is held for Done & Use, never written to a book.
+  if (_tbIsIb()) {
+    var _o = state._tbIbCur || {};
+    if (patch && patch.url) state._tbIbCur = { url: patch.url, src: patch.src || '',
+      prevUrl: (patch.prevUrl !== undefined) ? patch.prevUrl : (_o.url && _o.url !== patch.url ? _o.url : (_o.prevUrl || '')),
+      prevSrc: (patch.prevSrc !== undefined) ? patch.prevSrc : (_o.url && _o.url !== patch.url ? (_o.src || '') : (_o.prevSrc || '')) };   // v3.3.87 -- one-deep Revert
+    var _rv = _tbEl('title-build-revert-btn'); if (_rv) _rv.classList.toggle('hidden', !(state._tbIbCur && state._tbIbCur.url && state._tbIbCur.prevUrl));
+    if (then) then(); return;
+  }
   // v3.0.652 -- TD-443. THE ONE PLACE THAT KNOWS A WRITE HAPPENED.
   //
   // Ian, 2026-08-12: "If I have a regular picture there... open up the title builder... do nothing
@@ -12422,6 +12469,8 @@ function _tbArchiveRow() {
   }) || null;
 }
 function _tbSyncArchivePill() {
+  // v3.3.87 -- for an Image Builder title, state.archives is the Builder's campaign's (loaded on open, archivesCid).
+  if (_tbIsIb() && String(state.archivesCid || '') !== String(IB.cid || '')) return;
   var btn = _tbEl('title-build-archive-btn');
   if (!btn) return;
   var row = _tbArchiveRow();
@@ -12443,6 +12492,7 @@ function _tbSyncArchivePill() {
 // always. Half a pair following the target and half not -- the third time in three builds, and the
 // reason both halves now come from one place.
 function _tbWords() {
+  if (_tbIsIb()) return { title: String((IB.ttl && IB.ttl.title) || '').trim(), subtitle: String((IB.ttl && IB.ttl.subtitle) || '').trim() };   // v3.3.83
   if (_tbIsSession()) {
     var w = (state && state._tbSessionWords) || {};
     return { title: w.title || '', subtitle: w.subtitle || '' };
@@ -12488,6 +12538,15 @@ function _tbRenderWarn() {
 // unless the modal wrote something -- and a draft write does not touch the live title. So the two
 // controls need no special casing to behave identically: they already do.
 function titleBuilderUse() {
+  // v3.3.83 -- the Image Builder: the lettering and its description go to the Title section, to be drawn in.
+  if (_tbIsIb()) {
+    var cur = (state && state._tbIbCur) || {};
+    IB.ttl.url = cur.url || ''; IB.ttl.src = cur.url ? (cur.src || '') : '';
+    IB.ttl.desc = ((_tbEl('title-build-desc') || {}).value || '').trim();
+    closeTitleBuilder();
+    ibRender();
+    return;
+  }
   // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
   // straight through it: deleting one left the other satisfying the check. _tbSave already routes
   // book and chapter; there was never a second thing to say here.
@@ -12508,6 +12567,16 @@ function titleBuilderUse() {
   });
 }
 function closeTitleBuilder() {
+  // v3.3.83 -- the Image Builder's title: nothing on the page to repaint or reload.
+  if (_tbIsIb()) {
+    if (state._tbIbCur && state._tbIbCur.url) IB.ttlDraft = state._tbIbCur;   // a paid-for drawing comes back on reopen, used or not
+    _tbDoneIdle(); state._tbTarget = null; state._tbIbCur = null; state._tbDirty = false;
+    var _im = _tbEl('title-build-modal'); if (_im) _im.classList.add('hidden');
+    _tbIbMode();
+    // v3.3.87 -- the Archive list loaded for the Builder's campaign is not left standing in for the page's campaign.
+    if (String(state.archivesCid || '') === String(IB.cid || '') && !(state.currentCampaign && String(state.currentCampaign.id) === String(IB.cid))) { state.archives = []; state.archivesCid = null; }
+    return;
+  }
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
   // so I left and came back and then the image was there." The save landed; nothing told the page.
   //
@@ -12534,6 +12603,14 @@ function closeTitleBuilder() {
   // only a draft (the live words are still the old ones); Done & Use, Stash and Remove then land here and nothing
   // repainted. Every exit from the builder now re-reads the title mode, which repaints the note.
   try { if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock(); } catch (e) {}
+}
+// v3.3.83 -- the controls that act on a book or chapter (its Archive, Replace, Retouch, Stash) are set aside while the
+// Title Builder designs an Image Builder title, and come back for every other target.
+function _tbIbMode() {
+  // v3.3.87 -- Ian: bring them all back. Nothing is hidden now; each control knows the Image Builder target. Left as the
+  // one place that would set controls aside again, and to clear any style an older page left behind.
+  var m = _tbEl('title-build-modal'); if (!m) return;
+  Array.prototype.forEach.call(m.querySelectorAll('[onclick*="openTitleReplacePicker"], [onclick*="openTitleRefPicker"], #title-build-retouch-btn, #title-build-archive-btn, #title-build-stash'), function (el) { el.style.display = ''; });
 }
 function _tbShowResult(url) {
   // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper
@@ -12621,8 +12698,8 @@ function _tbSendRefFile(file) {
     .catch(function () { _tbErr('Could not store that image.'); });
 }
 function titleBuildGenerate() {
-  if (!state.currentCampaign) return;
-  var t = _tbTitle();
+  if (!state.currentCampaign && !_tbIsIb()) return;
+  var t = _tbIsIb() ? _tbWords().title : _tbTitle();   // v3.3.83
   if (!t) { _tbErr('Give the book a title first.'); return; }
   _tbErr('');
   var btn = _tbEl('title-build-go');
@@ -12636,7 +12713,7 @@ function titleBuildGenerate() {
   // states, which is the only requirement an overlay actually has.
   showBusyOverlay('title-build-result', 'Generating', 'Drawing your title\u2026');
   var body = {
-    campaignId: state.currentCampaign.id,
+    campaignId: _tbIsIb() ? IB.cid : state.currentCampaign.id,   // v3.3.83
     bookTitle: t,
     subtitle: _tbSubtitle(),
     description: (_tbEl('title-build-desc') || {}).value || '',
@@ -12690,11 +12767,11 @@ function titleBuildGenerate() {
         prompt: ((_tbEl('title-build-desc') || {}).value || '')
       });
       _tbRenderWarn();
-      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+      if (!_tbIsIb() && typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();   // v3.3.83 -- not for the Builder
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
-    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = _tbGoLabel(); } });   // v3.4.01
 }
 // =====================================================================================================
 // RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
@@ -12711,12 +12788,14 @@ function titleBuildGenerate() {
 // null each other. That is a five-place invariant and the apply script counts it.
 function titleBuildRetouchOpen() {
   state.retouchTitle = true;
+  state.retouchIb = null;   // v3.3.87 -- an Image Builder picture retouch must not take this one
   state.retouchMomentId = null;
   state.retouchCharId = null;
   state.retouchSessionCharId = null;
   state.retouchAssetId = null;
   var ta = document.getElementById('retouch-instruction');
-  if (ta) ta.value = '';
+  if (ta) { ta.value = ''; ta.placeholder = 'Say what to change about the lettering, e.g. make the ivy blue-green and keep the letters the same'; }   // v3.4.01 -- this box has no markers
+  var _tm = document.getElementById('retouch-title-msg'); if (_tm) _tm.textContent = '';
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.remove('hidden');
   if (ta) setTimeout(function () { ta.focus(); }, 30);
@@ -12727,7 +12806,7 @@ function titleBuildRetouchClose() { state.retouchTitle = null; }
 // Synchronous, like Generate above it and unlike every other Retouch in the product -- see the note
 // on the route. Costs a token, because it is a call to fal.
 function titleBuildRetouch(instruction) {
-  if (!state.currentCampaign) return;
+  if (!state.currentCampaign && !_tbIsIb()) return;   // v3.3.87
   instruction = String(instruction || '').trim();
   if (!instruction) return;
   _tbErr('');
@@ -12802,6 +12881,17 @@ function titleBuildRevert() {
 // ONE WRITE, not two. Live and draft move in a single patch so there is no instant where the
 // artwork is off the cover and not yet held anywhere.
 function titleBuildStash() {
+  // v3.3.87 -- an Image Builder title: keep the drawing for the next opening, but take it out of the Title section, so
+  // the art style letters any typed title again (as Stash takes a drawn title off a cover).
+  if (_tbIsIb()) {
+    var _sc = _tbCur();
+    if (_sc.url) IB.ttlDraft = { url: _sc.url, src: _sc.src || '' };
+    IB.ttl.url = ''; IB.ttl.src = '';
+    closeTitleBuilder();
+    ibRender();
+    showAlert('Stashed. The drawing is kept in the Title Builder; press Done & Use to put it back.');
+    return;
+  }
   if (!state.currentCampaign) return;
   var cur = _tbCur();
   if (!cur.url) {
@@ -12897,6 +12987,7 @@ function titleBuildRemove() {
 
 // TD-402. Archive on, archive off -- the same toggle every other image in the product has.
 function titleBuildArchiveToggle() {
+  if (_tbIsIb()) { _tbIbArchiveToggle(); return; }   // v3.3.87
   if (!state.currentCampaign) return;
   var url = _tbCur().url || '';
   if (!url) return;
@@ -12930,12 +13021,40 @@ function titleBuildArchiveToggle() {
 // Two pickers, one grid. Ian: "You should be able to pull in a reference image from the archive. And
 // even Pull in an actual title from the archive. For pulling in an archive only pull in Archived items
 // with the type Title." Both filter to type 'title' and neither costs a token -- no fal call is made.
+// v3.3.87 -- Archive / Archived for an Image Builder title, into (or out of) the Builder's campaign's Archive.
+function _tbIbArchiveToggle() {
+  var cur = _tbCur(); if (!cur.url || !IB.cid) return;
+  var row = (String(state.archivesCid || '') === String(IB.cid)) ? _tbArchiveRow() : null;
+  _tbErr('');
+  if (row) {
+    fetch('/api/campaigns/' + encodeURIComponent(IB.cid) + '/archives/' + row.id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.error) { _tbErr(d.message || d.error); return; }
+        state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
+        _tbSyncArchivePill(); showAlert('Removed from the Archive.');
+      })
+      .catch(function () { _tbErr('Could not update the Archive.'); });
+    return;
+  }
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/title-archive', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: cur.url, src: cur.src, title: _tbWords().title, subtitle: _tbWords().subtitle, prompt: ((_tbEl('title-build-desc') || {}).value || '') }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.archive) { _tbErr((d && (d.message || d.error)) || 'Could not archive the title.'); return; }
+      if (String(state.archivesCid || '') === String(IB.cid)) state.archives = (state.archives || []).filter(function (a) { return a.id !== d.archive.id; }).concat([d.archive]);
+      _tbSyncArchivePill(); showAlert('Title saved to ' + (IB.cname || 'the campaign') + '\u2019s Archive.');
+    })
+    .catch(function () { _tbErr('Could not archive the title.'); });
+}
 function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title from your Archive'); }
 function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
 function _tbOpenPicker(mode, heading) {
-  if (!state.currentCampaign) return;
-  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title' };   // v3.3.29
-  state.pickerFilters = fpApply('titlebuilder', state.currentCampaign.id, Object.assign(emptyArchiveFilters(), { type: 'title' }));
+  // v3.3.87 -- an Image Builder title picks from the Builder's campaign's Archive (ctx.cid), not the page's.
+  var _pcid = _tbIsIb() ? IB.cid : (state.currentCampaign && state.currentCampaign.id);
+  if (!_pcid) return;
+  state.pickerCtx = { mode: mode, pinArea: 'titlebuilder', forceType: 'title', cid: _tbIsIb() ? IB.cid : undefined };   // v3.3.29; v3.3.87 -- cid
+  state.pickerFilters = fpApply('titlebuilder', _pcid, Object.assign(emptyArchiveFilters(), { type: 'title' }));
   state.pickerFilters.type = 'title';   // pinned or not, this picker offers titles only
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
@@ -12943,7 +13062,7 @@ function _tbOpenPicker(mode, heading) {
   // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
   // modal, which is the same collision the campaign settings modal hit.
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); });   // v3.3.29
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); state.pickerFilters.type = 'title'; renderPicker(); }, _pcid);   // v3.3.29; v3.3.87 -- _pcid
 }
 
 function prepSaveTitleColor() {
@@ -15363,6 +15482,7 @@ function archiveVersionLabel(a) {
 
 function archiveMomentLabel(a) {
   if (a.moment_title) return a.moment_title;
+  if (!a.moment_id && !a.session_id && a.title) return a.title;   // v3.3.74 -- an Image Builder picture: its name
   if (a.moment_panel_order !== null && a.moment_panel_order !== undefined) return 'Panel ' + (a.moment_panel_order + 1);
   return null;
 }
@@ -15920,6 +16040,7 @@ function rgArticle(s) {
 // characters and assets in one list and a bare name cannot say which. Names are all the
 // server matches on, so the tag is for the label only and never for the value.
 function rgPanelRefs() {
+  if (rgState.ib) return (rgState.ib.refs || []).slice();   // v3.3.82 -- a Builder picture's own references
   var out = rgPanelCast().map(function (c) { return { name: c.name, kind: 'character' }; });
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) {
@@ -15967,7 +16088,7 @@ function rgCastBlockInner(label) {
   var mid = rgState.momentId;
   var p = (typeof _reviewPanel === 'function') ? _reviewPanel(mid) : null;
   var canEdit = (typeof canEditCurrentVersion === 'function') ? canEditCurrentVersion() : true;
-  var rows = castRowsHtml(p, mid, canEdit, { head: false });
+  var rows = rgState.ib ? '' : castRowsHtml(p, mid, canEdit, { head: false });   // v3.3.82 -- a Builder picture has no panel cast rows
   // v3.0.885 -- TD-761. COMPUTED, NOT REMEMBERED. Anything cast on this panel that did not
   // reach the reference list has no reference picture, so it cannot be used to correct a
   // figure. v3.0.884 recorded only the last one added; deriving it covers every one, and is
@@ -16012,6 +16133,7 @@ function rgCastSelect(label) {
   // session. Kicked on a timeout so the html below is in the DOM before the repaint looks for
   // it, and ensureReviewData is a no-op when the payload is already there for this fork.
   setTimeout(function () {
+    if (rgState.ib) return;   // v3.3.82 -- nothing to fetch for a Builder picture
     try { ensureReviewData(function () { rgRefreshCastBlock(null); }); } catch (e) {}
   }, 0);
   return '<div id="rg-cast-block">' + rgCastBlockInner(label) + '</div>';
@@ -16512,7 +16634,7 @@ function rgBuildFinal(done) {
   out.value = tpl || typed;
   if (note) note.textContent = 'Working on the wording...';
   var body = {
-    moment_id: rgState.momentId,
+    moment_id: rgState.ib ? null : rgState.momentId,   // v3.3.82 -- 'ib<id>' is not a panel
     action: action,
     typed: typed,
     template: tpl,
@@ -16600,6 +16722,7 @@ function rgTeardown() {
   if (srow) srow.classList.add('hidden');
   rgState.imageUrl = null;
   rgState.momentId = null;
+  rgState.ib = null;   // v3.3.82
   rgState.from = null;
   rgState.to = null;
   rgState.active = 'from';
@@ -16611,7 +16734,7 @@ function rgTeardown() {
 // Only the MOMENT path gets the grid. The same modal serves character
 // references, session characters, assets and built titles, which are single
 // figures or lettering where a grid buys nothing.
-function rgSetup(momentId) {
+function rgSetup(momentId, ibTarget) {   // v3.3.82 -- ibTarget { url, shape, refs }: an Image Builder picture (no moment)
   rgTeardown();
   if (!RG_ON) return;
   var wrap = document.getElementById('retouch-grid-wrap');
@@ -16622,9 +16745,11 @@ function rgSetup(momentId) {
   var ms = (typeof state !== 'undefined' && state && state.moments) || [];
   for (var i = 0; i < ms.length; i++) { if (ms[i] && String(ms[i].id) === String(momentId)) { m = ms[i]; break; } }
   var url = m && (m.image || m.image_url);
+  if (ibTarget) { m = { shape: ibTarget.shape }; url = ibTarget.url; }
   if (!url) return;
   var g = rgGrid(m.shape);
   rgState.momentId = momentId;
+  rgState.ib = ibTarget || null;
   rgState.cols = g.c;
   rgState.rows = g.r;
   // Through our own origin: R2 is a different origin and a cross-origin draw
@@ -16666,6 +16791,7 @@ function openRetouch(momentId) {
 
 function closeRetouch() {
   state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
+  state.retouchIb = null;      // v3.3.82
   rgTeardown();                // v3.0.750 -- the grid belongs to the moment path only
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
@@ -16725,7 +16851,12 @@ function submitRetouch() {
   if (state.retouchTitle) {
     var _ti = document.getElementById('retouch-instruction');
     var _txt = _ti ? String(_ti.value || '').trim() : '';
-    if (!_txt) { if (_ti) _ti.focus(); return; }
+    if (!_txt) {   // v3.4.01 -- an empty box says what it needs (testers: it did nothing and said nothing)
+      var _tm = document.getElementById('retouch-title-msg');
+      if (!_tm && _ti && _ti.parentNode) { _tm = document.createElement('div'); _tm.id = 'retouch-title-msg'; _tm.style.cssText = 'margin-top:6px;font-size:12px;'; _ti.parentNode.insertBefore(_tm, _ti.nextSibling); }
+      if (_ti) nagField(_ti, 'Type the change you want first.', _tm);
+      return;
+    }
     closeRetouch();
     titleBuildRetouch(_txt);
     return;
@@ -16747,6 +16878,16 @@ function submitRetouch() {
   // v3.0.758 -- grid words must resolve on the RAW path as well.
   else if (typeof rgResolveRefs === 'function' && rgState.momentId) instruction = rgResolveRefs(instruction);
   if (!instruction) { if (ta) ta.focus(); return; }
+
+  // v3.3.82 -- an Image Builder picture (read before closeRetouch disarms it).
+  if (state.retouchIb && state.currentView === 'image-builder') {
+    var _ibId = state.retouchIb;
+    var _ibSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
+    var _ibRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+    closeRetouch();
+    ibRetouchSend(_ibId, instruction, _ibSnap, _ibRef);
+    return;
+  }
 
   // Asset image target (uploaded, from-archive, or generated). Checked first.
   if (state.retouchAssetId) {
@@ -17109,7 +17250,7 @@ function applyArchiveToTarget(archiveId) {
   // The prep kinds carry their own campaign id and do not need this one, so they are let past and
   // checked by their own handler. Everything else still needs a campaign on screen, because /apply
   // is scoped to it -- and now says so rather than shrugging.
-  var cid = state.currentCampaign && state.currentCampaign.id;
+  var cid = (ctx && ctx.cid) || (state.currentCampaign && state.currentCampaign.id);   // v3.3.87 -- ctx.cid: the Image Builder's campaign
   if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
     'That image cannot be applied because no campaign is on screen.',
     'Open the campaign and try again.'); return; }
@@ -17124,6 +17265,18 @@ function applyArchiveToTarget(archiveId) {
     if (_cvMaybeCrop(ctx.prepKind, archiveId)) return;   // v3.1.18 -- TD-911: frame the front or back cover first
     closeReplacePicker();
     selectPrepImage(ctx.prepKind, archiveId);
+    return;
+  }
+  // v3.3.87 -- Replace, for an Image Builder title: the archived lettering becomes the drawing in the window. Nothing is
+  // written to a book; the archive row already has the cut copy and (in layout_meta) its uncut original.
+  if (ctx.mode === 'title' && _tbIsIb()) {
+    var _ar = (state.archives || []).filter(function (a) { return String(a.id) === String(archiveId); })[0];
+    if (!_ar || !_ar.image_url) return;
+    var _am = {}; try { _am = JSON.parse(_ar.layout_meta || '{}') || {}; } catch (e) { _am = {}; }
+    closeReplacePicker();
+    _tbSave({ url: _ar.image_url, src: _am.src || '' });
+    _tbShowResult(_ar.image_url);
+    _tbSyncArchivePill();
     return;
   }
   if (ctx.mode === 'title') {
@@ -17736,6 +17889,8 @@ function submitCopyToAsset() {
     if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
     return;
   }
+  // v3.3.82 -- an Image Builder picture (the window was opened by ibSaveAsset with an 'ib:' key).
+  if (_caArchiveId && String(_caArchiveId).indexOf('ib:') === 0) { ibSaveAssetSend(Number(String(_caArchiveId).slice(3)), name, catEl ? catEl.value : 'location', _caCropFrac() || undefined, errEl, saveBtn); return; }
   if (!_caArchiveId || !state.currentCampaign) { closeCopyToAssetModal(); return; }
   if (saveBtn) saveBtn.disabled = true;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/from-archive', {
@@ -18387,9 +18542,14 @@ function showView(view) {
     var _curCs = _visibleViewId();
     if (_curCs !== 'custom-styles') _cstyleBackFrom = _curCs || null;
   }
+  // v3.3.71 -- TD-1080. The Image Builder remembers where it was opened from, for ibBack().
+  if (view === 'image-builder') {
+    var _curIb = _visibleViewId();
+    if (_curIb !== 'image-builder') _ibBackFrom = _curIb || null;
+  }
   // v3.3.31 -- My Account remembers where it was opened from, for accountBack().
   if (view === 'account') accountNoteFrom();
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -18867,7 +19027,7 @@ function selectSession(id) {
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
-      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
+      var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback','image-builder'];   // v3.1.87 -- every page, as showView hides; a page left out stayed under the session
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
@@ -26506,6 +26666,8 @@ async function csCreateCampaign() {
     if (!r.ok || (d && d.error)) { showModalError('campaign-settings-error', (d && d.error) || 'Could not create the campaign.'); return; }
     closeCampaignSettings();
     if (typeof loadCampaigns === 'function') loadCampaigns();
+    // v3.4.04 -- made from the Image Builder's Create a campaign: the Builder picks it up straight away.
+    if (state && state.currentView === 'image-builder' && typeof openImageBuilder === 'function') openImageBuilder(true);
   } catch (e) {
     showModalError('campaign-settings-error', 'Could not create the campaign.');
   } finally {
@@ -29887,12 +30049,13 @@ function _visibleViewId() {
 }
 function sectionBack() {
   var t = _sectionBackFrom || 'sessions';
+  if (t === 'image-builder') { _sectionBackFrom = null; openImageBuilder(true); return; }   // v3.3.84 -- opened from the Image Builder
   if (t === 'session-detail') {
     // selectSession() only hides a partial set of views, which left the
     // Asset/Archive view stacked above the session. The detail DOM is still
     // populated (it was only hidden), so just hide every view and reveal it.
     if (!(state.currentSession && state.currentSession.id)) { showCampaignSection('sessions'); return; }
-    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
+    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings','custom-styles','feedback','image-builder'];   // v3.1.87 -- custom-styles and feedback added: a page left out stays on screen under the session
     ids.forEach(function(v){ var el = document.getElementById('view-' + v); if (el) el.style.display = 'none'; });
     var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
     state.currentView = 'session-detail';
@@ -29974,20 +30137,20 @@ var _accountBackFrom = null;
 function accountNoteFrom() {
   var cur = _visibleViewId();
   if (!cur) {
-    ['custom-styles', 'feedback'].forEach(function (v) {
+    ['custom-styles', 'feedback', 'image-builder'].forEach(function (v) {
       var el = document.getElementById('view-' + v);
       if (!cur && el && el.style.display !== 'none' && window.getComputedStyle(el).display !== 'none') cur = v;
     });
   }
   if (cur === 'account') return;
-  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account')) return;
+  if ((cur === 'orders' && _ordersBackFrom === 'account') || (cur === 'custom-styles' && _cstyleBackFrom === 'account') || (cur === 'image-builder' && _ibBackFrom === 'account')) return;
   _accountBackFrom = cur || null;
 }
 function accountBack() {
   var t = _accountBackFrom;
-  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
+  if (t === 'orders' || t === 'custom-styles' || t === 'feedback' || t === 'image-builder' || (t && ORDERS_BACK_PLAIN.indexOf(t) !== -1 && t !== 'account')) {
     var keepO = _ordersBackFrom, keepC = _cstyleBackFrom;
-    if (t === 'custom-styles') openCustomStylesView(); else showView(t);
+    if (t === 'custom-styles') openCustomStylesView(); else if (t === 'image-builder') openImageBuilder(true); else showView(t);   // v3.3.71
     _ordersBackFrom = keepO; _cstyleBackFrom = keepC;
     return;
   }
@@ -30324,6 +30487,9 @@ function tourKeyForView() {
 function startTour(viewId, manual) {
   _tourViewId = viewId;
   _tourSteps = _tourStepsFor(viewId);
+  // v3.4.04 -- a tour marked dropMissing (the Image Builder's) keeps only the steps whose part of the page is showing
+  // now, so its counter reads "of 10" rather than ending on "Step 11 of 12" (testers).
+  try { var _tdm = _toursData && _toursData[viewId]; if (_tdm && _tdm.dropMissing) _tourSteps = _tourSteps.filter(function (s) { return !s.selector || _tourVisible(document.querySelector(s.selector)); }); } catch (e) {}
   if (_tourSteps.length === 0) return;
   _tourIdx = 0;
   _tourShownAny = false;
@@ -30407,7 +30573,7 @@ function _tourPlace(el, step) {
   _tourCurEl = el; _tourCurStep = step;
   _tourShownAny = true;
   if (_tourPanelEl) { try { _tourPanelEl.classList.remove('tour-show-pills'); } catch (e) {} _tourPanelEl = null; }
-  if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }
+  if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel') || el.closest('.ib-frame'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }   // v3.3.99 -- the Image Builder's picture too
   var ov = document.getElementById('tour-overlay');
   var hl = document.getElementById('tour-highlight');
   var tip = document.getElementById('tour-tip');
@@ -32676,6 +32842,21 @@ function finalizeAwaitSaveJob(jobId, postedAt, q) {
     setTimeout(tick, POLL_MS);
   });
 }
+// v3.3.96 -- WHAT A FAILED SAVE SAYS. A storage blip used to put Cloudflare's whole JSON error into the run log. A
+// temporary one (R2 5xx / 429, a dropped connection, the network) now reads in plain words; the raw text goes to the
+// debug log. Every failure gets Try again, which runs just the save -- the optimized book is still on screen.
+function optimizeSaveFailText(raw) {
+  raw = String(raw || '');
+  var temp = /Image upload failed: (5\d\d|429|408)\b|cloudflare|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|network error|Failed to fetch/i.test(raw);
+  try { cgLogClient({ url: '/optimize/save', fn: 'finalizeSaveOptimized', kind: temp ? 'storage' : 'save', message: raw }); } catch (e) {}
+  var again = ' <a href="#" onclick="optimizeSaveRetry(this);return false;" style="color:var(--gold);text-decoration:underline;">Try again</a>';
+  if (temp) return 'Couldn\u2019t save: Cloudflare\u2019s file storage was briefly unavailable. Your optimized book is still on screen; wait a minute, then' + again + '.';
+  return 'Could not save this version: ' + escapeHtml(raw.slice(0, 300)) + '.' + again;
+}
+function optimizeSaveRetry(a) {
+  try { if (a && a.parentNode) a.parentNode.removeChild(a); } catch (e) {}
+  finalizeSaveOptimized(false);
+}
 function finalizeSaveOptimized(quiet) {
   if (!state.currentCampaign) return Promise.resolve(false);
   try {
@@ -32772,7 +32953,7 @@ function finalizeSaveOptimized(quiet) {
       // this used to report nothing at all, which is how a run of silent 409s went unnoticed long
       // enough that 'Load Last Optimized File' had no file behind it.
       var _code = (rj.j && rj.j.error) || '';
-      var _msg = 'Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');
+      var _msg = optimizeSaveFailText((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');   // v3.3.96 -- plain words, Try again
       // v3.0.389 -- the ticking line must never be left spinning on a failure.
       // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
       // forever. Never removes it while a loop is still running: the protective save can overlap
@@ -32782,7 +32963,7 @@ function finalizeSaveOptimized(quiet) {
       else if (!(quiet && _code === 'optimize_required')) { optimizeLogLine(_msg, 'stop'); }
       return false;
     }).catch(function (e) {
-      var _m = 'Could not save this version: ' + ((e && e.message) || 'network error');
+      var _m = optimizeSaveFailText((e && e.message) || 'network error');   // v3.3.96
       // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
       // forever. Never removes it while a loop is still running: the protective save can overlap
       // the tail of a run, and the bar belongs to the loop then.
@@ -35681,11 +35862,11 @@ function _rpReset() {
   if (pane) { pane.innerHTML = ''; pane.removeAttribute('data-built'); }
 }
 
-function _rpShapeStrip(activeKey) {
+function _rpShapeStrip(activeKey, pickFn) {   // v3.3.71 -- TD-1080: pickFn, the Image Builder's handler (a function name)
   return RP_SHAPES.map(function (s) {
     var bw = s.w >= s.h ? 44 : Math.round(44 * s.w / s.h), bh = s.w >= s.h ? Math.round(44 * s.h / s.w) : 44;
-    var on = s.key === activeKey, clickable = !!(state.rpUp && state.rpUp.img);
-    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="_rpPickShape(\'' + s.key + '\')"' : '') +
+    var on = s.key === activeKey, clickable = pickFn ? true : !!(state.rpUp && state.rpUp.img);
+    return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="' + (pickFn || '_rpPickShape') + '(\'' + s.key + '\')"' : '') +
       ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;min-height:82px;padding:4px;background:' +
       (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
       // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
@@ -36354,7 +36535,10 @@ function _impPick(email) {
 // =====================================================================================
 var _ci = null;   // { step, source, sourceName, charId, charName, look, observer }
 
-function _ciBase() { return '/api/campaigns/' + state.currentCampaign.id + '/characters/import'; }
+function _ciBase() {
+  if (_ci && _ci.mode === 'builder') return '/api/images/builder';   // v3.3.71 -- TD-1080: the Image Builder asks its own routes
+  return '/api/campaigns/' + state.currentCampaign.id + '/characters/import';
+}
 
 function _ciModal() {
   var m = document.getElementById('char-import-modal');
@@ -36400,8 +36584,8 @@ function _ciSet(title, sub, html) {
   var s = document.getElementById('ci-sub'); if (s) s.textContent = sub || '';
   var b = document.getElementById('ci-body'); if (b) { b.innerHTML = html; b.scrollTop = 0; }
   var msg = document.getElementById('ci-msg'); if (msg) msg.textContent = '';
-  var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns') ? '' : 'none';
-  var go = document.getElementById('ci-go'); if (go) { go.style.display = (_ci && _ci.step === 'looks') ? '' : 'none'; go.disabled = true; }
+  var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns' && !(_ci.start === 'characters' && _ci.step === 'characters')) ? '' : 'none';
+  var go = document.getElementById('ci-go'); if (go) { go.style.display = (_ci && _ci.step === 'looks') ? '' : 'none'; go.disabled = true; go.textContent = (_ci && _ci.mode === 'builder') ? 'Use this look' : 'Import this picture'; }
 }
 
 function _ciErr(text) { var m = document.getElementById('ci-msg'); if (m) m.textContent = text || ''; }
@@ -36417,19 +36601,26 @@ var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;te
 
 function _ciCampaigns() {
   _ci.step = 'campaigns';
-  _ciSet('Import a character', 'Choose the campaign the character comes from. These are the campaigns you run or belong to.', '<div style="padding:16px;opacity:0.7;">Loading your campaigns\u2026</div>');
+  var _ib = _ci.mode === 'builder';   // v3.3.71 -- TD-1080: choosing the Image Builder's campaign
+  _ciSet(_ib ? 'Choose a campaign' : 'Import a character', _ib ? 'The Image Builder works in one campaign at a time: its characters, assets, lore and gallery.' : 'Choose the campaign the character comes from. These are the campaigns you run or belong to.', '<div style="padding:16px;opacity:0.7;">Loading your campaigns\u2026</div>');
   _ciGet(_ciBase() + '/campaigns', function (d) {
     if (!_ci || _ci.step !== 'campaigns') return;
     var list = d.campaigns || [];
-    if (!list.length) { _ciSet('Import a character', '', '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
+    if (!list.length) { _ciSet(_ib ? 'Choose a campaign' : 'Import a character', '', _ib ? '<div style="padding:16px;">None of your campaigns can use the Image Builder yet.</div>' : '<div style="padding:16px;">You are not part of any other campaign yet.</div>'); return; }
     var b = document.getElementById('ci-body');
     b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
-      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' +
+      // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
+      var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(15,10,5,0.5);">'
+        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(15,10,5,0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
+      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' + _cpic +
         '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
     }).join('') + '</div>';
     Array.prototype.forEach.call(b.querySelectorAll('.ci-camp'), function (el) {
-      el.onclick = function () { _ciCharacters(el.getAttribute('data-id'), el.getAttribute('data-name')); };
+      el.onclick = function () {
+        if (_ib && _ci && typeof _ci.onCampaign === 'function') { var _f = _ci.onCampaign; closeCharImport(); _f(el.getAttribute('data-id'), el.getAttribute('data-name')); return; }
+        _ciCharacters(el.getAttribute('data-id'), el.getAttribute('data-name'));
+      };
     });
   });
 }
@@ -36465,13 +36656,13 @@ function _ciLookTile(l) {
 function _ciLooks(charId, charName) {
   if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; }
   _ci.step = 'looks'; _ci.charId = charId; _ci.charName = charName; _ci.look = null;
-  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. Pick one to copy into this campaign.', '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
+  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', grouped by version, oldest first. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
   var base = _ciBase() + '/campaigns/' + encodeURIComponent(_ci.source) + '/characters/' + encodeURIComponent(charId) + '/looks';
   _ciGet(base, function (d) {
     if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
     var grid = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;';
     var html = '<div style="margin-bottom:14px;"><div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">Original (the campaign\u2019s character card)</div>' +
-      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 it will be imported without one.</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
+      (d.original ? '<div style="' + grid + '">' + _ciLookTile(d.original) + '</div>' : '<div style="font-size:12px;opacity:0.7;">No reference picture on the card \u2014 ' + (_ci.mode === 'builder' ? 'its description is used instead.' : 'it will be imported without one.') + '</div><div style="' + grid + '">' + _ciLookTile({ key: 'original', url: '', label: 'Original (no picture)' }) + '</div>') + '</div>';
     (d.versions || []).forEach(function (v) {
       html += '<div class="ci-group" data-version="' + v.version_id + '" style="margin-bottom:14px;min-height:60px;">' +
         '<div class="ci-group-h" style="font-size:13px;color:#e8d49a;margin-bottom:6px;">' + escapeHtml(v.label) + '</div>' +
@@ -36487,7 +36678,8 @@ function _ciLooks(charId, charName) {
         if (!_ci || _ci.charId !== charId) return;
         var body = g.querySelector('.ci-group-body');
         var looks = r.looks || [];
-        body.innerHTML = looks.length ? looks.map(_ciLookTile).join('') : '<div style="font-size:12px;opacity:0.6;">No pictures of ' + escapeHtml(charName) + ' in this version.</div>';
+        if (!looks.length) { g.style.display = 'none'; return; }   // v3.3.79 -- a version with no pictures of them is left out, heading and all
+        body.innerHTML = looks.map(_ciLookTile).join('');
       });
     };
     var groups = b.querySelectorAll('.ci-group');
@@ -36508,17 +36700,23 @@ function _ciPickFromEvent(ev) {
   Array.prototype.forEach.call(document.querySelectorAll('#ci-body .ci-look'), function (el) { el.style.outline = ''; });
   t.style.outline = '2px solid #e8d49a';
   _ci.look = t.getAttribute('data-key');
+  var _lb = t.querySelector('b'); _ci.lookLabel = _lb ? _lb.textContent : '';   // v3.3.71 -- TD-1080: the Image Builder's chip
   var go = document.getElementById('ci-go'); if (go) go.disabled = false;
 }
 
 function _ciBack() {
   if (!_ci) return;
   if (_ci.step === 'looks') { var b = document.getElementById('ci-body'); if (b) b.removeEventListener('click', _ciPickFromEvent); if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; } _ciCharacters(_ci.source, _ci.sourceName); }
-  else if (_ci.step === 'characters') _ciCampaigns();
+  else if (_ci.step === 'characters' && _ci.start !== 'characters') _ciCampaigns();
 }
 
 function _ciImport() {
   if (!_ci || !_ci.look) return;
+  if (_ci.mode === 'builder') {   // v3.3.71 -- TD-1080: the Image Builder takes the look as a reference; nothing is copied
+    var _bl = _ci; closeCharImport();
+    if (typeof _bl.onLook === 'function') _bl.onLook({ charId: _bl.charId, charName: _bl.charName, look: _bl.look, label: _bl.lookLabel || '' });
+    return;
+  }
   var go = document.getElementById('ci-go'); if (go) go.disabled = true;
   _ciErr('');
   var s = document.getElementById('ci-sub'); if (s) s.textContent = 'Copying ' + _ci.charName + ' into this campaign\u2026';
@@ -38315,6 +38513,29 @@ function _panelJobsSync() {
 // clears both. Nothing about what Publish does changes; the server still refuses an unattested publish.
 // =====================================================================================
 var PREP_ATTEST_NAG = 'Tick the box above first: \u201cI own or have the rights to this content\u2026\u201d';
+// v3.3.93 -- THE SHAKE, SHARED. UI_CONVENTIONS 1 (TD-1026): when a button refuses because something it needs is not
+// done, that thing gets an amber outline and tint, shakes once, scrolls to the middle and takes focus, and the line by
+// the button says what is missing in amber. Typing or choosing in it clears both (and only a message this put there).
+// "Next time it's used: turn it into one shared helper" -- this is that helper; its CSS is added once, on first use.
+function nagField(el, message, statusEl) {
+  if (!el) return;
+  if (!document.getElementById('field-nag-css')) {
+    var st = document.createElement('style'); st.id = 'field-nag-css';
+    st.textContent = '.field-nag{outline:2px solid #e8a85a !important;outline-offset:3px;border-radius:6px;background-color:rgba(232,168,90,0.12) !important;animation:fieldNagShake 0.45s ease-in-out;}' +
+      '@keyframes fieldNagShake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}';
+    document.head.appendChild(st);
+  }
+  el.classList.remove('field-nag'); void el.offsetWidth; el.classList.add('field-nag');   // restart the shake
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  try { el.focus({ preventScroll: true }); } catch (e) {}
+  if (statusEl && message) { statusEl.style.color = '#e8a85a'; statusEl.textContent = message; }
+  var clear = function () {
+    el.classList.remove('field-nag');
+    if (statusEl && message && statusEl.textContent === message) { statusEl.textContent = ''; statusEl.style.color = ''; }
+    el.removeEventListener('input', clear); el.removeEventListener('change', clear);
+  };
+  el.addEventListener('input', clear); el.addEventListener('change', clear);
+}
 function _prepAttestNag(st) {
   if (st) { st.style.display = 'block'; st.style.color = '#e8a85a'; st.textContent = PREP_ATTEST_NAG; }
   var box = document.getElementById('prep-attest');
@@ -38374,7 +38595,7 @@ function openCompareTiersGrid(btn) {
   if (btn) btn.disabled = true;
   var sc = document.createElement('script');
   sc.id = 'tier-grid-js';
-  sc.src = '/js/tier-grid.js?v=3.2.47';
+  sc.src = '/js/tier-grid.js?v=3.4.02';   // v3.4.02 -- the Image Builder row
   sc.onload = function () {
     if (btn) btn.disabled = false;
     try { window.campaigniaTierGrid.open(); } catch (e) { if (msg) msg.textContent = 'Could not open the grid.'; }
@@ -38392,4 +38613,1390 @@ function openCompareTiersGrid(btn) {
 function cstyleFromPicker() {
   var _hide = function () { var m = document.getElementById('style-picker-modal'); if (m) m.classList.add('hidden'); };
   openCustomStylesView(_hide, _hide);
+}
+
+// =====================================================================================================
+// v3.3.71 -- TD-1080. THE IMAGE BUILDER, stage 1. Spec: claude/IMAGE_BUILDER_SPEC.md.
+//
+// Ian, 2026-11-01: a page off the profile menu where a Platinum member makes pictures that are not story panels --
+// a poster, a portrait, a map, a handout -- from a description, a shape, an art style and reference pictures of the
+// campaign's characters and assets. Every picture belongs to ONE campaign and is seen by that campaign's members
+// only; only its maker may change or delete it. Stage 1 is the page, the pickers, Generate and the gallery.
+//
+// It borrows rather than copies: the Import Character window (builder mode, _ci.mode), the Upload-your-own shape
+// strip (_rpShapeStrip with a pick function), the art style window (_ibStyleMode), the Review tab's chips and the
+// Add-an-asset window's look. The server decides who may use which campaign; the page only asks it.
+// APPENDED, NOT INSERTED (TD-853); every name here starts ib / IB and is declared nowhere else.
+// =====================================================================================================
+var IB = { campaigns: null, types: [], maxRefs: 14, cost: 1, cid: null, cname: '', chars: [], assets: [], shape: 'standard', style: '',
+  type: '', lore: true, desc: '', name: '', images: [], me: null, busy: false, poll: null, customStyles: [], loadSeq: 0,
+  tab: 'make', viewId: null, sig: '', zoom: null, ttl: ibTtlBlank(), ttlDraft: null, ho: ibHoBlank() };   // v3.3.92 -- ho: the handout's writing   // v3.3.83 -- ttl: the Title section   // v3.3.72 -- TD-1080: two tabs; the picture in the Make tab's viewer; the gallery's last-painted state
+var _ibStyleMode = false;   // the art style window is choosing for the Image Builder, not for a session
+var _ibStyleNext = false;   // set just before opening it; openStylePicker turns it into _ibStyleMode, so any other opening clears it
+var _ibBackFrom = null;     // the page the Image Builder was opened from, for ibBack()
+
+function ibCss() {
+  if (document.getElementById('ib-css')) return;
+  var st = document.createElement('style');
+  st.id = 'ib-css';
+  st.textContent =
+    '#ib-root{color:#f0e8d0;}' +
+    '#ib-root b,#ib-root label{color:#f0e8d0;}' +
+    '.main-content > div#view-image-builder{padding-top:0.5rem;}' +
+    '#view-image-builder .page-header{margin-bottom:8px;align-items:center;}' +
+    '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
+    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:10px;}' +
+    '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
+    '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
+    '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
+    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
+    '.ib-sec{margin-bottom:14px;}' +
+    '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
+    '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
+    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
+    '.ib-in.ib-bad{border-color:#e07a6a;}' +
+    '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid #e07a6a;outline-offset:2px;border-radius:8px;}' +
+    '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
+    '.ib-acc-sum{font-weight:400;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.ib-acc.open .ib-acc-sum{display:none;}' +
+    '#ib-chips .review-row{font-size:14px;gap:7px;margin-top:6px;}' +   // v3.3.80 -- References bigger (Ian)
+    '#ib-chips .review-label{font-size:12px;min-width:84px;}' +
+    '#ib-chips .review-chip,#ib-chips .review-add-btn,#ib-chips .review-none{font-size:13px;padding:3px 10px;}' +
+    '#ib-chips .review-none{padding:0;}' +
+    '#ib-chips .ib-meta{font-size:13px;margin-top:8px !important;}' +
+    '.ib-shapes{display:flex;flex-wrap:nowrap;gap:4px;}' +   // v3.3.78 -- one row (the strip's own min-width and padding are overridden here only)
+    '#ib-shapes .rp-shape{flex:1 1 0;min-width:0 !important;padding:4px 1px !important;}' +
+    '#ib-shapes .rp-shape > span:last-child{font-size:10px !important;}' +
+    '@media (max-width:520px){.ib-shapes{flex-wrap:wrap;}#ib-shapes .rp-shape{flex:0 0 auto;min-width:58px !important;}}' +
+    '.ib-viewer{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}' +
+    '.ib-zoom{display:inline-flex;align-items:center;gap:4px;}' +
+    '.ib-bar{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}' +   // v3.3.76
+    '.ib-bar-left{display:flex;gap:6px;flex-wrap:wrap;}' +
+    '.ib-frame:hover .panel-pill{opacity:1;}' +
+    '.ib-frame.tour-show-pills .panel-pill{opacity:1;}' +   // v3.3.99 -- shown while the tour points at them
+    '@media (max-width:820px){#ib-root .ib-pills{position:absolute;top:8px;left:8px;right:8px;margin:0;padding:0;}}' +
+    '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
+    '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
+    '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
+    '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
+    '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
+    '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
+    // v3.3.89 -- the title being placed
+    '.ib-place{position:absolute;z-index:4;cursor:move;touch-action:none;outline:1px dashed rgba(201,168,76,0.9);}' +
+    '.ib-place canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
+    '.ib-place-h{position:absolute;right:0;bottom:0;width:16px;height:16px;background:#c9a84c;border:2px solid #0a0604;border-radius:3px;cursor:nwse-resize;touch-action:none;}' +
+    '.ib-place-bar{position:absolute;left:8px;top:8px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}' +
+    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(10,6,4,0.75);color:#e8d9b0;}' +
+    '.ib-placing .panel-img-actions{display:none !important;}' +
+    // v3.3.92 -- the handout's writing being placed
+    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(201,168,76,0.95);background:rgba(255,248,225,0.12);}' +
+    '.ib-ho-box canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
+    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(201,168,76,0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
+    '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
+    '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
+    '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
+    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:8px;}' +
+    '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
+    '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
+    '.ib-meta{font-size:12px;color:rgba(240,232,208,0.7);}' +
+    '.ib-err{color:#f0a090;font-size:13px;}' +
+    '@media (max-width:800px){.ib-make{grid-template-columns:1fr;}.ib-viewer{position:static;}}';
+  document.head.appendChild(st);
+}
+
+function openImageBuilder(keepBack) {
+  var _kb = _ibBackFrom;
+  fetch('/api/images/builder/campaigns', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && d.error) || 'Could not open the Image Builder.'); return; }
+      var list = d.campaigns || [];
+      if (!list.length && !(state && state.user && state.user.tier === 'platinum')) {
+        platinumGate('the Image Builder', 'The Image Builder makes posters, portraits, maps and handouts for a campaign from its characters and assets. It is open in your own Platinum campaigns, and in any campaign whose Story Master is on Platinum.');
+        return;
+      }
+      IB.campaigns = list; IB.types = d.types || []; IB.maxRefs = d.max_refs || 14; IB.cost = (d.cost == null ? 1 : d.cost);
+      if (IB.cid && !ibCampaign(IB.cid)) ibClearCampaign();
+      if (!IB.cid) {
+        var here = state.currentCampaign && ibCampaign(state.currentCampaign.id);
+        var pick = here || (list.length === 1 ? list[0] : null);
+        if (pick) { IB.cid = pick.id; IB.cname = pick.name; }
+      }
+      ibCss();
+      showView('image-builder');
+      if (keepBack) _ibBackFrom = _kb;   // arriving from My Account's Back keeps the note, so the two never send you to each other
+      var _sn = document.getElementById('campaign-subnav'); if (_sn) _sn.style.display = 'none';
+      setBreadcrumb([{ label: 'My Campaigns', action: "showView('campaigns')" }, { label: 'Image Builder' }]);
+      ibRender();
+      if (IB.cid) ibLoadCampaign();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+
+function ibTtlBlank() { return { title: '', subtitle: '', place: 'bottom', size: 'medium', desc: '', url: '', src: '', pos: null }; }   // v3.3.89 -- pos; bottom by default
+function ibCampaign(id) { return (IB.campaigns || []).filter(function (c) { return String(c.id) === String(id); })[0] || null; }
+function ibClearCampaign() { IB.cid = null; IB.cname = ''; IB.chars = []; IB.assets = []; IB.images = []; IB.customStyles = []; IB.viewId = null; IB.sig = ''; if (IB.style && IB.style.indexOf('custom:') === 0) IB.style = ''; ibStopPoll(); }
+
+// Back: to the page the Builder was opened from, by the same rule as Custom Art Styles' Back.
+function ibBack() {
+  ibStopPoll();
+  var t = _ibBackFrom;
+  if (t && (ORDERS_BACK_PLAIN.indexOf(t) !== -1 || t === 'orders')) { showView(t); return; }
+  if (!t || !(state.currentCampaign && state.currentCampaign.id)) { showView('campaigns'); return; }
+  _sectionBackFrom = t;
+  sectionBack();
+}
+
+function ibReadForm() {
+  var g = function (id) { return document.getElementById(id); };
+  if (g('ib-desc')) IB.desc = g('ib-desc').value;
+  if (g('ib-name')) IB.name = g('ib-name').value;
+  if (g('ib-type')) IB.type = g('ib-type').value;
+  // v3.3.86 -- the instructions box is read only while it still belongs to the chosen type (data-type); a cleared or
+  // changed type sets IB.typeText itself.
+  var _ta = g('ib-type-text');
+  if (!IB.type) IB.typeText = '';
+  else if (_ta && _ta.getAttribute('data-type') === IB.type) { var _tv = _ta.value; IB.typeText = (_tv.trim() === ibTypeDefault(IB.type).trim()) ? '' : _tv; }
+  if (g('ib-lore')) IB.lore = !!g('ib-lore').checked;
+  if (g('ib-ttl-title')) IB.ttl.title = g('ib-ttl-title').value;   // v3.3.83
+  if (g('ib-ttl-sub')) IB.ttl.subtitle = g('ib-ttl-sub').value;
+  if (g('ib-ttl-place')) IB.ttl.place = g('ib-ttl-place').value;
+  if (g('ib-ttl-size')) IB.ttl.size = g('ib-ttl-size').value;
+  // v3.3.92 -- the handout's writing
+  if (g('ib-ho-text')) IB.ho.text = g('ib-ho-text').value;
+  if (g('ib-ho-font')) IB.ho.font = g('ib-ho-font').value;
+  if (g('ib-ho-ink')) IB.ho.ink = g('ib-ho-ink').value;
+  if (g('ib-ho-align')) IB.ho.align = g('ib-ho-align').value;
+  if (g('ib-ho-heading')) IB.ho.heading = !!g('ib-ho-heading').checked;
+}
+// v3.3.83 -- Ian: "Let's add the title builder button to this... one more accordian option at the bottom after
+// description", "Drawn In with warning", typed freely, "let the art style decide" with the cover's placement and size.
+function ibTitleBody() {
+  var t = IB.ttl, sel = function (id, cur, opts) {
+    return '<select class="ib-in" id="' + id + '" onchange="ibReadForm();ibAccRefresh()">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  return '<div class="ib-lbl">Title</div><input class="ib-in" id="ib-ttl-title" maxlength="100" placeholder="Leave empty for no title" value="' + escapeHtml(t.title) + '" oninput="ibReadForm();ibAccRefresh()">' +
+    '<div class="ib-lbl" style="margin-top:10px;">Subtitle</div><input class="ib-in" id="ib-ttl-sub" maxlength="140" placeholder="Optional" value="' + escapeHtml(t.subtitle) + '" oninput="ibReadForm();ibAccRefresh()">' +
+    // v3.3.89 -- no Placement or Size: the lettering is dragged onto the picture, dropped and resized there (Ian).
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+      '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the title\u2019s lettering (a token)">Title Builder</button>' +
+      '<span id="ib-ttl-msg" class="ib-meta"></span>' +   // v3.3.93 -- the shake's message
+      (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
+        (ibOthersOpen() ? '' : '<button class="btn btn-sm" type="button" onclick="ibRemoveTitle()" title="Take the title off the picture and out of this section. The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>')   // v3.3.95 -- the one Remove; v3.4.00 -- not on another member's picture (Ian)
+        : '<span class="ib-meta">Titles are made in the Title Builder.</span>') +   // v3.3.93
+    '</div>' +
+    '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
+    // v3.3.85 -- lettering is laid on exactly as designed, with a clean copy kept; only a typed title is drawn in for good.
+    (t.url
+      ? '<div class="ib-meta" style="margin-top:10px;">Your lettering is laid over the finished picture exactly as designed. A clean copy without the title is kept, so you can still archive it or save it without the title. On a picture already drawn, drag it on and Apply, for free.</div>'
+      : '<div class="ib-meta" style="margin-top:10px;">Press Title Builder to design the lettering for this title. It is laid over the picture exactly as designed, and a clean copy is kept.</div>');   // v3.3.93 -- titles come only from the Title Builder
+}
+function ibOpenTitleBuilder() {
+  ibReadForm();
+  if (!IB.cid) return;
+  if (!String(IB.ttl.title || '').trim()) {   // v3.3.93 -- the shake (Ian)
+    ibAccSet('title', true);
+    nagField(document.getElementById('ib-ttl-title'), 'Type the title above first, then press Title Builder.', document.getElementById('ib-ttl-msg'));
+    return;
+  }
+  openTitleBuilder({ kind: 'ib', campaignId: IB.cid });
+}
+// v3.3.87 -- Apply title, in the Title section (Ian: "down on the left hand side inside the title accordion"). It acts on
+// the picture in the viewer when it is yours and finished; repainted with the viewer, so it appears when a picture lands.
+function ibTtlApplyHtml() {
+  if (!IB.ttl || !IB.ttl.url) return '';
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  // v3.3.89 -- drag, drop and resize (Ian), with a button for anyone who would rather not drag.
+  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the lettering above onto the picture, <b>drop</b> it where you want it, and drag its corner to <b>resize</b> it. Then press Apply.</div>';
+  if (!mine) return how + '<span class="ib-meta">Make or open one of your pictures first.</span>';
+  return how + '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibPlaceStart()">Place title on picture</button>' +
+    // v3.3.95 -- Remove title is the one button by the lettering above.
+    ' <span class="ib-meta" id="ib-ttl-apply-msg">Free; Revert takes it off.</span>';
+}
+// =====================================================================================================
+// v3.3.89 -- PLACING THE TITLE BY HAND. Ian: "drag and drop the title image from the bottom onto the image where you
+// want it", with a corner handle for the size. The lettering (its transparent margins trimmed, as the server trims
+// them) sits over the picture -- the clean copy, when there is one -- with the cover's halo drawn live. Its box is kept
+// as fractions of the picture (IB.ttl.pos), which the server uses when it lays the title on.
+// =====================================================================================================
+function ibTtlDragStart(e) { IB._ttlDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-title'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
+function ibTtlDragOver(e) { if (IB._ttlDrag || IB._hoDrag) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) {} } }
+function ibTtlDrop(e) {
+  if (IB._hoDrag) { e.preventDefault(); IB._hoDrag = false; var hb = ibPlaceBox(); if (!hb) { ibHoPlaceStart(); return; } var hfr = document.getElementById('ib-frame').getBoundingClientRect(); ibHoPlaceStart((e.clientX - hfr.left - hb.ox) / hb.cw, (e.clientY - hfr.top - hb.oy) / hb.ch); return; }   // v3.3.92
+  if (!IB._ttlDrag) return;
+  e.preventDefault(); IB._ttlDrag = false;
+  var b = ibPlaceBox(); if (!b) { ibPlaceStart(); return; }
+  var fr = document.getElementById('ib-frame').getBoundingClientRect();
+  ibPlaceStart((e.clientX - fr.left - b.ox) / b.cw, (e.clientY - fr.top - b.oy) / b.ch);
+}
+document.addEventListener('dragend', function () { IB._ttlDrag = false; IB._hoDrag = false; });   // v3.3.92 -- _hoDrag
+// The picture's drawn area inside the frame (object-fit: contain), in the frame's pixels.
+function ibPlaceBox() {
+  var f = document.getElementById('ib-frame'), img = f && f.querySelector('img:not(.ib-place-x)');
+  if (!img || !img.naturalWidth) return null;
+  var fr = f.getBoundingClientRect(), ir = img.getBoundingClientRect();
+  var s = Math.min(ir.width / img.naturalWidth, ir.height / img.naturalHeight), cw = img.naturalWidth * s, ch = img.naturalHeight * s;
+  return { ox: ir.left - fr.left + (ir.width - cw) / 2, oy: ir.top - fr.top + (ir.height - ch) / 2, cw: cw, ch: ch };
+}
+// The lettering, trimmed to its ink, on a canvas. Read through the same-origin proxy so the pixels can be measured.
+function ibTtlCanvas(url, cb) {
+  var img = new Image();
+  img.onload = function () {
+    var c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    var minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+    try {
+      var d = x.getImageData(0, 0, c.width, c.height).data;
+      for (var yy = 0; yy < c.height; yy++) for (var xx = 0; xx < c.width; xx++) {
+        if (d[(yy * c.width + xx) * 4 + 3] > 16) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; if (yy < minY) minY = yy; if (yy > maxY) maxY = yy; }
+      }
+    } catch (e) { minX = 0; minY = 0; maxX = c.width - 1; maxY = c.height - 1; }
+    if (maxX < 0) { minX = 0; minY = 0; maxX = c.width - 1; maxY = c.height - 1; }
+    var o = document.createElement('canvas'); o.width = maxX - minX + 1; o.height = maxY - minY + 1;
+    o.getContext('2d').drawImage(c, minX, minY, o.width, o.height, 0, 0, o.width, o.height);
+    cb(o);
+  };
+  img.onerror = function () { cb(null); };
+  img.src = (/^\//.test(url)) ? url : ('/api/images/proxy?u=' + encodeURIComponent(url));
+}
+function ibPlaceStart(fx, fy) {
+  if (IB.hoPlacing) { IB.hoPlacing = null; }   // v3.3.92 -- one thing placed at a time
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your pictures first, then drag the title onto it.'); return; }
+  if (!IB.ttl || !IB.ttl.url) return;
+  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first.', 'title'); return; }
+  ibTtlCanvas(IB.ttl.url, function (cv) {
+    if (!cv) { showError('Could not load the lettering.'); return; }
+    var pa = (im.img_w && im.img_h) ? im.img_w / im.img_h : 1, asp = cv.width / cv.height;
+    var p = IB.ttl.pos ? { x: IB.ttl.pos.x, y: IB.ttl.pos.y, w: IB.ttl.pos.w } : { w: 0.62, x: 0.19, y: null };
+    var hf = function (w) { return w * pa / asp; };
+    if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - hf(p.w) / 2; }
+    else if (p.y == null) p.y = 1 - hf(p.w) - 0.04;   // the default: bottom, centred, as the posters
+    IB.placing = { id: im.id, cv: cv, asp: asp, pa: pa, x: p.x, y: p.y, w: p.w };
+    ibPlaceClamp();
+    ibPaintViewer();
+  });
+}
+function ibPlaceClamp() {
+  var P = IB.placing; if (!P) return;
+  var maxW = Math.min(1, P.asp / P.pa);   // never taller than the picture
+  P.w = Math.max(0.05, Math.min(maxW, P.w));
+  var h = P.w * P.pa / P.asp;
+  P.x = Math.max(0, Math.min(1 - P.w, P.x)); P.y = Math.max(0, Math.min(1 - h, P.y));
+}
+// Drawn over the picture whenever the viewer paints (it repaints while pictures are polled).
+function ibPlaceMount() {
+  var P = IB.placing; if (!P) return;
+  if (String(P.id) !== String(IB.viewId)) { IB.placing = null; return; }
+  var f = document.getElementById('ib-frame'); if (!f) return;
+  var im = ibImg(P.id), img = f.querySelector('img');
+  if (!img) return;
+  if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);   // no second title underneath
+  img.style.pointerEvents = 'none';
+  f.classList.add('ib-placing');
+  if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibPlaceMount(); }; return; }
+  var b = ibPlaceBox(); if (!b) return;
+  var old = f.querySelector('.ib-place'); if (old) old.parentNode.removeChild(old);
+  ibPlaceOthers(f, b, im, 'title');   // v3.3.94 -- the writing stays in view
+  var oldBar = f.querySelector('.ib-place-bar'); if (oldBar) oldBar.parentNode.removeChild(oldBar);
+  var box = document.createElement('div'); box.className = 'ib-place';
+  var c = document.createElement('canvas'); c.width = P.cv.width; c.height = P.cv.height; c.getContext('2d').drawImage(P.cv, 0, 0);
+  var rgb = 'rgba(10,6,4,';   // the cover's halo, as scrimRamp draws it
+  c.style.filter = 'drop-shadow(0 0 ' + (b.cw * 0.0058).toFixed(1) + 'px ' + rgb + '0.95)) drop-shadow(0 0 ' + (b.cw * 0.015).toFixed(1) + 'px ' + rgb + '0.8)) drop-shadow(0 0 ' + (b.cw * 0.037).toFixed(1) + 'px ' + rgb + '0.5))';
+  var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize';
+  box.appendChild(c); box.appendChild(h); f.appendChild(box);
+  var bar = document.createElement('div'); bar.className = 'ib-place-bar';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibPlaceApply()">Apply title here</button><button class="btn btn-sm" type="button" onclick="ibPlaceCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  f.appendChild(bar);
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.w * bb.cw / P.asp) + 'px'; };
+  put();
+  var drag = null;
+  var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
+  box.addEventListener('pointerdown', down('move'));
+  h.addEventListener('pointerdown', down('size'));
+  var move = function (e) {
+    if (!drag) return;
+    var bb = ibPlaceBox() || b, dx = (e.clientX - drag.sx) / bb.cw, dy = (e.clientY - drag.sy) / bb.ch;
+    if (drag.mode === 'move') { P.x = drag.x + dx; P.y = drag.y + dy; } else { P.w = drag.w + dx; P.x = drag.x; P.y = drag.y; }
+    ibPlaceClamp(); put();
+  };
+  var up = function () { drag = null; };
+  box.addEventListener('pointermove', move); box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+// v3.3.94 -- WHAT IS NOT BEING MOVED STAYS IN VIEW. Ian: "if I hit Place Title then it hides the text and vice versa."
+// Placing shows the clean copy (so the thing being moved is never seen twice), which took the OTHER one away as well.
+// It is drawn back on top here, where it sits: the handout's writing multiplied onto the paper, the title with the
+// cover's halo -- as the server lays them. A sequence number drops a late title drawing from an earlier mount.
+function ibPlaceOthers(f, b, im, moving) {
+  Array.prototype.forEach.call(f.querySelectorAll('.ib-other'), function (o) { o.parentNode.removeChild(o); });
+  var seq = f._ibOtherSeq = (f._ibOtherSeq || 0) + 1;
+  var R = (im && im.refs) || {};
+  var h = R.handout;
+  if (moving !== 'handout' && im && im.has_clean && h && !h.off && h.url && h.pos) {
+    var hi = document.createElement('img'); hi.className = 'ib-other'; hi.alt = ''; hi.src = h.url;
+    hi.style.cssText = 'position:absolute;z-index:3;pointer-events:none;mix-blend-mode:multiply;left:' + (b.ox + h.pos.x * b.cw) + 'px;top:' + (b.oy + h.pos.y * b.ch) + 'px;width:' + (h.pos.w * b.cw) + 'px;height:' + (h.pos.h * b.ch) + 'px;';
+    f.appendChild(hi);
+  }
+  var t = R.title;
+  if (moving !== 'title' && im && im.has_clean && t && !t.off && t.url && t.pos) {
+    ibTtlCanvas(t.url, function (cv) {
+      if (!cv || f._ibOtherSeq !== seq || !f.isConnected) return;
+      var c = document.createElement('canvas'); c.className = 'ib-other'; c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0);
+      var w = t.pos.w * b.cw, hp = w * cv.height / cv.width, rgb = 'rgba(10,6,4,';
+      c.style.cssText = 'position:absolute;z-index:3;pointer-events:none;left:' + (b.ox + t.pos.x * b.cw) + 'px;top:' + Math.min(b.oy + t.pos.y * b.ch, b.oy + b.ch - hp) + 'px;width:' + w + 'px;height:' + hp + 'px;' +
+        'filter:drop-shadow(0 0 ' + (b.cw * 0.0058).toFixed(1) + 'px ' + rgb + '0.95)) drop-shadow(0 0 ' + (b.cw * 0.015).toFixed(1) + 'px ' + rgb + '0.8)) drop-shadow(0 0 ' + (b.cw * 0.037).toFixed(1) + 'px ' + rgb + '0.5));';
+      f.appendChild(c);
+    });
+  }
+}
+function ibPlaceCancel() { IB.placing = null; ibPaintViewer(); }
+function ibPlaceApply() {
+  var P = IB.placing; if (!P) return;
+  IB.ttl.pos = { x: Math.round(P.x * 10000) / 10000, y: Math.round(P.y * 10000) / 10000, w: Math.round(P.w * 10000) / 10000 };
+  var id = P.id; IB.placing = null;
+  ibPaintViewer();
+  ibApplyTitle(id);
+}
+// =====================================================================================================
+// v3.3.92 -- THE HANDOUT'S WRITING. Ian chose the writing laid on, exactly as typed: the browser sets it in one of the
+// nine book faces (loaded by /css/fonts.css), fitted to a box the reader drags onto the picture and sizes by its corner,
+// uploads it as a transparent PNG, and the server multiplies it onto the paper. The box (IB.ho.pos) is fractions of the
+// picture: x, y, w, h. Generate sets the writing first, at the remembered box (or the default), so a new handout comes
+// back finished.
+// =====================================================================================================
+var IB_HO_FONT_LIST = [['garamond', 'Old book', "'EB Garamond', Georgia, serif"], ['cinzel', 'Engraved capitals', "'Cinzel', serif"], ['crimson-text', 'Classic print', "'Crimson Text', Georgia, serif"],
+  ['journal', 'Handwritten', "'Caveat', cursive"], ['script', 'Quill script', "'Dancing Script', cursive"], ['lora', 'Storybook', "'Lora', Georgia, serif"],
+  ['merriweather', 'Sturdy print', "'Merriweather', Georgia, serif"], ['bangers', 'Bold poster', "'Bangers', cursive"]];
+var IB_HO_INK_LIST = [['brown', 'Iron-gall brown', '#3b2312'], ['black', 'Black', '#17120d'], ['red', 'Faded red', '#6e1f14'], ['blue', 'Indigo', '#22305a']];
+var IB_HO_DEFAULT_POS = { x: 0.12, y: 0.22, w: 0.76, h: 0.6 };
+// v3.4.04 -- where Place writing starts the box: smaller, centred inside the area the drawing is asked to leave blank
+// (IB_HO_DEFAULT_POS, which still shapes the prompt), so the words start on the paper (testers).
+var IB_HO_START_POS = { x: 0.2, y: 0.32, w: 0.6, h: 0.4 };
+function ibHoBlank() { return { text: '', font: 'garamond', ink: 'brown', align: 'center', heading: true, url: '', pos: null }; }
+function ibHoFields() {
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-ho-text', IB.ho.text); set('ib-ho-font', IB.ho.font); set('ib-ho-ink', IB.ho.ink); set('ib-ho-align', IB.ho.align);
+  var h = document.getElementById('ib-ho-heading'); if (h) h.checked = IB.ho.heading !== false;
+}
+function ibHandoutBody() {
+  var h = IB.ho, sel = function (id, cur, list) {
+    return '<select class="ib-in" id="' + id + '" onchange="ibHoLive()">' + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  return '<div class="ib-meta" style="margin-bottom:6px;">The words on the handout, exactly as they should read. They are set in the font you choose and laid on the paper, so the spelling is always right.</div>' +
+    '<textarea class="ib-in" id="ib-ho-text" rows="6" maxlength="1500" placeholder="WANTED&#10;Grimbald the Grey&#10;for crimes against the Crown&#10;Reward: 500 gold" oninput="ibHoLive()">' + escapeHtml(h.text) + '</textarea>' +
+    '<div class="ib-meta" id="ib-ho-count" style="text-align:right;margin-top:2px;">' + ibCountText(h.text) + '</div>' +   // v3.4.04
+    '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="ib-ho-heading"' + (h.heading !== false ? ' checked' : '') + ' onchange="ibHoLive()"> First line as a heading</label>' +
+    '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;"><div style="flex:1;min-width:120px;"><div class="ib-lbl">Font</div>' + sel('ib-ho-font', h.font, IB_HO_FONT_LIST) + '</div>' +
+      '<div style="flex:1;min-width:120px;"><div class="ib-lbl">Ink</div>' + sel('ib-ho-ink', h.ink, IB_HO_INK_LIST) + '</div>' +
+      '<div style="flex:1;min-width:100px;"><div class="ib-lbl">Lines</div>' + sel('ib-ho-align', h.align, [['center', 'Centred'], ['left', 'Left']]) + '</div></div>' +
+    '<div id="ib-ho-apply" style="margin-top:10px;">' + ibHoApplyHtml() + '</div>';
+}
+// v3.3.93 -- is the writing (or the title) on this picture now? Then it can be taken off.
+function ibLayerOn(im, what) {
+  var x = im && im.refs && im.refs[what];
+  if (!x || x.off || !x.url || !im.has_clean) return false;
+  return what === 'title' ? !!x.title : !!(x.text && x.pos);
+}
+function ibLayerOff(id, what) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/layer-off', { what: what }, function (d) { ibPut(d.image); ibAccRefresh(); });
+}
+function ibHoApplyHtml() {
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the box below onto the picture, <b>drop</b> it where the writing goes, and drag its corner to <b>resize</b> it. Then press Apply writing here. A new handout is drawn with a clear writing area and no words, ready for yours.</div>';
+  if (!mine) return how + '<span class="ib-meta">Make or open one of your handouts to place the writing on it.</span>';
+  return how + '<span class="ib-ho-chip" draggable="true" ondragstart="ibHoDragStart(event)">\u270e Drag the writing onto the picture</span> ' +
+    '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button>' +
+    (ibLayerOn(im, 'handout') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'handout\')" title="Take the writing off this picture (free; Revert puts it back)">Remove writing from picture</button>' : '') +   // v3.3.93
+    ' <span class="ib-meta" id="ib-ho-msg"></span>';
+}
+// v3.4.01 -- a handout of yours, drawn, with words in its recipe and no writing on it yet (and not taken off on purpose).
+function ibHoWaiting(im, mine, busy) {
+  var h = im && im.refs && im.refs.handout;
+  return !!(mine && !busy && im.image_url && im.image_type === 'handout' && h && String(h.text || '').trim() && !h.off && !ibLayerOn(im, 'handout'));
+}
+// v3.4.04 -- the clean-copy pill's own words: Without title / Without text / Without title and text.
+function ibWithoutLabel(im) { var w = ibLaidOnWords(im); return 'Without ' + (w === 'the title' ? 'title' : (w === 'the text' ? 'text' : 'title and text')); }
+function ibHoApplyPaint() { var el = document.getElementById('ib-ho-apply'); if (el) el.innerHTML = ibHoApplyHtml(); }
+function ibHoDragStart(e) { IB._hoDrag = true; try { e.dataTransfer.setData('text/plain', 'ib-handout'); e.dataTransfer.effectAllowed = 'copy'; } catch (x) {} }
+function ibHoFamily(key) { var f = IB_HO_FONT_LIST.filter(function (x) { return x[0] === key; })[0]; return f ? f[2] : IB_HO_FONT_LIST[0][2]; }
+function ibHoInk(key) { var f = IB_HO_INK_LIST.filter(function (x) { return x[0] === key; })[0]; return f ? f[2] : IB_HO_INK_LIST[0][2]; }
+// Lays the text out at size s inside iw x ih: paragraphs from the line breaks, the first line larger when it is a
+// heading, words wrapped. ok is false when a single word cannot fit across.
+function ibHoLayout(ctx, ho, fam, s, iw) {
+  var paras = String(ho.text || '').split('\n'), lines = [], total = 0, ok = true;
+  paras.forEach(function (p, pi) {
+    var head = (pi === 0 && ho.heading !== false && paras.length > 1), sz = head ? s * 1.7 : s;
+    ctx.font = (head ? '700 ' : '') + sz + 'px ' + fam;
+    var words = p.split(/\s+/).filter(Boolean);
+    if (!words.length) { lines.push({ t: '', sz: sz, h: sz * 0.7 }); total += sz * 0.7; return; }
+    var cur = '';
+    words.forEach(function (w) {
+      if (ctx.measureText(w).width > iw) ok = false;
+      var tryL = cur ? cur + ' ' + w : w;
+      if (cur && ctx.measureText(tryL).width > iw) { lines.push({ t: cur, sz: sz, head: head, h: sz * 1.28 }); total += sz * 1.28; cur = w; } else cur = tryL;
+    });
+    lines.push({ t: cur, sz: sz, head: head, h: sz * 1.28 }); total += sz * 1.28;
+    if (head) { lines.push({ t: '', sz: s, h: s * 0.35 }); total += s * 0.35; }
+  });
+  return { lines: lines, h: total, ok: ok };
+}
+// The writing on a transparent canvas W x H: the largest size that fits, centred top to bottom.
+function ibHoCanvas(ho, W, H) {
+  var fam = ibHoFamily(ho.font);
+  var load = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('40px ' + fam), document.fonts.load('700 40px ' + fam)]).catch(function () {}) : Promise.resolve();
+  return load.then(function () {
+    var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
+    var x = c.getContext('2d'), pad = Math.round(Math.min(c.width, c.height) * 0.05), iw = c.width - 2 * pad, ih = c.height - 2 * pad;
+    var lo = 4, hi = Math.max(6, ih), best = null;
+    for (var i = 0; i < 22; i++) { var mid = (lo + hi) / 2, l = ibHoLayout(x, ho, fam, mid, iw); if (l.ok && l.h <= ih) { best = { s: mid, l: l }; lo = mid; } else hi = mid; }
+    if (!best) best = { s: lo, l: ibHoLayout(x, ho, fam, lo, iw) };
+    x.fillStyle = ibHoInk(ho.ink); x.globalAlpha = 0.92; x.textBaseline = 'top';
+    x.textAlign = ho.align === 'left' ? 'left' : 'center';
+    var y = pad + Math.max(0, (ih - best.l.h) / 2), tx = ho.align === 'left' ? pad : c.width / 2;
+    best.l.lines.forEach(function (ln) {
+      if (ln.t) { x.font = (ln.head ? '700 ' : '') + ln.sz + 'px ' + fam; x.textAlign = ln.head ? 'center' : (ho.align === 'left' ? 'left' : 'center'); x.fillText(ln.t, ln.head ? c.width / 2 : tx, y + ln.sz * 0.12); }
+      y += ln.h;
+    });
+    return c;
+  });
+}
+// Sets the writing at the box's real size and stores it; resolves to its address.
+function ibHoUpload(ho, W, H) {
+  return ibHoCanvas(ho, W, H).then(function (c) {
+    return fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/handout-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: c.toDataURL('image/png') }) });
+  }).then(function (r) { return r.json(); }).then(function (d) { if (!d || d.error || !d.url) throw new Error((d && d.error) || 'Could not store the writing.'); return d.url; });
+}
+// v3.4.01 -- before Generate the writing is NOT set any more: a new handout lands clean and the writing is dragged
+// on and applied (Ian: "Don't do it automatically... You need to drag and drop the text on there."). The words
+// still go with the recipe, so the picture is drawn with an empty writing area.
+function ibHoForGenerate(body) {
+  if (body.image_type !== 'handout' || !String(IB.ho.text || '').trim()) return Promise.resolve();
+  body.refs.handout = Object.assign({}, IB.ho, { url: '' });
+  return Promise.resolve();
+}
+function ibHoPlaceStart(fx, fy) {
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  if (!im || String(im.user_id) !== String(IB.me) || !im.image_url || ibBusy(im)) { showError('Make or open one of your handouts first, then drag the writing onto it.'); return; }
+  if (!String(IB.ho.text || '').trim()) { ibAccSet('type', true); nagField(document.getElementById('ib-ho-text'), 'Type the handout\u2019s words above first.', document.getElementById('ib-ho-msg')); return; }   // v3.3.93 -- the shake; the words are in the Image type panel
+  IB.placing = null;
+  var p = Object.assign({}, IB.ho.pos || IB_HO_START_POS);   // v3.4.04
+  if (fx != null && isFinite(fx)) { p.x = fx - p.w / 2; p.y = fy - p.h / 2; }
+  IB.hoPlacing = { id: im.id, x: p.x, y: p.y, w: p.w, h: p.h };
+  ibHoClamp();
+  ibPaintViewer();
+}
+function ibHoClamp() {
+  var P = IB.hoPlacing; if (!P) return;
+  P.w = Math.max(0.08, Math.min(1, P.w)); P.h = Math.max(0.08, Math.min(1, P.h));
+  P.x = Math.max(0, Math.min(1 - P.w, P.x)); P.y = Math.max(0, Math.min(1 - P.h, P.y));
+}
+function ibHoMount() {
+  var P = IB.hoPlacing; if (!P) return;
+  if (String(P.id) !== String(IB.viewId)) { IB.hoPlacing = null; return; }
+  var f = document.getElementById('ib-frame'); if (!f) return;
+  var im = ibImg(P.id), img = f.querySelector('img'); if (!img) return;
+  if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);
+  img.style.pointerEvents = 'none';
+  f.classList.add('ib-placing');
+  if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibHoMount(); }; return; }
+  var b = ibPlaceBox(); if (!b) return;
+  ['.ib-ho-box', '.ib-place-bar'].forEach(function (q) { var o = f.querySelector(q); if (o) o.parentNode.removeChild(o); });
+  ibPlaceOthers(f, b, im, 'handout');   // v3.3.94 -- the title stays in view
+  var box = document.createElement('div'); box.className = 'ib-ho-box';
+  var c = document.createElement('canvas'); box.appendChild(c);
+  var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize'; box.appendChild(h);
+  f.appendChild(box);
+  var bar = document.createElement('div'); bar.className = 'ib-place-bar';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibHoApply()">Apply writing here</button><button class="btn btn-sm" type="button" onclick="ibHoCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  f.appendChild(bar);
+  var draw = function () {   // the preview, set as it will be, at the box's size on screen
+    var bb = ibPlaceBox() || b, pw = P.w * bb.cw, ph = P.h * bb.ch;
+    ibHoCanvas(IB.ho, pw * 2, ph * 2).then(function (cv) { c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0); });
+  };
+  var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.h * bb.ch) + 'px'; };
+  put(); draw();
+  IB._hoRedraw = draw;   // v3.3.93 -- the options on the left redraw the box being placed
+  var drag = null;
+  var down = function (mode) { return function (e) { e.preventDefault(); e.stopPropagation(); drag = { mode: mode, sx: e.clientX, sy: e.clientY, x: P.x, y: P.y, w: P.w, h: P.h }; try { box.setPointerCapture(e.pointerId); } catch (x) {} }; };
+  box.addEventListener('pointerdown', down('move'));
+  h.addEventListener('pointerdown', down('size'));
+  box.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var bb = ibPlaceBox() || b, dx = (e.clientX - drag.sx) / bb.cw, dy = (e.clientY - drag.sy) / bb.ch;
+    if (drag.mode === 'move') { P.x = drag.x + dx; P.y = drag.y + dy; } else { P.w = drag.w + dx; P.h = drag.h + dy; P.x = drag.x; P.y = drag.y; }
+    ibHoClamp(); put();
+  });
+  var up = function () { if (drag && drag.mode === 'size') draw(); drag = null; };
+  box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+}
+// v3.3.93 -- a change to the words, font, ink, heading or lines: read it, and redraw the box being placed (a moment
+// after the last keystroke, so typing stays smooth). Apply then sets exactly what is shown.
+var _ibHoLiveT = null;
+function ibHoLive() {
+  ibReadForm(); ibAccRefresh();
+  if (!IB.hoPlacing || !IB._hoRedraw) return;
+  clearTimeout(_ibHoLiveT);
+  _ibHoLiveT = setTimeout(function () { if (IB.hoPlacing && IB._hoRedraw) IB._hoRedraw(); }, 120);
+}
+function ibHoCancel() { IB.hoPlacing = null; ibPaintViewer(); }
+function ibHoApply() {
+  var P = IB.hoPlacing; if (!P) return;
+  var f = document.getElementById('ib-frame'), img = f && f.querySelector('img');
+  var NW = (img && img.naturalWidth) || 1600, NH = (img && img.naturalHeight) || 1600;
+  var r4 = function (v) { return Math.round(v * 10000) / 10000; };
+  var pos = { x: r4(P.x), y: r4(P.y), w: r4(P.w), h: r4(P.h) }, id = P.id;
+  IB.hoPlacing = null; ibPaintViewer();
+  var msg = function (t) { var m = document.getElementById('ib-ho-msg'); if (m) m.textContent = t; };
+  msg('Setting the writing\u2026');
+  ibHoUpload(IB.ho, NW * pos.w, NH * pos.h).then(function (url) {
+    IB.ho.url = url; IB.ho.pos = pos;
+    return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/handout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handout: Object.assign({}, IB.ho) }) });
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the writing on the picture.'; msg(''); showError(m); return; }
+    ibPut(d.image); ibAccRefresh();
+    msg('Done. The writing is on the handout; ' + ibWithoutLabel(d.image) + ' shows the clean copy. Place it again to move it.');   // v3.4.04 -- the pill as it reads
+  }).catch(function (e) { msg(''); showError((e && e.message) || 'Could not lay the writing on the picture.'); });
+}
+function ibTtlApplyPaint() { var el = document.getElementById('ib-ttl-apply'); if (el) el.innerHTML = ibTtlApplyHtml(); }
+function ibViewClean(id) { var im = ibImg(id); if (im && im.clean_url) openLightbox(im.clean_url, (im.name || 'Picture') + ' (clean copy)'); }   // v3.3.85; v3.3.95 -- clean copy
+// v3.3.85 -- lay the Title section's lettering on this picture, free.
+function ibApplyTitle(id) {
+  ibReadForm(); ibActMsg('');
+  if (!String(IB.ttl.title || '').trim()) { ibMsg('Type the title first.', 'title'); return; }
+  var b = document.getElementById('ib-ttl-apply-btn'); if (b) { b.disabled = true; b.textContent = 'Applying\u2026'; }
+  // v3.3.87 -- a refusal or failure is said where the button is, and as a message, so it cannot pass unseen.
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: Object.assign({}, IB.ttl) }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { var m = (d && (d.message || d.error)) || 'Could not lay the title on the picture.'; ibTtlApplyPaint(); ibActMsg(escapeHtml(m)); showError(m); return; }
+      ibPut(d.image);
+      var ms = document.getElementById('ib-ttl-apply-msg'); if (ms) ms.textContent = 'Done. The title is on the picture; Without title shows the clean copy. Place it again to move it.';
+    })
+    .catch(function () { ibTtlApplyPaint(); showError('Connection error. Please try again.'); });
+}
+// v3.3.95 -- REMOVE TITLE, ONE BUTTON. Takes the title off the picture in the viewer when it is yours and the title is on
+// it (free; Revert puts it back), and clears the lettering from the Title section. The drawing is kept as the Title
+// Builder's draft, so reopening the Title Builder shows it and Done & Use brings it back without a token.
+// v3.4.00 -- is the picture on show someone else's? Then Remove title is not offered (tester finding 2026-11-01: it
+// only cleared the lettering from the viewer's own form, but looked like it changed their picture; Ian chose to hide it).
+function ibOthersOpen() { var im = IB.viewId ? ibImg(IB.viewId) : null; return !!(im && String(im.user_id) !== String(IB.me)); }
+function ibRemoveTitle() {
+  if (ibOthersOpen()) return;
+  ibReadForm();
+  var im = ibImg(IB.viewId);
+  var mine = im && String(im.user_id) === String(IB.me) && im.image_url && !ibBusy(im);
+  var clearForm = function () { if (IB.ttl.url) IB.ttlDraft = { url: IB.ttl.url, src: IB.ttl.src || '' }; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; ibRender(); };
+  if (mine && ibLayerOn(im, 'title')) {
+    ibActMsg('');
+    ibPost('/api/images/builder/images/' + encodeURIComponent(im.id) + '/layer-off', { what: 'title' }, function (d) { ibPut(d.image); clearForm(); });
+    return;
+  }
+  clearForm();
+}
+// v3.3.83 -- Ian: "The name change save should happen on blur." Leaving the Name field renames the picture in the
+// viewer when it is yours; with nothing in the viewer the name waits for Generate, as before.
+function ibNameChanged() {
+  ibReadForm();
+  var im = ibImg(IB.viewId), name = String(IB.name || '').trim();
+  if (!im || String(im.user_id) !== String(IB.me) || !name || name === im.name) return;
+  fetch('/api/images/builder/images/' + encodeURIComponent(im.id) + '/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { ibActMsg(escapeHtml((d && (d.message || d.error)) || 'Could not rename the picture.')); return; }
+      var cur = ibImg(im.id); if (cur) cur.name = d.name;
+      ibPaintGallery(); ibPaintViewer();
+    })
+    .catch(function () { ibActMsg('Connection error. Please try again.'); });
+}
+
+function ibStyleName() {
+  if (!IB.style) return '';
+  if (IB.style.indexOf('custom:') === 0) {
+    var id = IB.style.slice(7);
+    var s = (IB.customStyles || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return s ? ('Custom: ' + (s.name || 'Untitled')) : 'Custom style';
+  }
+  return artStyleName(IB.style);
+}
+
+function ibChipsHtml() {
+  var c = IB.chars.map(function (x, i) {
+    return '<span class="review-chip" title="' + escapeHtml(x.label || '') + '">' + escapeHtml(charDisplayName(x.name)) +
+      (x.label && x.look !== 'original' ? ' <span style="opacity:0.65;">(' + escapeHtml(x.label) + ')</span>' : '') +
+      '<button class="review-chip-x" title="Remove" onclick="ibRemoveChar(' + i + ')">&#215;</button></span>';
+  }).join('');
+  var a = IB.assets.map(function (x, i) {
+    return '<span class="review-chip review-chip-asset">' + escapeHtml(x.name) +
+      '<button class="review-chip-x" title="Remove" onclick="ibRemoveAsset(' + i + ')">&#215;</button></span>';
+  }).join('');
+  var full = (IB.chars.length + IB.assets.length) >= IB.maxRefs;
+  return '<div class="review-row"><span class="review-label">Characters</span>' + (c || '<span class="review-none">none</span>') +
+      (full ? '' : '<button class="review-add-btn" onclick="ibAddChar()">+ Add character</button>') + '</div>' +
+    '<div class="review-row"><span class="review-label">Assets</span>' + (a || '<span class="review-none">none</span>') +
+      (full ? '' : '<button class="review-add-btn" onclick="ibAddAsset()">+ Add asset</button>') +
+      '<button class="review-add-btn" onclick="ibGoAssets()">Go to Assets</button></div>' +
+    '<div class="ib-meta" style="margin-top:4px;">' + (IB.chars.length + IB.assets.length) + ' of ' + IB.maxRefs + ' reference pictures.</div>';
+}
+
+function ibRender() {
+  var root = document.getElementById('ib-root'); if (!root) return;
+  ibReadForm();
+  var camps = IB.campaigns || [];
+  var head = camps.length
+    ? '<div class="ib-head"><span class="ib-lbl" style="margin:0;">Campaign</span><b style="font-size:16px;">' + (IB.cid ? escapeHtml(IB.cname) : '<span style="opacity:0.6;">No campaign chosen</span>') + '</b>' +
+      '<button class="btn btn-sm" onclick="ibPickCampaign()">' + (IB.cid ? 'Change' : 'Choose a campaign') + '</button>' +
+      // v3.3.84 -- Ian: on the campaign line, buttons to the campaign, its Assets and its Archive.
+      (IB.cid ? '<span style="flex:1;"></span><button class="btn btn-sm" onclick="ibGoCampaign(\'sessions\')" title="Open this campaign">Campaign</button>' +
+        '<button class="btn btn-sm" onclick="ibGoCampaign(\'assets\')" title="This campaign\u2019s Asset Library">Assets</button>' +
+        '<button class="btn btn-sm" onclick="ibGoCampaign(\'archives\')" title="This campaign\u2019s Archive">Archive</button>' : '') + '</div>'
+    : '<div class="ib-meta" style="margin-bottom:12px;">Pictures are made for a campaign. Create one to start.</div>' +   // v3.4.01 -- and a button to do it (testers)
+      '<button class="btn btn-primary btn-sm" type="button" onclick="openCampaignModal()">Create a campaign</button>'   /* v3.4.04 -- over this page: no My Campaigns tour on top of it (testers) */;
+  if (!IB.cid) { root.innerHTML = head + (camps.length ? '<div class="ib-meta">Choose a campaign to start. Its characters, assets, lore and gallery come with it.</div>' : ''); return; }
+  var tabs = '<div class="ib-tabs">' +
+    '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? '' : ' on') + '" onclick="ibTab(\'make\')">Make a picture</button>' +
+    '<button type="button" class="ib-tab' + (IB.tab === 'gallery' ? ' on' : '') + '" id="ib-tab-gallery" onclick="ibTab(\'gallery\')">' + ibGalleryLabel() + '</button></div>';
+  if (IB.tab === 'gallery') {
+    root.innerHTML = head + tabs +
+      '<div class="ib-meta" style="margin-bottom:12px;">Every picture made in ' + escapeHtml(IB.cname) + ', by any member. Only the campaign\u2019s members can see them. Click one to open it.</div>' +
+      '<div id="ib-gallery" class="ib-gal">' + ibGalleryHtml() + '</div>';
+    ibGalleryBusy();
+    return;
+  }
+  var typeOpts = '<option value="">None \u2014 just my description</option>' + (IB.types || []).map(function (t) {
+    return '<option value="' + escapeHtml(t.key) + '"' + (IB.type === t.key ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>';
+  }).join('');
+  // v3.3.80 -- Ian: the Image name on top, then one accordion panel per part of the recipe, as the Prep & Preview
+  // pane does (prep-acc). Each remembers open / closed; a closed one shows its choice in its header.
+  root.innerHTML = head + tabs +
+    '<div class="ib-make">' +
+    '<div class="ib-card" id="ib-form">' +
+      '<div class="ib-sec"><div class="ib-lbl">Image name<span class="ib-req">required</span></div>' +
+        '<input class="ib-in" id="ib-name" maxlength="80" placeholder="A name for the gallery" value="' + escapeHtml(IB.name) + '" onchange="ibNameChanged()"></div>' +   // v3.3.83 -- saves on blur
+      ibAccHtml('refs', 'References', '<div id="ib-chips">' + ibChipsHtml() + '</div>') +
+      // v3.3.97 -- Image type sits under References (Ian); Shape and Art style follow it.
+      ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
+        '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml() +
+        (IB.type === 'handout' ? '<div id="ib-ho-sec" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);"><div class="ib-lbl">Handout text</div>' + ibHandoutBody() + '</div>' : '')) +   // v3.3.86; v3.3.93 -- the handout's words, under the dropdown
+      ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
+      ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
+      ibAccHtml('desc', 'Description',
+        '<textarea class="ib-in" id="ib-desc" rows="5" maxlength="1500" placeholder="What should the picture show?" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.desc) + '</textarea>' +
+        '<div class="ib-meta" id="ib-desc-count" style="text-align:right;margin-top:2px;">' + ibCountText(IB.desc) + '</div>' +   // v3.4.04
+        '<label style="display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer;margin-top:10px;"><input type="checkbox" id="ib-lore"' + (IB.lore ? ' checked' : '') + ' onchange="ibReadForm();ibAccRefresh()"> Include the campaign\u2019s lore</label>') +
+      // v3.3.93 -- the handout's words moved into the Image type panel (Ian).
+      ibAccHtml('title', 'Title', ibTitleBody()) +   // v3.3.83
+    '</div>' +
+    '<div class="ib-viewer" id="ib-viewer"></div>' +
+    '</div>';
+  ibPaintViewer();
+  try { maybeStartTour('image-builder'); } catch (e) {}   // v3.3.99 -- its tour, once (no-op once seen or while one runs)
+}
+// v3.3.80 -- the accordion panels. Open / closed is kept per panel on this computer (localStorage, wrapped: it can
+// throw or be empty); every panel starts open.
+var IB_ACC_KEY = 'ibAccClosed';
+function ibAccClosed() { try { var v = JSON.parse(window.localStorage.getItem(IB_ACC_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+function ibAccHtml(key, title, body) {
+  var shut = !!ibAccClosed()[key];
+  return '<div class="prep-acc ib-acc' + (shut ? '' : ' open') + '" id="ib-acc-' + key + '">' +
+    '<button class="prep-acc-head" type="button" onclick="ibAccToggle(\'' + key + '\')" aria-expanded="' + (shut ? 'false' : 'true') + '">' +
+      '<span class="ib-acc-title">' + title + '<span class="ib-acc-sum" id="ib-acc-sum-' + key + '">' + escapeHtml(ibAccSummary(key)) + '</span></span>' +
+      '<span class="prep-acc-chev">&#9662;</span></button>' +
+    '<div class="prep-acc-body"' + (shut ? ' style="display:none;"' : '') + '>' + body + '</div></div>';
+}
+function ibAccSet(key, open) {
+  var acc = document.getElementById('ib-acc-' + key); if (!acc) return;
+  var body = acc.querySelector('.prep-acc-body'), head = acc.querySelector('.prep-acc-head');
+  if (body) body.style.display = open ? '' : 'none';
+  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  acc.classList.toggle('open', !!open);
+  var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
+  try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
+}
+function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
+function ibAccSummary(key) {
+  if (key === 'refs') {
+    var n = IB.chars.length, m = IB.assets.length;
+    return (n || m) ? (n + ' character' + (n === 1 ? '' : 's') + ', ' + m + ' asset' + (m === 1 ? '' : 's')) : 'none';
+  }
+  if (key === 'shape') { var s = _rpShapeByKey(IB.shape); return s ? (s.label + ' ' + s.w + ':' + s.h) : 'not chosen'; }
+  if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
+  if (key === 'type') { var t = (IB.types || []).filter(function (x) { return x.key === IB.type; })[0]; return t ? (t.label + (IB.typeText ? ' \u00b7 edited' : '') + (IB.type === 'handout' && String(IB.ho.text || '').trim() ? ' \u00b7 text' : '')) : 'None'; }   // v3.3.93 -- text   // v3.3.86 -- edited
+  if (key === 'desc') { var d = String(IB.desc || '').trim(); return (d ? (d.length > 40 ? d.slice(0, 40) + '\u2026' : d) : 'empty') + (IB.lore ? ' \u00b7 lore' : ''); }
+  if (key === 'handout') { var hx = String(IB.ho.text || '').trim().split('\n')[0]; return hx ? (hx.length > 30 ? hx.slice(0, 30) + '\u2026' : hx) + (IB.ho.url && IB.ho.pos ? ' \u00b7 placed' : '') : 'empty'; }   // v3.3.92
+  if (key === 'title') { var tt = String(IB.ttl.title || '').trim(); return tt ? ((tt.length > 30 ? tt.slice(0, 30) + '\u2026' : tt) + (IB.ttl.url ? ' \u00b7 lettering' : '')) : 'none'; }   // v3.3.83
+  return '';
+}
+// v3.4.04 -- the 1,500-character boxes say how full they are (testers: a paste lost its tail without a word).
+var IB_TEXT_MAX = 1500;
+function ibCountText(s) { var n = String(s || '').length; return (n >= IB_TEXT_MAX * 0.93 ? '<span style="color:#e8a85a;">' : '<span>') + n.toLocaleString() + ' / ' + IB_TEXT_MAX.toLocaleString() + '</span>'; }
+function ibCountPaint() {
+  var d = document.getElementById('ib-desc-count'); if (d) d.innerHTML = ibCountText(IB.desc);
+  var h = document.getElementById('ib-ho-count'); if (h) h.innerHTML = ibCountText(IB.ho && IB.ho.text);
+}
+function ibAccRefresh() {
+  ibCountPaint();   // v3.4.04
+  ['refs', 'shape', 'style', 'type', 'desc', 'handout', 'title'].forEach(function (k) { var el = document.getElementById('ib-acc-sum-' + k); if (el) el.textContent = ibAccSummary(k); });
+  var tn = document.getElementById('ib-type-note'); if (tn) tn.innerHTML = ibTypeNoteHtml();   // v3.3.86
+}
+// v3.3.86 -- THE TYPE'S INSTRUCTIONS, FOR THIS PICTURE. Ian: "they need to be able to see and edit the prompt for that
+// selection just for that image generation... in case there are conflicts". A link under the dropdown opens the type's
+// text; edits are saved with this picture only (Regen and Make My Copy keep them), Reset brings the standard text back.
+function ibTypeDefault(key) { var t = (IB.types || []).filter(function (x) { return x.key === key; })[0]; return (t && t.text) || ''; }
+function ibTypeNoteHtml() {
+  return (IB.type === 'character' && IB.chars.length > 1) ? 'A Character Study works best with one character. With ' + IB.chars.length + ', it will do what it can.' : '';
+}
+function ibTypeEditHtml() {
+  var note = '<div class="ib-meta" id="ib-type-note" style="margin-top:6px;color:var(--gold-light);">' + ibTypeNoteHtml() + '</div>';
+  if (!IB.type || !ibTypeDefault(IB.type)) return note;
+  return note + '<div style="margin-top:6px;"><a href="#" onclick="ibTypeEditToggle();return false;" style="font-size:13px;">' + (IB.typeEditOpen ? 'Hide instructions' : 'See / edit instructions') + '</a></div>' +
+    '<div id="ib-type-edit"' + (IB.typeEditOpen ? '' : ' style="display:none;"') + '>' +
+      '<textarea class="ib-in" id="ib-type-text" data-type="' + escapeHtml(IB.type) + '" rows="8" maxlength="2500" style="margin-top:6px;font-size:13px;" oninput="ibReadForm();ibAccRefresh()">' + escapeHtml(IB.typeText || ibTypeDefault(IB.type)) + '</textarea>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><button class="btn btn-sm" type="button" onclick="ibTypeReset()">Reset</button>' +
+      '<span class="ib-meta">Changes apply to this picture only.</span></div></div>';
+}
+function ibTypeEditToggle() { ibReadForm(); IB.typeEditOpen = !IB.typeEditOpen; ibRender(); }
+function ibTypeReset() { var ta = document.getElementById('ib-type-text'); if (ta) ta.value = ibTypeDefault(IB.type); IB.typeText = ''; ibAccRefresh(); }
+// A new type brings its own text; edited text is replaced only after asking.
+async function ibTypeChanged() {
+  var sel = document.getElementById('ib-type'); if (!sel) return;
+  var next = sel.value;
+  sel.value = IB.type || '';
+  ibReadForm();   // read the form as it stood, with the old type's text
+  if (IB.typeText && !await uiConfirm('Change the image type? Your edited instructions will be replaced by the new type\u2019s.', { okText: 'Change', cancelText: 'Keep' })) return;
+  sel.value = next;
+  var ta = document.getElementById('ib-type-text'); if (ta) { ta.value = ibTypeDefault(next); ta.setAttribute('data-type', next); }
+  IB.type = next; IB.typeText = '';
+  ibRender();
+}
+
+function ibGalleryHtml() {
+  if (!IB.images.length) return '<div class="ib-meta">No pictures yet. Make one on the Make a picture tab.</div>';
+  return IB.images.map(function (im) {
+    var mine = String(im.user_id) === String(IB.me);
+    var busy = ibBusy(im), pic;
+    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
+    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
+    if (mine && !im.ready) pic = pic.replace('<div class="ib-pic', '<div style="position:relative;"><span class="ib-draft">Draft</span><div class="ib-pic') + '</div>';
+    var btns = '';
+    if (mine && !busy && (im.image_url || im.status === 'failed')) btns += '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>';
+    if (!mine && im.image_url && !busy) btns += '<button class="btn btn-sm" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>';
+    return '<div class="ib-img">' + pic +
+      '<b style="font-size:14px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
+      '<div class="ib-meta">' + escapeHtml(ibBits(im)) + '</div>' +
+      '<div class="ib-meta">By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
+      (btns ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + btns + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function ibPaintGallery() {
+  var t = document.getElementById('ib-tab-gallery'); if (t) t.textContent = ibGalleryLabel();
+  var g = document.getElementById('ib-gallery'); if (g) { g.innerHTML = ibGalleryHtml(); ibGalleryBusy(); }
+  ibPaintViewer();
+}
+function ibPaintChips() { var c = document.getElementById('ib-chips'); if (c) c.innerHTML = ibChipsHtml(); ibAccRefresh(); }
+
+function ibView(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
+  if (im && im.image_url) openLightbox(im.image_url, im.name || '');
+}
+// The Make tab's viewer: the picture being worked on (just generated, or opened from the Gallery), as big as the
+// pane allows at its own shape; before any, an empty frame in the chosen shape. A picture still drawing gets the
+// Storyboard's Generating spinner (showBusyOverlay), so it looks the same as a panel being drawn.
+function ibGalleryLabel() { return 'Gallery' + (IB.images.length ? ' (' + IB.images.length + ')' : ''); }
+function ibBits(im) {
+  var type = '';
+  (IB.types || []).forEach(function (t) { if (t.key === im.image_type) type = t.label; });
+  return [type, (_rpShapeByKey(im.shape) || {}).label, im.art_style_name ? ('Custom: ' + im.art_style_name) : artStyleLabel(im.art_style)].filter(Boolean).join(' \u00b7 ');
+}
+function ibFrameStyle(w, h) {
+  // v3.3.73 -- Fit: as wide as the pane, and no taller than the window less room for the zoom row and the caption
+  // (Ian: bigger, not the whole window). Zoomed: Fit times the zoom, never wider than the pane (.ib-frame max-width),
+  // so the whole picture stays on the page and a tall one simply makes the page longer (v3.3.75).
+  var fit = 'min(100%, (100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + ')';
+  return 'aspect-ratio:' + w + ' / ' + h + ';width:' + (IB.zoom ? 'calc(' + fit + ' * ' + IB.zoom + ');' : 'calc(' + fit + ');');
+}
+function ibViewerHtml() {
+  var im = IB.viewId ? IB.images.filter(function (x) { return String(x.id) === String(IB.viewId); })[0] : null;
+  // v3.3.76 -- one toolbar above the picture (Ian): Generate and New picture on the left, the zoom row on the right,
+  // and the form's messages (a missing field, out of tokens) just under it, where the button is.
+  var bar = '<div class="ib-bar">' +
+    '<div class="ib-bar-left">' +
+      '<button class="btn btn-primary btn-sm" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
+      '<button class="btn btn-sm" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
+      '<span id="ib-bar-state" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">@@IBSTATE@@</span>' +   // v3.3.77 -- Draft / Ready
+    '</div>' +
+    '<div class="ib-zoom" title="Zoom the picture">' +
+      '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
+      '<span id="ib-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
+      '<button class="btn btn-sm" onclick="ibZoomStep(0.1)" title="Zoom in">+</button>' +
+      '<button class="btn btn-sm" onclick="ibZoomFit()" title="Fit the picture to the pane">Fit</button>' +
+    '</div></div>' +
+    '<div id="ib-msg" class="ib-err" style="width:100%;"></div>';
+  if (!im) {
+    var s = _rpShapeByKey(IB.shape) || { w: 4, h: 3, label: 'Standard' };
+    return bar.replace('@@IBSTATE@@', '') + '<div class="ib-scroll"><div class="ib-frame" style="' + ibFrameStyle(s.w, s.h) + '"><div class="ib-empty">Your picture appears here.<br>' + escapeHtml(s.label) + ' ' + s.w + ':' + s.h + '</div></div></div>';
+  }
+  var shp = _rpShapeByKey(im.shape) || { w: 4, h: 3 };
+  var w = im.img_w || shp.w, h = im.img_h || shp.h;
+  var mine = String(im.user_id) === String(IB.me);
+  var busy = ibBusy(im);
+  var inner;
+  if (im.image_url) inner = '<img src="' + escapeHtml(im.image_url) + '" alt="' + escapeHtml(im.name) + '" onclick="ibView(' + im.id + ')">';
+  else if (im.status === 'failed') inner = '<div class="ib-err" style="padding:16px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div>';
+  else inner = '';
+  // v3.3.76 -- the picture's buttons sit ON the picture, as the Story panels' pills do (panel-img-actions /
+  // panel-pill: shown on hover, always shown on a phone). Nothing that changes the picture while it is being drawn.
+  var p = [];
+  if (!busy) {
+    if (mine) {
+      p.push('<button class="panel-pill" onclick="ibEditPrompt(' + im.id + ')" title="Change the words the picture is drawn from">Edit Prompt</button>');
+      p.push('<button class="panel-pill" onclick="ibRegen(' + im.id + ')" title="Draw this picture again from the same prompt (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Regen</button>');
+      // v3.3.85 -- Apply title: the Title section's lettering laid on this picture (free); Without title: the clean copy.
+      // v3.3.87 -- Apply title is in the Title section now (Ian), not on the picture.
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibRetouch(' + im.id + ')" title="Change one thing in the picture (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')">Retouch</button>');   // v3.3.82
+      if (im.has_prev) p.push('<button class="panel-pill" onclick="ibRevert(' + im.id + ')" title="Swap back to the picture before the last Regen or Retouch">Revert</button>');
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
+      if (im.image_url) p.push('<button class="panel-pill" onclick="ibSaveAsset(' + im.id + ')" title="Make it a campaign asset (an NPC, item or location); you can frame part of it">Save as Asset</button>');   // v3.3.82
+      if (im.has_clean && im.clean_url) p.push('<button class="panel-pill" onclick="ibViewClean(' + im.id + ')" title="The clean copy, without the title">Without ' + (ibLaidOnWords(im) === 'the title' ? 'title' : (ibLaidOnWords(im) === 'the text' ? 'text' : 'title and text')) + '</button>');   // v3.3.85; v3.3.95 -- names what is laid on
+      if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
+    } else if (im.image_url) {
+      p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
+    }
+  }
+  var pills = p.length ? '<div class="panel-img-actions ib-pills">' + p.join('') + '</div>' : '';
+  // Draft / Ready: in the toolbar beside Generate and New picture (v3.3.77, Ian), for the maker's own picture only.
+  var state = '';
+  if (mine) {
+    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
+      (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
+  }
+  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
+    '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
+      '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
+      '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
+      (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
+      (ibHoWaiting(im, mine, busy) ? '<div class="ib-meta" style="color:var(--gold-light);">Next: drag your writing onto the picture (in the Image type panel), size it with the yellow corner square, then press Apply writing here.</div>' : '') +   // v3.4.01
+      '<div id="ib-act-msg" class="ib-err"></div>' +
+    '</div>';
+}
+
+// v3.3.73 -- zoom, as the Prep & Preview row: 10% steps, 50%..300%, "Fit" until zoomed; kept until Fit is pressed.
+var IB_ROOM = 190;
+function ibZoomStep(d) {
+  var z = Math.round(((IB.zoom || 1) + d) * 100) / 100;
+  // v3.3.75 -- the largest zoom that still fits the pane's width: no more than that, and never above 300%.
+  var maxZ = 3, f = document.querySelector('#ib-viewer .ib-frame'), v = document.getElementById('ib-viewer');
+  if (f && v && f.getBoundingClientRect().width > 0) maxZ = Math.max(1, Math.min(3, Math.floor(v.clientWidth / (f.getBoundingClientRect().width / (IB.zoom || 1)) * 100) / 100));
+  IB.zoom = Math.min(maxZ, Math.max(0.5, z));
+  if (Math.abs(IB.zoom - 1) < 0.001) IB.zoom = null;
+  ibPaintViewer();
+}
+function ibZoomFit() { IB.zoom = null; ibPaintViewer(); }
+// v3.3.73 -- Draft / Ready (the maker only; the server checks).
+function ibReady(id, ready) {
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/ready', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ready: !!ready }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && (d.message || d.error)) || 'Could not change the picture.'); return; }
+      IB.images.forEach(function (x) { if (String(x.id) === String(id)) x.ready = !!d.ready; });
+      ibPaintGallery();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+// v3.3.73 -- New picture: a blank Make tab. Keeps the campaign, shape and art style; clears the rest. Nothing is
+// deleted (the last picture stays in the Gallery). Asks first only when there is typed text to lose.
+async function ibNew() {
+  ibReadForm();
+  if ((IB.desc.trim() || IB.name.trim()) && !await uiConfirm('Start a new picture? This clears the description, name, image type and references. Your pictures stay in the Gallery.', { okText: 'Clear', cancelText: 'Keep' })) return;
+  ibClearForm(false);
+  IB.tab = 'make';
+  ibRender();
+}
+// v3.3.81 -- empties the form, in IB AND in the page: ibRender reads the page back into IB first, so clearing only
+// IB left the old name and description in place. everything: also the shape and art style (a campaign change);
+// New picture keeps those.
+function ibClearForm(everything) {
+  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null; IB.typeText = '';   // v3.3.86 -- typeText
+  if (everything) { IB.shape = 'standard'; IB.style = ''; IB.zoom = null; }
+  var d = document.getElementById('ib-desc'); if (d) d.value = '';
+  var n = document.getElementById('ib-name'); if (n) n.value = '';
+  var t = document.getElementById('ib-type'); if (t) t.value = '';
+  var l = document.getElementById('ib-lore'); if (l) l.checked = true;
+  IB.ttl = ibTtlBlank(); IB.ttlDraft = null; ibTtlFields();   // v3.3.83
+  IB.ho = ibHoBlank(); IB.hoPlacing = null; ibHoFields();   // v3.3.92
+}
+// v3.3.83 -- the Title fields, set from IB.ttl (ibRender reads the page back into IB first).
+function ibTtlFields() {
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-ttl-title', IB.ttl.title); set('ib-ttl-sub', IB.ttl.subtitle); set('ib-ttl-place', IB.ttl.place); set('ib-ttl-size', IB.ttl.size);
+}
+function ibPaintViewer() {
+  var v = document.getElementById('ib-viewer'); if (!v) return;
+  v.innerHTML = ibViewerHtml();
+  v.style.position = IB.zoom ? 'static' : '';
+  ibTtlApplyPaint();   // v3.3.87 -- the Title section's Apply button follows the picture
+  ibPlaceMount();      // v3.3.89 -- the title being placed, if any
+  ibHoMount();         // v3.3.92 -- the handout's writing being placed, if any
+  ibHoApplyPaint();   // v3.3.75 -- a zoomed picture scrolls with the page instead of staying pinned
+  var f = document.getElementById('ib-frame');
+  if (f && f.getAttribute('data-pending') === '1') {
+    if (f.getAttribute('data-regen') === '1') showBusyOverlay(f, 'Regenerating', 'Drawing it again\u2026');
+    else showBusyOverlay(f, 'Generating', 'Drawing your picture\u2026');
+  }
+}
+function ibGalleryBusy() {
+  Array.prototype.forEach.call(document.querySelectorAll('#ib-gallery .ib-pending'), function (el) {
+    var im = IB.images.filter(function (x) { return String(x.id) === el.getAttribute('data-id'); })[0];
+    showBusyOverlay(el, im && im.image_url ? 'Regenerating' : 'Generating');
+  });
+}
+function ibTab(t) {
+  ibReadForm();
+  IB.tab = (t === 'gallery') ? 'gallery' : 'make';
+  ibRender();
+}
+// A Gallery picture opens in the Make tab's viewer, and its recipe replaces EVERY field on the left (v3.3.91 -- Ian:
+// "if you load up a picture from the gallery... it clears and replaces ALL the fields". Someone else's used to leave the
+// form as it was, so the last picture's description sat beside a different picture). Generate then makes a new picture
+// of your own from it; Regen, Retouch and the rest still act only on your own pictures.
+function ibOpen(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
+  IB.viewId = id;
+  IB.tab = 'make';
+  if (im) ibLoadRecipe(im);   // v3.3.91 -- every picture, yours or not
+  ibRender();
+  var v = document.getElementById('ib-viewer'); if (v && v.scrollIntoView) { try { v.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+}
+function ibLoadRecipe(im) {
+  var refs = im.refs || {};
+  IB.desc = im.description || ''; IB.name = im.name || ''; IB.type = (im.image_type === 'creature') ? 'character' : (im.image_type || ''); IB.lore = im.include_lore !== false;   // v3.3.92 -- creature is character
+  IB.typeText = refs.type_text || '';   // v3.3.86
+  var _tt = document.getElementById('ib-type-text'); if (_tt) { _tt.value = IB.typeText || ibTypeDefault(IB.type); _tt.setAttribute('data-type', IB.type); }
+  if (im.shape) IB.shape = im.shape;
+  if (im.art_style) IB.style = im.art_style;
+  IB.chars = (refs.characters || []).map(function (c) { return { id: c.id, name: c.name, look: c.look, label: c.label }; });
+  IB.assets = (refs.assets || []).map(function (a) { return { id: a.id, name: a.name, category: a.category }; });
+  // ibRender reads the form back first; put the recipe into the fields so it is what gets read.
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
+  var l = document.getElementById('ib-lore'); if (l) l.checked = IB.lore;
+  IB.ttl = Object.assign(ibTtlBlank(), (refs.title && typeof refs.title === 'object') ? refs.title : {}); IB.ttlDraft = null;   // v3.3.83
+  if (IB.ttl.off) { if (IB.ttl.url) IB.ttlDraft = { url: IB.ttl.url, src: IB.ttl.src || '' }; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; }   // v3.4.01 -- a title taken off stays out of the form, as after Remove
+  delete IB.ttl.off; ibTtlFields();
+  IB.ho = Object.assign(ibHoBlank(), (refs.handout && typeof refs.handout === 'object') ? refs.handout : {}); IB.hoPlacing = null; ibHoFields();   // v3.3.92
+}
+// Drawing right now: a first Generate, or a Regen of a picture already on show.
+function ibBusy(im) { return !!im && (im.status === 'queued' || im.status === 'processing'); }
+
+// Loads what the chosen campaign brings: its custom art styles (for the style window) and its gallery.
+function ibLoadCampaign() {
+  var cid = IB.cid, seq = ++IB.loadSeq;
+  fetch('/api/art-styles/custom/available/' + encodeURIComponent(cid), { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (seq !== IB.loadSeq) return; IB.customStyles = Array.isArray(d) ? d : []; var b = document.getElementById('ib-style-btn'); if (b && IB.style) b.textContent = ibStyleName(); })
+    .catch(function () {});
+  ibLoadGallery();
+}
+
+function ibLoadGallery() {
+  var cid = IB.cid; if (!cid) return;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/images', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (String(IB.cid) !== String(cid)) return;
+      if (!d || d.error) { var g = document.getElementById('ib-gallery'); if (g) g.innerHTML = '<div class="ib-err">' + escapeHtml((d && d.error) || 'Could not load the gallery.') + '</div>'; return; }
+      // v3.4.01 -- one of mine finished drawing since the last look: the token count at the top now, not 20 s later.
+      var _wasBusy = {}; (IB.images || []).forEach(function (x) { if (ibBusy(x)) _wasBusy[x.id] = 1; });
+      IB.images = d.images || []; IB.me = d.me;
+      var _landed = IB.images.some(function (x) { return _wasBusy[x.id] && !ibBusy(x) && String(x.user_id) === String(IB.me); });
+      if (_landed && typeof refreshTokenBalance === 'function') { refreshTokenBalance(); setTimeout(refreshTokenBalance, 3000); }
+      // Repaint only when something changed, so a spinner keeps turning between polls instead of restarting.
+      var sig = IB.images.map(function (im) { return im.id + ':' + im.status + ':' + (im.image_url || ''); }).join('|');
+      if (sig !== IB.sig) { IB.sig = sig; ibPaintGallery(); }
+      ibSchedulePoll();
+    })
+    .catch(function () {});
+}
+
+// While any picture is still being drawn, the gallery asks again every few seconds -- anyone's, so a member
+// watching sees another member's picture arrive. Stops when nothing is pending or the page is left.
+function ibStopPoll() { if (IB.poll) { clearTimeout(IB.poll); IB.poll = null; } }
+function ibSchedulePoll() {
+  ibStopPoll();
+  var pending = IB.images.some(ibBusy);
+  if (!pending) return;
+  IB.poll = setTimeout(function () {
+    IB.poll = null;
+    if (state.currentView !== 'image-builder') return;
+    ibLoadGallery();
+  }, 4000);
+}
+// ---------------------------------------------------------------- v3.3.74, stage 2: the buttons on a picture
+function ibImg(id) { return IB.images.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+function ibActMsg(t) { var m = document.getElementById('ib-act-msg'); if (m) m.innerHTML = t || ''; }
+function ibPut(img) {   // replace (or add) a row from the server and redraw
+  if (!img) return;
+  var found = false;
+  IB.images = IB.images.map(function (x) { if (String(x.id) === String(img.id)) { found = true; return img; } return x; });
+  if (!found) IB.images.unshift(img);
+  ibPaintGallery(); ibSchedulePoll();
+}
+function ibPost(url, body, cb) {
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) {
+        if (d && d.error === 'INSUFFICIENT_TOKENS') { ibActMsg(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+        ibActMsg(escapeHtml((d && (d.message || d.error)) || 'Something went wrong. Please try again.'));
+        return;
+      }
+      cb(d);
+    })
+    .catch(function () { ibActMsg('Connection error. Please try again.'); });
+}
+function ibRegen(id) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/regen', {}, function (d) {
+    ibPut(d.image);
+    if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+  });
+}
+function ibRevert(id) { ibActMsg(''); ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/revert', {}, function (d) { ibPut(d.image); if (d.image && String(IB.viewId) === String(d.image.id)) ibSyncLayers(d.image); }); }
+// v3.4.01 -- after Revert, the Title section and the handout's writing follow the picture's recipe: a title on the
+// picture shows its lettering (and Remove title); a title taken off keeps its drawing in the Title Builder, as Remove does.
+function ibSyncLayers(im) {
+  var r = im.refs || {}, t = (r.title && typeof r.title === 'object') ? r.title : null, h = (r.handout && typeof r.handout === 'object') ? r.handout : null;
+  IB.ttl = Object.assign(ibTtlBlank(), t || {});
+  if (t && t.off) { IB.ttlDraft = t.url ? { url: t.url, src: t.src || '' } : IB.ttlDraft; IB.ttl.url = ''; IB.ttl.src = ''; IB.ttl.pos = null; }
+  delete IB.ttl.off;
+  if (h) { IB.ho = Object.assign(ibHoBlank(), h); delete IB.ho.off; }
+  IB.placing = null; IB.hoPlacing = null;
+  ibTtlFields(); ibHoFields(); ibRender();
+}
+// v3.3.85 -- a picture with a clean copy asks which version first.
+function ibWhichCopy(id, verb) {
+  var im = ibImg(id);
+  if (!im || !im.has_clean) return Promise.resolve(false);
+  // v3.3.95 -- Ian: "With Title and Text... Without title and text." The choice names what is laid on.
+  var what = ibLaidOnWords(im);
+  return uiChoose(verb, 'This picture has ' + what + ' laid on it. Which version?', ['With ' + what, 'Without ' + what + ' (the clean copy)'])
+    .then(function (i) { return i === null ? null : i === 1; });
+}
+// v3.3.95 -- what is laid on a picture, in words: "the title", "the text", or "the title and text".
+function ibLaidOnWords(im) {
+  var t = ibLayerOn(im, 'title'), h = ibLayerOn(im, 'handout');
+  return (t && h) ? 'the title and text' : (h ? 'the text' : 'the title');
+}
+async function ibArchive(id) {
+  ibActMsg('');
+  var clean = await ibWhichCopy(id, 'Archive'); if (clean === null) return;
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/archive', { clean: clean }, function (d) {
+    showAlert(d.already ? 'This picture is already in the campaign\u2019s Archive.' : 'Archived. It is in the campaign\u2019s Archive, ready to use as a cover, title picture or replacement.');
+  });
+}
+function ibCopy(id) {
+  ibActMsg('');
+  ibPost('/api/images/builder/images/' + encodeURIComponent(id) + '/copy', {}, function (d) {
+    if (!d.image) return;
+    IB.images.unshift(d.image);
+    IB.sig = '';
+    ibOpen(d.image.id);
+  });
+}
+// Edit Prompt: the whole prompt last sent (read only) and the picture's own words (editable); Save, or Save & Regen.
+function ibEditPrompt(id) {
+  var im = ibImg(id); if (!im) return;
+  ibClosePrompt();
+  var overlay = document.createElement('div');
+  overlay.id = 'ib-prompt-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) ibClosePrompt(); });
+  overlay.innerHTML =
+    '<div class="prep-img-modal-box" style="max-width:760px;">' +
+      '<div class="prep-img-modal-head"><div class="prep-img-modal-title">Edit prompt \u2014 ' + escapeHtml(im.name || 'Untitled') + '</div>' +
+        '<button type="button" class="prep-img-modal-x" onclick="ibClosePrompt()">&times;</button></div>' +
+      '<div style="overflow-y:auto;color:#f0e8d0;">' +
+        '<div class="ib-lbl">The picture\u2019s words</div>' +
+        '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
+        '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
+        '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:#e8d49a;">The whole prompt last sent</summary>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
+        '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
+        '<button class="btn btn-sm" onclick="ibClosePrompt()">Cancel</button>' +
+        '<button class="btn btn-sm" onclick="ibSavePrompt(' + im.id + ', false)">Save</button>' +
+        '<button class="btn btn-sm btn-primary" onclick="ibSavePrompt(' + im.id + ', true)">Save &amp; Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>' +
+      '</div></div>';
+  document.body.appendChild(overlay);
+}
+// v3.3.82 -- Retouch: the Story panels' Retouch window, pointed at this picture (its grid, markers and reference
+// picker; the references are the picture's own). Sent by submitRetouch's Builder branch to ibRetouchSend.
+function ibRetouch(id) {
+  var im = ibImg(id); if (!im || !im.image_url) return;
+  state.retouchMomentId = null; state.retouchTitle = null; state.retouchCharId = null; state.retouchSessionCharId = null; state.retouchAssetId = null;
+  state.retouchIb = id;
+  var ta = document.getElementById('retouch-instruction'); if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal'); if (modal) modal.classList.remove('hidden');
+  var refs = [];
+  ((im.refs && im.refs.characters) || []).forEach(function (c) { if (c && c.name) refs.push({ name: c.name, kind: 'character' }); });
+  ((im.refs && im.refs.assets) || []).forEach(function (a) { if (a && a.name) refs.push({ name: a.name, kind: 'asset', category: a.category || '' }); });
+  rgSetup('ib' + id, { url: im.clean_url || im.image_url, shape: im.shape, refs: refs });   // v3.3.85 -- the clean copy is what gets retouched
+  if (ta) setTimeout(function () { ta.focus(); }, 30);
+}
+function ibRetouchSend(id, instruction, snap, refName) {
+  var im = ibImg(id), was = im ? im.status : null;
+  var spin = function () { var f = document.getElementById('ib-frame'); if (f) { hideBusyOverlay(f); showBusyOverlay(f, 'Retouching', 'Applying your change\u2026'); } };
+  if (im) { im.status = 'queued'; ibPaintViewer(); spin(); }   // the Retouching spinner while the markers go up
+  var undo = function (msg) { var cur = ibImg(id); if (cur && cur.status === 'queued') { cur.status = was || 'done'; ibPaintViewer(); } ibActMsg(msg); };
+  rgUploadMarked(snap).then(function (markedUrl) {
+    return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null }) });
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) {
+      if (d && d.error === 'INSUFFICIENT_TOKENS') { undo(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+      undo(escapeHtml((d && (d.message || d.error)) || 'Could not retouch the picture.'));
+      return;
+    }
+    ibPut(d.image); spin();
+    if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+  }).catch(function () { undo('Connection error. Please try again.'); });
+}
+// v3.3.82 -- Save as Asset: the Archive's Copy to Assets window (name, type, crop frame), keyed 'ib:<id>'.
+async function ibSaveAsset(id) {
+  var im = ibImg(id); if (!im || !im.image_url) return;
+  var clean = await ibWhichCopy(id, 'Save as Asset'); if (clean === null) return;   // v3.3.85
+  IB.assetClean = clean;
+  _caArchiveId = 'ib:' + id;
+  var nameEl = document.getElementById('ca-name'), catEl = document.getElementById('ca-category'), errEl = document.getElementById('ca-error');
+  if (errEl) errEl.classList.add('hidden');
+  if (nameEl) nameEl.value = im.name || '';
+  if (catEl) catEl.value = (im.image_type === 'item') ? 'item' : ((im.image_type === 'character' || im.image_type === 'creature' || im.image_type === 'token') ? 'npc' : 'location');
+  var m = document.getElementById('copy-asset-modal'); if (m) m.classList.remove('hidden');
+  try { _caCropStart({ id: 'ib:' + id, image_url: (clean && im.clean_url) ? im.clean_url : im.image_url }); } catch (e) {}
+  if (nameEl) setTimeout(function () { nameEl.focus(); nameEl.select(); }, 0);
+}
+function ibSaveAssetSend(id, name, category, crop, errEl, saveBtn) {
+  if (!IB.cid) { closeCopyToAssetModal(); return; }
+  if (saveBtn) saveBtn.disabled = true;
+  fetch('/api/campaigns/' + encodeURIComponent(IB.cid) + '/assets/from-builder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ builder_image_id: id, name: name, category: category, crop: crop, clean: !!IB.assetClean }) })   // v3.3.85
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (saveBtn) saveBtn.disabled = false;
+      if (!d || d.error) { if (errEl) { errEl.textContent = (d && (d.message || d.error)) || 'Could not save it as an asset.'; errEl.classList.remove('hidden'); } return; }
+      closeCopyToAssetModal();
+      showAlert('Saved to the campaign\u2019s Assets as \u201c' + (d.name || name) + '\u201d.');
+    })
+    .catch(function () { if (saveBtn) saveBtn.disabled = false; if (errEl) { errEl.textContent = 'Could not save it as an asset.'; errEl.classList.remove('hidden'); } });
+}
+function ibClosePrompt() { var m = document.getElementById('ib-prompt-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibSavePrompt(id, andRegen) {
+  var ta = document.getElementById('ib-words'), msg = document.getElementById('ib-words-msg');
+  var words = ta ? ta.value : '';
+  if (!words.trim()) { if (msg) msg.textContent = 'The prompt can\u2019t be empty.'; return; }
+  fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/words', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ words: words }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { if (msg) msg.textContent = (d && (d.message || d.error)) || 'Could not save the prompt.'; return; }
+      var im = ibImg(id); if (im) im.words = d.words;
+      ibClosePrompt();
+      if (andRegen) ibRegen(id);
+    })
+    .catch(function () { if (msg) msg.textContent = 'Connection error. Please try again.'; });
+}
+
+function ibPickCampaign() {
+  ibReadForm();
+  _ci = { step: 'campaigns', mode: 'builder', onCampaign: function (id, name) {
+    if (String(id) === String(IB.cid)) return;
+    ibClearCampaign();
+    ibClearForm(true);   // v3.3.81 -- a new campaign starts a blank form (its pictures are already saved in the old campaign's gallery)
+    IB.cid = parseInt(id, 10); IB.cname = name;
+    ibRender(); ibLoadCampaign();
+  } };
+  var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
+  _ciCampaigns();
+}
+
+function ibAddChar() {
+  if (!IB.cid) return;
+  ibReadForm();
+  _ci = { step: 'characters', mode: 'builder', start: 'characters', source: String(IB.cid), sourceName: IB.cname, onLook: function (p) {
+    if (IB.chars.some(function (c) { return String(c.id) === String(p.charId); })) {
+      IB.chars = IB.chars.map(function (c) { return String(c.id) === String(p.charId) ? { id: c.id, name: p.charName, look: p.look, label: p.label } : c; });
+    } else if (IB.chars.length + IB.assets.length < IB.maxRefs) {
+      IB.chars.push({ id: parseInt(p.charId, 10), name: p.charName, look: p.look, label: p.label });
+    }
+    ibPaintChips();
+  } };
+  var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
+  _ciCharacters(String(IB.cid), IB.cname);
+}
+function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); }
+function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); }
+
+// The Add-an-asset window, in the Review tab's look, listing the chosen campaign's assets with a picture.
+function ibAddAsset() {
+  if (!IB.cid) return;
+  ibReadForm();
+  var cid = IB.cid;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/assets', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (String(IB.cid) !== String(cid)) return;
+      if (!d || d.error) { showError((d && d.error) || 'Could not load the assets.'); return; }
+      ibAssetPicker(d.assets || []);
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+function ibCloseAssetPicker() { var m = document.getElementById('ib-asset-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibAssetPicker(rows) {
+  ibCloseAssetPicker();
+  var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
+  var have = {}; IB.assets.forEach(function (a) { have[String(a.id)] = true; });
+  var items = rows.filter(function (a) { return !have[String(a.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'ib-asset-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseAssetPicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add an asset';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', ibCloseAssetPicker);
+  head.appendChild(h); head.appendChild(x);
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = rows.length ? 'Every asset with a picture is already added.' : 'This campaign has no assets with a picture yet. Make them in the Asset Library (Go to Assets).';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function (it) {
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + ' \u00b7 ' + (ACAT[it.category] || it.category || '');
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function () {
+        if (IB.chars.length + IB.assets.length < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
+        ibCloseAssetPicker(); ibPaintChips();
+      });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+// Go to Assets: the chosen campaign's Asset Library. The form is kept (IB), so coming back finds it as it was.
+function ibGoAssets() { ibGoCampaign('assets'); }
+// v3.3.84 -- the Builder's campaign: its Sessions page, Asset Library or Archive. The Assets and Archive pages' Back
+// comes back here (sectionBack); the campaign itself is a place you went to, so it has none.
+function ibGoCampaign(section) {
+  ibReadForm(); ibStopPoll();
+  var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(IB.cid); })[0];
+  if (!c) { showError('Open the campaign from My Campaigns first.'); return; }
+  selectCampaign(c.id);
+  showCampaignSection(section);
+  if (section === 'assets' || section === 'archives') _sectionBackFrom = 'image-builder';
+}
+
+function ibPickShape(k) {
+  if (!_rpShapeByKey(k)) return;
+  IB.shape = k;
+  var s = document.getElementById('ib-shapes'); if (s) s.innerHTML = _rpShapeStrip(IB.shape, 'ibPickShape');
+  ibAccRefresh();
+  // The empty frame follows the shape; a picture already on show keeps its own.
+  var viewing = IB.viewId && IB.images.some(function (x) { return String(x.id) === String(IB.viewId); });
+  if (!viewing) ibPaintViewer();
+}
+
+function ibOpenStyle() {
+  if (!IB.cid) return;
+  ibReadForm();
+  _ibStyleNext = true;
+  openStylePicker('art');
+}
+function ibSetStyle(id) {
+  IB.style = id;
+  var b = document.getElementById('ib-style-btn'); if (b) { b.textContent = ibStyleName(); b.classList.remove('ib-bad'); }
+  ibAccRefresh();
+}
+
+function ibMsg(text, field) {
+  var m = document.getElementById('ib-msg'); if (m) m.innerHTML = text || '';
+  ['ib-desc', 'ib-name', 'ib-style-btn', 'ib-shapes', 'ib-ttl-title'].forEach(function (id) { var el = document.getElementById(id); if (el) el.classList.remove('ib-bad'); });
+  // v3.3.80 -- the field's panel is opened first, so a missing field in a closed panel is seen.
+  var map = { description: ['desc', 'ib-desc'], style: ['style', 'ib-style-btn'], shape: ['shape', 'ib-shapes'], name: [null, 'ib-name'], title: ['title', 'ib-ttl-title'] };   // v3.3.83 -- title
+  // v3.4.01 -- one field, or several (the first is shaken and takes the cursor; the rest are outlined).
+  var _fs = Array.isArray(field) ? field : (field ? [field] : []);
+  _fs.slice().reverse().forEach(function (k, i) {
+    var f = map[k]; if (!f) return;
+    if (f[0]) ibAccSet(f[0], true);
+    var el = document.getElementById(f[1]);
+    if (!el) return;
+    el.classList.add('ib-bad');
+    if (i === _fs.length - 1) nagField(el, null, null);   // v3.3.93 -- the shake, on the first in the form
+  });
+}
+
+function ibGenerate() {
+  if (!IB.cid || IB.busy) return;
+  ibReadForm();
+  // v3.4.01 -- every missing field at once (testers: "you find out about your two mistakes one at a time"), in the
+  // order of the form; the first is shaken and takes the cursor, the others are outlined.
+  var _miss = [];
+  if (!IB.name.trim()) _miss.push(['name', 'Give the picture a name.', 'a name']);
+  if (!IB.shape) _miss.push(['shape', 'Choose a shape for the picture.', 'a shape']);
+  if (!IB.style) _miss.push(['style', 'Choose an art style.', 'an art style']);
+  if (!IB.desc.trim() && !IB.type) _miss.push(['description', 'Describe the picture you want, or choose an image type.', 'a description (or an image type)']);   // v3.3.81
+  if (_miss.length === 1) { ibMsg(_miss[0][1], _miss[0][0]); return; }
+  if (_miss.length > 1) {
+    var _ws = _miss.map(function (m) { return m[2]; });
+    ibMsg('Still needed: ' + _ws.slice(0, -1).join(', ') + ' and ' + _ws[_ws.length - 1] + '.', _miss.map(function (m) { return m[0]; }));
+    return;
+  }
+  ibMsg('');
+  IB.busy = true;
+  var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+  var cid = IB.cid;
+  var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
+    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }),
+      title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null }, type_text: (IB.type && IB.typeText) ? IB.typeText : null };   // v3.3.83; v3.3.86 -- type_text
+  var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
+  ibHoForGenerate(body).then(function () { return fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); })   // v3.3.92 -- the writing is set first
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      done();
+      if (!d || d.error) {
+        if (d && d.error === 'INSUFFICIENT_TOKENS') { ibMsg(insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.'))); return; }
+        ibMsg(escapeHtml((d && (d.message || d.error)) || 'Could not start the picture.'), d && d.field);
+        return;
+      }
+      if (String(IB.cid) !== String(cid)) return;
+      if (d.image) { IB.images.unshift(d.image); IB.viewId = d.image.id; }   // stays on the Make tab: the new picture fills the viewer
+      ibPaintGallery(); ibSchedulePoll();
+      if (typeof refreshTokenBalance === 'function') setTimeout(refreshTokenBalance, 20000);
+    })
+    .catch(function () { done(); ibMsg('Connection error. Please try again.'); });
+}
+
+async function ibDelete(id) {
+  var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0]; if (!im) return;
+  if (!await uiConfirm('Delete \u201c' + (im.name || 'this picture') + '\u201d from the gallery? This cannot be undone.', { okText: 'Delete', cancelText: 'Cancel' })) return;
+  fetch('/api/images/builder/images/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showError((d && d.error) || 'Could not delete the picture.'); return; }
+      IB.images = IB.images.filter(function (x) { return String(x.id) !== String(id); });
+      if (String(IB.viewId) === String(id)) IB.viewId = null;
+      ibPaintGallery();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
 }

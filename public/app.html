@@ -111,6 +111,7 @@
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Stuff</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
+        <div class="user-menu-item" id="nav-image-builder-item" onclick="openImageBuilder();closeUserMenu()">Image Builder</div>   <!-- v3.3.71 -- TD-1080 -->
         <div class="user-menu-item mkt-live-link" onclick="closeUserMenu();location.href='/library?from=app#guild'">The Guild</div>   <!-- v3.3.05 -- TD-1037: same look as the items around it; shown only when the Marketplace is ON -->
         <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
         <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">Dashboard</div>
@@ -1347,6 +1348,20 @@
       <div class="char-grid" id="cstyle-grid">
         <div class="add-char-card" onclick="openCustomStyles()"><div class="plus">+</div><span>New style</span></div>
       </div>
+    </div>
+
+    <!-- v3.3.71 -- TD-1080. The Image Builder (claude/IMAGE_BUILDER_SPEC.md). ibRender() fills #ib-root. -->
+    <div id="view-image-builder" class="view" style="display:none;">
+      <div class="page-header">
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">   <!-- v3.3.76 -- the subtitle on the title's line (Ian) -->
+          <div class="page-title" style="color:var(--gold);font-family:var(--font-display);letter-spacing:1px;">Image Builder</div>   <!-- v3.3.84 -- the campaign page's header face (#view-sessions .page-title) -->
+          <div class="page-subtitle" style="margin-top:0;">Posters, portraits, maps and handouts for a campaign &mdash; shared with its members</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="ibBack()">&larr; Back</button>
+        </div>
+      </div>
+      <div id="ib-root"></div>
     </div>
 
     <div id="view-feedback" class="view" style="display:none;">
@@ -2851,7 +2866,7 @@
          result it produces, rather than in the footer beside Done. Ian marked the move on a
          screenshot. Done stays in the footer, where a close button belongs. -->
     <div class="tb-gen-row">
-      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate (1 token)</button>
     </div>
     <div class="tb-result" id="title-build-result">
       <!-- v3.0.629 -- Ian: "make it so when you open the Title builder the Replace button is there
@@ -2877,7 +2892,7 @@
                storyboard panel and the character reference do. A retouch costs a token and can come
                back worse; without this the only way out was to spend another one. -->
           <button class="panel-pill hidden" id="title-build-revert-btn" onclick="titleBuildRevert()" title="Undo the last retouch - restore the previous title">Revert</button>
-          <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
+          <button class="panel-pill" id="title-build-replace" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
           <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
           <!-- v3.0.687 -- REMOVE IS OFF THE TOOLBAR. It was the only exit from a drawn title and it is
                a deletion: Archive first or the token is gone. Done &amp; Stash is the non-destructive

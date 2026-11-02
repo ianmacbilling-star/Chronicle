@@ -255,6 +255,8 @@ var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or cr
 // RETOUCH IS NOT COVERED: retouchImage() does not call buildPanelInput. A
 // retouch preserves the image it is given, so it cannot introduce a mark that
 // was not already there -- but it cannot remove one either.
+// v3.3.83 -- an Image Builder picture with a title its maker typed: the same rule, except the one title asked for.
+var NO_MARKS_TITLED = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date or credit anywhere in the image, in any corner or along any edge. The ONLY lettering laid over the picture is the title the prompt asks for, spelled exactly as given.';
 var NO_MARKS = ' NO ARTIST MARKS: never sign the artwork. Do NOT add a signature, artist\'s mark, monogram, initials, watermark, stamp, seal, logo, date, caption, title, or credit anywhere in the image, in any corner or along any edge. Text that genuinely belongs to the scene itself \u2014 a sign, a banner, runes carved in stone, writing on an open page \u2014 is fine; a mark laid on top of the picture is not.';
 
 // v3.2.52 -- TD-966. A CUSTOM STYLE'S COMIC PAGE AND SOUND EFFECTS (Ian, 2026-10-23: "In picture Panels.. comic style",
@@ -305,8 +307,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   var _fade = (_fadeIn === true || _fadeIn === false) ? _fadeIn : isFadeStyle(style);
   var _panels = !!(_flags && _flags.panels), _sfx = !!(_flags && _flags.sfx);
   var edgeDirective = _panels ? COMIC_PAGE : (_fade ? FADE_WHITE : NO_BORDER);
-  var marksDirective = NO_MARKS + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));
-  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
+  var marksDirective = ((_flags && _flags.titled) ? NO_MARKS_TITLED : NO_MARKS) + (_sfx ? SFX_ONLY : (_panels ? NO_LETTERING : ''));   // v3.3.83 -- titled: Image Builder only
+  // v3.3.71 -- TD-1080. noCandid: an Image Builder poster, portrait or token may face the viewer. Panels never set it.
+  var hint = ((_flags && _flags.noCandid) ? '' : COMPOSITION_IMG) + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective + marksDirective;
   // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
   // It must land here and not only in extract.js, because extract writes each
   // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
@@ -2528,12 +2531,40 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           }
           await logImageGeneration(db, job.user_id, 'asset_reference', job.asset_id, null);
         }
+        // v3.3.71 -- TD-1080. An Image Builder picture: its gallery row takes the picture and its measured size.
+        if (job.kind === 'builder' && job.builder_image_id) {
+          // v3.3.74 -- a Regen: the picture on show moves into the one-deep undo slot (with its size) and the one
+          // that was there is released AFTER the row stops naming it (TD-1006's order), so Revert can swap back.
+          const _bi = await db.prepare('SELECT image_url, img_w, img_h, prev_image_url, clean_image_url, prev_clean_image_url, refs FROM builder_images WHERE id = ?').get(job.builder_image_id);
+          // v3.3.85 -- a title with Title Builder lettering is laid on now; what the model drew is kept as the clean copy.
+          // If the overlay fails the picture still lands, untitled, and the failure is logged.
+          let _shown = imageUrl, _clean = null;
+          const _ov = _bi ? ibLayersOf(_bi.refs) : null;   // v3.3.92 -- the handout's writing and the title
+          if (_ov) {
+            try { const _t = await ibCompose(imageUrl, _ov, job.builder_image_id); if (_t) { _shown = _t; _clean = imageUrl; } }
+            catch (_oe) { try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'webhook builder title', message: 'Could not lay the title on Image Builder picture ' + job.builder_image_id + ': ' + (_oe && _oe.message) }); } catch (_le) {} }
+          }
+          if (_bi && _bi.image_url && _bi.image_url !== imageUrl) {
+            let _bref = {}; try { _bref = _bi.refs ? (typeof _bi.refs === 'string' ? JSON.parse(_bi.refs) : _bi.refs) : {}; } catch (_pe) { _bref = {}; }
+            _bref.prevLayers = ibSnapLayers(_bref);   // v3.4.01 -- the picture going to the undo slot had the same layers
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+              .run(_shown, imgW, imgH, _clean, _bi.image_url, _bi.img_w || null, _bi.img_h || null, _bi.clean_image_url || null, JSON.stringify(_bref), new Date().toISOString(), job.builder_image_id);
+            // Released AFTER the row stops naming them; releaseImage keeps anything still named anywhere.
+            if (_bi.prev_image_url) await releaseImage(db, _bi.prev_image_url);
+            if (_bi.prev_clean_image_url) await releaseImage(db, _bi.prev_clean_image_url);
+          } else {
+            await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, updated_at = ? WHERE id = ?')
+              .run(_shown, imgW, imgH, _clean, new Date().toISOString(), job.builder_image_id);
+          }
+          await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
+        }
       const genSource = (job.kind === 'char_ref') ? 'character_reference'
         : (job.kind === 'session_ref') ? 'amendment_reference'
         : (job.kind === 'asset_ref') ? 'asset_reference'
         : (job.kind === 'asset_retouch') ? 'asset_retouch'
         : (job.kind === 'retouch') ? 'panel_retouch'
-        : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
+        : (job.kind === 'batch') ? 'panel_batch'
+        : (job.kind === 'builder') ? 'builder_image' : 'panel_regen';   // v3.3.71 -- TD-1080
       if (job.cost && job.cost > 0) {
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: genSource, event_type: 'generation_spend' });
       }
@@ -2836,9 +2867,13 @@ router.post('/title-build', requireAuth, async function (req, res) {
     // so since v3.0.617 while the line beneath it read req.body.bookTitle -- true only because the
     // client happened to send the right thing. Resolving the target answers it properly AND is what
     // lets a chapter draw its session name instead (TD-422).
-    const tgt = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    // v3.3.83 -- target kind 'ib': the Image Builder's Title section. Its words are the ones typed there.
+    const _ibTgt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
+    if (_ibTgt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    const tgt = _ibTgt ? { current: { words: { title: ibClip(req.body.ibTitle, 100), subtitle: ibClip(req.body.ibSubtitle, 140) } } }
+      : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (tgt.error) return res.status(403).json({ error: tgt.error });
-    const bookTitle = String((tgt.current.words && tgt.current.words.title) || campaign.name || '').trim();
+    const bookTitle = String((tgt.current.words && tgt.current.words.title) || (_ibTgt ? '' : campaign.name) || '').trim();
     if (!bookTitle) return res.json({ error: 'This has no title yet. Name it first, then draw it.' });
     const subtitle = String((tgt.current.words && tgt.current.words.subtitle) || '').trim();
     const description = String((req.body && req.body.description) || '').trim();
@@ -2989,7 +3024,12 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const own = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    // v3.3.87 -- target kind 'ib': the Image Builder's lettering, sent by the window (our own files only).
+    const _ibRt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
+    if (_ibRt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    const _ibCur = (req.body && req.body.ibCur) || {};
+    const own = _ibRt ? { current: { url: isOurPublicUrl(String(_ibCur.url || '')) ? String(_ibCur.url) : '', src: isOurPublicUrl(String(_ibCur.src || '')) ? String(_ibCur.src) : '' } }
+      : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (own.error) return res.status(403).json({ error: own.error });
     // v3.0.729 -- TD-527. THE DRAFT WINS, BECAUSE THE DRAFT IS WHAT THE READER CAN SEE.
     // It lives INSIDE current rather than beside it -- app.js has read d.current.draft since
@@ -3182,6 +3222,894 @@ router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, re
     return res.status(500).json({ error: (e && e.message) || 'backfill-dims failed' });
   }
 });
+// =====================================================================================================
+// v3.3.71 -- TD-1080. THE IMAGE BUILDER, stage 1 (spec claude/IMAGE_BUILDER_SPEC.md). Pictures made outside any
+// story panel, kept per campaign in builder_images with their whole recipe. A campaign is open to the Builder for
+// a user whose EFFECTIVE tier there is Platinum: their own plan, or the Story Master's (Ian: "inheritable from a
+// SM on platinum"). Every route asks that question for the campaign it touches; the page asking it too only saves
+// a round trip. The generation itself is the panel pipeline (buildPanelInput through submitPanelGen and the fal
+// webhook), so styles, references, the campaign standing instruction and the fal headers all behave as on a panel.
+// =====================================================================================================
+const IB_SHAPES = { panoramic: 1, wide: 1, standard: 1, square: 1, fullpage: 1, tall: 1, tower: 1 };
+const IB_NAME_MAX = 80, IB_DESC_MAX = 1500, IB_LORE_MAX = 2000, IB_WORDS_MAX = 6000;
+const IB_JOB_WINDOW_MS = 15 * 60 * 1000;   // the same 15 minutes as job_stale in IB_LIST_SQL
+const IB_LOST = 'This picture did not come back from the image service. Nothing was charged. Delete it and try again.';
+// One sentence per image type, added before the description. candid:false drops the story-panel rule that people
+// never face the viewer (COMPOSITION_IMG), which a poster, a portrait or a token needs to break.
+const IB_TYPES = [
+  // v3.3.86 -- Movie Poster / Book Cover and Character Study rewritten from Ian's examples (key-art montage posters; a
+  // character sheet: full figure plus three close-ups).
+  { key: 'poster', label: 'Movie Poster / Book Cover', candid: false, text: 'IMAGE TYPE: a cinematic movie poster or book cover in classic key-art style, one continuous composition with no frames, borders or panels. The main characters form a montage: the most important as large head-and-shoulders portraits in the upper half, overlapping and scaled by importance, gazing intently at the viewer or into the distance. The hero stands in the foreground, centred and larger than life, holding their signature weapon or object, with supporting figures smaller around and behind them, building a pyramid. Below and behind them, a key moment from the story and glimpses of its places blend into one another through light, smoke and cloud. Dramatic, high-contrast lighting with strong backlight and rim light, a glowing light source, and a bold split of warm and cool colour. Embers, sparks, rain, snow or dust fill the air. With only one character, they alone dominate the poster in a powerful stance, the setting rising behind them. Keep one band of the picture calm and uncluttered for a title laid on later: the bottom fifth, unless a title space is given below. Draw no title, lettering, names or credits.' },
+  // v3.3.92 -- Character Study and Creature Study are ONE type (Ian, 2026-11-01). The old key 'creature' still opens
+  // pictures made with it; ibType maps it here.
+  { key: 'character', label: 'Character / Creature Study', candid: false, text: 'IMAGE TYPE: a character sheet of ONE character or creature, painted as a single continuous illustration with no frames, borders or dividing lines. The subject appears whole and large: a person head to toe, a creature nose to tail. Its pose shows who or what it is, taken from the description when there is one; with none, an action pose with their signature weapon or gear for a fighter, a calmer, characterful stance for a scholar, a bard or a mystic, and for a beast a natural pose that shows its shape, size and features. Every piece of clothing, armour, equipment, hide, scale and feather is clearly visible. Alongside, three close-ups of the SAME subject\'s head (front view, three-quarter view and near-profile), each with a different expression, fading softly into the background. On a wide or square picture the full figure fills the left two-thirds and the close-ups are stacked down the right side; on a tall picture the full figure fills the top and the close-ups sit in a row along the bottom. Behind everything, an atmospheric setting from its world, darker and softer than the figure so it never competes with it. The face, markings, scars, colouring, clothing and gear match exactly in every view.' },
+  { key: 'group', label: 'Group Portrait', candid: false, text: 'IMAGE TYPE: a group portrait of the named characters together, every one clearly visible and recognisable, arranged with depth and a variety of poses, as if gathered for a memorable moment.' },
+  { key: 'location', label: 'Location / Establishing Shot', candid: true, text: 'IMAGE TYPE: an establishing shot of a place. The location itself is the subject: its architecture or landscape, light and atmosphere. People, if any, are small in the scene.' },
+  { key: 'action', label: 'Action Scene', candid: true, text: 'IMAGE TYPE: an action scene full of motion and drama, such as a battle, a chase or a moment of danger, with a strong diagonal composition and a clear focal point.' },
+  { key: 'map', label: 'Map', candid: true, text: 'IMAGE TYPE: a hand-drawn illustrated map seen from directly above, as if drawn on parchment by a cartographer: coastlines, rivers, roads, forests, mountains and settlements drawn as small illustrations. Place names, if any, are short and written in a simple hand.' },
+  // v3.3.97 -- Item Showcase as a still life (Ian's mirror-and-goblet example).
+  { key: 'item', label: 'Item Showcase', candid: false, text: 'IMAGE TYPE: an item showcase painted as a still life. The item, or each item when there are several, rests on a fitting surface (a stone plinth, a table, an altar, the ground), large and in sharp focus, filling most of the picture, with its materials, wear, markings and craftsmanship clearly visible. Several items are arranged together naturally, overlapping a little, none hidden. Behind them, a softly suggested setting from where they were found, darker and less detailed so it never competes, with one clear light falling on the items.' },
+  { key: 'handout', label: 'In-world Handout', candid: false, text: 'IMAGE TYPE: an in-world handout seen flat and filling the picture: a single document such as a wanted poster, letter, scroll or notice, aged and weathered to suit the setting. Any writing on it is short.' },
+  { key: 'token', label: 'Portrait / Headshot', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }   // v3.3.97 -- renamed (Ian); key unchanged
+];
+var IB_TYPE_TEXT_MAX = 2500;   // v3.3.86
+function ibType(key) { if (key === 'creature') key = 'character'; return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }   // v3.3.92 -- creature is character
+
+async function ibAllowed(userId, campaignId) {
+  if (!userId || !campaignId) return false;
+  try {
+    if (!(await getCampaignRole(userId, campaignId))) return false;
+    return (await getEffectiveTier(userId, campaignId)) === 'platinum';
+  } catch (e) { return false; }   // never fail OPEN on an entitlement question
+}
+async function ibGate(req, res) {
+  if (await ibAllowed(req.session.userId, req.params.cid)) return true;
+  res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature. It is open in your own Platinum campaigns, and in campaigns whose Story Master is on Platinum.' });
+  return false;
+}
+function ibRow(r) {
+  if (!r) return null;
+  var refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
+  if (refs && refs.prevLayers) delete refs.prevLayers;   // v3.4.01 -- the undo slot's layers stay on the server
+  // No sweeper ends a job whose webhook never came, so a picture still pending after IB_JOB_WINDOW_MS is shown as
+  // failed (and can be deleted). Nothing was charged: tokens are spent only when the picture arrives.
+  // v3.3.74 -- a Regen draws over a picture already on show, so "drawing" comes from the latest job, not from a
+  // missing picture: a live job means drawing; otherwise a picture means done; a lost or failed first job, failed.
+  var js = r.job_status || null;
+  var live = (js === 'queued' || js === 'processing') && r.job_stale !== true;
+  var st = live ? js : (r.image_url ? 'done' : ((js === 'queued' || js === 'processing') ? 'failed' : (js || 'queued')));
+  // The last Regen of a picture that is still on show did not work (failed, or never came back).
+  var lastErr = (r.image_url && !live && js && js !== 'done') ? (js === 'failed' ? (r.job_error || IB_LOST) : 'It did not come back from the image service. Nothing was charged.') : null;
+  return { id: r.id, campaign_id: r.campaign_id, user_id: r.user_id, maker: r.maker_name || '', name: r.name || '', description: r.description || '',
+    image_type: r.image_type || '', shape: r.shape || '', art_style: r.art_style || '', art_style_name: r.art_style_name || '', include_lore: !!r.include_lore,
+    refs: refs || { characters: [], assets: [] }, prompt: r.prompt || '', image_url: r.image_url || null, img_w: r.img_w || null, img_h: r.img_h || null,
+    status: st, error: r.image_url ? null : (st === 'failed' ? (r.job_error || IB_LOST) : null), job_id: r.job_id || null,
+    created_at: r.created_at || null, ready: r.is_ready !== false,   // v3.3.73 -- a NULL (never set) counts as Ready
+    words: r.words || '', has_prev: !!r.prev_image_url, has_clean: !!r.clean_image_url, clean_url: r.clean_image_url || null, copied_from: r.copied_from || null, last_error: lastErr };   // v3.3.74
+}
+const IB_LIST_SQL = 'SELECT b.*, u.name AS maker_name, ' +
+  '(SELECT j.status FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_status, ' +
+  '(SELECT j.error FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_error, ' +
+  '(SELECT j.id FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_id, ' +
+  // Stale is decided in SQL: created_at holds a UTC time with no zone, which the driver would read in the server's zone.
+  "(SELECT (j.created_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '15 minutes') FROM image_jobs j WHERE j.builder_image_id = b.id ORDER BY j.id DESC LIMIT 1) AS job_stale " +
+  'FROM builder_images b LEFT JOIN users u ON u.id = b.user_id ';
+
+// The campaigns this user may use here, with the image types for the form.
+router.get('/builder/campaigns', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id WHERE cm.user_id = ? ORDER BY LOWER(c.name) ASC'
+    ).all(req.session.userId);
+    const out = [];
+    for (const r of (rows || [])) {
+      // v3.4.03 -- image: the picture its My Campaigns card shows (campaign picture, else the book cover)
+      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '' });
+    }
+    let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
+    res.json({ campaigns: out, types: IB_TYPES.map(function (t) { return { key: t.key, label: t.label, text: t.text }; }), max_refs: MAX_PANEL_REFS, cost: cost });
+  } catch (e) {
+    console.error('[image-builder] campaigns error:', e.message);
+    res.json({ error: 'Could not load your campaigns.' });
+  }
+});
+
+// The character steps of the Import Character picker, read from the chosen campaign itself. Same answers as
+// /characters/import (routes/characters.js), which is Story Master only and reads another campaign.
+router.get('/builder/campaigns/:cid/characters', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare('SELECT id, name, cls, is_npc, canonical_reference_url, image_portrait, image FROM characters WHERE campaign_id = ? ORDER BY created_at ASC, id ASC').all(req.params.cid);
+    res.json({ characters: (rows || []).map(function (c) {
+      return { id: c.id, name: c.name, cls: c.cls || '', is_npc: !!c.is_npc, thumb: c.canonical_reference_url || c.image_portrait || c.image || null };
+    }) });
+  } catch (e) { console.error('[image-builder] characters error:', e.message); res.json({ error: 'Could not load the characters.' }); }
+});
+router.get('/builder/campaigns/:cid/characters/:charId/looks', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const { versionsForCampaign } = require('../database/db');
+    const { importLooksForVersion } = require('./characters');
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.charId, req.params.cid);
+    if (!ch) return res.status(404).json({ error: 'That character is no longer in the campaign.' });
+    const visible = await versionsForCampaign(db, req.params.cid, req.session.userId, null);
+    if (req.query.version_id) {
+      const v = visible.filter(function (x) { return String(x.version_id) === String(req.query.version_id); })[0];
+      if (!v) return res.status(403).json({ error: 'That version is not shared with you.' });
+      return res.json({ version_id: v.version_id, looks: await importLooksForVersion(db, ch.id, v.version_id) });
+    }
+    res.json({
+      character: { id: ch.id, name: ch.name, cls: ch.cls || '' },
+      original: ch.canonical_reference_url ? { key: 'original', label: 'Original', url: ch.canonical_reference_url } : null,
+      versions: visible.map(function (v) { return { version_id: v.version_id, label: v.label, is_canonical: v.is_canonical, is_mine: v.is_mine }; })
+    });
+  } catch (e) { console.error('[image-builder] looks error:', e.message); res.json({ error: 'Could not load that character\u2019s pictures.' }); }
+});
+router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare(ASSET_REF_SQL + ' ORDER BY LOWER(a.name) ASC').all(req.params.cid);
+    res.json({ assets: (rows || []).filter(function (a) { return !!a.image_url; }).map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location', image_url: a.image_url }; }) });
+  } catch (e) { console.error('[image-builder] assets error:', e.message); res.json({ error: 'Could not load the assets.' }); }
+});
+// The gallery: every image in the campaign, everyone's (Ian: visible to the whole campaign), newest first.
+router.get('/builder/campaigns/:cid/images', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    // v3.3.73 -- a Draft is seen by its maker only (not the Story Master either); Ready pictures by the whole campaign.
+    const rows = await db.prepare(IB_LIST_SQL + 'WHERE b.campaign_id = ? AND (b.is_ready IS NOT FALSE OR b.user_id = ?) ORDER BY b.id DESC LIMIT 200').all(req.params.cid, req.session.userId);
+    res.json({ images: (rows || []).map(ibRow), me: req.session.userId });
+  } catch (e) { console.error('[image-builder] list error:', e.message); res.json({ error: 'Could not load the Image Builder gallery.' }); }
+});
+
+// Character references are a character id and a look ('original' or 'sc:<session_characters id>'), resolved HERE
+// from the database: a picture address from the page is a claim, not proof. A session look must belong to a
+// version this user may see. Returns rows shaped like generate-moment's chars, or { error }.
+async function ibResolveCharacters(db, cid, uid, list) {
+  const out = [], seen = {};
+  const { versionsForCampaign } = require('../database/db');
+  let visible = null;
+  for (const it of (Array.isArray(list) ? list : [])) {
+    const id = parseInt(it && it.id, 10); if (!(id > 0) || seen[id]) continue; seen[id] = 1;
+    const ch = await db.prepare('SELECT id, name, cls, description, canonical_prompt, canonical_reference_url, height_ft FROM characters WHERE id = ? AND campaign_id = ?').get(id, cid);
+    if (!ch) return { error: 'One of the characters is no longer in this campaign.' };
+    const look = String((it && it.look) || 'original');
+    let url = ch.canonical_reference_url || null, prompt = null, label = 'Original';
+    if (look !== 'original') {
+      const m = /^sc:(\d+)$/.exec(look);
+      if (!m) return { error: 'That character look is not recognised.' };
+      const sc = await db.prepare('SELECT sc.reference_url, sc.prompt, sf.version_id, s.name AS session_name FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id WHERE sc.id = ? AND sc.character_id = ? AND s.campaign_id = ?').get(parseInt(m[1], 10), id, cid);
+      if (!sc || !sc.reference_url) return { error: 'That look of ' + ch.name + ' is no longer available.' };
+      if (visible === null) visible = await versionsForCampaign(db, cid, uid, null);
+      if (!visible.some(function (v) { return String(v.version_id) === String(sc.version_id); })) return { error: 'That look of ' + ch.name + ' is in a version that is not shared with you.' };
+      url = sc.reference_url; prompt = sc.prompt || null; label = sc.session_name || 'Session';
+    }
+    // v3.3.82 -- THE CHARACTER'S HEIGHT, as set on the character now. Story panels get it from the session snapshot
+    // (extract.js writes the HEIGHT: marker); the canonical prompt never carries one, so an Original look went without.
+    // charPromptWithHeight replaces any older marker, and buildCharacterBlock puts it on the character's name line.
+    if (ch.height_ft != null && Number(ch.height_ft) > 0) prompt = charPromptWithHeight(prompt || ch.canonical_prompt || ch.description || '', ch.height_ft);
+    out.push({ character_id: ch.id, name: ch.name, cls: ch.cls, description: ch.description, canonical_prompt: ch.canonical_prompt,
+      canonical_reference_url: ch.canonical_reference_url, snapshot_prompt: prompt, snapshot_reference_url: url, _look: look, _label: label });
+  }
+  return { chars: out };
+}
+
+// The words sent to the image model, before buildPanelInput adds the style, references and house rules.
+// v3.3.83 -- the Title section (Ian: "Drawn In with warning", typed freely, "let the art style decide", with the
+// cover's placement and size). Clean: one line, no double quotes (they would close the quoted title), capped.
+function ibClip(v, max) { return String(v == null ? '' : v).replace(/[\r\n\t]+/g, ' ').replace(/"/g, '\'').replace(/\s{2,}/g, ' ').trim().slice(0, max); }
+var IB_TITLE_PLACE = { top: 'across the TOP of the picture', middle: 'across the MIDDLE of the picture', bottom: 'across the BOTTOM of the picture' };
+var IB_TITLE_SIZE = { small: 'SMALL, about a third of the picture\'s width', medium: 'MEDIUM, about two thirds of the picture\'s width', large: 'LARGE, nearly the full width of the picture' };
+// The stored form, or null when there is no title text. The lettering (Title Builder artwork) is kept only when it is
+// one of our own files; src is the uncut original on its black ground, which is what the model is shown.
+function ibCleanTitle(t) {
+  if (!t || typeof t !== 'object') return null;
+  var title = ibClip(t.title, 100);
+  if (!title) return null;
+  var out = { title: title, subtitle: ibClip(t.subtitle, 140), place: IB_TITLE_PLACE[t.place] ? t.place : 'top', size: IB_TITLE_SIZE[t.size] ? t.size : 'medium',
+    desc: ibClip(t.desc, 300), url: '', src: '' };
+  // v3.3.89 -- a hand-placed title: its box as fractions of the picture (left, top, width; the height follows the
+  // lettering). Kept inside the picture; place and size are worked out from it for the model's title-space line.
+  const p = (t.pos && typeof t.pos === 'object') ? t.pos : null;
+  if (p) {
+    let w = Number(p.w), x = Number(p.x), y = Number(p.y);
+    if (isFinite(w) && isFinite(x) && isFinite(y) && w > 0) {
+      w = Math.min(1, Math.max(0.05, w)); x = Math.min(1 - w, Math.max(0, x)); y = Math.min(0.98, Math.max(0, y));
+      out.pos = { x: Math.round(x * 10000) / 10000, y: Math.round(y * 10000) / 10000, w: Math.round(w * 10000) / 10000 };
+      out.size = w < 0.45 ? 'small' : (w < 0.75 ? 'medium' : 'large');
+      out.place = y < 0.3 ? 'top' : (y > 0.55 ? 'bottom' : 'middle');
+    }
+  }
+  var u = String(t.url || '').trim(), s = String(t.src || '').trim();
+  if (u && isOurPublicUrl(u)) out.url = u;
+  if (out.url && s && isOurPublicUrl(s)) out.src = s;
+  return out;
+}
+// v3.3.85 -- THE LETTERING GOES ON LAST. Ian: "it's not putting the image from the title builder on the image." Handed
+// to the model as a reference, the lettering was treated as what every reference is -- something to redraw in the
+// picture's style -- and was redrawn, or dropped. So the model draws the picture with the title's band left calm, and
+// the Title Builder's own artwork (transparent, trimmed) is laid over it here, centred, at the placement and size
+// chosen; the picture before that is kept as the clean copy. The box is a share of the picture's width and height.
+var IB_TITLE_BOX = { small: [0.38, 0.16], medium: [0.62, 0.24], large: [0.88, 0.32] };
+async function ibFetchImage(u) {
+  let buf = null;
+  try { buf = await fetchFile(u); } catch (e) { buf = null; }
+  if (buf) return buf;
+  const r = await fetch(u);
+  if (!r.ok) throw new Error('could not fetch ' + u + ' (' + r.status + ')');
+  return Buffer.from(await r.arrayBuffer());
+}
+// v3.3.92 -- the title alone (Apply title, older callers).
+async function ibOverlayTitle(pictureUrl, t, imageId) { return ibCompose(pictureUrl, { title: t, handout: null }, imageId); }
+// v3.3.92 -- everything laid on a finished picture, in order: the handout's writing, then the title (with its haze and
+// halo). Returns the new file's address.
+async function ibCompose(pictureUrl, layersOf, imageId) {
+  const sharp = require('sharp');
+  const pic = await ibFetchImage(pictureUrl);
+  const meta0 = await sharp(pic).metadata();
+  const lay = [];
+  if (layersOf && layersOf.handout) lay.push(await ibHandoutLayer(sharp, layersOf.handout, meta0.width, meta0.height));
+  const t = layersOf && layersOf.title;
+  if (t) lay.push.apply(lay, await ibTitleLayers(sharp, t, meta0.width, meta0.height));
+  if (!lay.length) throw new Error('nothing to lay on');
+  const out = await sharp(pic).composite(lay.filter(Boolean)).png().toBuffer();
+  return uploadFile(out, 'ibtitled-' + imageId + '-' + Date.now() + '.png', 'image/png');
+}
+// v3.3.92 -- the title's layers (haze, halo, lettering), as ibOverlayTitle built them since v3.3.88.
+async function ibTitleLayers(sharp, t, W, H) {
+  let lettering = await ibFetchImage(t.url);
+  try { lettering = await sharp(lettering).trim().png().toBuffer(); } catch (e) {}   // transparent margins off, so the size is the lettering's
+  if (!W || !H) throw new Error('the picture has no size');
+  const box = IB_TITLE_BOX[t.size] || IB_TITLE_BOX.medium;
+  // v3.3.89 -- hand-placed: the width chosen (never taller than the picture); otherwise the old place / size box.
+  const lt = t.pos
+    ? await sharp(lettering).resize({ width: Math.max(1, Math.round(W * t.pos.w)), height: H, fit: 'inside' }).png().toBuffer({ resolveWithObject: true })
+    : await sharp(lettering).resize({ width: Math.max(1, Math.round(W * box[0])), height: Math.max(1, Math.round(H * box[1])), fit: 'inside' }).png().toBuffer({ resolveWithObject: true });
+  const lw = lt.info.width, lh = lt.info.height, m = Math.round(Math.min(W, H) * 0.04);
+  const top = t.pos ? Math.round(H * t.pos.y) : (t.place === 'middle' ? Math.round((H - lh) / 2) : (t.place === 'bottom' ? H - lh - m : m));   // v3.3.89 -- pos
+  // v3.3.88 -- THE COVER'S DARK FADE. Ian: "we now need the dark fade under it same as what we do on the cover." The
+  // cover puts two things behind a built title (services/printing/scrimRamp.js): a soft dark HAZE, full strength over
+  // the lettering's box and falling away outside it, and a HALO, three dark drop-shadows on the lettering's own alpha,
+  // tight to wide. The same image, the same semi-axes, the same colour and strengths are used here, so a titled
+  // picture reads like a cover. The CSS blur radii (0.035in, 0.09in, 0.22in on a ~6in cover) are taken as shares of the
+  // picture's width; a CSS blur radius is two standard deviations.
+  const L = t.pos ? Math.max(0, Math.min(W - lw, Math.round(W * t.pos.x))) : Math.max(0, Math.round((W - lw) / 2)), T = Math.max(0, Math.min(H - lh, top));   // v3.3.89 -- pos
+  const scrim = require('../services/printing/scrimRamp');
+  const layers = [];
+  const hw = Math.max(1, Math.round(lw * scrim.HAZE_RX)), hh = Math.max(1, Math.round(lh * scrim.HAZE_RY));
+  const haze = await sharp(scrim.hazePng()).resize(hw, hh, { fit: 'fill' }).png().toBuffer();
+  layers.push(await ibClipLayer(sharp, haze, hw, hh, L + Math.round((lw - hw) / 2), T + Math.round((lh - hh) / 2), W, H));
+  const alpha = await sharp(lt.data).ensureAlpha().extractChannel(3).raw().toBuffer();
+  const rgb = scrim.SCRIM_RGB;
+  for (const pass of IB_TITLE_HALO) {
+    const sigma = Math.max(0.5, W * pass[0] / 2), M = Math.ceil(sigma * 3);
+    const rgba = Buffer.alloc(lw * lh * 4);
+    for (let i = 0, j = 0; i < lw * lh; i++, j += 4) { rgba[j] = rgb[0]; rgba[j + 1] = rgb[1]; rgba[j + 2] = rgb[2]; rgba[j + 3] = Math.round(alpha[i] * pass[1]); }
+    const padded = await sharp(rgba, { raw: { width: lw, height: lh, channels: 4 } }).extend({ top: M, bottom: M, left: M, right: M, background: { r: rgb[0], g: rgb[1], b: rgb[2], alpha: 0 } }).png().toBuffer();
+    const shadow = await sharp(padded).blur(sigma).png().toBuffer();
+    layers.push(await ibClipLayer(sharp, shadow, lw + 2 * M, lh + 2 * M, L - M, T - M, W, H));
+  }
+  layers.push({ input: lt.data, left: L, top: T });
+  return layers;
+}
+// v3.3.88 -- the halo's three passes: [blur radius as a share of the picture's width, opacity], tight to wide, as the
+// cover's drop-shadows (0.035in at 0.95, 0.09in at 0.8, 0.22in at 0.5, on a cover about 6in wide).
+var IB_TITLE_HALO = [[0.0058, 0.95], [0.015, 0.8], [0.037, 0.5]];
+// A layer for sharp's composite, cut to the picture: composite refuses anything that reaches past the edges.
+async function ibClipLayer(sharp, buf, bw, bh, left, top, W, H) {
+  const x0 = Math.max(0, left), y0 = Math.max(0, top), x1 = Math.min(W, left + bw), y1 = Math.min(H, top + bh);
+  if (x1 <= x0 || y1 <= y0) return null;
+  const whole = (x0 === left && y0 === top && x1 - x0 === bw && y1 - y0 === bh);
+  const part = whole ? buf : await sharp(buf).extract({ left: x0 - left, top: y0 - top, width: x1 - x0, height: y1 - y0 }).png().toBuffer();
+  return { input: part, left: x0, top: y0 };
+}
+// =====================================================================================================
+// v3.3.92 -- THE HANDOUT'S WRITING, LAID ON. Ian chose "Laid on, exact text": image models misspell anything longer
+// than a few words, so the model draws the document with a clear writing area and the words are set by the browser in
+// one of the book faces (it has all nine, /css/fonts.css), uploaded as a transparent PNG, and laid over the picture here
+// with a multiply blend, so the ink takes the paper's grain. The box is fractions of the picture (x, y, w, h). The clean
+// copy is kept exactly as for a title, and the two are laid on together, text first.
+// =====================================================================================================
+var IB_HO_FONTS = ['garamond', 'cinzel', 'crimson-text', 'journal', 'script', 'lora', 'merriweather', 'bangers'];
+var IB_HO_INKS = ['brown', 'black', 'red', 'blue'];
+var IB_HO_TEXT_MAX = 1500;
+function ibCleanHandout(h) {
+  if (!h || typeof h !== 'object') return null;
+  const text = String(h.text == null ? '' : h.text).replace(/\r/g, '').replace(/\t/g, ' ').slice(0, IB_HO_TEXT_MAX).trim();
+  if (!text) return null;
+  const out = { text: text, font: IB_HO_FONTS.indexOf(h.font) >= 0 ? h.font : 'garamond', ink: IB_HO_INKS.indexOf(h.ink) >= 0 ? h.ink : 'brown',
+    align: h.align === 'left' ? 'left' : 'center', heading: h.heading !== false, url: '', pos: null };
+  const u = String(h.url || '').trim();
+  if (u && isOurPublicUrl(u)) out.url = u;
+  const p = (h.pos && typeof h.pos === 'object') ? h.pos : null;
+  if (p) {
+    let x = Number(p.x), y = Number(p.y), w = Number(p.w), hh = Number(p.h);
+    if ([x, y, w, hh].every(isFinite) && w > 0 && hh > 0) {
+      w = Math.min(1, Math.max(0.08, w)); hh = Math.min(1, Math.max(0.08, hh));
+      x = Math.min(1 - w, Math.max(0, x)); y = Math.min(1 - hh, Math.max(0, y));
+      const r4 = function (v) { return Math.round(v * 10000) / 10000; };
+      out.pos = { x: r4(x), y: r4(y), w: r4(w), h: r4(hh) };
+    }
+  }
+  return out;
+}
+// What the model is told when the writing will be laid on: a clear, EMPTY writing area where the box is.
+function ibHandoutSpaceText(h) {
+  const p = h.pos || { x: 0.12, y: 0.22, w: 0.76, h: 0.6 };
+  const cy = p.y + p.h / 2;
+  const where = cy < 0.38 ? 'the upper part' : (cy > 0.62 ? 'the lower part' : 'the middle');
+  return 'WRITING AREA: the writing on this document is added afterwards, so leave a large, clear area of plain, EMPTY paper for it in ' + where +
+    ' of the picture, about ' + Math.round(p.w * 100) + ' percent of the width and ' + Math.round(p.h * 100) + ' percent of the height. Draw no words, letters, numbers or scribbles anywhere on it; a drawing, seal, stain or border may frame the writing area but never cross it.';
+}
+// v3.4.01 -- WHAT WAS LAID ON THE PICTURE NOW IN THE UNDO SLOT. Testers 2026-11-01: Remove title, then Revert, brought
+// the picture back with its title showing while the recipe still said the title was off, so the next Apply rebuilt from
+// the clean copy and dropped the title. Every change that moves the picture on show into the undo slot now keeps the
+// title and writing as they were (refs.prevLayers), and Revert swaps them back with the picture.
+function ibSnapLayers(refs) { return { title: (refs && refs.title) || null, handout: (refs && refs.handout) || null }; }
+function ibSwapLayers(refs) {
+  if (!refs || !Object.prototype.hasOwnProperty.call(refs, 'prevLayers') || !refs.prevLayers) return false;
+  const was = refs.prevLayers, now = ibSnapLayers(refs);
+  if (was.title) refs.title = was.title; else delete refs.title;
+  if (was.handout) refs.handout = was.handout; else delete refs.handout;
+  refs.prevLayers = now;
+  return true;
+}
+// The layers a picture gets once it is drawn: the handout's writing and the title, each only when ready to lay on.
+function ibLayersOf(refsJson) {
+  let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
+  if (!refs) return null;
+  const t = refs.title, h = refs.handout;
+  const title = (t && t.title && t.url && !t.off) ? t : null, handout = (h && h.text && h.url && h.pos && !h.off) ? h : null;   // v3.3.93 -- off: taken off the picture
+  return (title || handout) ? { title: title, handout: handout } : null;
+}
+// The handout's writing as a composite layer: the uploaded PNG fitted to its box, multiplied onto the paper.
+async function ibHandoutLayer(sharp, h, W, H) {
+  const buf = await ibFetchImage(h.url);
+  const bw = Math.max(1, Math.round(W * h.pos.w)), bh = Math.max(1, Math.round(H * h.pos.h));
+  const fitted = await sharp(buf).resize(bw, bh, { fit: 'fill' }).png().toBuffer();
+  const L = Math.max(0, Math.min(W - bw, Math.round(W * h.pos.x))), T = Math.max(0, Math.min(H - bh, Math.round(H * h.pos.y)));
+  return { input: fitted, left: L, top: T, blend: 'multiply' };
+}
+// The recipe's title when it has lettering to lay on, else null.
+function ibOverlayOf(refsJson) {
+  let refs = null; try { refs = typeof refsJson === 'string' ? JSON.parse(refsJson) : refsJson; } catch (e) { refs = null; }
+  const t = refs && refs.title;
+  return (t && t.title && t.url) ? t : null;
+}
+// What the model is told when the lettering will be laid on afterwards: keep the band calm, draw no title.
+function ibTitleSpaceText(t) {
+  return 'TITLE SPACE: a title will be laid over the ' + t.place + ' of this picture afterwards, ' + IB_TITLE_SIZE[t.size] +
+    '. Keep that part of the picture calm and uncluttered (sky, ground, mist or shadow), with no faces or important detail in it. Do not draw any title, lettering or text yourself.';
+}
+function ibTitleText(t, hasRef) {
+  var s = 'TITLE LETTERING (part of this picture): letter exactly this title into the picture, spelled letter for letter: "' + t.title + '".';
+  if (t.subtitle) s += ' Underneath it, smaller, letter exactly: "' + t.subtitle + '".';
+  s += ' Place the title ' + IB_TITLE_PLACE[t.place] + ', ' + IB_TITLE_SIZE[t.size] + ', and keep it clear of faces.';
+  if (hasRef) s += ' Copy the lettering design (the letter shapes, colours and ornament) from the title lettering reference image, but not its plain black background: the lettering sits on this picture.';
+  if (t.desc) s += ' Lettering style: ' + t.desc + '.';
+  return s + ' Add no other words over the picture.';
+}
+function ibPrompt(o) {
+  var parts = [];
+  var typeText = o.type ? o.type.text : '';
+  // A poster is told to leave the title out; with a title asked for, it is part of the design instead.
+  // v3.3.86 -- a typed title (drawn by the art style) replaces any "no lettering" sentence in the type's text.
+  if (typeText && o.title && !o.titleOver) typeText = typeText.replace(/Draw no title, lettering, names or credits\.|Do not draw any title, lettering or text\./g, 'The only lettering is the title described below.');
+  if (typeText && o.handout) typeText = typeText.replace(' Any writing on it is short.', ' Its writing area is left blank.');   // v3.3.92
+  if (typeText) parts.push(typeText);
+  if (o.description) parts.push('THE PICTURE: ' + o.description);   // v3.3.81 -- none when an image type stands alone
+  if (o.handout) parts.push(ibHandoutSpaceText(o.handout));   // v3.3.92
+  if (o.title) parts.push(o.titleOver ? ibTitleSpaceText(o.title) : ibTitleText(o.title, false));   // v3.3.83; v3.3.85 -- lettering is laid on afterwards
+  if (o.genreLabels && o.genreLabels.length) parts.push('GENRE: this picture belongs to a ' + o.genreLabels.join(', ') + ' story; keep its subject and setting true to that.');
+  if (o.lore) parts.push('WORLD / LORE (background only; use what fits this picture, never illustrate all of it): ' + o.lore);
+  return parts.join('\n\n');
+}
+
+// v3.3.74 -- stage 2. Generate and Regen build the picture the SAME way, here: references resolved from the database,
+// style locks, the prompt words, the flags, and the submit. Returns null when it has already answered (an error,
+// or a rights refusal written by refuseRejected). recipe: { description, shape, style, type (key or null),
+// include_lore, refs: { characters: [{ id, look }], assets: [ids] } }; words: the picture's own words to send instead
+// of building them from the recipe (Edit Prompt, and every Regen once the words are stored).
+async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
+  const fal_key = process.env.FAL_API_KEY;
+  if (!fal_key) { res.json({ error: 'Image generation is not configured. Please contact support.' }); return null; }
+  const webhookUrl = falWebhookUrl();
+  if (!webhookUrl) { res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' }); return null; }
+  const style = recipe.style, shape = recipe.shape;
+  let type = recipe.type ? ibType(String(recipe.type)) : null;
+  // v3.3.86 -- the type's instructions as edited for this picture (Ian: "see and edit the prompt for that selection just
+  // for that image generation"). Kept only when it differs from the type's own text.
+  const typeText = type ? ibClip(recipe.type_text || (recipe.refs && recipe.refs.type_text), IB_TYPE_TEXT_MAX) : '';
+  if (type && typeText && typeText !== type.text) type = Object.assign({}, type, { text: typeText, edited: true });
+  if (recipe.type && !type) { res.json({ error: 'That image type is not recognised.' }); return null; }
+  if (!IB_SHAPES[shape]) { res.json({ error: 'Choose a shape for the picture.', field: 'shape' }); return null; }
+  if (!style) { res.json({ error: 'Choose an art style.', field: 'style' }); return null; }
+  const effRank = accessRank(await getEffectiveTier(uid, cid));
+  if (style.indexOf('custom:') !== 0 && !artStyleAllowed(effRank, style)) { res.json({ error: 'STYLE_LOCKED', message: 'That art style isn\u2019t available on your current plan.' }); return null; }
+  const _rs = await resolveGenStyle(db, style, uid, cid);
+  if (_rs.locked) { res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' }); return null; }
+
+  const refsIn = (recipe.refs && typeof recipe.refs === 'object') ? recipe.refs : {};
+  const rc = await ibResolveCharacters(db, cid, uid, refsIn.characters);
+  if (rc.error) { res.json({ error: rc.error }); return null; }
+  const chars = rc.chars;
+  const assetIds = (Array.isArray(refsIn.assets) ? refsIn.assets : []).map(function (x) { return parseInt(x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
+  const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
+  const assets = allAssets.filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; });
+  if (assets.length !== assetIds.length) { res.json({ error: 'One of the assets is no longer available, or its picture was removed.' }); return null; }
+  const ttl = ibCleanTitle(refsIn.title);   // v3.3.83
+  const ho = (type && type.key === 'handout') ? ibCleanHandout(refsIn.handout) : null;   // v3.3.92 -- the handout's writing
+  const ttlOver = !!(ttl && ttl.url);   // v3.3.85 -- Title Builder lettering is laid over the finished picture, not drawn by the model
+  if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
+  if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
+
+  const charIds = chars.map(function (c) { return c.character_id; });
+  const charList = buildCharacterBlock(chars, '', 0, charIds);
+  const assetList = buildAssetBlock(assets, '', assetIds);
+  const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
+    refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
+
+  let prompt = (typeof words === 'string' && words.trim()) ? words.trim().slice(0, IB_WORDS_MAX) : '';
+  if (!prompt) {
+    const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
+    const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
+    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttlOver ? ttl : null, titleOver: ttlOver, handout: ho });   // v3.3.93 -- only Title Builder lettering
+  }
+  // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
+  // own flags pass through untouched, exactly as a panel would send them.
+  let flags = _rs.isFade;
+  if (type && type.candid === false) flags = Object.assign((_rs.isFade && typeof _rs.isFade === 'object') ? Object.assign({}, _rs.isFade) : { fade: _rs.isFade }, { noCandid: true });
+  // v3.3.93 -- no 'titled' flag: only Title Builder lettering makes a title, and it is laid on, never drawn.
+
+  const modelKey = await getSelectedModel(db);
+  const cost = await getTokenCost(modelKey);
+  if (!(await canAfford(uid, cost))) { res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' }); return null; }
+  const _campPrompt = await loadCampaignPrompt(db, cid);
+  const seed = Math.floor(Math.random() * 2147483647);
+  const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
+  const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
+    assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
+  if (ttl) refsOut.title = ttl;   // v3.3.83
+  if (ho) refsOut.handout = ho;   // v3.3.92
+  if (type && type.edited) refsOut.type_text = type.text;   // v3.3.86
+  return { sub: sub, cost: cost, words: prompt, refsOut: refsOut, styleName: _rs.name || null, type: type, panelBlock: panelBlock };
+}
+async function ibQueueJob(db, uid, cid, sub, style, cost, imageId, prevImage) {
+  const now = new Date().toISOString();
+  return db.prepare(
+    'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, prev_image, created_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, style, cost, imageId, prevImage || null, now, now);
+}
+// The maker's own picture, in a campaign they may still use the Builder in, with nothing being drawn for it.
+async function ibOwnIdle(req, res, db) {
+  const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+  if (!r) { res.status(404).json({ error: 'That picture is no longer in the gallery.' }); return null; }
+  if (String(r.user_id) !== String(req.session.userId)) { res.status(403).json({ error: 'Only the person who made a picture can change it. Make your own copy to work on it.' }); return null; }
+  if (!(await ibAllowed(req.session.userId, r.campaign_id))) { res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' }); return null; }
+  const busy = await db.prepare("SELECT id FROM image_jobs WHERE builder_image_id = ? AND status IN ('queued', 'processing') AND created_at > ? LIMIT 1").get(r.id, new Date(Date.now() - IB_JOB_WINDOW_MS).toISOString());
+  if (busy) { res.json({ error: 'That picture is still being drawn. Try again once it has finished.' }); return null; }
+  return r;
+}
+function ibRecipeOf(r) {
+  let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
+  refs = refs || {};
+  return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null, type_text: refs.type_text || null, handout: refs.handout || null } };   // v3.3.92 -- handout   // v3.3.86 -- type_text   // v3.3.83 -- title
+}
+
+router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const b = req.body || {}, uid = req.session.userId, cid = parseInt(req.params.cid, 10);
+    const name = String(b.name || '').trim().slice(0, IB_NAME_MAX);
+    const description = String(b.description || '').trim().slice(0, IB_DESC_MAX);
+    if (!name) return res.json({ error: 'Give the picture a name.', field: 'name' });
+    // v3.3.81 -- an image type is enough on its own (Ian); the description is required only without one.
+    if (!description && !b.image_type) return res.json({ error: 'Describe the picture you want, or choose an image type.', field: 'description' });
+    const db = await getDb();
+    const style = String(b.art_style || '').trim(), shape = String(b.shape || '');
+    const recipe = { description: description, shape: shape, style: style, type: b.image_type || null, include_lore: b.include_lore !== false,
+      refs: (b.refs && typeof b.refs === 'object') ? b.refs : {}, type_text: b.type_text || null };   // v3.3.86 -- type_text
+    // v3.4.01 -- A NEW HANDOUT LANDS CLEAN. Ian: "Don't do it automatically... You need to drag and drop the text on
+    // there." Its words still shape the prompt (the empty writing area); the writing goes on when it is placed and applied.
+    if (recipe.refs.handout && typeof recipe.refs.handout === 'object') recipe.refs.handout = Object.assign({}, recipe.refs.handout, { url: '' });
+    const built = await ibBuildAndSubmit(req, res, db, uid, cid, recipe, null);
+    if (!built) return;
+    const sub = built.sub, type = built.type, now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, is_ready, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, type ? type.key : null, shape, style, built.styleName, recipe.include_lore, JSON.stringify(built.refsOut), sub.prompt || built.words, built.words, false, now, now);   // v3.3.73 -- starts as a Draft
+    const imageId = ins.lastInsertRowid;
+    const job = await ibQueueJob(db, uid, cid, sub, style, built.cost, imageId, null);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate',
+      message: 'Submitted Image Builder picture ' + imageId + ' (request ' + sub.request_id + ')',
+      detail: { campaign_id: cid, image_type: type ? type.key : null, shape: shape, style: style, refs: (built.panelBlock.refs || []).map(function (r) { return r.name; }), finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(imageId);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] generate error:', e.message);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/generate', message: 'Image Builder generation failed: ' + (e && e.message) }); } catch (_le) {}
+    res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// v3.3.87 -- the Title Builder's Archive, pointed at an Image Builder title: the lettering (and its uncut original) into
+// the campaign's Archive as a title, exactly as archive-title does for a cover, so it can be reused anywhere.
+router.post('/builder/campaigns/:cid/title-archive', requireAuth, async function (req, res) {
+  try {
+    if (!(await isTruePlatinum(req.session.userId))) return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    if (!(await ibGate(req, res))) return;
+    const cid = parseInt(req.params.cid, 10), b = req.body || {};
+    const url = String(b.url || '').trim(), src = String(b.src || '').trim();
+    if (!url || !isOurPublicUrl(url)) return res.json({ error: 'There is no lettering to archive yet.' });
+    const db = await getDb();
+    const already = await db.prepare("SELECT * FROM campaign_archives WHERE campaign_id = ? AND image_type = 'title' AND source_url = ? LIMIT 1").get(cid, url);
+    if (already) return res.json({ success: true, archive: already });
+    if (await rightsCheck.refuseRejected(res, [url], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
+    try {
+      const effTier = getTier(await getEffectiveTier(req.session.userId, cid));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(cid);
+        if (cnt && Number(cnt.c) >= cap) return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+      }
+    } catch (capErr) { console.error('[image-builder] title archive cap check error:', capErr.message); }
+    const { archiveCopy } = require('../storage/storage');
+    const archivedUrl = await archiveCopy(url);
+    let archivedSrc = '';
+    if (src && isOurPublicUrl(src)) { try { archivedSrc = await archiveCopy(src); } catch (e) { console.error('[image-builder] archive title source failed (keeping the cut copy):', e.message); } }
+    const meta = JSON.stringify({ subtitle: ibClip(b.subtitle, 140), src: archivedSrc || null });
+    const ins = await db.prepare(
+      'INSERT INTO campaign_archives (campaign_id, fork_id, image_type, title, image_url, source_url, image_prompt, layout_meta, archived_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, null, 'title', ibClip(b.title, 100) || null, archivedUrl, url, ibClip(b.prompt, 300) || null, meta, req.session.userId, new Date().toISOString());
+    const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, archive: row });
+  } catch (e) { console.error('[image-builder] title archive error:', e.message); res.json({ error: 'Could not archive the title. Please try again.' }); }
+});
+
+// v3.3.92 -- the handout's writing, as the browser set it: a transparent PNG, checked, stored. Only a PNG, at most
+// 4096 pixels a side and 8 MB; its metadata is checked as every upload's is.
+router.post('/builder/campaigns/:cid/handout-image', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String((req.body && req.body.data) || ''));
+    if (!m) return res.json({ error: 'The writing did not come through. Please try again.' });
+    const buf = Buffer.from(m[1], 'base64');
+    if (!buf.length || buf.length > 8 * 1024 * 1024) return res.json({ error: 'The writing is too large. Make the text box smaller and try again.' });
+    let meta = null; try { meta = await require('sharp')(buf).metadata(); } catch (e) { meta = null; }
+    if (!meta || meta.format !== 'png' || !(meta.width > 0) || !(meta.height > 0) || meta.width > 4096 || meta.height > 4096) return res.json({ error: 'The writing did not come through. Please try again.' });
+    const _tm = rightsCheck.metadataCheck(buf);
+    if (_tm && _tm.verdict === 'reject') return res.json({ error: 'That picture can\u2019t be used.' });
+    const url = await uploadFile(buf, 'ibtext-' + req.session.userId + '-' + Date.now() + '.png', 'image/png');
+    res.json({ url: url });
+  } catch (e) { console.error('[image-builder] handout image error:', e.message); res.json({ error: 'Could not store the writing. Please try again.' }); }
+});
+// v3.3.92 -- lay the handout's writing on the clean copy (with the title, if the picture has one). Free; Revert undoes.
+router.post('/builder/images/:id/handout', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing first.' });
+    const ho = ibCleanHandout(req.body && req.body.handout);
+    if (!ho) return res.json({ error: 'Type the handout\u2019s text first.' });
+    if (!ho.url || !ho.pos) return res.json({ error: 'Place the text on the picture first.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    const base = r.clean_image_url || r.image_url;
+    const _tl = ibLayersOf(refs);
+    let shown;
+    try { shown = await ibCompose(base, { handout: ho, title: _tl && _tl.title }, r.id); } catch (e) {
+      console.error('[image-builder] apply handout error:', e.message);
+      try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/handout', message: 'Could not lay the writing on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, writing: ho.url, pos: ho.pos } }); } catch (_le) {}
+      return res.json({ error: 'Could not lay the writing on the picture. Please try again.' });
+    }
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
+    refs.handout = ho;
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] apply handout error:', e.message); res.json({ error: 'Could not lay the writing on the picture.' }); }
+});
+
+// v3.3.93 -- TAKE THE WRITING OR THE TITLE OFF. Ian: "I'm having trouble removing the text from the picture once it's
+// on it." The picture is laid again from the clean copy with only what is left (or becomes the clean copy itself when
+// nothing is). The recipe keeps the words and the lettering, marked off, so Place or Apply puts them back; Regen and
+// Retouch leave them off. Free; the picture before goes to Revert.
+router.post('/builder/images/:id/layer-off', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const what = (req.body && req.body.what === 'title') ? 'title' : ((req.body && req.body.what === 'handout') ? 'handout' : '');
+    if (!what) return res.json({ error: 'Nothing to take off.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    const before = ibLayersOf(refs);
+    if (!r.clean_image_url || !before || !before[what]) return res.json({ error: what === 'title' ? 'There is no title on this picture to take off.' : 'There is no writing on this picture to take off.' });
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
+    refs[what] = Object.assign({}, refs[what], { off: true });
+    const after = ibLayersOf(refs);
+    let shown = r.clean_image_url, clean = null;
+    if (after) {
+      try { shown = await ibCompose(r.clean_image_url, after, r.id); clean = r.clean_image_url; } catch (e) {
+        console.error('[image-builder] layer off error:', e.message);
+        return res.json({ error: 'Could not take it off. Please try again.' });
+      }
+    }
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, clean, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] layer off error:', e.message); res.json({ error: 'Could not take it off.' }); }
+});
+
+// v3.3.85 -- Apply title: the Title section's lettering, laid on the clean copy at its placement and size, with no
+// redraw and no token. A picture with no clean copy is used as it is and becomes the clean copy -- unless its title was
+// drawn by the art style (typed, with no lettering), which cannot be lifted off. The picture before goes to Revert.
+router.post('/builder/images/:id/title', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing first.' });
+    const ttl = ibCleanTitle(req.body && req.body.title);
+    if (!ttl || !ttl.url) return res.json({ error: 'Design the lettering with the Title Builder first.' });
+    let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
+    // v3.3.93 -- a typed title is no longer drawn by the art style, so there is no drawn-in title to refuse over.
+    const base = r.clean_image_url || r.image_url;
+    let shown;
+    const _hoL = ibLayersOf(refs); // v3.3.92 -- the handout's writing goes back on too
+    try { shown = await ibCompose(base, { title: ttl, handout: _hoL && _hoL.handout }, r.id); } catch (e) {
+      console.error('[image-builder] apply title error:', e.message);
+      try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Image Builder', fn: 'POST /builder/images/:id/title', message: 'Could not lay the title on picture ' + r.id + ': ' + (e && e.message), detail: { picture: base, lettering: ttl.url, place: ttl.place, size: ttl.size } }); } catch (_le) {}   // v3.3.87
+      return res.json({ error: 'Could not lay the title on the picture. Please try again.' });
+    }
+    refs.prevLayers = ibSnapLayers(refs);   // v3.4.01
+    refs.title = ttl;
+    await db.prepare('UPDATE builder_images SET image_url = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(shown, base, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, JSON.stringify(refs), new Date().toISOString(), r.id);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] apply title error:', e.message); res.json({ error: 'Could not lay the title on the picture.' }); }
+});
+
+// v3.3.83 -- Rename: Ian, "The name change save should happen on blur". The maker only; allowed while it is drawing,
+// since the name is not part of the picture.
+router.post('/builder/images/:id/name', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT id, user_id, campaign_id FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can rename it.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    const name = String((req.body && req.body.name) || '').trim().slice(0, IB_NAME_MAX);
+    if (!name) return res.json({ error: 'Give the picture a name.' });
+    await db.prepare('UPDATE builder_images SET name = ?, updated_at = ? WHERE id = ?').run(name, new Date().toISOString(), r.id);
+    res.json({ success: true, name: name });
+  } catch (e) { console.error('[image-builder] rename error:', e.message); res.json({ error: 'Could not rename the picture.' }); }
+});
+
+// v3.3.74 -- Edit Prompt: the picture's own words (what follows the house rules, style and references in the
+// prompt). Saved here; Regen sends them. The whole assembled prompt stays read-only (builder_images.prompt).
+router.post('/builder/images/:id/words', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const words = String((req.body && req.body.words) || '').trim().slice(0, IB_WORDS_MAX);
+    if (!words) return res.json({ error: 'The prompt can\u2019t be empty.' });
+    await db.prepare('UPDATE builder_images SET words = ?, updated_at = ? WHERE id = ?').run(words, new Date().toISOString(), r.id);
+    res.json({ success: true, words: words });
+  } catch (e) { console.error('[image-builder] words error:', e.message); res.json({ error: 'Could not save the prompt.' }); }
+});
+
+// v3.3.74 -- Regen: the same recipe and words, a new seed, one token (spent when the picture arrives). The picture
+// on show goes to the one-deep undo slot (prev_image_url) when the new one lands, so Revert can bring it back.
+router.post('/builder/images/:id/regen', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const uid = req.session.userId, cid = r.campaign_id;
+    const built = await ibBuildAndSubmit(req, res, db, uid, cid, ibRecipeOf(r), r.words || null);
+    if (!built) return;
+    const sub = built.sub;
+    await db.prepare('UPDATE builder_images SET prompt = ?, words = ?, refs = ?, art_style_name = ?, updated_at = ? WHERE id = ?')
+      .run(sub.prompt || built.words, built.words, JSON.stringify(built.refsOut), built.styleName, new Date().toISOString(), r.id);
+    const job = await ibQueueJob(db, uid, cid, sub, r.art_style, built.cost, r.id, r.image_url || null);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/regen',
+      message: 'Regenerating Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] regen error:', e.message);
+    res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// v3.3.74 -- Revert: swap the picture and the one in the undo slot (so a second Revert goes forward again).
+router.post('/builder/images/:id/revert', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.prev_image_url) return res.json({ error: 'There is no earlier picture to go back to.' });
+    // v3.4.01 -- the title and writing go back with the picture (a picture from before v3.4.01 keeps the recipe as it is).
+    let _rrefs = {}; try { _rrefs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { _rrefs = {}; }
+    const _swapped = ibSwapLayers(_rrefs);
+    await db.prepare('UPDATE builder_images SET image_url = ?, img_w = ?, img_h = ?, clean_image_url = ?, prev_image_url = ?, prev_img_w = ?, prev_img_h = ?, prev_clean_image_url = ?, refs = ?, updated_at = ? WHERE id = ?')
+      .run(r.prev_image_url, r.prev_img_w || null, r.prev_img_h || null, r.prev_clean_image_url || null, r.image_url, r.img_w || null, r.img_h || null, r.clean_image_url || null, _swapped ? JSON.stringify(_rrefs) : (r.refs || null), new Date().toISOString(), r.id);   // v3.3.85 -- the clean copies swap too
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] revert error:', e.message); res.json({ error: 'Could not go back to the earlier picture.' }); }
+});
+
+// v3.3.74 -- Archive: a copy of the picture into the campaign's Archive (as a picture, image_type 'moment' with no
+// session, so the cover, title and Replace pickers take it like any archived panel). The archive cap and the rights
+// check apply as on every other Archive button. The maker only.
+router.post('/builder/images/:id/archive', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be archived.' });
+    // v3.3.85 -- clean: the copy without the title (Archive asks which, when there is one).
+    const _src = (req.body && req.body.clean && r.clean_image_url) ? r.clean_image_url : r.image_url;
+    const already = await db.prepare("SELECT id FROM campaign_archives WHERE campaign_id = ? AND source_url = ? LIMIT 1").get(r.campaign_id, _src);
+    if (already) return res.json({ success: true, already: true });
+    try {
+      const effTier = getTier(await getEffectiveTier(req.session.userId, r.campaign_id));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(r.campaign_id);
+        if (cnt && Number(cnt.c) >= cap) return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+      }
+    } catch (capErr) { console.error('[image-builder] archive cap check error:', capErr.message); }
+    if (await rightsCheck.refuseRejected(res, [_src], 'It can\u2019t be archived. Replace it with a picture you have the rights to.')) return;
+    const { archiveCopy } = require('../storage/storage');
+    const archivedUrl = await archiveCopy(_src);
+    await db.prepare(
+      'INSERT INTO campaign_archives (campaign_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(r.campaign_id, 'moment', (r.name || 'Image Builder picture') + (_src !== r.image_url ? ' (clean copy)' : ''), archivedUrl, _src, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
+    res.json({ success: true });
+  } catch (e) { console.error('[image-builder] archive error:', e.message); res.json({ error: 'Could not archive the picture.' }); }
+});
+
+// v3.3.74 -- Make My Copy: anyone in the campaign who can see the picture (Ready, or their own) gets their own copy
+// of its recipe, words and current picture, as a new Draft of theirs in the same campaign. Free: nothing is drawn.
+// The picture file is shared, which releaseImage already allows for (it keeps a file any row still names).
+router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const uid = req.session.userId;
+    const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (!(await ibAllowed(uid, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    if (r.is_ready === false && String(r.user_id) !== String(uid)) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be copied.' });
+    const now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, clean_image_url, is_ready, copied_from, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(r.campaign_id, uid, String(r.name || 'Picture').slice(0, IB_NAME_MAX - 7) + ' (copy)', r.description, r.image_type, r.shape, r.art_style, r.art_style_name, r.include_lore, r.refs, r.prompt, r.words, r.image_url, r.img_w, r.img_h, r.clean_image_url || null, false, r.id, now, now);   // v3.3.85 -- with its clean copy
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
+});
+
+// v3.3.82 -- Retouch a Builder picture, through the same submitRetouch the Story panels use: the picture is Image 1,
+// the recipe's references follow, the reader's markers ride along as a location diagram (marked_url), and a picked
+// reference narrows the payload to that one (ref_name). One token, spent when the picture arrives; the picture on
+// show moves into the Revert slot (the 'builder' webhook branch). The maker only, nothing being drawn.
+router.post('/builder/images/:id/retouch', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await ibOwnIdle(req, res, db); if (!r) return;
+    const uid = req.session.userId, cid = r.campaign_id;
+    const instruction = String((req.body && req.body.instruction) || '').trim();
+    if (!instruction) return res.json({ error: 'Describe the change you want.' });
+    if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be retouched.' });
+    if (await rightsCheck.refuseRejected(res, [r.image_url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;
+    const fal_key = process.env.FAL_API_KEY;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured. Please contact support.' });
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const _rs = await resolveGenStyle(db, r.art_style, uid, cid);
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' });
+    // The references this picture was drawn with, resolved again from the database (a removed one is left out
+    // rather than refusing the retouch: the picture itself is what is being changed).
+    const recipe = ibRecipeOf(r);
+    const chars = [];
+    for (const c of (recipe.refs.characters || [])) {
+      const one = await ibResolveCharacters(db, cid, uid, [c]);
+      if (!one.error && one.chars.length) chars.push(one.chars[0]);
+    }
+    const assetIds = (recipe.refs.assets || []).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return x > 0; });
+    const assets = assetIds.length ? (await db.prepare(ASSET_REF_SQL).all(cid)).filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; }) : [];
+    const charList = buildCharacterBlock(chars, '', 0, chars.map(function (c) { return c.character_id; }));
+    const assetList = buildAssetBlock(assets, '', assets.map(function (a) { return a.id; }));
+    const refs = combineRefs(charList.refs, assetList.refs);
+    // {{REF:Name}} placeholders and a picked reference, worded exactly as the panel route words them.
+    let instr = instruction;
+    if (instr.indexOf('{{REF:') !== -1) {
+      instr = instr.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+        const want = String(nm || '').trim().toLowerCase();
+        for (let i = 0; i < refs.length; i++) {
+          const rn = refs[i] && refs[i].name;
+          if (rn && String(rn).trim().toLowerCase() === want) return 'the single reference picture supplied with this request, which is the reference for ' + rn + ',';
+        }
+        return 'the supplied reference image for ' + nm;
+      });
+    }
+    const pick = String((req.body && req.body.ref_name) || '').trim();
+    if (pick) {
+      const hit = refs.filter(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })[0];
+      if (hit) instr = 'The character or object being corrected is ' + hit.name + '. The single reference picture supplied with this request is the reference for ' + hit.name +
+        ', and it is the only one supplied. Apply the change to ' + hit.name + ' and to no one else.\n\n' + instr;
+    }
+    let marked = String((req.body && req.body.marked_url) || '').trim();
+    if (marked && !isOurPublicUrl(marked)) marked = '';
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(uid, cost))) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    // v3.3.85 -- the clean copy is retouched; the lettering goes back on when it lands.
+    const sub = await submitRetouch(r.clean_image_url || r.image_url, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charList.text }, r.shape, marked || null, pick || null, false, null);
+    const now = new Date().toISOString();
+    const job = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, builder_image_id, prev_image, temp_inputs, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, uid, cid, 'builder', 'queued', sub.model, r.art_style, cost, r.id, r.image_url, marked ? JSON.stringify([marked]) : null, now, now);
+    await logDebug(uid, { level: 'info', source: 'generation', page: 'Image Builder', fn: 'POST /builder/retouch',
+      message: 'Retouching Image Builder picture ' + r.id + ' (request ' + sub.request_id + ')', detail: { instruction_raw: instruction, ref_name_picked: pick || null, refs: refs.map(function (x) { return x && x.name; }), marked_url: marked ? 'yes' : 'no', instruction_sent: instr } });
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
+    res.status(202).json({ status: 'queued', job_id: job.lastInsertRowid, image: ibRow(row) });
+  } catch (e) {
+    console.error('[image-builder] retouch error:', e.message);
+    res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// v3.3.73 -- Draft / Ready: the maker only, in a campaign they may still use the Builder in, and only once the
+// picture has arrived (a picture still drawing, or one that failed, stays a draft).
+router.post('/builder/images/:id/ready', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT id, user_id, campaign_id, image_url FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can change whether it is ready.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    const ready = !!(req.body && req.body.ready === true);
+    if (ready && !r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be marked Ready.' });
+    await db.prepare('UPDATE builder_images SET is_ready = ?, updated_at = ? WHERE id = ?').run(ready, new Date().toISOString(), r.id);
+    res.json({ success: true, ready: ready });
+  } catch (e) { console.error('[image-builder] ready error:', e.message); res.json({ error: 'Could not change the picture.' }); }
+});
+
+router.delete('/builder/images/:id', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
+    if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
+    if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can delete it.' });
+    const busy = await db.prepare("SELECT id FROM image_jobs WHERE builder_image_id = ? AND status IN ('queued', 'processing') AND created_at > ? LIMIT 1").get(r.id, new Date(Date.now() - IB_JOB_WINDOW_MS).toISOString());
+    if (busy) return res.json({ error: 'That picture is still being drawn. Delete it once it has finished.' });
+    await db.prepare('DELETE FROM builder_images WHERE id = ?').run(r.id);
+    if (r.image_url) await releaseImage(db, r.image_url);
+    if (r.prev_image_url) await releaseImage(db, r.prev_image_url);
+    if (r.clean_image_url) await releaseImage(db, r.clean_image_url);   // v3.3.85
+    if (r.prev_clean_image_url) await releaseImage(db, r.prev_clean_image_url);
+    res.json({ success: true });
+  } catch (e) { console.error('[image-builder] delete error:', e.message); res.json({ error: 'Could not delete the picture.' }); }
+});
+
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.

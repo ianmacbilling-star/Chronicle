@@ -173,6 +173,18 @@ const apiLimiter = rateLimit({
   validate: false,  // disable express-rate-limit config-validation warnings (version-proof; limiter still fully active)
   message: { error: 'Too many requests. Please slow down and try again in a few minutes.' }
 });
+// v3.3.90 -- WHAT THE AI CAP COUNTS. Ian, picking characters quickly in the Image Builder, hit "You're generating very
+// quickly": aiLimiter sits on the whole of /api/images, so every GET of a character list, a character's looks, the
+// assets, the gallery poll and every rights lookup counted against 30 a minute -- none of which calls a model. Under
+// /api/images only: reads (GET / HEAD), deletes, the rights lookup and the Image Builder's free actions (rename, words,
+// Draft / Ready, Revert, Archive, copy, Apply title) are not counted. Everything that can spend still is. The general
+// apiLimiter still covers every one of them.
+var AI_FREE_IMAGES_POST = /^\/(rights|builder\/images\/\d+\/(name|words|ready|revert|archive|copy|title|handout|layer-off)|builder\/campaigns\/\d+\/handout-image)\/?$/;   // v3.3.92 -- handout
+function aiLimiterSkip(req) {
+  if (req.baseUrl !== '/api/images') return false;
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'DELETE') return true;
+  return req.method === 'POST' && AI_FREE_IMAGES_POST.test(req.path || '');
+}
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,        // 1 minute
   max: 30,                    // generate-all is ONE request; single regens are one each
@@ -180,6 +192,7 @@ const aiLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: rlUserKey,
   validate: false,  // disable express-rate-limit config-validation warnings (version-proof; limiter still fully active)
+  skip: aiLimiterSkip,   // v3.3.90
   message: { error: "You're generating very quickly. Please wait a moment before generating again." }
 });
 

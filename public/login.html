@@ -398,6 +398,30 @@ function regFail(msg, fieldId) {
   el.addEventListener('input', fix);
   el.addEventListener('change', fix);
 });
+// v3.3.98 -- TD-1083. THE PROMO CODE IS CHECKED AS SOON AS ITS BOX IS LEFT, not only at Create Account (tester note
+// 2026-10-31). Same answer as /register. The cursor is not pulled back: they have just left the box on purpose.
+var _promoAsked = '';
+(function () {
+  var box = document.getElementById('reg-promo');
+  if (!box) return;
+  box.addEventListener('input', function () { _promoAsked = ''; });
+  box.addEventListener('blur', async function () {
+    var code = (box.value || '').trim().toUpperCase();
+    if (!code || code === _promoAsked) return;
+    _promoAsked = code;
+    try {
+      var r = await fetch('/api/auth/promo-check', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,plan:_signupPlan})});
+      var d = await r.json();
+      if ((box.value || '').trim().toUpperCase() !== code) return;   // changed while we asked
+      if (d && d.error) {
+        showError('register-error', d.error);
+        _regClearNag();
+        box.classList.remove('field-nag'); void box.offsetWidth; box.classList.add('field-nag');
+        _regNagEl = box;
+      }
+    } catch (e) {}
+  });
+})();
 
 document.getElementById('register-btn').addEventListener('click', async function() {
   hideError('register-error');

@@ -301,11 +301,14 @@ router.delete('/:id', requireAuth, async function(req, res) {
   async function grab(sql){ try { (await db.prepare(sql).all(cid)).forEach(function(r){ if (r && r.u) urls.push(r.u); }); } catch(e){ console.error('campaign-delete gather:', e.message); } }
   await grab('SELECT campaign_image_url AS u FROM campaigns WHERE id = ?');
   await grab('SELECT cover_image_url AS u FROM campaigns WHERE id = ?');
+  await grab('SELECT image_url AS u FROM builder_images WHERE campaign_id = ?');        // v3.3.71 -- TD-1080: Image Builder
+  await grab('SELECT prev_image_url AS u FROM builder_images WHERE campaign_id = ?');   // pictures go with their campaign
 
   // Clear non-cascading children first so the FK never blocks, then the campaign.
   async function wipe(sql){ try { await db.prepare(sql).run(cid); } catch(e){ console.error('campaign-delete wipe:', e.message); } }
   await wipe('DELETE FROM campaign_invites WHERE campaign_id = ?');
   await wipe('DELETE FROM image_jobs WHERE campaign_id = ?');
+  await wipe('DELETE FROM builder_images WHERE campaign_id = ?');   // v3.3.71 -- TD-1080
   await wipe('UPDATE print_orders SET campaign_id = NULL WHERE campaign_id = ?');
   await wipe('DELETE FROM campaign_members WHERE campaign_id = ?');
   try {

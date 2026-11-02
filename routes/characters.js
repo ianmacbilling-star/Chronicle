@@ -123,11 +123,12 @@ router.get('/import/campaigns', requireAuth, verifyCampaignDM, async function (r
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      'SELECT c.id, c.name, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
       'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id ' +
       'WHERE cm.user_id = ? AND c.id <> ? ORDER BY LOWER(c.name) ASC'
     ).all(req.session.userId, req.params.campaignId);
-    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0 }; }) });
+    // v3.4.03 -- the picture its My Campaigns card shows (campaign picture, else the book cover)
+    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '' }; }) });
   } catch (e) {
     console.error('[char-import] campaigns error:', e.message);
     res.json({ error: 'Could not load your campaigns.' });
@@ -950,3 +951,4 @@ router.post('/:id/revert-reference', requireAuth, verifyCampaignDmOrCharacterOwn
 });
 
 module.exports = router;
+module.exports.importLooksForVersion = importLooksForVersion;   // v3.3.71 -- TD-1080: the Image Builder's looks step

@@ -640,4 +640,41 @@ router.delete('/:assetId', requireAuth, verifyCampaignDM, async function(req, re
   }
 });
 
+// v3.3.82 -- TD-1080. Save an Image Builder picture as a campaign asset: the Copy to Assets window (name, type and the
+// crop frame) pointed at a Builder picture instead of an Archive row. Same rules as from-archive: who may add assets,
+// the asset cap, the rights check; the asset gets its OWN copy of the picture (cut to the frame when there is one).
+// The picture must be one the caller can see (Ready, or their own).
+router.post('/from-builder', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
+  try {
+    const db = await getDb();
+    const capMsg = await assetCapBlock(db, req.session.userId, req.params.campaignId);
+    if (capMsg) return res.json({ error: capMsg });
+    const name = (req.body && req.body.name || '').trim();
+    const category = cleanCategory(req.body && req.body.category);
+    if (!name) return res.json({ error: 'Asset name is required' });
+    const b = await db.prepare('SELECT id, user_id, image_url, clean_image_url, is_ready FROM builder_images WHERE id = ? AND campaign_id = ?').get(req.body && req.body.builder_image_id, req.params.campaignId);
+    if (!b || !b.image_url || (b.is_ready === false && String(b.user_id) !== String(req.session.userId))) return res.status(404).json({ error: 'Source image not found.' });
+    if (req.body && req.body.clean && b.clean_image_url) b.image_url = b.clean_image_url;   // v3.3.85 -- the copy without the title
+    if (await rightsCheck.refuseRejected(res, [b.image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
+    let imageUrl;
+    const crop = cropMath.readFrac(req.body && req.body.crop);
+    try {
+      imageUrl = crop ? await cropArchiveImage(b.image_url, crop) : await restoreCopy(b.image_url);
+    } catch (e) {
+      console.error('builder-to-asset copy failed:', e.message);
+      return res.json({ error: crop ? 'Could not cut out that part of the picture. Please try again.' : 'Could not copy the image. Please try again.' });
+    }
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO campaign_assets (campaign_id, name, category, image_url, created_at, created_by) ' +
+      'VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name, category, imageUrl, now, req.session.userId);
+    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(result.lastInsertRowid);
+    res.json(asset);
+  } catch (e) {
+    console.error('builder-to-asset error:', e.message);
+    res.json({ error: 'Could not copy this image to Assets.' });
+  }
+});
+
 module.exports = router;
