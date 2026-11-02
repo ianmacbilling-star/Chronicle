@@ -39378,7 +39378,7 @@ function ibAccRefresh() {
 // text; edits are saved with this picture only (Regen and Make My Copy keep them), Reset brings the standard text back.
 function ibTypeDefault(key) { var t = (IB.types || []).filter(function (x) { return x.key === key; })[0]; return (t && t.text) || ''; }
 function ibTypeNoteHtml() {
-  if (IB.type === 'mapscene') return 'Add the map to References as a Location asset (one only). A style without faded edges gives a full scene.';   // v3.4.10 -- TD-1091
+  if (IB.type === 'mapscene') return 'Add the map to References as an Item asset (or a Location), one only. A style without faded edges gives a full scene.';   // v3.4.10 -- TD-1091; v3.4.11 -- Item
   return (IB.type === 'character' && IB.chars.length > 1) ? 'A Character Study works best with one character. With ' + IB.chars.length + ', it will do what it can.' : '';
 }
 function ibTypeEditHtml() {
