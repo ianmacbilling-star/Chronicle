@@ -39504,7 +39504,10 @@ function ibViewerHtml() {
   // Draft / Ready: in the toolbar beside Generate and New picture (v3.3.77, Ian), for the maker's own picture only.
   var state = '';
   if (mine) {
-    state = '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
+    // v3.4.09 -- TD-1090. MAKE A COPY FOR THE MAKER (Ian, 2026-11-02: "a Make a Copy next to the New Picture button"). The
+    // same free copy others get from Make My Copy (POST /copy already allowed the maker): a new Draft that opens at once.
+    state = (im.image_url && !busy ? '<button class="btn btn-sm" id="ib-copy-own" onclick="ibCopy(' + im.id + ')" title="A new Draft of this picture, to change and redraw without touching this one (free)">Make a Copy</button>' : '') +
+      '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
   return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
