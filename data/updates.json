@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.11",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3411-map-to-scene-items-and-interiors",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Map to Scene takes a map saved as an Item, and turns dungeon and cave maps into a cutaway of the real place.",
+        "detail": "The map can be an Item asset (or a Location). It is used only as the plan of the place, so the picture shows the place itself rather than a map. Outdoor maps are seen from a low hilltop; dungeons, caves and buildings as a cutaway from above with the ceiling lifted off.",
+        "td": [
+          "TD-1091"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.10",
     "staged_on": "2026-11-02",
     "entries": [

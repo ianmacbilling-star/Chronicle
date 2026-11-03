@@ -414,10 +414,11 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
         if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'plan') return n + ' is a flat, top-down plan of the place "' + r.name + '". It is not an object in the scene and is never drawn itself: use it only for the layout of the place you draw.';   // v3.4.11 -- TD-1091, Map to Scene only
         return n + ' is a reference for "' + r.name + '".';
       }
       return n + ' is the reference for ' + r.name + '.';
-    }).join(' ');
+    }).join(' ') + (charRefs.some(function (r) { return r && r.isAsset && r.category === 'plan'; }) ? ' The plan is the one exception to the rules below: draw the real place it describes, never the plan itself, its paper or anything it lies on.' : '');   // v3.4.11
     var assetSection = assetText
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
@@ -3250,13 +3251,21 @@ const IB_TYPES = [
   // v3.4.10 -- TD-1091. Map to Scene (Ian, 2026-11-02): a flat map, given as ONE Location asset, rebuilt as a low angled
   // bird's-eye scene. Ian's tests: a storybook map and a top-down battle map both kept their layout; "masts" brought
   // antennas and "continue beyond the edges" a second town, so the wording names neither. needsMap: ibBuildAndSubmit.
-  { key: 'mapscene', label: 'Map to Scene', candid: true, needsMap: true, text: 'IMAGE TYPE: a low, angled bird\'s-eye view of a real place, built from a flat map. The location reference picture supplied with this request is a flat, top-down 2D map or plan of this place. Rebuild it as a real, three-dimensional landscape seen from a low vantage point about 30 degrees above the ground, as if from a nearby hilltop at the near edge of the map, looking out across the whole area toward the horizon.\n\nUse strong perspective: the map\'s bottom edge is close to the viewer, large and detailed at the bottom of the picture; the map\'s top edge is far away, smaller and softened by haze. Buildings show their front walls, doors, windows and the sides facing the viewer as well as their roofs; trees, rocks, boats and figures stand upright and cast long shadows across the ground.\n\nKeep the map\'s layout and contents exactly: every coastline, river, pier, road, wall, building, boat, forest and hill sits in the same place relative to the others as on the map, with the same shapes and proportions, seen in perspective. Each symbol on the map becomes the real thing it stands for, at its true scale, and the place holds exactly what the map shows. Everything keeps the era, materials and technology the map itself shows. Beyond the map\'s edges lies only open, natural country, water and sky, stretching quietly to a distant horizon, with a wide sky across the top of the picture. Light the scene with natural directional sunlight.\n\nThe whole picture is a painted landscape scene: the map\'s paper, border, grid, compass rose, legend, labels and lettering all become land, so the finished picture shows only the place itself.' },
+  // v3.4.11 -- {{MAP}} is the map's own name, filled in by ibMapType. Outdoor paragraph as Ian tested it on the harbour;
+  // the interior cutaway paragraph added after the Forbidden Cave map came back as a map on a table.
+  { key: 'mapscene', label: 'Map to Scene', candid: true, needsMap: true, text: 'IMAGE TYPE: a real place in three dimensions, built from a plan. The reference picture for "{{MAP}}" is a flat, top-down map or plan of this place; it is only the plan to build from. The finished picture shows the real place that plan describes: the place itself.\n\nIf the plan shows open country, a town, a harbour or a coast, rebuild it as a real, three-dimensional landscape seen from a low vantage point about 30 degrees above the ground, as if from a nearby hilltop at the near edge of the plan, looking out across the whole area toward the horizon. Use strong perspective: the plan\'s bottom edge is close to the viewer, large and detailed at the bottom of the picture; its top edge is far away, smaller and softened by haze. Buildings show their front walls, doors, windows and the sides facing the viewer as well as their roofs; trees, rocks, boats and figures stand upright and cast long shadows across the ground. Beyond the plan\'s edges lies only open, natural country, water and sky, stretching quietly to a distant horizon, with a wide sky across the top of the picture. Light the scene with natural directional sunlight.\n\nIf the plan shows an interior (a dungeon, cave, mine, castle, temple or building), rebuild it as a three-dimensional cutaway illustration seen from above at about 45 degrees, with the ceiling and roof lifted away so every room and corridor is visible at once. Every wall stands at its full height with rough stone faces, doorways and arches; floors are real flagstones, packed earth and scattered rubble; stairs climb and descend; statues, chests and rubble stand upright and cast shadows; the rooms are lit from within by torches and braziers, with deep shadow in the corners. Around the outside of the walls is solid rock and earth, cut away cleanly.\n\nKeep the plan\'s layout and contents exactly: every wall, room, corridor, stair, coastline, river, pier, road, building, boat, forest and hill sits in the same place relative to the others as on the plan, with the same shapes and proportions, seen in perspective. Each symbol on the plan becomes the real thing it stands for, at its true scale, and the place holds exactly what the plan shows. Everything keeps the era, materials and technology the plan itself shows.\n\nThe whole picture is a painted scene of the place itself: the plan\'s paper, border, grid, compass rose, legend, labels and lettering all become ground, floor and wall.' },
   // v3.3.97 -- Item Showcase as a still life (Ian's mirror-and-goblet example).
   { key: 'item', label: 'Item Showcase', candid: false, text: 'IMAGE TYPE: an item showcase painted as a still life. The item, or each item when there are several, rests on a fitting surface (a stone plinth, a table, an altar, the ground), large and in sharp focus, filling most of the picture, with its materials, wear, markings and craftsmanship clearly visible. Several items are arranged together naturally, overlapping a little, none hidden. Behind them, a softly suggested setting from where they were found, darker and less detailed so it never competes, with one clear light falling on the items.' },
   { key: 'handout', label: 'In-world Handout', candid: false, text: 'IMAGE TYPE: an in-world handout seen flat and filling the picture: a single document such as a wanted poster, letter, scroll or notice, aged and weathered to suit the setting. Any writing on it is short.' },
   { key: 'token', label: 'Portrait / Headshot', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }   // v3.3.97 -- renamed (Ian); key unchanged
 ];
 var IB_TYPE_TEXT_MAX = 2500;   // v3.3.86
+// v3.4.11 -- TD-1091. Map to Scene names the map: {{MAP}} in the type's words becomes the map asset's name, for the prompt
+// only (the stored type_text keeps the placeholder).
+function ibMapType(type, map) {
+  if (!type || !map || String(type.text || '').indexOf('{{MAP}}') < 0) return type;
+  return Object.assign({}, type, { text: type.text.split('{{MAP}}').join(assetCanonicalName(map.name)) });
+}
 function ibType(key) { if (key === 'creature') key = 'character'; return IB_TYPES.filter(function (t) { return t.key === key; })[0] || null; }   // v3.3.92 -- creature is character
 
 async function ibAllowed(userId, campaignId) {
@@ -3651,16 +3660,19 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const ho = (type && type.key === 'handout') ? ibCleanHandout(refsIn.handout) : null;   // v3.3.92 -- the handout's writing
   const ttlOver = !!(ttl && ttl.url);   // v3.3.85 -- Title Builder lettering is laid over the finished picture, not drawn by the model
   if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
-  if (type && type.needsMap) {   // v3.4.10 -- TD-1091: the map is the one Location asset; nothing is charged when it is missing
-    const _maps = assets.filter(function (a) { return (a.category || 'location') === 'location'; });
-    if (_maps.length === 0) { res.json({ error: 'Map to Scene needs the map: add it to References as a Location asset.', field: 'refs' }); return null; }
-    if (_maps.length > 1) { res.json({ error: 'Map to Scene uses one Location asset, the map. Remove the other Location assets from References.', field: 'refs' }); return null; }
+  let _ibMap = null;   // v3.4.11 -- Map to Scene: the asset that is the map
+  if (type && type.needsMap) {   // v3.4.10/11 -- TD-1091: the map is the one Item or Location asset (Ian: in the story a map is an item); nothing is charged when it is missing
+    const _maps = assets.filter(function (a) { var c = a.category || 'location'; return c === 'item' || c === 'location'; });
+    if (_maps.length === 0) { res.json({ error: 'Map to Scene needs the map: add it to References as an Item asset (or a Location).', field: 'refs' }); return null; }
+    if (_maps.length > 1) { res.json({ error: 'Map to Scene uses one map: leave just one Item or Location asset in References.', field: 'refs' }); return null; }
+    _ibMap = _maps[0];
   }
   if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
 
   const charIds = chars.map(function (c) { return c.character_id; });
   const charList = buildCharacterBlock(chars, '', 0, charIds);
-  const assetList = buildAssetBlock(assets, '', assetIds);
+  const assetList = buildAssetBlock(_ibMap ? assets.map(function (a) { return a === _ibMap ? Object.assign({}, a, { category: 'plan' }) : a; }) : assets, '', assetIds);   // v3.4.11 -- the map is a plan
+  if (_ibMap) assetList.text = String(assetList.text || '').split('\n').filter(function (l) { return !/ \(plan\)$/.test(l); }).join('\n');   // and not a scene asset to match
   const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
     refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
 
@@ -3668,7 +3680,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   if (!prompt) {
     const camp = await db.prepare('SELECT id, genres, lore FROM campaigns WHERE id = ?').get(cid);
     const lore = (recipe.include_lore !== false && camp && camp.lore && String(camp.lore).trim()) ? String(camp.lore).trim().slice(0, IB_LORE_MAX) : '';
-    prompt = ibPrompt({ type: type, description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttlOver ? ttl : null, titleOver: ttlOver, handout: ho });   // v3.3.93 -- only Title Builder lettering
+    prompt = ibPrompt({ type: ibMapType(type, _ibMap), description: recipe.description, genreLabels: genresvc.genreLabels(camp && camp.genres), lore: lore, title: ttlOver ? ttl : null, titleOver: ttlOver, handout: ho });   // v3.3.93 -- only Title Builder lettering
   }
   // A poster, portrait or token drops the story-panel rule that people never face the viewer. Otherwise the style's
   // own flags pass through untouched, exactly as a panel would send them.
