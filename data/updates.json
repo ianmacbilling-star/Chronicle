@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.16",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3416-campaign-pin-plain",
+        "kind": "improvement",
+        "public": false,
+        "summary": "My Campaigns: the pin sits on the card without a circle behind it.",
+        "detail": "A little larger, with a soft shadow so it shows on light covers.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.15",
     "staged_on": "2026-11-03",
     "entries": [

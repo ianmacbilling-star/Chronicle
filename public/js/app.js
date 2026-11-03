@@ -22029,10 +22029,12 @@ try { if (document.body && document.body.classList) document.body.classList.togg
 function campPinCss() {
   if (document.getElementById('camp-pin-css')) return;
   var s = document.createElement('style'); s.id = 'camp-pin-css';
+  // v3.4.16 -- no circle: the pin sits on the card itself, with a dark shadow so it reads on a light cover (Ian).
   s.textContent = '.camp-pin{position:absolute;top:12px;right:12px;z-index:7;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;' +
-    'border-radius:50%;border:1px solid rgba(201,168,76,0.45);background:rgba(10,6,4,0.72);color:rgba(201,168,76,0.6);cursor:pointer;padding:0;}' +
-    '.camp-pin:hover{color:#e8c870;background:rgba(10,6,4,0.9);}' +
-    '.camp-pin.on{color:#e8c870;border-color:#c9a84c;}' +
+    'border:none;background:none;color:rgba(232,200,112,0.75);cursor:pointer;padding:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));}' +
+    '.camp-pin svg{width:22px;height:22px;}' +
+    '.camp-pin:hover{color:#f0d888;}' +
+    '.camp-pin.on{color:#e8c870;}' +
     '.camp-pin.off svg{transform:rotate(45deg);}';
   document.head.appendChild(s);
 }
