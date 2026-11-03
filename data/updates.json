@@ -1,5 +1,69 @@
 [
   {
+    "version": "3.4.17",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3417-campaign-pickers-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Image Builder's and Import a character's campaign pickers now follow your My Campaigns order.",
+        "detail": "Pinned campaigns come first, marked with the pin, then the ones you opened most recently. Choosing a campaign in the Image Builder counts as opening it.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.16",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3416-campaign-pin-plain",
+        "kind": "improvement",
+        "public": false,
+        "summary": "My Campaigns: the pin sits on the card without a circle behind it.",
+        "detail": "A little larger, with a soft shadow so it shows on light covers.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.15",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3415-campaign-pins-and-recent",
+        "kind": "improvement",
+        "public": true,
+        "summary": "My Campaigns: pin campaigns to the top, and the rest are listed by when you last opened them.",
+        "detail": "Each campaign has a pin in its corner. Pinned campaigns stay at the top in the order you pinned them; the others follow, the one you opened most recently first. Your pins and order are your own and follow you to any device.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.14",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3414-builder-phone-buttons-and-panels",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: on a phone the picture's buttons sit under it, and opening a picture from the Gallery closes the form's panels.",
+        "detail": "Regen, Retouch, Edit Prompt and the rest now sit in a row under the picture on a phone, as on the Storyboard. A picture opened from the Gallery shows with every panel of the form shut, so the picture and its buttons are in view; New picture opens them again.",
+        "td": [
+          "TD-1093"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.13",
     "staged_on": "2026-11-02",
     "entries": [

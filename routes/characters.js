@@ -123,12 +123,13 @@ router.get('/import/campaigns', requireAuth, verifyCampaignDM, async function (r
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      // v3.4.17 -- TD-1094: the My Campaigns order.
+      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, cm.pinned_at, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
       'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id ' +
-      'WHERE cm.user_id = ? AND c.id <> ? ORDER BY LOWER(c.name) ASC'
+      'WHERE cm.user_id = ? AND c.id <> ? ORDER BY (cm.pinned_at IS NULL) ASC, cm.pinned_at ASC, cm.last_opened_at DESC NULLS LAST, c.created_at DESC'
     ).all(req.session.userId, req.params.campaignId);
     // v3.4.03 -- the picture its My Campaigns card shows (campaign picture, else the book cover)
-    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '' }; }) });
+    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at }; }) });   // v3.4.17 -- pinned
   } catch (e) {
     console.error('[char-import] campaigns error:', e.message);
     res.json({ error: 'Could not load your campaigns.' });

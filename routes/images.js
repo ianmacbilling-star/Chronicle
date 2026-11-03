@@ -3320,13 +3320,14 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
-      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id WHERE cm.user_id = ? ORDER BY LOWER(c.name) ASC'
+      // v3.4.17 -- TD-1094: the My Campaigns order (Ian: "It should also dictate the order for the Campaign Selector").
+      'SELECT c.id, c.name, c.campaign_image_url, c.cover_image_url, cm.role, cm.pinned_at, (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count ' +
+      'FROM campaign_members cm JOIN campaigns c ON c.id = cm.campaign_id WHERE cm.user_id = ? ORDER BY (cm.pinned_at IS NULL) ASC, cm.pinned_at ASC, cm.last_opened_at DESC NULLS LAST, c.created_at DESC'
     ).all(req.session.userId);
     const out = [];
     for (const r of (rows || [])) {
       // v3.4.03 -- image: the picture its My Campaigns card shows (campaign picture, else the book cover)
-      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '' });
+      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at });   // v3.4.17 -- pinned
     }
     let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
     const _ibAdm = await ibIsAdmin(req);   // v3.4.13

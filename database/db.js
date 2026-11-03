@@ -1116,6 +1116,10 @@ async function initPostgres() {
   // star pointing at a version that has gone, or that this member can no longer see, is simply ignored
   // by the reader, which is safer than a cascade reaching into the membership table.
   await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS default_version_id INTEGER');
+  // v3.4.15 -- TD-1094. My Campaigns order, each member's own: pinned_at (a pin; pinned campaigns first, in the order
+  // pinned) and last_opened_at (set on opening the campaign; the rest by it, most recent first).
+  await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMP');
+  await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS last_opened_at TIMESTAMP');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS campaign_invites (

@@ -3802,7 +3802,7 @@ function renderCampaigns() {
   if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
-    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
+    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
         : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
@@ -3832,6 +3832,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  campMarkOpened(id);   // v3.4.15 -- TD-1094: the order of My Campaigns
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
@@ -18686,7 +18687,7 @@ function renderCampaigns() {
   if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
-    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
+    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
         : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
@@ -18716,6 +18717,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  campMarkOpened(id);   // v3.4.15 -- TD-1094: the order of My Campaigns
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
@@ -22021,10 +22023,48 @@ try { if (document.body && document.body.classList) document.body.classList.togg
 // each time the list is read and is NEVER STORED, so choosing a campaign image replaces it and the
 // default follows the book as its pictures change. A default that is a drawn chapter title is fitted
 // whole (cbook-title), never cropped.
+// v3.4.15 -- TD-1094. MY CAMPAIGNS: PINS, THEN LAST OPENED (Ian: "Pin a few campaigns at top... Sorted by last opened").
+// The pin is the version picker's pin (_vpickPinSvg); its own small style, put in by script like the picker's, so a
+// cached style.css cannot leave it unstyled. A click on the pin never opens the campaign.
+function campPinCss() {
+  if (document.getElementById('camp-pin-css')) return;
+  var s = document.createElement('style'); s.id = 'camp-pin-css';
+  // v3.4.16 -- no circle: the pin sits on the card itself, with a dark shadow so it reads on a light cover (Ian).
+  s.textContent = '.camp-pin{position:absolute;top:12px;right:12px;z-index:7;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;' +
+    'border:none;background:none;color:rgba(232,200,112,0.75);cursor:pointer;padding:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));}' +
+    '.camp-pin svg{width:22px;height:22px;}' +
+    '.camp-pin:hover{color:#f0d888;}' +
+    '.camp-pin.on{color:#e8c870;}' +
+    '.camp-pin.off svg{transform:rotate(45deg);}';
+  document.head.appendChild(s);
+}
+function campPinHtml(c) {
+  campPinCss();
+  var on = !!c.my_pinned_at;
+  return '<button type="button" class="camp-pin ' + (on ? 'on' : 'off') + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="campTogglePin(' + c.id + ', event)" title="' +
+    (on ? 'Pinned to the top of your list. Click to unpin.' : 'Pin to the top of your list') + '">' + _vpickPinSvg(on) + '</button>';
+}
+function campTogglePin(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!c) return;
+  var on = !c.my_pinned_at;
+  fetch('/api/campaigns/' + encodeURIComponent(id) + '/pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: on }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showAlert((d && d.error) || 'Could not pin the campaign.'); return; }
+      showAlert(on ? 'Pinned to the top.' : 'Unpinned.');
+      loadCampaigns();   // the server's order
+    })
+    .catch(function () { showAlert('Connection error. Please try again.'); });
+}
+function campMarkOpened(id) {
+  if (!id) return;
+  try { fetch('/api/campaigns/' + encodeURIComponent(id) + '/opened', { method: 'POST' }).catch(function () {}); } catch (e) {}
+}
 function campaignBookHtml(c) {
   var pic = c.campaign_image_url || c.tile_image_url || '';
   var picIsTitle = !c.campaign_image_url && !!c.tile_image_url && thumbIsBuiltTitle(c.tile_image_meta);
-  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
+  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
     (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
     '<div class="cbook-art">' +
       (pic ? '<img' + (picIsTitle ? ' class="cbook-title"' : '') + ' src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
@@ -36635,7 +36675,9 @@ function _ciCampaigns() {
       // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
       var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(15,10,5,0.5);">'
         : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(15,10,5,0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
-      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' + _cpic +
+      // v3.4.17 -- TD-1094: a pinned campaign carries the My Campaigns pin (pinning itself stays on My Campaigns).
+      var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:#e8c870;line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
+      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + 'position:relative;">' + _cpin + _cpic +
         '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
     }).join('') + '</div>';
@@ -38708,7 +38750,7 @@ function ibCss() {
     '.ib-bar-left{display:flex;gap:6px;flex-wrap:wrap;}' +
     '.ib-frame:hover .panel-pill{opacity:1;}' +
     '.ib-frame.tour-show-pills .panel-pill{opacity:1;}' +   // v3.3.99 -- shown while the tour points at them
-    '@media (max-width:820px){#ib-root .ib-pills{position:absolute;top:8px;left:8px;right:8px;margin:0;padding:0;}}' +
+    '@media (max-width:820px){#ib-root .ib-pills{position:static;width:100%;margin:2px 0 0;padding:0;justify-content:center;}}' +   // v3.4.14 -- under the picture (Ian)
     '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
     '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
@@ -38930,6 +38972,7 @@ function ibPlaceMount() {
   if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);   // no second title underneath
   img.style.pointerEvents = 'none';
   f.classList.add('ib-placing');
+  ibPillsHide();   // v3.4.14
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibPlaceMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   var old = f.querySelector('.ib-place'); if (old) old.parentNode.removeChild(old);
@@ -39152,6 +39195,7 @@ function ibHoMount() {
   if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);
   img.style.pointerEvents = 'none';
   f.classList.add('ib-placing');
+  ibPillsHide();   // v3.4.14
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibHoMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   ['.ib-ho-box', '.ib-place-bar'].forEach(function (q) { var o = f.querySelector(q); if (o) o.parentNode.removeChild(o); });
@@ -39366,6 +39410,14 @@ function ibAccSet(key, open) {
   var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
+// v3.4.14 -- every panel of the form shut (a picture opened from the Gallery) or open (New picture), remembered as each
+// panel's own open / shut is.
+var IB_ACC_KEYS = ['refs', 'type', 'shape', 'style', 'desc', 'title'];
+function ibAccAll(open) {
+  var c = ibAccClosed();
+  IB_ACC_KEYS.forEach(function (k) { if (open) delete c[k]; else c[k] = 1; });
+  try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
+}
 function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
 function ibAccSummary(key) {
   if (key === 'refs') {
@@ -39429,9 +39481,9 @@ function ibGalleryHtml() {
   return IB.images.map(function (im) {
     var mine = String(im.user_id) === String(IB.me);
     var busy = ibBusy(im), pic;
-    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
-    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
-    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
+    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ', true)"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ', true)"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
+    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ', true)"></div>';
     if (mine && !im.ready) pic = pic.replace('<div class="ib-pic', '<div style="position:relative;"><span class="ib-draft">Draft</span><div class="ib-pic') + '</div>';
     var btns = '';
     if (mine && !busy && (im.image_url || im.status === 'failed')) btns += '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>';
@@ -39530,7 +39582,7 @@ function ibViewerHtml() {
       '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
-  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
+  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + (ibNarrow() ? '' : pills) + '</div></div>' + (ibNarrow() ? pills : '') +   // v3.4.14 -- TD-1093
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
@@ -39570,6 +39622,7 @@ async function ibNew() {
   if ((IB.desc.trim() || IB.name.trim()) && !await uiConfirm('Start a new picture? This clears the description, name, image type and references. Your pictures stay in the Gallery.', { okText: 'Clear', cancelText: 'Keep' })) return;
   ibClearForm(false);
   IB.tab = 'make';
+  ibAccAll(true);   // v3.4.14 -- a fresh form, every panel open
   ibRender();
 }
 // v3.3.81 -- empties the form, in IB AND in the page: ibRender reads the page back into IB first, so clearing only
@@ -39590,6 +39643,20 @@ function ibTtlFields() {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
   set('ib-ttl-title', IB.ttl.title); set('ib-ttl-sub', IB.ttl.subtitle); set('ib-ttl-place', IB.ttl.place); set('ib-ttl-size', IB.ttl.size);
 }
+// v3.4.14 -- TD-1093. ON A PHONE THE PICTURE'S BUTTONS GO UNDER IT, as on the Storyboard (Ian: "Need to come off the image
+// and be on under it"). The same 820px line as style.css's phone rule. The buttons are drawn outside the frame there
+// (the frame clips, so CSS alone could not move them); a window crossing the line redraws the viewer.
+function ibNarrow() {
+  var mq = null; try { mq = window.matchMedia ? window.matchMedia('(max-width: 820px)') : null; } catch (e) { mq = null; }
+  if (mq && !IB._mq) {
+    IB._mq = mq;
+    var redraw = function () { if (document.getElementById('ib-viewer')) ibPaintViewer(); };
+    try { if (mq.addEventListener) mq.addEventListener('change', redraw); else if (mq.addListener) mq.addListener(redraw); } catch (e) {}
+  }
+  return !!(mq && mq.matches);
+}
+// v3.4.14 -- while a title or the writing is being placed the buttons stay out of the way, wherever they are drawn.
+function ibPillsHide() { var p = document.querySelector('#ib-viewer .ib-pills'); if (p) p.style.display = 'none'; }
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
@@ -39619,8 +39686,9 @@ function ibTab(t) {
 // "if you load up a picture from the gallery... it clears and replaces ALL the fields". Someone else's used to leave the
 // form as it was, so the last picture's description sat beside a different picture). Generate then makes a new picture
 // of your own from it; Regen, Retouch and the rest still act only on your own pictures.
-function ibOpen(id) {
+function ibOpen(id, fromGallery) {   // v3.4.14 -- fromGallery: the Gallery's tiles
   var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
+  if (fromGallery) ibAccAll(false);   // v3.4.14 -- TD-1093 (Ian: "have it collapse the accordion... even on a computer")
   IB.viewId = id;
   IB.tab = 'make';
   if (im) ibLoadRecipe(im);   // v3.3.91 -- every picture, yours or not
@@ -39898,6 +39966,7 @@ function ibPickCampaign() {
     ibClearCampaign();
     ibClearForm(true);   // v3.3.81 -- a new campaign starts a blank form (its pictures are already saved in the old campaign's gallery)
     IB.cid = parseInt(id, 10); IB.cname = name;
+    if (typeof campMarkOpened === 'function') campMarkOpened(IB.cid);   // v3.4.17 -- TD-1094: working here moves it up My Campaigns
     ibRender(); ibLoadCampaign();
   } };
   var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
