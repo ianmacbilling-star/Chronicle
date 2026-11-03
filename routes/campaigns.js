@@ -90,6 +90,24 @@ async function campaignTilePicture(db, c, userId) {
 // multi-user-aware: a player invited to a campaign sees it here too.
 // For existing single-user data, behavior is identical (every campaign's
 // creator was backfilled as a 'dm' member at Phase 1).
+// v3.4.15 -- TD-1094. Pin or unpin a campaign at the top of MY list (Ian: "Pin a few campaigns at top"). The caller's
+// own membership row only.
+router.post('/:campaignId/pin', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb(), on = !!(req.body && req.body.pinned);
+    const at = on ? new Date().toISOString() : null;
+    await db.prepare('UPDATE campaign_members SET pinned_at = ? WHERE campaign_id = ? AND user_id = ?').run(at, req.params.campaignId, req.session.userId);
+    res.json({ success: true, pinned: on });
+  } catch (e) { console.error('[campaigns] pin error:', e.message); res.json({ error: 'Could not pin the campaign.' }); }
+});
+// v3.4.15 -- TD-1094. Opening a campaign: when I last opened it, for the order of my list. Fire and forget from the page.
+router.post('/:campaignId/opened', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    await db.prepare('UPDATE campaign_members SET last_opened_at = ? WHERE campaign_id = ? AND user_id = ?').run(new Date().toISOString(), req.params.campaignId, req.session.userId);
+    res.json({ success: true });
+  } catch (e) { console.error('[campaigns] opened error:', e.message); res.json({ error: 'Could not record the campaign.' }); }
+});
 router.get('/', requireAuth, async function(req, res) {
   const db = await getDb();
   // Phase 3 Deploy 3 — `locked` indicates this campaign has at least
@@ -97,13 +115,15 @@ router.get('/', requireAuth, async function(req, res) {
   // (until forks land in Phase 4). EXISTS subquery is cheap on the
   // small per-user campaign set.
   const campaigns = await db.prepare(
-    'SELECT c.*, cm.role AS my_role, cm.default_version_id, ' +
+    'SELECT c.*, cm.role AS my_role, cm.default_version_id, cm.pinned_at AS my_pinned_at, ' +   // v3.4.15 -- TD-1094
     "EXISTS (SELECT 1 FROM session_forks f JOIN sessions s ON s.id = f.session_id " +
     "WHERE s.campaign_id = c.id AND f.role = 'dm' AND f.player_access_status = 'ready') AS locked " +
     'FROM campaigns c ' +
     'JOIN campaign_members cm ON cm.campaign_id = c.id ' +
     'WHERE cm.user_id = ? ' +
-    'ORDER BY c.created_at DESC'
+    // v3.4.15 -- TD-1094 (Ian): pinned first, in the order pinned; then the rest by when this person last opened them;
+    // never-opened ones last, newest created first, as before.
+    'ORDER BY (cm.pinned_at IS NULL) ASC, cm.pinned_at ASC, cm.last_opened_at DESC NULLS LAST, c.created_at DESC'
   ).all(req.session.userId);
   // v3.0.839 -- TD-669. WHAT THIS CAMPAIGN'S GENRE PREFERS, RESOLVED IN ONE PLACE.
   // v3.0.954 -- TD-807. That place is decorateCampaign(), at the top of this file, which the

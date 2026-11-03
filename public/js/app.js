@@ -3802,7 +3802,7 @@ function renderCampaigns() {
   if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
-    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
+    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
         : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
@@ -3832,6 +3832,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  campMarkOpened(id);   // v3.4.15 -- TD-1094: the order of My Campaigns
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
@@ -18686,7 +18687,7 @@ function renderCampaigns() {
   if (_vc && _vc.classList) _vc.classList.toggle('camp-plain-bg', !!CAMPAIGNS_PAGE_PLAIN_BG);
   var html = state.campaigns.map(function(c) {
     if (CAMPAIGN_CARDS_AS_BOOKS) return campaignBookHtml(c);
-    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
+    return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
         : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
@@ -18716,6 +18717,7 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  campMarkOpened(id);   // v3.4.15 -- TD-1094: the order of My Campaigns
   if (typeof orderLoadedClear === 'function') orderLoadedClear();   // v3.2.11 -- TD-988: entering a campaign starts with nothing loaded
   state._novelLandedFor = null;   // v3.2.15 -- and its book area is entered fresh (novelLandOnEntry)
   // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
@@ -22021,10 +22023,46 @@ try { if (document.body && document.body.classList) document.body.classList.togg
 // each time the list is read and is NEVER STORED, so choosing a campaign image replaces it and the
 // default follows the book as its pictures change. A default that is a drawn chapter title is fitted
 // whole (cbook-title), never cropped.
+// v3.4.15 -- TD-1094. MY CAMPAIGNS: PINS, THEN LAST OPENED (Ian: "Pin a few campaigns at top... Sorted by last opened").
+// The pin is the version picker's pin (_vpickPinSvg); its own small style, put in by script like the picker's, so a
+// cached style.css cannot leave it unstyled. A click on the pin never opens the campaign.
+function campPinCss() {
+  if (document.getElementById('camp-pin-css')) return;
+  var s = document.createElement('style'); s.id = 'camp-pin-css';
+  s.textContent = '.camp-pin{position:absolute;top:12px;right:12px;z-index:7;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;' +
+    'border-radius:50%;border:1px solid rgba(201,168,76,0.45);background:rgba(10,6,4,0.72);color:rgba(201,168,76,0.6);cursor:pointer;padding:0;}' +
+    '.camp-pin:hover{color:#e8c870;background:rgba(10,6,4,0.9);}' +
+    '.camp-pin.on{color:#e8c870;border-color:#c9a84c;}' +
+    '.camp-pin.off svg{transform:rotate(45deg);}';
+  document.head.appendChild(s);
+}
+function campPinHtml(c) {
+  campPinCss();
+  var on = !!c.my_pinned_at;
+  return '<button type="button" class="camp-pin ' + (on ? 'on' : 'off') + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="campTogglePin(' + c.id + ', event)" title="' +
+    (on ? 'Pinned to the top of your list. Click to unpin.' : 'Pin to the top of your list') + '">' + _vpickPinSvg(on) + '</button>';
+}
+function campTogglePin(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!c) return;
+  var on = !c.my_pinned_at;
+  fetch('/api/campaigns/' + encodeURIComponent(id) + '/pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: on }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { showAlert((d && d.error) || 'Could not pin the campaign.'); return; }
+      showAlert(on ? 'Pinned to the top.' : 'Unpinned.');
+      loadCampaigns();   // the server's order
+    })
+    .catch(function () { showAlert('Connection error. Please try again.'); });
+}
+function campMarkOpened(id) {
+  if (!id) return;
+  try { fetch('/api/campaigns/' + encodeURIComponent(id) + '/opened', { method: 'POST' }).catch(function () {}); } catch (e) {}
+}
 function campaignBookHtml(c) {
   var pic = c.campaign_image_url || c.tile_image_url || '';
   var picIsTitle = !c.campaign_image_url && !!c.tile_image_url && thumbIsBuiltTitle(c.tile_image_meta);
-  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' +
+  return '<div class="campaign-card campaign-book" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
     (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
     '<div class="cbook-art">' +
       (pic ? '<img' + (picIsTitle ? ' class="cbook-title"' : '') + ' src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.15",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3415-campaign-pins-and-recent",
+        "kind": "improvement",
+        "public": true,
+        "summary": "My Campaigns: pin campaigns to the top, and the rest are listed by when you last opened them.",
+        "detail": "Each campaign has a pin in its corner. Pinned campaigns stay at the top in the order you pinned them; the others follow, the one you opened most recently first. Your pins and order are your own and follow you to any device.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.14",
     "staged_on": "2026-11-03",
     "entries": [
