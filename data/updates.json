@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.12",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3412-pill-pictures",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Click a character or asset pill to see its picture, in the Image Builder and on the Storyboard.",
+        "detail": "In the Image Builder's References, a character pill shows the look you picked and an asset pill its picture. On the Storyboard and Review, character pills now open the character's picture for that session, as asset pills already did. The x on a pill still only removes it.",
+        "td": [
+          "TD-1092"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.11",
     "staged_on": "2026-11-02",
     "entries": [

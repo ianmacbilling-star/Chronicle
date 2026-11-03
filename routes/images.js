@@ -3362,6 +3362,25 @@ router.get('/builder/campaigns/:cid/characters/:charId/looks', requireAuth, asyn
     });
   } catch (e) { console.error('[image-builder] looks error:', e.message); res.json({ error: 'Could not load that character\u2019s pictures.' }); }
 });
+// v3.4.12 -- TD-1092. The picture behind a References pill: a character's chosen look (ibResolveCharacters, the same check
+// Generate makes: in the campaign, a look the viewer may use) or an asset's picture (ASSET_REF_SQL: a rejected one has none).
+router.get('/builder/campaigns/:cid/ref-picture', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb(), cid = parseInt(req.params.cid, 10), uid = req.session.userId;
+    if (req.query.char) {
+      const rc = await ibResolveCharacters(db, cid, uid, [{ id: req.query.char, look: String(req.query.look || 'original') }]);
+      if (rc.error) return res.json({ error: rc.error });
+      const c = rc.chars[0];
+      if (!c || !c.snapshot_reference_url) return res.json({ error: 'That character has no reference picture yet.' });
+      return res.json({ url: c.snapshot_reference_url });
+    }
+    const id = parseInt(req.query.asset, 10);
+    const a = id > 0 ? (await db.prepare(ASSET_REF_SQL).all(cid)).filter(function (x) { return Number(x.id) === id; })[0] : null;
+    if (!a || !a.image_url) return res.json({ error: 'That asset has no picture.' });
+    res.json({ url: a.image_url });
+  } catch (e) { console.error('[image-builder] ref-picture error:', e.message); res.json({ error: 'Could not load that picture.' }); }
+});
 router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
   try {
     if (!(await ibGate(req, res))) return;
