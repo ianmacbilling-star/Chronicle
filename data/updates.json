@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.17",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3417-campaign-pickers-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Image Builder's and Import a character's campaign pickers now follow your My Campaigns order.",
+        "detail": "Pinned campaigns come first, marked with the pin, then the ones you opened most recently. Choosing a campaign in the Image Builder counts as opening it.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.16",
     "staged_on": "2026-11-03",
     "entries": [

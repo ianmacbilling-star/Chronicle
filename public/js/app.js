@@ -36675,7 +36675,9 @@ function _ciCampaigns() {
       // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
       var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(15,10,5,0.5);">'
         : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(15,10,5,0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
-      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + '">' + _cpic +
+      // v3.4.17 -- TD-1094: a pinned campaign carries the My Campaigns pin (pinning itself stays on My Campaigns).
+      var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:#e8c870;line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
+      return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + 'position:relative;">' + _cpin + _cpic +
         '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
     }).join('') + '</div>';
@@ -39964,6 +39966,7 @@ function ibPickCampaign() {
     ibClearCampaign();
     ibClearForm(true);   // v3.3.81 -- a new campaign starts a blank form (its pictures are already saved in the old campaign's gallery)
     IB.cid = parseInt(id, 10); IB.cname = name;
+    if (typeof campMarkOpened === 'function') campMarkOpened(IB.cid);   // v3.4.17 -- TD-1094: working here moves it up My Campaigns
     ibRender(); ibLoadCampaign();
   } };
   var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
