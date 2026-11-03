@@ -22038,7 +22038,9 @@ function campPinCss() {
     '.camp-pin.off svg{transform:rotate(45deg);}';
   document.head.appendChild(s);
 }
+var CAMP_PIN_MIN = 5;   // v3.4.18 -- TD-1094 (Ian: "Only show the pins if they have more than 4 Campaigns"); the order is kept either way
 function campPinHtml(c) {
+  if (((state && state.campaigns) || []).length < CAMP_PIN_MIN) return '';
   campPinCss();
   var on = !!c.my_pinned_at;
   return '<button type="button" class="camp-pin ' + (on ? 'on' : 'off') + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="campTogglePin(' + c.id + ', event)" title="' +

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.18",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3418-campaign-pins-from-five",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Campaign pins appear once you have five or more campaigns.",
+        "detail": "With four or fewer there is little to sort, so the pins stay out of the way; any pins you set are kept and still decide the order.",
+        "td": [
+          "TD-1094"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.17",
     "staged_on": "2026-11-03",
     "entries": [

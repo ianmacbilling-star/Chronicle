@@ -3327,7 +3327,7 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
     const out = [];
     for (const r of (rows || [])) {
       // v3.4.03 -- image: the picture its My Campaigns card shows (campaign picture, else the book cover)
-      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at });   // v3.4.17 -- pinned
+      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at && rows.length > 4 });   // v3.4.17 -- pinned; v3.4.18 -- marked only with more than 4 campaigns (all of them, before the Platinum filter)
     }
     let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
     const _ibAdm = await ibIsAdmin(req);   // v3.4.13
