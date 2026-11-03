@@ -129,7 +129,7 @@ router.get('/import/campaigns', requireAuth, verifyCampaignDM, async function (r
       'WHERE cm.user_id = ? AND c.id <> ? ORDER BY (cm.pinned_at IS NULL) ASC, cm.pinned_at ASC, cm.last_opened_at DESC NULLS LAST, c.created_at DESC'
     ).all(req.session.userId, req.params.campaignId);
     // v3.4.03 -- the picture its My Campaigns card shows (campaign picture, else the book cover)
-    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at }; }) });   // v3.4.17 -- pinned
+    res.json({ campaigns: (rows || []).map(function (r) { return { id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at && (rows || []).length + 1 > 4 }; }) });   // v3.4.17 -- pinned; v3.4.18 -- only with more than 4 campaigns (this list leaves out the one being imported into)
   } catch (e) {
     console.error('[char-import] campaigns error:', e.message);
     res.json({ error: 'Could not load your campaigns.' });
