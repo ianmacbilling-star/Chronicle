@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.14",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3414-builder-phone-buttons-and-panels",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: on a phone the picture's buttons sit under it, and opening a picture from the Gallery closes the form's panels.",
+        "detail": "Regen, Retouch, Edit Prompt and the rest now sit in a row under the picture on a phone, as on the Storyboard. A picture opened from the Gallery shows with every panel of the form shut, so the picture and its buttons are in view; New picture opens them again.",
+        "td": [
+          "TD-1093"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.13",
     "staged_on": "2026-11-02",
     "entries": [

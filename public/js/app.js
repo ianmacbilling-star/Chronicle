@@ -38708,7 +38708,7 @@ function ibCss() {
     '.ib-bar-left{display:flex;gap:6px;flex-wrap:wrap;}' +
     '.ib-frame:hover .panel-pill{opacity:1;}' +
     '.ib-frame.tour-show-pills .panel-pill{opacity:1;}' +   // v3.3.99 -- shown while the tour points at them
-    '@media (max-width:820px){#ib-root .ib-pills{position:absolute;top:8px;left:8px;right:8px;margin:0;padding:0;}}' +
+    '@media (max-width:820px){#ib-root .ib-pills{position:static;width:100%;margin:2px 0 0;padding:0;justify-content:center;}}' +   // v3.4.14 -- under the picture (Ian)
     '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
     '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
@@ -38930,6 +38930,7 @@ function ibPlaceMount() {
   if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);   // no second title underneath
   img.style.pointerEvents = 'none';
   f.classList.add('ib-placing');
+  ibPillsHide();   // v3.4.14
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibPlaceMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   var old = f.querySelector('.ib-place'); if (old) old.parentNode.removeChild(old);
@@ -39152,6 +39153,7 @@ function ibHoMount() {
   if (im && im.has_clean && im.clean_url && img.getAttribute('src') !== im.clean_url) img.setAttribute('src', im.clean_url);
   img.style.pointerEvents = 'none';
   f.classList.add('ib-placing');
+  ibPillsHide();   // v3.4.14
   if (!img.naturalWidth || !img.complete) { img.onload = function () { img.onload = null; ibHoMount(); }; return; }
   var b = ibPlaceBox(); if (!b) return;
   ['.ib-ho-box', '.ib-place-bar'].forEach(function (q) { var o = f.querySelector(q); if (o) o.parentNode.removeChild(o); });
@@ -39366,6 +39368,14 @@ function ibAccSet(key, open) {
   var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
+// v3.4.14 -- every panel of the form shut (a picture opened from the Gallery) or open (New picture), remembered as each
+// panel's own open / shut is.
+var IB_ACC_KEYS = ['refs', 'type', 'shape', 'style', 'desc', 'title'];
+function ibAccAll(open) {
+  var c = ibAccClosed();
+  IB_ACC_KEYS.forEach(function (k) { if (open) delete c[k]; else c[k] = 1; });
+  try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
+}
 function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
 function ibAccSummary(key) {
   if (key === 'refs') {
@@ -39429,9 +39439,9 @@ function ibGalleryHtml() {
   return IB.images.map(function (im) {
     var mine = String(im.user_id) === String(IB.me);
     var busy = ibBusy(im), pic;
-    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
-    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ')"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
-    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ')"></div>';
+    if (im.image_url) pic = '<div class="ib-pic' + (busy ? ' ib-pending' : '') + '" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ', true)"><img src="' + escapeHtml(im.image_url) + '" loading="lazy" alt="' + escapeHtml(im.name) + '"></div>';
+    else if (im.status === 'failed') pic = '<div class="ib-pic" onclick="ibOpen(' + im.id + ', true)"><div class="ib-err" style="padding:12px;text-align:center;">' + escapeHtml(im.error || 'This picture could not be drawn.') + '</div></div>';
+    else pic = '<div class="ib-pic ib-pending" data-id="' + im.id + '" onclick="ibOpen(' + im.id + ', true)"></div>';
     if (mine && !im.ready) pic = pic.replace('<div class="ib-pic', '<div style="position:relative;"><span class="ib-draft">Draft</span><div class="ib-pic') + '</div>';
     var btns = '';
     if (mine && !busy && (im.image_url || im.status === 'failed')) btns += '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')">Delete</button>';
@@ -39530,7 +39540,7 @@ function ibViewerHtml() {
       '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
       (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
   }
-  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + pills + '</div></div>' +
+  return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + (ibNarrow() ? '' : pills) + '</div></div>' + (ibNarrow() ? pills : '') +   // v3.4.14 -- TD-1093
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
@@ -39570,6 +39580,7 @@ async function ibNew() {
   if ((IB.desc.trim() || IB.name.trim()) && !await uiConfirm('Start a new picture? This clears the description, name, image type and references. Your pictures stay in the Gallery.', { okText: 'Clear', cancelText: 'Keep' })) return;
   ibClearForm(false);
   IB.tab = 'make';
+  ibAccAll(true);   // v3.4.14 -- a fresh form, every panel open
   ibRender();
 }
 // v3.3.81 -- empties the form, in IB AND in the page: ibRender reads the page back into IB first, so clearing only
@@ -39590,6 +39601,20 @@ function ibTtlFields() {
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
   set('ib-ttl-title', IB.ttl.title); set('ib-ttl-sub', IB.ttl.subtitle); set('ib-ttl-place', IB.ttl.place); set('ib-ttl-size', IB.ttl.size);
 }
+// v3.4.14 -- TD-1093. ON A PHONE THE PICTURE'S BUTTONS GO UNDER IT, as on the Storyboard (Ian: "Need to come off the image
+// and be on under it"). The same 820px line as style.css's phone rule. The buttons are drawn outside the frame there
+// (the frame clips, so CSS alone could not move them); a window crossing the line redraws the viewer.
+function ibNarrow() {
+  var mq = null; try { mq = window.matchMedia ? window.matchMedia('(max-width: 820px)') : null; } catch (e) { mq = null; }
+  if (mq && !IB._mq) {
+    IB._mq = mq;
+    var redraw = function () { if (document.getElementById('ib-viewer')) ibPaintViewer(); };
+    try { if (mq.addEventListener) mq.addEventListener('change', redraw); else if (mq.addListener) mq.addListener(redraw); } catch (e) {}
+  }
+  return !!(mq && mq.matches);
+}
+// v3.4.14 -- while a title or the writing is being placed the buttons stay out of the way, wherever they are drawn.
+function ibPillsHide() { var p = document.querySelector('#ib-viewer .ib-pills'); if (p) p.style.display = 'none'; }
 function ibPaintViewer() {
   var v = document.getElementById('ib-viewer'); if (!v) return;
   v.innerHTML = ibViewerHtml();
@@ -39619,8 +39644,9 @@ function ibTab(t) {
 // "if you load up a picture from the gallery... it clears and replaces ALL the fields". Someone else's used to leave the
 // form as it was, so the last picture's description sat beside a different picture). Generate then makes a new picture
 // of your own from it; Regen, Retouch and the rest still act only on your own pictures.
-function ibOpen(id) {
+function ibOpen(id, fromGallery) {   // v3.4.14 -- fromGallery: the Gallery's tiles
   var im = IB.images.filter(function (x) { return String(x.id) === String(id); })[0];
+  if (fromGallery) ibAccAll(false);   // v3.4.14 -- TD-1093 (Ian: "have it collapse the accordion... even on a computer")
   IB.viewId = id;
   IB.tab = 'make';
   if (im) ibLoadRecipe(im);   // v3.3.91 -- every picture, yours or not
