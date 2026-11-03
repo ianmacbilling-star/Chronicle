@@ -2095,7 +2095,7 @@ The recipe is a set of panels. Each one opens and closes, and shows its choice i
 - **Image name** (required): a name for the Gallery. On a picture of yours, changing it renames the picture as soon as you leave the box.
 - **References**: **+ Add character** picks a character and then which **look** to use: their **Original**, or how they looked in a particular session. **+ Add asset** picks a location, item or Supporting Character / NPC from the Asset Library. A picture can use up to **14 reference pictures** in all.
   - **Characters are drawn at the heights set on them**, so a tall half-orc stands well above a dwarf.
-- **Image type** (optional): **Movie Poster / Book Cover, Character / Creature Study, Group Portrait, Location / Establishing Shot, Action Scene, Map, Map to Scene, Item Showcase, In-world Handout** or **Portrait / Headshot**. Each type tells the drawing how to lay the picture out.
+- **Image type** (optional): **Movie Poster / Book Cover, Character / Creature Study, Group Portrait, Location / Establishing Shot, Action Scene, Map, Item Showcase, In-world Handout** or **Portrait / Headshot**. Each type tells the drawing how to lay the picture out.
   - A **Character / Creature Study** is a character sheet: the full figure plus three close-ups of the face. It works best with one character.
   - An **Item Showcase** lays the items out like a still life.
   - **See / edit instructions** shows the type's own wording. You can change it for **this picture only**; **Reset** brings back the standard wording.
@@ -2140,14 +2140,6 @@ You can put a drawn title on a picture: a poster's film title, the name on a por
 - **A clean copy, without the title, is always kept.** Regen and Retouch work on the clean copy and put the title back exactly where you placed it.
 - **Without title** on the picture shows the clean copy. **Archive** asks whether you want it **with** the title, **without** it, or **Both**; a clean copy saved to the Archive is named "... (clean copy)". **Save as Asset** always uses the clean copy.
 - **Remove title** takes it off the picture and out of the panel. The drawing stays in the Title Builder, and **Done & Use** brings it back without another token.
-
-**MAP TO SCENE: A FLAT MAP AS A REAL PLACE**
-
-**Map to Scene** turns a flat map (a town plan, a battle map, a dungeon or cave map, an illustrated map) into a painted view of the real place, with the same layout: the roads, buildings, rooms, rivers and piers stay where the map puts them, and the paper, labels, grid and compass rose disappear. Outdoor maps are seen from a low hilltop at an angle; dungeons, caves and buildings as a cutaway from above with the ceiling lifted off.
-- First add the map to the campaign as an asset, category **Item** (a map is something characters carry; **Location** works too). Then, in the Image Builder, add that asset to **References**, choose **Map to Scene**, pick an art style, and Generate. No description is needed. A picture of just the map works best: crop away any table or background around it.
-- Use **one** Item or Location asset, the map; Generate says so if there is none or more than one, and nothing is charged. Characters and NPC assets can be added too.
-- An art style without faded edges gives a full scene to the picture's edges; a style with faded edges paints it as a vignette.
-- Like every type, its instructions can be changed for one picture with **Edit Prompt** under Image type.
 
 **HANDOUTS: EXACT WORDS ON THE PAGE**
 
@@ -2322,7 +2314,6 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   has it.
 - **"I want a movie poster of our party."** Open **Image Builder** from the menu under your name, choose the campaign, add the characters under **References**, choose **Movie Poster / Book Cover** and a tall shape, then press **Generate**. To add the film's title, use the **Title** panel and the **Title Builder**, then drag the lettering onto the picture, size it with the yellow corner square, and press **Apply title here**. Archive it to use it as a book cover.
 - **"I want a character sheet for my character."** In the Image Builder, add just that character, choose **Character / Creature Study**, and Generate. You don't need a description.
-- **"I want to see my map as a real place."** Add the map as an **Item** asset, add it to **References** in the Image Builder, choose **Map to Scene**, and Generate.
 - **"I want a wanted poster / letter / scroll my players can read."** Choose **In-world Handout**, type the words exactly in **Handout text**, pick a font and ink, and Generate. The words are laid on the paper afterwards, so they are always spelled right.
 - **"I want to share a picture with my group."** Press **Mark Ready**. Every member of the campaign then sees it in the Image Builder's **Gallery**.
 - **"I like someone else's picture and want my own version."** Open it in the Image Builder's Gallery and press **Make My Copy** (free). Change anything and press Generate or Regen.

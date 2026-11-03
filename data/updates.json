@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.13",
+    "staged_on": "2026-11-02",
+    "entries": [
+      {
+        "id": "3413-map-to-scene-admin-only",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Map to Scene is shown to admins only while it is tested.",
+        "detail": "It is out of the Image type list and the help assistant for everyone else; pictures already made with it keep working.",
+        "td": [
+          "TD-1091"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.12",
     "staged_on": "2026-11-02",
     "entries": [
