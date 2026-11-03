@@ -5387,9 +5387,10 @@ function renderReview(data) {
     // Character chips — each carries an id; × removes when editable.
     var charChips = (p.characters || []).map(function(c) {
       var rm = canEditNarr
-        ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + mid + ', ' + c.id + ')">\u00d7</button>'
+        ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveCharacter(' + mid + ', ' + c.id + ')">\u00d7</button>'
         : '';
-      return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
+      // v3.4.12 -- TD-1092. Click the pill to see the character's picture, as the asset pills do; the x still only removes.
+      return '<span class="review-chip" data-char-id="' + (c.id == null ? '' : c.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openCharPicture(this)">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
     }).join('');
     if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
 
@@ -30286,8 +30287,9 @@ function _refreshOpenMomentOptions(momentId) {
 function castRowsHtml(p, momentId, canEdit, opts) {
   if (!p) return '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
   var charChips = (p.characters || []).map(function(c){
-    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
-    return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
+    var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
+    // v3.4.12 -- TD-1092. Click to see the character's picture (same as the Review renderer above).
+    return '<span class="review-chip" data-char-id="' + (c.id == null ? '' : c.id) + '" title="Click to see the picture" style="cursor:pointer;" onclick="openCharPicture(this)">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
   }).join();
   if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
   var assetChips = (p.assets || []).map(function(a){
@@ -35740,6 +35742,23 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
 // matched pill has no id. Shown in the app's own lightbox.
 // APPENDED, NOT INSERTED (TD-853); declared nowhere else.
 // =====================================================================================
+// v3.4.12 -- TD-1092. A Storyboard / Review character pill shows that character's picture in THIS session and version:
+// the session's reference (as drawn for this session, restyled if it was), else the character card's.
+function openCharPicture(el) {
+  if (!el || !state.currentCampaign || !state.currentSession) return;
+  var id = el.getAttribute('data-char-id') || '';
+  var shown = (el.firstChild && el.firstChild.nodeType === 3) ? String(el.firstChild.textContent || '').trim() : '';
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters' + forkQ())
+    .then(function (r) { return r.json(); })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      var r = rows.filter(function (x) { return String(x.character_id) === String(id); })[0] || null;
+      var url = r && (r.reference_url || r.canonical_reference_url);
+      if (!url) { showAlert('There is no reference picture for ' + (shown || 'this character') + ' yet.'); return; }
+      openLightbox(url, charDisplayName(r.name) + (r.styled_art_style ? ': ' + artStyleLabel(r.styled_art_style) : ''));
+    })
+    .catch(function () { showAlert('Connection error. Please try again.'); });
+}
 function openAssetPicture(el) {
   if (!el || !state.currentCampaign) return;
   var id = el.getAttribute('data-asset-id') || '';
@@ -39256,13 +39275,13 @@ function ibStyleName() {
 
 function ibChipsHtml() {
   var c = IB.chars.map(function (x, i) {
-    return '<span class="review-chip" title="' + escapeHtml(x.label || '') + '">' + escapeHtml(charDisplayName(x.name)) +
+    return '<span class="review-chip" title="Click to see the picture" style="cursor:pointer;" onclick="ibShowRef(\'char\', ' + i + ')">' + escapeHtml(charDisplayName(x.name)) +   // v3.4.12 -- TD-1092
       (x.label && x.look !== 'original' ? ' <span style="opacity:0.65;">(' + escapeHtml(x.label) + ')</span>' : '') +
-      '<button class="review-chip-x" title="Remove" onclick="ibRemoveChar(' + i + ')">&#215;</button></span>';
+      '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();ibRemoveChar(' + i + ')">&#215;</button></span>';
   }).join('');
   var a = IB.assets.map(function (x, i) {
-    return '<span class="review-chip review-chip-asset">' + escapeHtml(x.name) +
-      '<button class="review-chip-x" title="Remove" onclick="ibRemoveAsset(' + i + ')">&#215;</button></span>';
+    return '<span class="review-chip review-chip-asset" title="Click to see the picture" style="cursor:pointer;" onclick="ibShowRef(\'asset\', ' + i + ')">' + escapeHtml(x.name) +   // v3.4.12
+      '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();ibRemoveAsset(' + i + ')">&#215;</button></span>';
   }).join('');
   var full = (IB.chars.length + IB.assets.length) >= IB.maxRefs;
   return '<div class="review-row"><span class="review-label">Characters</span>' + (c || '<span class="review-none">none</span>') +
@@ -39898,6 +39917,19 @@ function ibAddChar() {
   } };
   var m = _ciModal(); m.classList.remove('hidden'); m.style.zIndex = '100002';
   _ciCharacters(String(IB.cid), IB.cname);
+}
+// v3.4.12 -- TD-1092. A References pill opens its picture in the lightbox, over the Builder (Ian: "so you can see it
+// without leaving the screen"): a character's chosen look, an asset's picture. The server finds the picture with the
+// same checks Generate uses (GET /builder/campaigns/:cid/ref-picture).
+function ibShowRef(kind, i) {
+  var it = kind === 'char' ? IB.chars[i] : IB.assets[i]; if (!it || !IB.cid) return;
+  var CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
+  var q = kind === 'char' ? ('char=' + encodeURIComponent(it.id) + '&look=' + encodeURIComponent(it.look || 'original')) : ('asset=' + encodeURIComponent(it.id));
+  var cap = kind === 'char' ? (charDisplayName(it.name) + ': ' + ((!it.look || it.look === 'original') ? 'Original' : (it.label || 'Session look'))) : (it.name + ': ' + (CAT[it.category] || 'Asset'));
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/ref-picture?' + q, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (!d || d.error || !d.url) { showAlert((d && (d.message || d.error)) || 'That picture could not be found.'); return; } openLightbox(d.url, cap); })
+    .catch(function () { showAlert('Connection error. Please try again.'); });
 }
 function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); ibSyncRefs(); }   // v3.4.07 -- ibSyncRefs
 function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); ibSyncRefs(); }
