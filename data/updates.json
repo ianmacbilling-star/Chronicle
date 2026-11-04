@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.4.20",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3420-look-picker-more",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Choosing a character's look: each card shows its session, date and art style, with the versions behind a \u2026",
+        "detail": "The list of versions that use a picture now opens from a small \u2026 pill on the card, so every card stays short and easy to compare.",
+        "td": [
+          "TD-1096"
+        ]
+      },
+      {
+        "id": "3420-scene-picker-filters",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: the Scenes picker has the Archive's filters and loads as you scroll.",
+        "detail": "Narrow the scenes by session, version, moment name, character, who archived it, art style and shape, newest or oldest first. Pictures load as you scroll down, so a big Archive opens quickly.",
+        "td": [
+          "TD-1097"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.19",
     "staged_on": "2026-11-03",
     "entries": [
