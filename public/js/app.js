@@ -15581,16 +15581,18 @@ function archiveShapeLabel(a) {
   for (var i = 0; i < ARCHIVE_SHAPES.length; i++) if (ARCHIVE_SHAPES[i][0] === k) return ARCHIVE_SHAPES[i][1];
   return 'Standard';
 }
-function getFilteredArchives(f) {
+// v3.4.20 -- TD-1097. o (optional): { rows, people } -- the Image Builder's Scenes picker filters its own list, and its
+// characters are the people in each picture (a.people) rather than a character archive's one character.
+function getFilteredArchives(f, o) {
   f = f || state.archiveFilters || {};
-  var rows = (state.archives || []).slice();
+  var rows = ((o && o.rows) || state.archives || []).slice();
   if (f.session) rows = rows.filter(function(a){ return String(a.session_id) === String(f.session); });
   if (f.moment) { var _mq = String(f.moment).toLowerCase(); rows = rows.filter(function(a){ return (archiveMomentLabel(a) || '').toLowerCase().indexOf(_mq) !== -1; }); }
   if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
   if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
   if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
   if (f.version) rows = rows.filter(function(a){ return archiveVersionLabel(a) === f.version; });
-  if (f.character) rows = rows.filter(function(a){ return String(a.character_id) === String(f.character); });
+  if (f.character) rows = rows.filter(function(a){ return (o && o.people) ? (a.people || []).indexOf(f.character) >= 0 : String(a.character_id) === String(f.character); });   // v3.4.20
   // v3.0.670 -- TD-474. Compared through archiveShapeKey rather than against a.shape directly, so
   // filtering for Standard also finds the legacy rows whose shape was never recorded -- which is
   // most of them, and all character archives.
@@ -15669,8 +15671,8 @@ function ensureArchivesLoaded(cb, campaignId) {
 //
 // This function builds the filter bar for BOTH the Archive page and the replace-from-archive
 // picker, so there is one box to fix rather than two that could disagree.
-function archiveFilterBarHTML(f, onchange) {
-  var rows = state.archives || [];
+function archiveFilterBarHTML(f, onchange, o) {   // v3.4.20 -- TD-1097: o as getFilteredArchives, plus o.noType
+  var rows = (o && o.rows) || state.archives || [];
   var sessions = {}, moments = {}, creators = {}, styles = {}, versions = {}, characters = {};
   rows.forEach(function(a){
     if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
@@ -15678,7 +15680,8 @@ function archiveFilterBarHTML(f, onchange) {
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
     if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
     var _vl = archiveVersionLabel(a); if (_vl) versions[_vl] = _vl;
-    if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
+    if (o && o.people) (a.people || []).forEach(function (n) { if (n) characters[n] = n; });   // v3.4.20
+    else if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
   function opts(map, sel) {
     return Object.keys(map).map(function(k){
@@ -15696,10 +15699,11 @@ function archiveFilterBarHTML(f, onchange) {
       + ' value="' + escapeHtml(f.moment || '') + '" oninput="if (!_filterTyped(this)) return; ' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
+    ((o && o.noType) ? '' :   // v3.4.20 -- the Scenes picker holds panels only
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
       '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
-      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
+      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>') +
     '<select class="archive-filter" onchange="' + onchange + '(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     // v3.0.670 -- TD-474. Ian: "You can add picture shape to the Archive screen and modal... so
     // someone could filter for, tall, tower, wide, full page, standard etc."
@@ -36638,6 +36642,7 @@ function openCharImport() {
 }
 
 function closeCharImport() {
+  _ciMoreClose();   // v3.4.20
   if (_ci && _ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} }
   _ci = null;
   var m = document.getElementById('char-import-modal');
@@ -36647,6 +36652,7 @@ function closeCharImport() {
 function _ciSet(title, sub, html) {
   var t = document.getElementById('ci-title'); if (t) t.textContent = title;
   var s = document.getElementById('ci-sub'); if (s) s.textContent = sub || '';
+  _ciMoreClose();   // v3.4.20
   var b = document.getElementById('ci-body'); if (b) { b.innerHTML = html; b.scrollTop = 0; }
   var msg = document.getElementById('ci-msg'); if (msg) msg.textContent = '';
   var back = document.getElementById('ci-back'); if (back) back.style.display = (_ci && _ci.step !== 'campaigns' && !(_ci.start === 'characters' && _ci.step === 'characters')) ? '' : 'none';
@@ -36719,7 +36725,9 @@ function _ciLookTile(l) {
     '<span style="font-size:12px;"><b>' + escapeHtml(l.label) + '</b>' + (l.date ? '<br><span style="opacity:0.65;">' + escapeHtml(l.date) + '</span>' : '') +
     (('style' in l) ? '<br><span class="ci-style" style="opacity:0.65;">' + escapeHtml(l.style ? ('Art style: ' + artStyleLabel(l.style)) : 'No art style recorded') + '</span>' : '') +   // v3.4.05 -- TD-1086 (Ian)
     (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') +
-    ((l.uses && l.uses.length) ? '<br><span class="ci-uses" style="opacity:0.75;font-size:11px;">' + escapeHtml(l.uses.join(' \u00b7 ')) + '</span>' : '') +   // v3.4.05 -- TD-1086
+    // v3.4.20 -- TD-1096 (Ian: "Way too much text"): the versions that use the picture open from a \u2026 pill.
+    ((l.uses && l.uses.length) ? '<br><span class="ci-more" role="button" title="Which versions use this picture" data-uses="' + escapeHtml(JSON.stringify(l.uses)) + '"' +
+      ' style="display:inline-block;margin-top:5px;padding:0 10px;border:1px solid rgba(201,168,76,0.45);border-radius:999px;font-size:13px;line-height:18px;color:#e8d49a;cursor:pointer;">\u2026</span>' : '') +
     '</span></button>';
 }
 
@@ -36733,7 +36741,7 @@ function _ciLookTile(l) {
 function _ciLooks(charId, charName) {
   if (_ci.observer) { try { _ci.observer.disconnect(); } catch (e) {} _ci.observer = null; }
   _ci.step = 'looks'; _ci.charId = charId; _ci.charName = charName; _ci.look = null;
-  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', oldest first. A picture used by more than one version is shown once, with those versions named under it. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
+  _ciSet('Choose ' + charName + '\u2019s look', 'Every look ' + charName + ' has had in ' + _ci.sourceName + ', oldest first. A picture used by more than one version is shown once; tap \u2026 to see which versions use it. ' + (_ci.mode === 'builder' ? 'Pick the look to use as a reference.' : 'Pick one to copy into this campaign.'), '<div style="padding:16px;opacity:0.7;">Loading\u2026</div>');
   var base = _ciBase() + '/campaigns/' + encodeURIComponent(_ci.source) + '/characters/' + encodeURIComponent(charId) + '/looks';
   _ciGet(base, function (d) {
     if (!_ci || _ci.step !== 'looks' || _ci.charId !== charId) return;
@@ -36772,7 +36780,41 @@ function _ciLooksHtml(d, vers, perVersion) {
   return note + '<div class="ci-looks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">' + tiles.map(_ciLookTile).join('') + '</div>';
 }
 
+// v3.4.20 -- TD-1096. THE \u2026 POP-UP: the versions that use a picture, one a line, by the pill; opened by a click (a
+// phone has no hover) and closed by any other click, a scroll of the window, or the window closing. Clicking the pill
+// does not choose the look; the rest of the card still does. Fixed to the page and kept inside the screen, so the
+// window's own scroll box never clips it.
+function _ciMoreClose() {
+  var p = document.getElementById('ci-more-pop'); if (p && p.parentNode) p.parentNode.removeChild(p);
+  document.removeEventListener('mousedown', _ciMoreOutside, true); document.removeEventListener('touchstart', _ciMoreOutside, true);
+  var b = document.getElementById('ci-body'); if (b) b.removeEventListener('scroll', _ciMoreClose);
+}
+function _ciMoreOutside(ev) {
+  var p = document.getElementById('ci-more-pop');
+  if (p && ev.target && p.contains(ev.target)) return;
+  if (ev.target && ev.target.closest && ev.target.closest('.ci-more')) return;   // the pill's own click toggles it
+  _ciMoreClose();
+}
+function _ciMoreOpen(pill) {
+  var was = document.getElementById('ci-more-pop'), same = was && was._pill === pill;
+  _ciMoreClose(); if (same) return;
+  var uses = []; try { uses = JSON.parse(pill.getAttribute('data-uses') || '[]') || []; } catch (e) { uses = []; }
+  var p = document.createElement('div'); p.id = 'ci-more-pop'; p._pill = pill;
+  p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:#16100a;border:1px solid rgba(201,168,76,0.45);' +
+    'border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.45;color:rgba(240,232,208,0.9);';
+  p.innerHTML = '<div style="color:#e8d49a;font-weight:600;margin-bottom:4px;">Used by these versions</div>' + uses.map(function (u) { return '<div>' + escapeHtml(u) + '</div>'; }).join('');
+  document.body.appendChild(p);
+  var r = pill.getBoundingClientRect(), W = window.innerWidth || document.documentElement.clientWidth, H = window.innerHeight || document.documentElement.clientHeight;
+  var pw = p.offsetWidth, ph = p.offsetHeight;
+  var left = Math.max(8, Math.min(r.left, W - pw - 8));
+  var top = (r.bottom + 6 + ph <= H - 8) ? (r.bottom + 6) : Math.max(8, r.top - 6 - ph);
+  p.style.left = left + 'px'; p.style.top = top + 'px';
+  document.addEventListener('mousedown', _ciMoreOutside, true); document.addEventListener('touchstart', _ciMoreOutside, true);
+  var b = document.getElementById('ci-body'); if (b) b.addEventListener('scroll', _ciMoreClose);
+}
 function _ciPickFromEvent(ev) {
+  var _more = ev.target && ev.target.closest ? ev.target.closest('.ci-more') : null;   // v3.4.20 -- TD-1096: the pill opens its list and picks nothing
+  if (_more) { ev.preventDefault(); ev.stopPropagation(); _ciMoreOpen(_more); return; }
   var t = ev.target && ev.target.closest ? ev.target.closest('.ci-look') : null;
   if (!t || !_ci || _ci.step !== 'looks') return;
   Array.prototype.forEach.call(document.querySelectorAll('#ci-body .ci-look'), function (el) { el.style.outline = ''; });
@@ -40031,42 +40073,97 @@ function ibAddScene() {
     })
     .catch(function () { showError('Connection error. Please try again.'); });
 }
-function ibCloseScenePicker() { var m = document.getElementById('ib-scene-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibCloseScenePicker() {
+  if (IB.sceneObs) { try { IB.sceneObs.disconnect(); } catch (e) {} IB.sceneObs = null; }   // v3.4.20
+  var m = document.getElementById('ib-scene-modal'); if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+// v3.4.20 -- TD-1097. THE ARCHIVE'S FILTER BAR ACROSS THE TOP, AND THE TILES LOADED AS YOU SCROLL (Ian, 2026-11-03: "have
+// the filtering at the top"; "that picker should be lazy scroll"). The bar is archiveFilterBarHTML, the Archive page's
+// own, over this list (o.rows), without Type (every scene is a panel) and with the people in each picture as its
+// characters. Filters start empty each time the window opens. A change redraws the tiles only, so the Moment Name box
+// keeps its focus; Clear filters redraws the bar too. Tiles go in IB_SCENE_PAGE at a time: a marker after the last one
+// is watched in the grid's own scroll box, and after each page the marker is asked again whether it is still in sight,
+// because an observer fires on a change and a tall window could otherwise stop at page one (adminOrdersTopUp).
+var IB_SCENE_PAGE = 24;
+function ibSceneFilter(key, val) { if (!IB.sceneF) IB.sceneF = emptyArchiveFilters(); IB.sceneF[key] = val; ibSceneGrid(); }
+function ibSceneClear() { IB.sceneF = emptyArchiveFilters(); ibSceneBar(); ibSceneGrid(); }
+function ibSceneBar() {
+  var host = document.getElementById('ib-scene-filters'); if (!host) return;
+  host.innerHTML = archiveFilterBarHTML(IB.sceneF || emptyArchiveFilters(), 'ibSceneFilter', { rows: IB.sceneRows || [], people: true, noType: true }) +
+    '<button type="button" class="archive-filter archive-clear" onclick="ibSceneClear()">Clear filters</button>';
+}
+function ibSceneItems() {
+  var have = {}; (IB.scenes || []).forEach(function (s) { have[String(s.id)] = true; });
+  return getFilteredArchives(IB.sceneF || emptyArchiveFilters(), { rows: (IB.sceneRows || []).filter(function (s) { return !have[String(s.id)]; }), people: true });
+}
+function ibSceneTile(it) {
+  var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+  var imgEl = document.createElement('img'); imgEl.className = 'prep-img-pick-img'; imgEl.loading = 'lazy'; imgEl.alt = '';
+  imgEl.style.width = '100%'; imgEl.style.objectFit = 'cover'; imgEl.style.objectPosition = 'center top'; imgEl.style.display = 'block';
+  imgEl.src = it.image_url;
+  var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + (it.session ? ' \u00b7 ' + it.session : '');
+  btn.appendChild(imgEl); btn.appendChild(cap);
+  btn.addEventListener('click', function () {
+    if (!IB.scenes) IB.scenes = [];
+    if (ibRefCount() < IB.maxRefs && !IB.scenes.some(function (s) { return String(s.id) === String(it.id); })) IB.scenes.push({ id: it.id, name: it.name });
+    ibCloseScenePicker(); ibPaintChips(); ibSyncRefs();
+  });
+  return btn;
+}
+function ibSceneMore() {
+  var grid = document.getElementById('ib-scene-grid'), list = IB.sceneList || [];
+  if (!grid || IB.sceneShown >= list.length) return;
+  var tail = document.getElementById('ib-scene-tail');
+  list.slice(IB.sceneShown, IB.sceneShown + IB_SCENE_PAGE).forEach(function (it) { grid.insertBefore(ibSceneTile(it), tail); });
+  IB.sceneShown = Math.min(list.length, IB.sceneShown + IB_SCENE_PAGE);
+  if (tail && IB.sceneShown >= list.length) tail.style.display = 'none';
+  setTimeout(ibSceneTopUp, 0);
+}
+function ibSceneTopUp() {
+  var grid = document.getElementById('ib-scene-grid'), tail = document.getElementById('ib-scene-tail');
+  if (!grid || !tail || tail.style.display === 'none' || IB.sceneShown >= (IB.sceneList || []).length) return;
+  var g = grid.getBoundingClientRect(), t = tail.getBoundingClientRect();
+  if (t.top - 300 <= g.bottom) ibSceneMore();
+}
+function ibSceneGrid() {
+  var grid = document.getElementById('ib-scene-grid'); if (!grid) return;
+  if (IB.sceneObs) { try { IB.sceneObs.disconnect(); } catch (e) {} IB.sceneObs = null; }
+  grid.innerHTML = ''; grid.scrollTop = 0;
+  IB.sceneList = ibSceneItems(); IB.sceneShown = 0;
+  if (!IB.sceneList.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    var all = IB.sceneRows || [], left = all.filter(function (s) { return !(IB.scenes || []).some(function (x) { return String(x.id) === String(s.id); }); });
+    empty.textContent = !all.length ? 'This campaign has no pictures in its Archive yet. Archive a story panel or an Image Builder picture first.'
+      : (!left.length ? 'Every scene in the Archive is already added.' : 'No scenes match these filters.');
+    grid.appendChild(empty); return;
+  }
+  var tail = document.createElement('div'); tail.id = 'ib-scene-tail'; tail.style.cssText = 'grid-column:1/-1;height:1px;';
+  grid.appendChild(tail);
+  if (typeof IntersectionObserver === 'function') {
+    // a notice can be queued from before the last page went in, so each one asks the marker where it is now (ibSceneTopUp)
+    IB.sceneObs = new IntersectionObserver(function (es) { for (var i = 0; i < es.length; i++) if (es[i].isIntersecting) { ibSceneTopUp(); break; } }, { root: grid, rootMargin: '300px' });
+    IB.sceneObs.observe(tail);
+  } else grid.addEventListener('scroll', ibSceneTopUp, { passive: true });
+  ibSceneMore();
+}
 function ibScenePicker(rows) {
   ibCloseScenePicker();
-  var have = {}; (IB.scenes || []).forEach(function (s) { have[String(s.id)] = true; });
-  var items = rows.filter(function (s) { return !have[String(s.id)]; });
+  IB.sceneRows = rows || []; IB.sceneF = emptyArchiveFilters();   // v3.4.20
   var overlay = document.createElement('div');
   overlay.id = 'ib-scene-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseScenePicker(); });
-  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box'; box.style.maxWidth = '820px';   // v3.4.20 -- room for the filters
   var head = document.createElement('div'); head.className = 'prep-img-modal-head';
   var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add a scene from the Archive';
   var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
   x.addEventListener('click', ibCloseScenePicker);
   head.appendChild(h); head.appendChild(x);
-  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
-  if (!items.length) {
-    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
-    empty.textContent = rows.length ? 'Every scene in the Archive is already added.' : 'This campaign has no pictures in its Archive yet. Archive a story panel or an Image Builder picture first.';
-    grid.appendChild(empty);
-  } else {
-    items.forEach(function (it) {
-      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
-      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
-      imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
-      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + (it.session ? ' \u00b7 ' + it.session : '');
-      btn.appendChild(imgEl); btn.appendChild(cap);
-      btn.addEventListener('click', function () {
-        if (!IB.scenes) IB.scenes = [];
-        if (ibRefCount() < IB.maxRefs && !IB.scenes.some(function (s) { return String(s.id) === String(it.id); })) IB.scenes.push({ id: it.id, name: it.name });
-        ibCloseScenePicker(); ibPaintChips(); ibSyncRefs();
-      });
-      grid.appendChild(btn);
-    });
-  }
-  box.appendChild(head); box.appendChild(grid);
+  var bar = document.createElement('div'); bar.id = 'ib-scene-filters';
+  bar.style.cssText = (IB.sceneRows.length ? 'display:flex;' : 'display:none;') + 'flex-wrap:wrap;gap:6px;margin-bottom:10px;';
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid'; grid.id = 'ib-scene-grid';
+  box.appendChild(head); box.appendChild(bar); box.appendChild(grid);
   overlay.appendChild(box); document.body.appendChild(overlay);
+  ibSceneBar(); ibSceneGrid();
 }
 // v3.4.07 -- TD-1088. THE REFERENCES SAVE TO THE OPEN PICTURE, like a Story panel's cast (Ian, 2026-11-02). With one
 // of my own drawn pictures open, every add or remove posts the whole list to POST /builder/images/:id/refs, so Retouch,

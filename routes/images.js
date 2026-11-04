@@ -3302,6 +3302,40 @@ async function ibScenePeople(db, cid, a) {
   } catch (e) { console.error('[image-builder] scene people error:', e.message); }
   return [];
 }
+// v3.4.20 -- TD-1097. ibScenePeople for a whole Archive at once: the same three sources in the same order (a panel's cast
+// set by hand; else the campaign's characters named in the panel's words; else a Builder picture's References), read in
+// four queries instead of up to three per picture. A read that fails leaves its source empty, as ibScenePeople does.
+async function ibSceneIndex(db, cid) {
+  const idx = { named: {}, moments: {}, chars: [], builder: [] };
+  const read = async function (sql, args) { try { const st = db.prepare(sql); return (await st.all.apply(st, args)) || []; } catch (e) { console.error('[image-builder] scene index error:', e.message); return []; } };
+  (await read("SELECT DISTINCT mc.moment_id, ch.name FROM moment_characters mc JOIN characters ch ON ch.id = mc.character_id " +
+    "JOIN campaign_archives a ON a.moment_id = mc.moment_id WHERE a.campaign_id = ? AND a.image_type = 'moment' ORDER BY ch.name", [cid])).forEach(function (r) {
+    (idx.named[r.moment_id] = idx.named[r.moment_id] || []).push(r.name);
+  });
+  (await read("SELECT DISTINCT m.id, m.title, m.description, m.prompt FROM moments m JOIN campaign_archives a ON a.moment_id = m.id " +
+    "WHERE a.campaign_id = ? AND a.image_type = 'moment'", [cid])).forEach(function (m) { idx.moments[m.id] = m; });
+  idx.chars = await read('SELECT name FROM characters WHERE campaign_id = ?', [cid]);
+  idx.builder = await read('SELECT image_url, clean_image_url, refs FROM builder_images WHERE campaign_id = ? ORDER BY id', [cid]);
+  return idx;
+}
+function ibScenePeopleIn(idx, a) {
+  try {
+    var uniq = function (xs) { return xs.filter(function (x, i) { return x && xs.indexOf(x) === i; }); };
+    if (a.moment_id) {
+      const named = idx.named[a.moment_id];
+      if (named && named.length) return uniq(named.map(function (n) { return characterCanonicalName(n); }));
+      const m = idx.moments[a.moment_id];
+      if (m) {
+        const text = [m.title, m.description, m.prompt].filter(Boolean).join(' ').toLowerCase();
+        return uniq((idx.chars || []).filter(function (c) { return c.name && characterNameMatches(c.name, text); }).map(function (c) { return characterCanonicalName(c.name); }));
+      }
+    }
+    const src = a.source_url || a.image_url;
+    const b = src ? (idx.builder || []).find(function (x) { return x.image_url === src || x.clean_image_url === src; }) : null;
+    if (b && b.refs) { let r = {}; try { r = JSON.parse(b.refs) || {}; } catch (e) { r = {}; } return uniq((r.characters || []).map(function (c) { return characterCanonicalName(c.name); })); }
+  } catch (e) { console.error('[image-builder] scene people error:', e.message); }
+  return [];
+}
 // The scenes a picture asks for, checked: archived pictures (image_type 'moment': story panels and Builder pictures) of THIS
 // campaign, which every member may see. In the order given, each once.
 async function ibResolveScenes(db, cid, list) {
@@ -3451,13 +3485,30 @@ router.get('/builder/campaigns/:cid/ref-picture', requireAuth, async function (r
 });
 // v3.4.19 -- TD-1095. The scene picker: the campaign's archived pictures (story panels and Image Builder pictures), newest
 // first, with the session each came from.
+// v3.4.20 -- TD-1097. With what the Archive's own filter bar reads (Ian: "have the filtering at the top"): the version,
+// who archived it, the art style, the shape, the moment's title -- the Archive list's columns -- and the people in it,
+// found as a scene reference finds them (ibScenePeople), so All characters can narrow panels too. Four reads in all,
+// whatever the Archive's size: ibSceneIndex loads what ibScenePeople would ask per picture, ibScenePeopleIn answers.
 router.get('/builder/campaigns/:cid/scenes', requireAuth, async function (req, res) {
   try {
     if (!(await ibGate(req, res))) return;
     const db = await getDb();
-    const rows = await db.prepare("SELECT a.id, a.title, a.image_url, s.name AS session_name FROM campaign_archives a LEFT JOIN sessions s ON s.id = a.session_id " +
-      "WHERE a.campaign_id = ? AND a.image_type = 'moment' AND a.image_url IS NOT NULL ORDER BY a.created_at DESC, a.id DESC").all(parseInt(req.params.cid, 10));
-    res.json({ scenes: (rows || []).map(function (r) { return { id: r.id, name: String(r.title || '').trim().slice(0, 80) || 'Scene', image_url: r.image_url, session: r.session_name || '' }; }) });
+    const cid = parseInt(req.params.cid, 10);
+    const rows = await db.prepare("SELECT a.id, a.title, a.image_url, a.source_url, a.moment_id, a.session_id, a.fork_id, a.archived_by, a.art_style, a.art_style_name, " +
+      "a.shape, a.img_w, a.img_h, a.created_at, s.name AS session_name, u.name AS archived_by_name, sf.role AS fork_role, fu.name AS fork_owner_name, " +
+      "m.title AS moment_title, m.panel_order AS moment_panel_order FROM campaign_archives a LEFT JOIN sessions s ON s.id = a.session_id " +
+      "LEFT JOIN users u ON u.id = a.archived_by LEFT JOIN session_forks sf ON sf.id = a.fork_id LEFT JOIN users fu ON fu.id = sf.user_id " +
+      "LEFT JOIN moments m ON m.id = a.moment_id " +
+      "WHERE a.campaign_id = ? AND a.image_type = 'moment' AND a.image_url IS NOT NULL ORDER BY a.created_at DESC, a.id DESC").all(cid);
+    const idx = await ibSceneIndex(db, cid);
+    res.json({ scenes: (rows || []).map(function (r) {
+      return { id: r.id, name: String(r.title || '').trim().slice(0, 80) || 'Scene', image_url: r.image_url, session: r.session_name || '',
+        session_id: r.session_id || null, session_title: r.session_name || null, moment_id: r.moment_id || null, title: r.title || null,
+        moment_title: r.moment_title || null, moment_panel_order: (r.moment_panel_order === undefined ? null : r.moment_panel_order),
+        fork_id: r.fork_id || null, fork_role: r.fork_role || null, fork_owner_name: r.fork_owner_name || null,
+        archived_by: r.archived_by || null, archived_by_name: r.archived_by_name || null, art_style: r.art_style || null, art_style_name: r.art_style_name || null,
+        shape: r.shape || null, img_w: r.img_w || null, img_h: r.img_h || null, created_at: r.created_at || null, people: ibScenePeopleIn(idx, r) };
+    }) });
   } catch (e) { console.error('[image-builder] scenes error:', e.message); res.json({ error: 'Could not load the Archive.' }); }
 });
 router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
