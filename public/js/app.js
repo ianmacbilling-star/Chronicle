@@ -11316,6 +11316,7 @@ function loadNovelPreview(layout) {
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
+  url += '&castRoster=1';   // v3.4.27 -- TD-1103: the page says its automatic names, for the text box
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -11336,6 +11337,7 @@ function loadNovelPreview(layout) {
     resizeNovelPreviewIframe();
     applyNovelZoom();
     try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
+    try { prepCastRosterFromPreview(iframe); } catch (_e) {}   // v3.4.27 -- TD-1103: the automatic names, for the text box
   };
   iframe.src = url;
 }
@@ -11649,6 +11651,7 @@ function prepSyncTitle() {
       : 'This is someone else s version. Switch to your own version to change the subtitle.';
   }
   try { _prepAuthorNoteSync(_ownV); } catch (e) {}   // v3.2.82 -- TD-1017
+  try { _prepCastWordsSync(_ownV); } catch (e) {}   // v3.4.27 -- TD-1103
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
@@ -20494,6 +20497,7 @@ function loadNovelPreview(layout) {
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
+  url += '&castRoster=1';   // v3.4.27 -- TD-1103: the page says its automatic names, for the text box
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -20514,6 +20518,7 @@ function loadNovelPreview(layout) {
     resizeNovelPreviewIframe();
     applyNovelZoom();
     try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
+    try { prepCastRosterFromPreview(iframe); } catch (_e) {}   // v3.4.27 -- TD-1103: the automatic names, for the text box
   };
   iframe.src = url;
 }
@@ -24732,6 +24737,9 @@ function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
   clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   clGateCastImg(ck, 'pcl-castmode', 'pcl-castmode-label');   // v3.4.26 -- the line-up or the picture, only with the page on
+  clGateCastImg(ck, 'prep-cast-head', 'prep-cast-head-label');   // v3.4.27 -- TD-1103: the heading and the text below, on either kind
+  clGateCastImg(ck, 'prep-cast-cap', 'prep-cast-cap-wrap');
+  try { _prepCastWordsSync(); } catch (e) {}   // the line-up shows its names in the box, a picture starts empty
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
   // v3.4.26 -- TD-1102. With the Company picture the NPC and Character pictures choices do not apply: hidden, values kept.
@@ -24766,7 +24774,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode'];   // v3.4.26 -- castmode   // v3.3.28; v3.4.23 -- pcl-ownTitle
+                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode', 'prep-cast-cap-auto'];   // v3.4.26 -- castmode; v3.4.27 -- the automatic-names link   // v3.3.28; v3.4.23 -- pcl-ownTitle
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -35234,6 +35242,7 @@ function resetPublishForCampaignSwitch(force) {
   _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
   var _an = document.getElementById('prep-author-note'); if (_an) { _an.value = ''; try { prepAuthorNoteCount(); } catch (e) {} }   // v3.2.82
+  ['prep-cast-head', 'prep-cast-cap'].forEach(function (i) { var x = document.getElementById(i); if (x) x.value = ''; }); _prepCastRoster = null;   // v3.4.27 -- the old book's words and names
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
   state.bookMeta = null;
@@ -38299,7 +38308,84 @@ function prepSaveAuthorNote() {
 }
 function _prepAuthorNoteQ() {
   var el = document.getElementById('prep-author-note');
-  return el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '';
+  return (el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '') + _prepCastWordsQ();   // v3.4.27 -- and the character page's words
+}
+// =====================================================================================
+// v3.4.27 -- TD-1103. THE CHARACTER PAGE'S HEADING AND TEXT BELOW. Ian, 2026-11-04: "Do both for both. But in the normal
+// line up... pre fill out the text for them with the from left to right text." Saved with the version like the author
+// note (as you type, on leaving the box, on leaving the page); previewed before they are saved.
+//  HEADING: shows "The Company" until changed; cleared means no heading. Saved only when it differs from what it shows.
+//  TEXT BELOW: while it is AUTOMATIC (company_caption null) the box shows the names the line-up prints, read off the
+//  last preview (data-roster), and nothing for a picture -- and the book keeps printing them fresh, so a renamed or added
+//  character stays right. Change the words and they print instead; "Use the automatic names" puts the names back.
+// =====================================================================================
+var PREP_CAST_HEAD_DEFAULT = 'The Company', PREP_CAST_HEAD_MAX = 48, PREP_CAST_CAP_MAX = 400;
+var _prepCastRoster = null;   // the automatic names the last preview printed; null until one has been seen
+function _prepCastHeadShown() { var bm = state.bookMeta || {}; return bm.company_heading == null ? PREP_CAST_HEAD_DEFAULT : String(bm.company_heading); }
+function _prepCastCapIsAuto() { var bm = state.bookMeta || {}; return bm.company_caption == null; }
+function _prepCastLineup() { var s = document.getElementById('pcl-castmode'); return !(s && s.value === 'image'); }
+function _prepCastCapAutoText() { return _prepCastLineup() ? String(_prepCastRoster || '') : ''; }
+function _prepCastCapShown() { var bm = state.bookMeta || {}; return _prepCastCapIsAuto() ? _prepCastCapAutoText() : String(bm.company_caption); }
+function _prepCastAutoLink() {
+  var a = document.getElementById('prep-cast-cap-auto');
+  if (a) a.style.display = (!_prepCastCapIsAuto() && _prepCastLineup()) ? '' : 'none';
+  var c = document.getElementById('prep-cast-cap');
+  if (c) c.placeholder = _prepCastLineup() ? 'The names, from left to right, appear here once the preview has shown the character page.' : 'Optional. Printed under the picture.';
+}
+function _prepCastWordsSync(own) {
+  var h = document.getElementById('prep-cast-head'), c = document.getElementById('prep-cast-cap');
+  if (typeof state === 'undefined' || !state) return;
+  if (h && document.activeElement !== h && !_prepTypeTimers['prep-cast-head']) h.value = _prepCastHeadShown();
+  if (c && document.activeElement !== c && !_prepTypeTimers['prep-cast-cap']) c.value = _prepCastCapShown();
+  if (own != null) {
+    if (h) h.readOnly = !own;
+    if (c) c.readOnly = !own;
+  }
+  _prepCastAutoLink();
+}
+function _prepCastHeadNow() { var h = document.getElementById('prep-cast-head'); return h ? String(h.value || '').replace(/\s+/g, ' ').trim().slice(0, PREP_CAST_HEAD_MAX) : null; }
+function _prepCastCapNow() { var c = document.getElementById('prep-cast-cap'); return c ? String(c.value || '').replace(/\r\n/g, '\n').slice(0, PREP_CAST_CAP_MAX) : null; }
+// What has been typed and not saved, as a patch; null when nothing differs from what the boxes show from the version.
+function _prepCastWordsPatch() {
+  var p = {}, any = false, hv = _prepCastHeadNow(), cv = _prepCastCapNow();
+  if (hv != null && hv !== _prepCastHeadShown().trim()) { p.company_heading = hv; any = true; }
+  if (cv != null && cv.trim() !== _prepCastCapShown().trim()) { p.company_caption = cv; any = true; }
+  return any ? p : null;
+}
+function prepSaveCastHead() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var hv = _prepCastHeadNow();
+  if (hv == null || hv === _prepCastHeadShown().trim()) return;
+  _prepMetaWrite({ company_heading: hv });
+}
+function prepSaveCastCap() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var cv = _prepCastCapNow();
+  if (cv == null || cv.trim() === _prepCastCapShown().trim()) return;
+  _prepMetaWrite({ company_caption: cv });
+  _prepCastAutoLink();
+}
+function prepCastCapUseAuto() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  clearTimeout(_prepTypeTimers['prep-cast-cap']); delete _prepTypeTimers['prep-cast-cap'];
+  _prepMetaWrite({ company_caption: null });
+  var c = document.getElementById('prep-cast-cap'); if (c) c.value = _prepCastCapAutoText();
+  _prepCastAutoLink();
+  try { prepMarkPreviewStale(true); } catch (e) {}
+}
+// The preview's words: the heading as typed; the text as typed, or castCapAuto while it still shows the automatic names.
+function _prepCastWordsQ() {
+  var q = '', hv = _prepCastHeadNow(), cv = _prepCastCapNow();
+  if (hv != null) q += '&castHead=' + encodeURIComponent(hv);
+  if (cv != null) q += (_prepCastCapIsAuto() && cv.trim() === _prepCastCapAutoText().trim()) ? '&castCapAuto=1' : ('&castCap=' + encodeURIComponent(cv));
+  return q;
+}
+// After a preview loads: the names it printed under the line-up, shown in the box while the text is automatic.
+function prepCastRosterFromPreview(iframe) {
+  var d = iframe && iframe.contentDocument; if (!d) return;
+  var p = d.querySelector('.cast-page[data-roster]'); if (!p) return;
+  _prepCastRoster = p.getAttribute('data-roster') || '';
+  _prepCastWordsSync();
 }
 // =====================================================================================
 // v3.2.84 -- TD-1019. THE TITLE, SUBTITLE AND AUTHOR NOTE SAVE AS YOU TYPE, AND ON THE WAY OUT.
@@ -38315,7 +38401,8 @@ function _prepAuthorNoteQ() {
 // Appended, not inserted (TD-853): nothing later in the file can shadow these.
 // =====================================================================================
 var PREP_TYPE_SAVE_MS = 1000;
-var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote' };
+var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote',
+                         'prep-cast-head': 'prepSaveCastHead', 'prep-cast-cap': 'prepSaveCastCap' };   // v3.4.27 -- TD-1103
 var _prepTypeTimers = {};
 function _prepTypeSave(id) {
   var el = document.getElementById(id);
@@ -38338,6 +38425,7 @@ function _prepUnsavedPatch() {
   if (s) { var sv = String(s.value || '').trim(); if (sv !== (bm.subtitle != null ? String(bm.subtitle) : '')) { patch.subtitle = sv; any = true; } }
   var n = document.getElementById('prep-author-note');
   if (n) { var nv = String(n.value || '').replace(/\r\n/g, '\n').slice(0, 600); if (nv.trim() !== (bm.author_note != null ? String(bm.author_note) : '').trim()) { patch.author_note = nv; any = true; } }
+  var _cw = _prepCastWordsPatch(); if (_cw) { Object.assign(patch, _cw); any = true; }   // v3.4.27 -- TD-1103
   return any ? patch : null;
 }
 function _prepFlushOnLeave() {

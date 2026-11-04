@@ -1807,6 +1807,12 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   picture instead, alone, as large as the page holds without cropping. Picking one switches **Character page** (under
   **Layout**, beside **Include character page**) to **Archived picture** and ticks Include character page; removing it
   goes back to the line-up. With Archived picture chosen but no picture picked, the line-up is used.
+  The picture gets the same frame as the book's other pictures (the **Picture border** setting under Layout).
+- **Heading** and **Text below** (Layout, under Include character page) — the character page's own words, for the line-up
+  or the picture. The heading starts as **The Company**; change it (for example to **The Cast**), or clear it for no
+  heading. On the line-up the text below starts as the characters' names from left to right and keeps itself up to date
+  as characters are added or renamed; type your own words and they print instead (in italic), and **Use the automatic
+  names** puts the names back. Under a picture the text starts empty. Line breaks are kept.
 - **Layout** — the layout itself, borders, captions, fonts and decorations.
 - The right-hand pane previews the book as you change things.
 

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.27",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3427-character-page-words",
+        "kind": "feature",
+        "public": true,
+        "summary": "Books: name your character page and add words under it.",
+        "detail": "Layout has a Heading box for the character page (it starts as The Company; call it The Cast, or leave it empty) and a Text below box. On the line-up the text starts as the names from left to right and stays up to date until you change it. A Company picture now gets the same frame as your other pictures.",
+        "td": [
+          "TD-1103"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.26",
     "staged_on": "2026-11-04",
     "entries": [

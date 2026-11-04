@@ -2553,6 +2553,55 @@ function bookAuthorNote(pageOpts, campaign) {
     : ((campaign && campaign._memberAuthorNote != null) ? campaign._memberAuthorNote : '');
   return String(raw).replace(/\r\n/g, '\n').trim().slice(0, AUTHOR_NOTE_MAX);
 }
+// v3.4.27 -- TD-1103. THE CHARACTER PAGE'S HEADING AND THE TEXT BELOW. Ian, 2026-11-04: "Leave the heading editable for any
+// option where there characters show... maybe they use the line up but want to call it 'The Cast'", and words under the
+// line-up or the picture -- on the line-up "pre fill out the text for them with the from left to right text".
+//   head: null (never set) is "The Company", the words every book has printed; '' is no heading at all.
+//   cap:  null is AUTOMATIC -- the roster under a line-up, nothing under a picture -- so a cast that changes keeps its
+//         names right. A string is the reader's own words in place of the roster; '' is nothing.
+// A preview passes words not yet saved in pageOpts (castHead, castCap; castCap null is "automatic"); otherwise the
+// version holds them. A book that never touched either prints exactly what it printed before.
+var CAST_HEAD_MAX = 48, CAST_CAP_MAX = 400, CAST_HEAD_DEFAULT = 'The Company';
+// Cinzel Bold's advance widths for ' ' to '~', in hundredths of an em (measured in Chromium, 2026-11-04); anything else 0.8em.
+var CAST_HEAD_W = [25,27,36,58,56,74,81,20,42,42,39,48,23,38,22,43,65,39,62,56,62,55,63,55,60,63,22,23,49,48,48,46,99,72,67,78,83,63,60,84,86,39,39,76,62,95,87,88,
+  66,88,75,58,67,82,73,97,73,70,66,42,43,42,55,50,54,64,60,68,75,56,54,73,75,35,34,67,55,86,78,78,59,77,66,52,60,71,64,87,65,64,61,38,26,38,49];
+var CAST_HEAD_LINE_PT = 470;   // the narrower page's line (6.8in) less a little: a heading this wide or less is one line
+var CAST_CAP_LINE_CH = 90;   // characters a line of the text below, on the conservative side, for the space it is given
+function castPageWords(pageOpts, campaign) {
+  var h = (pageOpts && pageOpts.castHead != null) ? pageOpts.castHead
+    : ((campaign && campaign._memberCompanyHeading != null) ? campaign._memberCompanyHeading : null);
+  var c = (pageOpts && pageOpts.castCap !== undefined) ? pageOpts.castCap
+    : ((campaign && campaign._memberCompanyCaption != null) ? campaign._memberCompanyCaption : null);
+  return {
+    head: (h == null) ? CAST_HEAD_DEFAULT : String(h).replace(/\s+/g, ' ').trim().slice(0, CAST_HEAD_MAX),
+    cap: (c == null) ? null : String(c).replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim().slice(0, CAST_CAP_MAX)
+  };
+}
+// Lines the text takes at about perLine characters a line; every line break starts a new one.
+function castTextLines(s, perLine) {
+  if (!s) return 0;
+  return String(s).split('\n').reduce(function (n, p) { return n + Math.max(1, Math.ceil(p.length / perLine)); }, 0);
+}
+// The heading is 22pt, the size "The Company" has always had, and a wide one steps down to stay on one line (10pt at the
+// least, which holds 48 of the widest letter). Measured from the letters, not counted, because Cinzel's W is three i's.
+function castHeadEm(head) {
+  var s = String(head || ''), em = 0;
+  for (var i = 0; i < s.length; i++) { var k = s.charCodeAt(i) - 32; em += (k >= 0 && k < CAST_HEAD_W.length) ? CAST_HEAD_W[k] / 100 : 0.8; }
+  return em;
+}
+function castHeadStyle(head) {
+  var em = castHeadEm(head);
+  if (em * 22 <= CAST_HEAD_LINE_PT) return '';
+  return ' style="font-size:' + Math.max(10, Math.floor(CAST_HEAD_LINE_PT / em)) + 'pt;white-space:nowrap;"';
+}
+// The line-up keeps 0.95in at the foot of the page for its names (four lines). The reader's own words get the same, and
+// more only when they need more -- the figures then shrink to suit, as they do for a bigger cast. Automatic: unchanged.
+function castRosterReserveIn(cap) {
+  if (cap == null) return 0.95;
+  var need = castTextLines(cap, CAST_CAP_LINE_CH) * 0.219 + 0.08;   // 10.5pt at 1.5 is 0.219in a line
+  return Math.max(0.95, Math.min(need, 2.8));
+}
+function castAttrEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;'); }
 // v3.3.70 -- TD-1079. THE AUTHOR NOTE IS SET AT THE SUBTITLE SIZE, 16pt (Ian), AND STEPS DOWN ONLY WHEN THE DETAILS
 // PAGE WOULD OVERFLOW. The page holds the title, the subtitle, the players, the byline, the note and the footer; a full
 // 600-character note at 16pt fits on its own, but with a subtitle, a long player list and several paragraphs it does
@@ -2628,6 +2677,8 @@ function applyForkBookMeta(campaign, fbm) {
   if (_f.subtitle != null) campaign._memberSubtitle = String(_f.subtitle);
   if (_f.title_color) campaign._memberTitleColor = String(_f.title_color);
   if (_f.author_note != null) campaign._memberAuthorNote = String(_f.author_note);   // v3.2.82 -- TD-1017
+  if (_f.company_heading != null) campaign._memberCompanyHeading = String(_f.company_heading);   // v3.4.27 -- TD-1103
+  if (_f.company_caption != null) campaign._memberCompanyCaption = String(_f.company_caption);
 }
 // v3.2.10 -- TD-988. A SAVED BOOK IS SELF-CONTAINED. Ian, 2026-10-19: "Saved books... should publish
 // exactly what is in those books... not what the current cover, title etc etc say." The save records
@@ -2645,6 +2696,7 @@ function savedBookMetaFrom(built) {
       title_image_url: c.title_image_url || '', company_image_url: c.company_image_url || '', built_title_url: c.built_title_url || '', book_title: t,   // v3.4.26 -- company
       subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '',
       author_note: bookAuthorNote(po, c),   // v3.2.82 -- TD-1017: the note the saved PDF was rendered with
+      company_heading: castPageWords(po, c).head, company_caption: castPageWords(po, c).cap,   // v3.4.27 -- TD-1103: the words it printed
       // v3.2.18 -- a drawn title carries its own subtitle in the artwork; recorded when its words are known.
       built_title_sub: (c.built_title_url && c._builtTitleText) ? String(c._builtTitleSub || '') : undefined };
   } catch (e) { return null; }
@@ -2692,11 +2744,15 @@ function applySavedBookMeta(campaign, pageOpts, m) {
   if (m.subtitle != null) campaign._memberSubtitle = String(m.subtitle); else delete campaign._memberSubtitle;
   if (m.title_color) campaign._memberTitleColor = String(m.title_color); else delete campaign._memberTitleColor;
   if (m.author_note != null) campaign._memberAuthorNote = String(m.author_note); else delete campaign._memberAuthorNote;   // v3.2.82
+  // v3.4.27 -- TD-1103. A save from before has neither: "The Company" and the automatic names, as it printed.
+  if (m.company_heading != null) campaign._memberCompanyHeading = String(m.company_heading); else delete campaign._memberCompanyHeading;
+  if (m.company_caption != null) campaign._memberCompanyCaption = String(m.company_caption); else delete campaign._memberCompanyCaption;
   if (pageOpts) {
     if (m.book_title) pageOpts.bookTitle = String(m.book_title);
     if (m.subtitle != null) pageOpts.subtitle = String(m.subtitle); else delete pageOpts.subtitle;
     if (m.title_color) pageOpts.titleColor = String(m.title_color); else delete pageOpts.titleColor;
     if (m.author_note != null) pageOpts.authorNote = String(m.author_note); else delete pageOpts.authorNote;   // v3.2.82
+    delete pageOpts.castHead; delete pageOpts.castCap;   // v3.4.27 -- the record's words, not a preview's
   }
   return true;
 }
@@ -4566,7 +4622,7 @@ async function resolveBookMismatch(req, campaignId, coStr) {
 // (applyForkBookMeta over the prefs, as every render reads them). The Order & Publish tab asks for this when a
 // book is put there and keeps it; /book-since compares it with now, so the warning reports only what changed
 // AFTER the book was optimized or loaded. One computation for both sides.
-var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'company_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color', 'author_note'];   // v3.2.82 -- author_note
+var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'company_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color', 'author_note', 'company_heading', 'company_caption'];   // v3.2.82 -- author_note; v3.4.27 -- the character page's words
 async function bookStateNow(req, campaignId) {
   var db = await getDb();
   var campaign = await db.prepare(
@@ -4583,6 +4639,9 @@ async function bookStateNow(req, campaignId) {
   return { v: 1, inc: includeFingerprint(incMap), co: storedLayoutCo(prefs) || '',
     cover: { cover_image_url: c2.cover_image_url || '', back_cover_image_url: c2.back_cover_image_url || '', title_image_url: c2.title_image_url || '',
       company_image_url: c2.company_image_url || '',   // v3.4.26
+      // v3.4.27 -- '' when never set, so a state taken before this version compares equal; '=' marks a set value ('' set is real).
+      company_heading: (c2._memberCompanyHeading != null ? '=' + c2._memberCompanyHeading : ''),
+      company_caption: (c2._memberCompanyCaption != null ? '=' + c2._memberCompanyCaption : ''),
       built_title_url: c2.built_title_url || '', book_title: String(c2._memberBookTitle || c2.name || ''),
       subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '',
       author_note: (c2._memberAuthorNote != null ? String(c2._memberAuthorNote) : '') } };   // v3.2.82
@@ -6020,10 +6079,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // single row and the roster had room beneath it by luck. The formation is taller now, so the two
   // must be solved together: the figures get what is left after the title block and the roster have
   // taken theirs. Change the page, the title or the roster and this follows on its own.
+  var _castWords = castPageWords(pageOpts, campaign);   // v3.4.27 -- TD-1103: the heading and the text below
+  var _castRosterText = '';                               // the automatic names, as plain words (one line a row)
   var CAST_PAGE_H_IN = 9.55;           // must match --cast-page-h in the stylesheet
   var CAST_PAGE_PAD_IN = 0.75;         // top and bottom, and the roster sits on the bottom one
   var CAST_TITLE_BLOCK_IN = 0.96;      // The Company + the divider + the formation's top margin
-  var CAST_ROSTER_RESERVE_IN = 0.95;   // four lines at 10.5pt/1.5 plus air -- the roster wraps, so this is a CEILING
+  var CAST_ROSTER_RESERVE_IN = castRosterReserveIn(_castWords.cap);   // four lines at 10.5pt/1.5 plus air -- the roster wraps, so this is a CEILING; v3.4.27 -- 0.95 unless the reader's own words need more
   var CAST_BLOCK_MAX_IN = CAST_PAGE_H_IN - (2 * CAST_PAGE_PAD_IN) - CAST_TITLE_BLOCK_IN - CAST_ROSTER_RESERVE_IN;
   var _CAST_MIN_REL = 0.35;            // the floor under height scaling (see _heightRel)
   // Back row as wide as the cast can fill, then one fewer each row forward. round(sqrt(2n)) is the
@@ -6220,6 +6281,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>';
       }).join(' &middot; ');
     };
+    var _rosterAt = _rowsHtml.length;   // v3.4.27 -- where the roster starts, so the reader's own words can take its place
     if (_rowsN === 1) {
       _rowsHtml += '<div class="cast-roster">From left to right: ' + _rosterRow(_rows[0]) + '</div>';
     } else {
@@ -6232,8 +6294,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         return '<span class="cast-roster-row"><i>' + _label(i) + ', from left to right:</i> ' + _rosterRow(row) + '</span>';
       }).join('') + '</div>';
     }
+    // v3.4.27 -- TD-1103. The same names as plain words, for the Prep panel's text box to start from.
+    var _rosterPlain = function (row) { return row.map(function (c) { return castFirstName(c.name); }).join(' \u00b7 '); };
+    _castRosterText = (_rowsN === 1) ? ('From left to right: ' + _rosterPlain(_rows[0]))
+      : _rows.map(function (row, i) { return (i === 0 ? 'Back row' : (i === _rowsN - 1 ? 'Front row' : 'Middle row')) + ', from left to right: ' + _rosterPlain(row); }).join('\n');
+    if (_castWords.cap != null) _rowsHtml = _rowsHtml.slice(0, _rosterAt) + (_castWords.cap ? '<div class="cast-roster cast-roster-own">' + _fmEsc(_castWords.cap) + '</div>' : '');
     castBlockHTML = _rowsHtml;
   }
+  // v3.4.27 -- the names-only list (a very large cast) has no roster line; the reader's own words go at the foot.
+  if (_castFields === 'list' && _castWords.cap) castBlockHTML += '<div class="cast-roster cast-roster-own">' + _fmEsc(_castWords.cap) + '</div>';
 
   // Get DM name from campaign
   const dmName = campaign.owner_name || campaign.dm_name || 'The Story Master';
@@ -6326,6 +6395,27 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // as large as it goes without cropping or stretching. Chosen but not picked: the line-up (Ian). Only with Include
   // character page on (fCast), as the line-up is.
   var castPicImg = (co && co.castmode === 'image' && campaign.company_image_url) ? String(campaign.company_image_url) : '';
+  // v3.4.27 -- TD-1103. The heading, on the line-up or the picture: "The Company" untouched, byte for byte what it printed.
+  var _castHeadHTML = _castWords.head ? ('<div class="cast-page-title"' + castHeadStyle(_castWords.head) + '>' + _fmEsc(_castWords.head) + '</div>\n  <div class="cast-divider"></div>') : '';
+  // The Prep preview asks for the automatic names (castRoster=1) so its text box can start from them. Nothing else does.
+  var _castRosterAttr = (pageOpts && pageOpts.castRosterOut) ? (' data-roster="' + castAttrEsc(_castRosterText) + '"') : '';
+  // THE PICTURE PAGE: the heading, then the picture in the same frame as every other picture (the Picture border setting,
+  // exactly as the title page draws it -- Ian: "Make sure the character picture gets the same frame as all the other
+  // pictures"), then the reader's words under it. The picture is as large as the page holds once the heading and the
+  // words have their room, never cropped or stretched; the frame hugs it, so a small picture is not enlarged.
+  var _castPicPageHTML = '';
+  if (castPicImg) {
+    var _cpCap = _castWords.cap || '';
+    var _cpLines = castTextLines(_cpCap, 80);
+    var _cpMaxH = 9.55 - 1.35 - (_castWords.head ? 0.9 : 0) - (_cpLines ? (0.15 + _cpLines * 0.235) : 0) - 0.45;
+    var _cpImg = '<img class="cast-pic" src="' + castPicImg.replace(/"/g, '&quot;') + '" alt="" style="max-width:6.85in;max-height:' + Math.max(2, _cpMaxH).toFixed(2) + 'in;" />';
+    _castPicPageHTML = (_castWords.head ? '<div class="cast-page-title"' + castHeadStyle(_castWords.head) + '>' + _fmEsc(_castWords.head) + '</div><div class="cast-divider"></div>' : '') +
+      '<div class="cast-pic-body"><div class="cast-pic-wrap">' +
+        ((co && co.border === 'frame' && co.arrange !== 'comicpage')
+          ? bronzeFrame(_cpImg, true, 0.6)
+          : '<div class="cast-pic-border" style="' + picBorderCss(co) + '">' + _cpImg + picOverlay(co) + '</div>') +
+      '</div>' + (_cpCap ? '<div class="cast-pic-cap">' + _fmEsc(_cpCap) + '</div>' : '') + '</div>';
+  }
   var _pseen = {};
   var playerNames = characters.map(function(c){ return (_pubName(c.player_name, c.player_pen_name) || '').trim(); })
     .filter(function(n){ if (!n) return false; var k = n.toLowerCase(); if (_pseen[k]) return false; _pseen[k] = 1; return true; })
@@ -6491,10 +6581,15 @@ ${previewScrollbarCss()}
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
-  /* v3.4.26 -- TD-1102: the picture fills the page's area inside its margins, whole (contain), never past it. */
-  .cast-page-pic { display:flex;align-items:center;justify-content:center;padding:0.6in 0.6in; }
-  .cast-pic-box { width:100%;height:calc(var(--cast-page-h) - 1.2in); }
-  .cast-pic { display:block;width:100%;height:100%;object-fit:contain;object-position:center center; }
+  /* v3.4.26 -- TD-1102; v3.4.27 -- TD-1103: the heading at the top (where the line-up has it), the framed picture and its words centred in the rest.
+     The picture's largest size is set on the picture itself (max-width / max-height), so the frame hugs it. */
+  .cast-page-pic { display:flex;flex-direction:column;padding:0.75in 0.6in 0.6in; }
+  .cast-pic-body { flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center; }
+  .cast-pic-wrap { max-width:100%;line-height:0;text-align:center; }
+  .cast-pic-border { display:inline-block;position:relative;line-height:0;border-radius:4px;overflow:hidden; }
+  .cast-pic { display:block;width:auto;height:auto;margin:0 auto; }
+  .cast-pic-cap { margin-top:0.15in;max-width:6.8in;font-family:'Crimson Text',serif;font-size:12pt;font-style:italic;line-height:1.4;color:#5b4a37;text-align:center;white-space:pre-line; }
+  .cast-roster-own { font-style:italic;white-space:pre-line; }
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
   /* v3.0.525 -- THE COMPANY IS A LINE-UP. No cards, no borders, no white boxes: the figures stand
      on the page and the only furniture is a ground shadow and the caption underneath. */
@@ -6707,10 +6802,9 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
 ${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
 ${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
 ${(fCast && (!paginated || pageOpts.page === 1)) ? (castPicImg ? `<!-- CAST & CREW PAGE: the book's picture (v3.4.26) -->
-<div class="cast-page cast-page-pic"><div class="cast-pic-box"><img class="cast-pic" src="${castPicImg.replace(/"/g, '&quot;')}" alt="" /></div></div>` : `<!-- CAST & CREW PAGE -->
-<div class="cast-page">
-  <div class="cast-page-title">The Company</div>
-  <div class="cast-divider"></div>
+<div class="cast-page cast-page-pic"${_castRosterAttr}>${_castPicPageHTML}</div>` : `<!-- CAST & CREW PAGE -->
+<div class="cast-page"${_castRosterAttr}>
+  ${_castHeadHTML}
   ${castBlockHTML}
 </div>`) : ''}
 ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
@@ -7027,6 +7121,11 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
   else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
   if (req.query.authorNote != null) pageOpts.authorNote = String(req.query.authorNote).slice(0, AUTHOR_NOTE_MAX);   // v3.2.82 -- an unsaved edit, previewed
+  // v3.4.27 -- TD-1103: the character page's heading and text below as typed; castCapAuto is "the automatic names".
+  if (req.query.castHead != null) pageOpts.castHead = String(req.query.castHead).slice(0, CAST_HEAD_MAX);
+  if (req.query.castCapAuto === '1') pageOpts.castCap = null;
+  else if (req.query.castCap != null) pageOpts.castCap = String(req.query.castCap).slice(0, CAST_CAP_MAX);
+  if (req.query.castRoster === '1') pageOpts.castRosterOut = true;   // the Prep preview reads the automatic names off the page
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
   res.set('X-Total-Sessions', String(sessionsWithData.length));
@@ -9052,6 +9151,11 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
   if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
   else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
   if (req.query.authorNote != null) pageOpts.authorNote = String(req.query.authorNote).slice(0, AUTHOR_NOTE_MAX);   // v3.2.82 -- an unsaved edit, previewed
+  // v3.4.27 -- TD-1103: the character page's heading and text below as typed; castCapAuto is "the automatic names".
+  if (req.query.castHead != null) pageOpts.castHead = String(req.query.castHead).slice(0, CAST_HEAD_MAX);
+  if (req.query.castCapAuto === '1') pageOpts.castCap = null;
+  else if (req.query.castCap != null) pageOpts.castCap = String(req.query.castCap).slice(0, CAST_CAP_MAX);
+  if (req.query.castRoster === '1') pageOpts.castRosterOut = true;   // the Prep preview reads the automatic names off the page
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
 
