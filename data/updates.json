@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.19",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3419-builder-scenes",
+        "kind": "feature",
+        "public": true,
+        "summary": "Image Builder: add scenes from the campaign's Archive as references, as vignettes on a poster and more.",
+        "detail": "A new Scenes row in References brings in archived story panels and Image Builder pictures. A poster fits them in as smaller vignettes; a portrait puts them in the background; a handout prints them on the document; an item showcase adds a small inset; a character study swaps one close-up for the scene; an action scene uses them to guide what the characters do. Each is redrawn in the picture's art style.",
+        "td": [
+          "TD-1095"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.18",
     "staged_on": "2026-11-03",
     "entries": [

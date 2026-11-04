@@ -414,11 +414,12 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
         if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'scene') return n + ' is an earlier moment from this story, "' + r.name + '"' + ((r.people && r.people.length) ? ', showing ' + r.people.join(', ') : '') + '. ' + (r.note || '') + ' Redraw it in this picture\u2019s art style.';   // v3.4.19 -- TD-1095, Image Builder only
         if (r.category === 'plan') return n + ' is a flat, top-down plan of the place "' + r.name + '". It is not an object in the scene and is never drawn itself: use it only for the layout of the place you draw.';   // v3.4.11 -- TD-1091, Map to Scene only
         return n + ' is a reference for "' + r.name + '".';
       }
       return n + ' is the reference for ' + r.name + '.';
-    }).join(' ') + (charRefs.some(function (r) { return r && r.isAsset && r.category === 'plan'; }) ? ' The plan is the one exception to the rules below: draw the real place it describes, never the plan itself, its paper or anything it lies on.' : '');   // v3.4.11
+    }).join(' ') + (charRefs.some(function (r) { return r && r.isAsset && r.category === 'plan'; }) ? ' The plan is the one exception to the rules below: draw the real place it describes, never the plan itself, its paper or anything it lies on.' : '') + (charRefs.some(function (r) { return r && r.isAsset && r.category === 'scene'; }) ? ' The earlier moments are scene references: use each one only as its own line above says, never copying its art style.' : '');   // v3.4.11; v3.4.19 -- scenes
     var assetSection = assetText
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
@@ -3260,6 +3261,59 @@ const IB_TYPES = [
   { key: 'token', label: 'Portrait / Headshot', candid: false, text: 'IMAGE TYPE: a head-and-shoulders portrait of one figure, centered and facing the viewer, on a plain background, with the head and shoulders well inside the picture so it can be cropped to a circle for use as a game token.' }   // v3.3.97 -- renamed (Ian); key unchanged
 ];
 var IB_TYPE_TEXT_MAX = 2500;   // v3.3.86
+// v3.4.19 -- TD-1095. SCENES FROM THE ARCHIVE AS REFERENCES (Ian, 2026-11-03: "pull in Archived scenes as additional
+// references... Another set of pills"). What a scene is FOR depends on the image type (Ian), so each type has one line
+// here and the line rides on the reference itself (so Regen and Edit Prompt words keep it). Always a suggestion. A type
+// with no line (Group Portrait, Location, Map, Map to Scene) does not send its scenes; they stay on the picture's list.
+var IB_SCENE_NOTES = {
+  poster: 'Fit it into the montage as one of the smaller vignettes, among and below the main portraits, showing its people, their action and its setting.',
+  token: 'Show it as a small vignette softly in the background, behind and beside the figure, keeping the head and shoulders clear and well inside the picture.',
+  handout: 'Show it as a printed illustration on the document itself, like the picture on a wanted poster or a sketch on a letter.',
+  item: 'Show it as a small inset vignette behind the still life, a glimpse of the item\u2019s story.',
+  character: 'Show it in place of one of the close-ups, so the sheet shows the full figure, the other close-ups and this moment.',
+  action: 'It is a guide to what its characters are doing: in this action scene, have them doing the same kind of action, movement and energy, drawn from their own character references, in this picture\u2019s own setting and composition. Use it only as a guide to the action, never for its layout or framing.',
+  '': 'Include it as a small vignette in this picture, showing its people, their action and its setting.'
+};
+var IB_SCENE_MAYBE = ' Include it only where it fits naturally; leave it out if it would crowd the picture.';
+function ibSceneNote(type) {
+  var k = type ? (type.key === 'creature' ? 'character' : type.key) : '';
+  if (!Object.prototype.hasOwnProperty.call(IB_SCENE_NOTES, k)) return null;
+  return IB_SCENE_NOTES[k] + (k === 'action' ? '' : IB_SCENE_MAYBE);
+}
+// Who a scene shows, from what the Archive recorded -- the user never types names. A story panel: its cast as set by hand,
+// else the campaign's characters named in the panel's own words (the matcher panels are drawn with). A Builder picture:
+// its References. Neither (the panel deleted, an upload): no names, and the model works it out from the picture.
+async function ibScenePeople(db, cid, a) {
+  try {
+    var uniq = function (xs) { return xs.filter(function (x, i) { return x && xs.indexOf(x) === i; }); };
+    if (a.moment_id) {
+      const named = await db.prepare('SELECT ch.name FROM moment_characters mc JOIN characters ch ON ch.id = mc.character_id WHERE mc.moment_id = ? ORDER BY ch.name').all(a.moment_id);
+      if (named && named.length) return uniq(named.map(function (r) { return characterCanonicalName(r.name); }));
+      const m = await db.prepare('SELECT title, description, prompt FROM moments WHERE id = ?').get(a.moment_id);
+      if (m) {
+        const text = [m.title, m.description, m.prompt].filter(Boolean).join(' ').toLowerCase();
+        const cs = await db.prepare('SELECT name FROM characters WHERE campaign_id = ?').all(cid);
+        return uniq((cs || []).filter(function (c) { return c.name && characterNameMatches(c.name, text); }).map(function (c) { return characterCanonicalName(c.name); }));
+      }
+    }
+    const src = a.source_url || a.image_url;
+    const b = src ? await db.prepare('SELECT refs FROM builder_images WHERE campaign_id = ? AND (image_url = ? OR clean_image_url = ?) LIMIT 1').get(cid, src, src) : null;
+    if (b && b.refs) { let r = {}; try { r = JSON.parse(b.refs) || {}; } catch (e) { r = {}; } return uniq((r.characters || []).map(function (c) { return characterCanonicalName(c.name); })); }
+  } catch (e) { console.error('[image-builder] scene people error:', e.message); }
+  return [];
+}
+// The scenes a picture asks for, checked: archived pictures (image_type 'moment': story panels and Builder pictures) of THIS
+// campaign, which every member may see. In the order given, each once.
+async function ibResolveScenes(db, cid, list) {
+  const ids = (Array.isArray(list) ? list : []).map(function (x) { return parseInt((x && typeof x === 'object') ? x.id : x, 10); }).filter(function (x, i, a) { return x > 0 && a.indexOf(x) === i; });
+  const out = [];
+  for (const id of ids) {
+    const a = await db.prepare("SELECT id, title, image_url, source_url, moment_id FROM campaign_archives WHERE id = ? AND campaign_id = ? AND image_type = 'moment'").get(id, cid);
+    if (!a || !a.image_url) return { error: 'One of the scenes is no longer in the Archive.' };
+    out.push({ id: a.id, name: String(a.title || '').trim().slice(0, 80) || 'Scene', url: a.image_url, people: await ibScenePeople(db, cid, a) });
+  }
+  return { scenes: out };
+}
 // v3.4.13 -- TD-1091. adminOnly types (Map to Scene, while Ian tests it: "Make it so Admin's can see it still while we
 // test it more") are listed and accepted for a NEW picture only for an admin (ADMIN_EMAILS). Pictures already made with
 // one keep working: Regen, Retouch and Make My Copy do not ask. A support session is the customer, so it is not admin.
@@ -3384,11 +3438,27 @@ router.get('/builder/campaigns/:cid/ref-picture', requireAuth, async function (r
       if (!c || !c.snapshot_reference_url) return res.json({ error: 'That character has no reference picture yet.' });
       return res.json({ url: c.snapshot_reference_url });
     }
+    if (req.query.scene) {   // v3.4.19 -- TD-1095
+      const _s = await ibResolveScenes(db, cid, [req.query.scene]);
+      if (_s.error || !_s.scenes.length) return res.json({ error: 'That scene is no longer in the Archive.' });
+      return res.json({ url: _s.scenes[0].url });
+    }
     const id = parseInt(req.query.asset, 10);
     const a = id > 0 ? (await db.prepare(ASSET_REF_SQL).all(cid)).filter(function (x) { return Number(x.id) === id; })[0] : null;
     if (!a || !a.image_url) return res.json({ error: 'That asset has no picture.' });
     res.json({ url: a.image_url });
   } catch (e) { console.error('[image-builder] ref-picture error:', e.message); res.json({ error: 'Could not load that picture.' }); }
+});
+// v3.4.19 -- TD-1095. The scene picker: the campaign's archived pictures (story panels and Image Builder pictures), newest
+// first, with the session each came from.
+router.get('/builder/campaigns/:cid/scenes', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const rows = await db.prepare("SELECT a.id, a.title, a.image_url, s.name AS session_name FROM campaign_archives a LEFT JOIN sessions s ON s.id = a.session_id " +
+      "WHERE a.campaign_id = ? AND a.image_type = 'moment' AND a.image_url IS NOT NULL ORDER BY a.created_at DESC, a.id DESC").all(parseInt(req.params.cid, 10));
+    res.json({ scenes: (rows || []).map(function (r) { return { id: r.id, name: String(r.title || '').trim().slice(0, 80) || 'Scene', image_url: r.image_url, session: r.session_name || '' }; }) });
+  } catch (e) { console.error('[image-builder] scenes error:', e.message); res.json({ error: 'Could not load the Archive.' }); }
 });
 router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
   try {
@@ -3687,7 +3757,11 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const ttl = ibCleanTitle(refsIn.title);   // v3.3.83
   const ho = (type && type.key === 'handout') ? ibCleanHandout(refsIn.handout) : null;   // v3.3.92 -- the handout's writing
   const ttlOver = !!(ttl && ttl.url);   // v3.3.85 -- Title Builder lettering is laid over the finished picture, not drawn by the model
-  if (chars.length + assets.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
+  const _sceneNote = ibSceneNote(type);   // v3.4.19 -- TD-1095: null = this type does not send scenes
+  const _rsn = await ibResolveScenes(db, cid, refsIn.scenes);
+  if (_rsn.error) { res.json({ error: _rsn.error, field: 'refs' }); return null; }
+  const scenes = _rsn.scenes, sent = (_sceneNote !== null) ? scenes : [];
+  if (chars.length + assets.length + sent.length > MAX_PANEL_REFS) { res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' }); return null; }
   let _ibMap = null;   // v3.4.11 -- Map to Scene: the asset that is the map
   if (type && type.needsMap) {   // v3.4.10/11 -- TD-1091: the map is the one Item or Location asset (Ian: in the story a map is an item); nothing is charged when it is missing
     const _maps = assets.filter(function (a) { var c = a.category || 'location'; return c === 'item' || c === 'location'; });
@@ -3696,13 +3770,19 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
     _ibMap = _maps[0];
   }
   if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return null;
+  if (sent.length && await rightsCheck.refuseRejected(res, sent.map(function (s) { return s.url; }), 'One of the scenes can\u2019t be used as a reference. Remove it from References.')) return null;   // v3.4.19
 
   const charIds = chars.map(function (c) { return c.character_id; });
   const charList = buildCharacterBlock(chars, '', 0, charIds);
   const assetList = buildAssetBlock(_ibMap ? assets.map(function (a) { return a === _ibMap ? Object.assign({}, a, { category: 'plan' }) : a; }) : assets, '', assetIds);   // v3.4.11 -- the map is a plan
   if (_ibMap) assetList.text = String(assetList.text || '').split('\n').filter(function (l) { return !/ \(plan\)$/.test(l); }).join('\n');   // and not a scene asset to match
+  // v3.4.19 -- scenes go after the assets, each carrying its type's line; the people they show join the cast list, so the
+  // roster rule does not forbid a vignette's own people.
+  const _sceneRefs = sent.map(function (s) { return { name: s.name, url: s.url, category: 'scene', isAsset: true, people: s.people, note: _sceneNote }; });
+  const _castNames = chars.map(function (c) { return c.name; });
+  sent.forEach(function (s) { (s.people || []).forEach(function (p) { if (_castNames.map(function (x) { return characterCanonicalName(x); }).indexOf(p) < 0) _castNames.push(p); }); });
   const panelBlock = { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text,
-    refs: combineRefs(charList.refs, assetList.refs), castExplicit: true, castNames: chars.map(function (c) { return c.name; }) };
+    refs: combineRefs(charList.refs, assetList.refs.concat(_sceneRefs)), castExplicit: true, castNames: _castNames };
 
   let prompt = (typeof words === 'string' && words.trim()) ? words.trim().slice(0, IB_WORDS_MAX) : '';
   if (!prompt) {
@@ -3724,6 +3804,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const sub = await submitPanelGen(prompt, _rs.styleForGen, fal_key, panelBlock, seed, modelKey, webhookUrl, shape, null, flags, _campPrompt);
   const refsOut = { characters: chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; }),
     assets: assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; }) };
+  if (scenes.length) refsOut.scenes = scenes.map(function (s) { return { id: s.id, name: s.name }; });   // v3.4.19 -- kept even when this type does not send them
   if (ttl) refsOut.title = ttl;   // v3.3.83
   if (ho) refsOut.handout = ho;   // v3.3.92
   if (type && type.edited) refsOut.type_text = type.text;   // v3.3.86
@@ -3750,7 +3831,7 @@ function ibRecipeOf(r) {
   let refs = null; try { refs = r.refs ? JSON.parse(r.refs) : null; } catch (e) { refs = null; }
   refs = refs || {};
   return { description: r.description || '', shape: r.shape, style: r.art_style, type: r.image_type || null, include_lore: r.include_lore !== false,
-    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), title: refs.title || null, type_text: refs.type_text || null, handout: refs.handout || null } };   // v3.3.92 -- handout   // v3.3.86 -- type_text   // v3.3.83 -- title
+    refs: { characters: (refs.characters || []).map(function (c) { return { id: c.id, look: c.look }; }), assets: (refs.assets || []).map(function (a) { return a.id; }), scenes: (refs.scenes || []).map(function (s) { return s.id; }), title: refs.title || null, type_text: refs.type_text || null, handout: refs.handout || null } };   // v3.3.92 -- handout   // v3.3.86 -- type_text   // v3.3.83 -- title
 }
 
 router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req, res) {
@@ -4023,12 +4104,15 @@ router.post('/builder/images/:id/refs', requireAuth, async function (req, res) {
     const allAssets = assetIds.length ? await db.prepare(ASSET_REF_SQL).all(cid) : [];
     const assets = assetIds.map(function (id) { return allAssets.filter(function (a) { return Number(a.id) === id && a.image_url; })[0]; }).filter(Boolean);
     if (assets.length !== assetIds.length) return res.json({ error: 'One of the assets is no longer available, or its picture was removed.' });
-    if (chars.length + assets.length > MAX_PANEL_REFS) return res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' });
+    const _rsn = await ibResolveScenes(db, cid, b.scenes);   // v3.4.19 -- TD-1095
+    if (_rsn.error) return res.json({ error: _rsn.error });
+    if (chars.length + assets.length + _rsn.scenes.length > MAX_PANEL_REFS) return res.json({ error: 'Use at most ' + MAX_PANEL_REFS + ' reference pictures in one image.' });
     if (await rightsCheck.refuseRejected(res, chars.map(function (c) { return c.snapshot_reference_url; }), 'It can\u2019t be used as a reference. Choose another look.')) return;
     let refs = {}; try { refs = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { refs = {}; }
     if (!refs || typeof refs !== 'object') refs = {};
     refs.characters = chars.map(function (c) { return { id: c.character_id, name: c.name, look: c._look, label: c._label }; });   // as Generate stores them
     refs.assets = assets.map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location' }; });
+    refs.scenes = _rsn.scenes.map(function (s) { return { id: s.id, name: s.name }; });   // v3.4.19
     await db.prepare('UPDATE builder_images SET refs = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(refs), new Date().toISOString(), r.id);
     const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(r.id);
     res.json({ success: true, image: ibRow(row) });
@@ -4119,7 +4203,8 @@ router.post('/builder/images/:id/retouch', requireAuth, async function (req, res
     const assets = assetIds.length ? (await db.prepare(ASSET_REF_SQL).all(cid)).filter(function (a) { return assetIds.indexOf(Number(a.id)) >= 0 && a.image_url; }) : [];
     const charList = buildCharacterBlock(chars, '', 0, chars.map(function (c) { return c.character_id; }));
     const assetList = buildAssetBlock(assets, '', assets.map(function (a) { return a.id; }));
-    const refs = combineRefs(charList.refs, assetList.refs);
+    const _rsnR = (ibSceneNote(ibType(r.image_type)) !== null) ? await ibResolveScenes(db, cid, recipe.refs.scenes) : { scenes: [] };   // v3.4.19 -- TD-1095
+    const refs = combineRefs(charList.refs, assetList.refs.concat((_rsnR.scenes || []).map(function (s) { return { name: s.name, url: s.url, category: 'scene', isAsset: true }; })));
     // {{REF:Name}} placeholders and a picked reference, worded exactly as the panel route words them.
     let instr = instruction;
     if (instr.indexOf('{{REF:') !== -1) {
