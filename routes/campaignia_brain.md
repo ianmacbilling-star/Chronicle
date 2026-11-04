@@ -2140,7 +2140,7 @@ You can put a drawn title on a picture: a poster's film title, the name on a por
 - **Placing it:** drag the lettering onto the picture, or press **Place title on picture**. The title appears in a dashed box. **Drag the box to move it**, and **drag the small yellow square in its bottom-right corner to make it bigger or smaller**; it keeps its shape. Then press **Apply title here**. Placing and applying are free. The title gets a soft dark halo so it reads on any background.
 - **A clean copy, without the title, is always kept.** Regen and Retouch work on the clean copy and put the title back exactly where you placed it.
 - **Without title** on the picture shows the clean copy. **Archive** asks whether you want it **with** the title, **without** it, or **Both**; a clean copy saved to the Archive is named "... (clean copy)". **Save as Asset** always uses the clean copy.
-- **Remove title** takes it off the picture and out of the panel. The drawing stays in the Title Builder, and **Done & Use** brings it back without another token.
+- **Move Title** on the picture selects the title already on it, in its dashed box where it sits now, so you can drag it somewhere else or resize it, then **Apply title here** (free). While it is selected, **Remove title** takes it off the picture and out of the panel. The drawing stays in the Title Builder, and **Done & Use** brings it back without another token.
 
 **HANDOUTS: EXACT WORDS ON THE PAGE**
 
@@ -2152,7 +2152,7 @@ Choose **In-world Handout** and a **Handout text** box opens in the same panel. 
 
 **Your words are never sent to the drawing.** The picture is drawn with an empty writing area, and your words are laid on the paper afterwards, so **the spelling is always exactly what you typed.**
 - **Place writing on picture** (or drag the chip) puts the writing in a dashed box. Drag the box to move it, and drag the yellow square in its corner to change its width and height. Changing the words, font or ink while it is on the picture redraws it in place.
-- **Apply writing here** keeps it. **Remove writing from picture** takes it off; your words stay in the box.
+- **Apply writing here** keeps it. **Move Writing** on the picture selects the writing already on it, to move or resize it the same way. While it is selected, **Remove writing** takes it off; your words stay in the box.
 - A handout can have a **title too**. Each can be placed or removed without touching the other.
 
 ---

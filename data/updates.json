@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.21",
+    "staged_on": "2026-11-03",
+    "entries": [
+      {
+        "id": "3421-move-title-writing",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: Move Title and Move Writing on the picture, to move or resize what is laid on it.",
+        "detail": "Press Move Title (or Move Writing on a handout) to select it where it sits, drag it or resize it from its corner, then Apply, for free. Remove title and Remove writing now show only while it is selected, and Delete sits beside Mark Ready.",
+        "td": [
+          "TD-1098"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.20",
     "staged_on": "2026-11-03",
     "entries": [
