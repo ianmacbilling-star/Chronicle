@@ -6409,8 +6409,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var _cpLines = castTextLines(_cpCap, 80);
     var _cpMaxH = 9.55 - 1.35 - (_castWords.head ? 0.9 : 0) - (_cpLines ? (0.15 + _cpLines * 0.235) : 0) - 0.45;
     var _cpImg = '<img class="cast-pic" src="' + castPicImg.replace(/"/g, '&quot;') + '" alt="" style="max-width:6.85in;max-height:' + Math.max(2, _cpMaxH).toFixed(2) + 'in;" />';
-    _castPicPageHTML = (_castWords.head ? '<div class="cast-page-title"' + castHeadStyle(_castWords.head) + '>' + _fmEsc(_castWords.head) + '</div><div class="cast-divider"></div>' : '') +
-      '<div class="cast-pic-body"><div class="cast-pic-wrap">' +
+    // v3.4.30 -- ONE GROUP, CENTRED (Ian, 2026-11-04: "group the title just over the image and the text just below the image"):
+    // the heading went at the top of the page, so a wide picture left it stranded above a gap. It now opens the centred body.
+    _castPicPageHTML = '<div class="cast-pic-body">' +
+      (_castWords.head ? '<div class="cast-page-title"' + castHeadStyle(_castWords.head) + '>' + _fmEsc(_castWords.head) + '</div><div class="cast-divider"></div>' : '') +
+      '<div class="cast-pic-wrap">' +
         ((co && co.border === 'frame' && co.arrange !== 'comicpage')
           ? bronzeFrame(_cpImg, true, 0.6)
           : '<div class="cast-pic-border" style="' + picBorderCss(co) + '">' + _cpImg + picOverlay(co) + '</div>') +
@@ -6581,7 +6584,7 @@ ${previewScrollbarCss()}
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
-  /* v3.4.26 -- TD-1102; v3.4.27 -- TD-1103: the heading at the top (where the line-up has it), the framed picture and its words centred in the rest.
+  /* v3.4.26 -- TD-1102; v3.4.27 -- TD-1103; v3.4.30: the heading, the framed picture and its words, centred together on the page.
      The picture's largest size is set on the picture itself (max-width / max-height), so the frame hugs it. */
   .cast-page-pic { display:flex;flex-direction:column;padding:0.75in 0.6in 0.6in; }
   .cast-pic-body { flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center; }

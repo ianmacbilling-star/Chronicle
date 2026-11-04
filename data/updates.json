@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.30",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3430-company-picture-grouped",
+        "kind": "fix",
+        "public": true,
+        "summary": "Books: a character page picture keeps its heading just above it and its text just below.",
+        "detail": "On a character page that uses an Archive picture, the heading, the picture and the text below are centred on the page together, so a wide picture no longer leaves the heading alone at the top.",
+        "td": [
+          "TD-1103"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.29",
     "staged_on": "2026-11-04",
     "entries": [
