@@ -1802,6 +1802,11 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   (you can still use it). The title-page picture is not framed this way. The **x** on a tile removes
   that picture, and so does picking the picture already on the cover. Clear the cover entirely and you
   get a **plain framed cover** — dark ground, gold frame, your title on it.
+- **Company picture** — the fourth tile. By default the character page is the line-up of your characters; pick a
+  picture here (for example a group picture made in the Image Builder and archived) and the character page shows that
+  picture instead, alone, as large as the page holds without cropping. Picking one switches **Character page** (under
+  **Layout**, beside **Include character page**) to **Archived picture** and ticks Include character page; removing it
+  goes back to the line-up. With Archived picture chosen but no picture picked, the line-up is used.
 - **Layout** — the layout itself, borders, captions, fonts and decorations.
 - The right-hand pane previews the book as you change things.
 

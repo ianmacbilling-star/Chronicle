@@ -484,11 +484,12 @@
               <div class="prep-field-label">Author&#8217;s Note</div>
               <textarea id="prep-author-note" maxlength="600" rows="4" onchange="prepSaveAuthorNote()" oninput="prepAuthorNoteCount()" placeholder="Optional. A note, message or dedication to your readers." class="prep-input" style="resize:vertical;min-height:84px;line-height:1.45;margin-bottom:2px;" title="Printed on the page with the copyright notice, right after the title page. In the PDF and the printed book only."></textarea>
               <div id="prep-author-note-count" style="font-size:11px;color:rgba(232,213,163,0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
-              <div class="prep-field-label">Cover, Back &amp; Title images</div>
+              <div class="prep-field-label">Cover, Back, Title &amp; Company images</div>
               <div class="prep-img-slots">
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-back" onclick="openPrepImagePicker('back')"></div><div class="prep-img-cap">Back</div></div>
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-title" onclick="openPrepImagePicker('title')"></div><div class="prep-img-cap">Title</div></div>
+                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-company" onclick="openPrepImagePicker('company')" title="A picture for the character page instead of the line-up"></div><div class="prep-img-cap">Company</div></div>   <!-- v3.4.26 -- TD-1102 -->
               </div>
               <!-- v3.4.24 -- TD-1100 (Ian, 2026-11-04: "way too wordy"; "put the whole title area in a separate outlined panel and
                    you can hide all of it when the check box is checked"; "move the Titling options UNDER the cover pictures"). The
@@ -615,6 +616,9 @@
                 </label>
               </div>
               <div class="pcl-toggles" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:10px;">
+                <!-- v3.4.26 -- TD-1102. Ian: "Include cover page" and "include TOC" "should be the first two listed". -->
+                <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="pcl-cover"><span>Include cover page</span></label>
+                <label class="cl-toggle" title="Include a table of contents listing the sessions"><input type="checkbox" id="pcl-toc"><span>Include table of contents</span></label>
                 <label class="cl-toggle" title="Large decorative first letter on the opening paragraph"><input type="checkbox" id="pcl-dropcap"><span>Drop cap on opening</span></label>
                 <label class="cl-toggle" title="Show the campaign / session header at the top of each page"><input type="checkbox" id="pcl-header"><span>Running page header</span></label>
                 <!-- v3.0.612 -- THE TWO DEPENDENT PAIRS SIT OPPOSITE EACH OTHER. Ian, 2026-08-10:
@@ -639,17 +643,18 @@
                      Company page." Off by default, so no book already in print changes. -->
                   <div class="pcl-toggle-pair">
                   <label class="cl-toggle" title="Include the character / cast page"><input type="checkbox" id="pcl-cast" onchange="prepSyncCastNpc()"><span>Include character page</span></label>
+                  <!-- v3.4.26 -- TD-1102: the line-up, or the book's Company picture (picked on the Company tile; picking one sets this). -->
+                  <label class="cl-field" id="pcl-castmode-label" title="The usual line-up of your characters, or a picture from your Archive (choose it on the Company tile under Title &amp; Cover)." style="padding-left:26px;"><span>Character page</span><select id="pcl-castmode" onchange="prepSyncCastNpc()"><option value="lineup">Character line-up</option><option value="image">Archived picture</option></select></label>
                   <label class="cl-toggle" id="pcl-castnpc-label" title="Also show your Supporting Characters / NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="pcl-castnpc"><span>Include Sup. Characters / NPCs</span></label>
                   <label class="cl-field" id="pcl-castpic-label" title="Which picture of each character the character page uses. Characters are only shown if they are in the cast of a session in this book." style="padding-left:26px;"><span>Character pictures</span><select id="pcl-castpic"><option value="canon">Canonical: The original pictures of the Characters</option><option value="vfirst">First appearance in this version (all sessions)</option><option value="vlast">Last appearance in this version (all sessions)</option><option value="bfirst">First appearance in the sessions in this book</option><option value="blast">Last appearance in the sessions in this book</option></select></label>   <!-- v3.3.28 -- was the Use newest character art tick box -->
                   </div>
                 </div>
-                <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="pcl-cover"><span>Include cover page</span></label>
+                <!-- v3.4.26 -- Include cover page and Include table of contents moved to the top of this list (Ian). -->
                 <!-- v3.0.616 -- HIDE CAMPAIGNIA LOGO IS GONE. Ian: the mark moves to the BACK cover and
                      is always on, so there is nothing left to toggle. It was a Platinum-gated control;
                      removing it retires that perk, which the landing-page tier copy (TD-387) must stop
                      claiming. The `hidelogo` key stays in CO_DEFAULTS so stored co strings still parse,
                      but nothing reads it any more. -->
-                <label class="cl-toggle" title="Include a table of contents listing the sessions"><input type="checkbox" id="pcl-toc"><span>Include table of contents</span></label>
               </div>
               <div style="display:flex;gap:8px;margin-top:14px;">
                 <button class="btn btn-sm" type="button" onclick="prepLayoutReset()">Reset</button>

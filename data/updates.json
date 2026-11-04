@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.26",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3426-company-picture",
+        "kind": "feature",
+        "public": true,
+        "summary": "Books: use a picture from your Archive as the character page instead of the line-up.",
+        "detail": "Prep & Preview has a Company tile beside Cover, Back and Title. Pick a picture there, such as one made in the Image Builder, and the character page shows it, fitted to the page. Layout now lists Include cover page and Include table of contents first.",
+        "td": [
+          "TD-1102"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.25",
     "staged_on": "2026-11-04",
     "entries": [

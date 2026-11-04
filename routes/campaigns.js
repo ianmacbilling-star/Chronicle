@@ -471,6 +471,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: coverFromPrefs(cur, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
+    company_image_url: cur.company_image_url || '',   // v3.4.26 -- TD-1102
     built_title_url: cur.built_title_url || '',
     // v3.0.622 -- TD-357(2). The WORDS the built title actually has drawn on it, recorded at build
     // time. Without them "has the title changed since it was drawn?" cannot be asked at all: the
@@ -566,11 +567,12 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     _curating = true;
   }
   // v3.1.96 -- TD-979. Your own book's covers and title page: never a rejected picture.
-  if (await rightsCheck.refuseRejected(res, [b.cover_image_url, b.back_cover_image_url, b.title_image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
+  if (await rightsCheck.refuseRejected(res, [b.cover_image_url, b.back_cover_image_url, b.title_image_url, b.company_image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
+  if (b.company_image_url !== undefined) patch.company_image_url = b.company_image_url || null;   // v3.4.26 -- TD-1102; the prefs blob takes it with no schema change
   // v3.0.618 -- THE BUILT TITLE IS ITS OWN FIELD. v3.0.617 stored it in title_image_url, which was
   // ALREADY TAKEN: that is the third image in the Prep panel, the artwork on the book title PAGE.
   // Ian saw his own title-page image appear in the builder and said so before anything overwrote it.
@@ -673,6 +675,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: coverFromPrefs(merged, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
+    company_image_url: merged.company_image_url || '',   // v3.4.26
     built_title_url: merged.built_title_url || '',
     built_title_src: merged.built_title_src || '',
     built_title_prompt: merged.built_title_prompt || '',

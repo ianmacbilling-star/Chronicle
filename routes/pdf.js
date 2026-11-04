@@ -839,6 +839,7 @@ var CO_DEFAULTS = {
   // keeps it as written: canon | vfirst | vlast | bfirst | blast. '' = not in the co string; parseCustomOpts then
   // decides -- from castimg when the string carries one (a layout saved before this), else bfirst, the new default.
   castpic: '',
+  castmode: 'lineup',   // v3.4.26 -- TD-1102: the character page is the line-up, or 'image' (the book's company_image_url)
   hidelogo: 0,
   // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
   // and paper, so they reach every render path automatically and persist through layout_opts with
@@ -895,6 +896,7 @@ function parseCustomOpts(str) {
     else o[k] = v;
   });
   // v3.3.28 -- a layout saved before castpic keeps the picture it had: castimg 0 = first in the version, 1 = last.
+  if (o.castmode !== 'image') o.castmode = 'lineup';   // v3.4.26 -- anything else is the line-up
   if (CAST_PICS.indexOf(o.castpic) < 0) o.castpic = /(^|,)\s*castimg\s*:/.test(String(str)) ? (o.castimg ? 'vlast' : 'vfirst') : 'bfirst';
   // AUTHORITATIVE GATE: a withheld layout never reaches the packer, however the request was formed.
   if (o.arrange && !layoutIsEnabled(o.arrange)) o.arrange = CO_LAYOUT_FALLBACK;
@@ -2612,6 +2614,7 @@ function applyForkBookMeta(campaign, fbm) {
   campaign.cover_image_url = coverFromPrefs(_f, campaign.campaign_image_url || '');
   campaign.back_cover_image_url = _f.back_cover_image_url || '';
   campaign.title_image_url = _f.title_image_url || '';
+  campaign.company_image_url = _f.company_image_url || '';   // v3.4.26 -- TD-1102: the character page's picture
   // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
   // byte-identical until v3.0.575; adding the field here is the whole reason it was consolidated.
   campaign.built_title_url = _f.built_title_url || '';
@@ -2639,7 +2642,7 @@ function savedBookMetaFrom(built) {
     if (!c) return null;
     var t = (po.bookTitle != null && String(po.bookTitle).trim()) ? String(po.bookTitle).trim() : String(c._memberBookTitle || c.name || '');
     return { v: 1, cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '',
-      title_image_url: c.title_image_url || '', built_title_url: c.built_title_url || '', book_title: t,
+      title_image_url: c.title_image_url || '', company_image_url: c.company_image_url || '', built_title_url: c.built_title_url || '', book_title: t,   // v3.4.26 -- company
       subtitle: (po.subtitle != null ? String(po.subtitle) : null), title_color: po.titleColor || '',
       author_note: bookAuthorNote(po, c),   // v3.2.82 -- TD-1017: the note the saved PDF was rendered with
       // v3.2.18 -- a drawn title carries its own subtitle in the artwork; recorded when its words are known.
@@ -2683,6 +2686,7 @@ function applySavedBookMeta(campaign, pageOpts, m) {
   campaign.cover_image_url = m.cover_image_url || '';
   campaign.back_cover_image_url = m.back_cover_image_url || '';
   campaign.title_image_url = m.title_image_url || '';
+  campaign.company_image_url = m.company_image_url || '';   // v3.4.26 -- a save made before has none: the line-up
   campaign.built_title_url = m.built_title_url || '';
   if (m.book_title) campaign._memberBookTitle = String(m.book_title);
   if (m.subtitle != null) campaign._memberSubtitle = String(m.subtitle); else delete campaign._memberSubtitle;
@@ -4319,7 +4323,7 @@ function includeFingerprint(incMap) {
 var CO_TITLE_KEYS = { titleStyle: 1, titlePlace: 1, titleSize: 1 };
 var CO_COMPARABLE = {
   arrange: 1, border: 1, caption: 1, font: 1, dropcap: 1, cover: 1, cast: 1, castnpc: 1, castimg: 1, castpic: 1,
-  toc: 1, header: 1, markers: 1, markerbreak: 1,
+  toc: 1, header: 1, markers: 1, markerbreak: 1, castmode: 1,   // v3.4.26
   titleStyle: 1, titlePlace: 1, titleSize: 1
 };
 // v3.0.800 -- TD-610. AN ABSENT co IS "WE WERE NOT TOLD", NOT "THE DEFAULTS".
@@ -4385,7 +4389,7 @@ var CO_CHANGE_LABELS = {
   arrange: 'Layout', border: 'Picture border', caption: 'Caption style', font: 'Font', dropcap: 'Drop cap',
   cover: 'Cover page', cast: 'Character page', castnpc: 'NPCs on the character page', castimg: 'Character portrait', castpic: 'Character pictures',
   toc: 'Contents page', header: 'Running header', markers: 'Session markers', markerbreak: 'Session page breaks',
-  titleStyle: 'Title style', titlePlace: 'Title placement', titleSize: 'Title size'
+  titleStyle: 'Title style', titlePlace: 'Title placement', titleSize: 'Title size', castmode: 'Character page'   // v3.4.26
 };
 function coSettingsDiff(savedCo, nowCo) {
   var out = { same: true, keys: [], changes: [] };
@@ -4562,7 +4566,7 @@ async function resolveBookMismatch(req, campaignId, coStr) {
 // (applyForkBookMeta over the prefs, as every render reads them). The Order & Publish tab asks for this when a
 // book is put there and keeps it; /book-since compares it with now, so the warning reports only what changed
 // AFTER the book was optimized or loaded. One computation for both sides.
-var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color', 'author_note'];   // v3.2.82 -- author_note
+var BOOK_STATE_COVER_KEYS = ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'company_image_url', 'built_title_url', 'book_title', 'subtitle', 'title_color', 'author_note'];   // v3.2.82 -- author_note
 async function bookStateNow(req, campaignId) {
   var db = await getDb();
   var campaign = await db.prepare(
@@ -4578,6 +4582,7 @@ async function bookStateNow(req, campaignId) {
   applyForkBookMeta(c2, prefs || {});
   return { v: 1, inc: includeFingerprint(incMap), co: storedLayoutCo(prefs) || '',
     cover: { cover_image_url: c2.cover_image_url || '', back_cover_image_url: c2.back_cover_image_url || '', title_image_url: c2.title_image_url || '',
+      company_image_url: c2.company_image_url || '',   // v3.4.26
       built_title_url: c2.built_title_url || '', book_title: String(c2._memberBookTitle || c2.name || ''),
       subtitle: (c2._memberSubtitle != null ? String(c2._memberSubtitle) : ''), title_color: c2._memberTitleColor || '',
       author_note: (c2._memberAuthorNote != null ? String(c2._memberAuthorNote) : '') } };   // v3.2.82
@@ -6316,6 +6321,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // gated on fCover -- only on page 1 when the preview is paginated.
   function _fmEsc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   var titleImg = campaign.title_image_url || '';
+  // v3.4.26 -- TD-1102. THE CHARACTER PAGE AS A PICTURE (Ian, 2026-11-04: "they may want to use an image for the company page and
+  // not our Typical company page with the characters line up"). Picture alone, no heading (Ian), fitted to the page's area
+  // as large as it goes without cropping or stretching. Chosen but not picked: the line-up (Ian). Only with Include
+  // character page on (fCast), as the line-up is.
+  var castPicImg = (co && co.castmode === 'image' && campaign.company_image_url) ? String(campaign.company_image_url) : '';
   var _pseen = {};
   var playerNames = characters.map(function(c){ return (_pubName(c.player_name, c.player_pen_name) || '').trim(); })
     .filter(function(n){ if (!n) return false; var k = n.toLowerCase(); if (_pseen[k]) return false; _pseen[k] = 1; return true; })
@@ -6481,6 +6491,10 @@ ${previewScrollbarCss()}
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
+  /* v3.4.26 -- TD-1102: the picture fills the page's area inside its margins, whole (contain), never past it. */
+  .cast-page-pic { display:flex;align-items:center;justify-content:center;padding:0.6in 0.6in; }
+  .cast-pic-box { width:100%;height:calc(var(--cast-page-h) - 1.2in); }
+  .cast-pic { display:block;width:100%;height:100%;object-fit:contain;object-position:center center; }
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
   /* v3.0.525 -- THE COMPANY IS A LINE-UP. No cards, no borders, no white boxes: the figures stand
      on the page and the only furniture is a ground shadow and the caption underneath. */
@@ -6692,12 +6706,13 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
 </div>` : ''}
 ${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
 ${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
-${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
+${(fCast && (!paginated || pageOpts.page === 1)) ? (castPicImg ? `<!-- CAST & CREW PAGE: the book's picture (v3.4.26) -->
+<div class="cast-page cast-page-pic"><div class="cast-pic-box"><img class="cast-pic" src="${castPicImg.replace(/"/g, '&quot;')}" alt="" /></div></div>` : `<!-- CAST & CREW PAGE -->
 <div class="cast-page">
   <div class="cast-page-title">The Company</div>
   <div class="cast-divider"></div>
   ${castBlockHTML}
-</div>` : ''}
+</div>`) : ''}
 ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
 
 <!-- SESSIONS -->

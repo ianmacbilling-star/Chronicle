@@ -11574,7 +11574,8 @@ var PREP_IMG_KINDS = {
   campaign: { label: 'Choose a Campaign image', field: 'campaign_image_url', campaignField: true },
   cover: { label: 'Choose a Cover image', field: 'cover_image_url' },
   back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
-  title: { label: 'Choose a Title image', field: 'title_image_url' }
+  title: { label: 'Choose a Title image', field: 'title_image_url' },
+  company: { label: 'Choose a Company picture', field: 'company_image_url' }   // v3.4.26 -- TD-1102: the character page as a picture
 };
 // First-publish convenience: if this campaign has a Campaign image but no
 // explicit publish Cover yet, seed the Cover with the Campaign image so it is
@@ -13512,8 +13513,19 @@ function _prepMemberSetImage(kind, url) {
     .then(function(r){ return r.json(); })
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
-    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.1.96: a refusal is not the new meta
+    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); if (kind === 'company') prepCompanyAuto(url); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.4.26 -- company   // v3.1.96: a refusal is not the new meta
     .catch(function(){ showError('Could not update your book image.'); });
+}
+// v3.4.26 -- TD-1102. PICKING A COMPANY PICTURE CHOOSES IT (Ian: "If they upload a character page then auto make the selection
+// for them"): Character page becomes Archived picture and Include character page is ticked; removing it goes back to the
+// line-up. Committed like any other layout change, and the preview is marked out of date.
+function prepCompanyAuto(url) {
+  var sel = document.getElementById('pcl-castmode'), ck = document.getElementById('pcl-cast');
+  if (!sel) return;
+  if (url) { sel.value = 'image'; if (ck) ck.checked = true; } else sel.value = 'lineup';
+  prepSyncCastNpc();
+  try { if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); } catch (e) {}
+  try { prepMarkPreviewStale(true); } catch (e) {}
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
 //
@@ -13534,7 +13546,7 @@ var PREP_CROP_KINDS = { cover: 1, back: 1 };
 function renderPrepThumbs() {
   var c = state.currentCampaign; if (!c) return;
   var _pos = prepCropPosClass();
-  ['cover','back','title'].forEach(function(kind){
+  ['cover','back','title','company'].forEach(function(kind){   // v3.4.26 -- company
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
     var _f = PREP_IMG_KINDS[kind].field;
     var url = ((state.bookMeta || {})[_f]) || '';
@@ -24424,6 +24436,7 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   castnpc:0,
   castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest (read only to carry an older layout forward)
   castpic:'bfirst',   // v3.3.28 -- the Character pictures dropdown: canon | vfirst | vlast | bfirst | blast
+  castmode:'lineup',  // v3.4.26 -- TD-1102: lineup | image (the Company picture)
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -24589,7 +24602,7 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic'];   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic','castmode'];   // v3.4.26 -- castmode   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 // v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
@@ -24718,8 +24731,13 @@ function clGateCastImg(ck, id, labelId){
 function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
   clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
+  clGateCastImg(ck, 'pcl-castmode', 'pcl-castmode-label');   // v3.4.26 -- the line-up or the picture, only with the page on
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
+  // v3.4.26 -- TD-1102. With the Company picture the NPC and Character pictures choices do not apply: hidden, values kept.
+  var _cm = document.getElementById('pcl-castmode'), _pic = !!(_cm && _cm.value === 'image') && !!(ck ? ck.checked : true);
+  var _cpl = document.getElementById('pcl-castpic-label'); if (_cpl && _pic) _cpl.style.display = 'none';
+  if (cnl) cnl.style.display = _pic ? 'none' : '';
   if(!cn) return;
   var on = ck ? !!ck.checked : true;
   cn.disabled = !on;
@@ -24748,7 +24766,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castpic', 'pcl-ownTitle'];   // v3.3.28; v3.4.23 -- pcl-ownTitle
+                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode'];   // v3.4.26 -- castmode   // v3.3.28; v3.4.23 -- pcl-ownTitle
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24766,7 +24784,7 @@ function prepApplyOwnershipLock() {
     // The cover, back and title image slots. openPrepImagePicker already refuses and explains, so
     // this is about LOOKING inert as well as being inert -- a live-looking tile that answers a click
     // with an apology is the same fault in a different costume.
-    ['cover', 'back', 'title'].forEach(function (k) {
+    ['cover', 'back', 'title', 'company'].forEach(function (k) {   // v3.4.26 -- company
       var t = document.getElementById('prep-thumb-' + k);
       if (!t) return;
       t.style.opacity = own ? '' : '0.55';
