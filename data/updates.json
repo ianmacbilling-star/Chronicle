@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.22",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3422-pick-several",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Image Builder: pick several scenes or assets at once, search assets by name, and pin the scene filters.",
+        "detail": "In + Add scene and + Add asset, click pictures to tick them, then press Add to bring them all in. The asset window has a search box for the name, and the scene window's Pin keeps your filters for next time.",
+        "td": [
+          "TD-1099"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.21",
     "staged_on": "2026-11-03",
     "entries": [

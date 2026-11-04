@@ -40114,8 +40114,92 @@ function ibCloseScenePicker() {
 // is watched in the grid's own scroll box, and after each page the marker is asked again whether it is still in sight,
 // because an observer fires on a change and a tall window could otherwise stop at page one (adminOrdersTopUp).
 var IB_SCENE_PAGE = 24;
-function ibSceneFilter(key, val) { if (!IB.sceneF) IB.sceneF = emptyArchiveFilters(); IB.sceneF[key] = val; ibSceneGrid(); }
-function ibSceneClear() { IB.sceneF = emptyArchiveFilters(); ibSceneBar(); ibSceneGrid(); }
+// v3.4.22 -- TD-1099. PICK SEVERAL AT ONCE (Ian, 2026-11-04: "would there be a way to pick multiple at a time. And same
+// for Assets?"). In + Add scene and + Add asset a click ticks a picture (gold outline and a check) instead of adding it
+// and closing; a second click unticks it. The bar under the grid counts them and Add puts them all in, in the order
+// ticked. Ticks stay while the filters or the search change. The room is what the server allows for the picture's
+// references (characters + assets + scenes, at most IB.maxRefs; the refs route counts every scene), so once the ticks
+// fill it the other pictures dim and cannot be ticked.
+function ibRefRoom() { return Math.max(0, IB.maxRefs - (IB.chars.length + IB.assets.length + (IB.scenes || []).length)); }
+function ibPickList(kind) { if (kind === 'scene') { if (!IB.scenePick) IB.scenePick = []; return IB.scenePick; } if (!IB.assetPick) IB.assetPick = []; return IB.assetPick; }
+function ibPickHas(kind, id) { return ibPickList(kind).some(function (x) { return String(x.id) === String(id); }); }
+function ibPickMark(btn, on, full) {
+  var im = btn.querySelector('.prep-img-pick-img'), ok = btn.querySelector('.ib-pick-ok');
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (im) { im.style.borderColor = on ? '#e8d49a' : ''; im.style.boxShadow = on ? '0 0 0 2px #e8d49a' : ''; }
+  if (ok) ok.style.display = on ? 'flex' : 'none';
+  btn.style.opacity = (!on && full) ? '0.4' : ''; btn.style.cursor = (!on && full) ? 'not-allowed' : '';
+}
+function ibPickTile(kind, it, btn) {
+  btn.style.position = 'relative'; btn.setAttribute('data-id', String(it.id));
+  var ok = document.createElement('span'); ok.className = 'ib-pick-ok'; ok.textContent = '\u2713';
+  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:#e8d49a;color:#16100a;font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
+  btn.appendChild(ok);
+  btn.addEventListener('click', function () { ibPickToggle(kind, it); });
+  ibPickMark(btn, ibPickHas(kind, it.id), ibPickList(kind).length >= ibRefRoom());
+}
+function ibPickToggle(kind, it) {
+  var list = ibPickList(kind), i = -1;
+  list.forEach(function (x, j) { if (String(x.id) === String(it.id)) i = j; });
+  if (i >= 0) list.splice(i, 1);
+  else { if (list.length >= ibRefRoom()) return; list.push(kind === 'scene' ? { id: it.id, name: it.name } : { id: it.id, name: it.name, category: it.category }); }
+  ibPickPaint(kind);
+}
+function ibPickPaint(kind) {
+  var list = ibPickList(kind), room = ibRefRoom(), full = list.length >= room;
+  var grid = document.getElementById(kind === 'scene' ? 'ib-scene-grid' : 'ib-asset-grid');
+  if (grid) Array.prototype.forEach.call(grid.querySelectorAll('.prep-img-pick-named[data-id]'), function (b) { ibPickMark(b, ibPickHas(kind, b.getAttribute('data-id')), full); });
+  var n = list.length, msg = document.getElementById('ib-pick-msg'), go = document.getElementById('ib-pick-add');
+  if (msg) msg.textContent = room === 0 ? ('References are full (' + IB.maxRefs + '). Remove one to add another.')
+    : (n === 0 ? 'Click pictures to pick them.' : (n + ' selected' + (full ? ' \u00b7 that fills the ' + IB.maxRefs + ' references' : '')));
+  if (go) { go.disabled = n === 0; go.textContent = n > 1 ? ('Add ' + n) : 'Add'; }
+}
+function ibPickBar(kind, close) {
+  var bar = document.createElement('div'); bar.className = 'ib-pick-bar';
+  bar.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:10px;';
+  var msg = document.createElement('span'); msg.className = 'ib-meta'; msg.id = 'ib-pick-msg'; msg.style.marginRight = 'auto';
+  var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-sm'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', close);
+  var go = document.createElement('button'); go.type = 'button'; go.className = 'btn btn-sm btn-primary'; go.id = 'ib-pick-add'; go.textContent = 'Add'; go.disabled = true;
+  go.addEventListener('click', function () { ibPickAdd(kind); });
+  bar.appendChild(msg); bar.appendChild(cancel); bar.appendChild(go);
+  return bar;
+}
+function ibPickAdd(kind) {
+  var list = ibPickList(kind).slice(), room = ibRefRoom();
+  if (kind === 'scene') {
+    if (!IB.scenes) IB.scenes = [];
+    list.forEach(function (s) { if (room > 0 && !IB.scenes.some(function (x) { return String(x.id) === String(s.id); })) { IB.scenes.push({ id: s.id, name: s.name }); room--; } });
+    ibCloseScenePicker();
+  } else {
+    list.forEach(function (a) { if (room > 0 && !IB.assets.some(function (x) { return String(x.id) === String(a.id); })) { IB.assets.push({ id: a.id, name: a.name, category: a.category }); room--; } });
+    ibCloseAssetPicker();
+  }
+  if (list.length) { ibPaintChips(); ibSyncRefs(); }
+}
+// v3.4.22 -- TD-1099. THE SCENES PICKER'S PIN (Ian: "add the pin so it remembers what you were filtering for"): the
+// Archive's own pin (fpGet / fpSet, area 'ib-scenes', per campaign, this browser), beside the window's \u00d7. Pinned, the
+// filters are saved as they change and come back when the window opens; a pinned value that matches nothing is dropped
+// on opening (ibSceneSettle), as _pickerSettle does, so a pin never opens on an empty grid.
+function ibScenePinPaint() {
+  var p = document.getElementById('ib-scene-pin'); if (!p) return;
+  p.innerHTML = (IB.sceneRows || []).length ? fpButtonHTML(!!fpGet('ib-scenes', IB.cid), 'ibScenePinToggle') : '';
+}
+function ibScenePinToggle() {
+  if (fpGet('ib-scenes', IB.cid)) fpClear('ib-scenes', IB.cid); else fpSet('ib-scenes', IB.cid, IB.sceneF || emptyArchiveFilters());
+  ibScenePinPaint();
+}
+function ibSceneSettle() {
+  var f = IB.sceneF, rows = IB.sceneRows || [], o = { rows: rows, people: true };
+  if (!rows.length) return;
+  ['session', 'version', 'moment', 'character', 'creator', 'style', 'shape'].forEach(function (k) {
+    if (!f[k]) return;
+    var one = emptyArchiveFilters(); one[k] = f[k];
+    if (!getFilteredArchives(one, o).length) f[k] = '';
+  });
+  if (!getFilteredArchives(f, o).length) { var s = f.sort; IB.sceneF = emptyArchiveFilters(); IB.sceneF.sort = s || 'newest'; }
+}
+function ibSceneFilter(key, val) { if (!IB.sceneF) IB.sceneF = emptyArchiveFilters(); IB.sceneF[key] = val; fpRemember('ib-scenes', IB.cid, IB.sceneF); ibSceneGrid(); }   // v3.4.22 -- kept while pinned
+function ibSceneClear() { IB.sceneF = emptyArchiveFilters(); fpRemember('ib-scenes', IB.cid, IB.sceneF); ibSceneBar(); ibSceneGrid(); }
 function ibSceneBar() {
   var host = document.getElementById('ib-scene-filters'); if (!host) return;
   host.innerHTML = archiveFilterBarHTML(IB.sceneF || emptyArchiveFilters(), 'ibSceneFilter', { rows: IB.sceneRows || [], people: true, noType: true }) +
@@ -40132,11 +40216,7 @@ function ibSceneTile(it) {
   imgEl.src = it.image_url;
   var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + (it.session ? ' \u00b7 ' + it.session : '');
   btn.appendChild(imgEl); btn.appendChild(cap);
-  btn.addEventListener('click', function () {
-    if (!IB.scenes) IB.scenes = [];
-    if (ibRefCount() < IB.maxRefs && !IB.scenes.some(function (s) { return String(s.id) === String(it.id); })) IB.scenes.push({ id: it.id, name: it.name });
-    ibCloseScenePicker(); ibPaintChips(); ibSyncRefs();
-  });
+  ibPickTile('scene', it, btn);   // v3.4.22 -- TD-1099: a click ticks it
   return btn;
 }
 function ibSceneMore() {
@@ -40177,7 +40257,8 @@ function ibSceneGrid() {
 }
 function ibScenePicker(rows) {
   ibCloseScenePicker();
-  IB.sceneRows = rows || []; IB.sceneF = emptyArchiveFilters();   // v3.4.20
+  IB.sceneRows = rows || []; IB.scenePick = [];   // v3.4.22 -- nothing ticked yet
+  IB.sceneF = fpApply('ib-scenes', IB.cid, emptyArchiveFilters()); ibSceneSettle();   // v3.4.20; v3.4.22 -- the pinned filters, when pinned
   var overlay = document.createElement('div');
   overlay.id = 'ib-scene-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseScenePicker(); });
@@ -40186,13 +40267,16 @@ function ibScenePicker(rows) {
   var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add a scene from the Archive';
   var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
   x.addEventListener('click', ibCloseScenePicker);
-  head.appendChild(h); head.appendChild(x);
+  var right = document.createElement('div'); right.style.cssText = 'display:flex;align-items:center;gap:8px;';   // v3.4.22 -- the pin beside the \u00d7
+  var pin = document.createElement('span'); pin.id = 'ib-scene-pin'; right.appendChild(pin); right.appendChild(x);
+  head.appendChild(h); head.appendChild(right);
   var bar = document.createElement('div'); bar.id = 'ib-scene-filters';
   bar.style.cssText = (IB.sceneRows.length ? 'display:flex;' : 'display:none;') + 'flex-wrap:wrap;gap:6px;margin-bottom:10px;';
   var grid = document.createElement('div'); grid.className = 'prep-img-grid'; grid.id = 'ib-scene-grid';
   box.appendChild(head); box.appendChild(bar); box.appendChild(grid);
+  if (IB.sceneRows.length) box.appendChild(ibPickBar('scene', ibCloseScenePicker));   // v3.4.22
   overlay.appendChild(box); document.body.appendChild(overlay);
-  ibSceneBar(); ibSceneGrid();
+  ibScenePinPaint(); ibSceneBar(); ibSceneGrid(); ibPickPaint('scene');
 }
 // v3.4.07 -- TD-1088. THE REFERENCES SAVE TO THE OPEN PICTURE, like a Story panel's cast (Ian, 2026-11-02). With one
 // of my own drawn pictures open, every add or remove posts the whole list to POST /builder/images/:id/refs, so Retouch,
@@ -40241,9 +40325,7 @@ function ibAddAsset() {
 function ibCloseAssetPicker() { var m = document.getElementById('ib-asset-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
 function ibAssetPicker(rows) {
   ibCloseAssetPicker();
-  var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
-  var have = {}; IB.assets.forEach(function (a) { have[String(a.id)] = true; });
-  var items = rows.filter(function (a) { return !have[String(a.id)]; });
+  IB.assetRows = rows || []; IB.assetPick = []; IB.assetQ = '';   // v3.4.22 -- TD-1099
   var overlay = document.createElement('div');
   overlay.id = 'ib-asset-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseAssetPicker(); });
@@ -40253,27 +40335,45 @@ function ibAssetPicker(rows) {
   var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
   x.addEventListener('click', ibCloseAssetPicker);
   head.appendChild(h); head.appendChild(x);
-  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  box.appendChild(head);
+  // v3.4.22 -- TD-1099 (Ian: "at least a text filter for the name. No pin necessary"): a search box over the name and kind;
+  // it redraws the tiles only, so typing keeps the box's focus.
+  if (IB.assetRows.length) {
+    var q = document.createElement('input'); q.type = 'text'; q.className = 'archive-filter archive-filter-search'; q.id = 'ib-asset-q';
+    q.placeholder = 'Search by name'; q.autocomplete = 'off'; q.setAttribute('data-1p-ignore', ''); q.setAttribute('data-lpignore', 'true');
+    q.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:10px;';
+    q.addEventListener('input', function () { IB.assetQ = q.value; ibAssetGrid(); });
+    box.appendChild(q);
+  }
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid'; grid.id = 'ib-asset-grid';
+  box.appendChild(grid);
+  if (IB.assetRows.length) box.appendChild(ibPickBar('asset', ibCloseAssetPicker));
+  overlay.appendChild(box); document.body.appendChild(overlay);
+  ibAssetGrid(); ibPickPaint('asset');
+}
+var IB_ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };
+function ibAssetGrid() {
+  var grid = document.getElementById('ib-asset-grid'); if (!grid) return;
+  grid.innerHTML = '';
+  var rows = IB.assetRows || [], have = {}; IB.assets.forEach(function (a) { have[String(a.id)] = true; });
+  var left = rows.filter(function (a) { return !have[String(a.id)]; });
+  var w = String(IB.assetQ || '').trim().toLowerCase();
+  var items = w ? left.filter(function (a) { return (String(a.name || '') + ' ' + (IB_ACAT[a.category] || a.category || '')).toLowerCase().indexOf(w) >= 0; }) : left;
   if (!items.length) {
     var empty = document.createElement('div'); empty.className = 'prep-img-empty';
-    empty.textContent = rows.length ? 'Every asset with a picture is already added.' : 'This campaign has no assets with a picture yet. Make them in the Asset Library (Go to Assets).';
-    grid.appendChild(empty);
-  } else {
-    items.forEach(function (it) {
-      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
-      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
-      imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
-      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + ' \u00b7 ' + (ACAT[it.category] || it.category || '');
-      btn.appendChild(imgEl); btn.appendChild(cap);
-      btn.addEventListener('click', function () {
-        if (ibRefCount() < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
-        ibCloseAssetPicker(); ibPaintChips(); ibSyncRefs();   // v3.4.07
-      });
-      grid.appendChild(btn);
-    });
+    empty.textContent = !rows.length ? 'This campaign has no assets with a picture yet. Make them in the Asset Library (Go to Assets).'
+      : (!left.length ? 'Every asset with a picture is already added.' : 'No assets match that name.');
+    grid.appendChild(empty); return;
   }
-  box.appendChild(head); box.appendChild(grid);
-  overlay.appendChild(box); document.body.appendChild(overlay);
+  items.forEach(function (it) {
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+    var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+    imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
+    var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + ' \u00b7 ' + (IB_ACAT[it.category] || it.category || '');
+    btn.appendChild(imgEl); btn.appendChild(cap);
+    ibPickTile('asset', it, btn);   // v3.4.22 -- a click ticks it
+    grid.appendChild(btn);
+  });
 }
 
 // Go to Assets: the chosen campaign's Asset Library. The form is kept (IB), so coming back finds it as it was.
