@@ -13801,24 +13801,32 @@ function refreshNovelPreview() {
 // once and keeps a soft gold glow until the preview is drawn again (loadNovelPreview clears it, whatever drew it).
 // Edits that already redraw the preview themselves (Apply & preview, Done & Use) clear it straight away.
 // Programmatic fills fire no events, so loading a book never lights it.
-function prepMarkPreviewStale(on) {
+function prepMarkPreviewStale(on, ev) {   // v3.4.25 -- ev: the edit that made it stale
   var b = document.getElementById('prep-refresh-btn');
   if (!b) return;
   var was = b.classList.contains('prep-refresh-stale');
   if (!on) {
-    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle');
+    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle', 'prep-refresh-flash'); b._flashAt = 0;   // v3.4.25
     b.title = 'Redraw the preview with your latest changes.';
     return;
   }
   b.classList.add('prep-refresh-stale');
   b.title = 'Your changes are not in the preview yet. Press to redraw it.';
-  if (!was) { b.classList.remove('prep-refresh-wiggle'); void b.offsetWidth; b.classList.add('prep-refresh-wiggle'); }
+  // v3.4.25 -- TD-1101 (Ian, 2026-11-04: "make it so the Refresh Preview gets bright for a second when things change along
+  // with the shake. It's not obvious enough."). EVERY change, not only the first: the wiggle plus a bright gold flash
+  // (prep-refresh-flash), then the soft glow until the preview is drawn. Typing in a text box flashes at most once every
+  // two seconds, so it never strobes; anything else at most once in 0.6 s (a select fires input and change together).
+  var now = Date.now(), t = ev && ev.target;
+  var typing = !!(ev && ev.type === 'input' && t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && /^(text|search|)$/.test(String(t.type || '')))));
+  if (b._flashAt && now - b._flashAt < (typing ? 2000 : 600)) return;
+  b._flashAt = now;
+  b.classList.remove('prep-refresh-wiggle', 'prep-refresh-flash'); void b.offsetWidth; b.classList.add('prep-refresh-flash');
 }
 function _prepPanelEdited(e) {
   var t = e && e.target;
   if (!t || typeof t.closest !== 'function' || !t.closest('#novel-prep-panel')) return;
   if (t.readOnly || t.disabled) return;
-  prepMarkPreviewStale(true);
+  prepMarkPreviewStale(true, e);
 }
 document.addEventListener('input', _prepPanelEdited, true);
 document.addEventListener('change', _prepPanelEdited, true);

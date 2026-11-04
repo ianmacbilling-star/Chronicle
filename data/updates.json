@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.25",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3425-refresh-flash",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: Refresh preview flashes bright and wiggles every time you change something.",
+        "detail": "The button lights up gold for a moment with each change, then keeps a soft glow until you refresh, so it is easy to see that the preview is out of date.",
+        "td": [
+          "TD-1101"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.24",
     "staged_on": "2026-11-04",
     "entries": [
