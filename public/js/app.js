@@ -24673,13 +24673,14 @@ function novelSplitInit(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', novelSplitInit); } else { novelSplitInit(); }
 // Prep-pane accordion (Preview & Export tab): independent open/close per panel.
 var PREP_ACC_KEY = 'campaignia.prepAcc';   // remember which Prep panel was last open
-var PREP_ACC_KEYS = ['cover', 'layout'];   // 'publish' moved to the Order & Publish tab (v3.0.137)
+var PREP_ACC_KEYS = ['cover', 'titlepage', 'note', 'company', 'toc', 'body', 'back'];   // v3.4.28 -- in the book's order (Ian); 'publish' moved to the Order & Publish tab (v3.0.137)
 // Re-open the panel the user last worked in when they come back to Prep & Preview, instead of
 // always resetting to Title & Cover. Exactly one panel is open (the remembered one).
 function prepAccRestore(){
   var want = null;
   try { want = window.localStorage.getItem(PREP_ACC_KEY); } catch (e) {}
   if (!want) return;
+  if (want === 'layout') { want = 'body'; try { window.localStorage.setItem(PREP_ACC_KEY, want); } catch (e) {} }   // v3.4.28 -- the old Layout panel's controls are mostly in Body
   if (PREP_ACC_KEYS.indexOf(want) < 0) { want = PREP_ACC_KEYS[0]; try { window.localStorage.setItem(PREP_ACC_KEY, want); } catch (e) {} }   // e.g. a saved 'publish' from before it moved tabs
   PREP_ACC_KEYS.forEach(function(k){
     var acc = document.getElementById('prep-acc-' + k); if (!acc) return;
@@ -24690,7 +24691,7 @@ function prepAccRestore(){
     if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
     acc.classList.toggle('open', open);
   });
-  if (want === 'layout' && typeof prepLayoutLoad === 'function') prepLayoutLoad();   // same population the open transition does
+  if (typeof prepLayoutLoad === 'function') prepLayoutLoad();   // same population the open transition does; v3.4.28 -- layout controls are in every panel now
 }
 function togglePrepAcc(key){
   var acc=document.getElementById('prep-acc-'+key); if(!acc) return;
@@ -24702,7 +24703,7 @@ function togglePrepAcc(key){
   if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
   acc.classList.toggle('open', !isOpen);
   if(!isOpen){ try { window.localStorage.setItem(PREP_ACC_KEY, key); } catch (e) {} }   // remember the panel just OPENED
-  if(key==='layout' && !isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open
+  if(!isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open; v3.4.28 -- any panel, they all hold layout controls
 }
 // Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
 // context using pcl-* controls, wired to the same unified customOpts store. Storyboard modal untouched.
@@ -24774,7 +24775,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode', 'prep-cast-cap-auto'];   // v3.4.26 -- castmode; v3.4.27 -- the automatic-names link   // v3.3.28; v3.4.23 -- pcl-ownTitle
+                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode', 'prep-cast-cap-auto', 'prep-layout-reset'];   // v3.4.26 -- castmode; v3.4.27 -- the automatic-names link; v3.4.28 -- Reset   // v3.3.28; v3.4.23 -- pcl-ownTitle
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24946,10 +24947,12 @@ function prepLayoutLoad(){
   // so a control there is read correctly wherever it sits -- but the change LISTENER is bound to the
   // Layout panel, so without this a placement change would be read only when something in Layout
   // happened to change as well.
-  var _cp = document.getElementById('prep-acc-cover');
-  if (_cp && !_cp._commitWired) { _cp._commitWired = true; _cp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
-  var _lp = document.getElementById('prep-acc-layout');
-  if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  // v3.4.28 -- SEVEN PANELS, ONE RULE. The layout controls are spread over all seven now, so each panel commits a change in it.
+  PREP_ACC_KEYS.forEach(function (k) {
+    var _p = document.getElementById('prep-acc-' + k);
+    if (_p && !_p._commitWired) { _p._commitWired = true; _p.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  });
+  prepSyncCoverNote();
   // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
   prepApplyOwnershipLock();
 }
@@ -25026,12 +25029,27 @@ function prepLayoutCommit(){
 function prepLayoutApply(){
   if(prepLayoutCommit() && typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle);
 }
-function prepLayoutReset(){
+// v3.4.28 -- RESET NOW SAVES, SO IT ASKS FIRST. It used to set the controls and wait for Apply & preview, which is gone (Ian:
+// "The Refresh button handles that now"). The layout choices are spread over all seven panels, so it says so; the title,
+// words and pictures are not layout choices and stay. Refused on someone else's version and while a book is being ordered.
+async function prepLayoutReset(){
+  if (typeof novelOwnView === 'function' && !novelOwnView()) return;
+  if (typeof blockLayoutChangeIfOrdering === 'function' && blockLayoutChangeIfOrdering()) return;
+  var ok = (typeof uiConfirm === 'function') ? await uiConfirm('Put every layout choice in all the panels back to the defaults? Your title, words and pictures stay.', { okText: 'Reset', cancelText: 'Cancel' }) : true;
+  if (!ok) return;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
   prepSyncMarkerBreak();
   prepSyncCastNpc();
+  prepSyncCoverNote();
   try { prepApplyOwnershipLock(); } catch (e) {}   // v3.4.23 -- the tick box follows the reset placement
+  if (typeof prepLayoutCommit === 'function') prepLayoutCommit();
+  try { prepMarkPreviewStale(true); } catch (e) {}
+}
+// v3.4.28 -- Include cover page (in Cover) also prints the back cover, so the Back Cover panel says when covers are off.
+function prepSyncCoverNote(){
+  var ck = document.getElementById('pcl-cover'), n = document.getElementById('prep-back-off');
+  if (n) n.style.display = (ck && !ck.checked) ? '' : 'none';
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';

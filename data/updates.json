@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.28",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3428-prep-panels-in-book-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: the settings are in the order of the book.",
+        "detail": "The panels now run Cover, Title Page, Author's Note Page, The Company Page, Table of Contents, Body and Back Cover, each with the settings for that part of the book. Apply & preview is gone: changes save as you make them and Refresh preview shows them.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.27",
     "staged_on": "2026-11-04",
     "entries": [

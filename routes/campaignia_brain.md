@@ -1782,18 +1782,24 @@ Everything here belongs to the version you picked on tab 1. **This is the quick 
 try things out** — stylings, fonts, decorations and layouts — because previewing here is
 **faster and cheaper than running Optimize**. Settle the look here first.
 
-- **Title and subtitle** — default to the campaign name; change them here. The **Author’s Note** box under
-  them is a note to your readers, printed on the page after the title page (PDF and print only).
+- **The panels follow the book**, front to back: **Cover**, **Title Page**, **Author’s Note Page**, **The Company Page**,
+  **Table of Contents**, **Body** and **Back Cover**. Open whichever you need; each holds the settings for that part of the
+  book, and everything is saved with this version as you change it (switch versions and the panels show that version's).
+  Press **Refresh preview** to see a change. **Reset layout choices** (at the foot of Body) puts every layout choice in all
+  the panels back to the defaults, after asking; your title, words and pictures stay.
+- **Cover** — **Include cover page** (it also prints the back cover), the **Title** and **Subtitle** (they default to the
+  campaign name and nothing; the title page and spine use them too), the cover picture, and the title's look.
+- **Author’s Note Page** — a note to your readers, printed on the page after the title page (PDF and print only).
 - **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
   instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
-  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
-  **Layout** on this same tab. They are on every plan and cost nothing.
+  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, in the
+  **Cover** panel on this same tab. They are on every plan and cost nothing.
 - **My Cover Picture has Title Included** — tick it (under the cover pictures) when your cover picture already has the
   title drawn on it, for example an Image Builder picture archived **With title**. The front cover then shows the picture
   alone, with no title, subtitle or dark band over it, and the title settings below are hidden. The title and subtitle
   are still printed on the spine and the title page and shown in the Library. For an Image Builder picture, a line under
   the box says if the title on the picture differs from your Title or Subtitle. Untick it to bring the title settings back.
-- **Cover, back cover and title-page images** — pick each from your Archive. The tiles show you
+- **Cover, back cover and title-page pictures** (in the Cover, Back Cover and Title Page panels) — pick each from your Archive. The tiles show you
   **the crop the printed page will use**, not the whole image. **For the front and back cover you
   choose that crop yourself:** if the picture is not already the cover's shape, it opens in a
   cover-shaped frame placed where the cover would have cut it — drag the frame to move it, drag a
@@ -1802,18 +1808,20 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   (you can still use it). The title-page picture is not framed this way. The **x** on a tile removes
   that picture, and so does picking the picture already on the cover. Clear the cover entirely and you
   get a **plain framed cover** — dark ground, gold frame, your title on it.
-- **Company picture** — the fourth tile. By default the character page is the line-up of your characters; pick a
+- **Company picture** — in **The Company Page** panel. By default the character page is the line-up of your characters; pick a
   picture here (for example a group picture made in the Image Builder and archived) and the character page shows that
-  picture instead, alone, as large as the page holds without cropping. Picking one switches **Character page** (under
-  **Layout**, beside **Include character page**) to **Archived picture** and ticks Include character page; removing it
+  picture instead, alone, as large as the page holds without cropping. Picking one switches **Character page** (just
+  above it, under **Include character page**) to **Archived picture** and ticks Include character page; removing it
   goes back to the line-up. With Archived picture chosen but no picture picked, the line-up is used.
-  The picture gets the same frame as the book's other pictures (the **Picture border** setting under Layout).
-- **Heading** and **Text below** (Layout, under Include character page) — the character page's own words, for the line-up
+  The picture gets the same frame as the book's other pictures (the **Picture border** setting in **Body**).
+- **Heading** and **Text below** (The Company Page panel) — the character page's own words, for the line-up
   or the picture. The heading starts as **The Company**; change it (for example to **The Cast**), or clear it for no
   heading. On the line-up the text below starts as the characters' names from left to right and keeps itself up to date
   as characters are added or renamed; type your own words and they print instead (in italic), and **Use the automatic
   names** puts the names back. Under a picture the text starts empty. Line breaks are kept.
-- **Layout** — the layout itself, borders, captions, fonts and decorations.
+- **Table of Contents** — Include table of contents, Session dividers and New page per session.
+- **Body** — the layout itself (Picture Book or Magazine), picture borders, captions, the body font, drop cap and the
+  running page header.
 - The right-hand pane previews the book as you change things.
 
 **Tab 3 — Optimize: put the whole book together**
