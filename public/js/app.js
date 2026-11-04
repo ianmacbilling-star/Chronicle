@@ -38902,7 +38902,7 @@ function ibTitleBody() {
       '<button class="btn btn-sm" type="button" onclick="ibOpenTitleBuilder()" title="Design the title\u2019s lettering (a token)">Title Builder</button>' +
       '<span id="ib-ttl-msg" class="ib-meta"></span>' +   // v3.3.93 -- the shake's message
       (t.url ? '<img src="' + escapeHtml(t.url) + '" alt="Title lettering" title="Drag onto the picture; click to enlarge" draggable="true" ondragstart="ibTtlDragStart(event)" style="height:38px;max-width:180px;object-fit:contain;background:#000;border-radius:4px;cursor:grab;" onclick="openLightbox(this.src, \'Title lettering\')">' +
-        (ibOthersOpen() ? '' : '<button class="btn btn-sm" type="button" onclick="ibRemoveTitle()" title="Take the title off the picture and out of this section. The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>')   // v3.3.95 -- the one Remove; v3.4.00 -- not on another member's picture (Ian)
+        ''   // v3.4.21 -- TD-1098: Remove title shows only while the title is selected on the picture (the placing bar), Ian
         : '<span class="ib-meta">Titles are made in the Title Builder.</span>') +   // v3.3.93
     '</div>' +
     '<div id="ib-ttl-apply" style="margin-top:10px;">' + ibTtlApplyHtml() + '</div>' +   // v3.3.87
@@ -38931,7 +38931,7 @@ function ibTtlApplyHtml() {
   var how = '<div class="ib-meta" style="margin-bottom:6px;"><b>Drag</b> the lettering above onto the picture, <b>drop</b> it where you want it, and drag its corner to <b>resize</b> it. Then press Apply.</div>';
   if (!mine) return how + '<span class="ib-meta">Make or open one of your pictures first.</span>';
   return how + '<button class="btn btn-sm btn-primary" type="button" id="ib-ttl-apply-btn" onclick="ibPlaceStart()">Place title on picture</button>' +
-    // v3.3.95 -- Remove title is the one button by the lettering above.
+    // v3.4.21 -- Remove title is in the placing bar, shown while the title on the picture is selected.
     ' <span class="ib-meta" id="ib-ttl-apply-msg">Free; Revert takes it off.</span>';
 }
 // =====================================================================================================
@@ -39029,7 +39029,9 @@ function ibPlaceMount() {
   var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize';
   box.appendChild(c); box.appendChild(h); f.appendChild(box);
   var bar = document.createElement('div'); bar.className = 'ib-place-bar';
-  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibPlaceApply()">Apply title here</button><button class="btn btn-sm" type="button" onclick="ibPlaceCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibPlaceApply()">Apply title here</button><button class="btn btn-sm" type="button" onclick="ibPlaceCancel()">Cancel</button>' +
+    (ibLayerOn(im, 'title') ? '<button class="btn btn-sm" type="button" onclick="ibPlaceRemove()" title="Take the title off the picture (free; Revert puts it back). The drawing stays in the Title Builder; Done &amp; Use brings it back.">Remove title</button>' : '') +   // v3.4.21 -- TD-1098
+    '<span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
   f.appendChild(bar);
   var put = function () { var bb = ibPlaceBox() || b; box.style.left = (bb.ox + P.x * bb.cw) + 'px'; box.style.top = (bb.oy + P.y * bb.ch) + 'px'; box.style.width = (P.w * bb.cw) + 'px'; box.style.height = (P.w * bb.cw / P.asp) + 'px'; ibPlaceBarAt(f, box, bar); };   // v3.4.08 -- the bar follows the title
   put();
@@ -39088,6 +39090,26 @@ function ibPlaceOthers(f, b, im, moving) {
   }
 }
 function ibPlaceCancel() { IB.placing = null; ibPaintViewer(); }
+// v3.4.21 -- TD-1098. MOVE TITLE / MOVE WRITING. The pill on the picture selects what is laid on it: the picture's own
+// title (or writing), from its saved References, is put back in the form and placed where it sits now, at its size, over
+// the clean copy. Then it is the usual placing: drag, resize by the corner, Apply (free) or Cancel; Revert undoes an
+// Apply. Remove sits in that bar, so it shows only while the title or the writing is selected (Ian).
+function ibMoveLayer(id, what) {
+  var im = ibImg(id);
+  if (!im || String(IB.viewId) !== String(id) || String(im.user_id) !== String(IB.me) || ibBusy(im) || !ibLayerOn(im, what)) return;
+  ibActMsg('');
+  if (what === 'title') {
+    IB.hoPlacing = null;
+    IB.ttl = Object.assign(ibTtlBlank(), im.refs.title); delete IB.ttl.off; IB.ttlDraft = null;
+    ibTtlFields(); ibRender(); ibPlaceStart();
+  } else {
+    IB.placing = null;
+    IB.ho = Object.assign(ibHoBlank(), im.refs.handout); delete IB.ho.off;
+    ibHoFields(); ibRender(); ibHoPlaceStart();
+  }
+}
+function ibPlaceRemove() { IB.placing = null; ibPaintViewer(); ibRemoveTitle(); }
+function ibHoPlaceRemove(id) { IB.hoPlacing = null; ibPaintViewer(); ibLayerOff(id, 'handout'); }
 function ibPlaceApply() {
   var P = IB.placing; if (!P) return;
   IB.ttl.pos = { x: Math.round(P.x * 10000) / 10000, y: Math.round(P.y * 10000) / 10000, w: Math.round(P.w * 10000) / 10000 };
@@ -39146,7 +39168,7 @@ function ibHoApplyHtml() {
   if (!mine) return how + '<span class="ib-meta">Make or open one of your handouts to place the writing on it.</span>';
   return how + '<span class="ib-ho-chip" draggable="true" ondragstart="ibHoDragStart(event)">\u270e Drag the writing onto the picture</span> ' +
     '<button class="btn btn-sm" type="button" onclick="ibHoPlaceStart()">Place writing on picture</button>' +
-    (ibLayerOn(im, 'handout') ? ' <button class="btn btn-sm" type="button" onclick="ibLayerOff(' + im.id + ', \'handout\')" title="Take the writing off this picture (free; Revert puts it back)">Remove writing from picture</button>' : '') +   // v3.3.93
+    // v3.4.21 -- TD-1098: Remove writing is in the placing bar, shown while the writing on the picture is selected (Ian).
     ' <span class="ib-meta" id="ib-ho-msg"></span>';
 }
 // v3.4.01 -- a handout of yours, drawn, with words in its recipe and no writing on it yet (and not taken off on purpose).
@@ -39249,7 +39271,9 @@ function ibHoMount() {
   var h = document.createElement('div'); h.className = 'ib-place-h'; h.title = 'Drag to resize'; box.appendChild(h);
   f.appendChild(box);
   var bar = document.createElement('div'); bar.className = 'ib-place-bar';
-  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibHoApply()">Apply writing here</button><button class="btn btn-sm" type="button" onclick="ibHoCancel()">Cancel</button><span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
+  bar.innerHTML = '<button class="btn btn-sm btn-primary" type="button" onclick="ibHoApply()">Apply writing here</button><button class="btn btn-sm" type="button" onclick="ibHoCancel()">Cancel</button>' +
+    (ibLayerOn(im, 'handout') ? '<button class="btn btn-sm" type="button" onclick="ibHoPlaceRemove(' + im.id + ')" title="Take the writing off the picture (free; Revert puts it back). Your words stay in the box.">Remove writing</button>' : '') +   // v3.4.21 -- TD-1098
+    '<span class="ib-place-tip">Drag to move \u00b7 drag the corner to resize</span>';
   f.appendChild(bar);
   var draw = function () {   // the preview, set as it will be, at the box's size on screen
     var bb = ibPlaceBox() || b, pw = P.w * bb.cw, ph = P.h * bb.ch;
@@ -39621,7 +39645,11 @@ function ibViewerHtml() {
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibArchive(' + im.id + ')" title="Copy it into the campaign\u2019s Archive, to use as a cover, title or replacement">Archive</button>');
       if (im.image_url) p.push('<button class="panel-pill" onclick="ibSaveAsset(' + im.id + ')" title="Make it a campaign asset (an NPC, item or location); you can frame part of it">Save as Asset</button>');   // v3.3.82
       if (im.has_clean && im.clean_url) p.push('<button class="panel-pill" onclick="ibViewClean(' + im.id + ')" title="The clean copy, without the title">Without ' + (ibLaidOnWords(im) === 'the title' ? 'title' : (ibLaidOnWords(im) === 'the text' ? 'text' : 'title and text')) + '</button>');   // v3.3.85; v3.3.95 -- names what is laid on
-      if (im.image_url || im.status === 'failed') p.push('<button class="panel-pill" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>');
+      // v3.4.21 -- TD-1098 (Ian, 2026-11-03: "a button on the picture that lets you Move Title"; "if there is text on there you
+      // should have a pill for that too"). Each selects what is laid on the picture, to move and resize it; Delete went
+      // to the row beside Mark Ready.
+      if (ibLayerOn(im, 'title')) p.push('<button class="panel-pill" onclick="ibMoveLayer(' + im.id + ', \'title\')" title="Select the title to move or resize it (free)">Move Title</button>');
+      if (ibLayerOn(im, 'handout')) p.push('<button class="panel-pill" onclick="ibMoveLayer(' + im.id + ', \'handout\')" title="Select the writing to move or resize it (free)">Move Writing</button>');
     } else if (im.image_url) {
       p.push('<button class="panel-pill" onclick="ibCopy(' + im.id + ')" title="Your own copy, to change and redraw (free)">Make My Copy</button>');
     }
@@ -39634,7 +39662,8 @@ function ibViewerHtml() {
     // same free copy others get from Make My Copy (POST /copy already allowed the maker): a new Draft that opens at once.
     state = (im.image_url && !busy ? '<button class="btn btn-sm" id="ib-copy-own" onclick="ibCopy(' + im.id + ')" title="A new Draft of this picture, to change and redraw without touching this one (free)">Make a Copy</button>' : '') +
       '<span class="ib-state' + (im.ready ? ' ready' : '') + '">' + (im.ready ? 'Ready \u2014 the campaign can see it' : 'Draft \u2014 only you can see it') + '</span>' +
-      (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '');
+      (im.image_url && !busy ? '<button class="btn btn-sm" onclick="ibReady(' + im.id + ', ' + (im.ready ? 'false' : 'true') + ')">' + (im.ready ? 'Back to Draft' : 'Mark Ready') + '</button>' : '') +
+      (!busy && (im.image_url || im.status === 'failed') ? '<button class="btn btn-sm" onclick="ibDelete(' + im.id + ')" title="Delete this picture">Delete</button>' : '');   // v3.4.21 -- TD-1098: beside Mark Ready (Ian)
   }
   return bar.replace('@@IBSTATE@@', function () { return state; }) + '<div class="ib-scroll"><div class="ib-frame" id="ib-frame" ondragover="ibTtlDragOver(event)" ondrop="ibTtlDrop(event)" data-pending="' + (busy ? '1' : '') + '" data-regen="' + (busy && im.image_url ? '1' : '') + '" style="' + ibFrameStyle(w, h) + '">' + inner + (ibNarrow() ? '' : pills) + '</div></div>' + (ibNarrow() ? pills : '') +   // v3.4.14 -- TD-1093
     '<div class="ib-caption" style="width:min(100%, calc((100vh - ' + IB_ROOM + 'px) * ' + w + ' / ' + h + '));">' +
