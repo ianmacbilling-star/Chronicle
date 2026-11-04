@@ -1808,13 +1808,13 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   (you can still use it). The title-page picture is not framed this way. The **x** on a tile removes
   that picture, and so does picking the picture already on the cover. Clear the cover entirely and you
   get a **plain framed cover** — dark ground, gold frame, your title on it.
-- **Company picture** — in **The Company Page** panel. By default the character page is the line-up of your characters; pick a
-  picture here (for example a group picture made in the Image Builder and archived) and the character page shows that
-  picture instead, alone, as large as the page holds without cropping. Picking one switches **Character page** (just
-  above it, under **Include character page**) to **Archived picture** and ticks Include character page; removing it
-  goes back to the line-up. With Archived picture chosen but no picture picked, the line-up is used.
+- **Company picture** — in **The Company Page** panel. By default the character page is the line-up of your characters.
+  To use a picture instead (for example a group picture made in the Image Builder and archived), set **Character page**
+  to **Archived picture**, then pick it on the tile under it (on the line-up the tile is greyed out). The page then shows
+  that picture, as large as the page holds without cropping, with the heading above it and your text below it.
+  Removing the picture goes back to the line-up; with Archived picture chosen but no picture picked, the line-up is used.
   The picture gets the same frame as the book's other pictures (the **Picture border** setting in **Body**).
-- **Heading** and **Text below** (The Company Page panel) — the character page's own words, for the line-up
+- **Heading** and **Text below** (The Company Page panel, beside the Company picture) — the character page's own words, for the line-up
   or the picture. The heading starts as **The Company**; change it (for example to **The Cast**), or clear it for no
   heading. On the line-up the text below starts as the characters' names from left to right and keeps itself up to date
   as characters are added or renamed; type your own words and they print instead (in italic), and **Use the automatic
@@ -2276,9 +2276,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"Where do I start / what's the right order?"** Give the whole path in **1a. Getting started**,
   starting from step 1 (Create a campaign) unless they clearly have already done the early steps.
   The **Ask Us** panel also has a **New here? Get started step by step** pill that walks through it.
-- **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Picture
-  Book or Magazine. Run **Optimize** on the Publish page to see the real
-  printed result.
+- **"How do I change the book's layout?"** On the Publish page, **Prep & Preview** → the **Body** panel (Picture Book
+  or Magazine, borders, captions, fonts); a session's **Preview** tab has the same choices under its **Layout** button.
+  Run **Optimize** on the Publish page to see the real printed result.
 - **"How do I hand off running the campaign?"** **Members** → the member's **⋯** →
   **Make Story Master**. The incoming Story Master needs a paid subscription; everyone
   keeps their own versions.

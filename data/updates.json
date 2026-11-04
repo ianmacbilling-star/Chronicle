@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.29",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3429-company-panel-and-tour",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Company Page panel is more compact, and the tour knows the new panels.",
+        "detail": "The Heading and Text below boxes sit beside the Company picture, which is greyed out while the character page is the line-up. The Publish tour walks through the new panels.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.28",
     "staged_on": "2026-11-04",
     "entries": [

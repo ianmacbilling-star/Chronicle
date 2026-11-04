@@ -24738,8 +24738,7 @@ function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
   clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
   clGateCastImg(ck, 'pcl-castmode', 'pcl-castmode-label');   // v3.4.26 -- the line-up or the picture, only with the page on
-  clGateCastImg(ck, 'prep-cast-head', 'prep-cast-head-label');   // v3.4.27 -- TD-1103: the heading and the text below, on either kind
-  clGateCastImg(ck, 'prep-cast-cap', 'prep-cast-cap-wrap');
+  clGateCastImg(ck, 'prep-cast-head', 'prep-cast-row');   // v3.4.27 -- TD-1103: the heading and the text below, on either kind; v3.4.29 -- one row with the picture
   try { _prepCastWordsSync(); } catch (e) {}   // the line-up shows its names in the box, a picture starts empty
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
@@ -24747,6 +24746,10 @@ function prepSyncCastNpc(){
   var _cm = document.getElementById('pcl-castmode'), _pic = !!(_cm && _cm.value === 'image') && !!(ck ? ck.checked : true);
   var _cpl = document.getElementById('pcl-castpic-label'); if (_cpl && _pic) _cpl.style.display = 'none';
   if (cnl) cnl.style.display = _pic ? 'none' : '';
+  // v3.4.29 -- Ian: "If they pick character line up... grey out the company archive picture option." Dimmed and not clickable
+  // on the line-up; a picture already chosen stays on the tile, so choosing Archived picture again brings it back.
+  var _ct = document.getElementById('prep-company-tile');
+  if (_ct) { var _ln = !(_cm && _cm.value === 'image'); _ct.style.opacity = _ln ? '0.4' : ''; _ct.style.pointerEvents = _ln ? 'none' : ''; }
   if(!cn) return;
   var on = ck ? !!ck.checked : true;
   cn.disabled = !on;
