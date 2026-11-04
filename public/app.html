@@ -484,12 +484,21 @@
               <div class="prep-field-label">Author&#8217;s Note</div>
               <textarea id="prep-author-note" maxlength="600" rows="4" onchange="prepSaveAuthorNote()" oninput="prepAuthorNoteCount()" placeholder="Optional. A note, message or dedication to your readers." class="prep-input" style="resize:vertical;min-height:84px;line-height:1.45;margin-bottom:2px;" title="Printed on the page with the copyright notice, right after the title page. In the PDF and the printed book only."></textarea>
               <div id="prep-author-note-count" style="font-size:11px;color:rgba(232,213,163,0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
+              <div class="prep-field-label">Cover, Back &amp; Title images</div>
+              <div class="prep-img-slots">
+                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
+                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-back" onclick="openPrepImagePicker('back')"></div><div class="prep-img-cap">Back</div></div>
+                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-title" onclick="openPrepImagePicker('title')"></div><div class="prep-img-cap">Title</div></div>
+              </div>
+              <!-- v3.4.24 -- TD-1100 (Ian, 2026-11-04: "way too wordy"; "put the whole title area in a separate outlined panel and
+                   you can hide all of it when the check box is checked"; "move the Titling options UNDER the cover pictures"). The
+                   box is still titlePlace 'none' underneath (prepOwnTitleChanged); prepApplyTitleModeLock hides #prep-title-panel.
+                   pcl-ownTitle-words: the word check for an Image Builder cover (prepCoverWordsPaint). -->
+              <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--gold-light);cursor:pointer;margin:14px 0 6px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> My Cover Picture has Title Included</label>
+              <div id="pcl-ownTitle-words" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:0 0 8px;"></div>
+              <div id="prep-title-panel" style="border:1px solid rgba(201,168,76,0.35);border-radius:8px;padding:10px 12px 4px;margin:6px 0 4px;">
               <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
               <div id="prep-drawn-title-note" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:4px 0 8px;"></div>
-              <!-- v3.4.23 -- TD-1100. Ian: "Cover picture has the title". Ticked, the front cover draws no title over the picture; it
-                   is titlePlace 'none' underneath (prepOwnTitleChanged), so it saves and prints like every other cover setting. -->
-              <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;margin:4px 0 8px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> Cover picture has the title</label>
-              <div id="pcl-ownTitle-note" style="display:none;font-size:11px;line-height:1.4;color:rgba(232,213,163,0.72);margin:-4px 0 10px;">The front cover shows your picture alone, with no title over it. Use a cover picture with the title drawn on it, such as an Image Builder picture archived With title. The title and subtitle are still used on the spine, the title page and in the Library.</div>
 
               <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
                    We will figure out a better way to explain this than a big message like this."
@@ -554,11 +563,6 @@
                   </select>
                 </div>
               </div>
-              <div class="prep-field-label">Cover, Back &amp; Title images</div>
-              <div class="prep-img-slots">
-                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
-                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-back" onclick="openPrepImagePicker('back')"></div><div class="prep-img-cap">Back</div></div>
-                <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-title" onclick="openPrepImagePicker('title')"></div><div class="prep-img-cap">Title</div></div>
               </div>
             </div>
           </div>

@@ -1788,10 +1788,11 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
   styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
   **Layout** on this same tab. They are on every plan and cost nothing.
-- **Cover picture has the title** — tick it when your cover picture already has the title drawn on it, for example an
-  Image Builder picture archived **With title**. The front cover then shows the picture alone, with no title, subtitle or
-  dark band over it, and the title settings grey out. The title and subtitle are still printed on the spine and the title
-  page and shown in the Library. Untick it to put the cover title back where it was.
+- **My Cover Picture has Title Included** — tick it (under the cover pictures) when your cover picture already has the
+  title drawn on it, for example an Image Builder picture archived **With title**. The front cover then shows the picture
+  alone, with no title, subtitle or dark band over it, and the title settings below are hidden. The title and subtitle
+  are still printed on the spine and the title page and shown in the Library. For an Image Builder picture, a line under
+  the box says if the title on the picture differs from your Title or Subtitle. Untick it to bring the title settings back.
 - **Cover, back cover and title-page images** — pick each from your Archive. The tiles show you
   **the crop the printed page will use**, not the whole image. **For the front and back cover you
   choose that crop yourself:** if the picture is not already the cover's shape, it opens in a

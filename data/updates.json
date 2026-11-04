@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.24",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3424-cover-title-panel",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: the title settings sit in their own panel under the cover pictures, hidden when your cover picture has its title.",
+        "detail": "Tick My Cover Picture has Title Included to hide the title style, placement, size and Title Builder. For an Image Builder cover, a line says if the title on the picture differs from your book's title.",
+        "td": [
+          "TD-1100"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.23",
     "staged_on": "2026-11-04",
     "entries": [

@@ -13554,6 +13554,7 @@ function renderPrepThumbs() {
       el.innerHTML = '<span class="prep-thumb-plus">+</span>';
     }
   });
+  try { prepCoverWordsCheck(); } catch (e) {}   // v3.4.24 -- TD-1100: the cover may have changed
 }
 // prepRemoveImage: clear one of the three book pictures.
 //
@@ -24809,6 +24810,44 @@ function prepRenderDrawnTitleNote() {
 // v3.4.23 -- TD-1100. THE TICK BOX IS titlePlace 'none'. Ticking keeps the placement it replaces (data-prev-place) so
 // unticking puts it back; the change bubbles to the Title & Cover panel, whose listener commits the options as for any
 // other control. The select stays the one source of truth: prepApplyTitleModeLock sets the box from it.
+// v3.4.24 -- TD-1100. DOES THE COVER PICTURE SAY THE BOOK'S TITLE? (Ian: "Will it be able to tell if the title embedded on
+// the cover picture has different words than the actual title?"; "Image builder only... If they do it elsewhere all bets
+// are off.") GET .../archives/title-words names the words an Image Builder title was laid on with, for the cover's
+// address (recorded when it was archived With title, carried to a framed cover copy, else found through the Archive's
+// source). Fetched when the cover changes (renderPrepThumbs); compared, letters and digits only, whenever the title,
+// subtitle or the box changes (prepApplyTitleModeLock). Shown only while the box is ticked; nothing for other pictures.
+function prepCoverWordsCheck() {
+  var c = state.currentCampaign; if (!c) return;
+  var url = ((state.bookMeta || {}).cover_image_url) || '';
+  var cw = state._coverWords;
+  if (cw && cw.url === url && String(cw.cid) === String(c.id)) { prepCoverWordsPaint(); return; }
+  state._coverWords = { url: url, cid: c.id, words: null };
+  prepCoverWordsPaint();
+  if (!url) return;
+  fetch('/api/campaigns/' + encodeURIComponent(c.id) + '/archives/title-words?url=' + encodeURIComponent(url), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var now = state._coverWords; if (!now || now.url !== url || String(now.cid) !== String(c.id)) return;
+      now.words = (d && d.words && d.words.title) ? d.words : null;
+      prepCoverWordsPaint();
+    })
+    .catch(function () {});
+}
+function prepWordsKey(s) { return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''); }
+function prepCoverWordsMsg(w, title, sub) {
+  if (!w || !w.title) return '';
+  if (prepWordsKey(w.title) !== prepWordsKey(title)) return 'Your cover picture says \u201c' + w.title + '\u201d, but your title is \u201c' + title + '\u201d.';
+  if (w.subtitle && prepWordsKey(w.subtitle) !== prepWordsKey(sub))
+    return 'Your cover picture\u2019s subtitle says \u201c' + w.subtitle + '\u201d, but ' + (String(sub || '').trim() ? 'your subtitle is \u201c' + sub + '\u201d.' : 'your book has no subtitle.');
+  return '';
+}
+function prepCoverWordsPaint() {
+  var el = document.getElementById('pcl-ownTitle-words'); if (!el) return;
+  var sel = document.getElementById('pcl-titlePlace'), ownT = !!(sel && sel.value === 'none');
+  var w = state._coverWords && state._coverWords.words;
+  var msg = (ownT && w) ? prepCoverWordsMsg(w, _tbTitle(), _tbSubtitle()) : '';
+  el.textContent = msg; el.style.display = msg ? '' : 'none';
+}
 function prepOwnTitleChanged(cb) {
   var sel = document.getElementById('pcl-titlePlace'); if (!sel) return;
   if (cb.checked) { if (sel.value !== 'none') sel.setAttribute('data-prev-place', sel.value); sel.value = 'none'; }
@@ -24820,7 +24859,7 @@ function prepApplyTitleModeLock() {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
     var _ps = document.getElementById('pcl-titlePlace'), ownT = !!(_ps && _ps.value === 'none');   // v3.4.23 -- TD-1100
-    var OWN_T_MSG = 'Your cover picture carries the title, so the cover title settings are off. Untick "Cover picture has the title" to use them.';
+    var OWN_T_MSG = 'Your cover picture carries the title, so the cover title settings are off.';   // v3.4.24 -- hidden with the panel
     // Computes the answer for these two controls from BOTH of their gates -- see below.
     ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -24847,17 +24886,11 @@ function prepApplyTitleModeLock() {
         ? 'Your title is drawn artwork right now, so the title styles and color do not apply. Remove the drawn title in the Title Builder to use them again.'
         : (el.getAttribute('data-title-orig') || ''));
     });
-    // v3.4.23 -- TD-1100. Placement, size and the Title Builder only TIGHTEN here: prepApplyOwnershipLock has just set them
-    // from ownership (they are PREP_LOCK_PLAIN), and calls this last, so unticking releases them through that path.
-    ['pcl-titlePlace', 'pcl-titleSize', 'title-build-open'].forEach(function (id) {
-      var el = document.getElementById(id); if (!el) return;
-      if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
-      if (ownT) el.disabled = true;
-      el.style.opacity = (ownT || el.disabled) ? '0.55' : '';
-      el.title = ownT ? OWN_T_MSG : (el.getAttribute('data-title-orig') || '');
-    });
+    // v3.4.24 -- TD-1100. Ticked, the whole titling panel (style, colour, Title Builder, placement, size and the drawn-title
+    // note) is hidden, not greyed (Ian); unticked it shows again where it is. The box follows the select.
+    var _pnl = document.getElementById('prep-title-panel'); if (_pnl) _pnl.style.display = ownT ? 'none' : '';
     var _cb = document.getElementById('pcl-ownTitle'); if (_cb) _cb.checked = ownT;
-    var _nt = document.getElementById('pcl-ownTitle-note'); if (_nt) _nt.style.display = ownT ? '' : 'none';
+    prepCoverWordsPaint();
     // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
     // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
     // the title text changes while the builder is open.

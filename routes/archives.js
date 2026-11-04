@@ -260,6 +260,31 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   }
 });
 
+// v3.4.24 -- TD-1100. THE WORDS ON AN IMAGE BUILDER COVER. By the picture's address, in this campaign only: the words
+// recorded when it was archived With title (or when a cover was framed from it); else, for a picture archived before
+// that was recorded, the Builder picture the archived copy came from (its source) and the title laid on it now. Nothing
+// for any other picture (Ian: "If they do it elsewhere all bets are off").
+async function titleWordsFor(db, cid, url) {
+  if (!url) return null;
+  const c = parseInt(cid, 10);
+  const row = await db.prepare('SELECT title, subtitle FROM image_title_words WHERE url = ? AND campaign_id = ?').get(url, c);
+  if (row && row.title) return { title: row.title, subtitle: row.subtitle || '' };
+  const a = await db.prepare("SELECT source_url FROM campaign_archives WHERE campaign_id = ? AND image_url = ? AND image_type = 'moment' AND source_url IS NOT NULL LIMIT 1").get(c, url);
+  const src = (a && a.source_url) || url;
+  const b = await db.prepare('SELECT refs, clean_image_url FROM builder_images WHERE campaign_id = ? AND image_url = ? LIMIT 1').get(c, src);
+  if (!b || !b.refs || !b.clean_image_url) return null;
+  let r = {}; try { r = JSON.parse(b.refs) || {}; } catch (e) { return null; }
+  const t = r.title;
+  if (!t || !t.url || t.off || !String(t.title || '').trim()) return null;
+  return { title: String(t.title).trim(), subtitle: String(t.subtitle || '').trim() };
+}
+router.get('/title-words', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    res.json({ words: await titleWordsFor(db, req.params.campaignId, String(req.query.url || '')) });
+  } catch (e) { console.error('title-words error:', e.message); res.json({ words: null }); }
+});
+
 // DELETE /api/campaigns/:campaignId/archives/:archiveId — remove ONE archive
 // entry by id. Allowed if you archived it (archived_by) OR you are the Story
 // Master. Releases the R2 copy via the refcount after the row is gone.
@@ -381,6 +406,10 @@ router.post('/:archiveId/cover-crop', requireAuth, verifyCampaignMember, async f
     const frac = cropMath.readFrac(c && typeof c === 'object' ? { x: c.x, y: c.y, w: c.w, h: 1 } : null);
     if (!frac) return res.json({ error: 'No framing was sent. Please try again.' });
     const out = await cropImage.cutAndStore(archive.image_url, { ratio: COVER_RATIO, minSide: COVER_MIN_SIDE, frac: frac, maxSide: COVER_MAX_SIDE, name: 'cover-crop' });
+    try {   // v3.4.24 -- TD-1100: a framed cover keeps the words of the picture it was cut from
+      const _w = await titleWordsFor(db, req.params.campaignId, archive.image_url);
+      if (_w) await db.prepare('INSERT INTO image_title_words (url, campaign_id, title, subtitle) VALUES (?, ?, ?, ?) ON CONFLICT (url) DO NOTHING').run(out.url, parseInt(req.params.campaignId, 10), _w.title, _w.subtitle || null);
+    } catch (e) { console.error('cover-crop title words error:', e.message); }
     res.json({ url: out.url, width: out.width, height: out.height });
   } catch (e) {
     console.error('cover-crop error:', e.message);

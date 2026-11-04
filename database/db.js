@@ -2331,6 +2331,9 @@ async function migrateGifts(pool) {
     // v3.3.85 -- the clean copy (the picture before its title lettering was laid on), and the one in the undo slot.
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS clean_image_url TEXT');
     await pool.query('ALTER TABLE builder_images ADD COLUMN IF NOT EXISTS prev_clean_image_url TEXT');
+    // v3.4.24 -- TD-1100. The words an Image Builder title was laid on with, by picture address: the archived copy (and a
+    // cover framed from it), so Prep & Preview can say when a cover picture's title differs from the book's.
+    await pool.query('CREATE TABLE IF NOT EXISTS image_title_words (url TEXT PRIMARY KEY, campaign_id INTEGER, title TEXT, subtitle TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
   } catch (e) { console.error('[image-builder] migration skipped this boot:', e && e.message); }
 }
 
