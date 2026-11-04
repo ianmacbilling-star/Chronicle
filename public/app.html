@@ -486,6 +486,10 @@
               <div id="prep-author-note-count" style="font-size:11px;color:rgba(232,213,163,0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
               <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
               <div id="prep-drawn-title-note" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:4px 0 8px;"></div>
+              <!-- v3.4.23 -- TD-1100. Ian: "Cover picture has the title". Ticked, the front cover draws no title over the picture; it
+                   is titlePlace 'none' underneath (prepOwnTitleChanged), so it saves and prints like every other cover setting. -->
+              <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;margin:4px 0 8px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> Cover picture has the title</label>
+              <div id="pcl-ownTitle-note" style="display:none;font-size:11px;line-height:1.4;color:rgba(232,213,163,0.72);margin:-4px 0 10px;">The front cover shows your picture alone, with no title over it. Use a cover picture with the title drawn on it, such as an Image Builder picture archived With title. The title and subtitle are still used on the spine, the title page and in the Library.</div>
 
               <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
                    We will figure out a better way to explain this than a big message like this."
@@ -538,6 +542,7 @@
                     <option value="bottom">Bottom</option>
                     <option value="middle">Middle</option>
                     <option value="top">Top</option>
+                    <option value="none" hidden>None &mdash; the picture has the title</option>   <!-- v3.4.23 -- set by the tick box -->
                   </select>
                 </div>
                 <div class="prep-field-col">

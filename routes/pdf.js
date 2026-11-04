@@ -2466,8 +2466,16 @@ function coverSizeCss(size) {
     ' .cover-title { font-size:' + pt(COVER_PT.plainTitle) + '; }' +
     ' .cover-dates { font-size:' + pt(COVER_PT.plainSub) + '; }';
 }
+// v3.4.23 -- TD-1100. NONE: THE COVER PICTURE CARRIES THE TITLE (Ian, 2026-11-04: "an option where it doesn't do the
+// title on the book cover at all and they use images from the image builder that already have the title embedded").
+// The caption block -- typed title, subtitle, drawn title and the dark scrim behind them -- is not drawn, and the art is
+// centred. Kept as a value of titlePlace, not a new key, so it rides the co string every cover, saved book and order
+// already carries, and the approval check (CO_COMPARABLE) already notices it. The spine, back cover and title page
+// are untouched. A cover with no picture has nothing to carry a title, so it falls back to bottom (coverPlaceCss).
 var COVER_PLACE = {
   bottom: '',
+  none: '.cover-art-caption { display:none !important; }' +
+    ' .cover-art-img { object-position:center center; }',
   top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
     ' }' +
     ' .cover-art-img { object-position:center bottom; }',
@@ -2476,8 +2484,9 @@ var COVER_PLACE = {
     ' }' +
     ' .cover-art-img { object-position:center center; }'
 };
-function coverPlaceCss(place) {
+function coverPlaceCss(place, hasArt) {
   var k = String(place || 'bottom');
+  if (k === 'none' && !hasArt) k = 'bottom';   // v3.4.23 -- no picture, no title in it
   return Object.prototype.hasOwnProperty.call(COVER_PLACE, k) ? COVER_PLACE[k] : COVER_PLACE.bottom;
 }
 function coverTitleCss(key) {
@@ -5644,7 +5653,7 @@ ${previewScrollbarCss()}
   ${coverTitleCss(co && co.titleStyle)}
   ${_builtTitle ? builtTitleCss(co && co.titleSize) : ''}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
-  ${coverPlaceCss(co && co.titlePlace)}
+  ${coverPlaceCss(co && co.titlePlace, !!campaign.cover_image_url)}
   /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
   ${coverSizeCss(co && co.titleSize)}
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
@@ -6454,7 +6463,7 @@ ${previewScrollbarCss()}
   ${coverTitleCss(co && co.titleStyle)}
   ${_builtTitle ? builtTitleCss(co && co.titleSize) : ''}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
-  ${coverPlaceCss(co && co.titlePlace)}
+  ${coverPlaceCss(co && co.titlePlace, !!coverImg)}
   /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
   ${coverSizeCss(co && co.titleSize)}
 
@@ -7592,7 +7601,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var titleFaceCss = coverTitleFaceCss(wco && wco.titleStyle);
   var titlePresetCss = coverTitleCss(wco && wco.titleStyle);
   var titleSizeCss = coverSizeCss(wco && wco.titleSize);
-  var titlePlaceCss = coverPlaceCss(wco && wco.titlePlace);
+  var titlePlaceCss = coverPlaceCss(wco && wco.titlePlace, !!campaign.cover_image_url);   // v3.4.23 -- frontImg is declared below
   var subtitleTxt = esc(coverSubtitle({ subtitle: opts.subtitle }));
   var builtTitle = campaign.built_title_url || '';   // v3.0.620 -- TD-357 stage two, same helper as the interior
   var frontImg = campaign.cover_image_url || '';

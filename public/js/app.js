@@ -13689,6 +13689,7 @@ var COVER_CROP_ASPECT = 7.1 / 9.6;
 function coverCropAnchor() {
   var p = '';
   try { p = (typeof customOpts === 'object' && customOpts) ? String(customOpts.titlePlace || '') : ''; } catch (e) {}
+  if (p === 'none') return 'middle';   // v3.4.23 -- the picture carries the title: centred, as coverPlaceCss draws it
   return (p === 'top' || p === 'middle') ? p : 'bottom';
 }
 
@@ -24738,7 +24739,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castpic'];   // v3.3.28
+                       'pcl-castpic', 'pcl-ownTitle'];   // v3.3.28; v3.4.23 -- pcl-ownTitle
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24805,10 +24806,21 @@ function prepRenderDrawnTitleNote() {
   el.textContent = msg;
   el.style.display = msg ? '' : 'none';
 }
+// v3.4.23 -- TD-1100. THE TICK BOX IS titlePlace 'none'. Ticking keeps the placement it replaces (data-prev-place) so
+// unticking puts it back; the change bubbles to the Title & Cover panel, whose listener commits the options as for any
+// other control. The select stays the one source of truth: prepApplyTitleModeLock sets the box from it.
+function prepOwnTitleChanged(cb) {
+  var sel = document.getElementById('pcl-titlePlace'); if (!sel) return;
+  if (cb.checked) { if (sel.value !== 'none') sel.setAttribute('data-prev-place', sel.value); sel.value = 'none'; }
+  else { var p = sel.getAttribute('data-prev-place'); sel.value = (p === 'top' || p === 'middle') ? p : 'bottom'; }
+  prepApplyOwnershipLock();
+}
 function prepApplyTitleModeLock() {
   try {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    var _ps = document.getElementById('pcl-titlePlace'), ownT = !!(_ps && _ps.value === 'none');   // v3.4.23 -- TD-1100
+    var OWN_T_MSG = 'Your cover picture carries the title, so the cover title settings are off. Untick "Cover picture has the title" to use them.';
     // Computes the answer for these two controls from BOTH of their gates -- see below.
     ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -24826,15 +24838,26 @@ function prepApplyTitleModeLock() {
       // title in charge, and is this your version. pcl-titleStyle is also in PREP_LOCK_PLAIN, which
       // sets the same `!own`; print-title-color is in NEITHER list, which is why nothing else could
       // ever bring it back.
-      el.disabled = !!(built || !own);
-      el.style.opacity = (built || !own) ? '0.55' : '';
+      el.disabled = !!(built || !own || ownT);   // v3.4.23 -- ownT
+      el.style.opacity = (built || !own || ownT) ? '0.55' : '';
       // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
       // would 'restore' the explanation this function itself put there.
       if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
-      el.title = built
+      el.title = ownT ? OWN_T_MSG : (built
         ? 'Your title is drawn artwork right now, so the title styles and color do not apply. Remove the drawn title in the Title Builder to use them again.'
-        : (el.getAttribute('data-title-orig') || '');
+        : (el.getAttribute('data-title-orig') || ''));
     });
+    // v3.4.23 -- TD-1100. Placement, size and the Title Builder only TIGHTEN here: prepApplyOwnershipLock has just set them
+    // from ownership (they are PREP_LOCK_PLAIN), and calls this last, so unticking releases them through that path.
+    ['pcl-titlePlace', 'pcl-titleSize', 'title-build-open'].forEach(function (id) {
+      var el = document.getElementById(id); if (!el) return;
+      if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
+      if (ownT) el.disabled = true;
+      el.style.opacity = (ownT || el.disabled) ? '0.55' : '';
+      el.title = ownT ? OWN_T_MSG : (el.getAttribute('data-title-orig') || '');
+    });
+    var _cb = document.getElementById('pcl-ownTitle'); if (_cb) _cb.checked = ownT;
+    var _nt = document.getElementById('pcl-ownTitle-note'); if (_nt) _nt.style.display = ownT ? '' : 'none';
     // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
     // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
     // the title text changes while the builder is open.
@@ -24941,6 +24964,7 @@ function prepLayoutReset(){
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
   prepSyncMarkerBreak();
   prepSyncCastNpc();
+  try { prepApplyOwnershipLock(); } catch (e) {}   // v3.4.23 -- the tick box follows the reset placement
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.23",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3423-cover-own-title",
+        "kind": "feature",
+        "public": true,
+        "summary": "Book covers: tick \"Cover picture has the title\" to show a titled picture without a second title over it.",
+        "detail": "In Prep & Preview, the new tick box under the title and subtitle leaves the front cover to your picture alone, such as an Image Builder picture archived with its title. The spine and the title page still carry the title.",
+        "td": [
+          "TD-1100"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.22",
     "staged_on": "2026-11-04",
     "entries": [
