@@ -39319,6 +39319,10 @@ function ibStyleName() {
   return artStyleName(IB.style);
 }
 
+// v3.4.19 -- TD-1095. The types that use scenes (Ian): poster, portrait, handout, item showcase, character study, action
+// scene, and no type. The rest hide the row and do not count or send them; the picture keeps its list.
+function ibScenesOn(type) { return ['', 'poster', 'token', 'handout', 'item', 'character', 'creature', 'action'].indexOf(type || '') >= 0; }
+function ibRefCount() { return IB.chars.length + IB.assets.length + (ibScenesOn(IB.type) ? (IB.scenes || []).length : 0); }
 function ibChipsHtml() {
   var c = IB.chars.map(function (x, i) {
     return '<span class="review-chip" title="Click to see the picture" style="cursor:pointer;" onclick="ibShowRef(\'char\', ' + i + ')">' + escapeHtml(charDisplayName(x.name)) +   // v3.4.12 -- TD-1092
@@ -39329,13 +39333,19 @@ function ibChipsHtml() {
     return '<span class="review-chip review-chip-asset" title="Click to see the picture" style="cursor:pointer;" onclick="ibShowRef(\'asset\', ' + i + ')">' + escapeHtml(x.name) +   // v3.4.12
       '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();ibRemoveAsset(' + i + ')">&#215;</button></span>';
   }).join('');
-  var full = (IB.chars.length + IB.assets.length) >= IB.maxRefs;
+  var full = ibRefCount() >= IB.maxRefs;   // v3.4.19 -- scenes count too
+  var sc = (IB.scenes || []).map(function (x, i) {
+    return '<span class="review-chip review-chip-asset" title="Click to see the picture" style="cursor:pointer;" onclick="ibShowRef(\'scene\', ' + i + ')">' + escapeHtml(x.name) +
+      '<button class="review-chip-x" title="Remove" onclick="event.stopPropagation();ibRemoveScene(' + i + ')">&#215;</button></span>';
+  }).join('');
+  var scRow = ibScenesOn(IB.type) ? ('<div class="review-row"><span class="review-label">Scenes</span>' + (sc || '<span class="review-none">none</span>') +
+      (full ? '' : '<button class="review-add-btn" onclick="ibAddScene()">+ Add scene</button>') + '</div>') : '';
   return '<div class="review-row"><span class="review-label">Characters</span>' + (c || '<span class="review-none">none</span>') +
       (full ? '' : '<button class="review-add-btn" onclick="ibAddChar()">+ Add character</button>') + '</div>' +
     '<div class="review-row"><span class="review-label">Assets</span>' + (a || '<span class="review-none">none</span>') +
       (full ? '' : '<button class="review-add-btn" onclick="ibAddAsset()">+ Add asset</button>') +
-      '<button class="review-add-btn" onclick="ibGoAssets()">Go to Assets</button></div>' +
-    '<div class="ib-meta" style="margin-top:4px;">' + (IB.chars.length + IB.assets.length) + ' of ' + IB.maxRefs + ' reference pictures.</div>';
+      '<button class="review-add-btn" onclick="ibGoAssets()">Go to Assets</button></div>' + scRow +
+    '<div class="ib-meta" style="margin-top:4px;">' + ibRefCount() + ' of ' + IB.maxRefs + ' reference pictures.</div>';
 }
 
 function ibRender() {
@@ -39423,8 +39433,8 @@ function ibAccAll(open) {
 function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
 function ibAccSummary(key) {
   if (key === 'refs') {
-    var n = IB.chars.length, m = IB.assets.length;
-    return (n || m) ? (n + ' character' + (n === 1 ? '' : 's') + ', ' + m + ' asset' + (m === 1 ? '' : 's')) : 'none';
+    var n = IB.chars.length, m = IB.assets.length, q = ibScenesOn(IB.type) ? (IB.scenes || []).length : 0;   // v3.4.19 -- q scenes
+    return (n || m || q) ? (n + ' character' + (n === 1 ? '' : 's') + ', ' + m + ' asset' + (m === 1 ? '' : 's') + (q ? ', ' + q + ' scene' + (q === 1 ? '' : 's') : '')) : 'none';
   }
   if (key === 'shape') { var s = _rpShapeByKey(IB.shape); return s ? (s.label + ' ' + s.w + ':' + s.h) : 'not chosen'; }
   if (key === 'style') return IB.style ? ibStyleName() : 'not chosen';
@@ -39631,7 +39641,7 @@ async function ibNew() {
 // IB left the old name and description in place. everything: also the shape and art style (a campaign change);
 // New picture keeps those.
 function ibClearForm(everything) {
-  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.viewId = null; IB.typeText = '';   // v3.3.86 -- typeText
+  IB.desc = ''; IB.name = ''; IB.type = ''; IB.lore = true; IB.chars = []; IB.assets = []; IB.scenes = []; IB.viewId = null; IB.typeText = '';   // v3.3.86 -- typeText; v3.4.19 -- scenes
   if (everything) { IB.shape = 'standard'; IB.style = ''; IB.zoom = null; }
   var d = document.getElementById('ib-desc'); if (d) d.value = '';
   var n = document.getElementById('ib-name'); if (n) n.value = '';
@@ -39706,6 +39716,7 @@ function ibLoadRecipe(im) {
   if (im.art_style) IB.style = im.art_style;
   IB.chars = (refs.characters || []).map(function (c) { return { id: c.id, name: c.name, look: c.look, label: c.label }; });
   IB.assets = (refs.assets || []).map(function (a) { return { id: a.id, name: a.name, category: a.category }; });
+  IB.scenes = (refs.scenes || []).map(function (s) { return { id: s.id, name: s.name }; });   // v3.4.19 -- TD-1095
   // ibRender reads the form back first; put the recipe into the fields so it is what gets read.
   var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
   set('ib-desc', IB.desc); set('ib-name', IB.name); set('ib-type', IB.type);
@@ -39895,6 +39906,7 @@ function ibRetouch(id) {
   var refs = [];
   ((im.refs && im.refs.characters) || []).forEach(function (c) { if (c && c.name) refs.push({ name: c.name, kind: 'character' }); });
   ((im.refs && im.refs.assets) || []).forEach(function (a) { if (a && a.name) refs.push({ name: a.name, kind: 'asset', category: a.category || '' }); });
+  if (ibScenesOn(im.image_type)) ((im.refs && im.refs.scenes) || []).forEach(function (s) { if (s && s.name) refs.push({ name: s.name, kind: 'asset', category: 'scene' }); });   // v3.4.19
   rgSetup('ib' + id, { url: im.clean_url || im.image_url, shape: im.shape, refs: refs,   // v3.3.85 -- the clean copy is what gets retouched
     styleLabel: artStyleLabel(im.art_style, im.art_style_name) });   // v3.4.05 -- TD-1085: named by Fix or reapply the art style
   if (ta) setTimeout(function () { ta.focus(); }, 30);
@@ -39981,7 +39993,7 @@ function ibAddChar() {
   _ci = { step: 'characters', mode: 'builder', start: 'characters', source: String(IB.cid), sourceName: IB.cname, onLook: function (p) {
     if (IB.chars.some(function (c) { return String(c.id) === String(p.charId); })) {
       IB.chars = IB.chars.map(function (c) { return String(c.id) === String(p.charId) ? { id: c.id, name: p.charName, look: p.look, label: p.label } : c; });
-    } else if (IB.chars.length + IB.assets.length < IB.maxRefs) {
+    } else if (ibRefCount() < IB.maxRefs) {   // v3.4.19
       IB.chars.push({ id: parseInt(p.charId, 10), name: p.charName, look: p.look, label: p.label });
     }
     ibPaintChips(); ibSyncRefs();   // v3.4.07
@@ -39993,10 +40005,10 @@ function ibAddChar() {
 // without leaving the screen"): a character's chosen look, an asset's picture. The server finds the picture with the
 // same checks Generate uses (GET /builder/campaigns/:cid/ref-picture).
 function ibShowRef(kind, i) {
-  var it = kind === 'char' ? IB.chars[i] : IB.assets[i]; if (!it || !IB.cid) return;
+  var it = kind === 'char' ? IB.chars[i] : (kind === 'scene' ? (IB.scenes || [])[i] : IB.assets[i]); if (!it || !IB.cid) return;   // v3.4.19 -- scene
   var CAT = { location: 'Location', npc: 'Supporting Character / NPC', item: 'Item' };
-  var q = kind === 'char' ? ('char=' + encodeURIComponent(it.id) + '&look=' + encodeURIComponent(it.look || 'original')) : ('asset=' + encodeURIComponent(it.id));
-  var cap = kind === 'char' ? (charDisplayName(it.name) + ': ' + ((!it.look || it.look === 'original') ? 'Original' : (it.label || 'Session look'))) : (it.name + ': ' + (CAT[it.category] || 'Asset'));
+  var q = kind === 'char' ? ('char=' + encodeURIComponent(it.id) + '&look=' + encodeURIComponent(it.look || 'original')) : ((kind === 'scene' ? 'scene=' : 'asset=') + encodeURIComponent(it.id));
+  var cap = kind === 'char' ? (charDisplayName(it.name) + ': ' + ((!it.look || it.look === 'original') ? 'Original' : (it.label || 'Session look'))) : (kind === 'scene' ? (it.name + ': Scene') : (it.name + ': ' + (CAT[it.category] || 'Asset')));
   fetch('/api/images/builder/campaigns/' + encodeURIComponent(IB.cid) + '/ref-picture?' + q, { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (d) { if (!d || d.error || !d.url) { showAlert((d && (d.message || d.error)) || 'That picture could not be found.'); return; } openLightbox(d.url, cap); })
@@ -40004,6 +40016,58 @@ function ibShowRef(kind, i) {
 }
 function ibRemoveChar(i) { IB.chars.splice(i, 1); ibPaintChips(); ibSyncRefs(); }   // v3.4.07 -- ibSyncRefs
 function ibRemoveAsset(i) { IB.assets.splice(i, 1); ibPaintChips(); ibSyncRefs(); }
+function ibRemoveScene(i) { (IB.scenes || []).splice(i, 1); ibPaintChips(); ibSyncRefs(); }   // v3.4.19 -- TD-1095
+// v3.4.19 -- TD-1095. + Add scene: the campaign's archived pictures, in the Add-an-asset window's look.
+function ibAddScene() {
+  if (!IB.cid) return;
+  ibReadForm();
+  var cid = IB.cid;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/scenes', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (String(IB.cid) !== String(cid)) return;
+      if (!d || d.error) { showError((d && d.error) || 'Could not load the Archive.'); return; }
+      ibScenePicker(d.scenes || []);
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
+}
+function ibCloseScenePicker() { var m = document.getElementById('ib-scene-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
+function ibScenePicker(rows) {
+  ibCloseScenePicker();
+  var have = {}; (IB.scenes || []).forEach(function (s) { have[String(s.id)] = true; });
+  var items = rows.filter(function (s) { return !have[String(s.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'ib-scene-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) ibCloseScenePicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add a scene from the Archive';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', ibCloseScenePicker);
+  head.appendChild(h); head.appendChild(x);
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = rows.length ? 'Every scene in the Archive is already added.' : 'This campaign has no pictures in its Archive yet. Archive a story panel or an Image Builder picture first.';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function (it) {
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      imgEl.style.backgroundImage = 'url("' + encodeURI(it.image_url) + '")';
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + (it.session ? ' \u00b7 ' + it.session : '');
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function () {
+        if (!IB.scenes) IB.scenes = [];
+        if (ibRefCount() < IB.maxRefs && !IB.scenes.some(function (s) { return String(s.id) === String(it.id); })) IB.scenes.push({ id: it.id, name: it.name });
+        ibCloseScenePicker(); ibPaintChips(); ibSyncRefs();
+      });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
 // v3.4.07 -- TD-1088. THE REFERENCES SAVE TO THE OPEN PICTURE, like a Story panel's cast (Ian, 2026-11-02). With one
 // of my own drawn pictures open, every add or remove posts the whole list to POST /builder/images/:id/refs, so Retouch,
 // Regen and Edit Prompt read what the form shows. Someone else's picture, or a new one not yet drawn: the form only,
@@ -40022,7 +40086,7 @@ function ibSyncRefs() {
   var id = im.id;
   IB.refsQ = (IB.refsQ || Promise.resolve()).then(function () {
     if (String(IB.viewId) !== String(id)) return;   // moved to another picture: its own list is in the form now
-    var body = { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }) };
+    var body = { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }), scenes: (IB.scenes || []).map(function (s) { return s.id; }) };   // v3.4.19
     return fetch('/api/images/builder/images/' + encodeURIComponent(id) + '/refs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -40076,7 +40140,7 @@ function ibAssetPicker(rows) {
       var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name + ' \u00b7 ' + (ACAT[it.category] || it.category || '');
       btn.appendChild(imgEl); btn.appendChild(cap);
       btn.addEventListener('click', function () {
-        if (IB.chars.length + IB.assets.length < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
+        if (ibRefCount() < IB.maxRefs && !IB.assets.some(function (a) { return String(a.id) === String(it.id); })) IB.assets.push({ id: it.id, name: it.name, category: it.category });
         ibCloseAssetPicker(); ibPaintChips(); ibSyncRefs();   // v3.4.07
       });
       grid.appendChild(btn);
@@ -40159,7 +40223,7 @@ function ibGenerate() {
   var btn = document.getElementById('ib-go'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
   var cid = IB.cid;
   var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
-    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }),
+    refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }), scenes: (IB.scenes || []).map(function (s) { return s.id; }),   // v3.4.19
       title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null }, type_text: (IB.type && IB.typeText) ? IB.typeText : null };   // v3.3.83; v3.3.86 -- type_text
   var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
   ibHoForGenerate(body).then(function () { return fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); })   // v3.3.92 -- the writing is set first
