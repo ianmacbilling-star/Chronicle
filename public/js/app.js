@@ -10504,6 +10504,7 @@ function saveNarrativeSection(type, panelIndex) {
   .then(function(result) {
     if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
       : type === 'outro' ? 'narrative-closing'
@@ -10532,6 +10533,7 @@ function saveInlineNarrative(silent) {
   .then(function(result) {
     if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     if (!silent) showAlert('Narrative saved!');
   });
 }
@@ -19632,6 +19634,7 @@ function saveNarrativeSection(type, panelIndex) {
   .then(function(result) {
     if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
       : type === 'outro' ? 'narrative-closing'
@@ -19660,6 +19663,7 @@ function saveInlineNarrative(silent) {
   .then(function(result) {
     if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     if (!silent) showAlert('Narrative saved!');
   });
 }
@@ -40922,6 +40926,20 @@ function fxNums(src) {
   return out;
 }
 function fxRowLabel(num, word) { return num + ' \u2013 ' + word; }
+// v3.4.42 -- After a save: a bridge that is no longer out of place (rewritten here, by typing, Regen's Use this or the
+// Coach) loses its note without waiting for a reload. Only removes; a note never appears without a redraw.
+function fxRepaintStale() {
+  var secs = (state.narrativeData && state.narrativeData.sections) || [], ms = state.moments || [];
+  ms.forEach(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {};
+    (s.bridges || []).forEach(function (b) {
+      var el = document.getElementById('narrative-bridge-' + b.id); if (!el) return;
+      var note = el.querySelector('.pm-stale');
+      if (note && !(String(b.text || '').trim() && fxBridgeStale(b, m.id, ms[i + 1] ? ms[i + 1].id : null))) note.parentNode.removeChild(note);
+    });
+  });
+}
+
 // v3.4.41 -- TD-1107. Before Regenerate Narrative on a rearranged story, say what happens to the bridges. Asked only when
 // the bridges are not already one per gap (a gap with none or several, one after the title, or one out of place), so a
 // story nobody rearranged is not asked. true: asked, and the run goes on (calling again) only on yes.

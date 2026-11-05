@@ -335,6 +335,12 @@ function isScriptText(text) {
 }
 function buildNarrativeHTML(text, isIntro) {
   if (!text) return '';
+  // v3.4.42 -- TD-1107. The Opening followed by bridges placed after the title: the Opening as the Opening, each bridge as
+  // an ordinary paragraph. Only introWithTitleBridges puts the separator in, so every other text is untouched.
+  if (isIntro && text.indexOf('\u2063') >= 0) {
+    var _tp = text.split('\u2063').map(function (s) { return s.trim(); });
+    return buildNarrativeHTML(_tp[0], true) + _tp.slice(1).filter(Boolean).map(function (s) { return buildNarrativeHTML(s, false); }).join('');
+  }
   // Script-formatted narrative (Comic Dialogue) arrives as newline-separated speaker
   // lines (NAME: "..."). HTML collapses newlines, so detect that shape and convert the
   // breaks to <br> with no first-line indent. Flowing prose (no NAME: speaker lines) is
@@ -5335,6 +5341,7 @@ function previewScrollbarCss() {
 // text -- which holds the AI's unused text (TD-1106), never printed. Only the block's `bridges` (placed there by a
 // user's move) are added, each as its own paragraph. With none, the Opening comes back exactly as given, so a book
 // nobody has rearranged is byte-for-byte what it was.
+var TITLE_BRIDGE_SEP = '\n\u2063\n';   // v3.4.42 -- an invisible separator between the Opening and a bridge placed after the title
 function introWithTitleBridges(intro, sections, moments) {
   var est = -1;
   (moments || []).forEach(function (m, k) { if (est < 0 && m && m.kind === 'establishing') est = k; });
@@ -5342,7 +5349,9 @@ function introWithTitleBridges(intro, sections, moments) {
   var sec = (sections || []).find(function (s) { return s && s.panel_index === est; });
   var tb = (sec && Array.isArray(sec.bridges)) ? sec.bridges.map(function (b) { return String((b && b.text) || '').trim(); }).filter(Boolean) : [];
   if (!tb.length) return intro;
-  return [String(intro || '').trim()].concat(tb).filter(Boolean).join('\n\n');
+  // v3.4.42 -- each as its OWN paragraph in the ordinary narration style, after the Opening (Erin: it ran into the Opening
+  // paragraph, in the Opening's italic). buildNarrativeHTML splits on TITLE_BRIDGE_SEP; nothing else ever contains it.
+  return String(intro || '').trim() + TITLE_BRIDGE_SEP + tb.join(TITLE_BRIDGE_SEP);
 }
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   // v3.1.92 -- TD-979. Rejected (watermarked or stock) pictures become a plain "Picture removed" box,

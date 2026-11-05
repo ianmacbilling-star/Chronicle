@@ -443,12 +443,33 @@ async function ensureIds(db, forkId) {
   const ids = moments.map(function (m) { return Number(m.id); });
   const al = alignSections(secs, ids);
   if (al === null) return false;
+  // v3.4.42 -- A COPIED VERSION (New Version) comes with the other version's text, so each bridge's `between` names the
+  // OTHER version's pictures, and every bridge said it was out of place before anything moved (Erin, 2026-11-05: 17 of
+  // 17). Its pictures are the same ones in the same order, so the other version's ids are put back as this version's:
+  // by position while the blocks still carry the other ids (a fresh copy), and, for a copy already given its own ids
+  // before this fix, a bridge that names none of this version's pictures is taken to be where it was written.
+  const idset = {}; ids.forEach(function (id) { idset[id] = true; });
+  const idMap = {};
+  secs.forEach(function (s, i) { if (s && s.moment_id != null && !idset[Number(s.moment_id)] && i < ids.length && secs.length === ids.length) idMap[Number(s.moment_id)] = ids[i]; });
+  let copied = false;
+  al.forEach(function (b, g) {
+    if (!Array.isArray(b.bridges)) return;
+    b.bridges = b.bridges.map(function (x) {
+      if (!x || !Array.isArray(x.between)) return x;
+      const bw = x.between.map(function (v) { return v == null ? null : (idMap[Number(v)] !== undefined ? idMap[Number(v)] : Number(v)); });
+      const foreign = bw.some(function (v) { return v != null; }) && bw.every(function (v) { return v == null || !idset[v]; });
+      const nb = foreign ? [ids[g], (g + 1 < ids.length) ? ids[g + 1] : null] : bw;
+      if (JSON.stringify(nb) === JSON.stringify(x.between)) return x;
+      copied = true;
+      return Object.assign({}, x, { between: nb });
+    });
+  });
   const fresh = al.some(function (b, i) { return !Array.isArray(b.bridges) || !secs[i] || Number(secs[i].moment_id) !== ids[i] || secs[i].panel_index !== i; });
   const norm = normBlocks(al, moments);
   const d0 = parseJson(fk.narrative_directions, {}), o0 = parseJson(fk.narrative_outlines, {});
   const d1 = liftKeys(d0, norm), o1 = liftKeys(o0, norm);
   const keysMoved = JSON.stringify(d1) !== JSON.stringify(d0) || JSON.stringify(o1) !== JSON.stringify(o0);
-  if (!fresh && !keysMoved) return false;
+  if (!fresh && !keysMoved && !copied) return false;
   const r = await db.prepare('UPDATE session_forks SET narrative_sections = ?, narrative_directions = ?, narrative_outlines = ? WHERE id = ? AND narrative_sections = ? AND COALESCE(narrative_directions, \'\') = ? AND COALESCE(narrative_outlines, \'\') = ?')
     .run(JSON.stringify(norm), JSON.stringify(d1), JSON.stringify(o1), forkId, fk.narrative_sections, fk.narrative_directions || '', fk.narrative_outlines || '');
   return !!(r && r.changes);

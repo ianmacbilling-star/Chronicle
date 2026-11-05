@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.42",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3442-move-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story moves: a new version no longer marks every bridge out of place; a bridge after the title prints as its own paragraph.",
+        "detail": "Copying a session to a new version keeps its bridges where they were written, so no out-of-place notes appear until something is moved (versions already copied are put right when next opened). A bridge placed right after the title now prints as its own paragraph after the Opening. Rewriting a bridge (typing, Regen, the Coach) removes its out-of-place note straight away.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.41",
     "staged_on": "2026-11-05",
     "entries": [
