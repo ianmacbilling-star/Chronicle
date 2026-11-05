@@ -599,6 +599,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
+  // v3.4.37 -- TD-1107. A bridge's Directions and outline are kept under its id; the prompt below reads them by gap.
+  try {
+    const _gr = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    const _gn = panelOrder.readNorm(_gr ? _gr.narrative_sections : null, moments);
+    gapDirections = panelOrder.gapView(gapDirections, _gn); gapOutlines = panelOrder.gapView(gapOutlines, _gn);
+  } catch (_g) {}
   // v3.1.49 -- TD-941. The author's text in numbered sentences: what the model answers with, and what
   // the blocks are copied from afterwards. Worked out once, here, so both use exactly the same cuts.
   const _wUnits = isWritten ? writtenSlices.splitUnits(session.transcript) : null;
@@ -1172,6 +1178,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     // v3.4.36 -- TD-1107. One bridge between each pair of pictures, each keeping the id (and so the Directions) of the
     // first bridge in its gap today; the title's hidden text is left as written (services/panelOrder.js fromGenerated).
     const _oldSecRow = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    var _finalSecs = panelOrder.fromGenerated(parsed.sections || [], moments || [], _oldSecRow ? _oldSecRow.narrative_sections : null);   // v3.4.37 -- also the job's result
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
       'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
@@ -1179,7 +1186,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ).run(
       parsed.intro || '',
       parsed.intro_summary || '',
-      JSON.stringify(panelOrder.fromGenerated(parsed.sections || [], moments || [], _oldSecRow ? _oldSecRow.narrative_sections : null)),   // v3.4.36
+      JSON.stringify(_finalSecs),   // v3.4.36
       parsed.outro || '',
       parsed.outro_summary || '',
       narrStyleId, now, req.session.userId, targetForkId
@@ -1230,7 +1237,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     }
     try { await recordGeneration(req.session.userId, { event_type: 'generate_narrative', tokens_redeemed: _narrCharge, quantity: moments.length, unit: 'panels', model: TEXT_MODEL, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId }); } catch (e) {}
     await db.prepare("UPDATE narrative_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(
-      JSON.stringify({ success: true, intro: parsed.intro || '', sections: parsed.sections || [], outro: parsed.outro || '' }),
+      JSON.stringify({ success: true, intro: parsed.intro || '', sections: _finalSecs, outro: parsed.outro || '' }),   // v3.4.37 -- as stored: bridges and their ids
       new Date().toISOString(), jobId
     );
 
@@ -1417,7 +1424,7 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|between:\d+|moment:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|between:\d+|moment:\d+|bridge:b[0-9a-f]{7})$/.test(gap)) {   // v3.4.37 -- a bridge by its id
     return res.json({ error: 'Invalid gap key' });
   }
 
@@ -1456,7 +1463,7 @@ router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, r
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|moment:\d+|between:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|moment:\d+|between:\d+|bridge:b[0-9a-f]{7})$/.test(gap)) {   // v3.4.37
     return res.json({ error: 'Invalid gap key' });
   }
 
@@ -1665,7 +1672,7 @@ const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more 
 const WT_WORD_MAX = 60;           // characters a Word selection may have
 const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
 const WRITING_USES_PER_TOKEN = 4;
-const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|story)$/;   // v3.2.36 -- 'story': the Story / Session Transcript box
+const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|bridge:b[0-9a-f]{7}|story)$/;   // v3.4.37 -- a bridge by its id;   // v3.2.36 -- 'story': the Story / Session Transcript box
 // v3.2.36 -- TD-999 stage 3. The coach on the Story box reads a WINDOW of a long story (the page sends about
 // 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
 // tools there need a selection, capped like a Narrative box. Regen is for the Narrative boxes only.
@@ -1698,14 +1705,50 @@ function wtChain(moments) {
   out.push('closing');
   return out;
 }
+// v3.4.37 -- TD-1107. THE CHAIN AS THE PAGE SHOWS IT: pictures and bridges in any order. A bridge is 'bridge:<id>';
+// its pictures either side are the picture its block belongs to and the next picture (or the end of the session).
+function wtChainCtx(ctx) {
+  if (!ctx.norm) return wtChain(ctx.moments);
+  const out = ['opening'];
+  ctx.moments.forEach(function (m, i) {
+    if (!(m && m.kind === 'establishing')) out.push('moment:' + i);
+    ((ctx.norm[i] && ctx.norm[i].bridges) || []).forEach(function (x) { out.push('bridge:' + x.id); });
+  });
+  out.push('closing');
+  return out;
+}
+// Which picture a bridge follows (its block), or -1. An old page's 'between:i' is the first bridge of gap i.
+function wtGapOf(ctx, box) {
+  if (!ctx || !ctx.norm) return box.indexOf('between:') === 0 ? parseInt(box.split(':')[1], 10) : -1;
+  if (box.indexOf('between:') === 0) return parseInt(box.split(':')[1], 10);
+  if (box.indexOf('bridge:') !== 0) return -1;
+  const id = box.slice(7);
+  for (let g = 0; g < ctx.norm.length; g++) if (ctx.norm[g].bridges.some(function (x) { return x.id === id; })) return g;
+  return -1;
+}
+function wtResolve(ctx, box) {
+  if (!ctx || !ctx.norm || box.indexOf('between:') !== 0) return box;
+  const g = parseInt(box.split(':')[1], 10), b = ctx.norm[g];
+  return (b && b.bridges.length) ? ('bridge:' + b.bridges[0].id) : box;
+}
 function wtBoxText(box, intro, sections, outro) {
   if (box === 'opening') return intro || '';
   if (box === 'closing') return outro || '';
+  if (box.indexOf('bridge:') === 0) {   // v3.4.37
+    const id = box.slice(7); let t = '';
+    (sections || []).forEach(function (s) { ((s && s.bridges) || []).forEach(function (x) { if (x.id === id) t = String(x.text || ''); }); });
+    return t;
+  }
   const i = parseInt(box.split(':')[1], 10);
   const s = (sections || []).find(function (x) { return x && x.panel_index === i; }) || {};
   return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
 }
-function wtBoxName(box, moments) {
+function wtBoxName(box, moments, norm) {
+  if (box.indexOf('bridge:') === 0) {   // v3.4.37 -- TD-1107: named by the pictures it now sits between
+    const g = wtGapOf({ norm: norm }, box);
+    const a = moments[g] || {}, b = moments[g + 1];
+    return 'a bridge after PANEL ' + (g + 1) + ' ("' + (a.title || 'untitled') + '")' + (b ? (' and before PANEL ' + (g + 2) + ' ("' + (b.title || 'untitled') + '")') : ', at the end of the session') + ', which carries the story from one picture to the next';
+  }
   if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
   if (box === 'opening') return 'the Opening (before the first picture)';
   if (box === 'closing') return 'the Closing (after the last picture)';
@@ -1766,7 +1809,11 @@ async function writingContext(db, req, session, targetForkId) {
     return canon + (toks.length > 1 ? ' (also known as: ' + toks.slice(1).join(', ') + ')' : '') + ' — ' + (c.cls || '') + ': ' + String(c.description || '').slice(0, 300);
   }).join('\n');
   const moments = await db.prepare('SELECT id, title, description, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+  // v3.4.37 -- TD-1107. The text in the new shape (bridges with ids), and Directions read by bridge or by gap.
+  const norm = panelOrder.readNorm(sections, moments);
+  if (norm) { sections = norm; gapDirections = panelOrder.gapView(panelOrder.liftKeys(gapDirections, norm), norm); gapOutlines = panelOrder.gapView(panelOrder.liftKeys(gapOutlines, norm), norm); }
   return {
+    norm: norm,
     campaign, charList, directorNotes, gapDirections, gapOutlines, narrStyleId, styleBundle, verbosity, narrator, fpAnon, moments,
     intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : '',
     lore: (campaign && campaign.lore) ? String(campaign.lore).trim() : '',                      // v3.2.32
@@ -1817,8 +1864,8 @@ function wtIntentBlock(ctx, box) {
 }
 function wtNeighbours(ctx, box) {
   if (box === 'story') return '';   // v3.2.36 -- the story has no boxes either side
-  const chain = wtChain(ctx.moments);
-  const at = chain.indexOf(box);
+  const chain = wtChainCtx(ctx);   // v3.4.37 -- the real neighbours on the page
+  const at = chain.indexOf(wtResolve(ctx, box));
   const prev = at > 0 ? chain[at - 1] : null;
   const next = (at >= 0 && at < chain.length - 1) ? chain[at + 1] : null;
   const pt = prev ? wtBoxText(prev, ctx.intro, ctx.sections, ctx.outro) : '';
@@ -1833,6 +1880,10 @@ function wtPanels(ctx, box) {
   const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
   if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
   if (box === 'closing') return n ? ('The last picture: ' + show(n - 1) + '\n\n') : '';
+  if (box.indexOf('bridge:') === 0) {   // v3.4.37 -- the pictures it sits between now
+    const g = wtGapOf(ctx, box);
+    return 'The picture before: ' + show(g) + '\n' + (g + 1 < n ? ('The picture after: ' + show(g + 1)) : 'After it: the end of the session.') + '\n\n';
+  }
   const i = parseInt(box.split(':')[1], 10);
   if (box.indexOf('moment:') === 0) return 'THIS box\'s picture: ' + show(i) + '\n\n';
   return 'The picture before: ' + show(i) + '\nThe picture after: ' + show(i + 1) + '\n\n';
@@ -1861,7 +1912,7 @@ function wtMessage(kept, rest) {
 
 function wtPrompt(tool, ctx, session, box, text, body) {
   const bg = wtBackground(ctx, session);
-  const name = wtBoxName(box, ctx.moments);
+  const name = wtBoxName(wtResolve(ctx, box), ctx.moments, ctx.norm);   // v3.4.37
   // v3.2.40 -- FEEDBACK ON THE STORY BOX IS BIG PICTURE (Ian, 2026-10-22). The Story box may hold notes, a game
   // transcript or a story the writer wrote, and may be one chapter or a whole story: the coach says which, then judges
   // the composition -- shape, pacing, clarity, gaps, consistency -- not sentences ("The individual paragraphs can be
@@ -2037,7 +2088,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n' +
       'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
       (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
-      (box.indexOf('between:') === 0 ? 'Cover only what happens between the picture before and the picture after. ' : '') +
+      ((box.indexOf('between:') === 0 || box.indexOf('bridge:') === 0) ? 'Cover only what happens between the picture before and the picture after. ' : '') +   // v3.4.37
       (isOutline ? 'Write bullet points, one per line, each starting with • and a space. ' : '') +
       (isDialogue ? 'Put each spoken line on its own line, led by the speaker\'s name and a colon. ' : '') +
       'Use typographic quotes “ ” for speech.\n' +
@@ -2120,7 +2171,7 @@ function wtTranscriptWindow(ctx, session, box, size) {
   const tr = String(session.transcript || '');
   if (tr.length <= size) return tr;
   const n = Math.max(1, ctx.moments.length);
-  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
+  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : (box.indexOf('bridge:') === 0) ? ((Math.max(0, wtGapOf(ctx, box)) + 1) / n) : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);   // v3.4.37
   let start = Math.round(pos * tr.length - size / 2);
   start = Math.max(0, Math.min(tr.length - size, start));
   return (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + size) +
@@ -2229,8 +2280,12 @@ async function writingToolHandler(req, res) {
   if (tool === 'regen') {
     if (ctx.narrStyleId === 'written') return res.json({ error: 'This version uses Already Written, so the words are your own and Regen has nothing to write. Edit the text, or use Generate Narrative to split your story again.' });
     if (!session.transcript) return res.json({ error: 'This session has nothing in its Story / Session Transcript box yet, so there is nothing to write from.' });
+    if (box.indexOf('bridge:') === 0) {   // v3.4.37
+      if (wtGapOf(ctx, box) < 0) return res.status(400).json({ error: 'That bridge is no longer on the storyboard. Reload the page.' });
+    } else {
     const bi = box.indexOf(':') > 0 ? parseInt(box.split(':')[1], 10) : 0;
     if (box !== 'opening' && box !== 'closing' && !(bi >= 0 && bi < ctx.moments.length)) return res.status(400).json({ error: 'That panel is no longer on the storyboard. Reload the page.' });
+    }
   }
 
   // Before the call: a use in hand, or a token to buy four. Nothing is spent here.

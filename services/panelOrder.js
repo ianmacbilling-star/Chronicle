@@ -165,7 +165,7 @@ function mergeSave(incoming, storedRaw, moments) {
       b.bridges = b0.bridges.filter(function (x) { return x && known[x.id]; }).map(function (x) {
         const k = known[x.id], t = String(x.text == null ? '' : x.text);
         const o = Object.assign({}, k, { text: t, summary: (x.summary !== undefined) ? (x.summary || '') : (k.summary || '') });
-        if (t !== String(k.text || '')) o.between = want;   // rewritten here: it is written for where it sits now
+        if (t.trim() !== String(k.text || '').trim()) o.between = want;   // rewritten here: it is written for where it sits now (pages trim)
         return o;
       });
     } else if (title) {
@@ -303,8 +303,9 @@ async function applyLayout(db, opts, make) {
         return derive(s, i, newIds, isTitle(kindOf[id]));
       });
     }
-    const dirs = remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew, gapMap);
-    const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap);
+    // v3.4.37 -- a bridge's Directions and outline live under its id and go with it; a deleted bridge's go with it.
+    const dirs = pruneKeys(liftKeys(remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew, gapMap), newSecs), newSecs);
+    const outs = pruneKeys(liftKeys(remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap), newSecs), newSecs);
     // Generate Story's Review lines: the narration line follows its picture, the bridge line follows its bridge.
     let newOutline = null;
     const ol = parseJson(fk && fk.narrative_outline, null);
@@ -409,5 +410,73 @@ async function applyArrange(db, opts) {
   });
 }
 
-module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, applyArrange,
+// =====================================================================================================
+// v3.4.37 -- KEYS BY BRIDGE. A bridge's Directions and outline are kept under 'bridge:<id>' and go wherever it goes.
+// Older text kept them under 'between:i' (the gap after picture i): those of a gap that holds bridges belong to its
+// first bridge and move to it. An empty gap keeps 'between:i' (Regenerate Narrative writes a bridge there).
+// =====================================================================================================
+function liftKeys(map, norm) {
+  const out = Object.assign({}, map || {});
+  if (!norm) return out;
+  norm.forEach(function (b, g) {
+    const k = 'between:' + g;
+    if (out[k] === undefined || !b.bridges.length) return;
+    const nk = 'bridge:' + b.bridges[0].id;
+    if (out[nk] === undefined) out[nk] = out[k];
+    delete out[k];
+  });
+  return out;
+}
+// Keys of bridges that are gone are dropped (a deleted bridge is deleted for good).
+function pruneKeys(map, norm) {
+  if (!norm) return map;
+  const have = {};
+  norm.forEach(function (b) { b.bridges.forEach(function (x) { have[x.id] = true; }); });
+  const out = {};
+  Object.keys(map || {}).forEach(function (k) { const m = /^bridge:(.+)$/.exec(k); if (!m || have[m[1]]) out[k] = map[k]; });
+  return out;
+}
+// For a writer that still thinks in gaps (Generate Narrative writes one bridge per gap): 'between:i' read from the
+// gap's first bridge.
+function gapView(map, norm) {
+  const out = Object.assign({}, map || {});
+  if (!norm) return out;
+  norm.forEach(function (b, g) {
+    if (b.bridges.length && out['bridge:' + b.bridges[0].id] !== undefined) out['between:' + g] = out['bridge:' + b.bridges[0].id];
+  });
+  return out;
+}
+// A version's text in the new shape, read only. null when there is none, or it does not match the pictures.
+function readNorm(rawSecs, moments) {
+  const secs = parseJson(rawSecs, []);
+  if (!Array.isArray(secs) || !secs.length || !moments || !moments.length) return null;
+  const al = alignSections(secs, moments.map(function (m) { return Number(m.id); }));
+  return al === null ? null : normBlocks(al, moments);
+}
+// v3.4.37 -- A VERSION'S BRIDGE IDS ARE MADE ONCE AND KEPT. Called before a page reads a version's text: older text
+// gets its ids (and its Directions moved to them) and is written back, so the ids the page holds are the ones stored.
+// The text itself is unchanged (after is the same words). Written only when something changes, and only if the row
+// still holds what was read (a write that happened meanwhile wins; the next read tries again).
+async function ensureIds(db, forkId) {
+  const fk = await db.prepare('SELECT narrative_sections, narrative_directions, narrative_outlines FROM session_forks WHERE id = ?').get(forkId);
+  if (!fk || fk.narrative_sections == null || typeof fk.narrative_sections !== 'string') return false;
+  const secs = parseJson(fk.narrative_sections, []);
+  if (!Array.isArray(secs) || !secs.length) return false;
+  const moments = await db.prepare('SELECT id, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC, id ASC').all(forkId);
+  const ids = moments.map(function (m) { return Number(m.id); });
+  const al = alignSections(secs, ids);
+  if (al === null) return false;
+  const fresh = al.some(function (b, i) { return !Array.isArray(b.bridges) || !secs[i] || Number(secs[i].moment_id) !== ids[i] || secs[i].panel_index !== i; });
+  const norm = normBlocks(al, moments);
+  const d0 = parseJson(fk.narrative_directions, {}), o0 = parseJson(fk.narrative_outlines, {});
+  const d1 = liftKeys(d0, norm), o1 = liftKeys(o0, norm);
+  const keysMoved = JSON.stringify(d1) !== JSON.stringify(d0) || JSON.stringify(o1) !== JSON.stringify(o0);
+  if (!fresh && !keysMoved) return false;
+  const r = await db.prepare('UPDATE session_forks SET narrative_sections = ?, narrative_directions = ?, narrative_outlines = ? WHERE id = ? AND narrative_sections = ? AND COALESCE(narrative_directions, \'\') = ? AND COALESCE(narrative_outlines, \'\') = ?')
+    .run(JSON.stringify(norm), JSON.stringify(d1), JSON.stringify(o1), forkId, fk.narrative_sections, fk.narrative_directions || '', fk.narrative_outlines || '');
+  return !!(r && r.changes);
+}
+
+module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, applyArrange, liftKeys, pruneKeys, gapView, readNorm, ensureIds,
+
   normBlocks, mergeSave, fromGenerated, flatten, derive, parseJson, TITLE_BRIDGES };

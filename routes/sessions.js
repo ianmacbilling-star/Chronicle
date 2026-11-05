@@ -10,6 +10,7 @@ const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllow
 const GOLD_RANK = 3;
 const imageHelpers = require('./images');
 const rightsCheck = require('../services/rightsCheck');   // v3.1.91 -- TD-979
+const panelOrder = require('../services/panelOrder');   // v3.4.37 -- TD-1107: every bridge's id, before a page reads it
 const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
 // GET last used art style and layout style
@@ -326,6 +327,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
+  try { await panelOrder.ensureIds(db, viewForkId); } catch (_pe) { console.error('[panels] ids: ' + ((_pe && _pe.message) || _pe)); }   // v3.4.37 -- TD-1107
   const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, narrative_verbosity, art_style_override, version_id FROM session_forks WHERE id=?').get(viewForkId);
   // Set-and-forget defaults: when this user has not chosen a style for THIS session
   // yet, inherit their most recent prior choice in this campaign (per-user; DM forks
@@ -1243,6 +1245,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
 
     const viewForkId = await getViewableForkId(db, sessionId, req.session.userId, req.query.fork_id);
     if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
+    try { await panelOrder.ensureIds(db, viewForkId); } catch (_pe) { console.error('[panels] ids: ' + ((_pe && _pe.message) || _pe)); }   // v3.4.37 -- TD-1107
     const moments = await db.prepare(
       'SELECT id, title, description, type, prompt, panel_order, cast_explicit, kind, locked FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'   // v3.4.33 -- locked, for the move buttons
     ).all(viewForkId);
@@ -1443,6 +1446,9 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       };
     });
 
+    // v3.4.37 -- TD-1107. The bridges after each picture, by id, in page order (the Review rows), as stored.
+    const _revNorm = panelOrder.readNorm(fkRow ? fkRow.narrative_sections : null, moments);
+    panels.forEach(function (p, i) { p.bridges = _revNorm ? _revNorm[i].bridges.map(function (x) { return { id: x.id, summary: x.summary || '', stale: !(Array.isArray(x.between) && Number(x.between[0]) === Number(moments[i].id) && (x.between[1] == null ? null : Number(x.between[1])) === ((i + 1 < moments.length) ? Number(moments[i + 1].id) : null)) }; }) : null; });   // null: no text yet, the Review plans by gap as before
     var effectiveOutlines = {};
     var _effOut = function(key, fb) {
       var st = gapOutlines[key];
@@ -1456,6 +1462,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       var ns = narrativeByPanel[p.panel_order];
       _effOut('moment:' + i, ns ? (ns.before_summary || '') : '');
       _effOut('between:' + i, ns ? (ns.after_summary || '') : '');
+      (p.bridges || []).forEach(function (b, k) { _effOut('bridge:' + b.id, (k === 0 && ns && ns.after_summary) ? ns.after_summary : (b.summary || '')); });   // v3.4.37
     });
     res.json({
       intro: narrativeIntro,

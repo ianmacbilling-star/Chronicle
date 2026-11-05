@@ -5344,7 +5344,7 @@ function renderReview(data) {
 
   // A steerable narrative row: shows the outline (what the prose WILL say)
   // plus a Direction pill that lights gold when a direction has been set.
-  function narrRow(gapKey, label, cls) {
+  function narrRow(gapKey, label, cls, brg) {   // v3.4.37 -- brg: the bridge, when the row is one
     var hasDir = !!(state.narrativeDirections && state.narrativeDirections[gapKey]);
     var oText = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
     var safeLabel = escapeHtmlReview(label);
@@ -5369,9 +5369,10 @@ function renderReview(data) {
     var body = oText
       ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(formatOutlineText(oText)) + '</div>'
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
-    return '<div class="review-nar ' + cls + '">' +
+    return '<div class="review-nar ' + cls + '"' + (gapKey.indexOf('bridge:') === 0 ? (' data-fx-src="review" data-fx-t="b" data-fx-id="' + gapKey.slice(7) + '"') : '') + '>' +   // v3.4.37
       '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu +
-        (gapKey.indexOf('between:') === 0 ? bridgeMoveControls('review', Number(gapKey.slice(8))) : '') + '</div>' +   // v3.4.35
+        (gapKey.indexOf('bridge:') === 0 ? spaceControls('review', 'b', gapKey.slice(7)) : '') + '</div>' +   // v3.4.37
+      ((brg && brg.stale) ? panelStaleNoteHtml() : '') +
       body +
     '</div>';
   }
@@ -5454,13 +5455,13 @@ function renderReview(data) {
         '<button class="row-menu-item" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')">Edit Narrative Direction</button>' +
         '</div></div>'
       : '';
-    html += '<div class="review-panel">' +
+    html += '<div class="review-panel"' + (_isEstR ? '' : (' data-fx-src="review" data-fx-t="p" data-fx-id="' + mid + '"')) + '>' +   // v3.4.37
       '<div class="review-panel-head">' +
         (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">Opening</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
-          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu + panelMoveControls('review', i) +   // v3.4.33 -- TD-1107
+          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu + (_isEstR ? '' : spaceControls('review', 'p', mid)) +   // v3.4.37 -- TD-1107
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -5468,9 +5469,14 @@ function renderReview(data) {
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
     '</div>';
 
-    // Bridge gap AFTER this panel (the last gap is covered by the closing).
-    if (!_isEstR && i < panels.length - 1) {
-      html += narrRow('between:' + i, bridgeLabel(++_bNumR, p, panels[i + 1], num, num + 1), 'review-nar-bridge');   // v3.4.35
+    // v3.4.37 -- TD-1107. Every bridge that follows this picture on the page, by its id. With no narrative yet the
+    // Review still plans one bridge per gap, as before (the last gap is covered by the closing).
+    if (Array.isArray(p.bridges)) {
+      p.bridges.forEach(function (b) {
+        html += narrRow('bridge:' + String(b.id).replace(/[^a-z0-9]/gi, ''), fxBridgeLabel(++_bNumR, p, num, panels[i + 1] || null, num + 1), 'review-nar-bridge', b);
+      });
+    } else if (!_isEstR && i < panels.length - 1) {
+      html += narrRow('between:' + i, fxBridgeLabel(++_bNumR, p, num, panels[i + 1], num + 1), 'review-nar-bridge');
     }
   });
 
@@ -10453,6 +10459,19 @@ function collectNarrativeState() {
       after_summary: prev.after_summary || ''
     };
     if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    // v3.4.37 -- TD-1107. Every bridge by its id, each from its own box; one rewritten here is written for where it sits.
+    if (Array.isArray(prev.bridges)) {
+      var _nid = (state.moments[i + 1] || {}).id;
+      _sec.bridges = prev.bridges.map(function (b) {
+        var bx = document.getElementById('narrative-bridge-box-' + b.id);
+        var tx = bx ? bx.value.trim() : String(b.text || '');
+        var o = Object.assign({}, b, { text: tx });
+        if (tx !== String(b.text || '').trim()) o.between = [m.id, _nid == null ? null : _nid];
+        return o;
+      });
+      if (m.kind !== 'establishing') _sec.after = _sec.bridges.map(function (b) { return b.text; }).join('\n\n');
+      delete _sec.bridge_stale;
+    }
     return _sec;
   });
   return {
@@ -10512,6 +10531,7 @@ function regenNarrativeSection(type, panelIndex) {
   // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
   // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
   // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  if (type === 'bridge') { wtOpen('regen', 'bridge:' + panelIndex, 'narrative-bridge-box-' + panelIndex); return; }   // v3.4.37 -- a bridge by its id
   var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
@@ -18262,7 +18282,7 @@ function renderStoryboard() {
     }
     var optsBtn = '<button class="moment-opts-btn" onclick="toggleMomentOptions(' + m.id + ')" title="Cast &amp; prominence for this panel">&#8230;</button>';
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
-    return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '">' +
+    return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '"' + (m.kind === 'establishing' ? '' : (' data-fx-src="board" data-fx-t="p" data-fx-id="' + m.id + '"')) + '>' +   // v3.4.37
       '<div class="storyboard-panel-img">' +
         imgHtml + '<div class="panel-img-actions">' + titleBtn + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
@@ -18313,6 +18333,7 @@ function renderStoryboard() {
     var gapKey = (id === 'narrative-opening') ? 'opening'
       : (id === 'narrative-closing') ? 'closing'
       : (id.indexOf('narrative-moment-') === 0) ? 'moment:' + id.replace('narrative-moment-', '')
+      : (id.indexOf('narrative-bridge-') === 0) ? 'bridge:' + id.replace('narrative-bridge-', '')   // v3.4.37 -- a bridge by its id
       : 'between:' + id.replace('narrative-between-', '');
     var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
     var dirText = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
@@ -18336,13 +18357,19 @@ function renderStoryboard() {
     // v3.4.33 -- TD-1107. Ian: the move and delete buttons on the panel's moment bar; a bridge written for a different next
     // panel says so until its words change.
     var _pmIdx = (id.indexOf('narrative-moment-') === 0) ? Number(id.replace('narrative-moment-', '')) : -1;
-    var _bsIdx = (id.indexOf('narrative-between-') === 0) ? Number(id.replace('narrative-between-', '')) : -1;
-    var _bsSec = (_bsIdx >= 0) ? (((state.narrativeData && state.narrativeData.sections) || []).find(function (s) { return s.panel_index === _bsIdx; }) || {}) : {};
-    var _bsNote = (_bsSec.bridge_stale && String(_bsSec.after || '').trim()) ? panelStaleNoteHtml() : '';
-    return '<div class="narrative-panel" id="' + id + '">' +
+    // v3.4.37 -- a bridge by its id: its controls, and a note when it now sits between other pictures.
+    var _brId = (id.indexOf('narrative-bridge-') === 0) ? id.replace('narrative-bridge-', '') : '';
+    var _bsNote = '';
+    if (_brId) (state.moments || []).forEach(function (pm, pi) {
+      var ps = (((state.narrativeData && state.narrativeData.sections) || []).find(function (s) { return s.panel_index === pi; }) || {});
+      (ps.bridges || []).forEach(function (pb) {
+        if (pb.id === _brId && String(pb.text || '').trim() && fxBridgeStale(pb, pm.id, state.moments[pi + 1] ? state.moments[pi + 1].id : null)) _bsNote = panelStaleNoteHtml();
+      });
+    });
+    return '<div class="narrative-panel" id="' + id + '"' + (_brId ? (' data-fx-src="board" data-fx-t="b" data-fx-id="' + _brId + '"') : '') + '>' +   // v3.4.37
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
-        regenBtn + (_pmIdx >= 0 ? panelMoveControls('board', _pmIdx) : '') + (_bsIdx >= 0 ? bridgeMoveControls('board', _bsIdx) : '') +   // v3.4.35
+        regenBtn + ((_pmIdx >= 0 && state.moments[_pmIdx]) ? spaceControls('board', 'p', state.moments[_pmIdx].id) : '') + (_brId ? spaceControls('board', 'b', _brId) : '') +   // v3.4.37
       '</div>' + _bsNote +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
@@ -18359,17 +18386,31 @@ function renderStoryboard() {
   if (!_hasEst) cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
     'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
-  // Alternate panels and between-narratives
-  var _pNum = 0, _bNum = 0;   // v3.4.35 -- bridges numbered 1, 2, 3... on their own
+  // v3.4.37 -- TD-1107. Each picture, then every bridge that follows it on the page (any number, each by its id,
+  // numbered down the page and named after the pictures either side). Text from before bridges had ids (no
+  // narrative yet, or text that does not match its panels) shows the old way: one box per gap.
+  var _pNum = 0, _bNum = 0;
   state.moments.forEach(function(m, i) {
-    if (m.kind === 'establishing') { cells.push(buildPanel(m, i, 0)); return; }
-    _pNum++;
-    cells.push(buildPanel(m, i, _pNum));
-    if (i < state.moments.length - 1) {
-      var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
+    var _isT = (m.kind === 'establishing');
+    if (!_isT) _pNum++;
+    cells.push(buildPanel(m, i, _isT ? 0 : _pNum));
+    var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
+    var _nx = state.moments[i + 1] || null;
+    if (Array.isArray(section.bridges)) {
+      section.bridges.forEach(function (b) {
+        var _bid = String(b.id || '').replace(/[^a-z0-9]/gi, '');
+        cells.push(buildNarrative(
+          'narrative-bridge-' + _bid,
+          fxBridgeLabel(++_bNum, m, _pNum, _nx, _pNum + 1),
+          'narrative-bridge-box-' + _bid,
+          'Bridge the story...', b.text || '',
+          'regenNarrativeSection(\'bridge\',\'' + _bid + '\')', false
+        ));
+      });
+    } else if (!_isT && i < state.moments.length - 1) {
       cells.push(buildNarrative(
         'narrative-between-' + i,
-        bridgeLabel(++_bNum, state.moments[i], state.moments[i + 1], _pNum, _pNum + 1),   // v3.4.35
+        fxBridgeLabel(++_bNum, m, _pNum, _nx, _pNum + 1),
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
         'regenNarrativeSection(\'between\',' + i + ')', false
@@ -18391,6 +18432,11 @@ function renderStoryboard() {
 function fillStoryboardProse(narr) {
   narr = narr || state.narrativeData || {};
   var secs = narr.sections || [];
+  // v3.4.37 -- TD-1107. When the bridges on the page are not the bridges in the text, draw the board again.
+  var _want = [], _have = [];
+  secs.forEach(function (s) { (s.bridges || []).forEach(function (b) { _want.push('narrative-bridge-box-' + b.id); }); });
+  var _bx = document.querySelectorAll('textarea[id^="narrative-bridge-box-"]'); for (var _n = 0; _n < _bx.length; _n++) _have.push(_bx[_n].id);
+  if ((_want.length || _have.length) && _want.join() !== _have.join() && typeof renderStoryboard === 'function') { try { renderStoryboard(); return; } catch (_re) {} }
   var setBox = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
   setBox('narrative-intro-box', narr.intro);
   setBox('narrative-outro-box', narr.outro);
@@ -18399,6 +18445,7 @@ function fillStoryboardProse(narr) {
     var sec = secs.find(function(x){ return x.panel_index === i; }) || {};
     setBox('narrative-moment-box-' + i, sec.before);
     setBox('narrative-between-box-' + i, sec.after);
+    (sec.bridges || []).forEach(function (b) { setBox('narrative-bridge-box-' + b.id, b.text); });   // v3.4.37
   });
 }
 
@@ -19539,6 +19586,19 @@ function collectNarrativeState() {
       after_summary: prev.after_summary || ''
     };
     if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    // v3.4.37 -- TD-1107. Every bridge by its id, each from its own box; one rewritten here is written for where it sits.
+    if (Array.isArray(prev.bridges)) {
+      var _nid = (state.moments[i + 1] || {}).id;
+      _sec.bridges = prev.bridges.map(function (b) {
+        var bx = document.getElementById('narrative-bridge-box-' + b.id);
+        var tx = bx ? bx.value.trim() : String(b.text || '');
+        var o = Object.assign({}, b, { text: tx });
+        if (tx !== String(b.text || '').trim()) o.between = [m.id, _nid == null ? null : _nid];
+        return o;
+      });
+      if (m.kind !== 'establishing') _sec.after = _sec.bridges.map(function (b) { return b.text; }).join('\n\n');
+      delete _sec.bridge_stale;
+    }
     return _sec;
   });
   return {
@@ -20265,6 +20325,7 @@ function regenNarrativeSection(type, panelIndex) {
   // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
   // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
   // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  if (type === 'bridge') { wtOpen('regen', 'bridge:' + panelIndex, 'narrative-bridge-box-' + panelIndex); return; }   // v3.4.37 -- a bridge by its id
   var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
@@ -41016,3 +41077,191 @@ async function bridgeClear(src, g) {
   if (!w.ok) return;
   await _bridgeSend({ anchor: list[0].id, op: 'clear', a: g });
 }
+// =====================================================================================================
+// v3.4.37 -- TD-1107. FREE ORDER ON THE PAGE (claude/FREE_ORDER_STORY_SPEC.md). Ian, 2026-11-05: "A user should be able
+// to move the image panels and narrative panels around separately wherever they want to put them with the drag and
+// drop or move them one spot at a time with the arrows. There should be no rules... only warnings."
+// Two kinds of space: a PICTURE (picture and its own text, never apart) and a BRIDGE (text on its own, with an id).
+// The arrows swap a space with whatever sits next to it; the gripper drops it anywhere (a gold line shows where).
+// The title picture and the Opening never move, and nothing goes right after the title until the book can print it
+// (v3.4.38, FX_TITLE_BRIDGES). Locks are on the picture and no longer stop a move. The server checks everything again
+// (services/panelOrder.js applyArrange); a list that is out of date is refused, and the page reloads.
+// =====================================================================================================
+var FX_TITLE_BRIDGES = false;
+// The pictures in order, each with the bridges that follow it on the page.
+function fxPics(src) {
+  if (src === 'review') {
+    return ((state.reviewData && state.reviewData.panels) || []).map(function (p) {
+      return { id: p.moment_id, kind: p.kind, title: p.title, bridges: (p.bridges || []).map(function (b) { return { id: b.id, stale: !!b.stale }; }) };
+    });
+  }
+  var secs = (state.narrativeData && state.narrativeData.sections) || [];
+  return (state.moments || []).map(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {};
+    return { id: m.id, kind: m.kind, title: m.title, bridges: Array.isArray(s.bridges) ? s.bridges : [] };
+  });
+}
+// The page order after the title: { t: 'p' | 'b', id }.
+function fxFlat(src) {
+  var out = [];
+  fxPics(src).forEach(function (p, i) {
+    if (!(i === 0 && p.kind === 'establishing')) out.push({ t: 'p', id: p.id });
+    p.bridges.forEach(function (b) { out.push({ t: 'b', id: b.id }); });
+  });
+  return out;
+}
+function fxOk(items) { return !items.length || items[0].t === 'p' || FX_TITLE_BRIDGES; }
+function fxSame(a, b) { return a.length === b.length && a.every(function (x, n) { return x.t === b[n].t && String(x.id) === String(b[n].id); }); }
+function fxIndex(flat, t, id) { var k = -1; flat.forEach(function (it, n) { if (it.t === t && String(it.id) === String(id)) k = n; }); return k; }
+// A bridge is "out of place" when the pictures either side are not the ones it was written between.
+function fxBridgeStale(b, picId, nextId) {
+  if (!b || !Array.isArray(b.between)) return !!(b && b.id);
+  var b1 = b.between[1] == null ? null : Number(b.between[1]);
+  return Number(b.between[0]) !== Number(picId) || b1 !== (nextId == null ? null : Number(nextId));
+}
+// "Bridge 4: The Vault -> The Chase": numbered down the page, named after the pictures either side.
+function fxBridgeLabel(num, a, an, b, bn) {
+  var left = (!a || a.kind === 'establishing') ? 'Opening' : _bridgeTitle(a, an);
+  var right = b ? _bridgeTitle(b, bn) : 'Closing';
+  return 'Bridge ' + num + ': ' + left + ' → ' + right;
+}
+// The arrows, the x and the gripper for one space. Nothing on someone else's version, or on the title.
+function spaceControls(src, t, id) {
+  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
+  var flat = fxFlat(src), k = fxIndex(flat, t, id);
+  if (k < 0) return '';
+  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
+  var what = t === 'p' ? 'panel' : 'bridge';
+  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var off = 'opacity:0.35;cursor:default;';
+  var can = function (j) {
+    if (j < 0 || j >= flat.length) return false;
+    var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
+    return fxOk(it);
+  };
+  var q = t === 'p' ? String(Number(id)) : ('\'' + String(id).replace(/[^a-z0-9]/gi, '') + '\'');
+  var btn = function (j, sym, tip) {
+    return can(j) ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();spaceStep(\'' + src + '\',\'' + t + '\',' + q + ',' + (j - k) + ')">' + sym + '</button>'
+      : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
+  };
+  var del = t === 'p' ? ('panelDelete(' + Number(id) + ')') : ('bridgeDelete(' + q + ',\'' + src + '\')');
+  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+    btn(k - 1, back, 'Move this ' + what + ' one place ' + (src === 'review' ? 'up' : 'earlier')) +
+    '<button type="button" style="' + bs + '" title="Delete this ' + what + '" onclick="event.stopPropagation();' + del + '">&times;</button>' +
+    btn(k + 1, fwd, 'Move this ' + what + ' one place ' + (src === 'review' ? 'down' : 'later')) +
+    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:#c9a84c;cursor:grab;user-select:none;">⠿</span></span>';
+}
+// Send a new page order (or a bridge to delete) for the version on screen, then reload both views.
+async function fxSend(src, body) {
+  var pics = fxPics(src);
+  if (!pics.length || !state.currentCampaign || !state.currentSession) return;
+  body.anchor = pics[0].id;
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/arrange', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await _pmAfter(r);
+  } catch (e) { showError('That could not be moved. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+async function fxWarn() {
+  if (_pmWarnOff()) return true;
+  var a = await _pmAsk('Moving panels changes your story’s order.', PANEL_MOVE_LINES, 'Move', false, true);
+  if (!a.ok) return false;
+  if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
+  return true;
+}
+// One step: the space trades places with whatever sits next to it.
+async function spaceStep(src, t, id, dir) {
+  if (_pmBusy) return;
+  var flat = fxFlat(src), k = fxIndex(flat, t, id), j = k + dir;
+  if (k < 0 || j < 0 || j >= flat.length) return;
+  var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
+  if (!fxOk(it)) return;
+  if (!(await fxWarn())) return;
+  await fxSend(src, { items: it });
+}
+// Anywhere: the space is taken out and put in before (or after) another.
+function fxMoved(flat, k, j, after) {
+  var it = flat.slice(), x = it.splice(k, 1)[0];
+  var at = j > k ? j - 1 : j;
+  it.splice(after ? at + 1 : at, 0, x);
+  return it;
+}
+async function spaceMoveTo(src, k, j, after) {
+  if (_pmBusy) return;
+  var flat = fxFlat(src);
+  if (k < 0 || k >= flat.length || j < 0 || j >= flat.length) return;
+  var it = fxMoved(flat, k, j, after);
+  if (fxSame(it, flat) || !fxOk(it)) return;
+  if (!(await fxWarn())) return;
+  await fxSend(src, { items: it });
+}
+async function bridgeDelete(id, src) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var a = await _pmAsk('Delete this bridge?', ['Its text is gone for good. Regenerate Narrative will write a new bridge here, along with fresh text for the whole session.'], 'Delete', true, false);
+  if (!a.ok) return;
+  await fxSend(src === 'review' ? 'review' : 'board', { deleteBridge: id });
+}
+// --- Drag and drop: from the gripper only (Ian: "so there is no accidental dragging"). ---
+var _fxDrag = null, _fxMark = null;
+function _fxSpace(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  var s = el.closest('[data-fx-t]');
+  return s ? { src: s.getAttribute('data-fx-src'), t: s.getAttribute('data-fx-t'), id: s.getAttribute('data-fx-id'), el: s } : null;
+}
+function _fxPaint(el, side) {
+  if (_fxMark && _fxMark !== el) _fxMark.style.boxShadow = '';
+  _fxMark = el || null;
+  if (el) el.style.boxShadow = side;
+}
+function _fxPlace(e) {
+  var s = _fxSpace(e.target);
+  if (!_fxDrag || !s || s.src !== _fxDrag.src) return null;
+  var flat = fxFlat(s.src), k = fxIndex(flat, _fxDrag.t, _fxDrag.id), j = fxIndex(flat, s.t, s.id);
+  if (k < 0 || j < 0 || k === j) return null;
+  var r = s.el.getBoundingClientRect();
+  var after = s.src === 'review' ? (e.clientY > r.top + r.height / 2) : (e.clientX > r.left + r.width / 2);
+  var it = fxMoved(flat, k, j, after);
+  if (fxSame(it, flat) || !fxOk(it)) return null;
+  var side = s.src === 'review' ? (after ? 'inset 0 -4px 0 #e8c766' : 'inset 0 4px 0 #e8c766') : (after ? 'inset -4px 0 0 #e8c766' : 'inset 4px 0 0 #e8c766');
+  return { src: s.src, k: k, j: j, after: after, el: s.el, side: side };
+}
+try {
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.sp-grip')) return;
+    try { var sel = window.getSelection && window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (x) {}
+    var bar = t.closest('.narrative-block-header, .review-panel-head, .review-nar-head'); if (!bar) return;
+    bar.setAttribute('draggable', 'true'); bar.setAttribute('data-fx-bar', '1'); bar.style.cursor = 'grabbing';
+  }, true);
+  document.addEventListener('mouseup', function () {
+    if (_fxDrag) return;
+    var all = document.querySelectorAll('[data-fx-bar]');
+    for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
+  }, true);
+  document.addEventListener('dragstart', function (e) {
+    var bar = e.target && e.target.closest ? e.target.closest('[data-fx-bar]') : null; if (!bar) return;
+    var c = bar.querySelector('.sp-ctl'); if (!c) return;
+    _fxDrag = { src: c.getAttribute('data-sp-src'), t: c.getAttribute('data-sp-t'), id: c.getAttribute('data-sp-id') };
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'space'); } catch (x) {}
+  });
+  document.addEventListener('dragover', function (e) {
+    if (!_fxDrag) return;
+    var p = _fxPlace(e);
+    if (!p) { _fxPaint(null); return; }
+    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+    _fxPaint(p.el, p.side);
+  });
+  document.addEventListener('drop', function (e) {
+    if (!_fxDrag) return;
+    var p = _fxPlace(e); _fxDrag = null; _fxPaint(null);
+    if (!p) return;
+    e.preventDefault();
+    spaceMoveTo(p.src, p.k, p.j, p.after);
+  });
+  document.addEventListener('dragend', function () {
+    _fxDrag = null; _fxPaint(null);
+    var all = document.querySelectorAll('[data-fx-bar]');
+    for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
+  });
+} catch (e) {}

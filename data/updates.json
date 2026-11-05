@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.37",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3437-free-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Move story panels and bridges anywhere, separately.",
+        "detail": "On your own version, every picture panel and every bridge on the Story panels and the Review tab has arrows that move it one place (trading places with whatever is next to it) and a gripper to drag it anywhere, with a gold line showing where it will land. Bridges are numbered down the page and named after the pictures either side. The x on a bridge deletes it. Locked pictures can be moved. The title picture and Opening stay first.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.36",
     "staged_on": "2026-11-05",
     "entries": [

@@ -1170,19 +1170,23 @@ Where the story comes together as alternating image panels and narrative.
   coach on that box: an honest verdict and tips (**Feedback**), new versions of your words
   (**Rewrite**), and a better word (**Word**). See **10.9** for the whole coach. **1 token buys 4
   writing uses**; Word is free; members use their own tokens.
-- **Move or delete a panel** (your own version only): the **◀ × ▶** at the right of each panel's moment bar (and **▲ × ▼**
-  on each Review row), or by **dragging** it by its **gripper** (the ⠿ beside the arrows) onto another panel (on a
-  computer; on a phone use the arrows). The arrows move the panel one place earlier or later, taking its picture, its
-  moment text, its Directions, its outline, its characters and assets and any character change with it. **The bridges stay
-  where they are**: each **Bridge** (numbered, and named after the panels either side, e.g. *Bridge 4: The Vault → The
-  Chase*) stays in its place between two panels, whichever panels end up there. A bridge moves only on its own, with
-  its own **◀ × ▶** (or by dragging its gripper onto another bridge), which swaps two bridges; its **×** empties it
-  (the gap stays, for a Regen). Deleting a panel deletes its picture and its own text; the bridges after it stay where they were, after the panel before it (right after the title picture there is no place for a bridge, so there they go too). **×**
-  deletes the panel and its text for good, after asking. The title picture always stays first. A **locked** panel can't be
-  moved or deleted and keeps its place (unlock it first); arrows beside it jump over it. Moving asks first (you can tick
-  **Don't show this message again**) because things can fall out of step: the text may not flow between panels any more
-  (a bridge written for a different next panel says so; **Regen** it, or regenerate the narrative), pictures may not match
-  the new order, a character change may land in the wrong place, and **Generate Story** starts over without your changes.
+- **Move panels and bridges anywhere** (your own version only). The Story panels and the Review tab hold two kinds of
+  piece: a **picture panel** (the picture and its own text, which never come apart) and a **bridge** (the text between
+  pictures, which is its own piece). Each has **◀ × ▶** at the right of its bar (**▲ × ▼** on the Review
+  tab) and a **gripper** (⠿). The arrows move it **one place**, trading places with whatever sits next to it, picture or
+  bridge; dragging its gripper drops it **anywhere** (a gold line shows where it will land; on a phone use the arrows).
+  There are no rules, only warnings: two pictures can sit side by side, several bridges in a row, a bridge just before
+  the Closing. A picture takes its moment text, Directions, outline, characters, assets and any character change with it;
+  a bridge takes its own Directions and outline. **Bridges** are numbered down the page and named after the pictures
+  either side (*Bridge 4: The Vault → The Chase*); one that now sits between other pictures than it was written for
+  says so (**Regen** it, or **Regenerate Narrative**). The **title picture and the Opening never move**, and for now
+  nothing can go right after the title. **Locked** pictures move like any other (the lock is on the picture).
+  **× on a bridge** deletes it for good, after asking; there is no “add a bridge” — every picture has its own text box,
+  so there is always somewhere to write. **× on a panel** deletes the picture and its text for good, after asking; the
+  bridges after it stay where they were. **Regen** on one box rewrites only that box, for where it sits now.
+  **Regenerate Narrative** keeps your picture order and rewrites all the text, with one bridge between each pair of
+  pictures again (extra bridges, and any you placed oddly, are replaced). **Generate Story** starts over and keeps
+  nothing. Moving asks first (you can tick **Don't show this message again**).
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
 you already have — your own drawing, a photo, a painting — onto that panel instead of one Campaignia
