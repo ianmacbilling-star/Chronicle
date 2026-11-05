@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.43",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3443-coach-continuity",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Writing Coach checks that each box makes sense after everything before it on the page.",
+        "detail": "Feedback now reads the whole page up to the box and checks continuity first: a character gaining something they already had, an event repeated or undone, time running backwards with no flashback. It names the row it clashes with, numbered as the page numbers them. Regen writes for the page as it now reads, and handles a moved picture as a flashback or flash-forward on purpose.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.42",
     "staged_on": "2026-11-05",
     "entries": [

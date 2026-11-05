@@ -1743,19 +1743,60 @@ function wtBoxText(box, intro, sections, outro) {
   const s = (sections || []).find(function (x) { return x && x.panel_index === i; }) || {};
   return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
 }
-function wtBoxName(box, moments, norm) {
-  if (box.indexOf('bridge:') === 0) {   // v3.4.37 -- TD-1107: named by the pictures it now sits between
-    const g = wtGapOf({ norm: norm }, box);
-    const a = moments[g] || {}, b = moments[g + 1];
-    return 'a bridge after PANEL ' + (g + 1) + ' ("' + (a.title || 'untitled') + '")' + (b ? (' and before PANEL ' + (g + 2) + ' ("' + (b.title || 'untitled') + '")') : ', at the end of the session') + ', which carries the story from one picture to the next';
-  }
-  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
-  if (box === 'opening') return 'the Opening (before the first picture)';
-  if (box === 'closing') return 'the Closing (after the last picture)';
-  const i = parseInt(box.split(':')[1], 10);
+// v3.4.43 -- TD-1107. THE COACH COUNTS AS THE PAGE DOES (Erin: it said "between Panel 4 and Panel 5" where the page shows
+// "6 \u2013 Bridge" between 5 and 8). Every row numbered top to bottom: 1 the Opening, then every picture and bridge in page
+// order, the Closing last -- the same rule as fxNums on the page.
+function wtRows(moments, norm) {
+  let n = 1; const out = { opening: 1 };
+  (moments || []).forEach(function (m, i) {
+    const title = (i === 0 && m && m.kind === 'establishing');
+    if (!title) out['moment:' + i] = ++n;
+    if (norm && norm[i]) norm[i].bridges.forEach(function (x) { out['bridge:' + x.id] = ++n; });
+    else if (!norm && !title && i < moments.length - 1) out['between:' + i] = ++n;
+  });
+  out.closing = n + 1;
+  return out;
+}
+function wtPicRow(rows, moments, i) {
   const m = moments[i] || {};
-  if (box.indexOf('moment:') === 0) return 'the text for PANEL ' + (i + 1) + ' ("' + (m.title || 'untitled') + '"), which tells what that picture shows';
-  return 'the bridge between PANEL ' + (i + 1) + ' and PANEL ' + (i + 2) + ', which carries the story from one picture to the next';
+  if (i === 0 && m.kind === 'establishing') return 'the title picture (row 1)';
+  return 'row ' + rows['moment:' + i] + ' ("' + (m.title || 'untitled') + '")';
+}
+// How a box is labelled for the coach: the page's own words.
+function wtRowLabel(rows, moments, key) {
+  if (key === 'opening') return '1 \u2013 Opening';
+  if (key === 'closing') return rows.closing + ' \u2013 Closing';
+  if (key.indexOf('moment:') === 0) { const i = parseInt(key.split(':')[1], 10); return rows[key] + ' \u2013 Moment (the picture "' + ((moments[i] || {}).title || 'untitled') + '")'; }
+  return (rows[key] || '?') + ' \u2013 Bridge';
+}
+function wtBoxName(box, moments, norm) {
+  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
+  const rows = wtRows(moments, norm);
+  if (box === 'opening') return 'row 1 \u2013 Opening (before the first picture)';
+  if (box === 'closing') return 'row ' + rows.closing + ' \u2013 Closing (after the last picture)';
+  if (box.indexOf('moment:') === 0) { const i = parseInt(box.split(':')[1], 10); return 'row ' + rows[box] + ' \u2013 Moment: the text for the picture "' + ((moments[i] || {}).title || 'untitled') + '", which tells what that picture shows'; }
+  const g = wtGapOf({ norm: norm }, box);
+  return 'row ' + (rows[box] || '?') + ' \u2013 Bridge, after ' + wtPicRow(rows, moments, g) + (moments[g + 1] ? (' and before ' + wtPicRow(rows, moments, g + 1)) : ', at the end of the session') + ', which carries the story from one picture to the next';
+}
+// v3.4.43 -- WHAT THE READER HAS ALREADY READ (Ian, 2026-11-05: the coach called the sneeze that gives Gerald his wings
+// perfect, three rows after he had flown and swooped -- "That doesn't really jive"). Every box earlier on the page, in
+// page order and labelled as the page labels it, up to the text just before this box (which wtNeighbours gives in
+// full). A long page keeps the nearest boxes whole and the earlier ones as their openings, so a use costs about the
+// same however long the story is. The order on the page is the story: never the order the pictures were made in.
+const WT_PAGE_MAX = 9000, WT_PAGE_SHORT = 300, WT_PAGE_NEAR = 4;
+function wtPageSoFar(ctx, box) {
+  if (box === 'story' || box === 'opening') return '';
+  const chain = wtChainCtx(ctx), at = chain.indexOf(wtResolve(ctx, box));
+  if (at < 2) return '';
+  const rows = wtRows(ctx.moments, ctx.norm);
+  const items = chain.slice(0, at - 1).map(function (k) { return { label: wtRowLabel(rows, ctx.moments, k), text: String(wtBoxText(k, ctx.intro, ctx.sections, ctx.outro) || '').trim() }; })
+    .filter(function (x) { return x.text; });
+  if (!items.length) return '';
+  let total = items.reduce(function (s, x) { return s + x.text.length; }, 0);
+  if (total > WT_PAGE_MAX) items.forEach(function (x, k) { if (k < items.length - WT_PAGE_NEAR && x.text.length > WT_PAGE_SHORT) x.text = x.text.slice(0, WT_PAGE_SHORT) + '\u2026'; });
+  let out = items.map(function (x) { return x.label + ': ' + x.text; }).join('\n');
+  if (out.length > WT_PAGE_MAX + 3000) out = '\u2026' + out.slice(out.length - (WT_PAGE_MAX + 3000));
+  return 'EARLIER ON THE PAGE, in the order the reader reads it (everything before the text just before this box; for continuity, not to be changed):\n' + out + '\n\n';
 }
 
 // Everything a tool needs to know about this version, read from the database (never from the page).
@@ -1870,14 +1911,16 @@ function wtNeighbours(ctx, box) {
   const next = (at >= 0 && at < chain.length - 1) ? chain[at + 1] : null;
   const pt = prev ? wtBoxText(prev, ctx.intro, ctx.sections, ctx.outro) : '';
   const nt = next ? wtBoxText(next, ctx.intro, ctx.sections, ctx.outro) : '';
-  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (for flow only, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
-    (nt ? ('THE TEXT JUST AFTER THIS BOX (for flow only, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
+  const rows = wtRows(ctx.moments, ctx.norm);   // v3.4.43 -- labelled as the page labels them
+  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (' + wtRowLabel(rows, ctx.moments, prev) + '; for flow and continuity, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
+    (nt ? ('THE TEXT JUST AFTER THIS BOX (' + wtRowLabel(rows, ctx.moments, next) + '; for flow, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
 }
 
 function wtPanels(ctx, box) {
   if (box === 'story') return '';   // v3.2.36
   const n = ctx.moments.length;
-  const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
+  const rows = wtRows(ctx.moments, ctx.norm);   // v3.4.43 -- the page's row numbers
+  const show = function (i) { const m = ctx.moments[i]; return m ? (wtPicRow(rows, ctx.moments, i) + ' shows: ' + (m.description || '')) : ''; };
   if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
   if (box === 'closing') return n ? ('The last picture: ' + show(n - 1) + '\n\n') : '';
   if (box.indexOf('bridge:') === 0) {   // v3.4.37 -- the pictures it sits between now
@@ -1956,7 +1999,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       system: shareTr ? [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: WT_SYSTEM }] : WT_SYSTEM,   // v3.2.57
       prompt: wtMessage([bg.campaign, bg.session],
         (shareTr ? 'THE ORIGINAL STORY / SESSION TRANSCRIPT: at the start of this request, above (what actually happened; the passage must be true to it).\n\n' : '') +   // v3.2.57
-        wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
+        wtPanels(ctx, box) + wtPageSoFar(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction; v3.4.43 -- and the page before it
         (whole ? '' : story) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
         // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
@@ -1968,8 +2011,15 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         // does), so a passage that reads beautifully but gets the session wrong cannot be "great".
         // v3.2.55 -- the original story now comes before the passage (above), kept with the background when whole.
         'YOUR ROLE: You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.\n' +
-        'First judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
-        'A great passage is TRUE to the original story (names, who did what, the order of events, nothing invented that contradicts it), SPECIFIC (concrete details from this session, not vague mood), ' +
+        // v3.4.43 -- CONTINUITY FIRST (Ian, 2026-11-05: "What it needs to make sure of... is that the new story with the changes
+        // makes sense"). The writer may have rearranged the pictures on purpose, so the order on the page is the story.
+        'FIRST, CONTINUITY. The reader has already read everything above this passage on the page, in that order. Check that THIS passage makes sense after it: ' +
+        'a character must not gain, learn or do for the first time something they already had, knew or did earlier on the page; an event must not happen again or be undone; ' +
+        'time must not run backwards unless the text clearly makes it a flashback (or a flash-forward); nobody may be somewhere they cannot be. ' +
+        'A passage that clashes with what came before cannot be "great": lead with that clash, name the row it clashes with as the page labels it (e.g. \u201crow 3 \u2013 Moment\u201d), ' +
+        'and suggest a fix -- change the line so it fits, or make the jump a clear flashback or flash-forward. The order on the page is the story the writer chose: never ask for the pictures to be put back in another order.\n' +
+        'Then judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
+        'A great passage is TRUE to the original story (names, who did what, nothing invented that contradicts it; the order is the page\'s, which the writer may have changed on purpose), SPECIFIC (concrete details from this session, not vague mood), ' +
         'IN VOICE (the chosen narrative voice and this campaign, not generic filler), and free of stock phrasing: clichés and stock phrases (“a testament to”, “the air hung heavy”, “little did they know”), ' +
         'repeated sentence shapes, piled-up em dashes and vague grandeur all count against it, however smooth it reads. Choose ONE verdict:\n' +
         '- "great": it does its job well; the only changes you could suggest are matters of taste. Say so plainly (\u201cI wouldn\u2019t change a thing!\u201d) and give NO suggestions.\n' +
@@ -1977,7 +2027,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         '- "work": it has real problems a reader would notice. Give 3 to 5 suggestions, leading with the one that matters most.\n' +
         'Do not invent problems to have something to say, and do not praise to be kind: praise must name the actual words or choices that work. ' +
         'If the writer has clearly already applied earlier suggestions and the passage now does its job, the verdict is "great".\n' +
-        'Suggestions cover faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
+        'Suggestions cover continuity with the page before it, faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
         'flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). ' +
         'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose.\n' +
         'If THE PROMPT or THE DIRECTION for this part is given above, the passage must cover the prompt and follow the direction: one that does not cannot be "great", say which part it misses, and never suggest undoing either.\n' +
@@ -2080,13 +2130,16 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     // v3.2.55 -- the persona line moved from the top to just before the instructions, after the parts that are kept.
     prompt: wtMessage([bg.campaign, bg.session],
       (rgShare ? 'The session transcript (what actually happened): at the start of this request, above.\n\n' : '') +   // v3.2.57
-      wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      wtPanels(ctx, box) + wtPageSoFar(ctx, box) + wtNeighbours(ctx, box) +   // v3.4.43 -- and the page before it
       (rgWhole ? '' : rgStory) +
       'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
       (outlineEdited(outl) ? ('REQUIRED CONTENT for this block (you MUST cover these facts, in your own prose): ' + outlineText(outl) + '\n') : '') +
       (dir ? ('DIRECTOR STEERING for this block (you MUST follow this): ' + dir + '\n') : '') +
       'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n' +
       'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
+      // v3.4.43 -- the page as it now reads is the story; a picture moved ahead of its time is written as a jump, on purpose.
+      'It must make sense after everything earlier on the page, in that order: never repeat, undo or contradict what has already happened there (a character must not gain or learn again what they already had or knew). ' +
+      'If this picture\'s events come earlier in time than what the reader has just read, write it clearly as a flashback (or, the other way, a flash-forward) in the story\'s own voice, never as a note about the order. ' +
       (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
       ((box.indexOf('between:') === 0 || box.indexOf('bridge:') === 0) ? 'Cover only what happens between the picture before and the picture after. ' : '') +   // v3.4.37
       (isOutline ? 'Write bullet points, one per line, each starting with • and a space. ' : '') +
