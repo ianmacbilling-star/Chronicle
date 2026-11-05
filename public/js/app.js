@@ -4870,8 +4870,13 @@ function openChangeReview(charId) {
   var moments = state.moments || [];
   var savedIdx = (typeof r.change_moment_index === 'number' && r.change_moment_index >= 0) ? r.change_moment_index : -1;
   var emptyOpt = '<option value="-1"' + (savedIdx < 0 ? ' selected' : '') + '>&mdash; Empty (applies throughout, not tied to a Moment Panel) &mdash;</option>';
+  var _scNums = (typeof fxNums === 'function') ? fxNums('board') : {};   // v3.4.44 -- the page's row numbers
   var momentOptions = moments.map(function(m, i) {
-    var label = 'Moment Panel ' + (i + 1) + (m.title ? ': ' + m.title : '');
+    // v3.4.44 -- TD-1107. Labelled as the Story panels and the Review label them ("7 \u2013 One Big Sneeze!"), worked out from
+    // the order at the moment the box opens, so after panels move the next opening shows the new numbers. Pictures only:
+    // a change starts at a picture, never a bridge.
+    var label = (i === 0 && m.kind === 'establishing') ? ('1 \u2013 Opening' + (m.title ? ': ' + m.title : ''))
+      : ((_scNums['p' + m.id] || (i + 1)) + ' \u2013 ' + (m.title || 'Untitled panel'));
     var sel = (i === savedIdx) ? ' selected' : '';
     return '<option value="' + i + '"' + sel + '>' + label + '</option>';
   }).join('');

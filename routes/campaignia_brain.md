@@ -1067,7 +1067,8 @@ this tab is where you change a character as the story goes along. It lists the c
   reference and shows the result. **Approve change** to keep it, or **Discard / Ignore**.
   This is the plain box, not the Storyboard's guided panel — but every piece of advice in
   10.7 about wording a retouch still applies here.
-- **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown sets when
+- **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown (its pictures numbered as on the Story
+  panels and the Review, e.g. *7 – One Big Sneeze!*; it follows its picture when panels move) sets when
   the new look kicks in (normal before, changed from it onward). Leave Empty to apply
   throughout.
 - **Evolves across sessions** — each session pulls every character forward from where

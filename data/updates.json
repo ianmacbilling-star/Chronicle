@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.44",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3444-change-dropdown-numbers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The character-change dropdown numbers its pictures as the Story panels do.",
+        "detail": "On the Characters tab, “Change first appears at this Moment Panel” now lists each picture with its number and title as the Story panels and the Review show them, so after panels move the numbers match the page.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.43",
     "staged_on": "2026-11-05",
     "entries": [
