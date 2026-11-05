@@ -78,6 +78,18 @@ router.post('/reorder', requireAuth, verifyCampaignMember, async function(req, r
     res.json({ success: true, order: out.order });
   } catch (e) { return _panelErr(res, e); }
 });
+// v3.4.35 -- TD-1107. Move (swap) or empty a bridge on your own version. { anchor: any panel id of the version, op, a, b }.
+router.post('/bridges', requireAuth, verifyCampaignMember, async function(req, res) {
+  const b = req.body || {};
+  if (b.anchor == null) return res.status(400).json({ error: 'BAD_ORDER', message: 'No panel was named.' });
+  const db = await getDb();
+  const own = await _ownForkOf(db, b.anchor, req.params.sessionId, req.session.userId);
+  if (own.error) return res.status(own.status).json({ error: own.error });
+  try {
+    await panelOrder.applyBridges(db, { forkId: own.forkId, sessionId: req.params.sessionId, op: b.op, a: b.a, b: b.b });
+    res.json({ success: true });
+  } catch (e) { return _panelErr(res, e); }
+});
 router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const own = await _ownForkOf(db, req.params.momentId, req.params.sessionId, req.session.userId);

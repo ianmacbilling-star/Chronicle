@@ -5370,7 +5370,8 @@ function renderReview(data) {
       ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(formatOutlineText(oText)) + '</div>'
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
     return '<div class="review-nar ' + cls + '">' +
-      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu + '</div>' +
+      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu +
+        (gapKey.indexOf('between:') === 0 ? bridgeMoveControls('review', Number(gapKey.slice(8))) : '') + '</div>' +   // v3.4.35
       body +
     '</div>';
   }
@@ -5379,7 +5380,7 @@ function renderReview(data) {
   var _hasEstR = panels.some(function(p){ return p.kind === 'establishing'; });
   if (!_hasEstR) html += narrRow('opening', 'Opening', 'review-nar-open');
 
-  var _pNumR = 0;
+  var _pNumR = 0, _bNumR = 0;   // v3.4.35
   panels.forEach(function(p, i) {
     var _isEstR = (p.kind === 'establishing');
     var num = _isEstR ? 0 : (++_pNumR);
@@ -5469,7 +5470,7 @@ function renderReview(data) {
 
     // Bridge gap AFTER this panel (the last gap is covered by the closing).
     if (!_isEstR && i < panels.length - 1) {
-      html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), 'review-nar-bridge');
+      html += narrRow('between:' + i, bridgeLabel(++_bNumR, p, panels[i + 1], num, num + 1), 'review-nar-bridge');   // v3.4.35
     }
   });
 
@@ -18341,7 +18342,7 @@ function renderStoryboard() {
     return '<div class="narrative-panel" id="' + id + '">' +
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
-        regenBtn + (_pmIdx >= 0 ? panelMoveControls('board', _pmIdx) : '') +
+        regenBtn + (_pmIdx >= 0 ? panelMoveControls('board', _pmIdx) : '') + (_bsIdx >= 0 ? bridgeMoveControls('board', _bsIdx) : '') +   // v3.4.35
       '</div>' + _bsNote +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
@@ -18359,7 +18360,7 @@ function renderStoryboard() {
     'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
   // Alternate panels and between-narratives
-  var _pNum = 0;
+  var _pNum = 0, _bNum = 0;   // v3.4.35 -- bridges numbered 1, 2, 3... on their own
   state.moments.forEach(function(m, i) {
     if (m.kind === 'establishing') { cells.push(buildPanel(m, i, 0)); return; }
     _pNum++;
@@ -18368,7 +18369,7 @@ function renderStoryboard() {
       var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
       cells.push(buildNarrative(
         'narrative-between-' + i,
-        'Panel ' + _pNum + ' → ' + (_pNum + 1),
+        bridgeLabel(++_bNum, state.moments[i], state.moments[i + 1], _pNum, _pNum + 1),   // v3.4.35
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
         'regenNarrativeSection(\'between\',' + i + ')', false
@@ -40756,11 +40757,11 @@ function panelMoveControls(src, i) {
   return '<span class="pm-ctl" data-pm-src="' + src + '" data-pm-i="' + i + '" style="display:inline-flex;gap:4px;margin-left:auto;">' +   // v3.4.34 -- what a drag starting on this bar moves
     btn(-1, back, a >= 0, src === 'review' ? 'Move this panel up' : 'Move this panel earlier') +
     '<button type="button" style="' + bs + '" title="Delete this panel" onclick="event.stopPropagation();panelDelete(' + p.id + ')">&times;</button>' +
-    btn(1, fwd, b >= 0, src === 'review' ? 'Move this panel down' : 'Move this panel later') + '</span>';
+    btn(1, fwd, b >= 0, src === 'review' ? 'Move this panel down' : 'Move this panel later') + pmGrip('panel') + '</span>';   // v3.4.35
 }
 function panelLockedMsg(ev) { if (ev) ev.stopPropagation(); showError('This panel is locked. Unlock it first to move or delete it.'); }
 function panelStaleNoteHtml() {
-  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">The panels around this were moved, so this was written to lead into a different panel. Regenerate it to match, or regenerate the narrative.</div>';
+  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">This bridge now sits between different panels from the ones it was written for. Regenerate it to match, or regenerate the narrative.</div>';
 }
 function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN_KEY) === '1'; } catch (e) { return false; } }
 // A small dialog in the look of uiConfirm, with an optional "Don't show this message again" box. Resolves { ok, quiet }.
@@ -40901,40 +40902,117 @@ function _pmMark(el) {
 try {
   // A bar becomes draggable only while pressed, so text in it and the buttons on it behave as before.
   document.addEventListener('mousedown', function (e) {
-    var t = e.target; if (!t || typeof t.closest !== 'function' || t.closest('button, input, textarea, select, a')) return;
-    var bar = t.closest('.narrative-block-header, .review-panel-head'); if (!bar) return;
+    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.pm-grip')) return;   // v3.4.35 -- only the gripper starts a drag
+    try { var sel = window.getSelection && window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (x) {}   // else the browser drags the selected text instead
+    var bar = t.closest('.narrative-block-header, .review-panel-head, .review-nar-head'); if (!bar) return;   // v3.4.35 -- bridge rows too
     var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
-    if (!_pmMovable(c.getAttribute('data-pm-src'), Number(c.getAttribute('data-pm-i')))) return;
+    if (c.getAttribute('data-pm-kind') !== 'bridge' && !_pmMovable(c.getAttribute('data-pm-src'), Number(c.getAttribute('data-pm-i')))) return;
     bar.setAttribute('draggable', 'true'); bar.style.cursor = 'grab';
   }, true);
   document.addEventListener('mouseup', function () {
     if (_pmDrag) return;
-    var all = document.querySelectorAll('.narrative-block-header[draggable], .review-panel-head[draggable]');
+    var all = document.querySelectorAll('.narrative-block-header[draggable], .review-panel-head[draggable], .review-nar-head[draggable]');
     for (var k = 0; k < all.length; k++) { all[k].removeAttribute('draggable'); all[k].style.cursor = ''; }
   }, true);
   document.addEventListener('dragstart', function (e) {
-    var bar = e.target && e.target.closest ? e.target.closest('.narrative-block-header[draggable], .review-panel-head[draggable]') : null; if (!bar) return;
+    var bar = e.target && e.target.closest ? e.target.closest('.narrative-block-header[draggable], .review-panel-head[draggable], .review-nar-head[draggable]') : null; if (!bar) return;
     var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
-    _pmDrag = { src: c.getAttribute('data-pm-src'), i: Number(c.getAttribute('data-pm-i')) };
+    _pmDrag = { kind: c.getAttribute('data-pm-kind') || 'panel', src: c.getAttribute('data-pm-src'), i: Number(c.getAttribute('data-pm-i')) };
     try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'panel'); } catch (x) {}
   });
   document.addEventListener('dragover', function (e) {
     if (!_pmDrag) return;
-    var s = _pmSpot(e.target);
-    if (!s || s.src !== _pmDrag.src || s.i === _pmDrag.i || !_pmMovable(s.src, s.i)) { _pmMark(null); return; }
+    var s = _pmSpotAny(e.target);
+    if (!_pmDropOk(_pmDrag, s)) { _pmMark(null); return; }
     e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
     _pmMark(s.el);
   });
   document.addEventListener('drop', function (e) {
     if (!_pmDrag) return;
-    var d = _pmDrag, s = _pmSpot(e.target); _pmDrag = null; _pmMark(null);
-    if (!s || s.src !== d.src || s.i === d.i || !_pmMovable(s.src, s.i)) return;
+    var d = _pmDrag, s = _pmSpotAny(e.target); _pmDrag = null; _pmMark(null);
+    if (!_pmDropOk(d, s)) return;
     e.preventDefault();
-    panelMoveTo(d.src, d.i, s.i);
+    if (d.kind === 'bridge') bridgeSwap(d.src, d.i, s.i); else panelMoveTo(d.src, d.i, s.i);   // v3.4.35
   });
   document.addEventListener('dragend', function (e) {
     _pmDrag = null; _pmMark(null);
     var bar = e.target && e.target.closest ? e.target.closest('[draggable]') : null;
-    if (bar && bar.classList && (bar.classList.contains('narrative-block-header') || bar.classList.contains('review-panel-head'))) { bar.removeAttribute('draggable'); bar.style.cursor = ''; }
+    if (bar && bar.classList && (bar.classList.contains('narrative-block-header') || bar.classList.contains('review-panel-head') || bar.classList.contains('review-nar-head'))) { bar.removeAttribute('draggable'); bar.style.cursor = ''; }
   });
 } catch (e) {}
+// =====================================================================================================
+// v3.4.35 -- TD-1107. BRIDGES: THEIR LABEL, AND MOVING OR EMPTYING ONE ON ITS OWN. Panels no longer take their bridges
+// along (services/panelOrder.js); a bridge moves only by its own arrows or a drag onto another bridge, which swaps the two.
+// Its x empties it (after asking); the gap stays, for a Regen. Labels: "Bridge 4: <panel title> -> <panel title>".
+// =====================================================================================================
+function _bridgeTitle(m, n) {
+  var t = String((m && m.title) || '').trim();
+  if (!t) return n ? ('Panel ' + n) : 'Opening';
+  if (t.length <= 30) return t;
+  var cut = t.slice(0, 31).replace(/\s+\S*$/, '');   // at a word break, where there is one
+  return (cut.length >= 12 ? cut : t.slice(0, 29)) + '\u2026';
+}
+// v3.4.35 -- THE GRIPPER (Ian: "add a small Gripper button next to the far right arrow... so there is no accidental dragging").
+// A drag starts only from here; the rest of the bar no longer drags.
+function pmGrip(kind) {
+  return '<span class="pm-grip" title="Drag to move this ' + kind + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:#c9a84c;cursor:grab;user-select:none;">\u283F</span>';
+}
+function bridgeLabel(num, a, b, na, nb) { return 'Bridge ' + num + ': ' + _bridgeTitle(a, na) + ' \u2192 ' + _bridgeTitle(b, nb); }
+// The bridges a version shows: after each panel that is not the title, except the last.
+function _bridgeShown(list, g) { return g >= 0 && g < list.length - 1 && !!list[g] && list[g].kind !== 'establishing'; }
+function bridgeMoveControls(src, g) {
+  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
+  var list = _pmList(src); if (!_bridgeShown(list, g)) return '';
+  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
+  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var off = 'opacity:0.35;cursor:default;';
+  var btn = function (dir, sym, tip) {
+    return _bridgeShown(list, g + dir) ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();bridgeSwap(\'' + src + '\',' + g + ',' + (g + dir) + ')">' + sym + '</button>'
+      : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
+  };
+  return '<span class="pm-ctl" data-pm-kind="bridge" data-pm-src="' + src + '" data-pm-i="' + g + '" style="display:inline-flex;gap:4px;margin-left:auto;">' +
+    btn(-1, back, 'Swap with the bridge before') +
+    '<button type="button" style="' + bs + '" title="Empty this bridge" onclick="event.stopPropagation();bridgeClear(\'' + src + '\',' + g + ')">&times;</button>' +
+    btn(1, fwd, 'Swap with the bridge after') + pmGrip('bridge') + '</span>';
+}
+// Where a drag is over: a bridge (its Story box or Review row) or a panel (as before).
+function _pmSpotAny(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  var nb = el.closest('.narrative-panel');
+  if (nb && /^narrative-between-\d+$/.test(nb.id)) return { kind: 'bridge', src: 'board', i: Number(nb.id.replace('narrative-between-', '')), el: nb };
+  var rb = el.closest('.review-nar');
+  var c = rb ? rb.querySelector('.pm-ctl[data-pm-kind="bridge"]') : null;
+  if (c) return { kind: 'bridge', src: 'review', i: Number(c.getAttribute('data-pm-i')), el: rb };
+  var s = _pmSpot(el); if (s) s.kind = 'panel';
+  return s;
+}
+function _pmDropOk(d, s) {
+  if (!d || !s || (d.kind || 'panel') !== s.kind || s.src !== d.src || s.i === d.i) return false;
+  return s.kind === 'bridge' ? _bridgeShown(_pmList(s.src), s.i) : _pmMovable(s.src, s.i);
+}
+async function _bridgeSend(body) {
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/bridges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await _pmAfter(r);
+  } catch (e) { showError('The bridge could not be changed. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+async function bridgeSwap(src, a, b) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var list = _pmList(src); if (!_bridgeShown(list, a) || !_bridgeShown(list, b) || a === b || !list.length) return;
+  if (!_pmWarnOff()) {
+    var w = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
+    if (!w.ok) return;
+    if (w.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
+  }
+  await _bridgeSend({ anchor: list[0].id, op: 'swap', a: a, b: b });
+}
+async function bridgeClear(src, g) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var list = _pmList(src); if (!_bridgeShown(list, g) || !list.length) return;
+  var w = await _pmAsk('Empty this bridge?', ['Its text is removed, so the panels on either side run straight on from one to the next.', 'The gap stays: Regen writes a new bridge for it whenever you like.'], 'Empty it', true, false);
+  if (!w.ok) return;
+  await _bridgeSend({ anchor: list[0].id, op: 'clear', a: g });
+}

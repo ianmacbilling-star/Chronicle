@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.35",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3435-bridges-stay",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Story panels move without their bridges; bridges move on their own.",
+        "detail": "Moving a panel now leaves the bridge text where it is. Each bridge is numbered and named after the panels either side, and has its own arrows and x to swap it with a neighbour or empty it. Drag panels and bridges by the new gripper beside the arrows.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.34",
     "staged_on": "2026-11-05",
     "entries": [

@@ -62,12 +62,13 @@ function stampSections(sections, momentIds) {
 }
 
 // 'moment:i' / 'between:i' keys follow their panel; a deleted panel's are dropped; anything else is kept.
-function remapKeys(map, oldToNew) {
+// v3.4.35 -- with gapMap, 'between:i' keys follow their GAP instead (a bridge stays put when panels move).
+function remapKeys(map, oldToNew, gapMap) {
   const out = {};
   Object.keys(map || {}).forEach(function (k) {
     const m = /^(moment|between):(\d+)$/.exec(k);
     if (!m) { out[k] = map[k]; return; }
-    const ni = oldToNew[Number(m[2])];
+    const ni = (m[1] === 'between' && gapMap) ? gapMap[Number(m[2])] : oldToNew[Number(m[2])];
     if (ni === undefined || ni === null) return;
     out[m[1] + ':' + ni] = map[k];
   });
@@ -122,20 +123,35 @@ async function applyPanels(db, opts) {
       if (s && s.narrative_sections != null) { secHome = 'session'; rawSecs = s.narrative_sections; }
     }
     const secs = parseJson(rawSecs, []);
+    // v3.4.35 -- which old gap each new gap's bridge comes from, and where each old gap's bridge goes.
+    // Deleting keeps the bridge BEFORE the panel (gap d-1) and drops the one after it (gap d).
+    const delAt = (opts.deleteId != null) ? oldIds.indexOf(Number(opts.deleteId)) : -1;
+    const dropGap = delAt;
+    const gapSrc = function (k) { return (dropGap >= 0 && k >= dropGap) ? k + 1 : k; };
+    const gapMap = oldIds.map(function (x, g) { return (dropGap < 0 || g < dropGap) ? g : (g === dropGap ? null : g - 1); });
     let newSecs = null;
     if (Array.isArray(secs) && secs.length) {
       const oldAligned = alignSections(secs, oldIds);
       if (oldAligned === null) throw fail('MISMATCH', 'This session’s text no longer matches its panels. Regenerate the narrative first, then move the panels.', 409);
-      const oldNext = {}; oldIds.forEach(function (id, i) { oldNext[id] = (i + 1 < oldIds.length) ? oldIds[i + 1] : null; });
+      // v3.4.35 -- THE BRIDGES STAY IN THEIR GAPS (Ian, 2026-11-05: "I don't want the bridges to move... it's almost
+      // impossible to follow what happens if the surrounding text moves with the image panels"). A panel takes its MOMENT
+      // text (before, before_summary); the BRIDGE after position i (after, after_summary) stays at i. Deleting the panel
+      // at d keeps the bridge before it (gap d-1) and drops the one after (gap d). Any bridge whose panels on either side
+      // are not the ones it was written between is marked bridge_stale.
       newSecs = newIds.map(function (id, i) {
-        const s = Object.assign({}, oldAligned[oldIds.indexOf(id)]);
+        const mom = oldAligned[oldIds.indexOf(id)] || {};
+        const g = gapSrc(i), gap = oldAligned[g] || {};
+        const s = Object.assign({}, mom);
+        delete s.after; delete s.after_summary; delete s.bridge_stale;
+        if (gap.after !== undefined) s.after = gap.after;
+        if (gap.after_summary !== undefined) s.after_summary = gap.after_summary;
         s.panel_index = i; s.moment_id = id;
-        const next = (i + 1 < newIds.length) ? newIds[i + 1] : null;
-        if (next !== oldNext[id]) s.bridge_stale = true;   // its Bridge was written to lead into a different panel
+        const joins = (i + 1 < newIds.length) && (newIds[i] !== oldIds[g] || newIds[i + 1] !== oldIds[g + 1]);
+        if (gap.bridge_stale || joins) s.bridge_stale = true;
         return s;
       });
     }
-    const dirs = remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew);
+    const dirs = remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew, gapMap);
     // v3.4.33 -- THE GENERATE STORY OUTLINE (narrative_outline: { intro, sections:[{ panel_index, before, outline }], outro }),
     // the Review tab's short summaries, is kept by position too, so it follows its panels the same way (stamped by id).
     // Left as it is when it does not match the panels; it is a summary, and the text is what must never be wrong.
@@ -144,9 +160,10 @@ async function applyPanels(db, opts) {
     if (ol && Array.isArray(ol.sections) && ol.sections.length) {
       const byPos = ol.sections.slice().sort(function (a, b) { return ((a && a.panel_index) || 0) - ((b && b.panel_index) || 0); });
       const olAligned = alignSections(byPos, oldIds);
-      if (olAligned !== null) newOutline = Object.assign({}, ol, { sections: newIds.map(function (id, i) { return Object.assign({}, olAligned[oldIds.indexOf(id)], { panel_index: i, moment_id: id }); }) });
+      // v3.4.35 -- the outline's narration follows its panel; its bridge line (outline) stays in its gap, as the text does.
+      if (olAligned !== null) newOutline = Object.assign({}, ol, { sections: newIds.map(function (id, i) { const s = Object.assign({}, olAligned[oldIds.indexOf(id)], { panel_index: i, moment_id: id }); const gp = olAligned[gapSrc(i)] || {}; s.outline = (gp.outline !== undefined) ? gp.outline : ''; return s; }) });
     }
-    const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew);
+    const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap);
 
     if (opts.deleteId != null) await tx.prepare('DELETE FROM moments WHERE id = ? AND fork_id = ?').run(Number(opts.deleteId), forkId);
     for (let i = 0; i < newIds.length; i++) await tx.prepare('UPDATE moments SET panel_order = ? WHERE id = ? AND fork_id = ?').run(i, newIds[i], forkId);
@@ -174,4 +191,54 @@ async function applyPanels(db, opts) {
   });
 }
 
-module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, parseJson };
+// v3.4.35 -- MOVING OR EMPTYING A BRIDGE ON ITS OWN (Ian: "I want to be able to move the narrative bridge panels too... but
+// separately", and "an x on a bridge too"). A bridge is the text in gap g, between the panels at g and g+1; the ones
+// shown are those after a panel that is not the title, up to the last but one. 'swap' exchanges two bridges' text with
+// their Directions, outlines and Review outline lines, and marks both as written for other panels; 'clear' empties one
+// (its Directions and outline stay, for a Regen). One transaction, refused while writing runs, like the panels.
+async function applyBridges(db, opts) {
+  const forkId = Number(opts.forkId), sessionId = Number(opts.sessionId);
+  const cut = new Date(Date.now() - JOB_WINDOW_MS).toISOString();
+  const nj = await db.prepare("SELECT id FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ?").get(forkId, cut);
+  const ej = await db.prepare("SELECT id FROM extract_jobs WHERE session_id = ? AND status IN ('pending','running') AND updated_at > ?").get(sessionId, cut);
+  if (nj || ej) throw fail('BUSY', (nj ? 'The narrative is being written' : 'Generate Story is running') + ' for this session. Wait for it to finish, then try again.', 409);
+  return db.transaction(async function (tx) {
+    const moments = await tx.prepare('SELECT id, kind FROM moments WHERE fork_id = ? AND session_id = ? ORDER BY panel_order ASC, id ASC FOR UPDATE').all(forkId, sessionId);
+    const ids = moments.map(function (m) { return Number(m.id); });
+    const shown = function (g) { return Number.isInteger(g) && g >= 0 && g < moments.length - 1 && moments[g].kind !== 'establishing'; };
+    const a = Number(opts.a), b = (opts.op === 'swap') ? Number(opts.b) : null;
+    if (!shown(a) || (opts.op === 'swap' && (!shown(b) || a === b)) || (opts.op !== 'swap' && opts.op !== 'clear')) throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
+    const fk = await tx.prepare('SELECT role, narrative_sections, narrative_directions, narrative_outlines, narrative_outline FROM session_forks WHERE id = ? FOR UPDATE').get(forkId);
+    let secHome = 'fork', rawSecs = fk ? fk.narrative_sections : null;
+    if (rawSecs == null && fk && fk.role === 'dm') {
+      const s = await tx.prepare('SELECT narrative_sections FROM sessions WHERE id = ?').get(sessionId);
+      if (s && s.narrative_sections != null) { secHome = 'session'; rawSecs = s.narrative_sections; }
+    }
+    const secs0 = parseJson(rawSecs, []);
+    if (!Array.isArray(secs0) || !secs0.length) throw fail('NO_TEXT', 'There is no narrative text here yet.', 409);
+    const secs = alignSections(secs0, ids);
+    if (secs === null) throw fail('MISMATCH', 'This session\u2019s text no longer matches its panels. Regenerate the narrative first.', 409);
+    const dirs = parseJson(fk && fk.narrative_directions, {}), outs = parseJson(fk && fk.narrative_outlines, {});
+    const ol = parseJson(fk && fk.narrative_outline, null);
+    const olSecs = (ol && Array.isArray(ol.sections)) ? alignSections(ol.sections.slice().sort(function (x, y) { return ((x && x.panel_index) || 0) - ((y && y.panel_index) || 0); }), ids) : null;
+    const swapKey = function (m, x, y) { const kx = 'between:' + x, ky = 'between:' + y, vx = m[kx], vy = m[ky]; delete m[kx]; delete m[ky]; if (vy !== undefined) m[kx] = vy; if (vx !== undefined) m[ky] = vx; };
+    if (opts.op === 'swap') {
+      const ta = { after: secs[a].after, after_summary: secs[a].after_summary }, tb = { after: secs[b].after, after_summary: secs[b].after_summary };
+      secs[a].after = tb.after; secs[a].after_summary = tb.after_summary; secs[a].bridge_stale = true;
+      secs[b].after = ta.after; secs[b].after_summary = ta.after_summary; secs[b].bridge_stale = true;
+      swapKey(dirs, a, b); swapKey(outs, a, b);
+      if (olSecs) { const t = olSecs[a].outline; olSecs[a].outline = olSecs[b].outline; olSecs[b].outline = t; }
+    } else {
+      secs[a].after = ''; secs[a].after_summary = ''; delete secs[a].bridge_stale;
+    }
+    const sets = ['narrative_directions = ?', 'narrative_outlines = ?'], vals = [JSON.stringify(dirs), JSON.stringify(outs)];
+    if (secHome === 'fork') { sets.push('narrative_sections = ?'); vals.push(JSON.stringify(secs)); }
+    if (olSecs) { sets.push('narrative_outline = ?'); vals.push(JSON.stringify(Object.assign({}, ol, { sections: olSecs }))); }
+    vals.push(forkId);
+    await tx.prepare('UPDATE session_forks SET ' + sets.join(', ') + ' WHERE id = ?').run(...vals);
+    if (secHome === 'session') await tx.prepare('UPDATE sessions SET narrative_sections = ? WHERE id = ?').run(JSON.stringify(secs), sessionId);
+    return { ok: true };
+  });
+}
+
+module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, parseJson };
