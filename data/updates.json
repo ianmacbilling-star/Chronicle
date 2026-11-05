@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.46",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3446-picker-names",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Names under the pictures in the picture pickers are larger and easier to read.",
+        "detail": "In every window where you pick a character, asset or picture, the names under the pictures are bigger, bolder and brighter, and the Characters tab link in the + Add character note is gold instead of blue.",
+        "td": [
+          "TD-1040"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.45",
     "staged_on": "2026-11-05",
     "entries": [
