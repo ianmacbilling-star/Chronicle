@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.32",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3432-panel-moves-server",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Groundwork for moving and deleting story panels: each panel's text is now linked to it.",
+        "detail": "A panel and its text, Directions, outline and character-change marker move together in one step. The buttons come in the next update.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.31",
     "staged_on": "2026-11-05",
     "entries": [

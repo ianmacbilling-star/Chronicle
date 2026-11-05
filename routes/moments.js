@@ -10,6 +10,7 @@ const { uploadFile } = require('../storage/storage');
 const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const { demoteBuiltTitle } = require('../services/titleTarget');
 const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
+const panelOrder = require('../services/panelOrder');   // v3.4.32 -- TD-1107: moving and deleting panels
 
 // v3.0.507 -- ONE definition of the title cap, shared with routes/extract.js. A title typed by
 // hand must obey the same rule a generated one does, or the cap is decorative. Kept byte-identical
@@ -51,14 +52,41 @@ router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
   res.json(moment);
 });
 
-router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
+// v3.4.32 -- TD-1107. MOVE AND DELETE PANELS ON YOUR OWN VERSION (services/panelOrder.js has the rules).
+// Delete used to be Story-Master-only and never checked which version the panel was in; it now follows the rule for
+// editing a panel (your own version), takes the panel's text, Directions, outline and character-change marker with it
+// in one transaction, and refuses a locked panel or the title picture. Nothing on the page called it before this version.
+async function _ownForkOf(db, momentId, sessionId, userId) {
+  const row = await db.prepare('SELECT m.fork_id, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?').get(momentId, sessionId);
+  if (!row) return { status: 404, error: 'Panel not found' };
+  if (String(row.fork_owner) !== String(userId)) return { status: 403, error: 'You can only change your own version' };
+  return { forkId: row.fork_id };
+}
+function _panelErr(res, e) {
+  if (e && e.code) return res.status(e.status || 409).json({ error: e.code, message: e.message });
+  console.error('[panels] ' + ((e && e.stack) || e));
+  return res.status(500).json({ error: 'FAILED', message: 'The panels could not be changed. Nothing was changed; please try again.' });
+}
+router.post('/reorder', requireAuth, verifyCampaignMember, async function(req, res) {
+  const order = (req.body && Array.isArray(req.body.order)) ? req.body.order : null;
+  if (!order || !order.length) return res.status(400).json({ error: 'BAD_ORDER', message: 'No order was sent.' });
   const db = await getDb();
-  const prev = await db.prepare('SELECT image, kind, revert_image FROM moments WHERE id=? AND session_id=?').get(req.params.momentId, req.params.sessionId);
-  if (prev && prev.kind === 'establishing') return res.status(403).json({ error: 'The title image cannot be deleted. Regenerate it from the storyboard instead.' });
-  await db.prepare('DELETE FROM moments WHERE id=? AND session_id=?').run(req.params.momentId, req.params.sessionId);
-  if (prev && prev.image) await releaseImage(db, prev.image);
-  if (prev && prev.revert_image) await releaseImage(db, prev.revert_image);
-  res.json({ success: true });
+  const own = await _ownForkOf(db, order[0], req.params.sessionId, req.session.userId);
+  if (own.error) return res.status(own.status).json({ error: own.error });
+  try {
+    const out = await panelOrder.applyPanels(db, { forkId: own.forkId, sessionId: req.params.sessionId, order: order });
+    res.json({ success: true, order: out.order });
+  } catch (e) { return _panelErr(res, e); }
+});
+router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const own = await _ownForkOf(db, req.params.momentId, req.params.sessionId, req.session.userId);
+  if (own.error) return res.status(own.status).json({ error: own.error });
+  try {
+    const out = await panelOrder.applyPanels(db, { forkId: own.forkId, sessionId: req.params.sessionId, deleteId: req.params.momentId });
+    for (const u of out.release) { try { await releaseImage(db, u); } catch (_r) {} }   // only if nothing else uses the file
+    res.json({ success: true, order: out.order });
+  } catch (e) { return _panelErr(res, e); }
 });
 
 // PUT - edit a moment's prompt. DM may edit canonical (Platinum-gated);

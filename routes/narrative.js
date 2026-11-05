@@ -8,6 +8,7 @@ const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL, WRITING_MODEL, WRITING_FAST_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
 const transcriptCache = require('../services/transcriptCache');   // v3.2.56 -- TD-1010: the transcript first, kept
+const panelOrder = require('../services/panelOrder');   // v3.4.32 -- TD-1107: text linked to its panel by id
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -1175,7 +1176,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ).run(
       parsed.intro || '',
       parsed.intro_summary || '',
-      JSON.stringify(parsed.sections || []),
+      JSON.stringify(panelOrder.stampSections(parsed.sections || [], (moments || []).map(function (m) { return m.id; }))),
       parsed.outro || '',
       parsed.outro_summary || '',
       narrStyleId, now, req.session.userId, targetForkId
@@ -1309,11 +1310,14 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const now = new Date().toISOString();
+  // v3.4.32 -- TD-1107. Lined up with the version's panels by id (or by position, when the ids are not there yet) and stamped.
+  let _secs = sections || [];
+  try { const _ms = await db.prepare('SELECT id FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId); _secs = panelOrder.stampSections(_secs, _ms.map(function (m) { return m.id; })); } catch (_e) {}
   await db.prepare(
     'UPDATE session_forks SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     intro || '',
-    JSON.stringify(sections || []),
+    JSON.stringify(_secs),
     outro || '',
     now, req.session.userId, targetForkId
   );
