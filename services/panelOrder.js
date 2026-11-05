@@ -43,7 +43,9 @@ function alignSections(sections, momentIds) {
   let allIds = true;
   secs.forEach(function (s) { if (s && s.moment_id != null && byId[String(s.moment_id)] === undefined) byId[String(s.moment_id)] = s; else allIds = false; });
   let ordered = null;
-  if (allIds && secs.length === ids.length && ids.every(function (id) { return byId[id] !== undefined; })) {
+  // v3.4.33 -- by id even when the text also holds a panel that is gone (a save from a page that had not reloaded
+  // after a delete): the deleted panel's block is dropped and the rest are put back against their own panels.
+  if (allIds && ids.every(function (id) { return byId[id] !== undefined; })) {
     ordered = ids.map(function (id) { return byId[id]; });
   } else if (secs.length === ids.length) {
     ordered = secs.slice();
@@ -113,7 +115,7 @@ async function applyPanels(db, opts) {
     const oldToNew = oldIds.map(function (id) { return newIndex[id] === undefined ? null : newIndex[id]; });
 
     // The text: the version's own, or (a version from before versions held text) the session's.
-    const fk = await tx.prepare('SELECT role, narrative_sections, narrative_directions, narrative_outlines FROM session_forks WHERE id = ? FOR UPDATE').get(forkId);
+    const fk = await tx.prepare('SELECT role, narrative_sections, narrative_directions, narrative_outlines, narrative_outline FROM session_forks WHERE id = ? FOR UPDATE').get(forkId);
     let secHome = 'fork', rawSecs = fk ? fk.narrative_sections : null;
     if (rawSecs == null && fk && fk.role === 'dm') {
       const s = await tx.prepare('SELECT narrative_sections FROM sessions WHERE id = ?').get(sessionId);
@@ -134,6 +136,16 @@ async function applyPanels(db, opts) {
       });
     }
     const dirs = remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew);
+    // v3.4.33 -- THE GENERATE STORY OUTLINE (narrative_outline: { intro, sections:[{ panel_index, before, outline }], outro }),
+    // the Review tab's short summaries, is kept by position too, so it follows its panels the same way (stamped by id).
+    // Left as it is when it does not match the panels; it is a summary, and the text is what must never be wrong.
+    let newOutline = null;
+    const ol = parseJson(fk && fk.narrative_outline, null);
+    if (ol && Array.isArray(ol.sections) && ol.sections.length) {
+      const byPos = ol.sections.slice().sort(function (a, b) { return ((a && a.panel_index) || 0) - ((b && b.panel_index) || 0); });
+      const olAligned = alignSections(byPos, oldIds);
+      if (olAligned !== null) newOutline = Object.assign({}, ol, { sections: newIds.map(function (id, i) { return Object.assign({}, olAligned[oldIds.indexOf(id)], { panel_index: i, moment_id: id }); }) });
+    }
     const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew);
 
     if (opts.deleteId != null) await tx.prepare('DELETE FROM moments WHERE id = ? AND fork_id = ?').run(Number(opts.deleteId), forkId);
@@ -141,6 +153,7 @@ async function applyPanels(db, opts) {
 
     const sets = ['narrative_directions = ?', 'narrative_outlines = ?'], vals = [JSON.stringify(dirs), JSON.stringify(outs)];
     if (newSecs && secHome === 'fork') { sets.push('narrative_sections = ?'); vals.push(JSON.stringify(newSecs)); }
+    if (newOutline) { sets.push('narrative_outline = ?'); vals.push(JSON.stringify(newOutline)); }   // v3.4.33
     vals.push(forkId);
     await tx.prepare('UPDATE session_forks SET ' + sets.join(', ') + ' WHERE id = ?').run(...vals);
     if (newSecs && secHome === 'session') await tx.prepare('UPDATE sessions SET narrative_sections = ? WHERE id = ?').run(JSON.stringify(newSecs), sessionId);

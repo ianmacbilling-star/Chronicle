@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.33",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3433-move-delete-panels",
+        "kind": "feature",
+        "public": true,
+        "summary": "Move and delete story panels.",
+        "detail": "On your own version, each panel has arrows and an x on the Story panels and the Review tab. A panel's picture, text, directions and outline move with it. Locked panels and the title picture stay where they are. Deleting a panel cannot be undone.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.32",
     "staged_on": "2026-11-05",
     "entries": [

@@ -5459,7 +5459,7 @@ function renderReview(data) {
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
-          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
+          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu + panelMoveControls('review', i) +   // v3.4.33 -- TD-1107
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -10442,13 +10442,17 @@ function collectNarrativeState() {
     var mbox = document.getElementById('narrative-moment-box-' + i);
     var abox = document.getElementById('narrative-between-box-' + i);
     var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
-    return {
+    var _after = abox ? abox.value.trim() : (prev.after || '');
+    var _sec = {
       panel_index: i,
+      moment_id: m.id,   // v3.4.33 -- TD-1107: the text is linked to its panel
       before: mbox ? mbox.value.trim() : (prev.before || ''),
       before_summary: prev.before_summary || '',
-      after: abox ? abox.value.trim() : (prev.after || ''),
+      after: _after,
       after_summary: prev.after_summary || ''
     };
+    if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    return _sec;
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -18328,11 +18332,17 @@ function renderStoryboard() {
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
     var _nsName = narrStyleName(state.narrativeStyleUsed ? state.narrativeStyleUsed : (state.narrativeStyle || 'classic'));
+    // v3.4.33 -- TD-1107. Ian: the move and delete buttons on the panel's moment bar; a bridge written for a different next
+    // panel says so until its words change.
+    var _pmIdx = (id.indexOf('narrative-moment-') === 0) ? Number(id.replace('narrative-moment-', '')) : -1;
+    var _bsIdx = (id.indexOf('narrative-between-') === 0) ? Number(id.replace('narrative-between-', '')) : -1;
+    var _bsSec = (_bsIdx >= 0) ? (((state.narrativeData && state.narrativeData.sections) || []).find(function (s) { return s.panel_index === _bsIdx; }) || {}) : {};
+    var _bsNote = (_bsSec.bridge_stale && String(_bsSec.after || '').trim()) ? panelStaleNoteHtml() : '';
     return '<div class="narrative-panel" id="' + id + '">' +
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
-        regenBtn +
-      '</div>' +
+        regenBtn + (_pmIdx >= 0 ? panelMoveControls('board', _pmIdx) : '') +
+      '</div>' + _bsNote +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
@@ -19518,13 +19528,17 @@ function collectNarrativeState() {
     var mbox = document.getElementById('narrative-moment-box-' + i);
     var abox = document.getElementById('narrative-between-box-' + i);
     var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
-    return {
+    var _after = abox ? abox.value.trim() : (prev.after || '');
+    var _sec = {
       panel_index: i,
+      moment_id: m.id,   // v3.4.33 -- TD-1107: the text is linked to its panel
       before: mbox ? mbox.value.trim() : (prev.before || ''),
       before_summary: prev.before_summary || '',
-      after: abox ? abox.value.trim() : (prev.after || ''),
+      after: _after,
       after_summary: prev.after_summary || ''
     };
+    if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    return _sec;
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -40703,4 +40717,130 @@ async function ibDelete(id) {
       ibPaintGallery();
     })
     .catch(function () { showError('Connection error. Please try again.'); });
+}
+// =====================================================================================================
+// v3.4.33 -- TD-1107. MOVE AND DELETE STORY PANELS (the server side is services/panelOrder.js, v3.4.32).
+// Ian, 2026-11-05: arrows with an x between them on each panel's moment bar on the Story panels, and on each Review row;
+// a warning on moving that lists what can go out of step, with "Don't show this message again"; delete always asks, and
+// cannot be undone. Only on your own version. The title picture stays first; a locked panel can be neither moved nor
+// deleted and keeps its place, so an arrow beside one jumps over it. After any change the session reloads (both views).
+// =====================================================================================================
+var PANEL_MOVE_WARN_KEY = 'campaignia.panelMoveWarnOff';
+function _pmList(src) {
+  if (src === 'review') return ((state.reviewData && state.reviewData.panels) || []).map(function (p) { return { id: p.moment_id, kind: p.kind, locked: !!p.locked }; });
+  return (state.moments || []).map(function (m) { return { id: m.id, kind: m.kind, locked: !!m.locked }; });
+}
+// Where a panel at i goes for one step in dir (-1 / +1): the nearest unlocked panel that way, never the title; -1 if none.
+function _pmTarget(list, i, dir) {
+  var j = i + dir;
+  while (j >= 0 && j < list.length && list[j].locked) j += dir;
+  if (j < 0 || j >= list.length || list[j].kind === 'establishing') return -1;
+  return j;
+}
+function panelMoveControls(src, i) {
+  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
+  var list = _pmList(src), p = list[i];
+  if (!p || p.kind === 'establishing') return '';
+  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
+  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var off = 'opacity:0.35;cursor:default;';
+  if (p.locked) {
+    var lk = ' onclick="panelLockedMsg(event)" title="Unlock this panel first." style="' + bs + off + '"';
+    return '<span class="pm-ctl" style="display:inline-flex;gap:4px;margin-left:auto;">' + '<button type="button"' + lk + '>' + back + '</button><button type="button"' + lk + '>&times;</button><button type="button"' + lk + '>' + fwd + '</button></span>';
+  }
+  var a = _pmTarget(list, i, -1), b = _pmTarget(list, i, 1);
+  var btn = function (dir, sym, can, tip) {
+    return can ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();panelMove(\'' + src + '\',' + p.id + ',' + dir + ')">' + sym + '</button>'
+               : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
+  };
+  return '<span class="pm-ctl" style="display:inline-flex;gap:4px;margin-left:auto;">' +
+    btn(-1, back, a >= 0, src === 'review' ? 'Move this panel up' : 'Move this panel earlier') +
+    '<button type="button" style="' + bs + '" title="Delete this panel" onclick="event.stopPropagation();panelDelete(' + p.id + ')">&times;</button>' +
+    btn(1, fwd, b >= 0, src === 'review' ? 'Move this panel down' : 'Move this panel later') + '</span>';
+}
+function panelLockedMsg(ev) { if (ev) ev.stopPropagation(); showError('This panel is locked. Unlock it first to move or delete it.'); }
+function panelStaleNoteHtml() {
+  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">The panels around this were moved, so this was written to lead into a different panel. Regenerate it to match, or regenerate the narrative.</div>';
+}
+function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN_KEY) === '1'; } catch (e) { return false; } }
+// A small dialog in the look of uiConfirm, with an optional "Don't show this message again" box. Resolves { ok, quiet }.
+function _pmAsk(title, lines, okText, danger, offerQuiet) {
+  return new Promise(function (resolve) {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var bx = document.createElement('div');
+    bx.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div'); h.textContent = title; h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    var ul = document.createElement('ul'); ul.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin:0 0 14px;padding-left:20px;';
+    lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; li.style.marginBottom = '4px'; ul.appendChild(li); });
+    var q = null;
+    if (offerQuiet) {
+      var lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;color:#e8d5a3;font-size:13px;margin-bottom:14px;cursor:pointer;';
+      q = document.createElement('input'); q.type = 'checkbox'; q.id = 'pm-quiet';
+      lab.appendChild(q); lab.appendChild(document.createTextNode('Don\u2019t show this message again')); bx.appendChild(h); bx.appendChild(ul); bx.appendChild(lab);
+    } else { bx.appendChild(h); bx.appendChild(ul); }
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var c = document.createElement('button'); c.className = 'btn btn-sm'; c.textContent = 'Cancel';
+    var o = document.createElement('button'); o.className = 'btn btn-sm ' + (danger ? 'btn-danger' : 'btn-primary'); o.textContent = okText;
+    row.appendChild(c); row.appendChild(o); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov);
+    var done = function (ok) { try { document.body.removeChild(ov); } catch (e) {} resolve({ ok: ok, quiet: !!(q && q.checked) }); };
+    c.onclick = function () { done(false); }; o.onclick = function () { done(true); };
+    ov.onclick = function (e) { if (e.target === ov) done(false); };
+    try { o.focus(); } catch (e) {}
+  });
+}
+var PANEL_MOVE_LINES = [
+  'The story text may no longer flow between panels. Regenerate the narrative, or just the affected sequences.',
+  'Pictures may no longer match the new order. Regenerate any that look wrong.',
+  'A character\u2019s change may now fall in the wrong place. Check that character\u2019s pictures.',
+  'Generate Story starts over and won\u2019t keep your changes.'
+];
+// Anything typed and not yet saved goes first, so it lands against the panels as they stand now.
+async function _pmFlushText() {
+  if (typeof narrativeSaveTimer === 'undefined' || !narrativeSaveTimer) return;
+  clearTimeout(narrativeSaveTimer); narrativeSaveTimer = null;
+  try {
+    await fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collectNarrativeState()) });
+  } catch (e) {}
+}
+function _pmAfter(r) {
+  return r.json().catch(function () { return {}; }).then(function (d) {
+    if (!r.ok || (d && d.error)) { showError((d && d.message) || 'The panels could not be changed.'); }
+    try { if (typeof wtClose === 'function') wtClose(); } catch (e) {}
+    if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+  });
+}
+var _pmBusy = false;
+async function panelMove(src, momentId, dir) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var list = _pmList(src), i = -1;
+  list.forEach(function (p, k) { if (String(p.id) === String(momentId)) i = k; });
+  if (i < 0) return;
+  var j = _pmTarget(list, i, dir); if (j < 0) return;
+  if (!_pmWarnOff()) {
+    var a = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
+    if (!a.ok) return;
+    if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
+  }
+  var order = list.map(function (p) { return p.id; });
+  var t = order[i]; order[i] = order[j]; order[j] = t;
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: order }) });
+    await _pmAfter(r);
+  } catch (e) { showError('The panels could not be changed. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+async function panelDelete(momentId) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var a = await _pmAsk('Delete this panel?', ['Its picture and its text are gone for good and can\u2019t be brought back. A copy you saved to your Archive stays there.'].concat(PANEL_MOVE_LINES), 'Delete', true, false);
+  if (!a.ok) return;
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId, { method: 'DELETE' });
+    await _pmAfter(r);
+  } catch (e) { showError('The panel could not be deleted. Please try again.'); }
+  finally { _pmBusy = false; }
 }

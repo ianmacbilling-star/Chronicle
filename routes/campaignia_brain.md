@@ -1170,6 +1170,14 @@ Where the story comes together as alternating image panels and narrative.
   coach on that box: an honest verdict and tips (**Feedback**), new versions of your words
   (**Rewrite**), and a better word (**Word**). See **10.9** for the whole coach. **1 token buys 4
   writing uses**; Word is free; members use their own tokens.
+- **Move or delete a panel** (your own version only): the **◀ × ▶** at the right of each panel's moment bar (and **▲ × ▼**
+  on each Review row). The arrows move the panel one place earlier or later, taking its picture, its text (the moment and
+  the bridge after it), its Directions, its outline, its characters and assets and any character change with it. **×**
+  deletes the panel and its text for good, after asking. The title picture always stays first. A **locked** panel can't be
+  moved or deleted and keeps its place (unlock it first); arrows beside it jump over it. Moving asks first (you can tick
+  **Don't show this message again**) because things can fall out of step: the text may not flow between panels any more
+  (a bridge written for a different next panel says so; **Regen** it, or regenerate the narrative), pictures may not match
+  the new order, a character change may land in the wrong place, and **Generate Story** starts over without your changes.
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
 you already have — your own drawing, a photo, a painting — onto that panel instead of one Campaignia
