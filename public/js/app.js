@@ -40753,7 +40753,7 @@ function panelMoveControls(src, i) {
     return can ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();panelMove(\'' + src + '\',' + p.id + ',' + dir + ')">' + sym + '</button>'
                : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
   };
-  return '<span class="pm-ctl" style="display:inline-flex;gap:4px;margin-left:auto;">' +
+  return '<span class="pm-ctl" data-pm-src="' + src + '" data-pm-i="' + i + '" style="display:inline-flex;gap:4px;margin-left:auto;">' +   // v3.4.34 -- what a drag starting on this bar moves
     btn(-1, back, a >= 0, src === 'review' ? 'Move this panel up' : 'Move this panel earlier') +
     '<button type="button" style="' + bs + '" title="Delete this panel" onclick="event.stopPropagation();panelDelete(' + p.id + ')">&times;</button>' +
     btn(1, fwd, b >= 0, src === 'review' ? 'Move this panel down' : 'Move this panel later') + '</span>';
@@ -40844,3 +40844,97 @@ async function panelDelete(momentId) {
   } catch (e) { showError('The panel could not be deleted. Please try again.'); }
   finally { _pmBusy = false; }
 }
+// =====================================================================================================
+// v3.4.34 -- TD-1107. DRAG AND DROP. Drag a panel by its moment bar (Story panels) or its row's top line (Review) and drop
+// it on another panel: it takes that panel's place and the panels between shift along. Locked panels and the title keep
+// their places -- nothing can be dragged from them or dropped on them, and the shifting goes around them. The same warning
+// (unless silenced) and the same server call as the arrows. The arrows stay: they work on phones, where dragging does not.
+// =====================================================================================================
+// The new order for moving the panel at i to j: only the movable places change hands, in order.
+function panelDragOrder(list, i, j) {
+  var mov = []; list.forEach(function (p, k) { if (!p.locked && p.kind !== 'establishing') mov.push(k); });
+  if (i === j || mov.indexOf(i) < 0 || mov.indexOf(j) < 0) return null;
+  var seq = mov.map(function (k) { return list[k].id; });
+  var moving = list[i].id; seq.splice(seq.indexOf(moving), 1); seq.splice(mov.indexOf(j), 0, moving);
+  var order = list.map(function (p) { return p.id; });
+  mov.forEach(function (k, n) { order[k] = seq[n]; });
+  return order;
+}
+async function panelMoveTo(src, i, j) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var order = panelDragOrder(_pmList(src), i, j); if (!order) return;
+  if (!_pmWarnOff()) {
+    var a = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
+    if (!a.ok) return;
+    if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
+  }
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: order }) });
+    await _pmAfter(r);
+  } catch (e) { showError('The panels could not be changed. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+// Which panel an element belongs to: { src, i } from its bar, its picture card, or its Review row; null for anything else.
+function _pmSpot(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  var row = el.closest('.review-panel');
+  if (row) { var c = row.querySelector('.pm-ctl'); return c ? { src: 'review', i: Number(c.getAttribute('data-pm-i')), el: row } : null; }
+  var nm = el.closest('.narrative-panel');
+  if (nm && /^narrative-moment-\d+$/.test(nm.id)) return { src: 'board', i: Number(nm.id.replace('narrative-moment-', '')), el: nm };
+  var card = el.closest('.storyboard-panel');
+  if (card && /^moment-card-\d+$/.test(card.id)) {
+    var mid = card.id.replace('moment-card-', ''), k = -1;
+    _pmList('board').forEach(function (p, n) { if (String(p.id) === mid) k = n; });
+    return k >= 0 ? { src: 'board', i: k, el: card } : null;
+  }
+  return null;
+}
+function _pmMovable(src, i) { var p = _pmList(src)[i]; return !!(p && !p.locked && p.kind !== 'establishing'); }
+var _pmDrag = null, _pmOver = null;
+function _pmMark(el) {
+  if (_pmOver && _pmOver !== el) { _pmOver.style.outline = ''; _pmOver.style.outlineOffset = ''; }
+  _pmOver = el || null;
+  if (el) { el.style.outline = '2px dashed #e8c766'; el.style.outlineOffset = '2px'; }
+}
+try {
+  // A bar becomes draggable only while pressed, so text in it and the buttons on it behave as before.
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target; if (!t || typeof t.closest !== 'function' || t.closest('button, input, textarea, select, a')) return;
+    var bar = t.closest('.narrative-block-header, .review-panel-head'); if (!bar) return;
+    var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
+    if (!_pmMovable(c.getAttribute('data-pm-src'), Number(c.getAttribute('data-pm-i')))) return;
+    bar.setAttribute('draggable', 'true'); bar.style.cursor = 'grab';
+  }, true);
+  document.addEventListener('mouseup', function () {
+    if (_pmDrag) return;
+    var all = document.querySelectorAll('.narrative-block-header[draggable], .review-panel-head[draggable]');
+    for (var k = 0; k < all.length; k++) { all[k].removeAttribute('draggable'); all[k].style.cursor = ''; }
+  }, true);
+  document.addEventListener('dragstart', function (e) {
+    var bar = e.target && e.target.closest ? e.target.closest('.narrative-block-header[draggable], .review-panel-head[draggable]') : null; if (!bar) return;
+    var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
+    _pmDrag = { src: c.getAttribute('data-pm-src'), i: Number(c.getAttribute('data-pm-i')) };
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'panel'); } catch (x) {}
+  });
+  document.addEventListener('dragover', function (e) {
+    if (!_pmDrag) return;
+    var s = _pmSpot(e.target);
+    if (!s || s.src !== _pmDrag.src || s.i === _pmDrag.i || !_pmMovable(s.src, s.i)) { _pmMark(null); return; }
+    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+    _pmMark(s.el);
+  });
+  document.addEventListener('drop', function (e) {
+    if (!_pmDrag) return;
+    var d = _pmDrag, s = _pmSpot(e.target); _pmDrag = null; _pmMark(null);
+    if (!s || s.src !== d.src || s.i === d.i || !_pmMovable(s.src, s.i)) return;
+    e.preventDefault();
+    panelMoveTo(d.src, d.i, s.i);
+  });
+  document.addEventListener('dragend', function (e) {
+    _pmDrag = null; _pmMark(null);
+    var bar = e.target && e.target.closest ? e.target.closest('[draggable]') : null;
+    if (bar && bar.classList && (bar.classList.contains('narrative-block-header') || bar.classList.contains('review-panel-head'))) { bar.removeAttribute('draggable'); bar.style.cursor = ''; }
+  });
+} catch (e) {}

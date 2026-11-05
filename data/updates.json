@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.34",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3434-drag-panels",
+        "kind": "feature",
+        "public": true,
+        "summary": "Drag story panels into a new order.",
+        "detail": "On a computer, drag a panel by its moment bar on the Story panels, or by the top of its row on the Review tab, and drop it on another panel. The arrows still work, including on phones.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.33",
     "staged_on": "2026-11-05",
     "entries": [
