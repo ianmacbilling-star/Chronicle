@@ -1783,7 +1783,7 @@ try things out** — stylings, fonts, decorations and layouts — because previe
 **faster and cheaper than running Optimize**. Settle the look here first.
 
 - **The panels follow the book**, front to back: **Cover**, **Title Page**, **Author’s Note Page**, **The Company Page**,
-  **Table of Contents**, **Body** and **Back Cover**. Open whichever you need; each holds the settings for that part of the
+  **Table of Contents**, **Body** and **Back Cover**. Open whichever you need (one is open at a time; opening another closes it); each holds the settings for that part of the
   book, and everything is saved with this version as you change it (switch versions and the panels show that version's).
   Press **Refresh preview** to see a change. **Reset layout choices** (at the foot of Body) puts every layout choice in all
   the panels back to the defaults, after asking; your title, words and pictures stay.

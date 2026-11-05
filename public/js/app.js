@@ -24703,6 +24703,15 @@ function togglePrepAcc(key){
   if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
   acc.classList.toggle('open', !isOpen);
   if(!isOpen){ try { window.localStorage.setItem(PREP_ACC_KEY, key); } catch (e) {} }   // remember the panel just OPENED
+  // v3.4.31 -- ONE PANEL AT A TIME (Ian: "auto close when you click another one. It gets too long when a bunch get open").
+  if(!isOpen) PREP_ACC_KEYS.forEach(function(k){
+    if(k===key) return;
+    var o=document.getElementById('prep-acc-'+k); if(!o) return;
+    var ob=o.querySelector('.prep-acc-body'), oh=o.querySelector('.prep-acc-head');
+    if(ob) ob.style.display='none';
+    if(oh) oh.setAttribute('aria-expanded','false');
+    o.classList.toggle('open', false);
+  });
   if(!isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open; v3.4.28 -- any panel, they all hold layout controls
 }
 // Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
@@ -39661,10 +39670,20 @@ function ibRender() {
 }
 // v3.3.80 -- the accordion panels. Open / closed is kept per panel on this computer (localStorage, wrapped: it can
 // throw or be empty); every panel starts open.
+// v3.4.31 -- ONE PANEL OPEN AT A TIME (Ian, 2026-11-05: "auto close when you click another one"). The same record is kept
+// (the shut ones), and the open panel is the first not shut; a record that was never written opens the first panel.
+// An older record with several open shows only the first of them, and settles the next time one is opened.
 var IB_ACC_KEY = 'ibAccClosed';
+function ibAccOpenNow() {
+  var raw = null; try { raw = window.localStorage.getItem(IB_ACC_KEY); } catch (e) {}
+  if (raw == null) return IB_ACC_KEYS[0];
+  var c = ibAccClosed();
+  for (var i = 0; i < IB_ACC_KEYS.length; i++) if (!c[IB_ACC_KEYS[i]]) return IB_ACC_KEYS[i];
+  return '';
+}
 function ibAccClosed() { try { var v = JSON.parse(window.localStorage.getItem(IB_ACC_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
 function ibAccHtml(key, title, body) {
-  var shut = !!ibAccClosed()[key];
+  var shut = (key !== ibAccOpenNow());   // v3.4.31 -- one open at a time
   return '<div class="prep-acc ib-acc' + (shut ? '' : ' open') + '" id="ib-acc-' + key + '">' +
     '<button class="prep-acc-head" type="button" onclick="ibAccToggle(\'' + key + '\')" aria-expanded="' + (shut ? 'false' : 'true') + '">' +
       '<span class="ib-acc-title">' + title + '<span class="ib-acc-sum" id="ib-acc-sum-' + key + '">' + escapeHtml(ibAccSummary(key)) + '</span></span>' +
@@ -39678,6 +39697,16 @@ function ibAccSet(key, open) {
   if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
   acc.classList.toggle('open', !!open);
   var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
+  // v3.4.31 -- opening one shuts every other panel, on the page and in the record.
+  if (open) IB_ACC_KEYS.forEach(function (k) {
+    if (k === key) return;
+    c[k] = 1;
+    var o = document.getElementById('ib-acc-' + k); if (!o) return;
+    var ob = o.querySelector('.prep-acc-body'), oh = o.querySelector('.prep-acc-head');
+    if (ob) ob.style.display = 'none';
+    if (oh) oh.setAttribute('aria-expanded', 'false');
+    o.classList.toggle('open', false);
+  });
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
 // v3.4.14 -- every panel of the form shut (a picture opened from the Gallery) or open (New picture), remembered as each
@@ -39685,7 +39714,8 @@ function ibAccSet(key, open) {
 var IB_ACC_KEYS = ['refs', 'type', 'shape', 'style', 'desc', 'title'];
 function ibAccAll(open) {
   var c = ibAccClosed();
-  IB_ACC_KEYS.forEach(function (k) { if (open) delete c[k]; else c[k] = 1; });
+  // v3.4.31 -- "open" (New picture) now means the first panel open and the rest shut: one at a time.
+  IB_ACC_KEYS.forEach(function (k, i) { if (open && i === 0) delete c[k]; else c[k] = 1; });
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
 function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.31",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3431-one-panel-open",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview and the Image Builder open one panel at a time.",
+        "detail": "Opening a panel closes the one that was open, so the list stays short. The panel you used last is open when you come back.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.30",
     "staged_on": "2026-11-04",
     "entries": [
