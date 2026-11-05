@@ -1577,15 +1577,16 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   min-height: 16px;
 }
 
+/* v3.4.47 -- picture 120 x 160 on the left, name row and description on its right, the description ending level
+   with the bottom of the picture (Ian). */
 .sc-card-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  align-items: stretch;
+  gap: 14px;
 }
 .sc-thumb {
-  width: 52px;
-  height: 52px;
+  width: 120px;
+  height: 160px;
   border-radius: 8px;
   object-fit: cover;
   object-position: center top;
@@ -1600,7 +1601,10 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   background: rgba(201,168,76,0.08);
   color: rgba(201,168,76,0.4);
 }
-.sc-card-id { flex: 1; }
+.sc-thumb-empty { font-size: 40px; }
+.sc-card-main { flex: 1; min-width: 0; height: 160px; display: flex; flex-direction: column; position: relative; }
+.sc-card-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.sc-card-id { flex: 1; min-width: 0; }
 .sc-card-name {
   font-family: var(--font-display);
   font-size: 15px;
@@ -1619,6 +1623,24 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   border: 1px solid rgba(201,168,76,0.15);
   border-radius: var(--radius);
   padding: 10px 12px;
+}
+/* v3.4.47 -- beside the picture: the box fills what is left of its height and the text ends in an ellipsis. */
+.sc-card-main .sc-card-prompt { flex: 1; min-height: 0; overflow: hidden; padding: 8px 12px; }
+.sc-card-prompt-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+/* the whole description, under the box, while a cut one is hovered (styled like the ?s tips) */
+@media (hover:hover) {
+  .sc-card-main.is-cut:has(.sc-card-prompt:hover)::after {
+    content: attr(data-full); position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 300;
+    white-space: pre-wrap; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.5 Georgia, serif;
+    padding: 10px 13px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
+  }
+}
+/* phones: the picture on top and the whole description, uncut */
+@media (max-width: 640px) {
+  .sc-card-head { flex-direction: column; }
+  .sc-card-main { height: auto; }
+  .sc-card-main .sc-card-prompt { overflow: visible; }
+  .sc-card-prompt-text { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
 }
 
 /* Phase 3 — hide DM-only UI elements when the current user is a player.

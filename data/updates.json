@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.47",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3447-session-character-cards",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Bigger character pictures on a session's Characters tab, with the description beside them.",
+        "detail": "Each character's picture is larger, and the name and description sit to its right. A long description is cut to fit beside the picture; hover over it to read it all. On a phone the picture sits on top with the whole description below.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.46",
     "staged_on": "2026-11-05",
     "entries": [

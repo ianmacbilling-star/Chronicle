@@ -4428,19 +4428,28 @@ function renderSessionCharacters(rows) {
       editBtn = '<button class="btn btn-sm sc-edit-btn" onclick="openChangeReview(' + r.character_id + ')">' + editLabel + '</button>';
     }
 
+    // v3.4.47 -- (Ian, 2026-11-05: "Make the character pictures bigger and put the text beside the characters... if the
+    // text is too long then put a ... on the end of it with a hover over"; "the description should NOT run longer than the
+    // picture is tall"). Picture 120 x 160 on the left; on its right the name row, then the description, which ends level
+    // with the picture and is cut with an ellipsis. Hovering a cut description shows it whole (scPromptTip).
+    var _fullAttr = String(r.prompt || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
       '<div class="sc-card-head">' +
         thumb +
-        '<div class="sc-card-id">' +
-          '<div class="sc-card-name">' + r.name +
-            (isNpc ? ' <span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') + '</div>' +
-          '<div class="sc-card-cls">' + (r.cls || '') + '</div>' +
+        '<div class="sc-card-main" data-full="' + _fullAttr + '">' +
+          '<div class="sc-card-top">' +
+            '<div class="sc-card-id">' +
+              '<div class="sc-card-name">' + r.name +
+                (isNpc ? ' <span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') + '</div>' +
+              '<div class="sc-card-cls">' + (r.cls || '') + '</div>' +
+            '</div>' +
+            editBtn +
+          '</div>' +
+          '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '" onmouseenter="scPromptTip(this)">' +
+            '<div class="sc-card-prompt-text">' + (r.prompt || '') + '</div></div>' +
         '</div>' +
-        editBtn +
       '</div>' +
       changeBadge +
-      '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '">' +
-        (r.prompt || '') + '</div>' +
       '<div class="sc-style-strip" id="sc-style-strip-' + r.character_id + '">' +
         scStyleStripHtml(r) + '</div>' +
     '</div>';
@@ -41260,4 +41269,22 @@ async function _regenCastDropsOk(transcript) {
     '\n\nTo keep them, add ' + (one ? 'their name' : 'their names') + ' to the Story or the notes first. ' +
     'You can also add them back afterwards with Add A Character.',
     { title: 'Characters will leave this session', preserveLines: true, okText: 'Generate anyway', cancelText: 'Cancel' });
+}
+
+// =================================================================================================
+// v3.4.47 -- Session Characters tab cards: a cut description shows whole on hover. Measured AT HOVER (the tab may
+// have been hidden when the cards were drawn, when nothing can be measured), and the pop-up is the card's own
+// ::after (style.css .sc-card-main.is-cut), so nothing is added to the page. APPENDED (TD-853); declared nowhere else.
+// =================================================================================================
+function scPromptTip(box) {
+  var t = box && box.querySelector('.sc-card-prompt-text');
+  var main = box && box.parentNode;
+  if (!t || !main) return;
+  // line-clamp makes scrollHeight report the clamped height, so measure the text unclamped for a moment (no paint between).
+  var shown = Math.min(t.clientHeight, box.clientHeight);
+  t.style.display = 'block'; t.style.webkitLineClamp = 'unset'; t.style.overflow = 'visible';
+  var full = t.scrollHeight;
+  t.style.display = ''; t.style.webkitLineClamp = ''; t.style.overflow = '';
+  var cut = full > shown + 1;
+  if (cut) main.classList.add('is-cut'); else main.classList.remove('is-cut');
 }
