@@ -67,29 +67,7 @@ function _panelErr(res, e) {
   console.error('[panels] ' + ((e && e.stack) || e));
   return res.status(500).json({ error: 'FAILED', message: 'The panels could not be changed. Nothing was changed; please try again.' });
 }
-router.post('/reorder', requireAuth, verifyCampaignMember, async function(req, res) {
-  const order = (req.body && Array.isArray(req.body.order)) ? req.body.order : null;
-  if (!order || !order.length) return res.status(400).json({ error: 'BAD_ORDER', message: 'No order was sent.' });
-  const db = await getDb();
-  const own = await _ownForkOf(db, order[0], req.params.sessionId, req.session.userId);
-  if (own.error) return res.status(own.status).json({ error: own.error });
-  try {
-    const out = await panelOrder.applyPanels(db, { forkId: own.forkId, sessionId: req.params.sessionId, order: order });
-    res.json({ success: true, order: out.order });
-  } catch (e) { return _panelErr(res, e); }
-});
-// v3.4.35 -- TD-1107. Move (swap) or empty a bridge on your own version. { anchor: any panel id of the version, op, a, b }.
-router.post('/bridges', requireAuth, verifyCampaignMember, async function(req, res) {
-  const b = req.body || {};
-  if (b.anchor == null) return res.status(400).json({ error: 'BAD_ORDER', message: 'No panel was named.' });
-  const db = await getDb();
-  const own = await _ownForkOf(db, b.anchor, req.params.sessionId, req.session.userId);
-  if (own.error) return res.status(own.status).json({ error: own.error });
-  try {
-    await panelOrder.applyBridges(db, { forkId: own.forkId, sessionId: req.params.sessionId, op: b.op, a: b.a, b: b.b });
-    res.json({ success: true });
-  } catch (e) { return _panelErr(res, e); }
-});
+// v3.4.39 -- the v3.4.32 /reorder and v3.4.35 /bridges routes are gone: every move goes through /arrange below.
 // v3.4.36 -- TD-1107, FREE ORDER (claude/FREE_ORDER_STORY_SPEC.md). On your own version: the whole page order after
 // the title { anchor, items: [{t:'p', id}, {t:'b', id}, ...] }, or one bridge to delete { anchor, deleteBridge }.
 router.post('/arrange', requireAuth, verifyCampaignMember, async function(req, res) {

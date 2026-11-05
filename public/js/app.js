@@ -40781,51 +40781,16 @@ async function ibDelete(id) {
     .catch(function () { showError('Connection error. Please try again.'); });
 }
 // =====================================================================================================
-// v3.4.33 -- TD-1107. MOVE AND DELETE STORY PANELS (the server side is services/panelOrder.js, v3.4.32).
-// Ian, 2026-11-05: arrows with an x between them on each panel's moment bar on the Story panels, and on each Review row;
-// a warning on moving that lists what can go out of step, with "Don't show this message again"; delete always asks, and
-// cannot be undone. Only on your own version. The title picture stays first; a locked panel can be neither moved nor
-// deleted and keeps its place, so an arrow beside one jumps over it. After any change the session reloads (both views).
+// v3.4.33 -- TD-1107. WHAT THE PANEL MOVES SHARE (v3.4.39: the v3.4.33-35 moves -- pictures-only arrows, the
+// bridge swap, the old drag -- are gone; the page now moves pictures and bridges freely, see v3.4.37 below).
+// The move warning with "Don't show this message again", the delete of a picture (always asks; cannot be undone),
+// saving typed text first, reloading both views after a change, and a bridge's out-of-place note.
 // =====================================================================================================
 var PANEL_MOVE_WARN_KEY = 'campaignia.panelMoveWarnOff';
-function _pmList(src) {
-  if (src === 'review') return ((state.reviewData && state.reviewData.panels) || []).map(function (p) { return { id: p.moment_id, kind: p.kind, locked: !!p.locked }; });
-  return (state.moments || []).map(function (m) { return { id: m.id, kind: m.kind, locked: !!m.locked }; });
-}
-// Where a panel at i goes for one step in dir (-1 / +1): the nearest unlocked panel that way, never the title; -1 if none.
-function _pmTarget(list, i, dir) {
-  var j = i + dir;
-  while (j >= 0 && j < list.length && list[j].locked) j += dir;
-  if (j < 0 || j >= list.length || list[j].kind === 'establishing') return -1;
-  return j;
-}
-function panelMoveControls(src, i) {
-  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
-  var list = _pmList(src), p = list[i];
-  if (!p || p.kind === 'establishing') return '';
-  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
-  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
-  var off = 'opacity:0.35;cursor:default;';
-  if (p.locked) {
-    var lk = ' onclick="panelLockedMsg(event)" title="Unlock this panel first." style="' + bs + off + '"';
-    return '<span class="pm-ctl" style="display:inline-flex;gap:4px;margin-left:auto;">' + '<button type="button"' + lk + '>' + back + '</button><button type="button"' + lk + '>&times;</button><button type="button"' + lk + '>' + fwd + '</button></span>';
-  }
-  var a = _pmTarget(list, i, -1), b = _pmTarget(list, i, 1);
-  var btn = function (dir, sym, can, tip) {
-    return can ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();panelMove(\'' + src + '\',' + p.id + ',' + dir + ')">' + sym + '</button>'
-               : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
-  };
-  return '<span class="pm-ctl" data-pm-src="' + src + '" data-pm-i="' + i + '" style="display:inline-flex;gap:4px;margin-left:auto;">' +   // v3.4.34 -- what a drag starting on this bar moves
-    btn(-1, back, a >= 0, src === 'review' ? 'Move this panel up' : 'Move this panel earlier') +
-    '<button type="button" style="' + bs + '" title="Delete this panel" onclick="event.stopPropagation();panelDelete(' + p.id + ')">&times;</button>' +
-    btn(1, fwd, b >= 0, src === 'review' ? 'Move this panel down' : 'Move this panel later') + pmGrip('panel') + '</span>';   // v3.4.35
-}
-function panelLockedMsg(ev) { if (ev) ev.stopPropagation(); showError('This panel is locked. Unlock it first to move or delete it.'); }
 function panelStaleNoteHtml() {
   return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">This bridge now sits between different panels from the ones it was written for. Regenerate it to match, or regenerate the narrative.</div>';
 }
 function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN_KEY) === '1'; } catch (e) { return false; } }
-// A small dialog in the look of uiConfirm, with an optional "Don't show this message again" box. Resolves { ok, quiet }.
 function _pmAsk(title, lines, okText, danger, offerQuiet) {
   return new Promise(function (resolve) {
     var ov = document.createElement('div');
@@ -40857,7 +40822,6 @@ var PANEL_MOVE_LINES = [
   'A character\u2019s change may now fall in the wrong place. Check that character\u2019s pictures.',
   'Generate Story starts over and won\u2019t keep your changes.'
 ];
-// Anything typed and not yet saved goes first, so it lands against the panels as they stand now.
 async function _pmFlushText() {
   if (typeof narrativeSaveTimer === 'undefined' || !narrativeSaveTimer) return;
   clearTimeout(narrativeSaveTimer); narrativeSaveTimer = null;
@@ -40873,27 +40837,6 @@ function _pmAfter(r) {
   });
 }
 var _pmBusy = false;
-async function panelMove(src, momentId, dir) {
-  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
-  var list = _pmList(src), i = -1;
-  list.forEach(function (p, k) { if (String(p.id) === String(momentId)) i = k; });
-  if (i < 0) return;
-  var j = _pmTarget(list, i, dir); if (j < 0) return;
-  if (!_pmWarnOff()) {
-    var a = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
-    if (!a.ok) return;
-    if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
-  }
-  var order = list.map(function (p) { return p.id; });
-  var t = order[i]; order[i] = order[j]; order[j] = t;
-  _pmBusy = true;
-  try {
-    await _pmFlushText();
-    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: order }) });
-    await _pmAfter(r);
-  } catch (e) { showError('The panels could not be changed. Please try again.'); }
-  finally { _pmBusy = false; }
-}
 async function panelDelete(momentId) {
   if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
   var a = await _pmAsk('Delete this panel?', ['Its picture and its text are gone for good and can\u2019t be brought back. A copy you saved to your Archive stays there.'].concat(PANEL_MOVE_LINES), 'Delete', true, false);
@@ -40906,176 +40849,12 @@ async function panelDelete(momentId) {
   } catch (e) { showError('The panel could not be deleted. Please try again.'); }
   finally { _pmBusy = false; }
 }
-// =====================================================================================================
-// v3.4.34 -- TD-1107. DRAG AND DROP. Drag a panel by its moment bar (Story panels) or its row's top line (Review) and drop
-// it on another panel: it takes that panel's place and the panels between shift along. Locked panels and the title keep
-// their places -- nothing can be dragged from them or dropped on them, and the shifting goes around them. The same warning
-// (unless silenced) and the same server call as the arrows. The arrows stay: they work on phones, where dragging does not.
-// =====================================================================================================
-// The new order for moving the panel at i to j: only the movable places change hands, in order.
-function panelDragOrder(list, i, j) {
-  var mov = []; list.forEach(function (p, k) { if (!p.locked && p.kind !== 'establishing') mov.push(k); });
-  if (i === j || mov.indexOf(i) < 0 || mov.indexOf(j) < 0) return null;
-  var seq = mov.map(function (k) { return list[k].id; });
-  var moving = list[i].id; seq.splice(seq.indexOf(moving), 1); seq.splice(mov.indexOf(j), 0, moving);
-  var order = list.map(function (p) { return p.id; });
-  mov.forEach(function (k, n) { order[k] = seq[n]; });
-  return order;
-}
-async function panelMoveTo(src, i, j) {
-  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
-  var order = panelDragOrder(_pmList(src), i, j); if (!order) return;
-  if (!_pmWarnOff()) {
-    var a = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
-    if (!a.ok) return;
-    if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
-  }
-  _pmBusy = true;
-  try {
-    await _pmFlushText();
-    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: order }) });
-    await _pmAfter(r);
-  } catch (e) { showError('The panels could not be changed. Please try again.'); }
-  finally { _pmBusy = false; }
-}
-// Which panel an element belongs to: { src, i } from its bar, its picture card, or its Review row; null for anything else.
-function _pmSpot(el) {
-  if (!el || typeof el.closest !== 'function') return null;
-  var row = el.closest('.review-panel');
-  if (row) { var c = row.querySelector('.pm-ctl'); return c ? { src: 'review', i: Number(c.getAttribute('data-pm-i')), el: row } : null; }
-  var nm = el.closest('.narrative-panel');
-  if (nm && /^narrative-moment-\d+$/.test(nm.id)) return { src: 'board', i: Number(nm.id.replace('narrative-moment-', '')), el: nm };
-  var card = el.closest('.storyboard-panel');
-  if (card && /^moment-card-\d+$/.test(card.id)) {
-    var mid = card.id.replace('moment-card-', ''), k = -1;
-    _pmList('board').forEach(function (p, n) { if (String(p.id) === mid) k = n; });
-    return k >= 0 ? { src: 'board', i: k, el: card } : null;
-  }
-  return null;
-}
-function _pmMovable(src, i) { var p = _pmList(src)[i]; return !!(p && !p.locked && p.kind !== 'establishing'); }
-var _pmDrag = null, _pmOver = null;
-function _pmMark(el) {
-  if (_pmOver && _pmOver !== el) { _pmOver.style.outline = ''; _pmOver.style.outlineOffset = ''; }
-  _pmOver = el || null;
-  if (el) { el.style.outline = '2px dashed #e8c766'; el.style.outlineOffset = '2px'; }
-}
-try {
-  // A bar becomes draggable only while pressed, so text in it and the buttons on it behave as before.
-  document.addEventListener('mousedown', function (e) {
-    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.pm-grip')) return;   // v3.4.35 -- only the gripper starts a drag
-    try { var sel = window.getSelection && window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (x) {}   // else the browser drags the selected text instead
-    var bar = t.closest('.narrative-block-header, .review-panel-head, .review-nar-head'); if (!bar) return;   // v3.4.35 -- bridge rows too
-    var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
-    if (c.getAttribute('data-pm-kind') !== 'bridge' && !_pmMovable(c.getAttribute('data-pm-src'), Number(c.getAttribute('data-pm-i')))) return;
-    bar.setAttribute('draggable', 'true'); bar.style.cursor = 'grab';
-  }, true);
-  document.addEventListener('mouseup', function () {
-    if (_pmDrag) return;
-    var all = document.querySelectorAll('.narrative-block-header[draggable], .review-panel-head[draggable], .review-nar-head[draggable]');
-    for (var k = 0; k < all.length; k++) { all[k].removeAttribute('draggable'); all[k].style.cursor = ''; }
-  }, true);
-  document.addEventListener('dragstart', function (e) {
-    var bar = e.target && e.target.closest ? e.target.closest('.narrative-block-header[draggable], .review-panel-head[draggable], .review-nar-head[draggable]') : null; if (!bar) return;
-    var c = bar.querySelector('.pm-ctl[data-pm-src]'); if (!c) return;
-    _pmDrag = { kind: c.getAttribute('data-pm-kind') || 'panel', src: c.getAttribute('data-pm-src'), i: Number(c.getAttribute('data-pm-i')) };
-    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'panel'); } catch (x) {}
-  });
-  document.addEventListener('dragover', function (e) {
-    if (!_pmDrag) return;
-    var s = _pmSpotAny(e.target);
-    if (!_pmDropOk(_pmDrag, s)) { _pmMark(null); return; }
-    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
-    _pmMark(s.el);
-  });
-  document.addEventListener('drop', function (e) {
-    if (!_pmDrag) return;
-    var d = _pmDrag, s = _pmSpotAny(e.target); _pmDrag = null; _pmMark(null);
-    if (!_pmDropOk(d, s)) return;
-    e.preventDefault();
-    if (d.kind === 'bridge') bridgeSwap(d.src, d.i, s.i); else panelMoveTo(d.src, d.i, s.i);   // v3.4.35
-  });
-  document.addEventListener('dragend', function (e) {
-    _pmDrag = null; _pmMark(null);
-    var bar = e.target && e.target.closest ? e.target.closest('[draggable]') : null;
-    if (bar && bar.classList && (bar.classList.contains('narrative-block-header') || bar.classList.contains('review-panel-head') || bar.classList.contains('review-nar-head'))) { bar.removeAttribute('draggable'); bar.style.cursor = ''; }
-  });
-} catch (e) {}
-// =====================================================================================================
-// v3.4.35 -- TD-1107. BRIDGES: THEIR LABEL, AND MOVING OR EMPTYING ONE ON ITS OWN. Panels no longer take their bridges
-// along (services/panelOrder.js); a bridge moves only by its own arrows or a drag onto another bridge, which swaps the two.
-// Its x empties it (after asking); the gap stays, for a Regen. Labels: "Bridge 4: <panel title> -> <panel title>".
-// =====================================================================================================
 function _bridgeTitle(m, n) {
   var t = String((m && m.title) || '').trim();
   if (!t) return n ? ('Panel ' + n) : 'Opening';
   if (t.length <= 30) return t;
   var cut = t.slice(0, 31).replace(/\s+\S*$/, '');   // at a word break, where there is one
   return (cut.length >= 12 ? cut : t.slice(0, 29)) + '\u2026';
-}
-// v3.4.35 -- THE GRIPPER (Ian: "add a small Gripper button next to the far right arrow... so there is no accidental dragging").
-// A drag starts only from here; the rest of the bar no longer drags.
-function pmGrip(kind) {
-  return '<span class="pm-grip" title="Drag to move this ' + kind + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:#c9a84c;cursor:grab;user-select:none;">\u283F</span>';
-}
-function bridgeLabel(num, a, b, na, nb) { return 'Bridge ' + num + ': ' + _bridgeTitle(a, na) + ' \u2192 ' + _bridgeTitle(b, nb); }
-// The bridges a version shows: after each panel that is not the title, except the last.
-function _bridgeShown(list, g) { return g >= 0 && g < list.length - 1 && !!list[g] && list[g].kind !== 'establishing'; }
-function bridgeMoveControls(src, g) {
-  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
-  var list = _pmList(src); if (!_bridgeShown(list, g)) return '';
-  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
-  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
-  var off = 'opacity:0.35;cursor:default;';
-  var btn = function (dir, sym, tip) {
-    return _bridgeShown(list, g + dir) ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();bridgeSwap(\'' + src + '\',' + g + ',' + (g + dir) + ')">' + sym + '</button>'
-      : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
-  };
-  return '<span class="pm-ctl" data-pm-kind="bridge" data-pm-src="' + src + '" data-pm-i="' + g + '" style="display:inline-flex;gap:4px;margin-left:auto;">' +
-    btn(-1, back, 'Swap with the bridge before') +
-    '<button type="button" style="' + bs + '" title="Empty this bridge" onclick="event.stopPropagation();bridgeClear(\'' + src + '\',' + g + ')">&times;</button>' +
-    btn(1, fwd, 'Swap with the bridge after') + pmGrip('bridge') + '</span>';
-}
-// Where a drag is over: a bridge (its Story box or Review row) or a panel (as before).
-function _pmSpotAny(el) {
-  if (!el || typeof el.closest !== 'function') return null;
-  var nb = el.closest('.narrative-panel');
-  if (nb && /^narrative-between-\d+$/.test(nb.id)) return { kind: 'bridge', src: 'board', i: Number(nb.id.replace('narrative-between-', '')), el: nb };
-  var rb = el.closest('.review-nar');
-  var c = rb ? rb.querySelector('.pm-ctl[data-pm-kind="bridge"]') : null;
-  if (c) return { kind: 'bridge', src: 'review', i: Number(c.getAttribute('data-pm-i')), el: rb };
-  var s = _pmSpot(el); if (s) s.kind = 'panel';
-  return s;
-}
-function _pmDropOk(d, s) {
-  if (!d || !s || (d.kind || 'panel') !== s.kind || s.src !== d.src || s.i === d.i) return false;
-  return s.kind === 'bridge' ? _bridgeShown(_pmList(s.src), s.i) : _pmMovable(s.src, s.i);
-}
-async function _bridgeSend(body) {
-  _pmBusy = true;
-  try {
-    await _pmFlushText();
-    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/bridges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    await _pmAfter(r);
-  } catch (e) { showError('The bridge could not be changed. Please try again.'); }
-  finally { _pmBusy = false; }
-}
-async function bridgeSwap(src, a, b) {
-  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
-  var list = _pmList(src); if (!_bridgeShown(list, a) || !_bridgeShown(list, b) || a === b || !list.length) return;
-  if (!_pmWarnOff()) {
-    var w = await _pmAsk('Moving panels changes your story\u2019s order.', PANEL_MOVE_LINES, 'Move', false, true);
-    if (!w.ok) return;
-    if (w.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
-  }
-  await _bridgeSend({ anchor: list[0].id, op: 'swap', a: a, b: b });
-}
-async function bridgeClear(src, g) {
-  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
-  var list = _pmList(src); if (!_bridgeShown(list, g) || !list.length) return;
-  var w = await _pmAsk('Empty this bridge?', ['Its text is removed, so the panels on either side run straight on from one to the next.', 'The gap stays: Regen writes a new bridge for it whenever you like.'], 'Empty it', true, false);
-  if (!w.ok) return;
-  await _bridgeSend({ anchor: list[0].id, op: 'clear', a: g });
 }
 // =====================================================================================================
 // v3.4.37 -- TD-1107. FREE ORDER ON THE PAGE (claude/FREE_ORDER_STORY_SPEC.md). Ian, 2026-11-05: "A user should be able

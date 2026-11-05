@@ -359,7 +359,7 @@ function stripLead(ctx, items, drop) {
   return items;
 }
 
-// Move pictures (order) or delete one (deleteId). A deleted picture's bridges stay where they sat on the page, after
+// Delete a picture (deleteId; the DELETE route), or reorder pictures with bridges kept in their gaps (order; tests only). A deleted picture's bridges stay where they sat on the page, after
 // the picture before it.
 async function applyPanels(db, opts) {
   return applyLayout(db, opts, function (ctx) {
@@ -370,29 +370,6 @@ async function applyPanels(db, opts) {
       return { items: items, deleteId: opts.deleteId, dropBridges: drop };
     }
     return { items: itemsKeepingGaps(ctx, plan.newIds) };
-  });
-}
-
-// v3.4.35 pages: swap the bridges of two gaps, or empty one gap. A gap is one the page shows: after a picture that is
-// not the title, up to the last but one.
-async function applyBridges(db, opts) {
-  return applyLayout(db, opts, function (ctx) {
-    const n = ctx.moments.length;
-    const shown = function (g) { return Number.isInteger(g) && g >= 0 && g < n - 1 && !isTitle(ctx.moments[g]); };
-    const a = Number(opts.a), b = (opts.op === 'swap') ? Number(opts.b) : null;
-    if (!shown(a) || (opts.op === 'swap' && (!shown(b) || a === b)) || (opts.op !== 'swap' && opts.op !== 'clear')) throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
-    if (!ctx.norm) throw fail('NO_TEXT', 'There is no narrative text here yet.', 409);
-    const order = ctx.moments.map(function (m) { return Number(m.id); });
-    const gaps = ctx.norm.map(function (blk) { return blk.bridges.map(function (x) { return x.id; }); });
-    const drop = {};
-    if (opts.op === 'swap') { const t = gaps[a]; gaps[a] = gaps[b]; gaps[b] = t; }
-    else { gaps[a].forEach(function (id) { drop[id] = true; }); gaps[a] = []; }
-    const items = [];
-    order.forEach(function (id, i) {
-      if (!(i === 0 && ctx.head)) items.push({ t: 'p', id: id });
-      gaps[i].forEach(function (x) { items.push({ t: 'b', id: x }); });
-    });
-    return { items: items, dropBridges: drop };
   });
 }
 
@@ -477,6 +454,6 @@ async function ensureIds(db, forkId) {
   return !!(r && r.changes);
 }
 
-module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, applyArrange, liftKeys, pruneKeys, gapView, readNorm, ensureIds,
+module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyArrange, liftKeys, pruneKeys, gapView, readNorm, ensureIds,
 
   normBlocks, mergeSave, fromGenerated, flatten, derive, parseJson, TITLE_BRIDGES };

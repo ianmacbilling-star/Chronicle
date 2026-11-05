@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.39",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3439-move-cleanup",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Clean-up: the older panel-move code is gone.",
+        "detail": "The routes and page code from the first designs of panel moving (v3.4.32-35: pictures-only arrows, swapping bridges, the first drag) are removed. Every move now goes through one route; nothing a user sees changes.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.38",
     "staged_on": "2026-11-05",
     "entries": [
