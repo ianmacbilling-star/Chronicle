@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.41",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3441-tester-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Small fixes from testing: the Company page, the cover warning, Help, and two warnings for rearranged stories.",
+        "detail": "Include Sup. Characters / NPCs now hides with the character page. When both your cover picture’s title and subtitle differ from the book’s, both are said at once. Help tries once more by itself before saying it could not answer. Regenerate Narrative asks first on a rearranged story, and Regen says Use this replaces the whole box.",
+        "td": [
+          "TD-1104", "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.40",
     "staged_on": "2026-11-05",
     "entries": [

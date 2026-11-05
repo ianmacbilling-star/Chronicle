@@ -5945,9 +5945,14 @@ function submitHelp() {
   renderHelpThread();
   var body = { messages: _helpThread.slice(-12), current_view_id: _helpCurrentViewId(), ai_done_sent: _helpAiDoneSent };
   if (state && state.currentCampaign && state.currentCampaign.id) body.current_campaign_id = state.currentCampaign.id;
+  // v3.4.41 -- ONE QUIET RETRY. Erin, 2026-11-05: "Could not answer that right now", then the same question answered on
+  // the next press. A failed call (no answer, nothing said why, or the line dropped) is tried once more after a moment
+  // before the red line shows. A reason the server gives (asking too fast, not set up) is shown at once.
+  var _helpSend = function (attempt) {
   fetch('/api/help/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
+      if (attempt === 0 && !(data && data.ok && data.answer) && (!data || !data.error || /^Could not answer that right now/.test(String(data.error)))) { setTimeout(function () { _helpSend(1); }, 1500); return; }
       _helpPending = false;
       if (btn) btn.disabled = false;
       if (data && data.ok && data.answer) {
@@ -5962,6 +5967,7 @@ function submitHelp() {
       renderHelpThread();
     })
     .catch(function(){
+      if (attempt === 0) { setTimeout(function () { _helpSend(1); }, 1500); return; }   // v3.4.41
       _helpPending = false;
       if (btn) btn.disabled = false;
       _helpThread.pop();
@@ -5969,6 +5975,8 @@ function submitHelp() {
       _helpError = 'Could not answer that right now - try again?';
       renderHelpThread();
     });
+  };
+  _helpSend(0);
 }
 
 function openNarrDirection(gapKey, label) {
@@ -7471,6 +7479,7 @@ function ensureGenFree() {
 function generateNarrativeAndImages() {
   if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025
   if (!ensureGenFree()) return;
+  if (fxRegenAsk(generateNarrativeAndImages)) return;   // v3.4.41 -- TD-1107: rearranged bridges go back to one per gap
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
   state._writtenLenOk = false;
@@ -7618,6 +7627,7 @@ function cancelNarr() {
 // confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  if (fxRegenAsk(generateNarrativeOnly)) return;   // v3.4.41 -- TD-1107: rearranged bridges go back to one per gap
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeOnly(); } }); return; }
   if (!state._sbSummaryAsked && state._sbSummaryEdited) {
@@ -19902,7 +19912,7 @@ function wtStalePaint() {
 }
 function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
-  if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
+  if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction. <b>Use this</b> replaces all of this box\u2019s text, including anything you added.</p>' +   // v3.4.41 -- TD-1107
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
   if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">Big-picture feedback on your whole story: what it reads as (notes, a game transcript or a written story; one chapter or the whole thing), ' +
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
@@ -24832,7 +24842,7 @@ function prepSyncCastNpc(){
   // v3.4.26 -- TD-1102. With the Company picture the NPC and Character pictures choices do not apply: hidden, values kept.
   var _cm = document.getElementById('pcl-castmode'), _pic = !!(_cm && _cm.value === 'image') && !!(ck ? ck.checked : true);
   var _cpl = document.getElementById('pcl-castpic-label'); if (_cpl && _pic) _cpl.style.display = 'none';
-  if (cnl) cnl.style.display = _pic ? 'none' : '';
+  if (cnl) cnl.style.display = (_pic || !(ck ? ck.checked : true)) ? 'none' : '';   // v3.4.41 -- and hidden with the page off, like the rest (Erin)
   // v3.4.29 -- Ian: "If they pick character line up... grey out the company archive picture option." Dimmed and not clickable
   // on the line-up; a picture already chosen stays on the tile, so choosing Archived picture again brings it back.
   var _ct = document.getElementById('prep-company-tile');
@@ -24959,12 +24969,15 @@ function prepCoverWordsCheck() {
     .catch(function () {});
 }
 function prepWordsKey(s) { return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''); }
+// v3.4.41 -- both at once when both differ (Erin: "a person tidying up a cover will think they are done... then get a
+// second warning they could have been told about at the same time").
 function prepCoverWordsMsg(w, title, sub) {
   if (!w || !w.title) return '';
-  if (prepWordsKey(w.title) !== prepWordsKey(title)) return 'Your cover picture says \u201c' + w.title + '\u201d, but your title is \u201c' + title + '\u201d.';
+  var out = [];
+  if (prepWordsKey(w.title) !== prepWordsKey(title)) out.push('Your cover picture says \u201c' + w.title + '\u201d, but your title is \u201c' + title + '\u201d.');
   if (w.subtitle && prepWordsKey(w.subtitle) !== prepWordsKey(sub))
-    return 'Your cover picture\u2019s subtitle says \u201c' + w.subtitle + '\u201d, but ' + (String(sub || '').trim() ? 'your subtitle is \u201c' + sub + '\u201d.' : 'your book has no subtitle.');
-  return '';
+    out.push('Your cover picture\u2019s subtitle says \u201c' + w.subtitle + '\u201d, but ' + (String(sub || '').trim() ? 'your subtitle is \u201c' + sub + '\u201d.' : 'your book has no subtitle.'));
+  return out.join(' ');
 }
 function prepCoverWordsPaint() {
   var el = document.getElementById('pcl-ownTitle-words'); if (!el) return;
@@ -40909,6 +40922,30 @@ function fxNums(src) {
   return out;
 }
 function fxRowLabel(num, word) { return num + ' \u2013 ' + word; }
+// v3.4.41 -- TD-1107. Before Regenerate Narrative on a rearranged story, say what happens to the bridges. Asked only when
+// the bridges are not already one per gap (a gap with none or several, one after the title, or one out of place), so a
+// story nobody rearranged is not asked. true: asked, and the run goes on (calling again) only on yes.
+function fxRegenIrregular() {
+  var secs = (state.narrativeData && state.narrativeData.sections) || [], ms = state.moments || [];
+  if (!secs.some(function (s) { return s && Array.isArray(s.bridges); })) return false;
+  return ms.some(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {}, br = Array.isArray(s.bridges) ? s.bridges : [];
+    var nx = ms[i + 1] ? ms[i + 1].id : null;
+    if (m.kind === 'establishing') return br.length > 0;
+    if (i < ms.length - 1 && br.length !== 1) return true;
+    if (br.length > 1) return true;
+    return br.some(function (b) { return fxBridgeStale(b, m.id, nx); });
+  });
+}
+function fxRegenAsk(again) {
+  if (state._fxRegenOk) { state._fxRegenOk = false; return false; }
+  if (!fxRegenIrregular()) return false;
+  uiConfirm('Regenerate Narrative rewrites all the text in your current picture order. The bridges go back to one between each pair of pictures: extra bridges, and any right after the title, are removed.',
+            { okText: 'Regenerate', cancelText: 'Cancel' })
+    .then(function (ok) { if (ok === true) { state._fxRegenOk = true; again(); } });
+  return true;
+}
+
 function fxOk(items, src) { var ps = fxPics(src); return !items.length || items[0].t === 'p' || (FX_TITLE_BRIDGES && !!ps.length && ps[0].kind === 'establishing'); }
 function fxSame(a, b) { return a.length === b.length && a.every(function (x, n) { return x.t === b[n].t && String(x.id) === String(b[n].id); }); }
 function fxIndex(flat, t, id) { var k = -1; flat.forEach(function (it, n) { if (it.t === t && String(it.id) === String(id)) k = n; }); return k; }

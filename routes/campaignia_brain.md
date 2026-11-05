@@ -1185,7 +1185,7 @@ Where the story comes together as alternating image panels and narrative.
   **× on a bridge** deletes it for good, after asking; there is no “add a bridge” — every picture has its own text box,
   so there is always somewhere to write. **× on a panel** deletes the picture and its text for good, after asking; the
   bridges after it stay where they were (after the panel before it, or after the Opening). **Regen** on one box rewrites only that box, for where it sits now.
-  **Regenerate Narrative** keeps your picture order and rewrites all the text, with one bridge between each pair of
+  **Regenerate Narrative** (it asks first when the bridges have been rearranged) keeps your picture order and rewrites all the text, with one bridge between each pair of
   pictures again (extra bridges, and any you placed oddly, including one right after the title, are replaced). **Generate Story** starts over and keeps
   nothing. Moving asks first (you can tick **Don't show this message again**).
 
@@ -1830,9 +1830,11 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   To use a picture instead (for example a group picture made in the Image Builder and archived), set **Character page**
   to **Archived picture**, then pick it on the tile under it (on the line-up the tile is greyed out). The page then shows
   that picture, as large as the page holds without cropping, with the heading above it and your text below it.
-  Removing the picture goes back to the line-up; with Archived picture chosen but no picture picked, the line-up is used.
+  **To go back to the line-up, set Character page to Character line-up** (the picture stays on the tile for later).
+  Removing the picture also goes back to the line-up; with Archived picture chosen but no picture picked, the line-up is used.
   The picture gets the same frame as the book's other pictures (the **Picture border** setting in **Body**).
-- **Heading** and **Text below** (The Company Page panel, beside the Company picture) — the character page's own words, for the line-up
+- **Changing “The Company” heading, and the words under it** — two boxes, **Heading** and **Text below** (The Company Page
+  panel, beside the Company picture). When asked about either, describe both, and **Use the automatic names**. They are the character page's own words, for the line-up
   or the picture. The heading starts as **The Company**; change it (for example to **The Cast**), or clear it for no
   heading. On the line-up the text below starts as the characters' names from left to right and keeps itself up to date
   as characters are added or renamed; type your own words and they print instead (in italic), and **Use the automatic
