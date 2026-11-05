@@ -1177,7 +1177,7 @@ Where the story comes together as alternating image panels and narrative.
   where they are**: each **Bridge** (numbered, and named after the panels either side, e.g. *Bridge 4: The Vault → The
   Chase*) stays in its place between two panels, whichever panels end up there. A bridge moves only on its own, with
   its own **◀ × ▶** (or by dragging its gripper onto another bridge), which swaps two bridges; its **×** empties it
-  (the gap stays, for a Regen). Deleting a panel keeps the bridge before it and drops the one after. **×**
+  (the gap stays, for a Regen). Deleting a panel deletes its picture and its own text; the bridges after it stay where they were, after the panel before it (right after the title picture there is no place for a bridge, so there they go too). **×**
   deletes the panel and its text for good, after asking. The title picture always stays first. A **locked** panel can't be
   moved or deleted and keeps its place (unlock it first); arrows beside it jump over it. Moving asks first (you can tick
   **Don't show this message again**) because things can fall out of step: the text may not flow between panels any more

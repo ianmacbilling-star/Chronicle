@@ -90,6 +90,19 @@ router.post('/bridges', requireAuth, verifyCampaignMember, async function(req, r
     res.json({ success: true });
   } catch (e) { return _panelErr(res, e); }
 });
+// v3.4.36 -- TD-1107, FREE ORDER (claude/FREE_ORDER_STORY_SPEC.md). On your own version: the whole page order after
+// the title { anchor, items: [{t:'p', id}, {t:'b', id}, ...] }, or one bridge to delete { anchor, deleteBridge }.
+router.post('/arrange', requireAuth, verifyCampaignMember, async function(req, res) {
+  const b = req.body || {};
+  if (b.anchor == null) return res.status(400).json({ error: 'BAD_ORDER', message: 'No panel was named.' });
+  const db = await getDb();
+  const own = await _ownForkOf(db, b.anchor, req.params.sessionId, req.session.userId);
+  if (own.error) return res.status(own.status).json({ error: own.error });
+  try {
+    const out = await panelOrder.applyArrange(db, { forkId: own.forkId, sessionId: req.params.sessionId, items: b.items, deleteBridge: b.deleteBridge });
+    res.json({ success: true, order: out.order, items: out.items });
+  } catch (e) { return _panelErr(res, e); }
+});
 router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const own = await _ownForkOf(db, req.params.momentId, req.params.sessionId, req.session.userId);

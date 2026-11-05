@@ -1169,6 +1169,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       return;
     }
     const now = new Date().toISOString();
+    // v3.4.36 -- TD-1107. One bridge between each pair of pictures, each keeping the id (and so the Directions) of the
+    // first bridge in its gap today; the title's hidden text is left as written (services/panelOrder.js fromGenerated).
+    const _oldSecRow = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
       'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
@@ -1176,7 +1179,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ).run(
       parsed.intro || '',
       parsed.intro_summary || '',
-      JSON.stringify(panelOrder.stampSections(parsed.sections || [], (moments || []).map(function (m) { return m.id; }))),
+      JSON.stringify(panelOrder.fromGenerated(parsed.sections || [], moments || [], _oldSecRow ? _oldSecRow.narrative_sections : null)),   // v3.4.36
       parsed.outro || '',
       parsed.outro_summary || '',
       narrStyleId, now, req.session.userId, targetForkId
@@ -1312,7 +1315,12 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
   const now = new Date().toISOString();
   // v3.4.32 -- TD-1107. Lined up with the version's panels by id (or by position, when the ids are not there yet) and stamped.
   let _secs = sections || [];
-  try { const _ms = await db.prepare('SELECT id FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId); _secs = panelOrder.stampSections(_secs, _ms.map(function (m) { return m.id; })); } catch (_e) {}
+  // v3.4.36 -- and merged with what is stored, so every bridge keeps its id; an edited bridge box becomes that text.
+  try {
+    const _ms = await db.prepare('SELECT id, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+    const _st = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    _secs = panelOrder.mergeSave(_secs, _st ? _st.narrative_sections : null, _ms);
+  } catch (_e) { console.error('[narrative] save merge: ' + ((_e && _e.message) || _e)); }
   await db.prepare(
     'UPDATE session_forks SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(

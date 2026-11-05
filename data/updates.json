@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.36",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3436-bridge-ids",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story text: every bridge has an id of its own, ready for moving panels and bridges anywhere.",
+        "detail": "Behind the scenes, the first step of free ordering (TD-1107): each bridge carries its own id and keeps it when panels move, are deleted or the narrative is saved. Deleting a panel now keeps the bridges after it, after the panel before it. A new route arranges a version in any order; the page uses it from v3.4.37.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.35",
     "staged_on": "2026-11-05",
     "entries": [

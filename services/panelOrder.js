@@ -1,30 +1,34 @@
 'use strict';
 // =====================================================================================================
 // v3.4.32 -- TD-1107. MOVING AND DELETING STORY PANELS, AND EVERYTHING THAT BELONGS TO THEM.
+// v3.4.36 -- FREE ORDER (claude/FREE_ORDER_STORY_SPEC.md). Ian, 2026-11-05: "A user should be able to move the image
+// panels and narrative panels around separately wherever they want... there should be no rules... only warnings."
 //
-// Ian, 2026-11-05: testers "want to reorder or delete the story panels... sometimes the AI gets things out of order
-// or repeats something", without Generate Story again. And: "couldn't we put some shared identifier on text so they
-// are linked with a reference id... that way you move panel 5... both text and image panel 5 go together".
+// TWO KINDS OF SPACE: a PICTURE (its picture and its own Moment text, never apart) and a BRIDGE (text on its own).
+// A picture's block of text keeps the bridges that follow it on the page, each with an id of its own:
+//   { panel_index, moment_id, before, before_summary,
+//     bridges: [ { id, text, summary, between: [picture id before, picture id after] } ],
+//     after, after_summary }                      <- after = the bridges' text joined: what every book layout reads
+// `bridges` is the truth; after / after_summary are made from it HERE and nowhere else (derive), so the printed book
+// is unchanged for any story nobody has moved. `between` is where a bridge was written; when the pictures either side
+// are no longer those, the block says bridge_stale (the page shows "this bridge now sits between different panels").
 //
-// WHAT IS KEYED BY POSITION, AND SO MUST MOVE WITH A PANEL (measured in the v3.4.31 code):
-//   moments.panel_order                          -- the order itself; read everywhere as the 0-based index
-//   session_forks.narrative_sections             -- one block per panel BY POSITION: { panel_index, before (the
-//                                                   panel's Moment text), after (its Bridge to the next), summaries }
-//   session_forks.narrative_directions/outlines  -- maps keyed 'moment:i' and 'between:i' (and opening / closing)
-//   session_characters.change_moment_index       -- "this character looks different from panel i on"
-// The opening and closing text belong to the session, not a panel, and never move.
+// THE TITLE PICTURE AND THE OPENING NEVER MOVE. The title's block holds text the AI writes but nobody ever sees or
+// prints (TD-1106); it is left exactly as it is and never turned into a bridge. A bridge a user places right after
+// the title will be kept in the title block's `bridges` -- but the book cannot print those until v3.4.38, so until
+// then (TITLE_BRIDGES false) nothing may be placed there.
 //
-// THE RULES (Ian): the title picture stays first; a locked panel can be neither moved nor deleted and keeps its place
-// (others move around it); every session, Draft or Ready; only on your own version (the same rule as editing a
-// panel). A panel's Bridge travels with it; any Bridge whose next panel changed is marked bridge_stale, for the page
-// to say so. A moved character-change panel takes its marker along; a deleted one passes it to the panel after.
-// Everything happens in ONE transaction: the panels and their text can never be left half moved.
-//
-// THE LINK BY ID: every block of text carries its panel's id (moment_id). Positions still line them up, so every
-// reader (the page, the PDF, saved books) is unchanged; the id lets a write put them back in step if they ever drift.
+// WHAT ELSE IS KEYED BY POSITION (measured in v3.4.31): moments.panel_order (the order itself),
+// narrative_directions/outlines ('moment:i' follow their picture; 'between:i' belong to the first bridge of gap i
+// and follow it), narrative_outline (Generate Story's Review lines, the same way), and
+// session_characters.change_moment_index (follows its picture). Everything happens in ONE transaction.
+// Only on your own version; refused while a narrative or Generate Story is being written. Locks are on the PICTURE
+// and no longer stop a move (Ian: "Lift the rule on the locked panels").
 // =====================================================================================================
+const crypto = require('crypto');
 
 const JOB_WINDOW_MS = 20 * 60 * 1000;   // the narrative route's own window for a run still going
+const TITLE_BRIDGES = false;            // v3.4.38: the book prints a bridge placed right after the title
 
 function parseJson(s, dflt) {
   if (s == null || s === '') return dflt;
@@ -33,8 +37,8 @@ function parseJson(s, dflt) {
 }
 
 // The text blocks in the order of momentIds, each stamped with its panel's id and position. By id when every block
-// already carries one and they are exactly this version's panels; otherwise by position when the counts agree
-// (text written before the ids, or copied from another version, whose panels have other ids). null when neither.
+// already carries one and they cover this version's panels; otherwise by position when the counts agree (text written
+// before the ids, or copied from another version, whose panels have other ids). null when neither.
 function alignSections(sections, momentIds) {
   const secs = Array.isArray(sections) ? sections : [];
   if (!secs.length) return [];
@@ -43,8 +47,6 @@ function alignSections(sections, momentIds) {
   let allIds = true;
   secs.forEach(function (s) { if (s && s.moment_id != null && byId[String(s.moment_id)] === undefined) byId[String(s.moment_id)] = s; else allIds = false; });
   let ordered = null;
-  // v3.4.33 -- by id even when the text also holds a panel that is gone (a save from a page that had not reloaded
-  // after a delete): the deleted panel's block is dropped and the rest are put back against their own panels.
   if (allIds && ids.every(function (id) { return byId[id] !== undefined; })) {
     ordered = ids.map(function (id) { return byId[id]; });
   } else if (secs.length === ids.length) {
@@ -61,8 +63,8 @@ function stampSections(sections, momentIds) {
   return a === null ? (Array.isArray(sections) ? sections : []) : a;
 }
 
-// 'moment:i' / 'between:i' keys follow their panel; a deleted panel's are dropped; anything else is kept.
-// v3.4.35 -- with gapMap, 'between:i' keys follow their GAP instead (a bridge stays put when panels move).
+// 'moment:i' keys follow their picture (oldToNew); 'between:i' keys follow gapMap (old gap -> new gap). Dropped when
+// the map says null; anything else is kept.
 function remapKeys(map, oldToNew, gapMap) {
   const out = {};
   Object.keys(map || {}).forEach(function (k) {
@@ -77,14 +79,140 @@ function remapKeys(map, oldToNew, gapMap) {
 
 function fail(code, message, status) { const e = new Error(message); e.code = code; e.status = status || 409; return e; }
 
-// The new order and what moved, checked against the rules. oldIds: the version's panels as they stand.
+// A new bridge id, unique among `taken` (and recorded there).
+function bid(taken) {
+  let id;
+  do { id = 'b' + crypto.randomBytes(4).toString('hex').slice(0, 7); } while (taken && taken[id]);
+  if (taken) taken[id] = true;
+  return id;
+}
+function isTitle(m) { return !!(m && m.kind === 'establishing'); }
+
+// after / after_summary from the bridges, and the stale flag from `between`. The title's block is never touched.
+function derive(b, i, ids, title) {
+  delete b.bridge_stale;
+  if (!title) {
+    if (b.bridges.length) {
+      b.after = b.bridges.map(function (x) { return String(x.text || ''); }).join('\n\n');
+      b.after_summary = b.bridges.map(function (x) { return x.summary || ''; }).filter(Boolean).join(' ');
+    } else {
+      if (b.after !== undefined) b.after = '';
+      if (b.after_summary !== undefined) b.after_summary = '';
+    }
+  }
+  const want0 = Number(ids[i]), want1 = (i + 1 < ids.length) ? Number(ids[i + 1]) : null;
+  const off = b.bridges.some(function (x) {
+    if (!Array.isArray(x.between)) return true;
+    const b1 = x.between[1] == null ? null : Number(x.between[1]);
+    return Number(x.between[0]) !== want0 || b1 !== want1;
+  });
+  if (off) b.bridge_stale = true;
+  return b;
+}
+
+// Blocks (aligned to `moments`) in the new shape. Old text: a non-empty `after` becomes one bridge written for the
+// pictures either side (or already out of place, when v3.4.35 had marked it so); the title's hidden text is left be.
+function normBlocks(blocks, moments) {
+  const ids = moments.map(function (m) { return Number(m.id); });
+  const taken = {};
+  blocks.forEach(function (b) { (Array.isArray(b && b.bridges) ? b.bridges : []).forEach(function (x) { if (x && x.id) taken[x.id] = true; }); });
+  return blocks.map(function (b0, i) {
+    const b = Object.assign({}, b0 || {});
+    const title = isTitle(moments[i]);
+    if (Array.isArray(b.bridges)) {
+      b.bridges = b.bridges.filter(function (x) { return x && x.id; }).map(function (x) { return Object.assign({}, x); });
+    } else if (title || !String(b.after || '').trim()) {
+      b.bridges = [];
+    } else {
+      b.bridges = [{ id: bid(taken), text: String(b.after), summary: b.after_summary || '',
+        between: b.bridge_stale ? null : [ids[i], (i + 1 < ids.length) ? ids[i + 1] : null] }];
+    }
+    return derive(b, i, ids, title);
+  });
+}
+
+// The page order after the fixed head (the title, when there is one): pictures and bridges, as {t:'p'|'b', id}.
+function flatten(norm, moments) {
+  const out = [];
+  moments.forEach(function (m, i) {
+    if (!(i === 0 && isTitle(m))) out.push({ t: 'p', id: Number(m.id) });
+    (norm ? norm[i].bridges : []).forEach(function (x) { out.push({ t: 'b', id: x.id }); });
+  });
+  return out;
+}
+
+// v3.4.36 -- THE SAVE ROUTE. What the page sent, merged with what is stored so no bridge or id is lost. A page that
+// knows bridges sends them (by id; unknown ids are dropped). An older page sends only `after` for each block: when
+// it is what is stored, the bridges are kept as they are; when it was edited, the block's bridges become that one
+// text (it is what the writer sees and changed), keeping the first bridge's id so its Directions stay with it.
+function mergeSave(incoming, storedRaw, moments) {
+  const ids = moments.map(function (m) { return Number(m.id); });
+  const a = alignSections(incoming, ids);
+  if (a === null) return Array.isArray(incoming) ? incoming : [];
+  let old = null;
+  const sa = alignSections(parseJson(storedRaw, []), ids);
+  if (sa && sa.length) old = normBlocks(sa, moments);
+  const taken = {};
+  if (old) old.forEach(function (b) { b.bridges.forEach(function (x) { taken[x.id] = true; }); });
+  return a.map(function (b0, i) {
+    const b = Object.assign({}, b0);
+    const title = isTitle(moments[i]);
+    const ob = old ? old[i] : null;
+    const want = [ids[i], (i + 1 < ids.length) ? ids[i + 1] : null];
+    if (Array.isArray(b0.bridges)) {
+      const known = {};
+      if (ob) ob.bridges.forEach(function (x) { known[x.id] = x; });
+      b.bridges = b0.bridges.filter(function (x) { return x && known[x.id]; }).map(function (x) {
+        const k = known[x.id], t = String(x.text == null ? '' : x.text);
+        const o = Object.assign({}, k, { text: t, summary: (x.summary !== undefined) ? (x.summary || '') : (k.summary || '') });
+        if (t !== String(k.text || '')) o.between = want;   // rewritten here: it is written for where it sits now
+        return o;
+      });
+    } else if (title) {
+      b.bridges = ob ? ob.bridges.map(function (x) { return Object.assign({}, x); }) : [];
+    } else {
+      const ia = b0.after == null ? '' : String(b0.after);
+      const sb = ob ? ob.bridges : [];
+      const cur = sb.map(function (x) { return String(x.text || ''); }).join('\n\n');
+      if (ob && ia.trim() === cur.trim()) b.bridges = sb.map(function (x) { return Object.assign({}, x); });   // pages trim what they send
+      else if (!ia.trim()) b.bridges = [];
+      else b.bridges = [{ id: sb.length ? sb[0].id : bid(taken), text: ia,
+        summary: (b0.after_summary !== undefined) ? (b0.after_summary || '') : (sb[0] ? (sb[0].summary || '') : ''),
+        between: (!ob && b0.bridge_stale) ? null : want }];
+    }
+    return derive(b, i, ids, title);
+  });
+}
+
+// v3.4.36 -- A FRESH NARRATIVE (Regenerate Narrative, and the first write). One bridge between each pair of pictures,
+// in the pictures' order now; each takes the id of the first bridge that sits in that gap today, so its Directions
+// stay with it. Extra bridges, and any right after the title, are gone (Ian: "a regenerate narrative fixes it all").
+function fromGenerated(sections, moments, oldRaw) {
+  const ids = moments.map(function (m) { return Number(m.id); });
+  const a = alignSections(sections, ids);
+  if (a === null) return Array.isArray(sections) ? sections : [];
+  let old = null;
+  try { const oa = alignSections(parseJson(oldRaw, []), ids); if (oa && oa.length) old = normBlocks(oa, moments); } catch (e) { old = null; }
+  const taken = {};
+  if (old) old.forEach(function (b) { b.bridges.forEach(function (x) { taken[x.id] = true; }); });
+  return a.map(function (b0, i) {
+    const b = Object.assign({}, b0);
+    const title = isTitle(moments[i]);
+    const keep = (old && old[i] && old[i].bridges[0]) ? old[i].bridges[0].id : null;
+    b.bridges = (!title && String(b.after || '').trim())
+      ? [{ id: keep || bid(taken), text: String(b.after), summary: b.after_summary || '', between: [ids[i], (i + 1 < ids.length) ? ids[i + 1] : null] }]
+      : [];
+    return derive(b, i, ids, title);
+  });
+}
+
+// The rules a new order of pictures is checked against (the arrows' and drag's old route; still used by v3.4.35 pages).
 function planOrder(moments, newIds, deleteId) {
   const oldIds = moments.map(function (m) { return Number(m.id); });
   if (deleteId != null) {
     const d = moments.find(function (m) { return Number(m.id) === Number(deleteId); });
     if (!d) throw fail('NOT_FOUND', 'That panel is not in this version.', 404);
-    if (d.kind === 'establishing') throw fail('TITLE', 'The title picture cannot be deleted.', 403);
-    if (d.locked) throw fail('LOCKED', 'This panel is locked. Unlock it first.', 403);
+    if (isTitle(d)) throw fail('TITLE', 'The title picture cannot be deleted.', 403);
     return { oldIds: oldIds, newIds: oldIds.filter(function (id) { return id !== Number(deleteId); }) };
   }
   const want = (Array.isArray(newIds) ? newIds : []).map(Number);
@@ -92,90 +220,114 @@ function planOrder(moments, newIds, deleteId) {
     throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
   }
   moments.forEach(function (m, i) {
-    if (want[i] === Number(m.id)) return;
-    if (m.kind === 'establishing') throw fail('TITLE', 'The title picture stays first.', 403);
-    if (m.locked) throw fail('LOCKED', 'A locked panel keeps its place. Unlock it first.', 403);
+    if (want[i] !== Number(m.id) && isTitle(m)) throw fail('TITLE', 'The title picture stays first.', 403);
   });
   return { oldIds: oldIds, newIds: want };
 }
 
-// Apply a new order (reorder) or a deletion to one version, all or nothing. Returns what the caller should release.
-async function applyPanels(db, opts) {
-  const forkId = Number(opts.forkId), sessionId = Number(opts.sessionId);
-  // A narrative being written, or Generate Story running, would land in the old order: refuse until it finishes.
+async function busyCheck(db, forkId, sessionId) {
   const cut = new Date(Date.now() - JOB_WINDOW_MS).toISOString();
   const nj = await db.prepare("SELECT id FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ?").get(forkId, cut);
   const ej = await db.prepare("SELECT id FROM extract_jobs WHERE session_id = ? AND status IN ('pending','running') AND updated_at > ?").get(sessionId, cut);
   if (nj || ej) throw fail('BUSY', (nj ? 'The narrative is being written' : 'Generate Story is running') + ' for this session. Wait for it to finish, then try again.', 409);
+}
+
+// THE ONE PLACE A VERSION'S LAYOUT CHANGES. `make(ctx)` returns { items } (the whole page order after the title) and
+// optionally deleteId (a picture to delete, absent from items). Everything else follows from the items.
+async function applyLayout(db, opts, make) {
+  const forkId = Number(opts.forkId), sessionId = Number(opts.sessionId);
+  await busyCheck(db, forkId, sessionId);
   return db.transaction(async function (tx) {
     const moments = await tx.prepare('SELECT id, kind, locked, image, revert_image FROM moments WHERE fork_id = ? AND session_id = ? ORDER BY panel_order ASC, id ASC FOR UPDATE').all(forkId, sessionId);
     if (!moments.length) throw fail('NOT_FOUND', 'That version has no panels.', 404);
-    const plan = planOrder(moments, opts.order, opts.deleteId);
-    const oldIds = plan.oldIds, newIds = plan.newIds;
-    const newIndex = {}; newIds.forEach(function (id, i) { newIndex[id] = i; });
-    const oldToNew = oldIds.map(function (id) { return newIndex[id] === undefined ? null : newIndex[id]; });
-
-    // The text: the version's own, or (a version from before versions held text) the session's.
+    const oldIds = moments.map(function (m) { return Number(m.id); });
     const fk = await tx.prepare('SELECT role, narrative_sections, narrative_directions, narrative_outlines, narrative_outline FROM session_forks WHERE id = ? FOR UPDATE').get(forkId);
     let secHome = 'fork', rawSecs = fk ? fk.narrative_sections : null;
     if (rawSecs == null && fk && fk.role === 'dm') {
       const s = await tx.prepare('SELECT narrative_sections FROM sessions WHERE id = ?').get(sessionId);
       if (s && s.narrative_sections != null) { secHome = 'session'; rawSecs = s.narrative_sections; }
     }
-    const secs = parseJson(rawSecs, []);
-    // v3.4.35 -- which old gap each new gap's bridge comes from, and where each old gap's bridge goes.
-    // Deleting keeps the bridge BEFORE the panel (gap d-1) and drops the one after it (gap d).
-    const delAt = (opts.deleteId != null) ? oldIds.indexOf(Number(opts.deleteId)) : -1;
-    const dropGap = delAt;
-    const gapSrc = function (k) { return (dropGap >= 0 && k >= dropGap) ? k + 1 : k; };
-    const gapMap = oldIds.map(function (x, g) { return (dropGap < 0 || g < dropGap) ? g : (g === dropGap ? null : g - 1); });
+    const secs0 = parseJson(rawSecs, []);
+    let norm = null;
+    if (Array.isArray(secs0) && secs0.length) {
+      const al = alignSections(secs0, oldIds);
+      if (al === null) throw fail('MISMATCH', 'This session’s text no longer matches its panels. Regenerate the narrative first, then move the panels.', 409);
+      norm = normBlocks(al, moments);
+    }
+    const head = isTitle(moments[0]) ? moments[0] : null;
+    const ctx = { moments: moments, norm: norm, head: head, flat: flatten(norm, moments) };
+    const plan = make(ctx);
+    const items = (plan.items || []).map(function (it) { return { t: it && it.t === 'b' ? 'b' : 'p', id: (it && it.t === 'b') ? String(it.id) : Number(it && it.id) }; });
+
+    // Every picture (but a deleted one) and every bridge (but deleted ones) exactly once, and nothing new.
+    const delId = (plan.deleteId != null) ? Number(plan.deleteId) : null;
+    const dropB = plan.dropBridges || {};
+    const expect = ctx.flat.filter(function (it) { return !(it.t === 'p' && it.id === delId) && !(it.t === 'b' && dropB[it.id]); })
+      .map(function (it) { return it.t + ':' + it.id; }).sort();
+    const got = items.map(function (it) { return it.t + ':' + it.id; }).sort();
+    if (expect.length !== got.length || expect.some(function (k, n) { return k !== got[n]; })) throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
+    if (items.length && items[0].t === 'b' && !(head && TITLE_BRIDGES)) throw fail('SPOT', 'A bridge cannot go before the first picture.', 409);
+
+    // The new pictures, and the bridges after each.
+    const bridgeById = {}, oldGapOf = {}, wasFirst = {};
+    if (norm) norm.forEach(function (b, g) { b.bridges.forEach(function (x, k) { bridgeById[x.id] = x; oldGapOf[x.id] = g; if (k === 0) wasFirst[x.id] = true; }); });
+    const newIds = head ? [Number(head.id)] : [];
+    const groups = head ? [[]] : [];
+    items.forEach(function (it) {
+      if (it.t === 'p') { newIds.push(it.id); groups.push([]); } else groups[groups.length - 1].push(bridgeById[it.id]);
+    });
+    const posOf = {}; oldIds.forEach(function (id, i) { posOf[id] = i; });
+    const newIndex = {}; newIds.forEach(function (id, i) { newIndex[id] = i; });
+    const oldToNew = oldIds.map(function (id) { return newIndex[id] === undefined ? null : newIndex[id]; });
+    const kindOf = {}; moments.forEach(function (m) { kindOf[Number(m.id)] = m; });
+
+    // Which old gap's Directions / outline each new gap takes: the gap its first bridge was first in; an empty gap
+    // keeps those of the gap after the same picture, when nothing else has taken them.
+    const gapMap = oldIds.map(function () { return null; });
+    const srcOf = newIds.map(function () { return null; });
+    groups.forEach(function (gr, k) {
+      if (gr.length && wasFirst[gr[0].id]) { srcOf[k] = oldGapOf[gr[0].id]; gapMap[srcOf[k]] = k; }
+    });
+    groups.forEach(function (gr, k) {
+      if (gr.length) return;
+      const g = posOf[newIds[k]];
+      if (g !== undefined && gapMap[g] === null) { srcOf[k] = g; gapMap[g] = k; }
+    });
+
     let newSecs = null;
-    if (Array.isArray(secs) && secs.length) {
-      const oldAligned = alignSections(secs, oldIds);
-      if (oldAligned === null) throw fail('MISMATCH', 'This session’s text no longer matches its panels. Regenerate the narrative first, then move the panels.', 409);
-      // v3.4.35 -- THE BRIDGES STAY IN THEIR GAPS (Ian, 2026-11-05: "I don't want the bridges to move... it's almost
-      // impossible to follow what happens if the surrounding text moves with the image panels"). A panel takes its MOMENT
-      // text (before, before_summary); the BRIDGE after position i (after, after_summary) stays at i. Deleting the panel
-      // at d keeps the bridge before it (gap d-1) and drops the one after (gap d). Any bridge whose panels on either side
-      // are not the ones it was written between is marked bridge_stale.
+    if (norm) {
       newSecs = newIds.map(function (id, i) {
-        const mom = oldAligned[oldIds.indexOf(id)] || {};
-        const g = gapSrc(i), gap = oldAligned[g] || {};
-        const s = Object.assign({}, mom);
-        delete s.after; delete s.after_summary; delete s.bridge_stale;
-        if (gap.after !== undefined) s.after = gap.after;
-        if (gap.after_summary !== undefined) s.after_summary = gap.after_summary;
+        const s = Object.assign({}, norm[posOf[id]]);
+        s.bridges = groups[i].map(function (x) { return Object.assign({}, x); });
         s.panel_index = i; s.moment_id = id;
-        const joins = (i + 1 < newIds.length) && (newIds[i] !== oldIds[g] || newIds[i + 1] !== oldIds[g + 1]);
-        if (gap.bridge_stale || joins) s.bridge_stale = true;
-        return s;
+        return derive(s, i, newIds, isTitle(kindOf[id]));
       });
     }
     const dirs = remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew, gapMap);
-    // v3.4.33 -- THE GENERATE STORY OUTLINE (narrative_outline: { intro, sections:[{ panel_index, before, outline }], outro }),
-    // the Review tab's short summaries, is kept by position too, so it follows its panels the same way (stamped by id).
-    // Left as it is when it does not match the panels; it is a summary, and the text is what must never be wrong.
+    const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap);
+    // Generate Story's Review lines: the narration line follows its picture, the bridge line follows its bridge.
     let newOutline = null;
     const ol = parseJson(fk && fk.narrative_outline, null);
     if (ol && Array.isArray(ol.sections) && ol.sections.length) {
       const byPos = ol.sections.slice().sort(function (a, b) { return ((a && a.panel_index) || 0) - ((b && b.panel_index) || 0); });
-      const olAligned = alignSections(byPos, oldIds);
-      // v3.4.35 -- the outline's narration follows its panel; its bridge line (outline) stays in its gap, as the text does.
-      if (olAligned !== null) newOutline = Object.assign({}, ol, { sections: newIds.map(function (id, i) { const s = Object.assign({}, olAligned[oldIds.indexOf(id)], { panel_index: i, moment_id: id }); const gp = olAligned[gapSrc(i)] || {}; s.outline = (gp.outline !== undefined) ? gp.outline : ''; return s; }) });
+      const olA = alignSections(byPos, oldIds);
+      if (olA !== null) newOutline = Object.assign({}, ol, { sections: newIds.map(function (id, i) {
+        const s = Object.assign({}, olA[posOf[id]], { panel_index: i, moment_id: id });
+        s.outline = (srcOf[i] !== null && olA[srcOf[i]] && olA[srcOf[i]].outline !== undefined) ? olA[srcOf[i]].outline : '';
+        return s;
+      }) });
     }
-    const outs = remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap);
 
-    if (opts.deleteId != null) await tx.prepare('DELETE FROM moments WHERE id = ? AND fork_id = ?').run(Number(opts.deleteId), forkId);
+    if (delId != null) await tx.prepare('DELETE FROM moments WHERE id = ? AND fork_id = ?').run(delId, forkId);
     for (let i = 0; i < newIds.length; i++) await tx.prepare('UPDATE moments SET panel_order = ? WHERE id = ? AND fork_id = ?').run(i, newIds[i], forkId);
-
     const sets = ['narrative_directions = ?', 'narrative_outlines = ?'], vals = [JSON.stringify(dirs), JSON.stringify(outs)];
     if (newSecs && secHome === 'fork') { sets.push('narrative_sections = ?'); vals.push(JSON.stringify(newSecs)); }
-    if (newOutline) { sets.push('narrative_outline = ?'); vals.push(JSON.stringify(newOutline)); }   // v3.4.33
+    if (newOutline) { sets.push('narrative_outline = ?'); vals.push(JSON.stringify(newOutline)); }
     vals.push(forkId);
     await tx.prepare('UPDATE session_forks SET ' + sets.join(', ') + ' WHERE id = ?').run(...vals);
     if (newSecs && secHome === 'session') await tx.prepare('UPDATE sessions SET narrative_sections = ? WHERE id = ?').run(JSON.stringify(newSecs), sessionId);
 
-    // A character change follows its panel; from a deleted panel it starts at the panel after (the same index).
+    // A character change follows its picture; from a deleted picture it starts at the picture after (the same index).
     const ch = await tx.prepare('SELECT id, change_moment_index FROM session_characters WHERE fork_id = ? AND change_moment_index IS NOT NULL').all(forkId);
     for (const r of ch) {
       const o = Number(r.change_moment_index);
@@ -186,59 +338,76 @@ async function applyPanels(db, opts) {
       else n = oldIds.slice(0, o).filter(function (id) { return newIndex[id] !== undefined; }).length;
       if (n !== o) await tx.prepare('UPDATE session_characters SET change_moment_index = ? WHERE id = ?').run(n, r.id);
     }
-    const gone = (opts.deleteId != null) ? moments.find(function (m) { return Number(m.id) === Number(opts.deleteId); }) : null;
-    return { order: newIds, release: gone ? [gone.image, gone.revert_image].filter(Boolean) : [] };
+    const gone = (delId != null) ? moments.find(function (m) { return Number(m.id) === delId; }) : null;
+    return { order: newIds, items: items, release: gone ? [gone.image, gone.revert_image].filter(Boolean) : [] };
   });
 }
 
-// v3.4.35 -- MOVING OR EMPTYING A BRIDGE ON ITS OWN (Ian: "I want to be able to move the narrative bridge panels too... but
-// separately", and "an x on a bridge too"). A bridge is the text in gap g, between the panels at g and g+1; the ones
-// shown are those after a panel that is not the title, up to the last but one. 'swap' exchanges two bridges' text with
-// their Directions, outlines and Review outline lines, and marks both as written for other panels; 'clear' empties one
-// (its Directions and outline stay, for a Regen). One transaction, refused while writing runs, like the panels.
+// The items with the pictures in `order` and each gap's bridges where they were (a v3.4.35 page's arrows).
+function itemsKeepingGaps(ctx, order) {
+  const items = [];
+  order.forEach(function (id, i) {
+    if (!(i === 0 && ctx.head)) items.push({ t: 'p', id: Number(id) });
+    (ctx.norm ? ctx.norm[i].bridges : []).forEach(function (x) { items.push({ t: 'b', id: x.id }); });
+  });
+  return items;
+}
+// Leading bridges with nowhere to go (right after the title, until v3.4.38): they go with what was deleted.
+function stripLead(ctx, items, drop) {
+  while (items.length && items[0].t === 'b' && !(ctx.head && TITLE_BRIDGES)) { drop[items[0].id] = true; items.shift(); }
+  return items;
+}
+
+// Move pictures (order) or delete one (deleteId). A deleted picture's bridges stay where they sat on the page, after
+// the picture before it.
+async function applyPanels(db, opts) {
+  return applyLayout(db, opts, function (ctx) {
+    const plan = planOrder(ctx.moments, opts.order, opts.deleteId);
+    if (opts.deleteId != null) {
+      const drop = {};
+      const items = stripLead(ctx, ctx.flat.filter(function (it) { return !(it.t === 'p' && it.id === Number(opts.deleteId)); }), drop);
+      return { items: items, deleteId: opts.deleteId, dropBridges: drop };
+    }
+    return { items: itemsKeepingGaps(ctx, plan.newIds) };
+  });
+}
+
+// v3.4.35 pages: swap the bridges of two gaps, or empty one gap. A gap is one the page shows: after a picture that is
+// not the title, up to the last but one.
 async function applyBridges(db, opts) {
-  const forkId = Number(opts.forkId), sessionId = Number(opts.sessionId);
-  const cut = new Date(Date.now() - JOB_WINDOW_MS).toISOString();
-  const nj = await db.prepare("SELECT id FROM narrative_jobs WHERE fork_id = ? AND status IN ('pending','running') AND updated_at > ?").get(forkId, cut);
-  const ej = await db.prepare("SELECT id FROM extract_jobs WHERE session_id = ? AND status IN ('pending','running') AND updated_at > ?").get(sessionId, cut);
-  if (nj || ej) throw fail('BUSY', (nj ? 'The narrative is being written' : 'Generate Story is running') + ' for this session. Wait for it to finish, then try again.', 409);
-  return db.transaction(async function (tx) {
-    const moments = await tx.prepare('SELECT id, kind FROM moments WHERE fork_id = ? AND session_id = ? ORDER BY panel_order ASC, id ASC FOR UPDATE').all(forkId, sessionId);
-    const ids = moments.map(function (m) { return Number(m.id); });
-    const shown = function (g) { return Number.isInteger(g) && g >= 0 && g < moments.length - 1 && moments[g].kind !== 'establishing'; };
+  return applyLayout(db, opts, function (ctx) {
+    const n = ctx.moments.length;
+    const shown = function (g) { return Number.isInteger(g) && g >= 0 && g < n - 1 && !isTitle(ctx.moments[g]); };
     const a = Number(opts.a), b = (opts.op === 'swap') ? Number(opts.b) : null;
     if (!shown(a) || (opts.op === 'swap' && (!shown(b) || a === b)) || (opts.op !== 'swap' && opts.op !== 'clear')) throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
-    const fk = await tx.prepare('SELECT role, narrative_sections, narrative_directions, narrative_outlines, narrative_outline FROM session_forks WHERE id = ? FOR UPDATE').get(forkId);
-    let secHome = 'fork', rawSecs = fk ? fk.narrative_sections : null;
-    if (rawSecs == null && fk && fk.role === 'dm') {
-      const s = await tx.prepare('SELECT narrative_sections FROM sessions WHERE id = ?').get(sessionId);
-      if (s && s.narrative_sections != null) { secHome = 'session'; rawSecs = s.narrative_sections; }
-    }
-    const secs0 = parseJson(rawSecs, []);
-    if (!Array.isArray(secs0) || !secs0.length) throw fail('NO_TEXT', 'There is no narrative text here yet.', 409);
-    const secs = alignSections(secs0, ids);
-    if (secs === null) throw fail('MISMATCH', 'This session\u2019s text no longer matches its panels. Regenerate the narrative first.', 409);
-    const dirs = parseJson(fk && fk.narrative_directions, {}), outs = parseJson(fk && fk.narrative_outlines, {});
-    const ol = parseJson(fk && fk.narrative_outline, null);
-    const olSecs = (ol && Array.isArray(ol.sections)) ? alignSections(ol.sections.slice().sort(function (x, y) { return ((x && x.panel_index) || 0) - ((y && y.panel_index) || 0); }), ids) : null;
-    const swapKey = function (m, x, y) { const kx = 'between:' + x, ky = 'between:' + y, vx = m[kx], vy = m[ky]; delete m[kx]; delete m[ky]; if (vy !== undefined) m[kx] = vy; if (vx !== undefined) m[ky] = vx; };
-    if (opts.op === 'swap') {
-      const ta = { after: secs[a].after, after_summary: secs[a].after_summary }, tb = { after: secs[b].after, after_summary: secs[b].after_summary };
-      secs[a].after = tb.after; secs[a].after_summary = tb.after_summary; secs[a].bridge_stale = true;
-      secs[b].after = ta.after; secs[b].after_summary = ta.after_summary; secs[b].bridge_stale = true;
-      swapKey(dirs, a, b); swapKey(outs, a, b);
-      if (olSecs) { const t = olSecs[a].outline; olSecs[a].outline = olSecs[b].outline; olSecs[b].outline = t; }
-    } else {
-      secs[a].after = ''; secs[a].after_summary = ''; delete secs[a].bridge_stale;
-    }
-    const sets = ['narrative_directions = ?', 'narrative_outlines = ?'], vals = [JSON.stringify(dirs), JSON.stringify(outs)];
-    if (secHome === 'fork') { sets.push('narrative_sections = ?'); vals.push(JSON.stringify(secs)); }
-    if (olSecs) { sets.push('narrative_outline = ?'); vals.push(JSON.stringify(Object.assign({}, ol, { sections: olSecs }))); }
-    vals.push(forkId);
-    await tx.prepare('UPDATE session_forks SET ' + sets.join(', ') + ' WHERE id = ?').run(...vals);
-    if (secHome === 'session') await tx.prepare('UPDATE sessions SET narrative_sections = ? WHERE id = ?').run(JSON.stringify(secs), sessionId);
-    return { ok: true };
+    if (!ctx.norm) throw fail('NO_TEXT', 'There is no narrative text here yet.', 409);
+    const order = ctx.moments.map(function (m) { return Number(m.id); });
+    const gaps = ctx.norm.map(function (blk) { return blk.bridges.map(function (x) { return x.id; }); });
+    const drop = {};
+    if (opts.op === 'swap') { const t = gaps[a]; gaps[a] = gaps[b]; gaps[b] = t; }
+    else { gaps[a].forEach(function (id) { drop[id] = true; }); gaps[a] = []; }
+    const items = [];
+    order.forEach(function (id, i) {
+      if (!(i === 0 && ctx.head)) items.push({ t: 'p', id: id });
+      gaps[i].forEach(function (x) { items.push({ t: 'b', id: x }); });
+    });
+    return { items: items, dropBridges: drop };
   });
 }
 
-module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, parseJson };
+// v3.4.36 -- FREE ORDER: the whole page order after the title ({items}), or one bridge to delete ({deleteBridge}).
+async function applyArrange(db, opts) {
+  return applyLayout(db, opts, function (ctx) {
+    if (opts.deleteBridge != null) {
+      const id = String(opts.deleteBridge);
+      if (!ctx.flat.some(function (it) { return it.t === 'b' && it.id === id; })) throw fail('STALE', 'That bridge is not there any more. Reload and try again.', 409);
+      const drop = {}; drop[id] = true;
+      return { items: ctx.flat.filter(function (it) { return !(it.t === 'b' && it.id === id); }), dropBridges: drop };
+    }
+    if (!Array.isArray(opts.items)) throw fail('BAD_ORDER', 'No order was sent.', 400);
+    return { items: opts.items };
+  });
+}
+
+module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyBridges, applyArrange,
+  normBlocks, mergeSave, fromGenerated, flatten, derive, parseJson, TITLE_BRIDGES };
