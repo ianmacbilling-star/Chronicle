@@ -1177,8 +1177,9 @@ Where the story comes together as alternating image panels and narrative.
   bridge; dragging its gripper drops it **anywhere** (a gold line shows where it will land; on a phone use the arrows).
   There are no rules, only warnings: two pictures can sit side by side, several bridges in a row, a bridge just before
   the Closing. A picture takes its moment text, Directions, outline, characters, assets and any character change with it;
-  a bridge takes its own Directions and outline. **Bridges** are numbered down the page and named after the pictures
-  either side (*Bridge 4: The Vault → The Chase*); one that now sits between other pictures than it was written for
+  a bridge takes its own Directions and outline. **Every row is numbered top to bottom**, the same on both pages:
+  *1 – Opening*, then the pictures and the bridges (*5 – Bridge*) in page order, and the Closing last (*14 –
+  Closing*); the numbers change as things move. A bridge that now sits between other pictures than it was written for
   says so (**Regen** it, or **Regenerate Narrative**). The **title picture and the Opening never move**; a bridge
   placed right after the title prints straight after the Opening. **Locked** pictures move like any other (the lock is on the picture).
   **× on a bridge** deletes it for good, after asking; there is no “add a bridge” — every picture has its own text box,

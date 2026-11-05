@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.40",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3440-row-numbers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Every row of the story is numbered in order, Opening to Closing.",
+        "detail": "On the Story panels and the Review tab every row now has a number from the top: 1 – Opening, then each picture and each bridge (shown simply as “3 – Bridge”), and the Closing last. The numbers follow the page, so they change as you move things.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.39",
     "staged_on": "2026-11-05",
     "entries": [

@@ -5379,12 +5379,13 @@ function renderReview(data) {
 
   var html = '';
   var _hasEstR = panels.some(function(p){ return p.kind === 'establishing'; });
-  if (!_hasEstR) html += narrRow('opening', 'Opening', 'review-nar-open');
+  var _numsR = fxNums('review');   // v3.4.40 -- every row numbered in page order, as on the Story panels
+  if (!_hasEstR) html += narrRow('opening', fxRowLabel(1, 'Opening'), 'review-nar-open');
 
   var _pNumR = 0, _bNumR = 0;   // v3.4.35
   panels.forEach(function(p, i) {
     var _isEstR = (p.kind === 'establishing');
-    var num = _isEstR ? 0 : (++_pNumR);
+    ++_pNumR; var num = _isEstR ? 1 : (_numsR['p' + p.moment_id] || _pNumR);   // v3.4.40 -- its number in page order
     var mid = p.moment_id;
 
     // Character chips — each carries an id; × removes when editable.
@@ -5457,7 +5458,7 @@ function renderReview(data) {
       : '';
     html += '<div class="review-panel"' + (_isEstR ? '' : (' data-fx-src="review" data-fx-t="p" data-fx-id="' + mid + '"')) + '>' +   // v3.4.37
       '<div class="review-panel-head">' +
-        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">Opening</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
@@ -5473,14 +5474,14 @@ function renderReview(data) {
     // Review still plans one bridge per gap, as before (the last gap is covered by the closing).
     if (Array.isArray(p.bridges)) {
       p.bridges.forEach(function (b) {
-        html += narrRow('bridge:' + String(b.id).replace(/[^a-z0-9]/gi, ''), fxBridgeLabel(++_bNumR, p, num, panels[i + 1] || null, num + 1), 'review-nar-bridge', b);
+        html += narrRow('bridge:' + String(b.id).replace(/[^a-z0-9]/gi, ''), fxRowLabel(_numsR['b' + b.id] || (++_bNumR), 'Bridge'), 'review-nar-bridge', b);
       });
     } else if (!_isEstR && i < panels.length - 1) {
-      html += narrRow('between:' + i, fxBridgeLabel(++_bNumR, p, num, panels[i + 1], num + 1), 'review-nar-bridge');
+      html += narrRow('between:' + i, fxRowLabel(_numsR['g' + i] || (++_bNumR), 'Bridge'), 'review-nar-bridge');
     }
   });
 
-  html += narrRow('closing', 'Closing', 'review-nar-close');
+  html += narrRow('closing', fxRowLabel(_numsR.closing, 'Closing'), 'review-nar-close');
 
   list.innerHTML = html;
 }
@@ -18287,7 +18288,7 @@ function renderStoryboard() {
         imgHtml + '<div class="panel-img-actions">' + titleBtn + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
-        '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
+        '<span class="moment-num">' + (m.kind === 'establishing' ? fxRowLabel(1, 'Opening') : String(_nums['p' + m.id] || pNum)) + '</span>' +   // v3.4.40
         // v3.0.507 -- EDIT THE TITLE WHERE YOU SEE IT. Ian, 2026-08-07: "I want to be able to
         // edit the titles on the storyboard tab... put your cursor on the title you can edit it
         // just like the narratives." Same behaviour as the narrative boxes beside it: type, and
@@ -18318,7 +18319,7 @@ function renderStoryboard() {
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
-      (m.kind === 'establishing' ? buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box', 'Opening paragraph...', narrative.intro, "regenNarrativeSection('opening')", true) : buildNarrative('narrative-moment-' + i, 'Panel ' + pNum + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true)) +
+      (m.kind === 'establishing' ? buildNarrative('narrative-opening', fxRowLabel(1, 'Opening'), 'narrative-intro-box', 'Opening paragraph...', narrative.intro, "regenNarrativeSection('opening')", true) : buildNarrative('narrative-moment-' + i, fxRowLabel(_nums['p' + m.id] || pNum, 'Moment'), 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true)) +
     '</div>';
   }
 
@@ -18378,12 +18379,13 @@ function renderStoryboard() {
     '</div>';
   }
 
+  var _nums = fxNums('board');   // v3.4.40 -- every row numbered in page order
   // Build alternating array: opening, panel0, between0-1, panel1, between1-2, panel2, ..., closing
   var cells = [];
 
   // Opening narrative
   var _hasEst = state.moments.some(function(m){ return m.kind === 'establishing'; });
-  if (!_hasEst) cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
+  if (!_hasEst) cells.push(buildNarrative('narrative-opening', fxRowLabel(1, 'Opening'), 'narrative-intro-box',
     'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
   // v3.4.37 -- TD-1107. Each picture, then every bridge that follows it on the page (any number, each by its id,
@@ -18401,7 +18403,7 @@ function renderStoryboard() {
         var _bid = String(b.id || '').replace(/[^a-z0-9]/gi, '');
         cells.push(buildNarrative(
           'narrative-bridge-' + _bid,
-          fxBridgeLabel(++_bNum, m, _pNum, _nx, _pNum + 1),
+          fxRowLabel(_nums['b' + _bid] || (++_bNum), 'Bridge'),   // v3.4.40 -- "3 - Bridge": no names on the text-only rows
           'narrative-bridge-box-' + _bid,
           'Bridge the story...', b.text || '',
           'regenNarrativeSection(\'bridge\',\'' + _bid + '\')', false
@@ -18410,7 +18412,7 @@ function renderStoryboard() {
     } else if (!_isT && i < state.moments.length - 1) {
       cells.push(buildNarrative(
         'narrative-between-' + i,
-        fxBridgeLabel(++_bNum, m, _pNum, _nx, _pNum + 1),
+        fxRowLabel(_nums['g' + i] || (++_bNum), 'Bridge'),   // v3.4.40
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
         'regenNarrativeSection(\'between\',' + i + ')', false
@@ -18419,7 +18421,7 @@ function renderStoryboard() {
   });
 
   // Closing narrative
-  cells.push(buildNarrative('narrative-closing', 'Closing', 'narrative-outro-box',
+  cells.push(buildNarrative('narrative-closing', fxRowLabel(_nums.closing, 'Closing'), 'narrative-outro-box',
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
@@ -40871,13 +40873,13 @@ var FX_TITLE_BRIDGES = true;   // v3.4.38 -- the book prints a bridge placed rig
 function fxPics(src) {
   if (src === 'review') {
     return ((state.reviewData && state.reviewData.panels) || []).map(function (p) {
-      return { id: p.moment_id, kind: p.kind, title: p.title, bridges: (p.bridges || []).map(function (b) { return { id: b.id, stale: !!b.stale }; }) };
+      return { id: p.moment_id, kind: p.kind, title: p.title, bridges: (p.bridges || []).map(function (b) { return { id: b.id, stale: !!b.stale }; }), legacy: !Array.isArray(p.bridges) };
     });
   }
   var secs = (state.narrativeData && state.narrativeData.sections) || [];
   return (state.moments || []).map(function (m, i) {
     var s = secs.find(function (x) { return x.panel_index === i; }) || {};
-    return { id: m.id, kind: m.kind, title: m.title, bridges: Array.isArray(s.bridges) ? s.bridges : [] };
+    return { id: m.id, kind: m.kind, title: m.title, bridges: Array.isArray(s.bridges) ? s.bridges : [], legacy: !Array.isArray(s.bridges) };
   });
 }
 // The page order after the title: { t: 'p' | 'b', id }.
@@ -40890,6 +40892,23 @@ function fxFlat(src) {
   return out;
 }
 // Nothing but a picture first -- except right after a title picture (v3.4.38), which the book prints after the Opening.
+// v3.4.40 -- EVERY ROW NUMBERED, TOP TO BOTTOM (Ian, 2026-11-05: "Each panel should have a number in sequence. not just
+// the image ones... as the panels move around... their numbers change"; "Put a number on all of them. including opening
+// and closing"). 1 is the Opening (the title picture, or the Opening box when there is none), then every picture and
+// bridge in page order, and the Closing last. The same on the Story panels and the Review tab ('p<id>', 'b<id>', and
+// 'g<i>' for a gap that has no bridge ids yet -- no narrative written).
+function fxNums(src) {
+  var n = 1, out = { opening: 1 }, ps = fxPics(src);
+  ps.forEach(function (p, i) {
+    var title = (i === 0 && p.kind === 'establishing');
+    if (!title) out['p' + p.id] = ++n;
+    if (p.legacy) { if (!title && i < ps.length - 1) out['g' + i] = ++n; }
+    else p.bridges.forEach(function (b) { out['b' + b.id] = ++n; });
+  });
+  out.closing = n + 1;
+  return out;
+}
+function fxRowLabel(num, word) { return num + ' \u2013 ' + word; }
 function fxOk(items, src) { var ps = fxPics(src); return !items.length || items[0].t === 'p' || (FX_TITLE_BRIDGES && !!ps.length && ps[0].kind === 'establishing'); }
 function fxSame(a, b) { return a.length === b.length && a.every(function (x, n) { return x.t === b[n].t && String(x.id) === String(b[n].id); }); }
 function fxIndex(flat, t, id) { var k = -1; flat.forEach(function (it, n) { if (it.t === t && String(it.id) === String(id)) k = n; }); return k; }
