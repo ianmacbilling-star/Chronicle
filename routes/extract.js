@@ -1007,3 +1007,44 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
 }
 
 module.exports = router;
+
+// =================================================================================================
+// v3.4.45 -- TD-1040. ADD A CHARACTER, AND THE GENERATE STORY WARNING (Ian, 2026-11-05).
+// Two helpers the session routes call (routes/sessions.js), hung on the router like images.js does.
+//
+// resolveCarryForward is THE rule Generate Story already uses for a character's look in a session:
+// the most recent EARLIER session in this version, else the Canonical's earlier session, else the
+// character's own canonical look. Add A Character calls the same function, so a character added by
+// hand comes in exactly as if Generate Story had found it (Ian: "follow the existing rule").
+//
+// wouldDropOnRegenerate answers "which of this session's cast would Generate Story take away?" with
+// the same three tests snapshotSessionCharacters applies: a row already decided (accepted or
+// rejected) is kept; a character named in the story or the notes is kept; the version's narrator is
+// kept. Everyone else is deleted and not put back. Ian: warn, do not keep them -- "They really should
+// update the story or the notes so it finds the character the second time."
+// The text is the one the page is about to save (the boxes), falling back to what is stored, and the
+// notes are the version's own: the session's notes on the Canonical, its fork notes on any other.
+// =================================================================================================
+async function wouldDropOnRegenerate(db, session, forkId, transcriptNow, notesNow) {
+  const fk = await db.prepare('SELECT id, role, fork_notes FROM session_forks WHERE id = ?').get(forkId);
+  if (!fk) return [];
+  const notes = (typeof notesNow === 'string') ? notesNow
+    : (fk.role === 'dm' ? (session.session_notes || '') : (fk.fork_notes || ''));
+  const transcript = (typeof transcriptNow === 'string') ? transcriptNow : (session.transcript || '');
+  const text = transcript + '\n' + notes;
+  const narr = await forkNarrator(db, forkId);
+  const rows = await db.prepare(
+    'SELECT sc.character_id, sc.change_status, ch.name FROM session_characters sc ' +
+    'JOIN characters ch ON ch.id = sc.character_id WHERE sc.fork_id = ?'
+  ).all(forkId);
+  const out = [];
+  for (const r of rows) {
+    if (r.change_status === 'accepted' || r.change_status === 'rejected') continue;
+    if (narr && String(narr.id) === String(r.character_id)) continue;
+    if (characterInText({ name: r.name }, text)) continue;
+    out.push({ id: r.character_id, name: r.name });
+  }
+  return out;
+}
+module.exports.resolveCarryForward = resolveCarryForward;
+module.exports.wouldDropOnRegenerate = wouldDropOnRegenerate;

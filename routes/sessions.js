@@ -686,6 +686,63 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
   res.json(rows);
 });
 
+// v3.4.45 -- TD-1040. ADD A CHARACTER to this session's cast by hand (Ian, 2026-11-05: "a small pill
+// button at the top of the characters tab... It should bring in the last saved version of that
+// character for that version. If there is none it should bring in the Canonical version"). Only
+// Generate Story built the cast until now, so a character it missed was missing from the book's
+// Company page too (v3.3.28). The look comes from the SAME rule Generate Story uses
+// (extract.js resolveCarryForward): no choosing between looks here. Only the cast changes; no panel.
+// Who: the version on screen must be the caller's to act on (callerForkId) -- the Story Master on
+// the Canonical, a member on their own version -- the same people who can edit the cards there.
+router.post('/:id/characters/add', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const fork = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.status(403).json({ error: 'You can only add characters to your own version of this session.' });
+    const charId = parseInt(req.body && req.body.character_id, 10);
+    if (!charId) return res.status(400).json({ error: 'Choose a character to add.' });
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(charId, session.campaign_id);
+    if (!ch) return res.status(404).json({ error: 'That character is not in this campaign.' });
+    const have = await db.prepare('SELECT id FROM session_characters WHERE fork_id = ? AND character_id = ?').get(fork, ch.id);
+    if (have) return res.json({ success: true, already: true, name: ch.name });
+    const carry = await require('./extract').resolveCarryForward(db, ch, session, fork);
+    await db.prepare(
+      'INSERT INTO session_characters ' +
+      '(session_id, fork_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(session.id, fork, ch.id, carry.prompt, carry.referenceUrl, null, false, 'none', new Date().toISOString());
+    console.log('[cast-add] session ' + session.id + ' version ' + fork + ' character ' + ch.id + ' look ' + (carry.referenceUrl ? 'carried' : 'none'));
+    res.json({ success: true, name: ch.name });
+  } catch (e) {
+    console.error('[cast-add] error:', e && e.message);
+    res.status(500).json({ error: 'Could not add the character. Try again.' });
+  }
+});
+
+// v3.4.45 -- TD-1040. WHO WOULD GENERATE STORY TAKE OUT OF THIS SESSION'S CAST? Asked by the page
+// just before Generate Story runs, with the Story and notes it is about to save. The same three
+// tests Generate Story applies (extract.js wouldDropOnRegenerate). It never refuses: any failure
+// answers "nobody", which is how Generate Story behaved before this warning existed.
+router.post('/:id/characters/regen-drops', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+    if (!session) return res.json({ drops: [] });
+    const fork = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.json({ drops: [] });
+    const b = req.body || {};
+    const drops = await require('./extract').wouldDropOnRegenerate(db, session, fork,
+      (typeof b.transcript === 'string') ? b.transcript : undefined,
+      (typeof b.notes === 'string') ? b.notes : undefined);
+    res.json({ drops: drops });
+  } catch (e) {
+    console.error('[regen-drops] error:', e && e.message);
+    res.json({ drops: [] });
+  }
+});
+
 // PUT edit a session character snapshot prompt (Platinum only)
 router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.45",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3445-add-a-character",
+        "kind": "feature",
+        "public": true,
+        "summary": "Add A Character on a session's Characters tab brings in someone Generate Story missed.",
+        "detail": "Pick a campaign character from the pictures and they join the session's cast with their latest look in this version (or the Canonical's, or their own look if neither has one). The Review and Storyboard + Add character windows now list only the session's cast, with a note pointing to Add A Character for anyone else. If Generate Story would take a character out of the cast because their name is not in the Story or the notes, it names them and asks first.",
+        "td": [
+          "TD-1040"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.44",
     "staged_on": "2026-11-05",
     "entries": [

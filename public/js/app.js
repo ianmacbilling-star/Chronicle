@@ -4369,6 +4369,10 @@ function renderSessionCharacters(rows) {
   var canEditPrompt = canAct;
   var list = document.getElementById('sc-list');
   if (!list) return;
+  // v3.4.45 -- TD-1040. Add A Character shows for whoever can act on this version (the cards' own rule).
+  var _scAddBtn = document.getElementById('sc-add-char-btn');
+  if (_scAddBtn) _scAddBtn.style.display = canAct ? '' : 'none';
+  state.scCastIds = rows.map(function (r) { return String(r.character_id); });
   // v3.3.42 -- OPEN EDIT PANELS SURVIVE A RE-RENDER (Ian: "once you approve one... you lose the running of all the others.
   // So you have to do one at a time"). Approving one card reloaded the whole list, which threw away every other card's
   // open Edit panel: its typed text, its retouch spinner, and the place its finished draft would land. The cards that
@@ -10295,6 +10299,9 @@ async function extractMoments() {
       return;
     }
   }
+
+  // v3.4.45 -- TD-1040. Warn when Generate Story would take characters out of this session's cast (BOTH copies).
+  if (!await _regenCastDropsOk(transcript)) return;
 
   // All pre-flight prompts passed -- claim the session-wide lock now (not
   // before the confirms above, so cancelling any prompt can never strand it).
@@ -19464,6 +19471,9 @@ async function extractMoments() {
       return;
     }
   }
+
+  // v3.4.45 -- TD-1040. Warn when Generate Story would take characters out of this session's cast (BOTH copies).
+  if (!await _regenCastDropsOk(transcript)) return;
 
   // All pre-flight prompts passed -- claim the session-wide lock now (not
   // before the confirms above, so cancelling any prompt can never strand it).
@@ -31003,14 +31013,22 @@ var _castAssetImg = {};
 // distinction is the whole difference between "none" and "could not ask".
 var _castCharRows = null;
 var _castAssetRows = null;
+// v3.4.45 -- TD-1040. This session's cast (the Characters tab), as a set of character ids. The Review
+// and Storyboard pickers offer only these (Ian: they "should only be showing characters that exist in the
+// character tab"). null = could not ask, and the picker falls back to every campaign character, as before.
+var _castSessionIds = null;
 
 function _loadCastImages(cb) {
   var cid = state.currentCampaign && state.currentCampaign.id;
   _castCharImg = {}; _castAssetImg = {};
   _castCharRows = null; _castAssetRows = null;
+  _castSessionIds = null;   // v3.4.45 -- TD-1040
   if (!cid) { cb(); return; }
   var done = 0;
-  function step(){ if (++done >= 2) cb(); }
+  function step(){ if (++done >= 3) cb(); }   // v3.4.45 -- TD-1040: three reads, the session cast is the third
+  var _sid = state.currentSession && state.currentSession.id;
+  if (_sid) fetch('/api/campaigns/' + cid + '/sessions/' + _sid + '/characters' + forkQ()).then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var m = {}; rows.forEach(function(r){ if (r && r.character_id != null) m[String(r.character_id)] = true; }); _castSessionIds = m; } step(); }).catch(step);
+  else step();
   function _byName(a, b){ return (a.name || '').localeCompare(b.name || ''); }   // v3.0.881 -- the /review payload sorts its master lists by name; match it so an unchanged campaign renders in the identical order
   fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(c){ if (c && c.id != null) { _castCharImg[String(c.id)] = c.canonical_reference_url || ''; out.push({ id: c.id, name: c.name, cls: c.cls }); } }); out.sort(_byName); _castCharRows = out; } step(); }).catch(step);
   fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(a){ if (a && a.id != null) { _castAssetImg[String(a.id)] = a.image_url || ''; out.push({ id: a.id, name: a.name, category: a.category }); } }); out.sort(_byName); _castAssetRows = out; } step(); }).catch(step);
@@ -31035,6 +31053,9 @@ function _buildCastPicker(kind, momentId) {
     ? (_castCharRows !== null ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []))
     : (_castAssetRows !== null ? _castAssetRows : ((state.reviewData && state.reviewData.all_assets) || []));
   var items = src.filter(function(x){ return !have[String(x.id)]; });
+  // v3.4.45 -- TD-1040. Characters: only this session's cast. Panels that already carry someone outside it keep
+  // them (Ian: leave them); this only narrows what can be added from now on.
+  if (isChar && _castSessionIds !== null) items = items.filter(function(x){ return _castSessionIds[String(x.id)]; });
   var overlay = document.createElement('div');
   overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function(e){ if (e.target === overlay) closeCastPicker(); });
@@ -31047,7 +31068,7 @@ function _buildCastPicker(kind, momentId) {
   var grid = document.createElement('div'); grid.className = 'prep-img-grid';
   if (!items.length) {
     var empty = document.createElement('div'); empty.className = 'prep-img-empty';
-    empty.textContent = isChar ? 'No more characters to add. Create characters on the Characters tab.' : 'No more assets to add. Create assets on the Asset Library tab.';
+    empty.textContent = isChar ? 'No more characters from this session\u2019s cast to add.' : 'No more assets to add. Create assets on the Asset Library tab.';
     grid.appendChild(empty);
   } else {
     items.forEach(function(it){
@@ -31064,6 +31085,7 @@ function _buildCastPicker(kind, momentId) {
     });
   }
   box.appendChild(head); box.appendChild(grid);
+  if (isChar) box.appendChild(_castPickerNote());   // v3.4.45 -- TD-1040
   overlay.appendChild(box); document.body.appendChild(overlay);
 }
 
@@ -41124,3 +41146,118 @@ try {
     for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
   });
 } catch (e) {}
+
+// =================================================================================================
+// v3.4.45 -- TD-1040. ADD A CHARACTER ON THE SESSION CHARACTERS TAB (Ian, 2026-11-05).
+// A pill beside Regenerate in Art Style opens the same picture grid as the Review tab's + Add
+// character, listing the campaign's characters not yet in this session's cast. Picking one adds it to
+// the cast with ONE look chosen by the server -- the latest look in this version, else the Canonical's,
+// else the character's own (routes/sessions.js POST characters/add, the rule Generate Story uses).
+// Nothing is added to any panel. APPENDED, NOT INSERTED (TD-853); these names are declared nowhere else.
+// =================================================================================================
+function scAddCharacter() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var sid = state.currentSession.id;
+  _loadCastImages(function () {
+    if (!state.currentSession || String(state.currentSession.id) !== String(sid)) return;
+    _scAddPickBuild();
+  });
+}
+
+function _scAddPickBuild() {
+  closeCastPicker();
+  var inCast = {};
+  if (_castSessionIds !== null) inCast = _castSessionIds;
+  else (state.scCastIds || []).forEach(function (id) { inCast[String(id)] = true; });
+  var src = (_castCharRows !== null) ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []);
+  var items = src.filter(function (x) { return !inCast[String(x.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeCastPicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add A Character';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', closeCastPicker);
+  head.appendChild(h); head.appendChild(x);
+  var hint = document.createElement('div'); hint.className = 'form-hint'; hint.style.cssText = 'margin:0 4px 10px;';
+  hint.textContent = 'They join this session\u2019s cast with their latest look in this version. Add them to the panels they appear in on the Review or Storyboard tab.';
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = 'Everyone in this campaign is already in this session\u2019s cast. New characters are made on the Characters screen.';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function (it) {
+      var img = _castCharImg[String(it.id)] || '';
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      if (img) { imgEl.style.backgroundImage = 'url("' + encodeURI(img) + '")'; }
+      else { imgEl.innerHTML = '&#128100;'; }
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name;
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function () { closeCastPicker(); scAddCharacterPick(it.id, it.name); });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(hint); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+function scAddCharacterPick(id, name) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var sid = state.currentSession.id;
+  var shown = charDisplayName(name);
+  var btn = document.getElementById('sc-add-char-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sid + '/characters/add' + forkQ(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ character_id: id, fork_id: state.currentForkId || null })
+  })
+    .then(function (r) { return r.json().catch(function () { return { error: 'Could not add the character. Try again.' }; }); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (!d || d.error) { showAlert((d && d.error) || 'Could not add the character. Try again.'); return; }
+      if (state.currentSession && String(state.currentSession.id) === String(sid)) loadSessionCharacters();
+      showAlert(shown + (d.already ? ' is already in this session\u2019s cast.' : ' was added to this session\u2019s cast.'));
+    })
+    .catch(function () { if (btn) btn.disabled = false; showAlert('Could not add the character. Try again.'); });
+}
+
+// The Review and Storyboard pickers list only this session's cast, so they say where the others come from
+// (Ian: "a note that says if they don't see who they are looking for to add them to the characters tab").
+function _castPickerNote() {
+  var note = document.createElement('div'); note.className = 'form-hint'; note.id = 'cast-pick-note';
+  note.style.cssText = 'margin:12px 4px 0;';
+  note.appendChild(document.createTextNode('Don\u2019t see who you\u2019re looking for? Add them to this session on the '));
+  var a = document.createElement('a'); a.href = '#'; a.textContent = 'Characters tab';
+  a.addEventListener('click', function (e) { e.preventDefault(); closeCastPicker(); switchSessionTab('characters'); });
+  note.appendChild(a);
+  note.appendChild(document.createTextNode(' with Add A Character.'));
+  return note;
+}
+
+// Asked by extractMoments (both copies) before Generate Story runs. Any failure answers yes: the old behaviour.
+async function _regenCastDropsOk(transcript) {
+  var drops = [];
+  try {
+    var notesEl = document.getElementById('session-notes-input');
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/regen-drops' + forkQ(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: transcript, notes: notesEl ? notesEl.value.trim() : '', fork_id: state.currentForkId || null })
+    });
+    var d = await r.json();
+    drops = (d && Array.isArray(d.drops)) ? d.drops : [];
+  } catch (e) { return true; }
+  if (!drops.length) return true;
+  var names = drops.map(function (x) { return '\u2022 ' + charDisplayName(x.name); }).join('\n');
+  var one = drops.length === 1;
+  return await uiConfirm('Generate Story builds this session\u2019s cast from the names it finds in the Story and the notes. ' +
+    (one ? 'This character is' : 'These characters are') + ' in the cast now but ' + (one ? 'is' : 'are') +
+    ' not named there, so they will be taken off this session\u2019s Characters tab:\n\n' + names +
+    '\n\nTo keep them, add ' + (one ? 'their name' : 'their names') + ' to the Story or the notes first. ' +
+    'You can also add them back afterwards with Add A Character.',
+    { title: 'Characters will leave this session', preserveLines: true, okText: 'Generate anyway', cancelText: 'Cancel' });
+}

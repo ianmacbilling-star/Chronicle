@@ -1046,7 +1046,10 @@ you want to change them later.
 illustrating, and produces a **story outline** (reviewed on the Review tab before any
 images are made). It also:
 - **Builds the session's cast** — detects which campaign characters appear in *this*
-  story (by name) and adds just that subset to the Characters tab.
+  story (by name) and adds just that subset to the Characters tab. If it misses someone, add them
+  with **Add A Character** on the Characters tab (10.2). Running Generate Story again rebuilds the cast
+  from the names it finds, so a character added by hand whose name is not in the Story or the notes is
+  taken off again; Generate Story names them and asks first. Put their name in the Story or the notes to keep them.
 - **Rebuilds from scratch** — it deletes the current moments on that version (images and
   narrative) and regenerates fresh; it warns you first. **Locks block it:** if the
   version has any locked panel, a locked title image, or an approved character change
@@ -1075,6 +1078,12 @@ this tab is where you change a character as the story goes along. It lists the c
   they ended the previous session, so a character visibly evolves over time. Approving a
   change carries it into later sessions.
 - **Going back** — use **Replace from Archive** to restore an earlier look.
+- **Add A Character** — the pill at the top, beside **Regenerate in Art Style**, brings in a campaign character
+  Generate Story missed. Pick them from the pictures; they join this session's cast with their **latest look in
+  this version** (from the most recent earlier session), or, if this version has none, the Canonical's latest look, or
+  else the character's own look from the Characters screen. You do not choose a look here. It adds them to the cast only:
+  put them in the panels they appear in on the Review or Storyboard tab. The Story Master adds on the Canonical; a
+  member adds on their own version. It costs nothing.
 
 ### 10.3 Review tab
 See how Campaignia planned your story **before** it writes the full narrative or spends
@@ -1089,7 +1098,9 @@ anything missing or wrong first. Per panel you can:
   (image panels only).
 - **Add/remove characters** and **add/remove assets**, and see where a **character change**
   lands. A **cast badge** shows **Auto-Matched** (automatic name-matching) or **Custom
-  cast** once you change it; **Reset to auto** reverts.
+  cast** once you change it; **Reset to auto** reverts. **+ Add character** lists only the characters in this
+  session's cast (its Characters tab); to add someone else, bring them in with **Add A Character** on the
+  Characters tab first.
 - On a **phone**, a panel's actions collapse into a **⋯ menu**.
 
 Outline = the facts; Direction = the flavor — they work together and don't conflict.
