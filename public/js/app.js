@@ -41087,7 +41087,7 @@ async function bridgeClear(src, g) {
 // (v3.4.38, FX_TITLE_BRIDGES). Locks are on the picture and no longer stop a move. The server checks everything again
 // (services/panelOrder.js applyArrange); a list that is out of date is refused, and the page reloads.
 // =====================================================================================================
-var FX_TITLE_BRIDGES = false;
+var FX_TITLE_BRIDGES = true;   // v3.4.38 -- the book prints a bridge placed right after the title, after the Opening
 // The pictures in order, each with the bridges that follow it on the page.
 function fxPics(src) {
   if (src === 'review') {
@@ -41110,7 +41110,8 @@ function fxFlat(src) {
   });
   return out;
 }
-function fxOk(items) { return !items.length || items[0].t === 'p' || FX_TITLE_BRIDGES; }
+// Nothing but a picture first -- except right after a title picture (v3.4.38), which the book prints after the Opening.
+function fxOk(items, src) { var ps = fxPics(src); return !items.length || items[0].t === 'p' || (FX_TITLE_BRIDGES && !!ps.length && ps[0].kind === 'establishing'); }
 function fxSame(a, b) { return a.length === b.length && a.every(function (x, n) { return x.t === b[n].t && String(x.id) === String(b[n].id); }); }
 function fxIndex(flat, t, id) { var k = -1; flat.forEach(function (it, n) { if (it.t === t && String(it.id) === String(id)) k = n; }); return k; }
 // A bridge is "out of place" when the pictures either side are not the ones it was written between.
@@ -41137,7 +41138,7 @@ function spaceControls(src, t, id) {
   var can = function (j) {
     if (j < 0 || j >= flat.length) return false;
     var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
-    return fxOk(it);
+    return fxOk(it, src);
   };
   var q = t === 'p' ? String(Number(id)) : ('\'' + String(id).replace(/[^a-z0-9]/gi, '') + '\'');
   var btn = function (j, sym, tip) {
@@ -41177,7 +41178,7 @@ async function spaceStep(src, t, id, dir) {
   var flat = fxFlat(src), k = fxIndex(flat, t, id), j = k + dir;
   if (k < 0 || j < 0 || j >= flat.length) return;
   var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
-  if (!fxOk(it)) return;
+  if (!fxOk(it, src)) return;
   if (!(await fxWarn())) return;
   await fxSend(src, { items: it });
 }
@@ -41193,7 +41194,7 @@ async function spaceMoveTo(src, k, j, after) {
   var flat = fxFlat(src);
   if (k < 0 || k >= flat.length || j < 0 || j >= flat.length) return;
   var it = fxMoved(flat, k, j, after);
-  if (fxSame(it, flat) || !fxOk(it)) return;
+  if (fxSame(it, flat) || !fxOk(it, src)) return;
   if (!(await fxWarn())) return;
   await fxSend(src, { items: it });
 }
@@ -41223,7 +41224,7 @@ function _fxPlace(e) {
   var r = s.el.getBoundingClientRect();
   var after = s.src === 'review' ? (e.clientY > r.top + r.height / 2) : (e.clientX > r.left + r.width / 2);
   var it = fxMoved(flat, k, j, after);
-  if (fxSame(it, flat) || !fxOk(it)) return null;
+  if (fxSame(it, flat) || !fxOk(it, s.src)) return null;
   var side = s.src === 'review' ? (after ? 'inset 0 -4px 0 #e8c766' : 'inset 0 4px 0 #e8c766') : (after ? 'inset -4px 0 0 #e8c766' : 'inset 4px 0 0 #e8c766');
   return { src: s.src, k: k, j: j, after: after, el: s.el, side: side };
 }

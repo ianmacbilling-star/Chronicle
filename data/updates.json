@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.38",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3438-bridge-after-title",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A bridge can now sit right after the title picture; the book prints it after the Opening.",
+        "detail": "Moving a bridge (or deleting the first panel) can put a bridge straight after the title picture. It shows there on the Story panels and the Review tab, and the printed book places it right after the Opening. Books nobody has rearranged print exactly as before.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.37",
     "staged_on": "2026-11-05",
     "entries": [

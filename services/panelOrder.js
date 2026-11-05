@@ -28,7 +28,7 @@
 const crypto = require('crypto');
 
 const JOB_WINDOW_MS = 20 * 60 * 1000;   // the narrative route's own window for a run still going
-const TITLE_BRIDGES = false;            // v3.4.38: the book prints a bridge placed right after the title
+const TITLE_BRIDGES = true;             // v3.4.38: the book prints a bridge placed right after the title (after the Opening)
 
 function parseJson(s, dflt) {
   if (s == null || s === '') return dflt;

@@ -5330,6 +5330,20 @@ function previewScrollbarCss() {
     "  ::-webkit-scrollbar-corner { background: transparent; }"
   ].join("\n");
 }
+// v3.4.38 -- TD-1107 (claude/FREE_ORDER_STORY_SPEC.md, Phase C). A BRIDGE PLACED RIGHT AFTER THE TITLE PICTURE PRINTS
+// STRAIGHT AFTER THE OPENING. Every layout lifts the title picture out of the panel flow, and with it the title's block of
+// text -- which holds the AI's unused text (TD-1106), never printed. Only the block's `bridges` (placed there by a
+// user's move) are added, each as its own paragraph. With none, the Opening comes back exactly as given, so a book
+// nobody has rearranged is byte-for-byte what it was.
+function introWithTitleBridges(intro, sections, moments) {
+  var est = -1;
+  (moments || []).forEach(function (m, k) { if (est < 0 && m && m.kind === 'establishing') est = k; });
+  if (est < 0) return intro;
+  var sec = (sections || []).find(function (s) { return s && s.panel_index === est; });
+  var tb = (sec && Array.isArray(sec.bridges)) ? sec.bridges.map(function (b) { return String((b && b.text) || '').trim(); }).filter(Boolean) : [];
+  if (!tb.length) return intro;
+  return [String(intro || '').trim()].concat(tb).filter(Boolean).join('\n\n');
+}
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   // v3.1.92 -- TD-979. Rejected (watermarked or stock) pictures become a plain "Picture removed" box,
   // here at the door, so no layout below can draw one. Copies only when something is swapped.
@@ -5358,7 +5372,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var fontImp = co ? coFontImport(co.font) : '';
   var fontFam = co ? coFontFamily(co.font) : '';
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
-  const intro = narrative.intro || '';
+  const intro = introWithTitleBridges(narrative.intro || '', narrative.sections || [], moments);   // v3.4.38 -- TD-1107
   const sections = narrative.sections || [];
   const outro = narrative.outro || '';
 
@@ -6318,6 +6332,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       sections: s.narrative_sections ? JSON.parse(s.narrative_sections) : [],
       outro: s.narrative_outro || ''
     };
+    narrative.intro = introWithTitleBridges(narrative.intro, narrative.sections, moments);   // v3.4.38 -- TD-1107
 
     // Approach B: lift the establishing/title-image moment OUT of the panel flow
     // (it becomes the session title image below, above the intro). Story panels
@@ -9192,7 +9207,8 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
                   layout_meta: (_est && _est.image && _est.image === _estImg) ? (_est.layout_meta || null) : null };
       beats.push({ idx: ++_ioIdx, kind: 'title', moment: _tm, shape: _tm.shape, aspect: (typeof momentAspect === 'function' ? (momentAspect(_tm) || 1) : 1), hasImage: true, before: '', after: '' });
     }
-    if (sd.narrative_intro) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_intro, after: '' });
+    var _introT = introWithTitleBridges(sd.narrative_intro, _secs, sd.moments || []);   // v3.4.38 -- TD-1107: as the book prints it
+    if (_introT) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: _introT, after: '' });
     (sd.moments || []).forEach(function (m, _j) {
       _pidx++;
       manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });

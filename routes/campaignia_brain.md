@@ -1179,13 +1179,13 @@ Where the story comes together as alternating image panels and narrative.
   the Closing. A picture takes its moment text, Directions, outline, characters, assets and any character change with it;
   a bridge takes its own Directions and outline. **Bridges** are numbered down the page and named after the pictures
   either side (*Bridge 4: The Vault → The Chase*); one that now sits between other pictures than it was written for
-  says so (**Regen** it, or **Regenerate Narrative**). The **title picture and the Opening never move**, and for now
-  nothing can go right after the title. **Locked** pictures move like any other (the lock is on the picture).
+  says so (**Regen** it, or **Regenerate Narrative**). The **title picture and the Opening never move**; a bridge
+  placed right after the title prints straight after the Opening. **Locked** pictures move like any other (the lock is on the picture).
   **× on a bridge** deletes it for good, after asking; there is no “add a bridge” — every picture has its own text box,
   so there is always somewhere to write. **× on a panel** deletes the picture and its text for good, after asking; the
-  bridges after it stay where they were. **Regen** on one box rewrites only that box, for where it sits now.
+  bridges after it stay where they were (after the panel before it, or after the Opening). **Regen** on one box rewrites only that box, for where it sits now.
   **Regenerate Narrative** keeps your picture order and rewrites all the text, with one bridge between each pair of
-  pictures again (extra bridges, and any you placed oddly, are replaced). **Generate Story** starts over and keeps
+  pictures again (extra bridges, and any you placed oddly, including one right after the title, are replaced). **Generate Story** starts over and keeps
   nothing. Moving asks first (you can tick **Don't show this message again**).
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
