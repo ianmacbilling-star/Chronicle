@@ -8,6 +8,7 @@ const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL, WRITING_MODEL, WRITING_FAST_MODEL } = require('../config/models');   // v3.2.27 -- WRITING_MODEL: the writing tools (TD-999)
 const transcriptCache = require('../services/transcriptCache');   // v3.2.56 -- TD-1010: the transcript first, kept
+const panelOrder = require('../services/panelOrder');   // v3.4.32 -- TD-1107: text linked to its panel by id
 const writtenSlices = require('../services/writtenSlices');   // v3.1.49 -- TD-941 Already Written
 
 // ============================================================
@@ -598,6 +599,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
+  // v3.4.37 -- TD-1107. A bridge's Directions and outline are kept under its id; the prompt below reads them by gap.
+  try {
+    const _gr = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    const _gn = panelOrder.readNorm(_gr ? _gr.narrative_sections : null, moments);
+    gapDirections = panelOrder.gapView(gapDirections, _gn); gapOutlines = panelOrder.gapView(gapOutlines, _gn);
+  } catch (_g) {}
   // v3.1.49 -- TD-941. The author's text in numbered sentences: what the model answers with, and what
   // the blocks are copied from afterwards. Worked out once, here, so both use exactly the same cuts.
   const _wUnits = isWritten ? writtenSlices.splitUnits(session.transcript) : null;
@@ -1168,6 +1175,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       return;
     }
     const now = new Date().toISOString();
+    // v3.4.36 -- TD-1107. One bridge between each pair of pictures, each keeping the id (and so the Directions) of the
+    // first bridge in its gap today; the title's hidden text is left as written (services/panelOrder.js fromGenerated).
+    const _oldSecRow = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    var _finalSecs = panelOrder.fromGenerated(parsed.sections || [], moments || [], _oldSecRow ? _oldSecRow.narrative_sections : null);   // v3.4.37 -- also the job's result
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
       'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
@@ -1175,7 +1186,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ).run(
       parsed.intro || '',
       parsed.intro_summary || '',
-      JSON.stringify(parsed.sections || []),
+      JSON.stringify(_finalSecs),   // v3.4.36
       parsed.outro || '',
       parsed.outro_summary || '',
       narrStyleId, now, req.session.userId, targetForkId
@@ -1226,7 +1237,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     }
     try { await recordGeneration(req.session.userId, { event_type: 'generate_narrative', tokens_redeemed: _narrCharge, quantity: moments.length, unit: 'panels', model: TEXT_MODEL, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId }); } catch (e) {}
     await db.prepare("UPDATE narrative_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(
-      JSON.stringify({ success: true, intro: parsed.intro || '', sections: parsed.sections || [], outro: parsed.outro || '' }),
+      JSON.stringify({ success: true, intro: parsed.intro || '', sections: _finalSecs, outro: parsed.outro || '' }),   // v3.4.37 -- as stored: bridges and their ids
       new Date().toISOString(), jobId
     );
 
@@ -1309,11 +1320,19 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const now = new Date().toISOString();
+  // v3.4.32 -- TD-1107. Lined up with the version's panels by id (or by position, when the ids are not there yet) and stamped.
+  let _secs = sections || [];
+  // v3.4.36 -- and merged with what is stored, so every bridge keeps its id; an edited bridge box becomes that text.
+  try {
+    const _ms = await db.prepare('SELECT id, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+    const _st = await db.prepare('SELECT narrative_sections FROM session_forks WHERE id = ?').get(targetForkId);
+    _secs = panelOrder.mergeSave(_secs, _st ? _st.narrative_sections : null, _ms);
+  } catch (_e) { console.error('[narrative] save merge: ' + ((_e && _e.message) || _e)); }
   await db.prepare(
     'UPDATE session_forks SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     intro || '',
-    JSON.stringify(sections || []),
+    JSON.stringify(_secs),
     outro || '',
     now, req.session.userId, targetForkId
   );
@@ -1405,7 +1424,7 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|between:\d+|moment:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|between:\d+|moment:\d+|bridge:b[0-9a-f]{7})$/.test(gap)) {   // v3.4.37 -- a bridge by its id
     return res.json({ error: 'Invalid gap key' });
   }
 
@@ -1444,7 +1463,7 @@ router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, r
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|moment:\d+|between:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|moment:\d+|between:\d+|bridge:b[0-9a-f]{7})$/.test(gap)) {   // v3.4.37
     return res.json({ error: 'Invalid gap key' });
   }
 
@@ -1653,7 +1672,7 @@ const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more 
 const WT_WORD_MAX = 60;           // characters a Word selection may have
 const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
 const WRITING_USES_PER_TOKEN = 4;
-const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|story)$/;   // v3.2.36 -- 'story': the Story / Session Transcript box
+const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|bridge:b[0-9a-f]{7}|story)$/;   // v3.4.37 -- a bridge by its id;   // v3.2.36 -- 'story': the Story / Session Transcript box
 // v3.2.36 -- TD-999 stage 3. The coach on the Story box reads a WINDOW of a long story (the page sends about
 // 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
 // tools there need a selection, capped like a Narrative box. Regen is for the Narrative boxes only.
@@ -1686,21 +1705,98 @@ function wtChain(moments) {
   out.push('closing');
   return out;
 }
+// v3.4.37 -- TD-1107. THE CHAIN AS THE PAGE SHOWS IT: pictures and bridges in any order. A bridge is 'bridge:<id>';
+// its pictures either side are the picture its block belongs to and the next picture (or the end of the session).
+function wtChainCtx(ctx) {
+  if (!ctx.norm) return wtChain(ctx.moments);
+  const out = ['opening'];
+  ctx.moments.forEach(function (m, i) {
+    if (!(m && m.kind === 'establishing')) out.push('moment:' + i);
+    ((ctx.norm[i] && ctx.norm[i].bridges) || []).forEach(function (x) { out.push('bridge:' + x.id); });
+  });
+  out.push('closing');
+  return out;
+}
+// Which picture a bridge follows (its block), or -1. An old page's 'between:i' is the first bridge of gap i.
+function wtGapOf(ctx, box) {
+  if (!ctx || !ctx.norm) return box.indexOf('between:') === 0 ? parseInt(box.split(':')[1], 10) : -1;
+  if (box.indexOf('between:') === 0) return parseInt(box.split(':')[1], 10);
+  if (box.indexOf('bridge:') !== 0) return -1;
+  const id = box.slice(7);
+  for (let g = 0; g < ctx.norm.length; g++) if (ctx.norm[g].bridges.some(function (x) { return x.id === id; })) return g;
+  return -1;
+}
+function wtResolve(ctx, box) {
+  if (!ctx || !ctx.norm || box.indexOf('between:') !== 0) return box;
+  const g = parseInt(box.split(':')[1], 10), b = ctx.norm[g];
+  return (b && b.bridges.length) ? ('bridge:' + b.bridges[0].id) : box;
+}
 function wtBoxText(box, intro, sections, outro) {
   if (box === 'opening') return intro || '';
   if (box === 'closing') return outro || '';
+  if (box.indexOf('bridge:') === 0) {   // v3.4.37
+    const id = box.slice(7); let t = '';
+    (sections || []).forEach(function (s) { ((s && s.bridges) || []).forEach(function (x) { if (x.id === id) t = String(x.text || ''); }); });
+    return t;
+  }
   const i = parseInt(box.split(':')[1], 10);
   const s = (sections || []).find(function (x) { return x && x.panel_index === i; }) || {};
   return (box.indexOf('moment:') === 0 ? s.before : s.after) || '';
 }
-function wtBoxName(box, moments) {
-  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
-  if (box === 'opening') return 'the Opening (before the first picture)';
-  if (box === 'closing') return 'the Closing (after the last picture)';
-  const i = parseInt(box.split(':')[1], 10);
+// v3.4.43 -- TD-1107. THE COACH COUNTS AS THE PAGE DOES (Erin: it said "between Panel 4 and Panel 5" where the page shows
+// "6 \u2013 Bridge" between 5 and 8). Every row numbered top to bottom: 1 the Opening, then every picture and bridge in page
+// order, the Closing last -- the same rule as fxNums on the page.
+function wtRows(moments, norm) {
+  let n = 1; const out = { opening: 1 };
+  (moments || []).forEach(function (m, i) {
+    const title = (i === 0 && m && m.kind === 'establishing');
+    if (!title) out['moment:' + i] = ++n;
+    if (norm && norm[i]) norm[i].bridges.forEach(function (x) { out['bridge:' + x.id] = ++n; });
+    else if (!norm && !title && i < moments.length - 1) out['between:' + i] = ++n;
+  });
+  out.closing = n + 1;
+  return out;
+}
+function wtPicRow(rows, moments, i) {
   const m = moments[i] || {};
-  if (box.indexOf('moment:') === 0) return 'the text for PANEL ' + (i + 1) + ' ("' + (m.title || 'untitled') + '"), which tells what that picture shows';
-  return 'the bridge between PANEL ' + (i + 1) + ' and PANEL ' + (i + 2) + ', which carries the story from one picture to the next';
+  if (i === 0 && m.kind === 'establishing') return 'the title picture (row 1)';
+  return 'row ' + rows['moment:' + i] + ' ("' + (m.title || 'untitled') + '")';
+}
+// How a box is labelled for the coach: the page's own words.
+function wtRowLabel(rows, moments, key) {
+  if (key === 'opening') return '1 \u2013 Opening';
+  if (key === 'closing') return rows.closing + ' \u2013 Closing';
+  if (key.indexOf('moment:') === 0) { const i = parseInt(key.split(':')[1], 10); return rows[key] + ' \u2013 Moment (the picture "' + ((moments[i] || {}).title || 'untitled') + '")'; }
+  return (rows[key] || '?') + ' \u2013 Bridge';
+}
+function wtBoxName(box, moments, norm) {
+  if (box === 'story') return 'a part of the session\'s STORY / TRANSCRIPT -- the writer\'s own source text, which Campaignia turns into the illustrated story. It may be a game transcript, notes or finished prose: coach it as what it is';
+  const rows = wtRows(moments, norm);
+  if (box === 'opening') return 'row 1 \u2013 Opening (before the first picture)';
+  if (box === 'closing') return 'row ' + rows.closing + ' \u2013 Closing (after the last picture)';
+  if (box.indexOf('moment:') === 0) { const i = parseInt(box.split(':')[1], 10); return 'row ' + rows[box] + ' \u2013 Moment: the text for the picture "' + ((moments[i] || {}).title || 'untitled') + '", which tells what that picture shows'; }
+  const g = wtGapOf({ norm: norm }, box);
+  return 'row ' + (rows[box] || '?') + ' \u2013 Bridge, after ' + wtPicRow(rows, moments, g) + (moments[g + 1] ? (' and before ' + wtPicRow(rows, moments, g + 1)) : ', at the end of the session') + ', which carries the story from one picture to the next';
+}
+// v3.4.43 -- WHAT THE READER HAS ALREADY READ (Ian, 2026-11-05: the coach called the sneeze that gives Gerald his wings
+// perfect, three rows after he had flown and swooped -- "That doesn't really jive"). Every box earlier on the page, in
+// page order and labelled as the page labels it, up to the text just before this box (which wtNeighbours gives in
+// full). A long page keeps the nearest boxes whole and the earlier ones as their openings, so a use costs about the
+// same however long the story is. The order on the page is the story: never the order the pictures were made in.
+const WT_PAGE_MAX = 9000, WT_PAGE_SHORT = 300, WT_PAGE_NEAR = 4;
+function wtPageSoFar(ctx, box) {
+  if (box === 'story' || box === 'opening') return '';
+  const chain = wtChainCtx(ctx), at = chain.indexOf(wtResolve(ctx, box));
+  if (at < 2) return '';
+  const rows = wtRows(ctx.moments, ctx.norm);
+  const items = chain.slice(0, at - 1).map(function (k) { return { label: wtRowLabel(rows, ctx.moments, k), text: String(wtBoxText(k, ctx.intro, ctx.sections, ctx.outro) || '').trim() }; })
+    .filter(function (x) { return x.text; });
+  if (!items.length) return '';
+  let total = items.reduce(function (s, x) { return s + x.text.length; }, 0);
+  if (total > WT_PAGE_MAX) items.forEach(function (x, k) { if (k < items.length - WT_PAGE_NEAR && x.text.length > WT_PAGE_SHORT) x.text = x.text.slice(0, WT_PAGE_SHORT) + '\u2026'; });
+  let out = items.map(function (x) { return x.label + ': ' + x.text; }).join('\n');
+  if (out.length > WT_PAGE_MAX + 3000) out = '\u2026' + out.slice(out.length - (WT_PAGE_MAX + 3000));
+  return 'EARLIER ON THE PAGE, in the order the reader reads it (everything before the text just before this box; for continuity, not to be changed):\n' + out + '\n\n';
 }
 
 // Everything a tool needs to know about this version, read from the database (never from the page).
@@ -1754,7 +1850,11 @@ async function writingContext(db, req, session, targetForkId) {
     return canon + (toks.length > 1 ? ' (also known as: ' + toks.slice(1).join(', ') + ')' : '') + ' — ' + (c.cls || '') + ': ' + String(c.description || '').slice(0, 300);
   }).join('\n');
   const moments = await db.prepare('SELECT id, title, description, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
+  // v3.4.37 -- TD-1107. The text in the new shape (bridges with ids), and Directions read by bridge or by gap.
+  const norm = panelOrder.readNorm(sections, moments);
+  if (norm) { sections = norm; gapDirections = panelOrder.gapView(panelOrder.liftKeys(gapDirections, norm), norm); gapOutlines = panelOrder.gapView(panelOrder.liftKeys(gapOutlines, norm), norm); }
   return {
+    norm: norm,
     campaign, charList, directorNotes, gapDirections, gapOutlines, narrStyleId, styleBundle, verbosity, narrator, fpAnon, moments,
     intro: fk ? (fk.narrative_intro || '') : '', sections: sections, outro: fk ? (fk.narrative_outro || '') : '',
     lore: (campaign && campaign.lore) ? String(campaign.lore).trim() : '',                      // v3.2.32
@@ -1805,22 +1905,28 @@ function wtIntentBlock(ctx, box) {
 }
 function wtNeighbours(ctx, box) {
   if (box === 'story') return '';   // v3.2.36 -- the story has no boxes either side
-  const chain = wtChain(ctx.moments);
-  const at = chain.indexOf(box);
+  const chain = wtChainCtx(ctx);   // v3.4.37 -- the real neighbours on the page
+  const at = chain.indexOf(wtResolve(ctx, box));
   const prev = at > 0 ? chain[at - 1] : null;
   const next = (at >= 0 && at < chain.length - 1) ? chain[at + 1] : null;
   const pt = prev ? wtBoxText(prev, ctx.intro, ctx.sections, ctx.outro) : '';
   const nt = next ? wtBoxText(next, ctx.intro, ctx.sections, ctx.outro) : '';
-  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (for flow only, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
-    (nt ? ('THE TEXT JUST AFTER THIS BOX (for flow only, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
+  const rows = wtRows(ctx.moments, ctx.norm);   // v3.4.43 -- labelled as the page labels them
+  return (pt ? ('THE TEXT JUST BEFORE THIS BOX (' + wtRowLabel(rows, ctx.moments, prev) + '; for flow and continuity, not to be changed):\n' + wtStr(pt, 4000) + '\n\n') : '') +
+    (nt ? ('THE TEXT JUST AFTER THIS BOX (' + wtRowLabel(rows, ctx.moments, next) + '; for flow, not to be changed):\n' + wtStr(nt, 4000) + '\n\n') : '');
 }
 
 function wtPanels(ctx, box) {
   if (box === 'story') return '';   // v3.2.36
   const n = ctx.moments.length;
-  const show = function (i) { const m = ctx.moments[i]; return m ? ('PANEL ' + (i + 1) + ' "' + (m.title || '') + '" shows: ' + (m.description || '')) : ''; };
+  const rows = wtRows(ctx.moments, ctx.norm);   // v3.4.43 -- the page's row numbers
+  const show = function (i) { const m = ctx.moments[i]; return m ? (wtPicRow(rows, ctx.moments, i) + ' shows: ' + (m.description || '')) : ''; };
   if (box === 'opening') return n ? ('The first picture: ' + show(0) + '\n\n') : '';
   if (box === 'closing') return n ? ('The last picture: ' + show(n - 1) + '\n\n') : '';
+  if (box.indexOf('bridge:') === 0) {   // v3.4.37 -- the pictures it sits between now
+    const g = wtGapOf(ctx, box);
+    return 'The picture before: ' + show(g) + '\n' + (g + 1 < n ? ('The picture after: ' + show(g + 1)) : 'After it: the end of the session.') + '\n\n';
+  }
   const i = parseInt(box.split(':')[1], 10);
   if (box.indexOf('moment:') === 0) return 'THIS box\'s picture: ' + show(i) + '\n\n';
   return 'The picture before: ' + show(i) + '\nThe picture after: ' + show(i + 1) + '\n\n';
@@ -1849,7 +1955,7 @@ function wtMessage(kept, rest) {
 
 function wtPrompt(tool, ctx, session, box, text, body) {
   const bg = wtBackground(ctx, session);
-  const name = wtBoxName(box, ctx.moments);
+  const name = wtBoxName(wtResolve(ctx, box), ctx.moments, ctx.norm);   // v3.4.37
   // v3.2.40 -- FEEDBACK ON THE STORY BOX IS BIG PICTURE (Ian, 2026-10-22). The Story box may hold notes, a game
   // transcript or a story the writer wrote, and may be one chapter or a whole story: the coach says which, then judges
   // the composition -- shape, pacing, clarity, gaps, consistency -- not sentences ("The individual paragraphs can be
@@ -1893,7 +1999,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
       system: shareTr ? [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: WT_SYSTEM }] : WT_SYSTEM,   // v3.2.57
       prompt: wtMessage([bg.campaign, bg.session],
         (shareTr ? 'THE ORIGINAL STORY / SESSION TRANSCRIPT: at the start of this request, above (what actually happened; the passage must be true to it).\n\n' : '') +   // v3.2.57
-        wtPanels(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction
+        wtPanels(ctx, box) + wtPageSoFar(ctx, box) + wtNeighbours(ctx, box) + wtIntentBlock(ctx, box) +   // v3.2.39 -- its prompt and direction; v3.4.43 -- and the page before it
         (whole ? '' : story) +
         'THE PASSAGE TO COACH -- ' + name + ':\n' + text + '\n\n' +
         // v3.2.38 -- A VERDICT FIRST (Ian, 2026-10-22: "I don't want it to blow smoke... but if it's really good it's good").
@@ -1905,8 +2011,15 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         // does), so a passage that reads beautifully but gets the session wrong cannot be "great".
         // v3.2.55 -- the original story now comes before the passage (above), kept with the background when whole.
         'YOUR ROLE: You are a warm, honest writing coach helping a new writer improve one passage of their own illustrated story. You teach; you do not rewrite. You always return valid JSON.\n' +
-        'First judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
-        'A great passage is TRUE to the original story (names, who did what, the order of events, nothing invented that contradicts it), SPECIFIC (concrete details from this session, not vague mood), ' +
+        // v3.4.43 -- CONTINUITY FIRST (Ian, 2026-11-05: "What it needs to make sure of... is that the new story with the changes
+        // makes sense"). The writer may have rearranged the pictures on purpose, so the order on the page is the story.
+        'FIRST, CONTINUITY. The reader has already read everything above this passage on the page, in that order. Check that THIS passage makes sense after it: ' +
+        'a character must not gain, learn or do for the first time something they already had, knew or did earlier on the page; an event must not happen again or be undone; ' +
+        'time must not run backwards unless the text clearly makes it a flashback (or a flash-forward); nobody may be somewhere they cannot be. ' +
+        'A passage that clashes with what came before cannot be "great": lead with that clash, name the row it clashes with as the page labels it (e.g. \u201crow 3 \u2013 Moment\u201d), ' +
+        'and suggest a fix -- change the line so it fits, or make the jump a clear flashback or flash-forward. The order on the page is the story the writer chose: never ask for the pictures to be put back in another order.\n' +
+        'Then judge THIS passage honestly against what a good, finished illustrated story needs -- not against perfection. Judge only the text in front of you. ' +
+        'A great passage is TRUE to the original story (names, who did what, nothing invented that contradicts it; the order is the page\'s, which the writer may have changed on purpose), SPECIFIC (concrete details from this session, not vague mood), ' +
         'IN VOICE (the chosen narrative voice and this campaign, not generic filler), and free of stock phrasing: clichés and stock phrases (“a testament to”, “the air hung heavy”, “little did they know”), ' +
         'repeated sentence shapes, piled-up em dashes and vague grandeur all count against it, however smooth it reads. Choose ONE verdict:\n' +
         '- "great": it does its job well; the only changes you could suggest are matters of taste. Say so plainly (\u201cI wouldn\u2019t change a thing!\u201d) and give NO suggestions.\n' +
@@ -1914,7 +2027,7 @@ function wtPrompt(tool, ctx, session, box, text, body) {
         '- "work": it has real problems a reader would notice. Give 3 to 5 suggestions, leading with the one that matters most.\n' +
         'Do not invent problems to have something to say, and do not praise to be kind: praise must name the actual words or choices that work. ' +
         'If the writer has clearly already applied earlier suggestions and the passage now does its job, the verdict is "great".\n' +
-        'Suggestions cover faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
+        'Suggestions cover continuity with the page before it, faithfulness to the original story, specific detail, stock phrasing, clarity, pacing, word choice, dialogue, showing rather than telling, ' +
         'flow from the text before it into the text after it, and anything that contradicts the world / lore or the story so far above (a name, place or fact that does not match). ' +
         'Respect the chosen voice, point of view and story instructions above: never suggest changing what the author chose on purpose.\n' +
         'If THE PROMPT or THE DIRECTION for this part is given above, the passage must cover the prompt and follow the direction: one that does not cannot be "great", say which part it misses, and never suggest undoing either.\n' +
@@ -2017,15 +2130,18 @@ function wtPrompt(tool, ctx, session, box, text, body) {
     // v3.2.55 -- the persona line moved from the top to just before the instructions, after the parts that are kept.
     prompt: wtMessage([bg.campaign, bg.session],
       (rgShare ? 'The session transcript (what actually happened): at the start of this request, above.\n\n' : '') +   // v3.2.57
-      wtPanels(ctx, box) + wtNeighbours(ctx, box) +
+      wtPanels(ctx, box) + wtPageSoFar(ctx, box) + wtNeighbours(ctx, box) +   // v3.4.43 -- and the page before it
       (rgWhole ? '' : rgStory) +
       'THE BLOCK TO WRITE AGAIN -- ' + name + '. Its current text, for reference (write a fresh version, do not just polish it):\n' + (text || '(empty)') + '\n\n' +
       (outlineEdited(outl) ? ('REQUIRED CONTENT for this block (you MUST cover these facts, in your own prose): ' + outlineText(outl) + '\n') : '') +
       (dir ? ('DIRECTOR STEERING for this block (you MUST follow this): ' + dir + '\n') : '') +
       'You are a ' + narrativePersona(ctx.campaign) + ' rewriting ONE block of the narrative for a graphic novel based on a real session.\n' +
       'Write it as ' + len + '. It must pick up exactly where the text before it ends and lead into the text after it, with no gaps and no repetition. ' +
+      // v3.4.43 -- the page as it now reads is the story; a picture moved ahead of its time is written as a jump, on purpose.
+      'It must make sense after everything earlier on the page, in that order: never repeat, undo or contradict what has already happened there (a character must not gain or learn again what they already had or knew). ' +
+      'If this picture\'s events come earlier in time than what the reader has just read, write it clearly as a flashback (or, the other way, a flash-forward) in the story\'s own voice, never as a note about the order. ' +
       (box.indexOf('moment:') === 0 ? 'Its main job is to tell what THIS box\'s picture shows and how it comes about. ' : '') +
-      (box.indexOf('between:') === 0 ? 'Cover only what happens between the picture before and the picture after. ' : '') +
+      ((box.indexOf('between:') === 0 || box.indexOf('bridge:') === 0) ? 'Cover only what happens between the picture before and the picture after. ' : '') +   // v3.4.37
       (isOutline ? 'Write bullet points, one per line, each starting with • and a space. ' : '') +
       (isDialogue ? 'Put each spoken line on its own line, led by the speaker\'s name and a colon. ' : '') +
       'Use typographic quotes “ ” for speech.\n' +
@@ -2108,7 +2224,7 @@ function wtTranscriptWindow(ctx, session, box, size) {
   const tr = String(session.transcript || '');
   if (tr.length <= size) return tr;
   const n = Math.max(1, ctx.moments.length);
-  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);
+  const pos = (box === 'opening') ? 0 : (box === 'closing') ? 1 : (box.indexOf('bridge:') === 0) ? ((Math.max(0, wtGapOf(ctx, box)) + 1) / n) : ((parseInt(box.split(':')[1], 10) + (box.indexOf('between:') === 0 ? 1 : 0.5)) / n);   // v3.4.37
   let start = Math.round(pos * tr.length - size / 2);
   start = Math.max(0, Math.min(tr.length - size, start));
   return (start > 0 ? '[…earlier part of the transcript left out…]\n' : '') + tr.slice(start, start + size) +
@@ -2217,8 +2333,12 @@ async function writingToolHandler(req, res) {
   if (tool === 'regen') {
     if (ctx.narrStyleId === 'written') return res.json({ error: 'This version uses Already Written, so the words are your own and Regen has nothing to write. Edit the text, or use Generate Narrative to split your story again.' });
     if (!session.transcript) return res.json({ error: 'This session has nothing in its Story / Session Transcript box yet, so there is nothing to write from.' });
+    if (box.indexOf('bridge:') === 0) {   // v3.4.37
+      if (wtGapOf(ctx, box) < 0) return res.status(400).json({ error: 'That bridge is no longer on the storyboard. Reload the page.' });
+    } else {
     const bi = box.indexOf(':') > 0 ? parseInt(box.split(':')[1], 10) : 0;
     if (box !== 'opening' && box !== 'closing' && !(bi >= 0 && bi < ctx.moments.length)) return res.status(400).json({ error: 'That panel is no longer on the storyboard. Reload the page.' });
+    }
   }
 
   // Before the call: a use in hand, or a token to buy four. Nothing is spent here.

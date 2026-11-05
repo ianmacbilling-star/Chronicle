@@ -471,6 +471,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: coverFromPrefs(cur, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
+    company_image_url: cur.company_image_url || '',   // v3.4.26 -- TD-1102
     built_title_url: cur.built_title_url || '',
     // v3.0.622 -- TD-357(2). The WORDS the built title actually has drawn on it, recorded at build
     // time. Without them "has the title changed since it was drawn?" cannot be asked at all: the
@@ -498,6 +499,9 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // from "cleared" so it knows whether to seed the field with the dates.
     subtitle: (cur.subtitle == null ? null : String(cur.subtitle)),
     author_note: (cur.author_note == null ? '' : String(cur.author_note)),   // v3.2.82 -- TD-1017
+    // v3.4.27 -- TD-1103. null means never set ("The Company"; the automatic names), so it is sent as null.
+    company_heading: (cur.company_heading == null ? null : String(cur.company_heading)),
+    company_caption: (cur.company_caption == null ? null : String(cur.company_caption)),
     // The date range the cover would show, computed by the SAME function pdf.js renders with
     // (formatDateRange). The Prep panel seeds the subtitle field from this, so a book that has never
     // had a subtitle opens showing exactly what its cover already says -- and a second copy of a
@@ -566,11 +570,12 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     _curating = true;
   }
   // v3.1.96 -- TD-979. Your own book's covers and title page: never a rejected picture.
-  if (await rightsCheck.refuseRejected(res, [b.cover_image_url, b.back_cover_image_url, b.title_image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
+  if (await rightsCheck.refuseRejected(res, [b.cover_image_url, b.back_cover_image_url, b.title_image_url, b.company_image_url], 'It can\u2019t be used here. Choose another picture, or replace it with one you have the rights to.')) return;
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
+  if (b.company_image_url !== undefined) patch.company_image_url = b.company_image_url || null;   // v3.4.26 -- TD-1102; the prefs blob takes it with no schema change
   // v3.0.618 -- THE BUILT TITLE IS ITS OWN FIELD. v3.0.617 stored it in title_image_url, which was
   // ALREADY TAKEN: that is the third image in the Prep panel, the artwork on the book title PAGE.
   // Ian saw his own title-page image appear in the builder and said so before anything overwrote it.
@@ -602,6 +607,10 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.subtitle !== undefined) patch.subtitle = (b.subtitle === '' ? '' : (b.subtitle || null));
   // v3.2.82 -- TD-1017. The author note: a note to the readers on the details page. 600 characters, line breaks kept.
   if (b.author_note !== undefined) patch.author_note = String(b.author_note == null ? '' : b.author_note).replace(/\r\n/g, '\n').slice(0, 600);
+  // v3.4.27 -- TD-1103. The character page's heading (48) and text below (400, line breaks kept). '' is a real value
+  // (no heading; no words); a null caption puts the automatic names back.
+  if (b.company_heading !== undefined) patch.company_heading = (b.company_heading == null) ? null : String(b.company_heading).replace(/\s+/g, ' ').trim().slice(0, 48);
+  if (b.company_caption !== undefined) patch.company_caption = (b.company_caption == null) ? null : String(b.company_caption).replace(/\r\n/g, '\n').slice(0, 400);
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
   // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.
@@ -673,6 +682,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: coverFromPrefs(merged, camp ? camp.campaign_image_url : ''),
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
+    company_image_url: merged.company_image_url || '',   // v3.4.26
     built_title_url: merged.built_title_url || '',
     built_title_src: merged.built_title_src || '',
     built_title_prompt: merged.built_title_prompt || '',
@@ -692,6 +702,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // one record must carry the same fields or the caller has to remember which is which.
     subtitle: (merged.subtitle == null ? null : String(merged.subtitle)),
     author_note: (merged.author_note == null ? '' : String(merged.author_note)),   // v3.2.82
+    company_heading: (merged.company_heading == null ? null : String(merged.company_heading)),   // v3.4.27
+    company_caption: (merged.company_caption == null ? null : String(merged.company_caption)),
     title_color: merged.title_color || '',
     layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''

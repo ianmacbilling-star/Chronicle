@@ -257,16 +257,22 @@
         },
         {
           "selector": "#prep-thumb-cover",
-          "title": "Cover, back and title images",
-          "text": "Set these from your Archive. The × on a tile removes that picture, and the tiles show you the crop the printed page will use. Clear the cover and you get a plain framed cover instead.",
+          "title": "Cover picture",
+          "text": "Set it from your Archive. The × removes it, and the tile shows you the crop the printed cover will use. Clear it and you get a plain framed cover instead.",
           "placement": "auto"
         },
         {
-          "selector": "#prep-acc-layout .prep-acc-body",
-          "title": "Layout",
-          "text": "Open this to choose how your book looks — the layout, borders, captions, fonts and decorations.",
+          "selector": "#prep-acc-titlepage .prep-acc-head",
+          "title": "The book, page by page",
+          "text": "These panels follow the book: Title Page, Author's Note Page, The Company Page, Table of Contents, Body and Back Cover. Everything saves as you change it; press Refresh preview to see it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#prep-acc-body .prep-acc-body",
+          "title": "Body",
+          "text": "How the pages look — the layout, borders, captions, fonts and decorations.",
           "placement": "auto",
-          "open": "#prep-acc-layout .prep-acc-head"
+          "open": "#prep-acc-body .prep-acc-head"
         },
         {
           "selector": "#ntab-finalize",
@@ -484,7 +490,7 @@
         {
           "selector": "#session-custom-btn",
           "title": "Layout",
-          "text": "Choose how your story is laid out — the layout, borders, captions, fonts and decorations. (Same as the Publish page.)",
+          "text": "Choose how your story is laid out — the layout, borders, captions, fonts and decorations. (The same choices are in the Publish page's Body panel.)",
           "placement": "auto"
         },
         {

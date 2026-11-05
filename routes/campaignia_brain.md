@@ -1067,7 +1067,8 @@ this tab is where you change a character as the story goes along. It lists the c
   reference and shows the result. **Approve change** to keep it, or **Discard / Ignore**.
   This is the plain box, not the Storyboard's guided panel — but every piece of advice in
   10.7 about wording a retouch still applies here.
-- **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown sets when
+- **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown (its pictures numbered as on the Story
+  panels and the Review, e.g. *7 – One Big Sneeze!*; it follows its picture when panels move) sets when
   the new look kicks in (normal before, changed from it onward). Leave Empty to apply
   throughout.
 - **Evolves across sessions** — each session pulls every character forward from where
@@ -1170,6 +1171,24 @@ Where the story comes together as alternating image panels and narrative.
   coach on that box: an honest verdict and tips (**Feedback**), new versions of your words
   (**Rewrite**), and a better word (**Word**). See **10.9** for the whole coach. **1 token buys 4
   writing uses**; Word is free; members use their own tokens.
+- **Move panels and bridges anywhere** (your own version only). The Story panels and the Review tab hold two kinds of
+  piece: a **picture panel** (the picture and its own text, which never come apart) and a **bridge** (the text between
+  pictures, which is its own piece). Each has **◀ × ▶** at the right of its bar (**▲ × ▼** on the Review
+  tab) and a **gripper** (⠿). The arrows move it **one place**, trading places with whatever sits next to it, picture or
+  bridge; dragging its gripper drops it **anywhere** (a gold line shows where it will land; on a phone use the arrows).
+  There are no rules, only warnings: two pictures can sit side by side, several bridges in a row, a bridge just before
+  the Closing. A picture takes its moment text, Directions, outline, characters, assets and any character change with it;
+  a bridge takes its own Directions and outline. **Every row is numbered top to bottom**, the same on both pages:
+  *1 – Opening*, then the pictures and the bridges (*5 – Bridge*) in page order, and the Closing last (*14 –
+  Closing*); the numbers change as things move. A bridge that now sits between other pictures than it was written for
+  says so (**Regen** it, or **Regenerate Narrative**). The **title picture and the Opening never move**; a bridge
+  placed right after the title prints straight after the Opening. **Locked** pictures move like any other (the lock is on the picture).
+  **× on a bridge** deletes it for good, after asking; there is no “add a bridge” — every picture has its own text box,
+  so there is always somewhere to write. **× on a panel** deletes the picture and its text for good, after asking; the
+  bridges after it stay where they were (after the panel before it, or after the Opening). **Regen** on one box rewrites only that box, for where it sits now.
+  **Regenerate Narrative** (it asks first when the bridges have been rearranged) keeps your picture order and rewrites all the text, with one bridge between each pair of
+  pictures again (extra bridges, and any you placed oddly, including one right after the title, are replaced). **Generate Story** starts over and keeps
+  nothing. Moving asks first (you can tick **Don't show this message again**).
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture
 you already have — your own drawing, a photo, a painting — onto that panel instead of one Campaignia
@@ -1782,13 +1801,24 @@ Everything here belongs to the version you picked on tab 1. **This is the quick 
 try things out** — stylings, fonts, decorations and layouts — because previewing here is
 **faster and cheaper than running Optimize**. Settle the look here first.
 
-- **Title and subtitle** — default to the campaign name; change them here. The **Author’s Note** box under
-  them is a note to your readers, printed on the page after the title page (PDF and print only).
+- **The panels follow the book**, front to back: **Cover**, **Title Page**, **Author’s Note Page**, **The Company Page**,
+  **Table of Contents**, **Body** and **Back Cover**. Open whichever you need (one is open at a time; opening another closes it); each holds the settings for that part of the
+  book, and everything is saved with this version as you change it (switch versions and the panels show that version's).
+  Press **Refresh preview** to see a change. **Reset layout choices** (at the foot of Body) puts every layout choice in all
+  the panels back to the defaults, after asking; your title, words and pictures stay.
+- **Cover** — **Include cover page** (it also prints the back cover), the **Title** and **Subtitle** (they default to the
+  campaign name and nothing; the title page and spine use them too), the cover picture, and the title's look.
+- **Author’s Note Page** — a note to your readers, printed on the page after the title page (PDF and print only).
 - **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
   instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
-  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, under
-  **Layout** on this same tab. They are on every plan and cost nothing.
-- **Cover, back cover and title-page images** — pick each from your Archive. The tiles show you
+  styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, in the
+  **Cover** panel on this same tab. They are on every plan and cost nothing.
+- **My Cover Picture has Title Included** — tick it (under the cover pictures) when your cover picture already has the
+  title drawn on it, for example an Image Builder picture archived **With title**. The front cover then shows the picture
+  alone, with no title, subtitle or dark band over it, and the title settings below are hidden. The title and subtitle
+  are still printed on the spine and the title page and shown in the Library. For an Image Builder picture, a line under
+  the box says if the title on the picture differs from your Title or Subtitle. Untick it to bring the title settings back.
+- **Cover, back cover and title-page pictures** (in the Cover, Back Cover and Title Page panels) — pick each from your Archive. The tiles show you
   **the crop the printed page will use**, not the whole image. **For the front and back cover you
   choose that crop yourself:** if the picture is not already the cover's shape, it opens in a
   cover-shaped frame placed where the cover would have cut it — drag the frame to move it, drag a
@@ -1797,7 +1827,22 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   (you can still use it). The title-page picture is not framed this way. The **x** on a tile removes
   that picture, and so does picking the picture already on the cover. Clear the cover entirely and you
   get a **plain framed cover** — dark ground, gold frame, your title on it.
-- **Layout** — the layout itself, borders, captions, fonts and decorations.
+- **Company picture** — in **The Company Page** panel. By default the character page is the line-up of your characters.
+  To use a picture instead (for example a group picture made in the Image Builder and archived), set **Character page**
+  to **Archived picture**, then pick it on the tile under it (on the line-up the tile is greyed out). The page then shows
+  that picture, as large as the page holds without cropping, with the heading above it and your text below it.
+  **To go back to the line-up, set Character page to Character line-up** (the picture stays on the tile for later).
+  Removing the picture also goes back to the line-up; with Archived picture chosen but no picture picked, the line-up is used.
+  The picture gets the same frame as the book's other pictures (the **Picture border** setting in **Body**).
+- **Changing “The Company” heading, and the words under it** — two boxes, **Heading** and **Text below** (The Company Page
+  panel, beside the Company picture). When asked about either, describe both, and **Use the automatic names**. They are the character page's own words, for the line-up
+  or the picture. The heading starts as **The Company**; change it (for example to **The Cast**), or clear it for no
+  heading. On the line-up the text below starts as the characters' names from left to right and keeps itself up to date
+  as characters are added or renamed; type your own words and they print instead (in italic), and **Use the automatic
+  names** puts the names back. Under a picture the text starts empty. Line breaks are kept.
+- **Table of Contents** — Include table of contents, Session dividers and New page per session.
+- **Body** — the layout itself (Picture Book or Magazine), picture borders, captions, the body font, drop cap and the
+  running page header.
 - The right-hand pane previews the book as you change things.
 
 **Tab 3 — Optimize: put the whole book together**
@@ -2252,9 +2297,9 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"Where do I start / what's the right order?"** Give the whole path in **1a. Getting started**,
   starting from step 1 (Create a campaign) unless they clearly have already done the early steps.
   The **Ask Us** panel also has a **New here? Get started step by step** pill that walks through it.
-- **"How do I change the book's layout?"** **Preview** tab → **Layout** button: Picture
-  Book or Magazine. Run **Optimize** on the Publish page to see the real
-  printed result.
+- **"How do I change the book's layout?"** On the Publish page, **Prep & Preview** → the **Body** panel (Picture Book
+  or Magazine, borders, captions, fonts); a session's **Preview** tab has the same choices under its **Layout** button.
+  Run **Optimize** on the Publish page to see the real printed result.
 - **"How do I hand off running the campaign?"** **Members** → the member's **⋯** →
   **Make Story Master**. The incoming Story Master needs a paid subscription; everyone
   keeps their own versions.

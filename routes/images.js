@@ -4197,6 +4197,16 @@ router.post('/builder/images/:id/archive', requireAuth, async function (req, res
       'INSERT INTO campaign_archives (campaign_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(r.campaign_id, 'moment', (r.name || 'Image Builder picture') + (_src !== r.image_url ? ' (clean copy)' : ''), archivedUrl, _src, r.words || r.description || null, r.art_style || null, r.art_style_name || null, r.img_w || null, r.img_h || null, r.shape || null, req.session.userId, new Date().toISOString());
+    // v3.4.24 -- TD-1100. Archived WITH its title: remember the words it was laid on with, for the cover word check.
+    if (_src === r.image_url) {
+      try {
+        let _rf = {}; try { _rf = r.refs ? JSON.parse(r.refs) : {}; } catch (e) { _rf = {}; }
+        const _t = _rf && _rf.title;
+        if (_t && _t.url && !_t.off && String(_t.title || '').trim() && r.clean_image_url)
+          await db.prepare('INSERT INTO image_title_words (url, campaign_id, title, subtitle) VALUES (?, ?, ?, ?) ON CONFLICT (url) DO NOTHING')
+            .run(archivedUrl, r.campaign_id, String(_t.title).trim().slice(0, 200), String(_t.subtitle || '').trim().slice(0, 200) || null);
+      } catch (e) { console.error('[image-builder] title words error:', e.message); }
+    }
     res.json({ success: true });
   } catch (e) { console.error('[image-builder] archive error:', e.message); res.json({ error: 'Could not archive the picture.' }); }
 });

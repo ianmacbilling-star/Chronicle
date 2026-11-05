@@ -256,7 +256,7 @@ function maskCharacters(chars) {
   var out = chars.map(function (c) { var n = maskFields(c, CHARACTER_UPLOAD_FIELDS); if (n !== c) hit = true; return n; });
   return hit ? out : chars;
 }
-function maskCampaign(c) { return maskFields(c, ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'campaign_image_url']); }
+function maskCampaign(c) { return maskFields(c, ['cover_image_url', 'back_cover_image_url', 'title_image_url', 'campaign_image_url', 'company_image_url']); }   // v3.4.26 -- company_image_url
 
 // url -> { verdict, reasons } for the ones that have a verdict. Never throws.
 // v3.2.17 -- A WARNING STORED BEFORE AI TOOL CREDITS WERE EXEMPT. Ian: "clear the warning if it sees it." A

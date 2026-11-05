@@ -4870,8 +4870,13 @@ function openChangeReview(charId) {
   var moments = state.moments || [];
   var savedIdx = (typeof r.change_moment_index === 'number' && r.change_moment_index >= 0) ? r.change_moment_index : -1;
   var emptyOpt = '<option value="-1"' + (savedIdx < 0 ? ' selected' : '') + '>&mdash; Empty (applies throughout, not tied to a Moment Panel) &mdash;</option>';
+  var _scNums = (typeof fxNums === 'function') ? fxNums('board') : {};   // v3.4.44 -- the page's row numbers
   var momentOptions = moments.map(function(m, i) {
-    var label = 'Moment Panel ' + (i + 1) + (m.title ? ': ' + m.title : '');
+    // v3.4.44 -- TD-1107. Labelled as the Story panels and the Review label them ("7 \u2013 One Big Sneeze!"), worked out from
+    // the order at the moment the box opens, so after panels move the next opening shows the new numbers. Pictures only:
+    // a change starts at a picture, never a bridge.
+    var label = (i === 0 && m.kind === 'establishing') ? ('1 \u2013 Opening' + (m.title ? ': ' + m.title : ''))
+      : ((_scNums['p' + m.id] || (i + 1)) + ' \u2013 ' + (m.title || 'Untitled panel'));
     var sel = (i === savedIdx) ? ' selected' : '';
     return '<option value="' + i + '"' + sel + '>' + label + '</option>';
   }).join('');
@@ -5344,7 +5349,7 @@ function renderReview(data) {
 
   // A steerable narrative row: shows the outline (what the prose WILL say)
   // plus a Direction pill that lights gold when a direction has been set.
-  function narrRow(gapKey, label, cls) {
+  function narrRow(gapKey, label, cls, brg) {   // v3.4.37 -- brg: the bridge, when the row is one
     var hasDir = !!(state.narrativeDirections && state.narrativeDirections[gapKey]);
     var oText = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
     var safeLabel = escapeHtmlReview(label);
@@ -5369,20 +5374,23 @@ function renderReview(data) {
     var body = oText
       ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(formatOutlineText(oText)) + '</div>'
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
-    return '<div class="review-nar ' + cls + '">' +
-      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu + '</div>' +
+    return '<div class="review-nar ' + cls + '"' + (gapKey.indexOf('bridge:') === 0 ? (' data-fx-src="review" data-fx-t="b" data-fx-id="' + gapKey.slice(7) + '"') : '') + '>' +   // v3.4.37
+      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu +
+        (gapKey.indexOf('bridge:') === 0 ? spaceControls('review', 'b', gapKey.slice(7)) : '') + '</div>' +   // v3.4.37
+      ((brg && brg.stale) ? panelStaleNoteHtml() : '') +
       body +
     '</div>';
   }
 
   var html = '';
   var _hasEstR = panels.some(function(p){ return p.kind === 'establishing'; });
-  if (!_hasEstR) html += narrRow('opening', 'Opening', 'review-nar-open');
+  var _numsR = fxNums('review');   // v3.4.40 -- every row numbered in page order, as on the Story panels
+  if (!_hasEstR) html += narrRow('opening', fxRowLabel(1, 'Opening'), 'review-nar-open');
 
-  var _pNumR = 0;
+  var _pNumR = 0, _bNumR = 0;   // v3.4.35
   panels.forEach(function(p, i) {
     var _isEstR = (p.kind === 'establishing');
-    var num = _isEstR ? 0 : (++_pNumR);
+    ++_pNumR; var num = _isEstR ? 1 : (_numsR['p' + p.moment_id] || _pNumR);   // v3.4.40 -- its number in page order
     var mid = p.moment_id;
 
     // Character chips — each carries an id; × removes when editable.
@@ -5453,13 +5461,13 @@ function renderReview(data) {
         '<button class="row-menu-item" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')">Edit Narrative Direction</button>' +
         '</div></div>'
       : '';
-    html += '<div class="review-panel">' +
+    html += '<div class="review-panel"' + (_isEstR ? '' : (' data-fx-src="review" data-fx-t="p" data-fx-id="' + mid + '"')) + '>' +   // v3.4.37
       '<div class="review-panel-head">' +
-        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">Opening</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
-          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
+          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu + (_isEstR ? '' : spaceControls('review', 'p', mid)) +   // v3.4.37 -- TD-1107
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -5467,13 +5475,18 @@ function renderReview(data) {
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
     '</div>';
 
-    // Bridge gap AFTER this panel (the last gap is covered by the closing).
-    if (!_isEstR && i < panels.length - 1) {
-      html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), 'review-nar-bridge');
+    // v3.4.37 -- TD-1107. Every bridge that follows this picture on the page, by its id. With no narrative yet the
+    // Review still plans one bridge per gap, as before (the last gap is covered by the closing).
+    if (Array.isArray(p.bridges)) {
+      p.bridges.forEach(function (b) {
+        html += narrRow('bridge:' + String(b.id).replace(/[^a-z0-9]/gi, ''), fxRowLabel(_numsR['b' + b.id] || (++_bNumR), 'Bridge'), 'review-nar-bridge', b);
+      });
+    } else if (!_isEstR && i < panels.length - 1) {
+      html += narrRow('between:' + i, fxRowLabel(_numsR['g' + i] || (++_bNumR), 'Bridge'), 'review-nar-bridge');
     }
   });
 
-  html += narrRow('closing', 'Closing', 'review-nar-close');
+  html += narrRow('closing', fxRowLabel(_numsR.closing, 'Closing'), 'review-nar-close');
 
   list.innerHTML = html;
 }
@@ -5937,9 +5950,14 @@ function submitHelp() {
   renderHelpThread();
   var body = { messages: _helpThread.slice(-12), current_view_id: _helpCurrentViewId(), ai_done_sent: _helpAiDoneSent };
   if (state && state.currentCampaign && state.currentCampaign.id) body.current_campaign_id = state.currentCampaign.id;
+  // v3.4.41 -- ONE QUIET RETRY. Erin, 2026-11-05: "Could not answer that right now", then the same question answered on
+  // the next press. A failed call (no answer, nothing said why, or the line dropped) is tried once more after a moment
+  // before the red line shows. A reason the server gives (asking too fast, not set up) is shown at once.
+  var _helpSend = function (attempt) {
   fetch('/api/help/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
+      if (attempt === 0 && !(data && data.ok && data.answer) && (!data || !data.error || /^Could not answer that right now/.test(String(data.error)))) { setTimeout(function () { _helpSend(1); }, 1500); return; }
       _helpPending = false;
       if (btn) btn.disabled = false;
       if (data && data.ok && data.answer) {
@@ -5954,6 +5972,7 @@ function submitHelp() {
       renderHelpThread();
     })
     .catch(function(){
+      if (attempt === 0) { setTimeout(function () { _helpSend(1); }, 1500); return; }   // v3.4.41
       _helpPending = false;
       if (btn) btn.disabled = false;
       _helpThread.pop();
@@ -5961,6 +5980,8 @@ function submitHelp() {
       _helpError = 'Could not answer that right now - try again?';
       renderHelpThread();
     });
+  };
+  _helpSend(0);
 }
 
 function openNarrDirection(gapKey, label) {
@@ -7463,6 +7484,7 @@ function ensureGenFree() {
 function generateNarrativeAndImages() {
   if (_anyPanelJobBlocked()) return;   // v3.2.91 -- TD-1025
   if (!ensureGenFree()) return;
+  if (fxRegenAsk(generateNarrativeAndImages)) return;   // v3.4.41 -- TD-1107: rearranged bridges go back to one per gap
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeAndImages(); } }); return; }
   state._writtenLenOk = false;
@@ -7610,6 +7632,7 @@ function cancelNarr() {
 // confirm that blocks the button people actually came for.
 function generateNarrativeOnly() {
   if (!ensureGenFree()) return;
+  if (fxRegenAsk(generateNarrativeOnly)) return;   // v3.4.41 -- TD-1107: rearranged bridges go back to one per gap
   // v3.1.51 -- TD-941. Already Written past the recommended length asks first; this call runs again on yes.
   if (state._writtenLenOk !== true) { _writtenLengthCheck().then(function (ok) { if (ok) { state._writtenLenOk = true; generateNarrativeOnly(); } }); return; }
   if (!state._sbSummaryAsked && state._sbSummaryEdited) {
@@ -10442,13 +10465,30 @@ function collectNarrativeState() {
     var mbox = document.getElementById('narrative-moment-box-' + i);
     var abox = document.getElementById('narrative-between-box-' + i);
     var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
-    return {
+    var _after = abox ? abox.value.trim() : (prev.after || '');
+    var _sec = {
       panel_index: i,
+      moment_id: m.id,   // v3.4.33 -- TD-1107: the text is linked to its panel
       before: mbox ? mbox.value.trim() : (prev.before || ''),
       before_summary: prev.before_summary || '',
-      after: abox ? abox.value.trim() : (prev.after || ''),
+      after: _after,
       after_summary: prev.after_summary || ''
     };
+    if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    // v3.4.37 -- TD-1107. Every bridge by its id, each from its own box; one rewritten here is written for where it sits.
+    if (Array.isArray(prev.bridges)) {
+      var _nid = (state.moments[i + 1] || {}).id;
+      _sec.bridges = prev.bridges.map(function (b) {
+        var bx = document.getElementById('narrative-bridge-box-' + b.id);
+        var tx = bx ? bx.value.trim() : String(b.text || '');
+        var o = Object.assign({}, b, { text: tx });
+        if (tx !== String(b.text || '').trim()) o.between = [m.id, _nid == null ? null : _nid];
+        return o;
+      });
+      if (m.kind !== 'establishing') _sec.after = _sec.bridges.map(function (b) { return b.text; }).join('\n\n');
+      delete _sec.bridge_stale;
+    }
+    return _sec;
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -10469,6 +10509,7 @@ function saveNarrativeSection(type, panelIndex) {
   .then(function(result) {
     if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
       : type === 'outro' ? 'narrative-closing'
@@ -10497,6 +10538,7 @@ function saveInlineNarrative(silent) {
   .then(function(result) {
     if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     if (!silent) showAlert('Narrative saved!');
   });
 }
@@ -10507,6 +10549,7 @@ function regenNarrativeSection(type, panelIndex) {
   // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
   // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
   // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  if (type === 'bridge') { wtOpen('regen', 'bridge:' + panelIndex, 'narrative-bridge-box-' + panelIndex); return; }   // v3.4.37 -- a bridge by its id
   var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
@@ -11316,6 +11359,7 @@ function loadNovelPreview(layout) {
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
+  url += '&castRoster=1';   // v3.4.27 -- TD-1103: the page says its automatic names, for the text box
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -11336,6 +11380,7 @@ function loadNovelPreview(layout) {
     resizeNovelPreviewIframe();
     applyNovelZoom();
     try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
+    try { prepCastRosterFromPreview(iframe); } catch (_e) {}   // v3.4.27 -- TD-1103: the automatic names, for the text box
   };
   iframe.src = url;
 }
@@ -11574,7 +11619,8 @@ var PREP_IMG_KINDS = {
   campaign: { label: 'Choose a Campaign image', field: 'campaign_image_url', campaignField: true },
   cover: { label: 'Choose a Cover image', field: 'cover_image_url' },
   back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
-  title: { label: 'Choose a Title image', field: 'title_image_url' }
+  title: { label: 'Choose a Title image', field: 'title_image_url' },
+  company: { label: 'Choose a Company picture', field: 'company_image_url' }   // v3.4.26 -- TD-1102: the character page as a picture
 };
 // First-publish convenience: if this campaign has a Campaign image but no
 // explicit publish Cover yet, seed the Cover with the Campaign image so it is
@@ -11648,6 +11694,7 @@ function prepSyncTitle() {
       : 'This is someone else s version. Switch to your own version to change the subtitle.';
   }
   try { _prepAuthorNoteSync(_ownV); } catch (e) {}   // v3.2.82 -- TD-1017
+  try { _prepCastWordsSync(_ownV); } catch (e) {}   // v3.4.27 -- TD-1103
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
@@ -13512,8 +13559,19 @@ function _prepMemberSetImage(kind, url) {
     .then(function(r){ return r.json(); })
     // v3.0.698 -- TD-497. AN EMPTY URL NO LONGER MEANS 'REVERT'. Under the presence rule in
     // database/db.js it means REMOVED, and the toast has to say the thing that just happened.
-    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.1.96: a refusal is not the new meta
+    .then(function(m){ if (_cmpRightsRefused(m) || (m && m.error)) { if (!_cmpRightsRefused(m)) showError(m.error); return; } state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); if (kind === 'company') prepCompanyAuto(url); showAlert(url ? 'Your book image set.' : 'Image removed.'); })   // v3.4.26 -- company   // v3.1.96: a refusal is not the new meta
     .catch(function(){ showError('Could not update your book image.'); });
+}
+// v3.4.26 -- TD-1102. PICKING A COMPANY PICTURE CHOOSES IT (Ian: "If they upload a character page then auto make the selection
+// for them"): Character page becomes Archived picture and Include character page is ticked; removing it goes back to the
+// line-up. Committed like any other layout change, and the preview is marked out of date.
+function prepCompanyAuto(url) {
+  var sel = document.getElementById('pcl-castmode'), ck = document.getElementById('pcl-cast');
+  if (!sel) return;
+  if (url) { sel.value = 'image'; if (ck) ck.checked = true; } else sel.value = 'lineup';
+  prepSyncCastNpc();
+  try { if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); } catch (e) {}
+  try { prepMarkPreviewStale(true); } catch (e) {}
 }
 // v3.0.698 -- TD-497. WHICH WAY A COVER TILE CROPS.
 //
@@ -13534,7 +13592,7 @@ var PREP_CROP_KINDS = { cover: 1, back: 1 };
 function renderPrepThumbs() {
   var c = state.currentCampaign; if (!c) return;
   var _pos = prepCropPosClass();
-  ['cover','back','title'].forEach(function(kind){
+  ['cover','back','title','company'].forEach(function(kind){   // v3.4.26 -- company
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
     var _f = PREP_IMG_KINDS[kind].field;
     var url = ((state.bookMeta || {})[_f]) || '';
@@ -13554,6 +13612,7 @@ function renderPrepThumbs() {
       el.innerHTML = '<span class="prep-thumb-plus">+</span>';
     }
   });
+  try { prepCoverWordsCheck(); } catch (e) {}   // v3.4.24 -- TD-1100: the cover may have changed
 }
 // prepRemoveImage: clear one of the three book pictures.
 //
@@ -13689,6 +13748,7 @@ var COVER_CROP_ASPECT = 7.1 / 9.6;
 function coverCropAnchor() {
   var p = '';
   try { p = (typeof customOpts === 'object' && customOpts) ? String(customOpts.titlePlace || '') : ''; } catch (e) {}
+  if (p === 'none') return 'middle';   // v3.4.23 -- the picture carries the title: centred, as coverPlaceCss draws it
   return (p === 'top' || p === 'middle') ? p : 'bottom';
 }
 
@@ -13799,24 +13859,32 @@ function refreshNovelPreview() {
 // once and keeps a soft gold glow until the preview is drawn again (loadNovelPreview clears it, whatever drew it).
 // Edits that already redraw the preview themselves (Apply & preview, Done & Use) clear it straight away.
 // Programmatic fills fire no events, so loading a book never lights it.
-function prepMarkPreviewStale(on) {
+function prepMarkPreviewStale(on, ev) {   // v3.4.25 -- ev: the edit that made it stale
   var b = document.getElementById('prep-refresh-btn');
   if (!b) return;
   var was = b.classList.contains('prep-refresh-stale');
   if (!on) {
-    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle');
+    b.classList.remove('prep-refresh-stale', 'prep-refresh-wiggle', 'prep-refresh-flash'); b._flashAt = 0;   // v3.4.25
     b.title = 'Redraw the preview with your latest changes.';
     return;
   }
   b.classList.add('prep-refresh-stale');
   b.title = 'Your changes are not in the preview yet. Press to redraw it.';
-  if (!was) { b.classList.remove('prep-refresh-wiggle'); void b.offsetWidth; b.classList.add('prep-refresh-wiggle'); }
+  // v3.4.25 -- TD-1101 (Ian, 2026-11-04: "make it so the Refresh Preview gets bright for a second when things change along
+  // with the shake. It's not obvious enough."). EVERY change, not only the first: the wiggle plus a bright gold flash
+  // (prep-refresh-flash), then the soft glow until the preview is drawn. Typing in a text box flashes at most once every
+  // two seconds, so it never strobes; anything else at most once in 0.6 s (a select fires input and change together).
+  var now = Date.now(), t = ev && ev.target;
+  var typing = !!(ev && ev.type === 'input' && t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && /^(text|search|)$/.test(String(t.type || '')))));
+  if (b._flashAt && now - b._flashAt < (typing ? 2000 : 600)) return;
+  b._flashAt = now;
+  b.classList.remove('prep-refresh-wiggle', 'prep-refresh-flash'); void b.offsetWidth; b.classList.add('prep-refresh-flash');
 }
 function _prepPanelEdited(e) {
   var t = e && e.target;
   if (!t || typeof t.closest !== 'function' || !t.closest('#novel-prep-panel')) return;
   if (t.readOnly || t.disabled) return;
-  prepMarkPreviewStale(true);
+  prepMarkPreviewStale(true, e);
 }
 document.addEventListener('input', _prepPanelEdited, true);
 document.addEventListener('change', _prepPanelEdited, true);
@@ -18232,12 +18300,12 @@ function renderStoryboard() {
     }
     var optsBtn = '<button class="moment-opts-btn" onclick="toggleMomentOptions(' + m.id + ')" title="Cast &amp; prominence for this panel">&#8230;</button>';
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
-    return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '">' +
+    return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '"' + (m.kind === 'establishing' ? '' : (' data-fx-src="board" data-fx-t="p" data-fx-id="' + m.id + '"')) + '>' +   // v3.4.37
       '<div class="storyboard-panel-img">' +
         imgHtml + '<div class="panel-img-actions">' + titleBtn + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
-        '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
+        '<span class="moment-num">' + (m.kind === 'establishing' ? fxRowLabel(1, 'Opening') : String(_nums['p' + m.id] || pNum)) + '</span>' +   // v3.4.40
         // v3.0.507 -- EDIT THE TITLE WHERE YOU SEE IT. Ian, 2026-08-07: "I want to be able to
         // edit the titles on the storyboard tab... put your cursor on the title you can edit it
         // just like the narratives." Same behaviour as the narrative boxes beside it: type, and
@@ -18268,7 +18336,7 @@ function renderStoryboard() {
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
-      (m.kind === 'establishing' ? buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box', 'Opening paragraph...', narrative.intro, "regenNarrativeSection('opening')", true) : buildNarrative('narrative-moment-' + i, 'Panel ' + pNum + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true)) +
+      (m.kind === 'establishing' ? buildNarrative('narrative-opening', fxRowLabel(1, 'Opening'), 'narrative-intro-box', 'Opening paragraph...', narrative.intro, "regenNarrativeSection('opening')", true) : buildNarrative('narrative-moment-' + i, fxRowLabel(_nums['p' + m.id] || pNum, 'Moment'), 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true)) +
     '</div>';
   }
 
@@ -18283,6 +18351,7 @@ function renderStoryboard() {
     var gapKey = (id === 'narrative-opening') ? 'opening'
       : (id === 'narrative-closing') ? 'closing'
       : (id.indexOf('narrative-moment-') === 0) ? 'moment:' + id.replace('narrative-moment-', '')
+      : (id.indexOf('narrative-bridge-') === 0) ? 'bridge:' + id.replace('narrative-bridge-', '')   // v3.4.37 -- a bridge by its id
       : 'between:' + id.replace('narrative-between-', '');
     var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
     var dirText = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
@@ -18303,11 +18372,23 @@ function renderStoryboard() {
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
     var _nsName = narrStyleName(state.narrativeStyleUsed ? state.narrativeStyleUsed : (state.narrativeStyle || 'classic'));
-    return '<div class="narrative-panel" id="' + id + '">' +
+    // v3.4.33 -- TD-1107. Ian: the move and delete buttons on the panel's moment bar; a bridge written for a different next
+    // panel says so until its words change.
+    var _pmIdx = (id.indexOf('narrative-moment-') === 0) ? Number(id.replace('narrative-moment-', '')) : -1;
+    // v3.4.37 -- a bridge by its id: its controls, and a note when it now sits between other pictures.
+    var _brId = (id.indexOf('narrative-bridge-') === 0) ? id.replace('narrative-bridge-', '') : '';
+    var _bsNote = '';
+    if (_brId) (state.moments || []).forEach(function (pm, pi) {
+      var ps = (((state.narrativeData && state.narrativeData.sections) || []).find(function (s) { return s.panel_index === pi; }) || {});
+      (ps.bridges || []).forEach(function (pb) {
+        if (pb.id === _brId && String(pb.text || '').trim() && fxBridgeStale(pb, pm.id, state.moments[pi + 1] ? state.moments[pi + 1].id : null)) _bsNote = panelStaleNoteHtml();
+      });
+    });
+    return '<div class="narrative-panel" id="' + id + '"' + (_brId ? (' data-fx-src="board" data-fx-t="b" data-fx-id="' + _brId + '"') : '') + '>' +   // v3.4.37
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
-        regenBtn +
-      '</div>' +
+        regenBtn + ((_pmIdx >= 0 && state.moments[_pmIdx]) ? spaceControls('board', 'p', state.moments[_pmIdx].id) : '') + (_brId ? spaceControls('board', 'b', _brId) : '') +   // v3.4.37
+      '</div>' + _bsNote +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
@@ -18315,25 +18396,40 @@ function renderStoryboard() {
     '</div>';
   }
 
+  var _nums = fxNums('board');   // v3.4.40 -- every row numbered in page order
   // Build alternating array: opening, panel0, between0-1, panel1, between1-2, panel2, ..., closing
   var cells = [];
 
   // Opening narrative
   var _hasEst = state.moments.some(function(m){ return m.kind === 'establishing'; });
-  if (!_hasEst) cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
+  if (!_hasEst) cells.push(buildNarrative('narrative-opening', fxRowLabel(1, 'Opening'), 'narrative-intro-box',
     'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
-  // Alternate panels and between-narratives
-  var _pNum = 0;
+  // v3.4.37 -- TD-1107. Each picture, then every bridge that follows it on the page (any number, each by its id,
+  // numbered down the page and named after the pictures either side). Text from before bridges had ids (no
+  // narrative yet, or text that does not match its panels) shows the old way: one box per gap.
+  var _pNum = 0, _bNum = 0;
   state.moments.forEach(function(m, i) {
-    if (m.kind === 'establishing') { cells.push(buildPanel(m, i, 0)); return; }
-    _pNum++;
-    cells.push(buildPanel(m, i, _pNum));
-    if (i < state.moments.length - 1) {
-      var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
+    var _isT = (m.kind === 'establishing');
+    if (!_isT) _pNum++;
+    cells.push(buildPanel(m, i, _isT ? 0 : _pNum));
+    var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
+    var _nx = state.moments[i + 1] || null;
+    if (Array.isArray(section.bridges)) {
+      section.bridges.forEach(function (b) {
+        var _bid = String(b.id || '').replace(/[^a-z0-9]/gi, '');
+        cells.push(buildNarrative(
+          'narrative-bridge-' + _bid,
+          fxRowLabel(_nums['b' + _bid] || (++_bNum), 'Bridge'),   // v3.4.40 -- "3 - Bridge": no names on the text-only rows
+          'narrative-bridge-box-' + _bid,
+          'Bridge the story...', b.text || '',
+          'regenNarrativeSection(\'bridge\',\'' + _bid + '\')', false
+        ));
+      });
+    } else if (!_isT && i < state.moments.length - 1) {
       cells.push(buildNarrative(
         'narrative-between-' + i,
-        'Panel ' + _pNum + ' → ' + (_pNum + 1),
+        fxRowLabel(_nums['g' + i] || (++_bNum), 'Bridge'),   // v3.4.40
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
         'regenNarrativeSection(\'between\',' + i + ')', false
@@ -18342,7 +18438,7 @@ function renderStoryboard() {
   });
 
   // Closing narrative
-  cells.push(buildNarrative('narrative-closing', 'Closing', 'narrative-outro-box',
+  cells.push(buildNarrative('narrative-closing', fxRowLabel(_nums.closing, 'Closing'), 'narrative-outro-box',
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
@@ -18355,6 +18451,11 @@ function renderStoryboard() {
 function fillStoryboardProse(narr) {
   narr = narr || state.narrativeData || {};
   var secs = narr.sections || [];
+  // v3.4.37 -- TD-1107. When the bridges on the page are not the bridges in the text, draw the board again.
+  var _want = [], _have = [];
+  secs.forEach(function (s) { (s.bridges || []).forEach(function (b) { _want.push('narrative-bridge-box-' + b.id); }); });
+  var _bx = document.querySelectorAll('textarea[id^="narrative-bridge-box-"]'); for (var _n = 0; _n < _bx.length; _n++) _have.push(_bx[_n].id);
+  if ((_want.length || _have.length) && _want.join() !== _have.join() && typeof renderStoryboard === 'function') { try { renderStoryboard(); return; } catch (_re) {} }
   var setBox = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
   setBox('narrative-intro-box', narr.intro);
   setBox('narrative-outro-box', narr.outro);
@@ -18363,6 +18464,7 @@ function fillStoryboardProse(narr) {
     var sec = secs.find(function(x){ return x.panel_index === i; }) || {};
     setBox('narrative-moment-box-' + i, sec.before);
     setBox('narrative-between-box-' + i, sec.after);
+    (sec.bridges || []).forEach(function (b) { setBox('narrative-bridge-box-' + b.id, b.text); });   // v3.4.37
   });
 }
 
@@ -19493,13 +19595,30 @@ function collectNarrativeState() {
     var mbox = document.getElementById('narrative-moment-box-' + i);
     var abox = document.getElementById('narrative-between-box-' + i);
     var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
-    return {
+    var _after = abox ? abox.value.trim() : (prev.after || '');
+    var _sec = {
       panel_index: i,
+      moment_id: m.id,   // v3.4.33 -- TD-1107: the text is linked to its panel
       before: mbox ? mbox.value.trim() : (prev.before || ''),
       before_summary: prev.before_summary || '',
-      after: abox ? abox.value.trim() : (prev.after || ''),
+      after: _after,
       after_summary: prev.after_summary || ''
     };
+    if (prev.bridge_stale && _after === String(prev.after || '').trim()) _sec.bridge_stale = true;   // cleared once its words change
+    // v3.4.37 -- TD-1107. Every bridge by its id, each from its own box; one rewritten here is written for where it sits.
+    if (Array.isArray(prev.bridges)) {
+      var _nid = (state.moments[i + 1] || {}).id;
+      _sec.bridges = prev.bridges.map(function (b) {
+        var bx = document.getElementById('narrative-bridge-box-' + b.id);
+        var tx = bx ? bx.value.trim() : String(b.text || '');
+        var o = Object.assign({}, b, { text: tx });
+        if (tx !== String(b.text || '').trim()) o.between = [m.id, _nid == null ? null : _nid];
+        return o;
+      });
+      if (m.kind !== 'establishing') _sec.after = _sec.bridges.map(function (b) { return b.text; }).join('\n\n');
+      delete _sec.bridge_stale;
+    }
+    return _sec;
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -19520,6 +19639,7 @@ function saveNarrativeSection(type, panelIndex) {
   .then(function(result) {
     if (result.error) { showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     // Show brief saved indicator on the button
     var btnId = type === 'intro' ? 'narrative-opening'
       : type === 'outro' ? 'narrative-closing'
@@ -19548,6 +19668,7 @@ function saveInlineNarrative(silent) {
   .then(function(result) {
     if (result.error) { if (!silent) showError('Error: ' + result.error); return; }
     state.narrativeData = data;
+    try { fxRepaintStale(); } catch (_fx) {}   // v3.4.42 -- a rewritten bridge drops its out-of-place note at once
     if (!silent) showAlert('Narrative saved!');
   });
 }
@@ -19800,7 +19921,7 @@ function wtStalePaint() {
 }
 function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
-  if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction.</p>' +
+  if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction. <b>Use this</b> replaces all of this box\u2019s text, including anything you added.</p>' +   // v3.4.41 -- TD-1107
     '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
   if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">Big-picture feedback on your whole story: what it reads as (notes, a game transcript or a written story; one chapter or the whole thing), ' +
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
@@ -20225,6 +20346,7 @@ function regenNarrativeSection(type, panelIndex) {
   // box and the Summary, charged a full narrative, and painted only this box. It now opens the Writing
   // coach on this box (wtOpen, TD-999), which asks the server for this box alone and shows the new
   // text first. Kept under its old name because buildNarrative's regenCall strings call it.
+  if (type === 'bridge') { wtOpen('regen', 'bridge:' + panelIndex, 'narrative-bridge-box-' + panelIndex); return; }   // v3.4.37 -- a bridge by its id
   var ta = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : type === 'moment' ? 'narrative-moment-box-' + panelIndex
@@ -20472,6 +20594,7 @@ function loadNovelPreview(layout) {
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   url += _prepAuthorNoteQ();   // v3.2.82 -- the note being typed, previewed before it is saved
+  url += '&castRoster=1';   // v3.4.27 -- TD-1103: the page says its automatic names, for the text box
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -20492,6 +20615,7 @@ function loadNovelPreview(layout) {
     resizeNovelPreviewIframe();
     applyNovelZoom();
     try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
+    try { prepCastRosterFromPreview(iframe); } catch (_e) {}   // v3.4.27 -- TD-1103: the automatic names, for the text box
   };
   iframe.src = url;
 }
@@ -24414,6 +24538,7 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   castnpc:0,
   castimg:0,   // v3.0.823 -- TD-657; 0 = oldest character art, 1 = newest (read only to carry an older layout forward)
   castpic:'bfirst',   // v3.3.28 -- the Character pictures dropdown: canon | vfirst | vlast | bfirst | blast
+  castmode:'lineup',  // v3.4.26 -- TD-1102: lineup | image (the Company picture)
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -24579,7 +24704,7 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic'];   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle','castpic','castmode'];   // v3.4.26 -- castmode   // v3.3.28 -- castpic   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 // v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
@@ -24645,13 +24770,14 @@ function novelSplitInit(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', novelSplitInit); } else { novelSplitInit(); }
 // Prep-pane accordion (Preview & Export tab): independent open/close per panel.
 var PREP_ACC_KEY = 'campaignia.prepAcc';   // remember which Prep panel was last open
-var PREP_ACC_KEYS = ['cover', 'layout'];   // 'publish' moved to the Order & Publish tab (v3.0.137)
+var PREP_ACC_KEYS = ['cover', 'titlepage', 'note', 'company', 'toc', 'body', 'back'];   // v3.4.28 -- in the book's order (Ian); 'publish' moved to the Order & Publish tab (v3.0.137)
 // Re-open the panel the user last worked in when they come back to Prep & Preview, instead of
 // always resetting to Title & Cover. Exactly one panel is open (the remembered one).
 function prepAccRestore(){
   var want = null;
   try { want = window.localStorage.getItem(PREP_ACC_KEY); } catch (e) {}
   if (!want) return;
+  if (want === 'layout') { want = 'body'; try { window.localStorage.setItem(PREP_ACC_KEY, want); } catch (e) {} }   // v3.4.28 -- the old Layout panel's controls are mostly in Body
   if (PREP_ACC_KEYS.indexOf(want) < 0) { want = PREP_ACC_KEYS[0]; try { window.localStorage.setItem(PREP_ACC_KEY, want); } catch (e) {} }   // e.g. a saved 'publish' from before it moved tabs
   PREP_ACC_KEYS.forEach(function(k){
     var acc = document.getElementById('prep-acc-' + k); if (!acc) return;
@@ -24662,7 +24788,7 @@ function prepAccRestore(){
     if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
     acc.classList.toggle('open', open);
   });
-  if (want === 'layout' && typeof prepLayoutLoad === 'function') prepLayoutLoad();   // same population the open transition does
+  if (typeof prepLayoutLoad === 'function') prepLayoutLoad();   // same population the open transition does; v3.4.28 -- layout controls are in every panel now
 }
 function togglePrepAcc(key){
   var acc=document.getElementById('prep-acc-'+key); if(!acc) return;
@@ -24674,7 +24800,16 @@ function togglePrepAcc(key){
   if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
   acc.classList.toggle('open', !isOpen);
   if(!isOpen){ try { window.localStorage.setItem(PREP_ACC_KEY, key); } catch (e) {} }   // remember the panel just OPENED
-  if(key==='layout' && !isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open
+  // v3.4.31 -- ONE PANEL AT A TIME (Ian: "auto close when you click another one. It gets too long when a bunch get open").
+  if(!isOpen) PREP_ACC_KEYS.forEach(function(k){
+    if(k===key) return;
+    var o=document.getElementById('prep-acc-'+k); if(!o) return;
+    var ob=o.querySelector('.prep-acc-body'), oh=o.querySelector('.prep-acc-head');
+    if(ob) ob.style.display='none';
+    if(oh) oh.setAttribute('aria-expanded','false');
+    o.classList.toggle('open', false);
+  });
+  if(!isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open; v3.4.28 -- any panel, they all hold layout controls
 }
 // Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
 // context using pcl-* controls, wired to the same unified customOpts store. Storyboard modal untouched.
@@ -24708,8 +24843,19 @@ function clGateCastImg(ck, id, labelId){
 function prepSyncCastNpc(){
   var ck=document.getElementById('pcl-cast');
   clGateCastImg(ck, 'pcl-castpic', 'pcl-castpic-label');   // v3.3.28 -- the Character pictures dropdown
+  clGateCastImg(ck, 'pcl-castmode', 'pcl-castmode-label');   // v3.4.26 -- the line-up or the picture, only with the page on
+  clGateCastImg(ck, 'prep-cast-head', 'prep-cast-row');   // v3.4.27 -- TD-1103: the heading and the text below, on either kind; v3.4.29 -- one row with the picture
+  try { _prepCastWordsSync(); } catch (e) {}   // the line-up shows its names in the box, a picture starts empty
   var cn=document.getElementById('pcl-castnpc');
   var cnl=document.getElementById('pcl-castnpc-label');
+  // v3.4.26 -- TD-1102. With the Company picture the NPC and Character pictures choices do not apply: hidden, values kept.
+  var _cm = document.getElementById('pcl-castmode'), _pic = !!(_cm && _cm.value === 'image') && !!(ck ? ck.checked : true);
+  var _cpl = document.getElementById('pcl-castpic-label'); if (_cpl && _pic) _cpl.style.display = 'none';
+  if (cnl) cnl.style.display = (_pic || !(ck ? ck.checked : true)) ? 'none' : '';   // v3.4.41 -- and hidden with the page off, like the rest (Erin)
+  // v3.4.29 -- Ian: "If they pick character line up... grey out the company archive picture option." Dimmed and not clickable
+  // on the line-up; a picture already chosen stays on the tile, so choosing Archived picture again brings it back.
+  var _ct = document.getElementById('prep-company-tile');
+  if (_ct) { var _ln = !(_cm && _cm.value === 'image'); _ct.style.opacity = _ln ? '0.4' : ''; _ct.style.pointerEvents = _ln ? 'none' : ''; }
   if(!cn) return;
   var on = ck ? !!ck.checked : true;
   cn.disabled = !on;
@@ -24738,7 +24884,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc',
-                       'pcl-castpic'];   // v3.3.28
+                       'pcl-castpic', 'pcl-ownTitle', 'pcl-castmode', 'prep-cast-cap-auto', 'prep-layout-reset'];   // v3.4.26 -- castmode; v3.4.27 -- the automatic-names link; v3.4.28 -- Reset   // v3.3.28; v3.4.23 -- pcl-ownTitle
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
@@ -24756,7 +24902,7 @@ function prepApplyOwnershipLock() {
     // The cover, back and title image slots. openPrepImagePicker already refuses and explains, so
     // this is about LOOKING inert as well as being inert -- a live-looking tile that answers a click
     // with an apology is the same fault in a different costume.
-    ['cover', 'back', 'title'].forEach(function (k) {
+    ['cover', 'back', 'title', 'company'].forEach(function (k) {   // v3.4.26 -- company
       var t = document.getElementById('prep-thumb-' + k);
       if (!t) return;
       t.style.opacity = own ? '' : '0.55';
@@ -24805,10 +24951,62 @@ function prepRenderDrawnTitleNote() {
   el.textContent = msg;
   el.style.display = msg ? '' : 'none';
 }
+// v3.4.23 -- TD-1100. THE TICK BOX IS titlePlace 'none'. Ticking keeps the placement it replaces (data-prev-place) so
+// unticking puts it back; the change bubbles to the Title & Cover panel, whose listener commits the options as for any
+// other control. The select stays the one source of truth: prepApplyTitleModeLock sets the box from it.
+// v3.4.24 -- TD-1100. DOES THE COVER PICTURE SAY THE BOOK'S TITLE? (Ian: "Will it be able to tell if the title embedded on
+// the cover picture has different words than the actual title?"; "Image builder only... If they do it elsewhere all bets
+// are off.") GET .../archives/title-words names the words an Image Builder title was laid on with, for the cover's
+// address (recorded when it was archived With title, carried to a framed cover copy, else found through the Archive's
+// source). Fetched when the cover changes (renderPrepThumbs); compared, letters and digits only, whenever the title,
+// subtitle or the box changes (prepApplyTitleModeLock). Shown only while the box is ticked; nothing for other pictures.
+function prepCoverWordsCheck() {
+  var c = state.currentCampaign; if (!c) return;
+  var url = ((state.bookMeta || {}).cover_image_url) || '';
+  var cw = state._coverWords;
+  if (cw && cw.url === url && String(cw.cid) === String(c.id)) { prepCoverWordsPaint(); return; }
+  state._coverWords = { url: url, cid: c.id, words: null };
+  prepCoverWordsPaint();
+  if (!url) return;
+  fetch('/api/campaigns/' + encodeURIComponent(c.id) + '/archives/title-words?url=' + encodeURIComponent(url), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var now = state._coverWords; if (!now || now.url !== url || String(now.cid) !== String(c.id)) return;
+      now.words = (d && d.words && d.words.title) ? d.words : null;
+      prepCoverWordsPaint();
+    })
+    .catch(function () {});
+}
+function prepWordsKey(s) { return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''); }
+// v3.4.41 -- both at once when both differ (Erin: "a person tidying up a cover will think they are done... then get a
+// second warning they could have been told about at the same time").
+function prepCoverWordsMsg(w, title, sub) {
+  if (!w || !w.title) return '';
+  var out = [];
+  if (prepWordsKey(w.title) !== prepWordsKey(title)) out.push('Your cover picture says \u201c' + w.title + '\u201d, but your title is \u201c' + title + '\u201d.');
+  if (w.subtitle && prepWordsKey(w.subtitle) !== prepWordsKey(sub))
+    out.push('Your cover picture\u2019s subtitle says \u201c' + w.subtitle + '\u201d, but ' + (String(sub || '').trim() ? 'your subtitle is \u201c' + sub + '\u201d.' : 'your book has no subtitle.'));
+  return out.join(' ');
+}
+function prepCoverWordsPaint() {
+  var el = document.getElementById('pcl-ownTitle-words'); if (!el) return;
+  var sel = document.getElementById('pcl-titlePlace'), ownT = !!(sel && sel.value === 'none');
+  var w = state._coverWords && state._coverWords.words;
+  var msg = (ownT && w) ? prepCoverWordsMsg(w, _tbTitle(), _tbSubtitle()) : '';
+  el.textContent = msg; el.style.display = msg ? '' : 'none';
+}
+function prepOwnTitleChanged(cb) {
+  var sel = document.getElementById('pcl-titlePlace'); if (!sel) return;
+  if (cb.checked) { if (sel.value !== 'none') sel.setAttribute('data-prev-place', sel.value); sel.value = 'none'; }
+  else { var p = sel.getAttribute('data-prev-place'); sel.value = (p === 'top' || p === 'middle') ? p : 'bottom'; }
+  prepApplyOwnershipLock();
+}
 function prepApplyTitleModeLock() {
   try {
     var built = !!(state.bookMeta && state.bookMeta.built_title_url);
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    var _ps = document.getElementById('pcl-titlePlace'), ownT = !!(_ps && _ps.value === 'none');   // v3.4.23 -- TD-1100
+    var OWN_T_MSG = 'Your cover picture carries the title, so the cover title settings are off.';   // v3.4.24 -- hidden with the panel
     // Computes the answer for these two controls from BOTH of their gates -- see below.
     ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -24826,15 +25024,20 @@ function prepApplyTitleModeLock() {
       // title in charge, and is this your version. pcl-titleStyle is also in PREP_LOCK_PLAIN, which
       // sets the same `!own`; print-title-color is in NEITHER list, which is why nothing else could
       // ever bring it back.
-      el.disabled = !!(built || !own);
-      el.style.opacity = (built || !own) ? '0.55' : '';
+      el.disabled = !!(built || !own || ownT);   // v3.4.23 -- ownT
+      el.style.opacity = (built || !own || ownT) ? '0.55' : '';
       // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
       // would 'restore' the explanation this function itself put there.
       if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
-      el.title = built
+      el.title = ownT ? OWN_T_MSG : (built
         ? 'Your title is drawn artwork right now, so the title styles and color do not apply. Remove the drawn title in the Title Builder to use them again.'
-        : (el.getAttribute('data-title-orig') || '');
+        : (el.getAttribute('data-title-orig') || ''));
     });
+    // v3.4.24 -- TD-1100. Ticked, the whole titling panel (style, colour, Title Builder, placement, size and the drawn-title
+    // note) is hidden, not greyed (Ian); unticked it shows again where it is. The box follows the select.
+    var _pnl = document.getElementById('prep-title-panel'); if (_pnl) _pnl.style.display = ownT ? 'none' : '';
+    var _cb = document.getElementById('pcl-ownTitle'); if (_cb) _cb.checked = ownT;
+    prepCoverWordsPaint();
     // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
     // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
     // the title text changes while the builder is open.
@@ -24856,10 +25059,12 @@ function prepLayoutLoad(){
   // so a control there is read correctly wherever it sits -- but the change LISTENER is bound to the
   // Layout panel, so without this a placement change would be read only when something in Layout
   // happened to change as well.
-  var _cp = document.getElementById('prep-acc-cover');
-  if (_cp && !_cp._commitWired) { _cp._commitWired = true; _cp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
-  var _lp = document.getElementById('prep-acc-layout');
-  if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  // v3.4.28 -- SEVEN PANELS, ONE RULE. The layout controls are spread over all seven now, so each panel commits a change in it.
+  PREP_ACC_KEYS.forEach(function (k) {
+    var _p = document.getElementById('prep-acc-' + k);
+    if (_p && !_p._commitWired) { _p._commitWired = true; _p.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  });
+  prepSyncCoverNote();
   // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
   prepApplyOwnershipLock();
 }
@@ -24936,11 +25141,27 @@ function prepLayoutCommit(){
 function prepLayoutApply(){
   if(prepLayoutCommit() && typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle);
 }
-function prepLayoutReset(){
+// v3.4.28 -- RESET NOW SAVES, SO IT ASKS FIRST. It used to set the controls and wait for Apply & preview, which is gone (Ian:
+// "The Refresh button handles that now"). The layout choices are spread over all seven panels, so it says so; the title,
+// words and pictures are not layout choices and stay. Refused on someone else's version and while a book is being ordered.
+async function prepLayoutReset(){
+  if (typeof novelOwnView === 'function' && !novelOwnView()) return;
+  if (typeof blockLayoutChangeIfOrdering === 'function' && blockLayoutChangeIfOrdering()) return;
+  var ok = (typeof uiConfirm === 'function') ? await uiConfirm('Put every layout choice in all the panels back to the defaults? Your title, words and pictures stay.', { okText: 'Reset', cancelText: 'Cancel' }) : true;
+  if (!ok) return;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
   prepSyncMarkerBreak();
   prepSyncCastNpc();
+  prepSyncCoverNote();
+  try { prepApplyOwnershipLock(); } catch (e) {}   // v3.4.23 -- the tick box follows the reset placement
+  if (typeof prepLayoutCommit === 'function') prepLayoutCommit();
+  try { prepMarkPreviewStale(true); } catch (e) {}
+}
+// v3.4.28 -- Include cover page (in Cover) also prints the back cover, so the Back Cover panel says when covers are off.
+function prepSyncCoverNote(){
+  var ck = document.getElementById('pcl-cover'), n = document.getElementById('prep-back-off');
+  if (n) n.style.display = (ck && !ck.checked) ? '' : 'none';
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
@@ -35151,6 +35372,7 @@ function resetPublishForCampaignSwitch(force) {
   _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
   var _an = document.getElementById('prep-author-note'); if (_an) { _an.value = ''; try { prepAuthorNoteCount(); } catch (e) {} }   // v3.2.82
+  ['prep-cast-head', 'prep-cast-cap'].forEach(function (i) { var x = document.getElementById(i); if (x) x.value = ''; }); _prepCastRoster = null;   // v3.4.27 -- the old book's words and names
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
   state.bookMeta = null;
@@ -38216,7 +38438,84 @@ function prepSaveAuthorNote() {
 }
 function _prepAuthorNoteQ() {
   var el = document.getElementById('prep-author-note');
-  return el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '';
+  return (el ? ('&authorNote=' + encodeURIComponent(String(el.value || '').slice(0, PREP_AUTHOR_NOTE_MAX))) : '') + _prepCastWordsQ();   // v3.4.27 -- and the character page's words
+}
+// =====================================================================================
+// v3.4.27 -- TD-1103. THE CHARACTER PAGE'S HEADING AND TEXT BELOW. Ian, 2026-11-04: "Do both for both. But in the normal
+// line up... pre fill out the text for them with the from left to right text." Saved with the version like the author
+// note (as you type, on leaving the box, on leaving the page); previewed before they are saved.
+//  HEADING: shows "The Company" until changed; cleared means no heading. Saved only when it differs from what it shows.
+//  TEXT BELOW: while it is AUTOMATIC (company_caption null) the box shows the names the line-up prints, read off the
+//  last preview (data-roster), and nothing for a picture -- and the book keeps printing them fresh, so a renamed or added
+//  character stays right. Change the words and they print instead; "Use the automatic names" puts the names back.
+// =====================================================================================
+var PREP_CAST_HEAD_DEFAULT = 'The Company', PREP_CAST_HEAD_MAX = 48, PREP_CAST_CAP_MAX = 400;
+var _prepCastRoster = null;   // the automatic names the last preview printed; null until one has been seen
+function _prepCastHeadShown() { var bm = state.bookMeta || {}; return bm.company_heading == null ? PREP_CAST_HEAD_DEFAULT : String(bm.company_heading); }
+function _prepCastCapIsAuto() { var bm = state.bookMeta || {}; return bm.company_caption == null; }
+function _prepCastLineup() { var s = document.getElementById('pcl-castmode'); return !(s && s.value === 'image'); }
+function _prepCastCapAutoText() { return _prepCastLineup() ? String(_prepCastRoster || '') : ''; }
+function _prepCastCapShown() { var bm = state.bookMeta || {}; return _prepCastCapIsAuto() ? _prepCastCapAutoText() : String(bm.company_caption); }
+function _prepCastAutoLink() {
+  var a = document.getElementById('prep-cast-cap-auto');
+  if (a) a.style.display = (!_prepCastCapIsAuto() && _prepCastLineup()) ? '' : 'none';
+  var c = document.getElementById('prep-cast-cap');
+  if (c) c.placeholder = _prepCastLineup() ? 'The names, from left to right, appear here once the preview has shown the character page.' : 'Optional. Printed under the picture.';
+}
+function _prepCastWordsSync(own) {
+  var h = document.getElementById('prep-cast-head'), c = document.getElementById('prep-cast-cap');
+  if (typeof state === 'undefined' || !state) return;
+  if (h && document.activeElement !== h && !_prepTypeTimers['prep-cast-head']) h.value = _prepCastHeadShown();
+  if (c && document.activeElement !== c && !_prepTypeTimers['prep-cast-cap']) c.value = _prepCastCapShown();
+  if (own != null) {
+    if (h) h.readOnly = !own;
+    if (c) c.readOnly = !own;
+  }
+  _prepCastAutoLink();
+}
+function _prepCastHeadNow() { var h = document.getElementById('prep-cast-head'); return h ? String(h.value || '').replace(/\s+/g, ' ').trim().slice(0, PREP_CAST_HEAD_MAX) : null; }
+function _prepCastCapNow() { var c = document.getElementById('prep-cast-cap'); return c ? String(c.value || '').replace(/\r\n/g, '\n').slice(0, PREP_CAST_CAP_MAX) : null; }
+// What has been typed and not saved, as a patch; null when nothing differs from what the boxes show from the version.
+function _prepCastWordsPatch() {
+  var p = {}, any = false, hv = _prepCastHeadNow(), cv = _prepCastCapNow();
+  if (hv != null && hv !== _prepCastHeadShown().trim()) { p.company_heading = hv; any = true; }
+  if (cv != null && cv.trim() !== _prepCastCapShown().trim()) { p.company_caption = cv; any = true; }
+  return any ? p : null;
+}
+function prepSaveCastHead() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var hv = _prepCastHeadNow();
+  if (hv == null || hv === _prepCastHeadShown().trim()) return;
+  _prepMetaWrite({ company_heading: hv });
+}
+function prepSaveCastCap() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var cv = _prepCastCapNow();
+  if (cv == null || cv.trim() === _prepCastCapShown().trim()) return;
+  _prepMetaWrite({ company_caption: cv });
+  _prepCastAutoLink();
+}
+function prepCastCapUseAuto() {
+  if (!state.currentCampaign || !(typeof prepUseMember === 'function' && prepUseMember())) return;
+  clearTimeout(_prepTypeTimers['prep-cast-cap']); delete _prepTypeTimers['prep-cast-cap'];
+  _prepMetaWrite({ company_caption: null });
+  var c = document.getElementById('prep-cast-cap'); if (c) c.value = _prepCastCapAutoText();
+  _prepCastAutoLink();
+  try { prepMarkPreviewStale(true); } catch (e) {}
+}
+// The preview's words: the heading as typed; the text as typed, or castCapAuto while it still shows the automatic names.
+function _prepCastWordsQ() {
+  var q = '', hv = _prepCastHeadNow(), cv = _prepCastCapNow();
+  if (hv != null) q += '&castHead=' + encodeURIComponent(hv);
+  if (cv != null) q += (_prepCastCapIsAuto() && cv.trim() === _prepCastCapAutoText().trim()) ? '&castCapAuto=1' : ('&castCap=' + encodeURIComponent(cv));
+  return q;
+}
+// After a preview loads: the names it printed under the line-up, shown in the box while the text is automatic.
+function prepCastRosterFromPreview(iframe) {
+  var d = iframe && iframe.contentDocument; if (!d) return;
+  var p = d.querySelector('.cast-page[data-roster]'); if (!p) return;
+  _prepCastRoster = p.getAttribute('data-roster') || '';
+  _prepCastWordsSync();
 }
 // =====================================================================================
 // v3.2.84 -- TD-1019. THE TITLE, SUBTITLE AND AUTHOR NOTE SAVE AS YOU TYPE, AND ON THE WAY OUT.
@@ -38232,7 +38531,8 @@ function _prepAuthorNoteQ() {
 // Appended, not inserted (TD-853): nothing later in the file can shadow these.
 // =====================================================================================
 var PREP_TYPE_SAVE_MS = 1000;
-var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote' };
+var PREP_TYPE_SAVERS = { 'prep-title': 'prepSaveTitle', 'prep-subtitle': 'prepSaveSubtitle', 'prep-author-note': 'prepSaveAuthorNote',
+                         'prep-cast-head': 'prepSaveCastHead', 'prep-cast-cap': 'prepSaveCastCap' };   // v3.4.27 -- TD-1103
 var _prepTypeTimers = {};
 function _prepTypeSave(id) {
   var el = document.getElementById(id);
@@ -38255,6 +38555,7 @@ function _prepUnsavedPatch() {
   if (s) { var sv = String(s.value || '').trim(); if (sv !== (bm.subtitle != null ? String(bm.subtitle) : '')) { patch.subtitle = sv; any = true; } }
   var n = document.getElementById('prep-author-note');
   if (n) { var nv = String(n.value || '').replace(/\r\n/g, '\n').slice(0, 600); if (nv.trim() !== (bm.author_note != null ? String(bm.author_note) : '').trim()) { patch.author_note = nv; any = true; } }
+  var _cw = _prepCastWordsPatch(); if (_cw) { Object.assign(patch, _cw); any = true; }   // v3.4.27 -- TD-1103
   return any ? patch : null;
 }
 function _prepFlushOnLeave() {
@@ -39469,10 +39770,20 @@ function ibRender() {
 }
 // v3.3.80 -- the accordion panels. Open / closed is kept per panel on this computer (localStorage, wrapped: it can
 // throw or be empty); every panel starts open.
+// v3.4.31 -- ONE PANEL OPEN AT A TIME (Ian, 2026-11-05: "auto close when you click another one"). The same record is kept
+// (the shut ones), and the open panel is the first not shut; a record that was never written opens the first panel.
+// An older record with several open shows only the first of them, and settles the next time one is opened.
 var IB_ACC_KEY = 'ibAccClosed';
+function ibAccOpenNow() {
+  var raw = null; try { raw = window.localStorage.getItem(IB_ACC_KEY); } catch (e) {}
+  if (raw == null) return IB_ACC_KEYS[0];
+  var c = ibAccClosed();
+  for (var i = 0; i < IB_ACC_KEYS.length; i++) if (!c[IB_ACC_KEYS[i]]) return IB_ACC_KEYS[i];
+  return '';
+}
 function ibAccClosed() { try { var v = JSON.parse(window.localStorage.getItem(IB_ACC_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
 function ibAccHtml(key, title, body) {
-  var shut = !!ibAccClosed()[key];
+  var shut = (key !== ibAccOpenNow());   // v3.4.31 -- one open at a time
   return '<div class="prep-acc ib-acc' + (shut ? '' : ' open') + '" id="ib-acc-' + key + '">' +
     '<button class="prep-acc-head" type="button" onclick="ibAccToggle(\'' + key + '\')" aria-expanded="' + (shut ? 'false' : 'true') + '">' +
       '<span class="ib-acc-title">' + title + '<span class="ib-acc-sum" id="ib-acc-sum-' + key + '">' + escapeHtml(ibAccSummary(key)) + '</span></span>' +
@@ -39486,6 +39797,16 @@ function ibAccSet(key, open) {
   if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
   acc.classList.toggle('open', !!open);
   var c = ibAccClosed(); if (open) delete c[key]; else c[key] = 1;
+  // v3.4.31 -- opening one shuts every other panel, on the page and in the record.
+  if (open) IB_ACC_KEYS.forEach(function (k) {
+    if (k === key) return;
+    c[k] = 1;
+    var o = document.getElementById('ib-acc-' + k); if (!o) return;
+    var ob = o.querySelector('.prep-acc-body'), oh = o.querySelector('.prep-acc-head');
+    if (ob) ob.style.display = 'none';
+    if (oh) oh.setAttribute('aria-expanded', 'false');
+    o.classList.toggle('open', false);
+  });
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
 // v3.4.14 -- every panel of the form shut (a picture opened from the Gallery) or open (New picture), remembered as each
@@ -39493,7 +39814,8 @@ function ibAccSet(key, open) {
 var IB_ACC_KEYS = ['refs', 'type', 'shape', 'style', 'desc', 'title'];
 function ibAccAll(open) {
   var c = ibAccClosed();
-  IB_ACC_KEYS.forEach(function (k) { if (open) delete c[k]; else c[k] = 1; });
+  // v3.4.31 -- "open" (New picture) now means the first panel open and the rest shut: one at a time.
+  IB_ACC_KEYS.forEach(function (k, i) { if (open && i === 0) delete c[k]; else c[k] = 1; });
   try { window.localStorage.setItem(IB_ACC_KEY, JSON.stringify(c)); } catch (e) {}
 }
 function ibAccToggle(key) { var acc = document.getElementById('ib-acc-' + key); if (acc) ibAccSet(key, !acc.classList.contains('open')); }
@@ -40482,3 +40804,323 @@ async function ibDelete(id) {
     })
     .catch(function () { showError('Connection error. Please try again.'); });
 }
+// =====================================================================================================
+// v3.4.33 -- TD-1107. WHAT THE PANEL MOVES SHARE (v3.4.39: the v3.4.33-35 moves -- pictures-only arrows, the
+// bridge swap, the old drag -- are gone; the page now moves pictures and bridges freely, see v3.4.37 below).
+// The move warning with "Don't show this message again", the delete of a picture (always asks; cannot be undone),
+// saving typed text first, reloading both views after a change, and a bridge's out-of-place note.
+// =====================================================================================================
+var PANEL_MOVE_WARN_KEY = 'campaignia.panelMoveWarnOff';
+function panelStaleNoteHtml() {
+  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">This bridge now sits between different panels from the ones it was written for. Regenerate it to match, or regenerate the narrative.</div>';
+}
+function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN_KEY) === '1'; } catch (e) { return false; } }
+function _pmAsk(title, lines, okText, danger, offerQuiet) {
+  return new Promise(function (resolve) {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var bx = document.createElement('div');
+    bx.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div'); h.textContent = title; h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    var ul = document.createElement('ul'); ul.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin:0 0 14px;padding-left:20px;';
+    lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; li.style.marginBottom = '4px'; ul.appendChild(li); });
+    var q = null;
+    if (offerQuiet) {
+      var lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;color:#e8d5a3;font-size:13px;margin-bottom:14px;cursor:pointer;';
+      q = document.createElement('input'); q.type = 'checkbox'; q.id = 'pm-quiet';
+      lab.appendChild(q); lab.appendChild(document.createTextNode('Don\u2019t show this message again')); bx.appendChild(h); bx.appendChild(ul); bx.appendChild(lab);
+    } else { bx.appendChild(h); bx.appendChild(ul); }
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var c = document.createElement('button'); c.className = 'btn btn-sm'; c.textContent = 'Cancel';
+    var o = document.createElement('button'); o.className = 'btn btn-sm ' + (danger ? 'btn-danger' : 'btn-primary'); o.textContent = okText;
+    row.appendChild(c); row.appendChild(o); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov);
+    var done = function (ok) { try { document.body.removeChild(ov); } catch (e) {} resolve({ ok: ok, quiet: !!(q && q.checked) }); };
+    c.onclick = function () { done(false); }; o.onclick = function () { done(true); };
+    ov.onclick = function (e) { if (e.target === ov) done(false); };
+    try { o.focus(); } catch (e) {}
+  });
+}
+var PANEL_MOVE_LINES = [
+  'The story text may no longer flow between panels. Regenerate the narrative, or just the affected sequences.',
+  'Pictures may no longer match the new order. Regenerate any that look wrong.',
+  'A character\u2019s change may now fall in the wrong place. Check that character\u2019s pictures.',
+  'Generate Story starts over and won\u2019t keep your changes.'
+];
+async function _pmFlushText() {
+  if (typeof narrativeSaveTimer === 'undefined' || !narrativeSaveTimer) return;
+  clearTimeout(narrativeSaveTimer); narrativeSaveTimer = null;
+  try {
+    await fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collectNarrativeState()) });
+  } catch (e) {}
+}
+function _pmAfter(r) {
+  return r.json().catch(function () { return {}; }).then(function (d) {
+    if (!r.ok || (d && d.error)) { showError((d && d.message) || 'The panels could not be changed.'); }
+    try { if (typeof wtClose === 'function') wtClose(); } catch (e) {}
+    if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+  });
+}
+var _pmBusy = false;
+async function panelDelete(momentId) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var a = await _pmAsk('Delete this panel?', ['Its picture and its text are gone for good and can\u2019t be brought back. A copy you saved to your Archive stays there.'].concat(PANEL_MOVE_LINES), 'Delete', true, false);
+  if (!a.ok) return;
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId, { method: 'DELETE' });
+    await _pmAfter(r);
+  } catch (e) { showError('The panel could not be deleted. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+function _bridgeTitle(m, n) {
+  var t = String((m && m.title) || '').trim();
+  if (!t) return n ? ('Panel ' + n) : 'Opening';
+  if (t.length <= 30) return t;
+  var cut = t.slice(0, 31).replace(/\s+\S*$/, '');   // at a word break, where there is one
+  return (cut.length >= 12 ? cut : t.slice(0, 29)) + '\u2026';
+}
+// =====================================================================================================
+// v3.4.37 -- TD-1107. FREE ORDER ON THE PAGE (claude/FREE_ORDER_STORY_SPEC.md). Ian, 2026-11-05: "A user should be able
+// to move the image panels and narrative panels around separately wherever they want to put them with the drag and
+// drop or move them one spot at a time with the arrows. There should be no rules... only warnings."
+// Two kinds of space: a PICTURE (picture and its own text, never apart) and a BRIDGE (text on its own, with an id).
+// The arrows swap a space with whatever sits next to it; the gripper drops it anywhere (a gold line shows where).
+// The title picture and the Opening never move, and nothing goes right after the title until the book can print it
+// (v3.4.38, FX_TITLE_BRIDGES). Locks are on the picture and no longer stop a move. The server checks everything again
+// (services/panelOrder.js applyArrange); a list that is out of date is refused, and the page reloads.
+// =====================================================================================================
+var FX_TITLE_BRIDGES = true;   // v3.4.38 -- the book prints a bridge placed right after the title, after the Opening
+// The pictures in order, each with the bridges that follow it on the page.
+function fxPics(src) {
+  if (src === 'review') {
+    return ((state.reviewData && state.reviewData.panels) || []).map(function (p) {
+      return { id: p.moment_id, kind: p.kind, title: p.title, bridges: (p.bridges || []).map(function (b) { return { id: b.id, stale: !!b.stale }; }), legacy: !Array.isArray(p.bridges) };
+    });
+  }
+  var secs = (state.narrativeData && state.narrativeData.sections) || [];
+  return (state.moments || []).map(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {};
+    return { id: m.id, kind: m.kind, title: m.title, bridges: Array.isArray(s.bridges) ? s.bridges : [], legacy: !Array.isArray(s.bridges) };
+  });
+}
+// The page order after the title: { t: 'p' | 'b', id }.
+function fxFlat(src) {
+  var out = [];
+  fxPics(src).forEach(function (p, i) {
+    if (!(i === 0 && p.kind === 'establishing')) out.push({ t: 'p', id: p.id });
+    p.bridges.forEach(function (b) { out.push({ t: 'b', id: b.id }); });
+  });
+  return out;
+}
+// Nothing but a picture first -- except right after a title picture (v3.4.38), which the book prints after the Opening.
+// v3.4.40 -- EVERY ROW NUMBERED, TOP TO BOTTOM (Ian, 2026-11-05: "Each panel should have a number in sequence. not just
+// the image ones... as the panels move around... their numbers change"; "Put a number on all of them. including opening
+// and closing"). 1 is the Opening (the title picture, or the Opening box when there is none), then every picture and
+// bridge in page order, and the Closing last. The same on the Story panels and the Review tab ('p<id>', 'b<id>', and
+// 'g<i>' for a gap that has no bridge ids yet -- no narrative written).
+function fxNums(src) {
+  var n = 1, out = { opening: 1 }, ps = fxPics(src);
+  ps.forEach(function (p, i) {
+    var title = (i === 0 && p.kind === 'establishing');
+    if (!title) out['p' + p.id] = ++n;
+    if (p.legacy) { if (!title && i < ps.length - 1) out['g' + i] = ++n; }
+    else p.bridges.forEach(function (b) { out['b' + b.id] = ++n; });
+  });
+  out.closing = n + 1;
+  return out;
+}
+function fxRowLabel(num, word) { return num + ' \u2013 ' + word; }
+// v3.4.42 -- After a save: a bridge that is no longer out of place (rewritten here, by typing, Regen's Use this or the
+// Coach) loses its note without waiting for a reload. Only removes; a note never appears without a redraw.
+function fxRepaintStale() {
+  var secs = (state.narrativeData && state.narrativeData.sections) || [], ms = state.moments || [];
+  ms.forEach(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {};
+    (s.bridges || []).forEach(function (b) {
+      var el = document.getElementById('narrative-bridge-' + b.id); if (!el) return;
+      var note = el.querySelector('.pm-stale');
+      if (note && !(String(b.text || '').trim() && fxBridgeStale(b, m.id, ms[i + 1] ? ms[i + 1].id : null))) note.parentNode.removeChild(note);
+    });
+  });
+}
+
+// v3.4.41 -- TD-1107. Before Regenerate Narrative on a rearranged story, say what happens to the bridges. Asked only when
+// the bridges are not already one per gap (a gap with none or several, one after the title, or one out of place), so a
+// story nobody rearranged is not asked. true: asked, and the run goes on (calling again) only on yes.
+function fxRegenIrregular() {
+  var secs = (state.narrativeData && state.narrativeData.sections) || [], ms = state.moments || [];
+  if (!secs.some(function (s) { return s && Array.isArray(s.bridges); })) return false;
+  return ms.some(function (m, i) {
+    var s = secs.find(function (x) { return x.panel_index === i; }) || {}, br = Array.isArray(s.bridges) ? s.bridges : [];
+    var nx = ms[i + 1] ? ms[i + 1].id : null;
+    if (m.kind === 'establishing') return br.length > 0;
+    if (i < ms.length - 1 && br.length !== 1) return true;
+    if (br.length > 1) return true;
+    return br.some(function (b) { return fxBridgeStale(b, m.id, nx); });
+  });
+}
+function fxRegenAsk(again) {
+  if (state._fxRegenOk) { state._fxRegenOk = false; return false; }
+  if (!fxRegenIrregular()) return false;
+  uiConfirm('Regenerate Narrative rewrites all the text in your current picture order. The bridges go back to one between each pair of pictures: extra bridges, and any right after the title, are removed.',
+            { okText: 'Regenerate', cancelText: 'Cancel' })
+    .then(function (ok) { if (ok === true) { state._fxRegenOk = true; again(); } });
+  return true;
+}
+
+function fxOk(items, src) { var ps = fxPics(src); return !items.length || items[0].t === 'p' || (FX_TITLE_BRIDGES && !!ps.length && ps[0].kind === 'establishing'); }
+function fxSame(a, b) { return a.length === b.length && a.every(function (x, n) { return x.t === b[n].t && String(x.id) === String(b[n].id); }); }
+function fxIndex(flat, t, id) { var k = -1; flat.forEach(function (it, n) { if (it.t === t && String(it.id) === String(id)) k = n; }); return k; }
+// A bridge is "out of place" when the pictures either side are not the ones it was written between.
+function fxBridgeStale(b, picId, nextId) {
+  if (!b || !Array.isArray(b.between)) return !!(b && b.id);
+  var b1 = b.between[1] == null ? null : Number(b.between[1]);
+  return Number(b.between[0]) !== Number(picId) || b1 !== (nextId == null ? null : Number(nextId));
+}
+// "Bridge 4: The Vault -> The Chase": numbered down the page, named after the pictures either side.
+function fxBridgeLabel(num, a, an, b, bn) {
+  var left = (!a || a.kind === 'establishing') ? 'Opening' : _bridgeTitle(a, an);
+  var right = b ? _bridgeTitle(b, bn) : 'Closing';
+  return 'Bridge ' + num + ': ' + left + ' → ' + right;
+}
+// The arrows, the x and the gripper for one space. Nothing on someone else's version, or on the title.
+function spaceControls(src, t, id) {
+  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
+  var flat = fxFlat(src), k = fxIndex(flat, t, id);
+  if (k < 0) return '';
+  var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
+  var what = t === 'p' ? 'panel' : 'bridge';
+  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var off = 'opacity:0.35;cursor:default;';
+  var can = function (j) {
+    if (j < 0 || j >= flat.length) return false;
+    var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
+    return fxOk(it, src);
+  };
+  var q = t === 'p' ? String(Number(id)) : ('\'' + String(id).replace(/[^a-z0-9]/gi, '') + '\'');
+  var btn = function (j, sym, tip) {
+    return can(j) ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();spaceStep(\'' + src + '\',\'' + t + '\',' + q + ',' + (j - k) + ')">' + sym + '</button>'
+      : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
+  };
+  var del = t === 'p' ? ('panelDelete(' + Number(id) + ')') : ('bridgeDelete(' + q + ',\'' + src + '\')');
+  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+    btn(k - 1, back, 'Move this ' + what + ' one place ' + (src === 'review' ? 'up' : 'earlier')) +
+    '<button type="button" style="' + bs + '" title="Delete this ' + what + '" onclick="event.stopPropagation();' + del + '">&times;</button>' +
+    btn(k + 1, fwd, 'Move this ' + what + ' one place ' + (src === 'review' ? 'down' : 'later')) +
+    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:#c9a84c;cursor:grab;user-select:none;">⠿</span></span>';
+}
+// Send a new page order (or a bridge to delete) for the version on screen, then reload both views.
+async function fxSend(src, body) {
+  var pics = fxPics(src);
+  if (!pics.length || !state.currentCampaign || !state.currentSession) return;
+  body.anchor = pics[0].id;
+  _pmBusy = true;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/arrange', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await _pmAfter(r);
+  } catch (e) { showError('That could not be moved. Please try again.'); }
+  finally { _pmBusy = false; }
+}
+async function fxWarn() {
+  if (_pmWarnOff()) return true;
+  var a = await _pmAsk('Moving panels changes your story’s order.', PANEL_MOVE_LINES, 'Move', false, true);
+  if (!a.ok) return false;
+  if (a.quiet) { try { window.localStorage.setItem(PANEL_MOVE_WARN_KEY, '1'); } catch (e) {} }
+  return true;
+}
+// One step: the space trades places with whatever sits next to it.
+async function spaceStep(src, t, id, dir) {
+  if (_pmBusy) return;
+  var flat = fxFlat(src), k = fxIndex(flat, t, id), j = k + dir;
+  if (k < 0 || j < 0 || j >= flat.length) return;
+  var it = flat.slice(), x = it[k]; it[k] = it[j]; it[j] = x;
+  if (!fxOk(it, src)) return;
+  if (!(await fxWarn())) return;
+  await fxSend(src, { items: it });
+}
+// Anywhere: the space is taken out and put in before (or after) another.
+function fxMoved(flat, k, j, after) {
+  var it = flat.slice(), x = it.splice(k, 1)[0];
+  var at = j > k ? j - 1 : j;
+  it.splice(after ? at + 1 : at, 0, x);
+  return it;
+}
+async function spaceMoveTo(src, k, j, after) {
+  if (_pmBusy) return;
+  var flat = fxFlat(src);
+  if (k < 0 || k >= flat.length || j < 0 || j >= flat.length) return;
+  var it = fxMoved(flat, k, j, after);
+  if (fxSame(it, flat) || !fxOk(it, src)) return;
+  if (!(await fxWarn())) return;
+  await fxSend(src, { items: it });
+}
+async function bridgeDelete(id, src) {
+  if (_pmBusy || !state.currentCampaign || !state.currentSession) return;
+  var a = await _pmAsk('Delete this bridge?', ['Its text is gone for good. Regenerate Narrative will write a new bridge here, along with fresh text for the whole session.'], 'Delete', true, false);
+  if (!a.ok) return;
+  await fxSend(src === 'review' ? 'review' : 'board', { deleteBridge: id });
+}
+// --- Drag and drop: from the gripper only (Ian: "so there is no accidental dragging"). ---
+var _fxDrag = null, _fxMark = null;
+function _fxSpace(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  var s = el.closest('[data-fx-t]');
+  return s ? { src: s.getAttribute('data-fx-src'), t: s.getAttribute('data-fx-t'), id: s.getAttribute('data-fx-id'), el: s } : null;
+}
+function _fxPaint(el, side) {
+  if (_fxMark && _fxMark !== el) _fxMark.style.boxShadow = '';
+  _fxMark = el || null;
+  if (el) el.style.boxShadow = side;
+}
+function _fxPlace(e) {
+  var s = _fxSpace(e.target);
+  if (!_fxDrag || !s || s.src !== _fxDrag.src) return null;
+  var flat = fxFlat(s.src), k = fxIndex(flat, _fxDrag.t, _fxDrag.id), j = fxIndex(flat, s.t, s.id);
+  if (k < 0 || j < 0 || k === j) return null;
+  var r = s.el.getBoundingClientRect();
+  var after = s.src === 'review' ? (e.clientY > r.top + r.height / 2) : (e.clientX > r.left + r.width / 2);
+  var it = fxMoved(flat, k, j, after);
+  if (fxSame(it, flat) || !fxOk(it, s.src)) return null;
+  var side = s.src === 'review' ? (after ? 'inset 0 -4px 0 #e8c766' : 'inset 0 4px 0 #e8c766') : (after ? 'inset -4px 0 0 #e8c766' : 'inset 4px 0 0 #e8c766');
+  return { src: s.src, k: k, j: j, after: after, el: s.el, side: side };
+}
+try {
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.sp-grip')) return;
+    try { var sel = window.getSelection && window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (x) {}
+    var bar = t.closest('.narrative-block-header, .review-panel-head, .review-nar-head'); if (!bar) return;
+    bar.setAttribute('draggable', 'true'); bar.setAttribute('data-fx-bar', '1'); bar.style.cursor = 'grabbing';
+  }, true);
+  document.addEventListener('mouseup', function () {
+    if (_fxDrag) return;
+    var all = document.querySelectorAll('[data-fx-bar]');
+    for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
+  }, true);
+  document.addEventListener('dragstart', function (e) {
+    var bar = e.target && e.target.closest ? e.target.closest('[data-fx-bar]') : null; if (!bar) return;
+    var c = bar.querySelector('.sp-ctl'); if (!c) return;
+    _fxDrag = { src: c.getAttribute('data-sp-src'), t: c.getAttribute('data-sp-t'), id: c.getAttribute('data-sp-id') };
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'space'); } catch (x) {}
+  });
+  document.addEventListener('dragover', function (e) {
+    if (!_fxDrag) return;
+    var p = _fxPlace(e);
+    if (!p) { _fxPaint(null); return; }
+    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+    _fxPaint(p.el, p.side);
+  });
+  document.addEventListener('drop', function (e) {
+    if (!_fxDrag) return;
+    var p = _fxPlace(e); _fxDrag = null; _fxPaint(null);
+    if (!p) return;
+    e.preventDefault();
+    spaceMoveTo(p.src, p.k, p.j, p.after);
+  });
+  document.addEventListener('dragend', function () {
+    _fxDrag = null; _fxPaint(null);
+    var all = document.querySelectorAll('[data-fx-bar]');
+    for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
+  });
+} catch (e) {}

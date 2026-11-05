@@ -1,5 +1,357 @@
 [
   {
+    "version": "3.4.44",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3444-change-dropdown-numbers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The character-change dropdown numbers its pictures as the Story panels do.",
+        "detail": "On the Characters tab, “Change first appears at this Moment Panel” now lists each picture with its number and title as the Story panels and the Review show them, so after panels move the numbers match the page.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.43",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3443-coach-continuity",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Writing Coach checks that each box makes sense after everything before it on the page.",
+        "detail": "Feedback now reads the whole page up to the box and checks continuity first: a character gaining something they already had, an event repeated or undone, time running backwards with no flashback. It names the row it clashes with, numbered as the page numbers them. Regen writes for the page as it now reads, and handles a moved picture as a flashback or flash-forward on purpose.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.42",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3442-move-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story moves: a new version no longer marks every bridge out of place; a bridge after the title prints as its own paragraph.",
+        "detail": "Copying a session to a new version keeps its bridges where they were written, so no out-of-place notes appear until something is moved (versions already copied are put right when next opened). A bridge placed right after the title now prints as its own paragraph after the Opening. Rewriting a bridge (typing, Regen, the Coach) removes its out-of-place note straight away.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.41",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3441-tester-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "Small fixes from testing: the Company page, the cover warning, Help, and two warnings for rearranged stories.",
+        "detail": "Include Sup. Characters / NPCs now hides with the character page. When both your cover picture’s title and subtitle differ from the book’s, both are said at once. Help tries once more by itself before saying it could not answer. Regenerate Narrative asks first on a rearranged story, and Regen says Use this replaces the whole box.",
+        "td": [
+          "TD-1104", "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.40",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3440-row-numbers",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Every row of the story is numbered in order, Opening to Closing.",
+        "detail": "On the Story panels and the Review tab every row now has a number from the top: 1 – Opening, then each picture and each bridge (shown simply as “3 – Bridge”), and the Closing last. The numbers follow the page, so they change as you move things.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.39",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3439-move-cleanup",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Clean-up: the older panel-move code is gone.",
+        "detail": "The routes and page code from the first designs of panel moving (v3.4.32-35: pictures-only arrows, swapping bridges, the first drag) are removed. Every move now goes through one route; nothing a user sees changes.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.38",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3438-bridge-after-title",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A bridge can now sit right after the title picture; the book prints it after the Opening.",
+        "detail": "Moving a bridge (or deleting the first panel) can put a bridge straight after the title picture. It shows there on the Story panels and the Review tab, and the printed book places it right after the Opening. Books nobody has rearranged print exactly as before.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.37",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3437-free-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Move story panels and bridges anywhere, separately.",
+        "detail": "On your own version, every picture panel and every bridge on the Story panels and the Review tab has arrows that move it one place (trading places with whatever is next to it) and a gripper to drag it anywhere, with a gold line showing where it will land. Bridges are numbered down the page and named after the pictures either side. The x on a bridge deletes it. Locked pictures can be moved. The title picture and Opening stay first.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.36",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3436-bridge-ids",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story text: every bridge has an id of its own, ready for moving panels and bridges anywhere.",
+        "detail": "Behind the scenes, the first step of free ordering (TD-1107): each bridge carries its own id and keeps it when panels move, are deleted or the narrative is saved. Deleting a panel now keeps the bridges after it, after the panel before it. A new route arranges a version in any order; the page uses it from v3.4.37.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.35",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3435-bridges-stay",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Story panels move without their bridges; bridges move on their own.",
+        "detail": "Moving a panel now leaves the bridge text where it is. Each bridge is numbered and named after the panels either side, and has its own arrows and x to swap it with a neighbour or empty it. Drag panels and bridges by the new gripper beside the arrows.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.34",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3434-drag-panels",
+        "kind": "feature",
+        "public": true,
+        "summary": "Drag story panels into a new order.",
+        "detail": "On a computer, drag a panel by its moment bar on the Story panels, or by the top of its row on the Review tab, and drop it on another panel. The arrows still work, including on phones.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.33",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3433-move-delete-panels",
+        "kind": "feature",
+        "public": true,
+        "summary": "Move and delete story panels.",
+        "detail": "On your own version, each panel has arrows and an x on the Story panels and the Review tab. A panel's picture, text, directions and outline move with it. Locked panels and the title picture stay where they are. Deleting a panel cannot be undone.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.32",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3432-panel-moves-server",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Groundwork for moving and deleting story panels: each panel's text is now linked to it.",
+        "detail": "A panel and its text, Directions, outline and character-change marker move together in one step. The buttons come in the next update.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.31",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3431-one-panel-open",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview and the Image Builder open one panel at a time.",
+        "detail": "Opening a panel closes the one that was open, so the list stays short. The panel you used last is open when you come back.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.30",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3430-company-picture-grouped",
+        "kind": "fix",
+        "public": true,
+        "summary": "Books: a character page picture keeps its heading just above it and its text just below.",
+        "detail": "On a character page that uses an Archive picture, the heading, the picture and the text below are centred on the page together, so a wide picture no longer leaves the heading alone at the top.",
+        "td": [
+          "TD-1103"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.29",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3429-company-panel-and-tour",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The Company Page panel is more compact, and the tour knows the new panels.",
+        "detail": "The Heading and Text below boxes sit beside the Company picture, which is greyed out while the character page is the line-up. The Publish tour walks through the new panels.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.28",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3428-prep-panels-in-book-order",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: the settings are in the order of the book.",
+        "detail": "The panels now run Cover, Title Page, Author's Note Page, The Company Page, Table of Contents, Body and Back Cover, each with the settings for that part of the book. Apply & preview is gone: changes save as you make them and Refresh preview shows them.",
+        "td": [
+          "TD-1104"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.27",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3427-character-page-words",
+        "kind": "feature",
+        "public": true,
+        "summary": "Books: name your character page and add words under it.",
+        "detail": "Layout has a Heading box for the character page (it starts as The Company; call it The Cast, or leave it empty) and a Text below box. On the line-up the text starts as the names from left to right and stays up to date until you change it. A Company picture now gets the same frame as your other pictures.",
+        "td": [
+          "TD-1103"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.26",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3426-company-picture",
+        "kind": "feature",
+        "public": true,
+        "summary": "Books: use a picture from your Archive as the character page instead of the line-up.",
+        "detail": "Prep & Preview has a Company tile beside Cover, Back and Title. Pick a picture there, such as one made in the Image Builder, and the character page shows it, fitted to the page. Layout now lists Include cover page and Include table of contents first.",
+        "td": [
+          "TD-1102"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.25",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3425-refresh-flash",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: Refresh preview flashes bright and wiggles every time you change something.",
+        "detail": "The button lights up gold for a moment with each change, then keeps a soft glow until you refresh, so it is easy to see that the preview is out of date.",
+        "td": [
+          "TD-1101"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.24",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3424-cover-title-panel",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Prep & Preview: the title settings sit in their own panel under the cover pictures, hidden when your cover picture has its title.",
+        "detail": "Tick My Cover Picture has Title Included to hide the title style, placement, size and Title Builder. For an Image Builder cover, a line says if the title on the picture differs from your book's title.",
+        "td": [
+          "TD-1100"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.23",
+    "staged_on": "2026-11-04",
+    "entries": [
+      {
+        "id": "3423-cover-own-title",
+        "kind": "feature",
+        "public": true,
+        "summary": "Book covers: tick \"Cover picture has the title\" to show a titled picture without a second title over it.",
+        "detail": "In Prep & Preview, the new tick box under the title and subtitle leaves the front cover to your picture alone, such as an Image Builder picture archived with its title. The spine and the title page still carry the title.",
+        "td": [
+          "TD-1100"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.22",
     "staged_on": "2026-11-04",
     "entries": [
