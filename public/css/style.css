@@ -1602,8 +1602,6 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   color: rgba(201,168,76,0.4);
 }
 .sc-thumb-empty { font-size: 40px; }
-.sc-card-main { flex: 1; min-width: 0; height: 160px; display: flex; flex-direction: column; position: relative; }
-.sc-card-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
 .sc-card-id { flex: 1; min-width: 0; }
 .sc-card-name {
   font-family: var(--font-display);
@@ -1624,23 +1622,59 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   border-radius: var(--radius);
   padding: 10px 12px;
 }
-/* v3.4.47 -- beside the picture: the box fills what is left of its height and the text ends in an ellipsis. */
-.sc-card-main .sc-card-prompt { flex: 1; min-height: 0; overflow: hidden; padding: 8px 12px; }
-.sc-card-prompt-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
-/* the whole description, under the box, while a cut one is hovered (styled like the ?s tips) */
+/* v3.4.48 -- the session Characters tab as picture cards, like the campaign Characters page (char-card--pic, whose
+   shared rules charPicCss injects), and the Edit window. */
+#sc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+#sc-list .sc-card { padding: 12px; margin: 0; overflow: visible; }
+#sc-list .sc-card .char-avatar { background: #fff; border-radius: var(--radius-lg) var(--radius-lg) 0 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+#sc-list .sc-card .char-avatar .sc-thumb { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; border: 0; border-radius: 0; }
+#sc-list .sc-card .char-avatar .sc-thumb-empty { width: 100%; height: 100%; background: rgba(20,12,4,0.6); }
+#sc-list .sc-card .char-name { font-family: var(--font-display); font-size: 15px; font-weight: 400; color: var(--gold-light); margin: 0; }
+.sc-card-cls2 { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+.sc-desc-wrap { position: relative; margin-top: 6px; }
+.sc-card-desc { font-size: 12px; color: var(--parchment); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-card-tag { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; cursor: pointer; }
+.sc-card-tag-pending { color: #e8a99c; background: rgba(224,122,106,0.12); border: 1px solid rgba(224,122,106,0.4); }
+.sc-card-tag-applied { color: #9ccb94; background: rgba(122,184,116,0.12); border: 1px solid rgba(122,184,116,0.4); }
+.sc-card-tag-draft { color: var(--gold); background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); }
+.sc-edit-draft:empty { display: none; }
 @media (hover:hover) {
-  .sc-card-main.is-cut:has(.sc-card-prompt:hover)::after {
-    content: attr(data-full); position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 300;
+  .sc-desc-wrap.is-cut:hover::after {
+    content: attr(data-full); position: absolute; top: calc(100% + 6px); left: -12px; width: 340px; max-width: 80vw; z-index: 300;
     white-space: pre-wrap; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.5 Georgia, serif;
     padding: 10px 13px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
   }
 }
-/* phones: the picture on top and the whole description, uncut */
-@media (max-width: 640px) {
-  .sc-card-head { flex-direction: column; }
-  .sc-card-main { height: auto; }
-  .sc-card-main .sc-card-prompt { overflow: visible; }
-  .sc-card-prompt-text { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+@media (max-width: 600px) { #sc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+/* the Edit window: below uiConfirm (100000) and the picture pickers (100001), which can open over it */
+.sc-edit-modal { position: fixed; inset: 0; z-index: 99990; background: rgba(8,5,2,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.sc-edit-box { background: #16100a; border: 1px solid rgba(201,168,76,0.35); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.5); width: 100%; max-width: 980px; max-height: 92vh; overflow: auto; padding: 18px 20px; }
+.sc-edit-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.sc-edit-head > div { flex: 1; min-width: 0; }
+.sc-edit-x { background: none; border: 0; color: var(--gold); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.sc-edit-body { display: flex; gap: 18px; align-items: flex-start; }
+.sc-edit-pic { flex: 0 0 300px; }
+.sc-edit-pic .sc-review-imgwrap { margin: 0; }
+.sc-edit-pic .sc-review-img { max-width: 300px; }
+.sc-edit-fields { flex: 1; min-width: 0; }
+.sc-edit-fields .char-prompt-editor { min-height: 96px; }
+.sc-edit-fields .sc-review-label { margin-top: 10px; }
+.sc-edit-fields .sc-review-label:first-child { margin-top: 0; }
+.sc-edit-actions { margin-top: 12px; }
+.sc-tip { position: relative; cursor: help; border-bottom: 1px dotted rgba(232,213,163,0.5); }
+@media (hover:hover) {
+  .sc-tip:hover::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 0; width: 320px; max-width: 80vw; z-index: 300;
+    white-space: normal; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.45 Georgia, serif;
+    padding: 8px 11px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
+  }
+}
+@media (max-width: 700px) {
+  .sc-edit-modal { padding: 0; }
+  .sc-edit-box { max-height: 100vh; height: 100%; border-radius: 0; }
+  .sc-edit-body { flex-direction: column; }
+  .sc-edit-pic { flex: 0 0 auto; width: 100%; }
+  .sc-edit-pic .sc-review-img { max-width: 100%; }
 }
 
 /* Phase 3 — hide DM-only UI elements when the current user is a player.

@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.48",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3448-session-character-cards",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A session's Characters tab shows picture cards, and Edit opens a window.",
+        "detail": "The characters are laid out across the tab as picture cards, like the Characters screen, with one line of the description (hover to read it all). Edit opens a window with the picture beside the boxes, so a retouch appears next to what you typed. A retouch keeps going if you close the window: the card shows it working and then New image ready. During Regenerate in Art Style every card waiting its turn shows that it is waiting. Approve change now saves an edited description too.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.47",
     "staged_on": "2026-11-05",
     "entries": [
