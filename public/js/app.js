@@ -4429,12 +4429,22 @@ function renderSessionCharacters(rows) {
       ? '<button class="char-btn" onclick="openChangeReview(' + r.character_id + ')" title="Edit how this character looks in this session">Edit</button>'
       : '';
     var tag = '';
-    if (pendingChange && canAct) tag = '<div class="sc-card-tag sc-card-tag-pending" onclick="openChangeReview(' + r.character_id + ')">&#9888; Change detected &mdash; review</div>';
-    else if (acceptedChange) tag = '<div class="sc-card-tag sc-card-tag-applied"' + (canEditPrompt ? ' onclick="openChangeReview(' + r.character_id + ')"' : '') + '>&#10003; Change applied</div>';
+    // v3.4.51 -- (Ian: "Can you make this more obvious... Maybe right over the picture? and a bigger font") a red band
+    // across the bottom of the picture instead of the small tag under the name.
+    var changeBand = (pendingChange && canAct)
+      ? '<div class="sc-pic-band sc-pic-band-change" onclick="openChangeReview(' + r.character_id + ')" title="Generate Story spotted a change to this character">&#9888; Change Detected &mdash; Edit for Details</div>'
+      : '';
+    if (acceptedChange) tag = '<div class="sc-card-tag sc-card-tag-applied"' + (canEditPrompt ? ' onclick="openChangeReview(' + r.character_id + ')"' : '') + '>&#10003; Change applied</div>';
     var _fullAttr = String(r.prompt || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return '<div class="sc-card char-card char-card--pic" id="sc-card-' + r.character_id + '">' +
       '<div class="char-card-header">' +
-        '<div class="char-avatar">' + thumb + '</div>' +
+        '<div class="char-avatar">' + thumb +
+          // v3.4.51 -- the bands sit on the picture; the gold one is painted by scPaintEditDraft into its holder
+          '<div class="sc-pic-bands">' +
+            '<div class="sc-edit-draft" id="sc-edit-draft-' + r.character_id + '">' + scEditDraftHtml(r.character_id) + '</div>' +
+            changeBand +
+          '</div>' +
+        '</div>' +
         (editBtn ? '<div class="char-actions">' + editBtn + '</div>' : '') +
       '</div>' +
       '<div class="char-name">' + r.name + '</div>' +
@@ -4443,7 +4453,6 @@ function renderSessionCharacters(rows) {
       '<div class="sc-desc-wrap" data-full="' + _fullAttr + '" onmouseenter="scPromptTip(this)">' +
         '<div class="sc-card-desc" id="sc-prompt-' + r.character_id + '">' + (r.prompt || '') + '</div></div>' +
       tag +
-      '<div class="sc-edit-draft" id="sc-edit-draft-' + r.character_id + '">' + scEditDraftHtml(r.character_id) + '</div>' +
       '<div class="sc-style-strip" id="sc-style-strip-' + r.character_id + '">' +
         scStyleStripHtml(r) + '</div>' +
     '</div>';
@@ -41333,7 +41342,7 @@ function scEditOpenFor(charId) {
 }
 function scEditDraftHtml(charId) {
   return (state.draftReference || {})[charId]
-    ? '<div class="sc-card-tag sc-card-tag-draft" onclick="openChangeReview(' + charId + ')" title="Open Edit to save it, or Revert to the saved picture">New picture ready &mdash; Edit to save</div>'   // v3.4.49 -- one Save
+    ? '<div class="sc-pic-band sc-pic-band-draft" onclick="openChangeReview(' + charId + ')" title="A retouched or restyled picture is waiting: open Edit to save it, or Revert">New Picture Ready &mdash; Edit to Save</div>'   // v3.4.51 -- a gold band on the picture
     : '';
 }
 function scPaintEditDraft(charId) {

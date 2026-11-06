@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.51",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3451-change-band",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A change Generate Story spotted now shows as a red band across the character's picture.",
+        "detail": "On a session's Characters tab, Change Detected - Edit for Details sits across the bottom of the picture in larger type, and a new picture waiting to be saved shows the same way in gold. Click either to open Edit.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.50",
     "staged_on": "2026-11-05",
     "entries": [

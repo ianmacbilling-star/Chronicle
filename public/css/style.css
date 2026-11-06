@@ -1638,6 +1638,14 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-card-tag-applied { color: #9ccb94; background: rgba(122,184,116,0.12); border: 1px solid rgba(122,184,116,0.4); }
 .sc-card-tag-draft { color: var(--gold); background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); }
 .sc-edit-draft:empty { display: none; }
+/* v3.4.51 -- bands across the bottom of the card's picture: red for a change Generate Story spotted, gold for a new picture
+   waiting to be saved (Ian: "more obvious... right over the picture... a bigger font"). Click opens Edit. */
+#sc-list .sc-card .char-avatar { position: relative; }
+.sc-pic-bands { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
+.sc-pic-band { padding: 9px 10px; font-size: 15px; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer; letter-spacing: 0.2px; }
+.sc-pic-band-change { background: rgba(150,38,22,0.93); color: #fff1e6; border-top: 1px solid rgba(255,190,160,0.5); }
+.sc-pic-band-draft { background: rgba(201,168,76,0.96); color: #1a1208; border-top: 1px solid rgba(255,235,180,0.7); }
+.sc-pic-band:hover { filter: brightness(1.1); }
 @media (hover:hover) {
   /* v3.4.49 -- ABOVE the line, over the picture. Below it, on the bottom row it lengthened the page, a scrollbar came and
      went, the cards reflowed under the pointer and the pop-up flickered (Ian). Above, it can never lengthen the page. */
