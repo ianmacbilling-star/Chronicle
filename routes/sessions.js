@@ -880,9 +880,12 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
 
     // Retouch FROM the current reference - session draft first, then canonical,
     // then an uploaded portrait. There must be something to retouch.
+    // v3.4.49 -- or from the picture waiting in the Edit window, when it is one of ours (sessionRefFrom).
+    const _from = await sessionRefFrom(db, req, characterId, fork);
+    if (_from && _from.error) return res.json({ error: _from.error, code: 'FROM_REFUSED' });
     // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
     const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    const baseImage = (_from && _from.url) || (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
     if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
     // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
@@ -1062,9 +1065,12 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
 
     // Restyle FROM the current reference - session snapshot first, then the
     // canonical, then an uploaded portrait. Same precedence as retouch.
+    // v3.4.49 -- or from the picture waiting in the Edit window, when it is one of ours (sessionRefFrom).
+    const _from = await sessionRefFrom(db, req, characterId, fork);
+    if (_from && _from.error) return res.json({ error: _from.error, code: 'FROM_REFUSED' });
     // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
     const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    const baseImage = (_from && _from.url) || (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
     if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
     // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
@@ -1266,6 +1272,22 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     res.json({ error: 'Could not approve the change.' });
   }
 });
+
+// v3.4.49 -- STEPS STACK IN THE EDIT WINDOW (Ian, 2026-11-05, option A). Retouch and Regenerate in Art Style used to
+// start from the SAVED reference every time, so "retouch again" never built on the last retouch and a retouch after a
+// restyle threw the restyle away. The window now sends the picture waiting in it as from_url. It is accepted ONLY if
+// one of this user's own session_ref jobs produced it, for this character in this version; anything else is refused,
+// never quietly swapped for the saved picture (a fallback is not a default). The rights check that follows runs on
+// whichever picture is used.
+async function sessionRefFrom(db, req, characterId, fork) {
+  const u = (req.body && typeof req.body.from_url === 'string') ? req.body.from_url.trim() : '';
+  if (!u) return null;
+  const j = await db.prepare(
+    "SELECT id FROM image_jobs WHERE user_id = ? AND character_id = ? AND fork_id = ? AND kind = 'session_ref' AND status = 'done' AND image_url = ? LIMIT 1"
+  ).get(req.session.userId, parseInt(characterId, 10), fork, u);
+  if (!j) return { error: 'That picture can\u2019t be worked on from here. Revert to the saved picture and try again. Nothing was charged.' };
+  return { url: u };
+}
 
 // POST reject a pending change. Marks it 'rejected' and clears the badge.
 // The rejected detail is kept on the row so re-extraction can tell the AI

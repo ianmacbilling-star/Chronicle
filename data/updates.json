@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.49",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3449-character-edit-window",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The character Edit window has one Save, Revert, and Regenerate in Art Style.",
+        "detail": "Beside Retouch image are Regenerate in Art Style and, when the AI suggested a change, Ignore suggested change. Retouch and Regenerate now build on each other. Replace and Archive stay on the picture after a retouch, and Revert goes back to the saved picture. One Save keeps everything as it is in the window. The description pop-up on the cards opens above the line and no longer flickers.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.48",
     "staged_on": "2026-11-05",
     "entries": [

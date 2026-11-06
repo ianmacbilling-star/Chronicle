@@ -1063,9 +1063,13 @@ own outline from their own notes. (Transcript and notes save automatically on cl
 Characters are first created on the **Characters screen** (section 9). Once the first session exists and is **Ready**,
 this tab is where you change a character as the story goes along. It lists the characters detected in this session as
 picture cards, like the Characters screen: the picture, the name, and one line of the description (hover to read it all).
-**Edit** on a card opens a window with the picture on the left and the boxes on the right. A **Retouch image** keeps going
-if you close the window; the card spins, then says **New image ready**, and opening Edit again shows it to approve.
-**Approve change** also saves an edited description. It also:
+**Edit** on a card opens a window with the picture on the left and the boxes on the right. Beside **Retouch image** are
+**Regenerate in Art Style** (this character only) and, when the AI suggested a change, **Ignore suggested change**, which
+clears the suggestion so it is not suggested again. Retouch and Regenerate build on each other: a retouch after a restyle
+keeps the restyle. While a new picture waits, a **Revert** pill on it goes back to the saved picture. Either keeps going if
+you close the window; the card spins, then says **New image ready**, and opening Edit again shows it. One **Save** keeps
+everything as it is in the window: the description, and a new picture as the change from the chosen panel onward (a
+picture only restyled becomes the reference, not a change). A suggestion nobody retouched stays a suggestion. It also:
 - **Detects visual changes** — if the story describes a change (a horn breaks off, a
   sunburn, a hole in a hat), Campaignia flags the character with a **review badge**.
   Open it with the character's **Edit** button.

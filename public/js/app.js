@@ -4559,8 +4559,6 @@ function scStyleStripHtml(r) {
         (stale ? 'Rendered in ' + escapeHtml(label) + ' — this version now uses ' + escapeHtml(curLabel)
                : 'Rendered in ' + escapeHtml(label)) +
       '</span>' +
-      '<button class="btn btn-xs" onclick="revertStyledReference(' + id + ')" ' +
-        'title="Put back the reference image that was here before it was regenerated in an art style">Revert</button>' +
       '</div>';
   }
   return '';
@@ -4940,7 +4938,6 @@ function openChangeReview(charId) {
   // the panel always used, so Retouch, Replace, Archive, Approve, Un-approve and Save description work unchanged.
   // One window at a time; a retouch keeps running when it is closed (scEditRetouchOn/Off), and the card says when
   // its picture is ready.
-  var _saveDesc = isAccepted ? '' : '<button class="btn btn-sm" onclick="saveSnapshot(' + charId + ')" title="Save the description only">Save description</button>';
   scCloseEditModal();
   var ov = document.createElement('div');
   ov.id = 'sc-edit-modal'; ov.className = 'sc-edit-modal';
@@ -4953,7 +4950,7 @@ function openChangeReview(charId) {
         detectedLine +
       '</div><button type="button" class="sc-edit-x" title="Close" onclick="scCloseReview(' + charId + ')">&times;</button></div>' +
       '<div class="sc-review sc-edit-body">' +
-        '<div class="sc-edit-pic"><div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions + '</div></div>' +
+        '<div class="sc-edit-pic"><div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + scEditPicHtml(charId, currentImg) + '</div></div>' +   // v3.4.49 -- one drawer for the picture and its pills
         '<div class="sc-edit-fields">' +
           '<label class="sc-review-label"><span class="sc-tip" data-tip="How this character is drawn in this session\u2019s pictures. It carries forward from the session before.">Description (this session)</span></label>' +
           '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
@@ -4961,32 +4958,33 @@ function openChangeReview(charId) {
           '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
             'placeholder="e.g. left horn broken off to a jagged stump">' +
             detailText + '</textarea>' +
+          // v3.4.49 -- the picture's three actions together (Ian): Retouch, Regenerate in Art Style, and Ignore suggested change
+          // (only while the AI's suggestion is undecided).
           '<div class="sc-review-retouch">' +
             '<button class="btn btn-sm" id="sc-retouch-' + charId + '" ' +
               'onclick="retouchSessionInline(' + charId + ')" ' +
               'title="Apply the amended appearance to the picture. You can close this window while it works.">&#9998; Retouch image</button>' +
+            '<button class="btn btn-sm" id="sc-restyle-one-' + charId + '" onclick="scEditRestyle(' + charId + ')" ' +
+              'title="Redraw this picture in this version\u2019s art style. You can close this window while it works.">Regenerate in Art Style</button>' +
+            ((r.change_status === 'pending' && r.change_detail)
+              ? '<button class="btn btn-sm" id="sc-ignore-' + charId + '" onclick="scIgnoreSuggestion(' + charId + ')" ' +
+                  'title="Clear the suggestion and do not suggest it again">Ignore suggested change</button>'
+              : '') +
           '</div>' +
           momentSelector +
         '</div>' +
       '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions sc-edit-actions">' +
-        '<button class="btn btn-sm btn-primary sc-approve-btn" id="sc-approve-' + charId + '" ' +
-          'onclick="approveChange(' + charId + ')" ' +
-          'title="Save the description and lock in this amended appearance from the chosen Moment Panel onward, and carry it into later sessions">&#10003; ' +
-          (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
-        _saveDesc +
-        '<button class="btn btn-sm" id="sc-reject-' + charId + '" ' +
-          'onclick="rejectChange(' + charId + ')" ' +
-          'title="Discard this amendment and leave the character unchanged for this session">&#10005; ' +
-          (isAccepted ? 'Un-approve' : 'Discard / Ignore') + '</button>' +
+        '<button class="btn btn-sm btn-primary sc-approve-btn" id="sc-save-' + charId + '" onclick="scSaveEdit(' + charId + ')" ' +
+          'title="Save everything as it is in this window">&#10003; Save</button>' +
         '<button class="btn btn-sm" onclick="scCloseReview(' + charId + ')">Cancel</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
   if (state.scEditRetouch && state.scEditRetouch[charId]) {
-    showBusyOverlay('sc-review-imgwrap-' + charId, 'Retouching', 'Applying your change\u2026');
-    var _rb = document.getElementById('sc-retouch-' + charId); if (_rb) _rb.disabled = true;
+    showBusyOverlay('sc-review-imgwrap-' + charId, state.scEditRetouch[charId] === true ? 'Retouching' : state.scEditRetouch[charId], 'Working\u2026');
+    scEditButtons(charId, true);
   } else if (_scDraft) {
     scEditDraftMsg(charId);
   }
@@ -5039,10 +5037,8 @@ function regenerateReference(charId) {
           clearInterval(ticker);
           if (btn) { btn.disabled = false; }
           var wrap = document.getElementById(wrapId);
-          if (wrap) {
-            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
-              'id="sc-review-img-' + charId + '" alt="reference" />';
-          }
+          state.draftReference = state.draftReference || {}; state.draftReference[charId] = url;   // v3.4.49 -- before drawing, so Revert shows
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills
           state.draftReference = state.draftReference || {};
           state.draftReference[charId] = url;
           if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
@@ -6385,9 +6381,9 @@ function applyCanonicalRef(charId, url) {
 
 function applySessionRefDraft(charId, url, wrapId, msg) {
   var wrap = document.getElementById(wrapId);
-  if (wrap) { wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'; }
   state.draftReference = state.draftReference || {};
   state.draftReference[charId] = url;
+  if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills
   if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
@@ -9619,25 +9615,25 @@ function retouchSessionInline(charId) {
   }
   var wrapId = 'sc-review-imgwrap-' + charId;
   if (msg) msg.textContent = '';
-  if (btn) btn.disabled = true;
+  scEditButtons(charId, true);   // v3.4.49 -- Retouch and Regenerate both wait
   showBusyOverlay(wrapId, 'Retouching', 'Applying your change\u2026');
   scEditRetouchOn(charId);   // v3.4.48 -- the card spins too, so closing the window loses nothing
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/retouch-reference' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+    // v3.4.49 -- from the picture waiting in the window, so steps stack (the server checks it is ours)
+    body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform', from_url: (state.draftReference || {})[charId] || '' })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.job_id) {
         pollRefJob(data.job_id, function(url){
-          var wrap = document.getElementById(wrapId);
-          if (wrap) {
-            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />';
-          }
           state.draftReference = state.draftReference || {};
           state.draftReference[charId] = url;
+          state.scDraftChanged = state.scDraftChanged || {}; state.scDraftChanged[charId] = true;   // v3.4.49 -- an appearance change is in it
+          var wrap = document.getElementById(wrapId);
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills, and Revert
           if (btn) btn.disabled = false;
           if (msg) msg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
           scEditRetouchOff(charId, true);   // v3.4.48
@@ -17067,10 +17063,8 @@ function submitRetouch() {
           // session_characters is written only on Approve.
           pollRefJob(data.job_id, function(url){
             var wrap = document.getElementById(scWrapId);
-            if (wrap) {
-              wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
-                'id="sc-review-img-' + scId + '" alt="reference" />';
-            }
+            state.draftReference = state.draftReference || {}; state.draftReference[scId] = url;   // v3.4.49
+            if (wrap) wrap.innerHTML = scEditPicHtml(scId, url);   // v3.4.49 -- with its pills
             state.draftReference = state.draftReference || {};
             state.draftReference[scId] = url;
             if (scMsg) scMsg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
@@ -41336,7 +41330,7 @@ function scEditOpenFor(charId) {
 }
 function scEditDraftHtml(charId) {
   return (state.draftReference || {})[charId]
-    ? '<div class="sc-card-tag sc-card-tag-draft" onclick="openChangeReview(' + charId + ')" title="Open Edit to approve or throw away the retouched picture">New image ready &mdash; Edit to approve</div>'
+    ? '<div class="sc-card-tag sc-card-tag-draft" onclick="openChangeReview(' + charId + ')" title="Open Edit to save it, or Revert to the saved picture">New picture ready &mdash; Edit to save</div>'   // v3.4.49 -- one Save
     : '';
 }
 function scPaintEditDraft(charId) {
@@ -41346,24 +41340,26 @@ function scPaintEditDraft(charId) {
 function scEditDraftMsg(charId) {
   var msg = document.getElementById('sc-review-msg-' + charId);
   if (!msg) return;
-  msg.innerHTML = 'Retouched picture ready. Approve to keep it, retouch again, or ' +
-    '<button type="button" class="btn btn-xs" onclick="scDropEditDraft(' + charId + ')">throw it away</button>';
+  msg.textContent = 'New picture ready. Save to keep it, keep working on it, or Revert to go back to the saved picture.';   // v3.4.49
 }
 function scDropEditDraft(charId) {
+  // v3.4.49 -- this is Revert: back to the saved picture, everything waiting forgotten.
   if (state.draftReference) delete state.draftReference[charId];
+  if (state.scDraftChanged) delete state.scDraftChanged[charId];
+  if (state.scDraftStyled) delete state.scDraftStyled[charId];
   scPaintEditDraft(charId);
   if (!scEditOpenFor(charId)) return;
   var r = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
   var url = r ? (r.reference_url || r.canonical_reference_url || '') : '';
   var wrap = document.getElementById('sc-review-imgwrap-' + charId);
-  if (wrap && url) wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />';
+  if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);
   var msg = document.getElementById('sc-review-msg-' + charId);
   if (msg) msg.textContent = 'Back to the saved picture.';
 }
-function scEditRetouchOn(charId) {
+function scEditRetouchOn(charId, label) {
   state.scEditRetouch = state.scEditRetouch || {};
-  state.scEditRetouch[charId] = true;
-  scBusyOn(charId, 'Retouching', 'Applying your change\u2026');
+  state.scEditRetouch[charId] = label || true;   // v3.4.49 -- true = Retouching; otherwise the label shown
+  scBusyOn(charId, label || 'Retouching', 'Working\u2026');
 }
 function scEditRetouchOff(charId, ok, errText) {
   if (state.scEditRetouch) delete state.scEditRetouch[charId];
@@ -41372,10 +41368,10 @@ function scEditRetouchOff(charId, ok, errText) {
     scPaintEditDraft(charId);
     if (scEditOpenFor(charId)) {
       scEditDraftMsg(charId);
-      var b = document.getElementById('sc-retouch-' + charId); if (b) b.disabled = false;
+      scEditButtons(charId, false);   // v3.4.49
     }
   } else if (scEditOpenFor(charId)) {
-    var b2 = document.getElementById('sc-retouch-' + charId); if (b2) b2.disabled = false;
+    scEditButtons(charId, false);   // v3.4.49
     hideBusyOverlay('sc-review-imgwrap-' + charId);
   } else if (errText) {
     scCardMessage(charId, 'Could not retouch: ' + errText);
@@ -41391,4 +41387,167 @@ function _scSaveDesc(charId, text) {
     .then(function (r) { return r.json().catch(function () { return {}; }); })
     .then(function (d) { return (d && d.success) ? null : ((d && d.error) || 'Could not save the description.'); })
     .catch(function () { return 'Could not save the description.'; });
+}
+
+// =================================================================================================
+// v3.4.49 -- THE EDIT WINDOW, REWORKED WITH IAN (2026-11-05). The picture and its pills are drawn by ONE function,
+// scEditPicHtml, because five places used to swap in a bare picture and Replace / Archive vanished after a retouch.
+// Revert sits on the picture while a new one is waiting (like the Storyboard panels). Retouch, Regenerate in Art
+// Style and Ignore suggested change sit together; Retouch and Regenerate build on the picture waiting in the window
+// (the server checks it is ours). One Save keeps everything as it is in the window. APPENDED (TD-853); new names.
+// =================================================================================================
+function scEditPicHtml(charId, url) {
+  var r = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; }) || {};
+  var waiting = !!(state.draftReference || {})[charId];
+  var img = url
+    ? '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'
+    : '<div class="sc-review-img sc-review-img-empty" id="sc-review-img-' + charId + '">No reference image yet</div>';
+  var arch = (typeof isMomentArchived === 'function') && isMomentArchived(r);
+  var pills = '<div class="panel-img-actions">' +
+    '<button class="panel-pill" onclick="openReplacePicker(\'character\', ' + charId + ')" title="Replace with an image from the Archive">Replace</button>' +
+    (url || r.reference_url || r.canonical_reference_url
+      ? '<button class="panel-pill' + (arch ? ' is-on' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' +
+          (arch ? 'In your Archive \u2014 click to remove' : 'Save the saved reference picture to your Archive') + '">' + (arch ? 'Archived' : 'Archive') + '</button>'
+      : '') +
+    (waiting ? '<button class="panel-pill" id="sc-revert-' + charId + '" onclick="scDropEditDraft(' + charId + ')" title="Go back to the saved picture">Revert</button>' : '') +
+    '</div>';
+  return img + pills;
+}
+
+function scEditButtons(charId, busy) {
+  ['sc-retouch-', 'sc-restyle-one-'].forEach(function (p) { var b = document.getElementById(p + charId); if (b) b.disabled = !!busy; });
+}
+
+// Regenerate in Art Style for this one character, from the window. Same server route as the tab's button; the
+// result waits in the window like a retouch (Save keeps it), building on any picture already waiting there.
+function scEditRestyle(charId) {
+  if (typeof ensureGenFree === 'function' && !ensureGenFree()) return;
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var wrapId = 'sc-review-imgwrap-' + charId;
+  if (msg) msg.textContent = '';
+  scEditButtons(charId, true);
+  showBusyOverlay(wrapId, 'Regenerating', 'Redrawing in the art style\u2026');
+  scEditRetouchOn(charId, 'Regenerating');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/restyle-reference' + forkQ(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_url: (state.draftReference || {})[charId] || '' })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function (url) {
+          state.draftReference = state.draftReference || {}; state.draftReference[charId] = url;
+          state.scDraftStyled = state.scDraftStyled || {}; state.scDraftStyled[charId] = data.art_style || true;
+          var wrap = document.getElementById(wrapId);
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          scEditRetouchOff(charId, true);
+        }, function (err) {
+          hideBusyOverlay(wrapId);
+          if (msg && scEditOpenFor(charId)) msg.textContent = 'Could not regenerate: ' + err;
+          scEditRetouchOff(charId, false, err);
+        });
+        return;
+      }
+      hideBusyOverlay(wrapId);
+      scEditRetouchOff(charId, false);
+      var m2 = document.getElementById('sc-review-msg-' + charId);
+      if (data && data.error === 'INSUFFICIENT_TOKENS') { if (m2) m2.innerHTML = insufficientTokensHtml(data.message); }
+      else if (m2) m2.textContent = (data && (data.message || data.error)) || 'Could not regenerate.';
+    })
+    .catch(function (e) { hideBusyOverlay(wrapId); scEditRetouchOff(charId, false, e && e.message); var m3 = document.getElementById('sc-review-msg-' + charId); if (m3) m3.textContent = 'Could not regenerate.'; });
+}
+
+// Ignore suggested change: the AI's suggestion is marked ignored (Generate Story will not suggest it again), the
+// Amended appearance box is cleared, and the window stays open.
+function scIgnoreSuggestion(charId) {
+  var btn = document.getElementById('sc-ignore-' + charId);
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/reject-change' + forkQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.success) { if (btn) btn.disabled = false; if (msg) msg.textContent = (d && d.error) || 'Could not ignore the suggestion.'; return; }
+      var row = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
+      if (row) { row.change_status = 'rejected'; row.change_flag = false; }
+      var box = document.getElementById('sc-review-text-' + charId); if (box) box.value = '';
+      if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+      if (msg) msg.textContent = 'Suggestion ignored.';
+      var tag = document.querySelector('#sc-card-' + charId + ' .sc-card-tag-pending');
+      if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not ignore the suggestion.'; });
+}
+
+function _scPost(charId, what, body) {
+  return fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/' + what + forkQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {})
+  })
+    .then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (d) { return (d && d.success) ? null : ((d && d.error) || 'Could not save.'); })
+    .catch(function () { return 'Could not save.'; });
+}
+
+// SAVE (Ian: "Save should approve the change as well... and leave everything in the state it was when the button was
+// pressed"). In order, each step only when it applies:
+//   1. the Description, if edited;
+//   2. a picture waiting in the window: from a retouch (or a retouch on top of a restyle) it becomes the change from the
+//      chosen panel onward (approve-change, after approve-styled-reference when a restyle is in it, so the art style is
+//      recorded and its own undo slot is armed); from Regenerate in Art Style alone it becomes the reference
+//      (approve-styled-reference), which is not an appearance change;
+//   3. no new picture but a change already approved: its text and "Change starts at" are kept as edited;
+//   4. an AI suggestion nobody retouched or ignored stays a suggestion; text typed but never retouched is kept in the box
+//      and the window says to retouch first, after everything else has saved.
+function scSaveEdit(charId) {
+  var row = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
+  if (!row) return;
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var btn = document.getElementById('sc-save-' + charId);
+  var descEl = document.getElementById('sc-editor-' + charId);
+  var textEl = document.getElementById('sc-review-text-' + charId);
+  var momentEl = document.getElementById('sc-review-moment-' + charId);
+  var norm = function (v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim(); };
+  var detail = textEl ? textEl.value.trim() : '';
+  var moment = momentEl ? parseInt(momentEl.value, 10) : (typeof row.change_moment_index === 'number' ? row.change_moment_index : -1);
+  if (isNaN(moment) || moment < -1) moment = -1;
+  var waiting = (state.draftReference || {})[charId] || '';
+  var styled = !!(state.scDraftStyled || {})[charId];
+  var changed = !!(state.scDraftChanged || {})[charId] || (waiting && !styled);
+  var accepted = row.change_status === 'accepted';
+  var steps = [];
+  if (descEl && norm(descEl.value) !== norm(row.prompt)) steps.push(function () { return _scSaveDesc(charId, descEl.value).then(function (e) { if (!e) row.prompt = descEl.value; return e; }); });
+  if (waiting) {
+    if (styled) steps.push(function () { return _scPost(charId, 'approve-styled-reference', { image_url: waiting }); });
+    if (changed) steps.push(function () { return _scPost(charId, 'approve-change', { detail: detail, image_url: waiting, moment_index: moment }); });
+  } else if (accepted) {
+    var curMoment = (typeof row.change_moment_index === 'number') ? row.change_moment_index : -1;
+    if (norm(detail) !== norm(row.change_note || row.change_detail) || moment !== curMoment) {
+      steps.push(function () { return _scPost(charId, 'approve-change', { detail: detail, image_url: row.reference_url || row.canonical_reference_url || null, moment_index: moment }); });
+    }
+  }
+  var typedOnly = !waiting && !accepted && detail && norm(detail) !== norm(row.change_detail);
+  if (btn) btn.disabled = true;
+  if (msg) msg.textContent = steps.length ? 'Saving\u2026' : '';
+  var k = 0;
+  function next() {
+    if (k >= steps.length) {
+      if (waiting) { delete state.draftReference[charId]; if (state.scDraftChanged) delete state.scDraftChanged[charId]; if (state.scDraftStyled) delete state.scDraftStyled[charId]; }
+      if (typedOnly) {
+        if (btn) btn.disabled = false;
+        if (msg) msg.textContent = (steps.length ? 'Saved. ' : '') + 'Retouch the picture first to make the Amended appearance a change.';
+        if (steps.length) loadSessionCharacters();
+        return;
+      }
+      scCloseReview(charId);
+      return;
+    }
+    steps[k++]().then(function (err) {
+      if (err) { if (btn) btn.disabled = false; if (msg) msg.textContent = err; return; }
+      next();
+    });
+  }
+  next();
 }

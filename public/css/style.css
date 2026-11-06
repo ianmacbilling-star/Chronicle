@@ -1639,8 +1639,10 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-card-tag-draft { color: var(--gold); background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); }
 .sc-edit-draft:empty { display: none; }
 @media (hover:hover) {
+  /* v3.4.49 -- ABOVE the line, over the picture. Below it, on the bottom row it lengthened the page, a scrollbar came and
+     went, the cards reflowed under the pointer and the pop-up flickered (Ian). Above, it can never lengthen the page. */
   .sc-desc-wrap.is-cut:hover::after {
-    content: attr(data-full); position: absolute; top: calc(100% + 6px); left: -12px; width: 340px; max-width: 80vw; z-index: 300;
+    content: attr(data-full); position: absolute; bottom: calc(100% + 6px); left: -12px; width: 340px; max-width: 80vw; z-index: 300;
     white-space: pre-wrap; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.5 Georgia, serif;
     padding: 10px 13px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
   }
@@ -1661,6 +1663,9 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-edit-fields .sc-review-label { margin-top: 10px; }
 .sc-edit-fields .sc-review-label:first-child { margin-top: 0; }
 .sc-edit-actions { margin-top: 12px; }
+/* v3.4.49 -- the picture's pills are always showing in the window (Replace, Archive, and Revert when a new picture waits) */
+.sc-edit-pic .panel-pill { opacity: 1; }
+.sc-review-retouch { flex-wrap: wrap; }
 .sc-tip { position: relative; cursor: help; border-bottom: 1px dotted rgba(232,213,163,0.5); }
 @media (hover:hover) {
   .sc-tip:hover::after {
@@ -3042,7 +3047,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    list, the per-card strip, and the staleness warning. Additive only -- no
    existing rule is touched, so the tab is unchanged until a reference is
    actually restyled. */
-.sc-style-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px; }
+.sc-style-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; margin-bottom:14px; }   /* v3.4.49 -- buttons right, the line above them removed */
 .sc-style-warning { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
   color:#c9a84c; border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:14px; line-height:1.45; }
 .sc-style-strip:empty { display:none; }
