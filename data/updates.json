@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.63",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3463-brand2-story-sheet",
+        "kind": "feature",
+        "public": false,
+        "summary": "Two brands: /story gets brand 2's own light look, Sky and Lavender.",
+        "detail": "New theme sheet css/themes/brand2.css: the same names as campaignia.css, with the storyteller brand's values chosen by Ian from the pastel trial (cool paper, slate-blue ink, periwinkle accent, pink button, a soft watercolor wash behind the page). /story now links that sheet instead of Campaignia's, and its browser toolbar color is the light page color. Every other page is unchanged. Fonts and layout are the same for now; fonts are next.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.62",
     "staged_on": "2026-11-06",
     "entries": [
