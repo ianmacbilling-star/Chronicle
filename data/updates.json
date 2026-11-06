@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.70",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3470-brain-characters-tab",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help assistant: the Characters tab answers match the redesigned Edit window.",
+        "detail": "Brain section 10.2 and the troubleshooting answer for a character whose look changes: the red Change Detected band (was a review badge), Save keeps a retouch (was Approve change), Revert and Cancel, Ignore suggested change, and the Change Starts at Moment dropdown (was Change first appears at this Moment Panel). Text only.",
+        "td": [
+          "TD-1111"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.69",
     "staged_on": "2026-11-06",
     "entries": [

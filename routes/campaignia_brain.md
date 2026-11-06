@@ -1073,14 +1073,16 @@ picture only restyled becomes the reference, not a change). A suggestion nobody 
 is approved, the Amended appearance box opens empty for the next one; the change itself stays in the Description as its
 RECENT CHANGE line, which is what the pictures are drawn from. A second change adds to the first. It also:
 - **Detects visual changes** — if the story describes a change (a horn breaks off, a
-  sunburn, a hole in a hat), Campaignia flags the character with a **review badge**.
-  Open it with the character's **Edit** button.
+  sunburn, a hole in a hat), Campaignia puts a red **Change Detected — Edit for Details** band across that
+  character's picture. Click the band, or the character's **Edit**, to see the suggested change in the window.
 - **Amend the look** — edit the description and type what changed into the **Amended
   appearance** box, then **Retouch image**: it applies just that change to the current
-  reference and shows the result. **Approve change** to keep it, or **Discard / Ignore**.
+  reference and shows the result in the window. **Save** keeps it (with anything else changed in the window); the
+  **Revert** pill on the new picture goes back to the saved one; **Cancel** closes without saving. A suggested change
+  that is wrong: **Ignore suggested change**.
   This is the plain box, not the Storyboard's guided panel — but every piece of advice in
   10.7 about wording a retouch still applies here.
-- **Pin to a moment** — a "Change first appears at this Moment Panel" dropdown (its pictures numbered as on the Story
+- **Pin to a moment** — the **Change Starts at Moment** dropdown (its pictures numbered as on the Story
   panels and the Review, e.g. *7 – One Big Sneeze!*; it follows its picture when panels move) sets when
   the new look kicks in (normal before, changed from it onward). Leave Empty to apply
   throughout.
@@ -2278,8 +2280,8 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"My character looks wrong / keeps changing between panels."** If they look wrong from the start, open the
   **Characters** screen (the Characters button) → the character's **Edit**. Tighten the description and add more
   **reference images** (more references = better consistency). If the *story* changes their look, open that
-  session's **Characters** tab → the character's **Edit**, type it into **Amended appearance** → **Retouch image** → **Approve change**, and use
-  the "Change first appears at this Moment Panel" dropdown to set when it kicks in. To go
+  session's **Characters** tab → the character's **Edit**, type it into **Amended appearance** → **Retouch image** → **Save**, and use
+  the **Change Starts at Moment** dropdown to set when it kicks in. To go
   back to an earlier look, use **Replace from Archive**.
 - **"I want more / fewer panels in a session."** Moments are pulled from your story's
   content up to your tier's ceiling — Campaignia won't pad to hit a number. For **fewer**,
