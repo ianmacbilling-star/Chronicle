@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.54",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3454-theme-sheet",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 1: Campaignia's colors now come from a theme sheet (nothing looks different).",
+        "detail": "style.css names every brand color (gold accent, dark panels, parchment text, crimson) and reads its value from css/themes/campaignia.css, so a second brand can have its own sheet. Proved identical: expanded back it is the old file, and every computed style of every element on the tested screens matches.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.53",
     "staged_on": "2026-11-05",
     "entries": [
