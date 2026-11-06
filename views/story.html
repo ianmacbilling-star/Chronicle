@@ -3,7 +3,7 @@
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
   <link rel="stylesheet" href="/css/themes/campaignia.css">
-  <script>/* v3.4.68 -- brand by web address (Ian, 2026-11-06): chroniclemygame.com (staging) shows brand 2 (its sheet over Campaignia's); campaignia.com and every other address keep Campaignia's look. Written by the parser so it is in place before the first paint. To be replaced by the server-side brand switch. */(function(){if(/(^|\.)chroniclemygame\.com$/.test(location.hostname)){document.write('<link rel="stylesheet" href="/css/themes/brand2.css">');window.__brand2=true;}})();</script>
+  <script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
   <meta charset="UTF-8">
   <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,7 +50,6 @@
   <link rel="stylesheet" href="/css/landing-story.css?v=3.4.61">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
-  <script>if(window.__brand2){document.querySelector('meta[name="theme-color"]').setAttribute('content','#f6f6fc');}</script>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Campaignia" />

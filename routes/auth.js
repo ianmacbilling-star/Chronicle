@@ -188,8 +188,11 @@ router.post('/register', async function(req, res) {
     const regTier = willJoinViaInvite ? 'copper' : 'trial';
     const trialStart = willJoinViaInvite ? null : now;
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, tier, created_at, last_active_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, regTier, now, now, trialStart, penRes.value || null, dob, TOS_VERSION, now, true);
+      // v3.4.69 -- TD-1105: the account belongs to the brand it signed up through (services/brands.js forSignup: the
+      // staging switch or variable, else the landing page the visitor came through, else Campaignia; always Campaignia on
+      // production while no other brand is live).
+      'INSERT INTO users (name, email, password, tier, created_at, last_active_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted, home_brand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, regTier, now, now, trialStart, penRes.value || null, dob, TOS_VERSION, now, true, require('../services/brands').forSignup(req));
 
     const newUserId = result.lastInsertRowid;
 

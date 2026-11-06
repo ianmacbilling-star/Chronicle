@@ -229,6 +229,12 @@ app.use(function(req, res, next) {
   next();
 });
 
+// v3.4.69 -- TWO BRANDS (TD-1105). Each page request is given its brand (services/brands.js): staging switch, the
+// BRAND variable (staging only), a brand's own address, the signed-in person's brand, the landing page they came
+// through, else Campaignia. It only sets cookies the page reads; on production, with only Campaignia live, it does
+// nothing at all. Before express.static and the page routes, after the session.
+app.use(require('./services/brands').middleware(getDb));
+
 app.get('/robots.txt', function(req, res) {
   res.type('text/plain');
   var body = isProdHost(req)

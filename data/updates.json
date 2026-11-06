@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.69",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3469-brand-groundwork",
+        "kind": "feature",
+        "public": false,
+        "summary": "Two brands groundwork: each page is given its brand; accounts remember theirs; a staging switch.",
+        "detail": "New services/brands.js: the brand list (Campaignia, live; brand 2, not live yet) and the rule that picks each page's brand: the staging switch (?brand=brand2 on any page, remembered by that browser; ?brand=clear), the BRAND Railway variable (staging only), a brand's own web address (none yet), the signed-in person's brand, the landing page they came through (/story is brand 2's), else Campaignia. A brand that is not live is never chosen on production. New column users.home_brand (text, every existing account 'campaignia'); a new account takes the brand it signed up through. Every page (app, sign-in, gift, redeem, invite, reset, landing pages, Library, legal pages, 404, offline) reads the brand and lays brand 2's theme over Campaignia's when it applies; /story's own address check from v3.4.68 is replaced by this. On production nothing changes while brand 2 is not live.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.68",
     "staged_on": "2026-11-06",
     "entries": [
