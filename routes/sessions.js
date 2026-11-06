@@ -686,6 +686,63 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
   res.json(rows);
 });
 
+// v3.4.45 -- TD-1040. ADD A CHARACTER to this session's cast by hand (Ian, 2026-11-05: "a small pill
+// button at the top of the characters tab... It should bring in the last saved version of that
+// character for that version. If there is none it should bring in the Canonical version"). Only
+// Generate Story built the cast until now, so a character it missed was missing from the book's
+// Company page too (v3.3.28). The look comes from the SAME rule Generate Story uses
+// (extract.js resolveCarryForward): no choosing between looks here. Only the cast changes; no panel.
+// Who: the version on screen must be the caller's to act on (callerForkId) -- the Story Master on
+// the Canonical, a member on their own version -- the same people who can edit the cards there.
+router.post('/:id/characters/add', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const fork = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.status(403).json({ error: 'You can only add characters to your own version of this session.' });
+    const charId = parseInt(req.body && req.body.character_id, 10);
+    if (!charId) return res.status(400).json({ error: 'Choose a character to add.' });
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(charId, session.campaign_id);
+    if (!ch) return res.status(404).json({ error: 'That character is not in this campaign.' });
+    const have = await db.prepare('SELECT id FROM session_characters WHERE fork_id = ? AND character_id = ?').get(fork, ch.id);
+    if (have) return res.json({ success: true, already: true, name: ch.name });
+    const carry = await require('./extract').resolveCarryForward(db, ch, session, fork);
+    await db.prepare(
+      'INSERT INTO session_characters ' +
+      '(session_id, fork_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(session.id, fork, ch.id, carry.prompt, carry.referenceUrl, null, false, 'none', new Date().toISOString());
+    console.log('[cast-add] session ' + session.id + ' version ' + fork + ' character ' + ch.id + ' look ' + (carry.referenceUrl ? 'carried' : 'none'));
+    res.json({ success: true, name: ch.name });
+  } catch (e) {
+    console.error('[cast-add] error:', e && e.message);
+    res.status(500).json({ error: 'Could not add the character. Try again.' });
+  }
+});
+
+// v3.4.45 -- TD-1040. WHO WOULD GENERATE STORY TAKE OUT OF THIS SESSION'S CAST? Asked by the page
+// just before Generate Story runs, with the Story and notes it is about to save. The same three
+// tests Generate Story applies (extract.js wouldDropOnRegenerate). It never refuses: any failure
+// answers "nobody", which is how Generate Story behaved before this warning existed.
+router.post('/:id/characters/regen-drops', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+    if (!session) return res.json({ drops: [] });
+    const fork = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+    if (!fork) return res.json({ drops: [] });
+    const b = req.body || {};
+    const drops = await require('./extract').wouldDropOnRegenerate(db, session, fork,
+      (typeof b.transcript === 'string') ? b.transcript : undefined,
+      (typeof b.notes === 'string') ? b.notes : undefined);
+    res.json({ drops: drops });
+  } catch (e) {
+    console.error('[regen-drops] error:', e && e.message);
+    res.json({ drops: [] });
+  }
+});
+
 // PUT edit a session character snapshot prompt (Platinum only)
 router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
@@ -823,9 +880,12 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
 
     // Retouch FROM the current reference - session draft first, then canonical,
     // then an uploaded portrait. There must be something to retouch.
+    // v3.4.49 -- or from the picture waiting in the Edit window, when it is one of ours (sessionRefFrom).
+    const _from = await sessionRefFrom(db, req, characterId, fork);
+    if (_from && _from.error) return res.json({ error: _from.error, code: 'FROM_REFUSED' });
     // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
     const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    const baseImage = (_from && _from.url) || (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
     if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
     // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
@@ -1005,9 +1065,12 @@ router.post('/:id/characters/:characterId/restyle-reference', requireAuth, verif
 
     // Restyle FROM the current reference - session snapshot first, then the
     // canonical, then an uploaded portrait. Same precedence as retouch.
+    // v3.4.49 -- or from the picture waiting in the Edit window, when it is one of ours (sessionRefFrom).
+    const _from = await sessionRefFrom(db, req, characterId, fork);
+    if (_from && _from.error) return res.json({ error: _from.error, code: 'FROM_REFUSED' });
     // v3.1.93 -- TD-979. With no generated reference yet, the FIRST uploaded picture that is not rejected.
     const _ups = await rightsCheck.splitRejected([ch.image_portrait, ch.image_fullbody, ch.image]);
-    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
+    const baseImage = (_from && _from.url) || (sc && sc.reference_url) || ch.canonical_reference_url || _ups.clean[0] || null;
     if (!baseImage && _ups.rejected.length) return res.json({ error: _ups.reason + ' Replace the character\u2019s uploaded picture with one you have the rights to. Nothing was charged.', code: 'RIGHTS_REJECTED', rights: _ups.rights });
     if (!baseImage) return res.json({ error: 'There is no reference image to restyle yet.' });
     // v3.1.91 -- TD-979. A generated reference can carry a rejection as a COPY of a rejected picture.
@@ -1209,6 +1272,22 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     res.json({ error: 'Could not approve the change.' });
   }
 });
+
+// v3.4.49 -- STEPS STACK IN THE EDIT WINDOW (Ian, 2026-11-05, option A). Retouch and Regenerate in Art Style used to
+// start from the SAVED reference every time, so "retouch again" never built on the last retouch and a retouch after a
+// restyle threw the restyle away. The window now sends the picture waiting in it as from_url. It is accepted ONLY if
+// one of this user's own session_ref jobs produced it, for this character in this version; anything else is refused,
+// never quietly swapped for the saved picture (a fallback is not a default). The rights check that follows runs on
+// whichever picture is used.
+async function sessionRefFrom(db, req, characterId, fork) {
+  const u = (req.body && typeof req.body.from_url === 'string') ? req.body.from_url.trim() : '';
+  if (!u) return null;
+  const j = await db.prepare(
+    "SELECT id FROM image_jobs WHERE user_id = ? AND character_id = ? AND fork_id = ? AND kind = 'session_ref' AND status = 'done' AND image_url = ? LIMIT 1"
+  ).get(req.session.userId, parseInt(characterId, 10), fork, u);
+  if (!j) return { error: 'That picture can\u2019t be worked on from here. Revert to the saved picture and try again. Nothing was charged.' };
+  return { url: u };
+}
 
 // POST reject a pending change. Marks it 'rejected' and clears the badge.
 // The rejected detail is kept on the row so re-extraction can tell the AI

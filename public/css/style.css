@@ -1577,15 +1577,16 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   min-height: 16px;
 }
 
+/* v3.4.47 -- picture 120 x 160 on the left, name row and description on its right, the description ending level
+   with the bottom of the picture (Ian). */
 .sc-card-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  align-items: stretch;
+  gap: 14px;
 }
 .sc-thumb {
-  width: 52px;
-  height: 52px;
+  width: 120px;
+  height: 160px;
   border-radius: 8px;
   object-fit: cover;
   object-position: center top;
@@ -1600,7 +1601,8 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   background: rgba(201,168,76,0.08);
   color: rgba(201,168,76,0.4);
 }
-.sc-card-id { flex: 1; }
+.sc-thumb-empty { font-size: 40px; }
+.sc-card-id { flex: 1; min-width: 0; }
 .sc-card-name {
   font-family: var(--font-display);
   font-size: 15px;
@@ -1619,6 +1621,73 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   border: 1px solid rgba(201,168,76,0.15);
   border-radius: var(--radius);
   padding: 10px 12px;
+}
+/* v3.4.48 -- the session Characters tab as picture cards, like the campaign Characters page (char-card--pic, whose
+   shared rules charPicCss injects), and the Edit window. */
+#sc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+#sc-list .sc-card { padding: 12px; margin: 0; overflow: visible; }
+#sc-list .sc-card .char-avatar { background: #fff; border-radius: var(--radius-lg) var(--radius-lg) 0 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+#sc-list .sc-card .char-avatar .sc-thumb { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; border: 0; border-radius: 0; }
+#sc-list .sc-card .char-avatar .sc-thumb-empty { width: 100%; height: 100%; background: rgba(20,12,4,0.6); }
+#sc-list .sc-card .char-name { font-family: var(--font-display); font-size: 15px; font-weight: 400; color: var(--gold-light); margin: 0; }
+.sc-card-cls2 { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+.sc-desc-wrap { position: relative; margin-top: 6px; }
+.sc-card-desc { font-size: 12px; color: var(--parchment); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-card-tag { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; cursor: pointer; }
+.sc-card-tag-pending { color: #e8a99c; background: rgba(224,122,106,0.12); border: 1px solid rgba(224,122,106,0.4); }
+.sc-card-tag-applied { color: #9ccb94; background: rgba(122,184,116,0.12); border: 1px solid rgba(122,184,116,0.4); }
+.sc-card-tag-draft { color: var(--gold); background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); }
+.sc-edit-draft:empty { display: none; }
+/* v3.4.51 -- bands across the bottom of the card's picture: red for a change Generate Story spotted, gold for a new picture
+   waiting to be saved (Ian: "more obvious... right over the picture... a bigger font"). Click opens Edit. */
+#sc-list .sc-card .char-avatar { position: relative; }
+.sc-pic-bands { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
+.sc-pic-band { padding: 9px 10px; font-size: 15px; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer; letter-spacing: 0.2px; }
+.sc-pic-band-change { background: rgba(150,38,22,0.93); color: #fff1e6; border-top: 1px solid rgba(255,190,160,0.5); }
+.sc-pic-band-draft { background: rgba(201,168,76,0.96); color: #1a1208; border-top: 1px solid rgba(255,235,180,0.7); }
+.sc-pic-band:hover { filter: brightness(1.1); }
+@media (hover:hover) {
+  /* v3.4.49 -- ABOVE the line, over the picture. Below it, on the bottom row it lengthened the page, a scrollbar came and
+     went, the cards reflowed under the pointer and the pop-up flickered (Ian). Above, it can never lengthen the page. */
+  .sc-desc-wrap.is-cut:hover::after {
+    content: attr(data-full); position: absolute; bottom: calc(100% + 6px); left: -12px; width: 340px; max-width: 80vw; z-index: 300;
+    white-space: pre-wrap; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.5 Georgia, serif;
+    padding: 10px 13px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
+  }
+}
+@media (max-width: 600px) { #sc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+/* the Edit window: below uiConfirm (100000) and the picture pickers (100001), which can open over it */
+.sc-edit-modal { position: fixed; inset: 0; z-index: 99990; background: rgba(8,5,2,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.sc-edit-box { background: #16100a; border: 1px solid rgba(201,168,76,0.35); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.5); width: 100%; max-width: 980px; max-height: 92vh; overflow: auto; padding: 18px 20px; }
+.sc-edit-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.sc-edit-head > div { flex: 1; min-width: 0; }
+.sc-edit-x { background: none; border: 0; color: var(--gold); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.sc-edit-body { display: flex; gap: 18px; align-items: flex-start; }
+.sc-edit-pic { flex: 0 0 300px; }
+.sc-edit-pic .sc-review-imgwrap { margin: 0; }
+.sc-edit-pic .sc-review-img { max-width: 300px; }
+.sc-edit-fields { flex: 1; min-width: 0; }
+.sc-edit-fields .char-prompt-editor { min-height: 96px; }
+.sc-edit-fields .sc-review-label { margin-top: 10px; }
+.sc-edit-fields .sc-review-label:first-child { margin-top: 0; }
+.sc-edit-actions { margin-top: 12px; }
+/* v3.4.49 -- the picture's pills are always showing in the window (Replace, Archive, and Revert when a new picture waits) */
+.sc-edit-pic .panel-pill { opacity: 1; }
+.sc-review-retouch { flex-wrap: wrap; }
+.sc-tip { position: relative; cursor: help; border-bottom: 1px dotted rgba(232,213,163,0.5); }
+@media (hover:hover) {
+  .sc-tip:hover::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 0; width: 320px; max-width: 80vw; z-index: 300;
+    white-space: normal; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.45 Georgia, serif;
+    padding: 8px 11px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
+  }
+}
+@media (max-width: 700px) {
+  .sc-edit-modal { padding: 0; }
+  .sc-edit-box { max-height: 100vh; height: 100%; border-radius: 0; }
+  .sc-edit-body { flex-direction: column; }
+  .sc-edit-pic { flex: 0 0 auto; width: 100%; }
+  .sc-edit-pic .sc-review-img { max-width: 100%; }
 }
 
 /* Phase 3 — hide DM-only UI elements when the current user is a player.
@@ -2586,7 +2655,8 @@ html.staging-env .app-logo-text{color:#2b1400;}
   cursor:pointer; opacity:0.75; transition:opacity 0.15s, background 0.15s; }
 .prep-thumb-x:hover { opacity:1; background:rgba(120,30,20,0.9); border-color:var(--gold); }
 .prep-img-slots .prep-img-thumb { position:relative; }
-.prep-img-cap { font-size:11px; color:rgba(201,168,76,0.8); margin-top:4px; }
+/* v3.4.46 -- names under the pictures in every picture picker: larger, semi-bold, cream (Ian: "I can't really read the writing"). */
+.prep-img-cap { font-size:14px; font-weight:600; color:#f0e8d0; margin-top:6px; }
 .prep-img-modal { position:fixed; inset:0; z-index:100001; background:rgba(8,5,2,0.72); display:flex; align-items:center; justify-content:center; padding:20px; }
 .prep-img-modal-box { background:#16100a; border:1px solid rgba(201,168,76,0.35); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,0.5); width:100%; max-width:680px; max-height:85vh; display:flex; flex-direction:column; padding:18px; }
 .prep-img-modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
@@ -2701,6 +2771,10 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-img-pick-named .prep-img-pick-img{aspect-ratio:1/1;border:2px solid rgba(201,168,76,0.2);border-radius:8px;background-size:cover;background-position:center top;background-color:rgba(20,12,4,0.6);display:flex;align-items:center;justify-content:center;font-size:34px;color:rgba(201,168,76,0.4);transition:border-color 0.15s;}
 .prep-img-pick-named:hover .prep-img-pick-img{border-color:var(--gold);}
 .prep-img-pick-named .prep-img-cap{text-align:center;line-height:1.25;}
+/* v3.4.46 -- TD-1040: the cast pickers' note links to the Characters tab in gold, not browser blue. */
+#cast-pick-note{font-size:13px;color:rgba(232,213,163,0.85);}
+#cast-pick-note a{color:var(--gold);text-decoration:underline;font-weight:600;}
+#cast-pick-note a:hover{color:#e0c169;}
 
 /* ===== Breadcrumb band holds the corner actions (Tour / Ask). Desktop: two pills.
    Mobile (<=480px): collapse into a kebab menu so they don't stretch the row. ===== */
@@ -2981,7 +3055,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    list, the per-card strip, and the staleness warning. Additive only -- no
    existing rule is touched, so the tab is unchanged until a reference is
    actually restyled. */
-.sc-style-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px; }
+.sc-style-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; margin-bottom:14px; }   /* v3.4.49 -- buttons right, the line above them removed */
 .sc-style-warning { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
   color:#c9a84c; border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:14px; line-height:1.45; }
 .sc-style-strip:empty { display:none; }

@@ -1046,7 +1046,10 @@ you want to change them later.
 illustrating, and produces a **story outline** (reviewed on the Review tab before any
 images are made). It also:
 - **Builds the session's cast** — detects which campaign characters appear in *this*
-  story (by name) and adds just that subset to the Characters tab.
+  story (by name) and adds just that subset to the Characters tab. If it misses someone, add them
+  with **Add A Character** on the Characters tab (10.2). Running Generate Story again rebuilds the cast
+  from the names it finds, so a character added by hand whose name is not in the Story or the notes is
+  taken off again; Generate Story names them and asks first. Put their name in the Story or the notes to keep them.
 - **Rebuilds from scratch** — it deletes the current moments on that version (images and
   narrative) and regenerates fresh; it warns you first. **Locks block it:** if the
   version has any locked panel, a locked title image, or an approved character change
@@ -1058,7 +1061,17 @@ own outline from their own notes. (Transcript and notes save automatically on cl
 
 ### 10.2 Characters tab
 Characters are first created on the **Characters screen** (section 9). Once the first session exists and is **Ready**,
-this tab is where you change a character as the story goes along. It lists the characters detected in this session. It also:
+this tab is where you change a character as the story goes along. It lists the characters detected in this session as
+picture cards, like the Characters screen: the picture, the name, and one line of the description (hover to read it all).
+**Edit** on a card opens a window with the picture on the left and the boxes on the right. Beside **Retouch image** are
+**Regenerate in Art Style** (this character only) and, when the AI suggested a change, **Ignore suggested change**, which
+clears the suggestion so it is not suggested again. Retouch and Regenerate build on each other: a retouch after a restyle
+keeps the restyle. While a new picture waits, a **Revert** pill on it goes back to the saved picture. Either keeps going if
+you close the window; the card spins, then says **New image ready**, and opening Edit again shows it. One **Save** keeps
+everything as it is in the window: the description, and a new picture as the change from the chosen panel onward (a
+picture only restyled becomes the reference, not a change). A suggestion nobody retouched stays a suggestion. Once a change
+is approved, the Amended appearance box opens empty for the next one; the change itself stays in the Description as its
+RECENT CHANGE line, which is what the pictures are drawn from. A second change adds to the first. It also:
 - **Detects visual changes** — if the story describes a change (a horn breaks off, a
   sunburn, a hole in a hat), Campaignia flags the character with a **review badge**.
   Open it with the character's **Edit** button.
@@ -1075,6 +1088,12 @@ this tab is where you change a character as the story goes along. It lists the c
   they ended the previous session, so a character visibly evolves over time. Approving a
   change carries it into later sessions.
 - **Going back** — use **Replace from Archive** to restore an earlier look.
+- **Add A Character** — the pill at the top, beside **Regenerate in Art Style**, brings in a campaign character
+  Generate Story missed. Pick them from the pictures; they join this session's cast with their **latest look in
+  this version** (from the most recent earlier session), or, if this version has none, the Canonical's latest look, or
+  else the character's own look from the Characters screen. You do not choose a look here. It adds them to the cast only:
+  put them in the panels they appear in on the Review or Storyboard tab. The Story Master adds on the Canonical; a
+  member adds on their own version. It costs nothing.
 
 ### 10.3 Review tab
 See how Campaignia planned your story **before** it writes the full narrative or spends
@@ -1089,7 +1108,9 @@ anything missing or wrong first. Per panel you can:
   (image panels only).
 - **Add/remove characters** and **add/remove assets**, and see where a **character change**
   lands. A **cast badge** shows **Auto-Matched** (automatic name-matching) or **Custom
-  cast** once you change it; **Reset to auto** reverts.
+  cast** once you change it; **Reset to auto** reverts. **+ Add character** lists only the characters in this
+  session's cast (its Characters tab); to add someone else, bring them in with **Add A Character** on the
+  Characters tab first.
 - On a **phone**, a panel's actions collapse into a **⋯ menu**.
 
 Outline = the facts; Direction = the flavor — they work together and don't conflict.

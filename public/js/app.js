@@ -4369,6 +4369,11 @@ function renderSessionCharacters(rows) {
   var canEditPrompt = canAct;
   var list = document.getElementById('sc-list');
   if (!list) return;
+  // v3.4.45 -- TD-1040. Add A Character shows for whoever can act on this version (the cards' own rule).
+  if (typeof charPicCss === 'function') charPicCss();   // v3.4.48 -- the picture-card rules the Characters page uses
+  var _scAddBtn = document.getElementById('sc-add-char-btn');
+  if (_scAddBtn) _scAddBtn.style.display = canAct ? '' : 'none';
+  state.scCastIds = rows.map(function (r) { return String(r.character_id); });
   // v3.3.42 -- OPEN EDIT PANELS SURVIVE A RE-RENDER (Ian: "once you approve one... you lose the running of all the others.
   // So you have to do one at a time"). Approving one card reloaded the whole list, which threw away every other card's
   // open Edit panel: its typed text, its retouch spinner, and the place its finished draft would land. The cards that
@@ -4414,29 +4419,40 @@ function renderSessionCharacters(rows) {
         '&#9888; Change detected &mdash; review</div>';
     }
 
-    var editBtn = '';
-    if (canEditPrompt) {
-      // Single "Edit" — always available (even after a change is approved,
-      // so appearance amendments can be redone). Opens ONE panel with both the
-      // description editor and the appearance-change section. When a change has
-      // already been applied, the button label shows it (no separate badge row).
-      var editLabel = acceptedChange ? '&#10003; Change applied — Edit' : '&#9998; Edit';
-      editBtn = '<button class="btn btn-sm sc-edit-btn" onclick="openChangeReview(' + r.character_id + ')">' + editLabel + '</button>';
-    }
-
-    return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
-      '<div class="sc-card-head">' +
-        thumb +
-        '<div class="sc-card-id">' +
-          '<div class="sc-card-name">' + r.name +
-            (isNpc ? ' <span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') + '</div>' +
-          '<div class="sc-card-cls">' + (r.cls || '') + '</div>' +
+    // v3.4.48 -- PICTURE CARDS, LIKE THE CAMPAIGN CHARACTERS PAGE (Ian, 2026-11-05: "more like character cards on the
+    // character panel... People are use to that. Going across the tab"). The picture across the top (char-card--pic,
+    // charPicCss) with an Edit pill on it; the name, the class and ONE line of description ("One line with the hover
+    // over is fine"); a tag for a pending or applied change, and one for a retouched picture waiting in the Edit window.
+    // Edit opens a window (openChangeReview). The id, the .sc-thumb picture and the strip keep their names, so the
+    // art-style run (scPaintDraft, scBusyOn on sc-card-N) and Replace work on these cards unchanged.
+    var editBtn = canEditPrompt
+      ? '<button class="char-btn" onclick="openChangeReview(' + r.character_id + ')" title="Edit how this character looks in this session">Edit</button>'
+      : '';
+    var tag = '';
+    // v3.4.51 -- (Ian: "Can you make this more obvious... Maybe right over the picture? and a bigger font") a red band
+    // across the bottom of the picture instead of the small tag under the name.
+    var changeBand = (pendingChange && canAct)
+      ? '<div class="sc-pic-band sc-pic-band-change" onclick="openChangeReview(' + r.character_id + ')" title="Generate Story spotted a change to this character">&#9888; Change Detected &mdash; Edit for Details</div>'
+      : '';
+    if (acceptedChange) tag = '<div class="sc-card-tag sc-card-tag-applied"' + (canEditPrompt ? ' onclick="openChangeReview(' + r.character_id + ')"' : '') + '>&#10003; Change applied</div>';
+    var _fullAttr = String(r.prompt || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return '<div class="sc-card char-card char-card--pic" id="sc-card-' + r.character_id + '">' +
+      '<div class="char-card-header">' +
+        '<div class="char-avatar">' + thumb +
+          // v3.4.51 -- the bands sit on the picture; the gold one is painted by scPaintEditDraft into its holder
+          '<div class="sc-pic-bands">' +
+            '<div class="sc-edit-draft" id="sc-edit-draft-' + r.character_id + '">' + scEditDraftHtml(r.character_id) + '</div>' +
+            changeBand +
+          '</div>' +
         '</div>' +
-        editBtn +
+        (editBtn ? '<div class="char-actions">' + editBtn + '</div>' : '') +
       '</div>' +
-      changeBadge +
-      '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '">' +
-        (r.prompt || '') + '</div>' +
+      '<div class="char-name">' + r.name + '</div>' +
+      (isNpc ? '<span class="char-badge char-badge-npc">Sup. Character / NPC</span>' : '') +
+      '<div class="sc-card-cls2">' + (r.cls || '') + '</div>' +
+      '<div class="sc-desc-wrap" data-full="' + _fullAttr + '" onmouseenter="scPromptTip(this)">' +
+        '<div class="sc-card-desc" id="sc-prompt-' + r.character_id + '">' + (r.prompt || '') + '</div></div>' +
+      tag +
       '<div class="sc-style-strip" id="sc-style-strip-' + r.character_id + '">' +
         scStyleStripHtml(r) + '</div>' +
     '</div>';
@@ -4552,8 +4568,6 @@ function scStyleStripHtml(r) {
         (stale ? 'Rendered in ' + escapeHtml(label) + ' — this version now uses ' + escapeHtml(curLabel)
                : 'Rendered in ' + escapeHtml(label)) +
       '</span>' +
-      '<button class="btn btn-xs" onclick="revertStyledReference(' + id + ')" ' +
-        'title="Put back the reference image that was here before it was regenerated in an art style">Revert</button>' +
       '</div>';
   }
   return '';
@@ -4634,6 +4648,8 @@ function runRestyleAll(rows) {
   var btn = document.getElementById('sc-restyle-all-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Regenerating…'; }
   var i = 0;
+  // v3.4.48 -- every card in line spins as Waiting until its turn (restyleOneReference turns it into Regenerating).
+  rows.forEach(function (r) { scBusyOn(r.character_id, 'Waiting', 'In line to be redrawn'); });
   function next() {
     if (i >= rows.length) {
       if (btn) { btn.disabled = false; btn.textContent = 'Regenerate in Art Style'; }
@@ -4645,6 +4661,7 @@ function runRestyleAll(rows) {
     restyleOneReference(r.character_id, function(ok, fatal) {
       if (fatal) {
         if (btn) { btn.disabled = false; btn.textContent = 'Regenerate in Art Style'; }
+        for (var _k = i; _k < rows.length; _k++) scBusyOff(rows[_k].character_id);   // v3.4.48 -- the rest stop waiting
         loadSessionCharacters();
         return;
       }
@@ -4809,6 +4826,7 @@ function applyStyledRetouch(charId) {
 // v3.3.42 -- close ONE card's Edit panel (or inline description editor) and redraw the list; every other open card is
 // kept as it is (renderSessionCharacters). Used by Approve, Discard, Save description and Cancel.
 function scCloseReview(charId) {
+  scCloseEditModal();   // v3.4.48
   var c = document.getElementById('sc-card-' + charId);
   if (c) Array.prototype.forEach.call(c.querySelectorAll('.sc-review, .char-prompt-editor'), function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
   loadSessionCharacters();
@@ -4861,6 +4879,9 @@ function openChangeReview(charId) {
   if (!card) return;
 
   var currentImg = r.reference_url || r.canonical_reference_url || '';
+  // v3.4.48 -- a retouched picture not yet approved is what the window shows (it waits in state.draftReference).
+  var _scDraft = (state.draftReference || {})[charId] || '';
+  if (_scDraft) currentImg = _scDraft;
   var imgHtml = currentImg
     ? '<img src="' + currentImg + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'
     : '<div class="sc-review-img sc-review-img-empty" id="sc-review-img-' + charId + '">No reference image yet</div>';
@@ -4881,8 +4902,7 @@ function openChangeReview(charId) {
     return '<option value="' + i + '"' + sel + '>' + label + '</option>';
   }).join('');
   var momentSelector = moments.length
-    ? '<label class="sc-review-label">Change first appears at this Moment Panel ' +
-        '(character looks normal before it; choose Empty to apply it throughout):</label>' +
+    ? '<label class="sc-review-label"><span class="sc-tip" data-tip="This is the moment where this change first shows up. The character keeps their prior look prior to this moment. Then at this moment the change takes effect and is carried over to the next session. Choose the Empty option to apply this change throughout the entire session.">Change Starts at Moment</span></label>' +   // v3.4.48 -- one line, the rest on hover (Ian)
       '<select class="form-input sc-review-moment" id="sc-review-moment-' + charId + '">' +
         emptyOpt + momentOptions +
       '</select>'
@@ -4893,7 +4913,7 @@ function openChangeReview(charId) {
   var isManual = !isAccepted && !r.change_detail;
   var titleText;
   if (isAccepted) {
-    titleText = '&#10003; Change applied — adjust or un-approve';
+    titleText = '&#10003; Change applied';   // v3.4.50 -- there is no Un-approve button any more
   } else if (isManual) {
     titleText = '&#10010; Amend ' + r.name + '\u2019s appearance';
   } else {
@@ -4901,15 +4921,17 @@ function openChangeReview(charId) {
   }
   // For an accepted change, the textarea holds the clean change_note
   // (the approved detail), not change_detail.
-  var detailText = isAccepted
-    ? (r.change_note || r.change_detail || '')
-    : (r.change_detail || '');
-  // Only show the "AI detected" line when the AI actually detected something.
-  var detectedLine = (r.change_detail && !isManual)
-    ? '<div class="sc-review-detected">The AI detected: <em>' + r.change_detail + '</em></div>'
+  // v3.4.50 -- (Ian: "Once a change is done and accepted... Can you clear it from the Retouch window?") The box holds
+  // only a suggestion still waiting for a decision. An approved change lives on in the Description (its RECENT CHANGE
+  // line, which is what the story pictures are drawn from), so the box opens empty for the next change.
+  var _pendingSugg = (r.change_status === 'pending' && !!r.change_detail);
+  var detailText = _pendingSugg ? r.change_detail : '';
+  // v3.4.50 -- the suggestion says what to do with it (Ian's wording, tightened); nothing once it is decided.
+  var detectedLine = _pendingSugg
+    ? '<div class="sc-review-detected"><b>Generate Story spotted a change:</b> <em>' + r.change_detail + '</em>. It is in the Amended appearance box. ' +
+      'Edit it if needed, then press <b>Retouch image</b> to apply it, or <b>Ignore suggested change</b> if it is wrong. You can always Revert.</div>'
     : (isManual
-        ? '<div class="sc-review-detected">Describe a permanent change to this ' +
-          'character — it will be applied from the chosen moment onward.</div>'
+        ? ''   // v3.4.48 -- the Amended appearance label's hover says it
         : '');
 
   // Reference-image controls - on-image pills: Replace + Archive only.
@@ -4923,43 +4945,61 @@ function openChangeReview(charId) {
         '<button class="btn btn-sm" onclick="openReplacePicker(\'character\', ' + charId + ')">&#8646; Replace from Archive</button>' +
       '</div>';
 
-  card.innerHTML =
-    '<div class="sc-review">' +
-      '<div class="sc-review-title">' + titleText + '</div>' +
-      '<div class="sc-review-name">' + r.name + '</div>' +
-      detectedLine +
-      '<label class="sc-review-label">Description (this session):</label>' +
-      '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
-      '<div class="char-prompt-actions" style="margin-bottom:10px;">' +
-        '<button class="btn btn-sm" onclick="saveSnapshot(' + charId + ')">Save description</button>' +
-      '</div>' +
-      '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
-      '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
-        'placeholder="e.g. left horn broken off to a jagged stump">' +
-        detailText + '</textarea>' +
-      '<div class="sc-review-retouch">' +
-        '<button class="btn btn-sm" id="sc-retouch-' + charId + '" ' +
-          'onclick="retouchSessionInline(' + charId + ')" ' +
-          'title="Apply the amended appearance above to the current reference image \u2014 retouches in place, no pop-up">&#9998; Retouch image</button>' +
-      '</div>' +
-      '<div class="sc-review-row">' +
-        '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions +
+  // v3.4.48 -- EDIT OPENS A WINDOW (Ian chose it over opening the card in place): the picture big on the left, the
+  // boxes on the right, the buttons along the bottom, and the grid behind it never moves. Every id inside is the one
+  // the panel always used, so Retouch, Replace, Archive, Approve, Un-approve and Save description work unchanged.
+  // One window at a time; a retouch keeps running when it is closed (scEditRetouchOn/Off), and the card says when
+  // its picture is ready.
+  scCloseEditModal();
+  var ov = document.createElement('div');
+  ov.id = 'sc-edit-modal'; ov.className = 'sc-edit-modal';
+  ov.setAttribute('data-char', String(charId));
+  ov.innerHTML =
+    '<div class="sc-edit-box" role="dialog" aria-modal="true">' +
+      '<div class="sc-edit-head"><div>' +
+        '<div class="sc-review-title">' + titleText + '</div>' +
+        '<div class="sc-review-name">' + r.name + '</div>' +
+        detectedLine +
+      '</div><button type="button" class="sc-edit-x" title="Close" onclick="scCloseReview(' + charId + ')">&times;</button></div>' +
+      '<div class="sc-review sc-edit-body">' +
+        '<div class="sc-edit-pic"><div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + scEditPicHtml(charId, currentImg) + '</div></div>' +   // v3.4.49 -- one drawer for the picture and its pills
+        '<div class="sc-edit-fields">' +
+          '<label class="sc-review-label"><span class="sc-tip" data-tip="How this character is drawn in this session\u2019s pictures. It carries forward from the session before.">Description (this session)</span></label>' +
+          '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
+          '<label class="sc-review-label"><span class="sc-tip" data-tip="Type a permanent change, such as a horn broken off, then press Retouch image to apply it to the picture. Approve change keeps it.">Amended appearance</span></label>' +
+          '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
+            'placeholder="e.g. left horn broken off to a jagged stump">' +
+            detailText + '</textarea>' +
+          // v3.4.49 -- the picture's three actions together (Ian): Retouch, Regenerate in Art Style, and Ignore suggested change
+          // (only while the AI's suggestion is undecided).
+          '<div class="sc-review-retouch">' +
+            '<button class="btn btn-sm" id="sc-retouch-' + charId + '" ' +
+              'onclick="retouchSessionInline(' + charId + ')" ' +
+              'title="Apply the amended appearance to the picture. You can close this window while it works.">&#9998; Retouch image</button>' +
+            '<button class="btn btn-sm" id="sc-restyle-one-' + charId + '" onclick="scEditRestyle(' + charId + ')" ' +
+              'title="Redraw this picture in this version\u2019s art style. You can close this window while it works.">Regenerate in Art Style</button>' +
+            ((r.change_status === 'pending' && r.change_detail)
+              ? '<button class="btn btn-sm" id="sc-ignore-' + charId + '" onclick="scIgnoreSuggestion(' + charId + ')" ' +
+                  'title="Clear the suggestion and do not suggest it again">Ignore suggested change</button>'
+              : '') +
+          '</div>' +
+          momentSelector +
         '</div>' +
-        '<div class="sc-review-side">' + momentSelector + '</div>' +
       '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
-      '<div class="char-prompt-actions">' +
-        '<button class="btn btn-sm btn-primary sc-approve-btn" id="sc-approve-' + charId + '" ' +
-          'onclick="approveChange(' + charId + ')" ' +
-          'title="Lock in this amended appearance from the chosen Moment Panel onward, and carry it into later sessions">&#10003; ' +
-          (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
-        '<button class="btn btn-sm" id="sc-reject-' + charId + '" ' +
-          'onclick="rejectChange(' + charId + ')" ' +
-          'title="Discard this amendment and leave the character unchanged for this session">&#10005; ' +
-          (isAccepted ? 'Un-approve' : 'Discard / Ignore') + '</button>' +
+      '<div class="char-prompt-actions sc-edit-actions">' +
+        '<button class="btn btn-sm btn-primary sc-approve-btn" id="sc-save-' + charId + '" onclick="scSaveEdit(' + charId + ')" ' +
+          'title="Save everything as it is in this window">&#10003; Save</button>' +
         '<button class="btn btn-sm" onclick="scCloseReview(' + charId + ')">Cancel</button>' +
       '</div>' +
     '</div>';
+  document.body.appendChild(ov);
+  if (state.scEditRetouch && state.scEditRetouch[charId]) {
+    showBusyOverlay('sc-review-imgwrap-' + charId, state.scEditRetouch[charId] === true ? 'Retouching' : state.scEditRetouch[charId], 'Working\u2026');
+    scEditButtons(charId, true);
+  } else if (_scDraft) {
+    scEditDraftMsg(charId);
+  }
 }
 
 // Piece 5: regenerate the reference image as a draft. The DM can do
@@ -5009,10 +5049,8 @@ function regenerateReference(charId) {
           clearInterval(ticker);
           if (btn) { btn.disabled = false; }
           var wrap = document.getElementById(wrapId);
-          if (wrap) {
-            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
-              'id="sc-review-img-' + charId + '" alt="reference" />';
-          }
+          state.draftReference = state.draftReference || {}; state.draftReference[charId] = url;   // v3.4.49 -- before drawing, so Revert shows
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills
           state.draftReference = state.draftReference || {};
           state.draftReference[charId] = url;
           if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
@@ -5045,7 +5083,23 @@ function regenerateReference(charId) {
 
 // Piece 5: approve the change — locks the draft image + text into this
 // session and writes it forward to later sessions.
-function approveChange(charId) {
+function approveChange(charId, descDone) {
+  // v3.4.48 -- one save: an edited Description is saved first, then the change is approved.
+  if (!descDone) {
+    var _de = document.getElementById('sc-editor-' + charId);
+    var _dr = (state.sessionCharacterRows || []).find(function(x) { return x.character_id === charId; });
+    var _norm = function (v) { return String(v || '').replace(/\r\n/g, '\n').trim(); };
+    if (_de && _dr && _norm(_de.value) !== _norm(_dr.prompt)) {
+      var _dm = document.getElementById('sc-review-msg-' + charId);
+      if (_dm) _dm.textContent = 'Saving...';
+      _scSaveDesc(charId, _de.value).then(function (err) {
+        if (err) { if (_dm) _dm.textContent = err; return; }
+        _dr.prompt = _de.value;
+        approveChange(charId, true);
+      });
+      return;
+    }
+  }
   var msg = document.getElementById('sc-review-msg-' + charId);
   var btn = document.getElementById('sc-approve-' + charId);
   var textEl = document.getElementById('sc-review-text-' + charId);
@@ -5108,6 +5162,7 @@ function rejectChange(charId) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.success) {
+        if (state.draftReference) delete state.draftReference[charId];   // v3.4.48 -- nothing left waiting on the card
         scCloseReview(charId);   // v3.3.42
       } else {
         if (btn) { btn.disabled = false; }
@@ -6338,9 +6393,9 @@ function applyCanonicalRef(charId, url) {
 
 function applySessionRefDraft(charId, url, wrapId, msg) {
   var wrap = document.getElementById(wrapId);
-  if (wrap) { wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'; }
   state.draftReference = state.draftReference || {};
   state.draftReference[charId] = url;
+  if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills
   if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
@@ -9572,36 +9627,40 @@ function retouchSessionInline(charId) {
   }
   var wrapId = 'sc-review-imgwrap-' + charId;
   if (msg) msg.textContent = '';
-  if (btn) btn.disabled = true;
+  scEditButtons(charId, true);   // v3.4.49 -- Retouch and Regenerate both wait
   showBusyOverlay(wrapId, 'Retouching', 'Applying your change\u2026');
+  scEditRetouchOn(charId);   // v3.4.48 -- the card spins too, so closing the window loses nothing
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/retouch-reference' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+    // v3.4.49 -- from the picture waiting in the window, so steps stack (the server checks it is ours)
+    body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform', from_url: (state.draftReference || {})[charId] || '' })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.job_id) {
         pollRefJob(data.job_id, function(url){
-          var wrap = document.getElementById(wrapId);
-          if (wrap) {
-            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />';
-          }
           state.draftReference = state.draftReference || {};
           state.draftReference[charId] = url;
+          state.scDraftChanged = state.scDraftChanged || {}; state.scDraftChanged[charId] = true;   // v3.4.49 -- an appearance change is in it
+          var wrap = document.getElementById(wrapId);
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);   // v3.4.49 -- with its pills, and Revert
           if (btn) btn.disabled = false;
           if (msg) msg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
+          scEditRetouchOff(charId, true);   // v3.4.48
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
         }, function(err){
           hideBusyOverlay(wrapId);
           if (btn) btn.disabled = false;
           if (msg) msg.textContent = 'Could not retouch: ' + err;
+          scEditRetouchOff(charId, false, err);   // v3.4.48
         });
         return;
       }
       hideBusyOverlay(wrapId);
       if (btn) btn.disabled = false;
+      scEditRetouchOff(charId, false);   // v3.4.48
       if (data && data.error === 'INSUFFICIENT_TOKENS') {
         if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
       } else if (msg) {
@@ -9610,7 +9669,7 @@ function retouchSessionInline(charId) {
         alert((data && (data.message || data.error)) || 'Could not retouch.');
       }
     })
-    .catch(function(e){ hideBusyOverlay(wrapId); if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not retouch: ' + e.message; });
+    .catch(function(e){ hideBusyOverlay(wrapId); if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not retouch: ' + e.message; scEditRetouchOff(charId, false, e.message); });
 }
 
 function startEditCharPrompt(charId) {
@@ -10295,6 +10354,9 @@ async function extractMoments() {
       return;
     }
   }
+
+  // v3.4.45 -- TD-1040. Warn when Generate Story would take characters out of this session's cast (BOTH copies).
+  if (!await _regenCastDropsOk(transcript)) return;
 
   // All pre-flight prompts passed -- claim the session-wide lock now (not
   // before the confirms above, so cancelling any prompt can never strand it).
@@ -17013,10 +17075,8 @@ function submitRetouch() {
           // session_characters is written only on Approve.
           pollRefJob(data.job_id, function(url){
             var wrap = document.getElementById(scWrapId);
-            if (wrap) {
-              wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
-                'id="sc-review-img-' + scId + '" alt="reference" />';
-            }
+            state.draftReference = state.draftReference || {}; state.draftReference[scId] = url;   // v3.4.49
+            if (wrap) wrap.innerHTML = scEditPicHtml(scId, url);   // v3.4.49 -- with its pills
             state.draftReference = state.draftReference || {};
             state.draftReference[scId] = url;
             if (scMsg) scMsg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
@@ -19464,6 +19524,9 @@ async function extractMoments() {
       return;
     }
   }
+
+  // v3.4.45 -- TD-1040. Warn when Generate Story would take characters out of this session's cast (BOTH copies).
+  if (!await _regenCastDropsOk(transcript)) return;
 
   // All pre-flight prompts passed -- claim the session-wide lock now (not
   // before the confirms above, so cancelling any prompt can never strand it).
@@ -24420,7 +24483,9 @@ function renderStats(d) {
   box.innerHTML = '<div id="stats-split" style="display:flex;gap:' + (_stWide ? '0' : '28px') + ';flex-wrap:' + (_stWide ? 'nowrap' : 'wrap') + ';align-items:' + (_stWide ? 'stretch' : 'flex-start') + ';">' +
     '<div id="stats-left" style="flex:0 ' + (_stWide ? '0 ' + _statsSplitBasis() : '1 520px') + ';min-width:240px;">' + html + '</div>' +
     (_stWide ? '<div id="stats-splitter" onmousedown="statsSplitStart(event)" title="Drag to resize" style="flex:0 0 14px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 7px;"><div style="width:3px;height:60px;background:rgba(216,184,92,0.5);border-radius:2px;"></div></div>' : '') +
-    '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span></div>' +
+    '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span>' +
+      // v3.4.52 -- Ian: a small refresh button over the user grid (reloads the list only)
+      ' <button type="button" class="btn btn-xs" id="stats-lastactive-refresh" onclick="loadUserLastActive()" title="Reload the user list" style="margin-left:8px;">&#8635; Refresh</button></div>' +
     // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
     // and dark scrollbars instead of inheriting the pane's.
     '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
@@ -24446,16 +24511,30 @@ function renderUserLastActive(d) {
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not load the user list.'; return; }
   if (d.missing) { out.textContent = 'The view vuuserlastactive is not in this database yet.'; return; }
   var rows = d.rows || [], cols = d.columns || [];
+  var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
   var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(201,168,76,0.85);white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.25);';
   var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
-    cols.map(function (c) { return '<th style="' + th + '">' + _ulaCell(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
-  rows.forEach(function (r) { h += '<tr>' + cols.map(function (c) { return '<td style="' + td + '">' + _ulaCell(r[c]) + '</td>'; }).join('') + '</tr>'; });
+    _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.forEach(function (r) { h += '<tr>' + _ord.map(function (o) { return '<td style="' + td + '">' + _ulaCell(r[o.col]) + '</td>'; }).join('') + '</tr>'; });
   out.innerHTML = h + '</tbody></table>';
 }
+// v3.4.52 -- (Ian, 2026-11-05) the user grid's columns in this order, under these names. The view's own names are matched
+// whatever their case; a view column not listed here still shows, after these, under its own name; a listed one the view
+// does not have is skipped.
+var ULA_ORDER = [['days_since_activity', 'Days'], ['name', 'Name'], ['email', 'Email'], ['last_action_est', 'Last Action DT'],
+  ['last_action', 'Last Action'], ['tier', 'Tier'], ['pass', 'Pass'], ['pass_ends', 'Expires'], ['status', 'Status']];
+function _ulaOrder(cols) {
+  var byLower = {}, used = {}, out = [];
+  (cols || []).forEach(function (c) { byLower[String(c).toLowerCase()] = c; });
+  ULA_ORDER.forEach(function (p) { var c = byLower[p[0]]; if (c !== undefined && !used[c]) { used[c] = true; out.push({ col: c, label: p[1] }); } });
+  (cols || []).forEach(function (c) { if (!used[c]) { used[c] = true; out.push({ col: c, label: c }); } });
+  return out;
+}
 function loadUserLastActive() {
+  var _o = document.getElementById('stats-lastactive'); if (_o) _o.textContent = 'Loading\u2026';   // v3.4.52 -- Refresh shows it is working
   fetch('/api/admin/user-last-active')
     .then(function (r) { return r.json(); })
     .then(renderUserLastActive)
@@ -31003,14 +31082,22 @@ var _castAssetImg = {};
 // distinction is the whole difference between "none" and "could not ask".
 var _castCharRows = null;
 var _castAssetRows = null;
+// v3.4.45 -- TD-1040. This session's cast (the Characters tab), as a set of character ids. The Review
+// and Storyboard pickers offer only these (Ian: they "should only be showing characters that exist in the
+// character tab"). null = could not ask, and the picker falls back to every campaign character, as before.
+var _castSessionIds = null;
 
 function _loadCastImages(cb) {
   var cid = state.currentCampaign && state.currentCampaign.id;
   _castCharImg = {}; _castAssetImg = {};
   _castCharRows = null; _castAssetRows = null;
+  _castSessionIds = null;   // v3.4.45 -- TD-1040
   if (!cid) { cb(); return; }
   var done = 0;
-  function step(){ if (++done >= 2) cb(); }
+  function step(){ if (++done >= 3) cb(); }   // v3.4.45 -- TD-1040: three reads, the session cast is the third
+  var _sid = state.currentSession && state.currentSession.id;
+  if (_sid) fetch('/api/campaigns/' + cid + '/sessions/' + _sid + '/characters' + forkQ()).then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var m = {}; rows.forEach(function(r){ if (r && r.character_id != null) m[String(r.character_id)] = true; }); _castSessionIds = m; } step(); }).catch(step);
+  else step();
   function _byName(a, b){ return (a.name || '').localeCompare(b.name || ''); }   // v3.0.881 -- the /review payload sorts its master lists by name; match it so an unchanged campaign renders in the identical order
   fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(c){ if (c && c.id != null) { _castCharImg[String(c.id)] = c.canonical_reference_url || ''; out.push({ id: c.id, name: c.name, cls: c.cls }); } }); out.sort(_byName); _castCharRows = out; } step(); }).catch(step);
   fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ if (Array.isArray(rows)) { var out = []; rows.forEach(function(a){ if (a && a.id != null) { _castAssetImg[String(a.id)] = a.image_url || ''; out.push({ id: a.id, name: a.name, category: a.category }); } }); out.sort(_byName); _castAssetRows = out; } step(); }).catch(step);
@@ -31035,6 +31122,9 @@ function _buildCastPicker(kind, momentId) {
     ? (_castCharRows !== null ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []))
     : (_castAssetRows !== null ? _castAssetRows : ((state.reviewData && state.reviewData.all_assets) || []));
   var items = src.filter(function(x){ return !have[String(x.id)]; });
+  // v3.4.45 -- TD-1040. Characters: only this session's cast. Panels that already carry someone outside it keep
+  // them (Ian: leave them); this only narrows what can be added from now on.
+  if (isChar && _castSessionIds !== null) items = items.filter(function(x){ return _castSessionIds[String(x.id)]; });
   var overlay = document.createElement('div');
   overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function(e){ if (e.target === overlay) closeCastPicker(); });
@@ -31047,7 +31137,7 @@ function _buildCastPicker(kind, momentId) {
   var grid = document.createElement('div'); grid.className = 'prep-img-grid';
   if (!items.length) {
     var empty = document.createElement('div'); empty.className = 'prep-img-empty';
-    empty.textContent = isChar ? 'No more characters to add. Create characters on the Characters tab.' : 'No more assets to add. Create assets on the Asset Library tab.';
+    empty.textContent = isChar ? 'No more characters from this session\u2019s cast to add.' : 'No more assets to add. Create assets on the Asset Library tab.';
     grid.appendChild(empty);
   } else {
     items.forEach(function(it){
@@ -31064,6 +31154,7 @@ function _buildCastPicker(kind, momentId) {
     });
   }
   box.appendChild(head); box.appendChild(grid);
+  if (isChar) box.appendChild(_castPickerNote());   // v3.4.45 -- TD-1040
   overlay.appendChild(box); document.body.appendChild(overlay);
 }
 
@@ -41124,3 +41215,373 @@ try {
     for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-fx-bar'); all[n].style.cursor = ''; }
   });
 } catch (e) {}
+
+// =================================================================================================
+// v3.4.45 -- TD-1040. ADD A CHARACTER ON THE SESSION CHARACTERS TAB (Ian, 2026-11-05).
+// A pill beside Regenerate in Art Style opens the same picture grid as the Review tab's + Add
+// character, listing the campaign's characters not yet in this session's cast. Picking one adds it to
+// the cast with ONE look chosen by the server -- the latest look in this version, else the Canonical's,
+// else the character's own (routes/sessions.js POST characters/add, the rule Generate Story uses).
+// Nothing is added to any panel. APPENDED, NOT INSERTED (TD-853); these names are declared nowhere else.
+// =================================================================================================
+function scAddCharacter() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var sid = state.currentSession.id;
+  _loadCastImages(function () {
+    if (!state.currentSession || String(state.currentSession.id) !== String(sid)) return;
+    _scAddPickBuild();
+  });
+}
+
+function _scAddPickBuild() {
+  closeCastPicker();
+  var inCast = {};
+  if (_castSessionIds !== null) inCast = _castSessionIds;
+  else (state.scCastIds || []).forEach(function (id) { inCast[String(id)] = true; });
+  var src = (_castCharRows !== null) ? _castCharRows : ((state.reviewData && state.reviewData.all_characters) || []);
+  var items = src.filter(function (x) { return !inCast[String(x.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeCastPicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Add A Character';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', closeCastPicker);
+  head.appendChild(h); head.appendChild(x);
+  var hint = document.createElement('div'); hint.className = 'form-hint'; hint.style.cssText = 'margin:0 4px 10px;';
+  hint.textContent = 'They join this session\u2019s cast with their latest look in this version. Add them to the panels they appear in on the Review or Storyboard tab.';
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = 'Everyone in this campaign is already in this session\u2019s cast. New characters are made on the Characters screen.';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function (it) {
+      var img = _castCharImg[String(it.id)] || '';
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      if (img) { imgEl.style.backgroundImage = 'url("' + encodeURI(img) + '")'; }
+      else { imgEl.innerHTML = '&#128100;'; }
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = it.name;
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function () { closeCastPicker(); scAddCharacterPick(it.id, it.name); });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(hint); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+function scAddCharacterPick(id, name) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var sid = state.currentSession.id;
+  var shown = charDisplayName(name);
+  var btn = document.getElementById('sc-add-char-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sid + '/characters/add' + forkQ(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ character_id: id, fork_id: state.currentForkId || null })
+  })
+    .then(function (r) { return r.json().catch(function () { return { error: 'Could not add the character. Try again.' }; }); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (!d || d.error) { showAlert((d && d.error) || 'Could not add the character. Try again.'); return; }
+      if (state.currentSession && String(state.currentSession.id) === String(sid)) loadSessionCharacters();
+      showAlert(shown + (d.already ? ' is already in this session\u2019s cast.' : ' was added to this session\u2019s cast.'));
+    })
+    .catch(function () { if (btn) btn.disabled = false; showAlert('Could not add the character. Try again.'); });
+}
+
+// The Review and Storyboard pickers list only this session's cast, so they say where the others come from
+// (Ian: "a note that says if they don't see who they are looking for to add them to the characters tab").
+function _castPickerNote() {
+  var note = document.createElement('div'); note.className = 'form-hint'; note.id = 'cast-pick-note';
+  note.style.cssText = 'margin:12px 4px 0;';
+  note.appendChild(document.createTextNode('Don\u2019t see who you\u2019re looking for? Add them to this session on the '));
+  var a = document.createElement('a'); a.href = '#'; a.textContent = 'Characters tab';
+  a.addEventListener('click', function (e) { e.preventDefault(); closeCastPicker(); switchSessionTab('characters'); });
+  note.appendChild(a);
+  note.appendChild(document.createTextNode(' with Add A Character.'));
+  return note;
+}
+
+// Asked by extractMoments (both copies) before Generate Story runs. Any failure answers yes: the old behaviour.
+async function _regenCastDropsOk(transcript) {
+  var drops = [];
+  try {
+    var notesEl = document.getElementById('session-notes-input');
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/regen-drops' + forkQ(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: transcript, notes: notesEl ? notesEl.value.trim() : '', fork_id: state.currentForkId || null })
+    });
+    var d = await r.json();
+    drops = (d && Array.isArray(d.drops)) ? d.drops : [];
+  } catch (e) { return true; }
+  if (!drops.length) return true;
+  var names = drops.map(function (x) { return '\u2022 ' + charDisplayName(x.name); }).join('\n');
+  var one = drops.length === 1;
+  return await uiConfirm('Generate Story builds this session\u2019s cast from the names it finds in the Story and the notes. ' +
+    (one ? 'This character is' : 'These characters are') + ' in the cast now but ' + (one ? 'is' : 'are') +
+    ' not named there, so they will be taken off this session\u2019s Characters tab:\n\n' + names +
+    '\n\nTo keep them, add ' + (one ? 'their name' : 'their names') + ' to the Story or the notes first. ' +
+    'You can also add them back afterwards with Add A Character.',
+    { title: 'Characters will leave this session', preserveLines: true, okText: 'Generate anyway', cancelText: 'Cancel' });
+}
+
+// =================================================================================================
+// v3.4.47 -- Session Characters tab cards: a cut description shows whole on hover. Measured AT HOVER (the tab may
+// have been hidden when the cards were drawn, when nothing can be measured), and the pop-up is the card's own
+// ::after (style.css .sc-card-main.is-cut), so nothing is added to the page. APPENDED (TD-853); declared nowhere else.
+// =================================================================================================
+function scPromptTip(box) {
+  // v3.4.48 -- the card shows ONE line now: it is cut when the text is wider than its box.
+  var t = box && box.querySelector('.sc-card-desc');
+  if (!t) return;
+  if (t.scrollWidth > t.clientWidth + 1) box.classList.add('is-cut'); else box.classList.remove('is-cut');
+}
+// =================================================================================================
+// v3.4.48 -- THE EDIT WINDOW ON THE SESSION CHARACTERS TAB (Ian, 2026-11-05). openChangeReview opens it; these are its
+// helpers. A retouch started in the window keeps running when the window is closed: the card spins (scBusyOn, which
+// the list re-applies on every redraw), and when the picture comes back it waits in state.draftReference, the card says
+// "New image ready", and reopening Edit shows it to approve. APPENDED (TD-853); these names are declared nowhere else.
+// =================================================================================================
+function scCloseEditModal() {
+  var m = document.getElementById('sc-edit-modal');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+function scEditOpenFor(charId) {
+  var m = document.getElementById('sc-edit-modal');
+  return !!(m && m.getAttribute('data-char') === String(charId));
+}
+function scEditDraftHtml(charId) {
+  return (state.draftReference || {})[charId]
+    ? '<div class="sc-pic-band sc-pic-band-draft" onclick="openChangeReview(' + charId + ')" title="A retouched or restyled picture is waiting: open Edit to save it, or Revert">New Picture Ready &mdash; Edit to Save</div>'   // v3.4.51 -- a gold band on the picture
+    : '';
+}
+function scPaintEditDraft(charId) {
+  var el = document.getElementById('sc-edit-draft-' + charId);
+  if (el) el.innerHTML = scEditDraftHtml(charId);
+}
+function scEditDraftMsg(charId) {
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (!msg) return;
+  msg.textContent = 'New picture ready. Save to keep it, keep working on it, or Revert to go back to the saved picture.';   // v3.4.49
+}
+function scDropEditDraft(charId) {
+  // v3.4.49 -- this is Revert: back to the saved picture, everything waiting forgotten.
+  if (state.draftReference) delete state.draftReference[charId];
+  if (state.scDraftChanged) delete state.scDraftChanged[charId];
+  if (state.scDraftStyled) delete state.scDraftStyled[charId];
+  scPaintEditDraft(charId);
+  if (!scEditOpenFor(charId)) return;
+  var r = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
+  var url = r ? (r.reference_url || r.canonical_reference_url || '') : '';
+  var wrap = document.getElementById('sc-review-imgwrap-' + charId);
+  if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (msg) msg.textContent = 'Back to the saved picture.';
+}
+function scEditRetouchOn(charId, label) {
+  state.scEditRetouch = state.scEditRetouch || {};
+  state.scEditRetouch[charId] = label || true;   // v3.4.49 -- true = Retouching; otherwise the label shown
+  scBusyOn(charId, label || 'Retouching', 'Working\u2026');
+}
+function scEditRetouchOff(charId, ok, errText) {
+  if (state.scEditRetouch) delete state.scEditRetouch[charId];
+  scBusyOff(charId);
+  if (ok) {
+    scPaintEditDraft(charId);
+    if (scEditOpenFor(charId)) {
+      scEditDraftMsg(charId);
+      scEditButtons(charId, false);   // v3.4.49
+    }
+  } else if (scEditOpenFor(charId)) {
+    scEditButtons(charId, false);   // v3.4.49
+    hideBusyOverlay('sc-review-imgwrap-' + charId);
+  } else if (errText) {
+    scCardMessage(charId, 'Could not retouch: ' + errText);
+  }
+}
+// Saves the Description box; resolves null when saved, or the message to show.
+function _scSaveDesc(charId, text) {
+  return fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + forkQ(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: text })
+  })
+    .then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (d) { return (d && d.success) ? null : ((d && d.error) || 'Could not save the description.'); })
+    .catch(function () { return 'Could not save the description.'; });
+}
+
+// =================================================================================================
+// v3.4.49 -- THE EDIT WINDOW, REWORKED WITH IAN (2026-11-05). The picture and its pills are drawn by ONE function,
+// scEditPicHtml, because five places used to swap in a bare picture and Replace / Archive vanished after a retouch.
+// Revert sits on the picture while a new one is waiting (like the Storyboard panels). Retouch, Regenerate in Art
+// Style and Ignore suggested change sit together; Retouch and Regenerate build on the picture waiting in the window
+// (the server checks it is ours). One Save keeps everything as it is in the window. APPENDED (TD-853); new names.
+// =================================================================================================
+function scEditPicHtml(charId, url) {
+  var r = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; }) || {};
+  var waiting = !!(state.draftReference || {})[charId];
+  var img = url
+    ? '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'
+    : '<div class="sc-review-img sc-review-img-empty" id="sc-review-img-' + charId + '">No reference image yet</div>';
+  var arch = (typeof isMomentArchived === 'function') && isMomentArchived(r);
+  var pills = '<div class="panel-img-actions">' +
+    '<button class="panel-pill" onclick="openReplacePicker(\'character\', ' + charId + ')" title="Replace with an image from the Archive">Replace</button>' +
+    (url || r.reference_url || r.canonical_reference_url
+      ? '<button class="panel-pill' + (arch ? ' is-on' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' +
+          (arch ? 'In your Archive \u2014 click to remove' : 'Save the saved reference picture to your Archive') + '">' + (arch ? 'Archived' : 'Archive') + '</button>'
+      : '') +
+    (waiting ? '<button class="panel-pill" id="sc-revert-' + charId + '" onclick="scDropEditDraft(' + charId + ')" title="Go back to the saved picture">Revert</button>' : '') +
+    '</div>';
+  return img + pills;
+}
+
+function scEditButtons(charId, busy) {
+  ['sc-retouch-', 'sc-restyle-one-'].forEach(function (p) { var b = document.getElementById(p + charId); if (b) b.disabled = !!busy; });
+}
+
+// Regenerate in Art Style for this one character, from the window. Same server route as the tab's button; the
+// result waits in the window like a retouch (Save keeps it), building on any picture already waiting there.
+function scEditRestyle(charId) {
+  if (typeof ensureGenFree === 'function' && !ensureGenFree()) return;
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var wrapId = 'sc-review-imgwrap-' + charId;
+  if (msg) msg.textContent = '';
+  scEditButtons(charId, true);
+  showBusyOverlay(wrapId, 'Regenerating', 'Redrawing in the art style\u2026');
+  scEditRetouchOn(charId, 'Regenerating');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/restyle-reference' + forkQ(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_url: (state.draftReference || {})[charId] || '' })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function (url) {
+          state.draftReference = state.draftReference || {}; state.draftReference[charId] = url;
+          state.scDraftStyled = state.scDraftStyled || {}; state.scDraftStyled[charId] = data.art_style || true;
+          var wrap = document.getElementById(wrapId);
+          if (wrap) wrap.innerHTML = scEditPicHtml(charId, url);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          scEditRetouchOff(charId, true);
+        }, function (err) {
+          hideBusyOverlay(wrapId);
+          if (msg && scEditOpenFor(charId)) msg.textContent = 'Could not regenerate: ' + err;
+          scEditRetouchOff(charId, false, err);
+        });
+        return;
+      }
+      hideBusyOverlay(wrapId);
+      scEditRetouchOff(charId, false);
+      var m2 = document.getElementById('sc-review-msg-' + charId);
+      if (data && data.error === 'INSUFFICIENT_TOKENS') { if (m2) m2.innerHTML = insufficientTokensHtml(data.message); }
+      else if (m2) m2.textContent = (data && (data.message || data.error)) || 'Could not regenerate.';
+    })
+    .catch(function (e) { hideBusyOverlay(wrapId); scEditRetouchOff(charId, false, e && e.message); var m3 = document.getElementById('sc-review-msg-' + charId); if (m3) m3.textContent = 'Could not regenerate.'; });
+}
+
+// Ignore suggested change: the AI's suggestion is marked ignored (Generate Story will not suggest it again), the
+// Amended appearance box is cleared, and the window stays open.
+function scIgnoreSuggestion(charId) {
+  var btn = document.getElementById('sc-ignore-' + charId);
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/reject-change' + forkQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.success) { if (btn) btn.disabled = false; if (msg) msg.textContent = (d && d.error) || 'Could not ignore the suggestion.'; return; }
+      var row = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
+      if (row) { row.change_status = 'rejected'; row.change_flag = false; }
+      var box = document.getElementById('sc-review-text-' + charId); if (box) box.value = '';
+      if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+      if (msg) msg.textContent = 'Suggestion ignored.';
+      var tag = document.querySelector('#sc-card-' + charId + ' .sc-card-tag-pending');
+      if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not ignore the suggestion.'; });
+}
+
+function _scPost(charId, what, body) {
+  return fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/characters/' + charId + '/' + what + forkQ(), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {})
+  })
+    .then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (d) { return (d && d.success) ? null : ((d && d.error) || 'Could not save.'); })
+    .catch(function () { return 'Could not save.'; });
+}
+
+// SAVE (Ian: "Save should approve the change as well... and leave everything in the state it was when the button was
+// pressed"). In order, each step only when it applies:
+//   1. the Description, if edited;
+//   2. a picture waiting in the window: from a retouch (or a retouch on top of a restyle) it becomes the change from the
+//      chosen panel onward (approve-change, after approve-styled-reference when a restyle is in it, so the art style is
+//      recorded and its own undo slot is armed); from Regenerate in Art Style alone it becomes the reference
+//      (approve-styled-reference), which is not an appearance change;
+//   3. no new picture but a change already approved: its text and "Change starts at" are kept as edited;
+//   4. an AI suggestion nobody retouched or ignored stays a suggestion; text typed but never retouched is kept in the box
+//      and the window says to retouch first, after everything else has saved.
+function scSaveEdit(charId) {
+  var row = (state.sessionCharacterRows || []).find(function (x) { return x.character_id === charId; });
+  if (!row) return;
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var btn = document.getElementById('sc-save-' + charId);
+  var descEl = document.getElementById('sc-editor-' + charId);
+  var textEl = document.getElementById('sc-review-text-' + charId);
+  var momentEl = document.getElementById('sc-review-moment-' + charId);
+  var norm = function (v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim(); };
+  var detail = textEl ? textEl.value.trim() : '';
+  var moment = momentEl ? parseInt(momentEl.value, 10) : (typeof row.change_moment_index === 'number' ? row.change_moment_index : -1);
+  if (isNaN(moment) || moment < -1) moment = -1;
+  var waiting = (state.draftReference || {})[charId] || '';
+  var styled = !!(state.scDraftStyled || {})[charId];
+  var changed = !!(state.scDraftChanged || {})[charId] || (waiting && !styled);
+  var accepted = row.change_status === 'accepted';
+  var steps = [];
+  if (descEl && norm(descEl.value) !== norm(row.prompt)) steps.push(function () { return _scSaveDesc(charId, descEl.value).then(function (e) { if (!e) row.prompt = descEl.value; return e; }); });
+  if (waiting) {
+    if (styled) steps.push(function () { return _scPost(charId, 'approve-styled-reference', { image_url: waiting }); });
+    // v3.4.50 -- a second change ADDS to the approved one (the server rewrites the RECENT CHANGE line from this detail,
+    // so sending only the new words would drop the old change from the text while the picture still shows it).
+    var _prev = accepted ? String(row.change_note || row.change_detail || '').trim() : '';
+    var _both = !_prev ? detail : (!detail || norm(detail) === norm(_prev) ? _prev : _prev.replace(/[\s.;,]+$/, '') + '; ' + detail);
+    if (changed) steps.push(function () { return _scPost(charId, 'approve-change', { detail: _both, image_url: waiting, moment_index: moment }); });
+  } else if (accepted) {
+    // v3.4.50 -- the box is empty for an approved change now, so moving "Change starts at" re-sends the APPROVED text.
+    var curMoment = (typeof row.change_moment_index === 'number') ? row.change_moment_index : -1;
+    if (moment !== curMoment) {
+      steps.push(function () { return _scPost(charId, 'approve-change', { detail: row.change_note || row.change_detail || '', image_url: row.reference_url || row.canonical_reference_url || null, moment_index: moment }); });
+    }
+  }
+  // v3.4.50 -- anything typed but never retouched, except an untouched suggestion (which simply stays a suggestion)
+  var typedOnly = !waiting && !!detail && !(row.change_status === 'pending' && norm(detail) === norm(row.change_detail));
+  if (btn) btn.disabled = true;
+  if (msg) msg.textContent = steps.length ? 'Saving\u2026' : '';
+  var k = 0;
+  function next() {
+    if (k >= steps.length) {
+      if (waiting) { delete state.draftReference[charId]; if (state.scDraftChanged) delete state.scDraftChanged[charId]; if (state.scDraftStyled) delete state.scDraftStyled[charId]; }
+      if (typedOnly) {
+        if (btn) btn.disabled = false;
+        if (msg) msg.textContent = (steps.length ? 'Saved. ' : '') + 'Retouch the picture first to make the Amended appearance a change.';
+        if (steps.length) loadSessionCharacters();
+        return;
+      }
+      scCloseReview(charId);
+      return;
+    }
+    steps[k++]().then(function (err) {
+      if (err) { if (btn) btn.disabled = false; if (msg) msg.textContent = err; return; }
+      next();
+    });
+  }
+  next();
+}

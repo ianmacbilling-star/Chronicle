@@ -1,5 +1,135 @@
 [
   {
+    "version": "3.4.53",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3453-change-starts-wording",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Clearer wording for when a character change starts.",
+        "detail": "In a character's Edit window, Change Starts at Moment explains on hover that the character keeps their earlier look until that moment, then the change takes effect and carries into the next session; Empty applies it to the whole session.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.52",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3452-stats-user-grid",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Dashboard Stats user list: columns reordered and renamed, and a Refresh button.",
+        "detail": "Days, Name, Email, Last Action DT, Last Action, Tier, Pass, Expires, Status, then any other column the view has. Refresh reloads the list.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.51",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3451-change-band",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A change Generate Story spotted now shows as a red band across the character's picture.",
+        "detail": "On a session's Characters tab, Change Detected - Edit for Details sits across the bottom of the picture in larger type, and a new picture waiting to be saved shows the same way in gold. Click either to open Edit.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.50",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3450-approved-change-clears",
+        "kind": "improvement",
+        "public": true,
+        "summary": "An approved character change no longer reappears in the Edit window, and a suggested change says what to do.",
+        "detail": "Once a change is approved, the Amended appearance box opens empty for the next one; the change stays in the Description, which is what the pictures are drawn from. A change Generate Story suggests now explains itself: retouch to apply it, or ignore it. A second change adds to the first instead of replacing it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.49",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3449-character-edit-window",
+        "kind": "improvement",
+        "public": true,
+        "summary": "The character Edit window has one Save, Revert, and Regenerate in Art Style.",
+        "detail": "Beside Retouch image are Regenerate in Art Style and, when the AI suggested a change, Ignore suggested change. Retouch and Regenerate now build on each other. Replace and Archive stay on the picture after a retouch, and Revert goes back to the saved picture. One Save keeps everything as it is in the window. The description pop-up on the cards opens above the line and no longer flickers.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.48",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3448-session-character-cards",
+        "kind": "improvement",
+        "public": true,
+        "summary": "A session's Characters tab shows picture cards, and Edit opens a window.",
+        "detail": "The characters are laid out across the tab as picture cards, like the Characters screen, with one line of the description (hover to read it all). Edit opens a window with the picture beside the boxes, so a retouch appears next to what you typed. A retouch keeps going if you close the window: the card shows it working and then New image ready. During Regenerate in Art Style every card waiting its turn shows that it is waiting. Approve change now saves an edited description too.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.47",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3447-session-character-cards",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Bigger character pictures on a session's Characters tab, with the description beside them.",
+        "detail": "Each character's picture is larger, and the name and description sit to its right. A long description is cut to fit beside the picture; hover over it to read it all. On a phone the picture sits on top with the whole description below.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.4.46",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3446-picker-names",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Names under the pictures in the picture pickers are larger and easier to read.",
+        "detail": "In every window where you pick a character, asset or picture, the names under the pictures are bigger, bolder and brighter, and the Characters tab link in the + Add character note is gold instead of blue.",
+        "td": [
+          "TD-1040"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.45",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3445-add-a-character",
+        "kind": "feature",
+        "public": true,
+        "summary": "Add A Character on a session's Characters tab brings in someone Generate Story missed.",
+        "detail": "Pick a campaign character from the pictures and they join the session's cast with their latest look in this version (or the Canonical's, or their own look if neither has one). The Review and Storyboard + Add character windows now list only the session's cast, with a note pointing to Add A Character for anyone else. If Generate Story would take a character out of the cast because their name is not in the Story or the notes, it names them and asks first.",
+        "td": [
+          "TD-1040"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.44",
     "staged_on": "2026-11-05",
     "entries": [
